@@ -2,7 +2,7 @@
 
 ## Hanchen TODO List
 1. Create an fpgakrnl dialect --> `include/fpgakrnl/Dialect.h`
-2. Create conv and pool operations in fpgakrnl dialect for DNNBuilder/SkyNet --> `include/fpgakrnl/Ops.td`
+2. Create conv and pool operations in fpgakrnl dialect --> `include/fpgakrnl/Ops.td`
 3. Create pass for lowering conv and pool operations in ONNX dialect to fpgakrnl dialect
 
 ## References
