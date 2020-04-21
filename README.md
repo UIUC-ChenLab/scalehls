@@ -1,9 +1,9 @@
 # HLS Large Design Project
 
 ## Hanchen TODO List
-1. Create an fpgaip dialect
-2. Create conv and pool operations in fpgaip dialect for DNNBuilder
-3. Create pass for lowering conv and pool operations in ONNX dialect to fpgaip dialect
+1. Create an fpgakrnl dialect --> `include/fpgakrnl/Dialect.h`
+2. Create conv and pool operations in fpgakrnl dialect for DNNBuilder/SkyNet --> `include/fpgakrnl/Ops.td`
+3. Create pass for lowering conv and pool operations in ONNX dialect to fpgakrnl dialect
 
 ## References
 1. [Toy Tutorial Chapter2: Emitting Basic MLIR](https://mlir.llvm.org/docs/Tutorials/Toy/Ch-2/#interfacing-with-mlir)
