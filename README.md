@@ -6,7 +6,6 @@
 3. Create pass for lowering conv and pool operations in ONNX dialect to fpgakrnl dialect
 
 ## Jack TODO List
-0. Upload the TVM IR example code for the MNIST model (Google Colab notebooks) 
 1. Extract the first conv and pool operations in the MNIST model in ONNX
 2. Emit the Affine (MLIR dialect) IR for these operations using onnx-mlir
 3. Find out how to do transformation and lowering passes within Affine, LinAlg, Loop dialects for those operations
