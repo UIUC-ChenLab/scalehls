@@ -16,11 +16,17 @@ def ConvOp : FpgaKrnl_Op<"conv", [NoSideEffect]> {
         Convolution Operation.
     }];
 
-    // hanchen is working here
-    let arguments = ();
+    let arguments = (ins AnyTypeOf<[AnyMemRef, AnyTensor]>:$ifmap,
+                     DefaultValuedAttr<AnyI32ElementsAttr, "0">:$kernel_value,
+                     DefaultValuedAttr<I32ArrayAttr, "{}">:$kernel_shape,
+                     DefaultValuedAttr<I32ArrayAttr, "{}">:$pads,
+                     OptionalAttr<I32ArrayAttr>:$dilations,
+                     OptionalAttr<I32ArrayAttr>:$strides,
+                     OptionalAttr<I32Attr>:$group);
 
-    let results = ();
-    
+    let results = (outs AnyTypeOf<[AnyMemRef, AnyTensor]>:$ofmap);
+
+    let verifier = [{ return ::verify(*this); }];
 }
 
 def MaxPoolOp : FpgaKrnl_Op<"maxpool", [NoSideEffect]> {
@@ -31,8 +37,13 @@ def MaxPoolOp : FpgaKrnl_Op<"maxpool", [NoSideEffect]> {
     }];
 
     // hanchen is working here
-    let arguments = ();
+    let arguments = (ins AnyTypeOf<[AnyMemRef, AnyTensor]>:$ifmap,
+                     DefaultValuedAttr<I32ArrayAttr, "{}">:$kernel_shape,
+                     DefaultValuedAttr<I32ArrayAttr, "{}">:$pads,
+                     OptionalAttr<I32ArrayAttr>:$dilations,
+                     OptionalAttr<I32ArrayAttr>:$strides);
 
-    let results = ();
+    let results = (outs AnyTypeOf<[AnyMemRef, AnyTensor]>:$ofmap);
     
+    let verifier = [{ return ::verify(*this); }];
 }

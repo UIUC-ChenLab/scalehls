@@ -13,6 +13,6 @@ class FpgaKrnlDialect : public mlir::Dialect {
 };
 
 #define GET_OP_CLASSES
-#include "toy/Ops.h.inc"
+#include "fpgakrnl/Ops.h.inc"
 }
 }
