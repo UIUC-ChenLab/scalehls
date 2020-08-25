@@ -1,2 +1,0 @@
-lark-parser==0.7.8
-parse==1.14.0
