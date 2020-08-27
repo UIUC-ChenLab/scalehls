@@ -38,10 +38,11 @@ static llvm::cl::opt<bool> verifyDiagnostics(
                    "expected-* lines on the corresponding line"),
     llvm::cl::init(false));
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
   mlir::registerAllDialects();
   mlir::registerAllTranslations();
+
+  hlsld::registerHLSCppEmitterTranslation();
 
   llvm::InitLLVM y(argc, argv);
 
@@ -55,15 +56,13 @@ int main(int argc, char **argv)
 
   std::string errorMessage;
   auto input = mlir::openInputFile(inputFilename, &errorMessage);
-  if (!input)
-  {
+  if (!input) {
     llvm::errs() << errorMessage << "\n";
     return 1;
   }
 
   auto output = mlir::openOutputFile(outputFilename, &errorMessage);
-  if (!output)
-  {
+  if (!output) {
     llvm::errs() << errorMessage << "\n";
     return 1;
   }
@@ -77,8 +76,7 @@ int main(int argc, char **argv)
     llvm::SourceMgr sourceMgr;
     sourceMgr.AddNewSourceBuffer(std::move(ownedBuffer), llvm::SMLoc());
 
-    if (!verifyDiagnostics)
-    {
+    if (!verifyDiagnostics) {
       mlir::SourceMgrDiagnosticHandler sourceMgrHandler(sourceMgr, &context);
       return (*translationRequested)(sourceMgr, os, &context);
     }
@@ -92,14 +90,11 @@ int main(int argc, char **argv)
     return sourceMgrHandler.verify();
   };
 
-  if (splitInputFile)
-  {
+  if (splitInputFile) {
     if (failed(mlir::splitAndProcessBuffer(std::move(input), processBuffer,
                                            output->os())))
       return 1;
-  }
-  else
-  {
+  } else {
     if (failed(processBuffer(std::move(input), output->os())))
       return 1;
   }
