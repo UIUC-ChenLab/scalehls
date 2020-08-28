@@ -8,8 +8,10 @@
 #include "mlir/IR/Function.h"
 #include "mlir/IR/Module.h"
 #include "mlir/IR/StandardTypes.h"
+#include "mlir/Support/LLVM.h"
 #include "mlir/Translation.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include "EmitHLSCpp.h"
@@ -17,108 +19,10 @@
 using namespace mlir;
 
 //===----------------------------------------------------------------------===//
-// Visitors
+// Some Base Classes
 //
-// These classes should (?) be factored out from here, and can be inherited by
-// different backend/emitter (e.g. HLS Cpp for Vivado, HLS Cpp for Intel FPGAs,
-// OpenCL, etc.).
-//===----------------------------------------------------------------------===//
-
-namespace {
-/// StmtVisitor is a visitor for statement nodes.
-template <typename ConcreteType, typename ResultType = void,
-          typename... ExtraArgs>
-class StmtVisitor {
-public:
-  ResultType dispatchStmtVisitor(Operation *op, ExtraArgs... args) {
-    auto *thisCast = static_cast<ConcreteType *>(this);
-    return TypeSwitch<Operation *, ResultType>(op)
-        .template Case<scf::IfOp>([&](auto opNode) -> ResultType {
-          return thisCast->visitStmt(opNode, args...);
-        })
-        .Default([&](auto expr) -> ResultType {
-          return thisCast->visitInvalidStmt(op, args...);
-        });
-  }
-
-  /// This callback is invoked on any non-statement operations.
-  ResultType visitInvalidStmt(Operation *op, ExtraArgs... args) {
-    op->emitOpError("Unknown statement.");
-    abort();
-  }
-
-  /// This callback is invoked on any statement operations that are not handled
-  /// by the concrete visitor.
-  ResultType visitUnhandledStmt(Operation *op, ExtraArgs... args) {
-    return ResultType();
-  }
-
-#define HANDLE(OPTYPE)                                                         \
-  ResultType visitStmt(OPTYPE op, ExtraArgs... args) {                         \
-    return static_cast<ConcreteType *>(this)->visitUnhandledStmt(op, args...); \
-  }
-
-  HANDLE(scf::IfOp);
-#undef HANDLE
-};
-} // namespace
-
-namespace {
-/// ExprVisitor is a visitor for expression nodes.
-template <typename ConcreteType, typename ResultType = void,
-          typename... ExtraArgs>
-class ExprVisitor {
-public:
-  ResultType dispatchExprVisitor(Operation *op, ExtraArgs... args) {
-    auto *thisCast = static_cast<ConcreteType *>(this);
-    return TypeSwitch<Operation *, ResultType>(op)
-        .template Case<AddIOp>([&](auto expr) -> ResultType {
-          return thisCast->visitExpr(expr, args...);
-        })
-        .Default([&](auto expr) -> ResultType {
-          return thisCast->visitInvalidExpr(op, args...);
-        });
-  }
-
-  /// This callback is invoked on any non-expression operations.
-  ResultType visitInvalidExpr(Operation *op, ExtraArgs... args) {
-    op->emitOpError("Unknown expression.");
-    abort();
-  }
-
-  /// This callback is invoked on any expression operations that are not handled
-  /// by the concrete visitor.
-  ResultType visitUnhandledExpr(Operation *op, ExtraArgs... args) {
-    return ResultType();
-  }
-
-  /// This fallback is invoked on any unary expr that isn't explicitly handled.
-  /// The default implementation delegates to the unhandled expression fallback.
-  ResultType visitUnaryExpr(Operation *op, ExtraArgs... args) {
-    return static_cast<ConcreteType *>(this)->visitUnhandledExpr(op, args...);
-  }
-
-  /// This fallback is invoked on any binary expr that isn't explicitly handled.
-  /// The default implementation delegates to the unhandled expression fallback.
-  ResultType visitBinaryExpr(Operation *op, ExtraArgs... args) {
-    return static_cast<ConcreteType *>(this)->visitUnhandledExpr(op, args...);
-  }
-
-#define HANDLE(OPTYPE, OPKIND)                                                 \
-  ResultType visitExpr(OPTYPE op, ExtraArgs... args) {                         \
-    return static_cast<ConcreteType *>(this)->visit##OPKIND##Expr(op,          \
-                                                                  args...);    \
-  }
-
-  HANDLE(AddIOp, Binary);
-#undef HANDLE
-};
-} // namespace
-
-//===----------------------------------------------------------------------===//
-// HLSCppEmitter Base Classes
-//
-// These classes should (?) be factored out from here somehow.
+// These classes should be factored out, and can be inherited by emitters
+// targeting various backends (e.g., Xilinx Vivado HLS, Intel FPGAs, etc.).
 //===----------------------------------------------------------------------===//
 
 namespace {
@@ -152,11 +56,6 @@ public:
     return op->emitError(message);
   }
 
-  InFlightDiagnostic emitOpError(Operation *op, const Twine &message) {
-    state.encounteredError = true;
-    return op->emitOpError(message);
-  }
-
   raw_ostream &indent() { return os.indent(state.currentIndent); }
 
   void addIndent() { state.currentIndent += 2; }
@@ -174,30 +73,54 @@ private:
 };
 } // namespace
 
-//===----------------------------------------------------------------------===//
-// ExprEmitter Class
-//===----------------------------------------------------------------------===//
-
 namespace {
-class ExprEmitter : public ExprVisitor<ExprEmitter> {
+/// This class is a visitor for SSACFG operation nodes.
+template <typename ConcreteType, typename ResultType, typename... ExtraArgs>
+class HLSCppVisitorBase {
 public:
-private:
+  ResultType dispatchVisitor(Operation *op, ExtraArgs... args) {
+    auto *thisCast = static_cast<ConcreteType *>(this);
+    return TypeSwitch<Operation *, ResultType>(op)
+        .template Case<
+            // Binary expressions.
+            AddIOp,
+            // Special operations.
+            ReturnOp>([&](auto opNode) -> ResultType {
+          return thisCast->visitOp(opNode, args...);
+        })
+        .Default([&](auto opNode) -> ResultType {
+          return thisCast->visitInvalidOp(op, args...);
+        });
+  }
+
+  /// This callback is invoked on any invalid operations.
+  ResultType visitInvalidOp(Operation *op, ExtraArgs... args) {
+    op->emitOpError("is unknown operation.");
+    abort();
+  }
+
+  /// This callback is invoked on any operations that are not handled by the
+  /// concrete visitor.
+  ResultType visitUnhandledOp(Operation *op, ExtraArgs... args) {
+    return ResultType();
+  }
+
+#define HANDLE(OPTYPE)                                                         \
+  ResultType visitOp(OPTYPE op, ExtraArgs... args) {                           \
+    return static_cast<ConcreteType *>(this)->visitUnhandledOp(op, args...);   \
+  }
+
+  // Binary expressions.
+  HANDLE(AddIOp);
+
+  // Special operations.
+  HANDLE(ReturnOp);
+#undef HANDLE
 };
 } // namespace
 
 //===----------------------------------------------------------------------===//
-// StmtEmitter Class
-//===----------------------------------------------------------------------===//
-
-namespace {
-class StmtEmitter : public ExprVisitor<StmtEmitter> {
-public:
-private:
-};
-} // namespace
-
-//===----------------------------------------------------------------------===//
-// ModuleEmitter Class
+// ModuleEmitter Class Definition
 //===----------------------------------------------------------------------===//
 
 namespace {
@@ -206,33 +129,72 @@ public:
   explicit ModuleEmitter(HLSCppEmitterState &state)
       : HLSCppEmitterBase(state) {}
 
+  void emitBinaryExpr(Operation *op, const char *syntax);
+
   void emitOperation(Operation *op);
-  void emitFunc(FuncOp func);
+  void emitFunction(FuncOp func);
   void emitModule(ModuleOp module);
 };
 } // namespace
 
+//===----------------------------------------------------------------------===//
+// ExprVisitor Class
+//===----------------------------------------------------------------------===//
+
+namespace {
+class ExprVisitor : public HLSCppVisitorBase<ExprVisitor, bool> {
+public:
+  ExprVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
+
+  using HLSCppVisitorBase::visitOp;
+  bool visitOp(AddIOp op) { return emitter.emitBinaryExpr(op, "+"), true; }
+
+private:
+  ModuleEmitter &emitter;
+};
+} // namespace
+
+//===----------------------------------------------------------------------===//
+// StmtVisitor Class
+//===----------------------------------------------------------------------===//
+
+namespace {
+class StmtVisitor : public HLSCppVisitorBase<StmtVisitor, bool> {
+public:
+  StmtVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
+
+private:
+  ModuleEmitter &emitter;
+};
+} // namespace
+
+//===----------------------------------------------------------------------===//
+// ModuleEmitter Class Implementation
+//===----------------------------------------------------------------------===//
+
+void ModuleEmitter::emitBinaryExpr(Operation *op, const char *syntax) {
+  indent();
+  os << "INFO: meet an addi " << syntax << "!\n";
+}
+
 void ModuleEmitter::emitOperation(Operation *op) {
-  os << "new op:" << op->getName() << ";\n";
+  ExprVisitor(*this).dispatchVisitor(op);
 };
 
-void ModuleEmitter::emitFunc(FuncOp func) {
+void ModuleEmitter::emitFunction(FuncOp func) {
   os << "void " << func.getName() << " (";
 
-  // TODO: handle arguments.
+  // TODO: handle function signature.
   os << ") {\n";
   addIndent();
 
-  // TODO: daclarations.
-
   // TODO: handle all operations.
-  if (func.getBlocks().size() != 1) {
-    func.emitError("More than one blocks in the current function.");
-  }
-  for (auto &op : func.front()) {
-    indent();
+  if (func.getBlocks().size() != 1)
+    emitError(func, "has more than one blocks.");
+  for (auto &op : func.front())
     emitOperation(&op);
-  }
+
+  reduceIndent();
   os << "}\n";
 };
 
@@ -256,9 +218,9 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 
   for (auto &op : *module.getBody()) {
     if (auto func = dyn_cast<FuncOp>(op))
-      emitFunc(func);
+      emitFunction(func);
     else if (!isa<ModuleTerminatorOp>(op))
-      op.emitError("Unknown operation.");
+      emitError(&op, "is unknown operation.");
   }
 }
 
