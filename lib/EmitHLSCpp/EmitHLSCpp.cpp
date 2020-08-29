@@ -36,50 +36,15 @@ static SmallString<8> getTypeString(Type type, Operation *op) {
 
   // Handle integer types.
   case StandardTypes::Index:
-    typeString = "uint";
+    typeString = "int";
     break;
   case StandardTypes::Integer: {
     auto intType = type.cast<IntegerType>();
-    switch (intType.getSignedness()) {
-
-    // Handle signed integer types.
-    case IntegerType::SignednessSemantics::Signed:
-    case IntegerType::SignednessSemantics::Signless: {
-      unsigned intWidth = intType.getWidth();
-      if (intWidth <= 8)
-        typeString = "int8_t";
-      else if (intWidth <= 16)
-        typeString = "int16_t";
-      else if (intWidth <= 32)
-        typeString = "int32_t";
-      else if (intWidth <= 64)
-        typeString = "int64_t";
-      else if (intWidth <= 128)
-        typeString = "int128_t";
-      else
-        op->emitError("has unsupported type.");
-      break;
-    }
-
-    // Handle unsigned integer types.
-    case IntegerType::SignednessSemantics::Unsigned:
-      unsigned intWidth = intType.getWidth();
-      if (intWidth == 1)
-        typeString = "bool";
-      else if (intWidth <= 8)
-        typeString = "int8_t";
-      else if (intWidth <= 16)
-        typeString = "int16_t";
-      else if (intWidth <= 32)
-        typeString = "int32_t";
-      else if (intWidth <= 64)
-        typeString = "int64_t";
-      else if (intWidth <= 128)
-        typeString = "int128_t";
-      else
-        op->emitError("has unsupported type.");
-      break;
-    } // switch (intType.getSignedness())
+    typeString = "ap_";
+    if (intType.getSignedness() == IntegerType::SignednessSemantics::Unsigned)
+      typeString += "u";
+    typeString += StringRef("int<" + std::to_string(intType.getWidth()) + ">");
+    break;
   }
   default:
     op->emitError("has unsupported type.");
