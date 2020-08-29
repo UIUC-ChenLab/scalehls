@@ -3,7 +3,7 @@
 // CHECK: void test_standard () {
 func @test_standard(%arg0: index, %arg1: index) -> (index) {
   
-  // CHECK: INFO: meet an addi +!
+  // CHECK: uint val2 = val0 + val1;
   %0 = addi %arg0, %arg1 : index
   return %0 : index
 

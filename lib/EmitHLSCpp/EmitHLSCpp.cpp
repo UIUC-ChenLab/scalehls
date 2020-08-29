@@ -18,6 +18,77 @@
 
 using namespace mlir;
 
+//===------------------------------------------------------------*- C++ -*-===//
+// Utils
+//===----------------------------------------------------------------------===//
+
+static SmallString<8> getTypeString(Type type, Operation *op) {
+  SmallString<8> typeString("unknown");
+  switch (type.getKind()) {
+
+  // Handle float types.
+  case StandardTypes::F16:
+    typeString = "float";
+    break;
+  case StandardTypes::F32:
+    typeString = "double";
+    break;
+
+  // Handle integer types.
+  case StandardTypes::Index:
+    typeString = "uint";
+    break;
+  case StandardTypes::Integer: {
+    auto intType = type.cast<IntegerType>();
+    switch (intType.getSignedness()) {
+
+    // Handle signed integer types.
+    case IntegerType::SignednessSemantics::Signed:
+    case IntegerType::SignednessSemantics::Signless: {
+      unsigned intWidth = intType.getWidth();
+      if (intWidth <= 8)
+        typeString = "int8_t";
+      else if (intWidth <= 16)
+        typeString = "int16_t";
+      else if (intWidth <= 32)
+        typeString = "int32_t";
+      else if (intWidth <= 64)
+        typeString = "int64_t";
+      else if (intWidth <= 128)
+        typeString = "int128_t";
+      else
+        op->emitError("has unsupported type.");
+      break;
+    }
+
+    // Handle unsigned integer types.
+    case IntegerType::SignednessSemantics::Unsigned:
+      unsigned intWidth = intType.getWidth();
+      if (intWidth == 1)
+        typeString = "bool";
+      else if (intWidth <= 8)
+        typeString = "int8_t";
+      else if (intWidth <= 16)
+        typeString = "int16_t";
+      else if (intWidth <= 32)
+        typeString = "int32_t";
+      else if (intWidth <= 64)
+        typeString = "int64_t";
+      else if (intWidth <= 128)
+        typeString = "int128_t";
+      else
+        op->emitError("has unsupported type.");
+      break;
+    } // switch (intType.getSignedness())
+  }
+  default:
+    op->emitError("has unsupported type.");
+    break;
+  } // switch (type.getKind())
+
+  return typeString;
+}
+
 //===----------------------------------------------------------------------===//
 // Some Base Classes
 //
@@ -95,7 +166,7 @@ public:
 
   /// This callback is invoked on any invalid operations.
   ResultType visitInvalidOp(Operation *op, ExtraArgs... args) {
-    op->emitOpError("is unknown operation.");
+    op->emitOpError("is unsupported operation.");
     abort();
   }
 
@@ -131,9 +202,23 @@ public:
 
   void emitBinaryExpr(Operation *op, const char *syntax);
 
+  void emitModule(ModuleOp module);
+
+private:
+  DenseMap<Value, SmallString<4>> nameTable;
+
+  SmallString<4> getName(Value value) { return nameTable[value]; }
+  SmallString<4> addName(Value value) {
+    // Temporary naming rule.
+    SmallString<4> valueName("val");
+    valueName += StringRef(std::to_string(nameTable.size()));
+
+    nameTable[value] = valueName;
+    return valueName;
+  };
+
   void emitOperation(Operation *op);
   void emitFunction(FuncOp func);
-  void emitModule(ModuleOp module);
 };
 } // namespace
 
@@ -174,7 +259,17 @@ private:
 
 void ModuleEmitter::emitBinaryExpr(Operation *op, const char *syntax) {
   indent();
-  os << "INFO: meet an addi " << syntax << "!\n";
+
+  // Emit result type.
+  os << getTypeString(op->getResultTypes().front(), op) << " ";
+
+  // Emit result value name.
+  os << addName(op->getResult(0)) << " = ";
+
+  // Emit expression.
+  os << getName(op->getOperand(0));
+  os << " " << syntax << " ";
+  os << getName(op->getOperand(1)) << ";\n";
 }
 
 void ModuleEmitter::emitOperation(Operation *op) {
@@ -185,6 +280,8 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   os << "void " << func.getName() << " (";
 
   // TODO: handle function signature.
+  for (auto &arg : func.getArguments())
+    addName(arg);
   os << ") {\n";
   addIndent();
 
@@ -220,7 +317,7 @@ void ModuleEmitter::emitModule(ModuleOp module) {
     if (auto func = dyn_cast<FuncOp>(op))
       emitFunction(func);
     else if (!isa<ModuleTerminatorOp>(op))
-      emitError(&op, "is unknown operation.");
+      emitError(&op, "is unsupported operation.");
   }
 }
 
