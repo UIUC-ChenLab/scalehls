@@ -83,8 +83,12 @@ public:
     auto *thisCast = static_cast<ConcreteType *>(this);
     return TypeSwitch<Operation *, ResultType>(op)
         .template Case<
-            // Binary expressions.
-            AddIOp,
+            // Float binary expressions.
+            CmpFOp, AddFOp, SubFOp, MulFOp, DivFOp, RemFOp,
+            // Integer binary expressions.
+            CmpIOp, AddIOp, SubIOp, MulIOp, SignedDivIOp, SignedRemIOp,
+            UnsignedDivIOp, UnsignedRemIOp, XOrOp, AndOp, OrOp, ShiftLeftOp,
+            SignedShiftRightOp, UnsignedShiftRightOp,
             // Special operations.
             ReturnOp>([&](auto opNode) -> ResultType {
           return thisCast->visitOp(opNode, args...);
@@ -111,8 +115,29 @@ public:
     return static_cast<ConcreteType *>(this)->visitUnhandledOp(op, args...);   \
   }
 
-  // Binary expressions.
+  // Float binary expressions.
+  HANDLE(CmpFOp);
+  HANDLE(AddFOp);
+  HANDLE(SubFOp);
+  HANDLE(MulFOp);
+  HANDLE(DivFOp);
+  HANDLE(RemFOp);
+
+  // Integer binary expressions.
+  HANDLE(CmpIOp);
   HANDLE(AddIOp);
+  HANDLE(SubIOp);
+  HANDLE(MulIOp);
+  HANDLE(SignedDivIOp);
+  HANDLE(SignedRemIOp);
+  HANDLE(UnsignedDivIOp);
+  HANDLE(UnsignedRemIOp);
+  HANDLE(XOrOp);
+  HANDLE(AndOp);
+  HANDLE(OrOp);
+  HANDLE(ShiftLeftOp);
+  HANDLE(SignedShiftRightOp);
+  HANDLE(UnsignedShiftRightOp);
 
   // Special operations.
   HANDLE(ReturnOp);
@@ -134,7 +159,8 @@ public:
   explicit ModuleEmitter(HLSCppEmitterState &state)
       : HLSCppEmitterBase(state) {}
 
-  void emitBinaryExpr(Operation *op, const char *syntax);
+  void emitBinary(Operation *op, const char *syntax);
+  void emitUnary(Operation *op, const char *syntax);
 
   void emitModule(ModuleOp module);
 
@@ -161,13 +187,87 @@ public:
   ExprVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
 
   using HLSCppVisitorBase::visitOp;
-  bool visitOp(AddIOp op) { return emitter.emitBinaryExpr(op, "+"), true; }
+  // Float binary expressions.
+  bool visitOp(CmpFOp op);
+  bool visitOp(AddFOp op) { return emitter.emitBinary(op, "+"), true; }
+  bool visitOp(SubFOp op) { return emitter.emitBinary(op, "-"), true; }
+  bool visitOp(MulFOp op) { return emitter.emitBinary(op, "*"), true; }
+  bool visitOp(DivFOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(RemFOp op) { return emitter.emitBinary(op, "%"), true; }
+
+  // Integer binary expressions.
+  bool visitOp(CmpIOp op);
+  bool visitOp(AddIOp op) { return emitter.emitBinary(op, "+"), true; }
+  bool visitOp(SubIOp op) { return emitter.emitBinary(op, "-"), true; }
+  bool visitOp(MulIOp op) { return emitter.emitBinary(op, "*"), true; }
+  bool visitOp(SignedDivIOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(SignedRemIOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(UnsignedDivIOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(UnsignedRemIOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(XOrOp op) { return emitter.emitBinary(op, "^"), true; }
+  bool visitOp(AndOp op) { return emitter.emitBinary(op, "&"), true; }
+  bool visitOp(OrOp op) { return emitter.emitBinary(op, "|"), true; }
+  bool visitOp(ShiftLeftOp op) { return emitter.emitBinary(op, "<<"), true; }
+  bool visitOp(SignedShiftRightOp op) {
+    return emitter.emitBinary(op, ">>"), true;
+  }
+  bool visitOp(UnsignedShiftRightOp op) {
+    return emitter.emitBinary(op, ">>"), true;
+  }
+
+  // Special operations.
   bool visitOp(ReturnOp op) { return true; }
 
 private:
   ModuleEmitter &emitter;
 };
 } // namespace
+
+bool ExprVisitor::visitOp(CmpFOp op) {
+  switch (op.getPredicate()) {
+  case CmpFPredicate::OEQ:
+  case CmpFPredicate::UEQ:
+    return emitter.emitBinary(op, "=="), true;
+  case CmpFPredicate::ONE:
+  case CmpFPredicate::UNE:
+    return emitter.emitBinary(op, "!="), true;
+  case CmpFPredicate::OLT:
+  case CmpFPredicate::ULT:
+    return emitter.emitBinary(op, "<"), true;
+  case CmpFPredicate::OLE:
+  case CmpFPredicate::ULE:
+    return emitter.emitBinary(op, "<="), true;
+  case CmpFPredicate::OGT:
+  case CmpFPredicate::UGT:
+    return emitter.emitBinary(op, ">"), true;
+  case CmpFPredicate::OGE:
+  case CmpFPredicate::UGE:
+    return emitter.emitBinary(op, ">="), true;
+  default:
+    return true;
+  }
+}
+
+bool ExprVisitor::visitOp(CmpIOp op) {
+  switch (op.getPredicate()) {
+  case CmpIPredicate::eq:
+    return emitter.emitBinary(op, "=="), true;
+  case CmpIPredicate::ne:
+    return emitter.emitBinary(op, "!="), true;
+  case CmpIPredicate::slt:
+  case CmpIPredicate::ult:
+    return emitter.emitBinary(op, "<"), true;
+  case CmpIPredicate::sle:
+  case CmpIPredicate::ule:
+    return emitter.emitBinary(op, "<="), true;
+  case CmpIPredicate::sgt:
+  case CmpIPredicate::ugt:
+    return emitter.emitBinary(op, ">"), true;
+  case CmpIPredicate::sge:
+  case CmpIPredicate::uge:
+    return emitter.emitBinary(op, ">="), true;
+  }
+}
 
 //===----------------------------------------------------------------------===//
 // StmtVisitor Class
@@ -241,7 +341,7 @@ void ModuleEmitter::emitValueDecl(Value val, bool isPtr = false) {
   return;
 }
 
-void ModuleEmitter::emitBinaryExpr(Operation *op, const char *syntax) {
+void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
   indent();
   emitValueDecl(op->getResult(0));
 
