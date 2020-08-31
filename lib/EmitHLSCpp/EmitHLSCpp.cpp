@@ -93,7 +93,7 @@ public:
             UnsignedDivIOp, UnsignedRemIOp, XOrOp, AndOp, OrOp, ShiftLeftOp,
             SignedShiftRightOp, UnsignedShiftRightOp,
             // Special operations.
-            ReturnOp>([&](auto opNode) -> ResultType {
+            ConstantOp, ReturnOp>([&](auto opNode) -> ResultType {
           return thisCast->visitOp(opNode, args...);
         })
         .Default([&](auto opNode) -> ResultType {
@@ -158,6 +158,7 @@ public:
   HANDLE(UnsignedShiftRightOp);
 
   // Special operations.
+  HANDLE(ConstantOp);
   HANDLE(ReturnOp);
 #undef HANDLE
 };
@@ -185,10 +186,10 @@ public:
 private:
   DenseMap<Value, SmallString<8>> nameTable;
 
-  SmallString<8> getName(Value val) { return nameTable[val]; }
+  SmallString<8> getName(Value val);
   SmallString<8> addName(Value val, bool isPtr);
 
-  void emitValueDecl(Value val, bool isPtr);
+  void emitValue(Value val, bool isPtr);
 
   void emitOperation(Operation *op);
   void emitFunction(FuncOp func);
@@ -237,22 +238,19 @@ public:
   bool visitOp(AbsFOp op) { return emitter.emitUnary(op, "abs"), true; }
   bool visitOp(CeilFOp op) { return emitter.emitUnary(op, "ceil"), true; }
   bool visitOp(NegFOp op) { return emitter.emitUnary(op, "-"), true; }
-
   bool visitOp(CosOp op) { return emitter.emitUnary(op, "cos"), true; }
   bool visitOp(SinOp op) { return emitter.emitUnary(op, "sin"), true; }
   bool visitOp(TanhOp op) { return emitter.emitUnary(op, "tanh"), true; }
-
   bool visitOp(SqrtOp op) { return emitter.emitUnary(op, "sqrt"), true; }
   bool visitOp(RsqrtOp op) { return emitter.emitUnary(op, "1.0 / sqrt"), true; }
-
   bool visitOp(ExpOp op) { return emitter.emitUnary(op, "exp"), true; }
   bool visitOp(Exp2Op op) { return emitter.emitUnary(op, "exp2"), true; }
-
   bool visitOp(LogOp op) { return emitter.emitUnary(op, "log"), true; }
   bool visitOp(Log2Op op) { return emitter.emitUnary(op, "log2"), true; }
   bool visitOp(Log10Op op) { return emitter.emitUnary(op, "log10"), true; }
 
   // Special operations.
+  bool visitOp(ConstantOp op) { return true; }
   bool visitOp(ReturnOp op) { return true; }
 
 private:
@@ -324,6 +322,31 @@ private:
 // ModuleEmitter Class Implementation
 //===----------------------------------------------------------------------===//
 
+SmallString<8> ModuleEmitter::getName(Value val) {
+  if (val.getKind() == Value::Kind::BlockArgument)
+    return nameTable[val];
+
+  // If value is the result of a constant operation, the constant number will be
+  // returned rather than the value name.
+  else if (auto constOp = dyn_cast<ConstantOp>(val.getDefiningOp())) {
+    auto valAttr = constOp.getValue();
+    switch (valAttr.getType().getKind()) {
+    case StandardTypes::F32:
+    case StandardTypes::F64:
+      return StringRef(to_string(valAttr.cast<FloatAttr>().getValueAsDouble()));
+
+    case StandardTypes::Index:
+    case StandardTypes::Integer:
+      return StringRef(to_string(valAttr.cast<IntegerAttr>().getInt()));
+
+    default:
+      emitError(val.getDefiningOp(), "has unsupported type.");
+      break;
+    }
+  } else
+    return nameTable[val];
+}
+
 SmallString<8> ModuleEmitter::addName(Value val, bool isPtr = false) {
   // Temporary naming rule.
   SmallString<8> newName;
@@ -331,22 +354,21 @@ SmallString<8> ModuleEmitter::addName(Value val, bool isPtr = false) {
     newName += "*";
   newName += StringRef("val" + to_string(nameTable.size()));
 
-  auto valName = nameTable[val];
-  if (!valName.empty() && valName != newName)
-    return valName;
-  else {
-    nameTable[val] = newName;
-    return newName;
-  }
+  // It seems currently addName method is only used by emitValue method,
+  // which has already checked whether the current value has be declared.
+  nameTable[val] = newName;
+  return newName;
 }
 
-void ModuleEmitter::emitValueDecl(Value val, bool isPtr = false) {
+void ModuleEmitter::emitValue(Value val, bool isPtr = false) {
   // Value has been declared before.
-  if (!getName(val).empty()) {
-    os << getName(val);
+  auto valName = getName(val);
+  if (!valName.empty()) {
+    os << valName;
     return;
   }
 
+  // Emit value type for declaring a new value.
   switch (val.getType().getKind()) {
   // Handle float types.
   case StandardTypes::F32:
@@ -358,7 +380,7 @@ void ModuleEmitter::emitValueDecl(Value val, bool isPtr = false) {
 
   // Handle integer types.
   case StandardTypes::Index:
-    os << "int ";
+    os << "int64_t ";
     break;
   case StandardTypes::Integer: {
     auto intType = val.getType().cast<IntegerType>();
@@ -373,14 +395,14 @@ void ModuleEmitter::emitValueDecl(Value val, bool isPtr = false) {
     break;
   }
 
-  // Add the new value declaration to nameTable.
+  // Add the new value to nameTable and emit its name.
   os << addName(val, isPtr);
   return;
 }
 
 void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
   indent();
-  emitValueDecl(op->getResult(0));
+  emitValue(op->getResult(0));
   os << " = " << getName(op->getOperand(0));
   os << " " << syntax << " ";
   os << getName(op->getOperand(1)) << ";\n";
@@ -388,7 +410,7 @@ void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
 
 void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
   indent();
-  emitValueDecl(op->getResult(0));
+  emitValue(op->getResult(0));
   os << " = " << syntax << "(" << getName(op->getOperand(0)) << ");\n";
 }
 
@@ -411,7 +433,7 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   unsigned argIdx = 0;
   for (auto &arg : func.getArguments()) {
     indent();
-    emitValueDecl(arg);
+    emitValue(arg);
     if (argIdx == func.getNumArguments() - 1 && func.getNumResults() == 0)
       os << "\n";
     else
@@ -424,7 +446,7 @@ void ModuleEmitter::emitFunction(FuncOp func) {
     unsigned resultIdx = 0;
     for (auto result : funcReturn.getOperands()) {
       indent();
-      emitValueDecl(result, /*isPtr=*/true);
+      emitValue(result, /*isPtr=*/true);
       if (resultIdx == func.getNumResults() - 1)
         os << "\n";
       else
