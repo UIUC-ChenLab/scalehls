@@ -83,6 +83,9 @@ public:
     auto *thisCast = static_cast<ConcreteType *>(this);
     return TypeSwitch<Operation *, ResultType>(op)
         .template Case<
+            // Unary expressions.
+            AbsFOp, CeilFOp, NegFOp, CosOp, SinOp, TanhOp, SqrtOp, RsqrtOp,
+            ExpOp, Exp2Op, LogOp, Log2Op, Log10Op,
             // Float binary expressions.
             CmpFOp, AddFOp, SubFOp, MulFOp, DivFOp, RemFOp,
             // Integer binary expressions.
@@ -114,6 +117,21 @@ public:
   ResultType visitOp(OPTYPE op, ExtraArgs... args) {                           \
     return static_cast<ConcreteType *>(this)->visitUnhandledOp(op, args...);   \
   }
+
+  // Unary expressions.
+  HANDLE(AbsFOp);
+  HANDLE(CeilFOp);
+  HANDLE(NegFOp);
+  HANDLE(CosOp);
+  HANDLE(SinOp);
+  HANDLE(TanhOp);
+  HANDLE(SqrtOp);
+  HANDLE(RsqrtOp);
+  HANDLE(ExpOp);
+  HANDLE(Exp2Op);
+  HANDLE(LogOp);
+  HANDLE(Log2Op);
+  HANDLE(Log10Op);
 
   // Float binary expressions.
   HANDLE(CmpFOp);
@@ -215,6 +233,25 @@ public:
     return emitter.emitBinary(op, ">>"), true;
   }
 
+  // Unary expressions.
+  bool visitOp(AbsFOp op) { return emitter.emitUnary(op, "abs"), true; }
+  bool visitOp(CeilFOp op) { return emitter.emitUnary(op, "ceil"), true; }
+  bool visitOp(NegFOp op) { return emitter.emitUnary(op, "-"), true; }
+
+  bool visitOp(CosOp op) { return emitter.emitUnary(op, "cos"), true; }
+  bool visitOp(SinOp op) { return emitter.emitUnary(op, "sin"), true; }
+  bool visitOp(TanhOp op) { return emitter.emitUnary(op, "tanh"), true; }
+
+  bool visitOp(SqrtOp op) { return emitter.emitUnary(op, "sqrt"), true; }
+  bool visitOp(RsqrtOp op) { return emitter.emitUnary(op, "1.0 / sqrt"), true; }
+
+  bool visitOp(ExpOp op) { return emitter.emitUnary(op, "exp"), true; }
+  bool visitOp(Exp2Op op) { return emitter.emitUnary(op, "exp2"), true; }
+
+  bool visitOp(LogOp op) { return emitter.emitUnary(op, "log"), true; }
+  bool visitOp(Log2Op op) { return emitter.emitUnary(op, "log2"), true; }
+  bool visitOp(Log10Op op) { return emitter.emitUnary(op, "log10"), true; }
+
   // Special operations.
   bool visitOp(ReturnOp op) { return true; }
 
@@ -312,10 +349,10 @@ void ModuleEmitter::emitValueDecl(Value val, bool isPtr = false) {
 
   switch (val.getType().getKind()) {
   // Handle float types.
-  case StandardTypes::F16:
+  case StandardTypes::F32:
     os << "float ";
     break;
-  case StandardTypes::F32:
+  case StandardTypes::F64:
     os << "double ";
     break;
 
@@ -344,11 +381,15 @@ void ModuleEmitter::emitValueDecl(Value val, bool isPtr = false) {
 void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
   indent();
   emitValueDecl(op->getResult(0));
-
-  // Emit expression. We are not folding sub-expressions for now.
   os << " = " << getName(op->getOperand(0));
   os << " " << syntax << " ";
   os << getName(op->getOperand(1)) << ";\n";
+}
+
+void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
+  indent();
+  emitValueDecl(op->getResult(0));
+  os << " = " << syntax << "(" << getName(op->getOperand(0)) << ");\n";
 }
 
 void ModuleEmitter::emitOperation(Operation *op) {
