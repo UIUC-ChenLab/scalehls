@@ -28,6 +28,8 @@ func @test_float_op(%arg0: f32, %arg1: f32) -> (f32) {
   %1 = rsqrt %0 : f32
   // CHECK: *[[FVAL_3:.*]] = [[VAL_5:.*]] * 11.000000;
   %2 = mulf %1, %c11 : f32
+  // CHECK: float [[FVAL_6:.*]][16];
+  %3 = alloc() : memref<16xf32>
   return %2 : f32
 // CHECK: }
 }

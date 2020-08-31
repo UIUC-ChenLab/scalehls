@@ -83,6 +83,8 @@ public:
     auto *thisCast = static_cast<ConcreteType *>(this);
     return TypeSwitch<Operation *, ResultType>(op)
         .template Case<
+            // Statements.
+            AllocOp,
             // Unary expressions.
             AbsFOp, CeilFOp, NegFOp, CosOp, SinOp, TanhOp, SqrtOp, RsqrtOp,
             ExpOp, Exp2Op, LogOp, Log2Op, Log10Op,
@@ -117,6 +119,9 @@ public:
   ResultType visitOp(OPTYPE op, ExtraArgs... args) {                           \
     return static_cast<ConcreteType *>(this)->visitUnhandledOp(op, args...);   \
   }
+
+  // Statements
+  HANDLE(AllocOp);
 
   // Unary expressions.
   HANDLE(AbsFOp);
@@ -177,6 +182,8 @@ class ModuleEmitter : public HLSCppEmitterBase {
 public:
   explicit ModuleEmitter(HLSCppEmitterState &state)
       : HLSCppEmitterBase(state) {}
+
+  void emitArrayDecl(AllocOp *op);
 
   void emitBinary(Operation *op, const char *syntax);
   void emitUnary(Operation *op, const char *syntax);
@@ -313,6 +320,9 @@ class StmtVisitor : public HLSCppVisitorBase<StmtVisitor, bool> {
 public:
   StmtVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
 
+  using HLSCppVisitorBase::visitOp;
+  bool visitOp(AllocOp op) { return emitter.emitArrayDecl(&op), true; }
+
 private:
   ModuleEmitter &emitter;
 };
@@ -368,8 +378,13 @@ void ModuleEmitter::emitValue(Value val, bool isPtr = false) {
     return;
   }
 
+  // Handle memref type.
+  auto valType = val.getType();
+  if (auto memType = valType.dyn_cast<MemRefType>())
+    valType = memType.getElementType();
+
   // Emit value type for declaring a new value.
-  switch (val.getType().getKind()) {
+  switch (valType.getKind()) {
   // Handle float types.
   case StandardTypes::F32:
     os << "float ";
@@ -383,7 +398,7 @@ void ModuleEmitter::emitValue(Value val, bool isPtr = false) {
     os << "int64_t ";
     break;
   case StandardTypes::Integer: {
-    auto intType = val.getType().cast<IntegerType>();
+    auto intType = valType.cast<IntegerType>();
     os << "ap_";
     if (intType.getSignedness() == IntegerType::SignednessSemantics::Unsigned)
       os << "u";
@@ -398,6 +413,13 @@ void ModuleEmitter::emitValue(Value val, bool isPtr = false) {
   // Add the new value to nameTable and emit its name.
   os << addName(val, isPtr);
   return;
+}
+
+void ModuleEmitter::emitArrayDecl(AllocOp *op) {
+  indent();
+  emitValue(op->getResult());
+  for (auto &shape : op->getType().getShape())
+    os << "[" << shape << "];\n";
 }
 
 void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
@@ -416,6 +438,9 @@ void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
 
 void ModuleEmitter::emitOperation(Operation *op) {
   if (ExprVisitor(*this).dispatchVisitor(op))
+    return;
+
+  if (StmtVisitor(*this).dispatchVisitor(op))
     return;
 
   emitError(op, "can't be correctly emitted.");
