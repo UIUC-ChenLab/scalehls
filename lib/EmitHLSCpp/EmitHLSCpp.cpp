@@ -83,7 +83,7 @@ public:
     auto *thisCast = static_cast<ConcreteType *>(this);
     return TypeSwitch<Operation *, ResultType>(op)
         .template Case<
-            // Statements.
+            // Memref related statements.
             AllocOp, LoadOp, StoreOp,
             // Unary expressions.
             AbsFOp, CeilFOp, NegFOp, CosOp, SinOp, TanhOp, SqrtOp, RsqrtOp,
@@ -120,7 +120,7 @@ public:
     return static_cast<ConcreteType *>(this)->visitUnhandledOp(op, args...);   \
   }
 
-  // Statements
+  // Memref related statements.
   HANDLE(AllocOp);
   HANDLE(LoadOp);
   HANDLE(StoreOp);
@@ -325,6 +325,7 @@ public:
   StmtVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
 
   using HLSCppVisitorBase::visitOp;
+  // Memref related statements.
   bool visitOp(AllocOp op) { return emitter.emitAlloc(&op), true; }
   bool visitOp(LoadOp op) { return emitter.emitLoad(&op), true; }
   bool visitOp(StoreOp op) { return emitter.emitStore(&op), true; }
@@ -481,6 +482,9 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   for (auto &arg : func.getArguments()) {
     indent();
     emitValue(arg);
+    if (auto memType = arg.getType().dyn_cast<MemRefType>())
+      for (auto &shape : memType.getShape())
+        os << "[" << shape << "]";
     if (argIdx == func.getNumArguments() - 1 && func.getNumResults() == 0)
       os << "\n";
     else
@@ -494,6 +498,9 @@ void ModuleEmitter::emitFunction(FuncOp func) {
     for (auto result : funcReturn.getOperands()) {
       indent();
       emitValue(result, /*isPtr=*/true);
+      if (auto memType = result.getType().dyn_cast<MemRefType>())
+        for (auto &shape : memType.getShape())
+          os << "[" << shape << "]";
       if (resultIdx == func.getNumResults() - 1)
         os << "\n";
       else
