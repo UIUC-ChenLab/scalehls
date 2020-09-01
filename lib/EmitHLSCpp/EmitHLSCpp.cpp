@@ -84,7 +84,7 @@ public:
     return TypeSwitch<Operation *, ResultType>(op)
         .template Case<
             // Statements.
-            AllocOp,
+            AllocOp, LoadOp, StoreOp,
             // Unary expressions.
             AbsFOp, CeilFOp, NegFOp, CosOp, SinOp, TanhOp, SqrtOp, RsqrtOp,
             ExpOp, Exp2Op, LogOp, Log2Op, Log10Op,
@@ -122,6 +122,8 @@ public:
 
   // Statements
   HANDLE(AllocOp);
+  HANDLE(LoadOp);
+  HANDLE(StoreOp);
 
   // Unary expressions.
   HANDLE(AbsFOp);
@@ -183,7 +185,9 @@ public:
   explicit ModuleEmitter(HLSCppEmitterState &state)
       : HLSCppEmitterBase(state) {}
 
-  void emitArrayDecl(AllocOp *op);
+  void emitAlloc(AllocOp *op);
+  void emitLoad(LoadOp *op);
+  void emitStore(StoreOp *op);
 
   void emitBinary(Operation *op, const char *syntax);
   void emitUnary(Operation *op, const char *syntax);
@@ -321,7 +325,9 @@ public:
   StmtVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
 
   using HLSCppVisitorBase::visitOp;
-  bool visitOp(AllocOp op) { return emitter.emitArrayDecl(&op), true; }
+  bool visitOp(AllocOp op) { return emitter.emitAlloc(&op), true; }
+  bool visitOp(LoadOp op) { return emitter.emitLoad(&op), true; }
+  bool visitOp(StoreOp op) { return emitter.emitStore(&op), true; }
 
 private:
   ModuleEmitter &emitter;
@@ -415,11 +421,27 @@ void ModuleEmitter::emitValue(Value val, bool isPtr = false) {
   return;
 }
 
-void ModuleEmitter::emitArrayDecl(AllocOp *op) {
+void ModuleEmitter::emitAlloc(AllocOp *op) {
   indent();
   emitValue(op->getResult());
   for (auto &shape : op->getType().getShape())
     os << "[" << shape << "];\n";
+}
+
+void ModuleEmitter::emitLoad(LoadOp *op) {
+  indent();
+  emitValue(op->getResult());
+  os << " = " << getName(op->getOperand(0));
+  for (auto indice : llvm::drop_begin(op->getOperands(), 1))
+    os << "[" << getName(indice) << "];\n";
+}
+
+void ModuleEmitter::emitStore(StoreOp *op) {
+  indent();
+  os << getName(op->getOperand(1));
+  for (auto indice : llvm::drop_begin(op->getOperands(), 2))
+    os << "[" << getName(indice) << "]";
+  os << " = " << getName(op->getOperand(0)) << ";\n";
 }
 
 void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
