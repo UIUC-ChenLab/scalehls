@@ -83,8 +83,13 @@ public:
     auto *thisCast = static_cast<ConcreteType *>(this);
     return TypeSwitch<Operation *, ResultType>(op)
         .template Case<
-            // Memref related statements.
+            // Memref-related statements.
             AllocOp, LoadOp, StoreOp,
+            // Affine statements (with region).
+            AffineForOp, AffineIfOp, AffineParallelOp,
+            // Affine statements (without region).
+            AffineApplyOp, AffineMaxOp, AffineMinOp, AffineLoadOp,
+            AffineStoreOp,
             // Unary expressions.
             AbsFOp, CeilFOp, NegFOp, CosOp, SinOp, TanhOp, SqrtOp, RsqrtOp,
             ExpOp, Exp2Op, LogOp, Log2Op, Log10Op,
@@ -95,9 +100,10 @@ public:
             UnsignedDivIOp, UnsignedRemIOp, XOrOp, AndOp, OrOp, ShiftLeftOp,
             SignedShiftRightOp, UnsignedShiftRightOp,
             // Special operations.
-            ConstantOp, ReturnOp>([&](auto opNode) -> ResultType {
-          return thisCast->visitOp(opNode, args...);
-        })
+            AffineYieldOp, ConstantOp, ReturnOp>(
+            [&](auto opNode) -> ResultType {
+              return thisCast->visitOp(opNode, args...);
+            })
         .Default([&](auto opNode) -> ResultType {
           return thisCast->visitInvalidOp(op, args...);
         });
@@ -124,6 +130,18 @@ public:
   HANDLE(AllocOp);
   HANDLE(LoadOp);
   HANDLE(StoreOp);
+
+  // Affine statements (with region).
+  HANDLE(AffineForOp);
+  HANDLE(AffineIfOp);
+  HANDLE(AffineParallelOp);
+
+  // Affine statements (without region).
+  HANDLE(AffineApplyOp);
+  HANDLE(AffineMaxOp);
+  HANDLE(AffineMinOp);
+  HANDLE(AffineLoadOp);
+  HANDLE(AffineStoreOp);
 
   // Unary expressions.
   HANDLE(AbsFOp);
@@ -165,6 +183,7 @@ public:
   HANDLE(UnsignedShiftRightOp);
 
   // Special operations.
+  HANDLE(AffineYieldOp);
   HANDLE(ConstantOp);
   HANDLE(ReturnOp);
 #undef HANDLE
@@ -185,22 +204,30 @@ public:
   explicit ModuleEmitter(HLSCppEmitterState &state)
       : HLSCppEmitterBase(state) {}
 
+  // Memref-related statement emitters.
   void emitAlloc(AllocOp *op);
   void emitLoad(LoadOp *op);
   void emitStore(StoreOp *op);
 
+  // Affine statement emitters.
+  void emitAffineFor(AffineForOp *op);
+  void emitAffineIf(AffineIfOp *op) {}
+  void emitAffineParallel(AffineParallelOp *op) {}
+
+  // Standard expression emitters.
   void emitBinary(Operation *op, const char *syntax);
   void emitUnary(Operation *op, const char *syntax);
 
+  // MLIR module emitter.
   void emitModule(ModuleOp module);
 
 private:
   DenseMap<Value, SmallString<8>> nameTable;
-
   SmallString<8> getName(Value val);
   SmallString<8> addName(Value val, bool isPtr);
-
   void emitValue(Value val, bool isPtr);
+
+  void emitRegion(Region &region);
 
   void emitOperation(Operation *op);
   void emitFunction(FuncOp func);
@@ -261,6 +288,7 @@ public:
   bool visitOp(Log10Op op) { return emitter.emitUnary(op, "log10"), true; }
 
   // Special operations.
+  bool visitOp(AffineYieldOp op) { return true; }
   bool visitOp(ConstantOp op) { return true; }
   bool visitOp(ReturnOp op) { return true; }
 
@@ -329,6 +357,20 @@ public:
   bool visitOp(AllocOp op) { return emitter.emitAlloc(&op), true; }
   bool visitOp(LoadOp op) { return emitter.emitLoad(&op), true; }
   bool visitOp(StoreOp op) { return emitter.emitStore(&op), true; }
+
+  // Affine statements (with region).
+  bool visitOp(AffineForOp op) { return emitter.emitAffineFor(&op), true; }
+  bool visitOp(AffineIfOp op) { return emitter.emitAffineIf(&op), true; }
+  bool visitOp(AffineParallelOp op) {
+    return emitter.emitAffineParallel(&op), true;
+  }
+
+  // Affine statements (without region).
+  bool visitOp(AffineApplyOp op) { return true; }
+  bool visitOp(AffineMaxOp op) { return true; }
+  bool visitOp(AffineMinOp op) { return true; }
+  bool visitOp(AffineLoadOp op) { return true; }
+  bool visitOp(AffineStoreOp op) { return true; }
 
 private:
   ModuleEmitter &emitter;
@@ -402,7 +444,7 @@ void ModuleEmitter::emitValue(Value val, bool isPtr = false) {
 
   // Handle integer types.
   case StandardTypes::Index:
-    os << "int64_t ";
+    os << "int ";
     break;
   case StandardTypes::Integer: {
     auto intType = valType.cast<IntegerType>();
@@ -445,6 +487,28 @@ void ModuleEmitter::emitStore(StoreOp *op) {
   os << " = " << getName(op->getOperand(0)) << ";\n";
 }
 
+void ModuleEmitter::emitAffineFor(mlir::AffineForOp *op) {
+  indent();
+  os << "for (";
+  auto iterVar = op->getInductionVar();
+
+  // Emit lower bound.
+  emitValue(iterVar);
+  if (op->hasConstantLowerBound())
+    os << " = " << op->getConstantLowerBound() << "; ";
+
+  // Emit upper bound.
+  if (op->hasConstantUpperBound())
+    os << getName(iterVar) << " < " << op->getConstantUpperBound() << "; ";
+
+  // Emit increase step.
+  os << getName(iterVar) << " += " << op->getStep() << ") {\n";
+
+  emitRegion(op->getRegion());
+  indent();
+  os << "}\n";
+}
+
 void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
   indent();
   emitValue(op->getResult(0));
@@ -457,6 +521,16 @@ void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
   indent();
   emitValue(op->getResult(0));
   os << " = " << syntax << "(" << getName(op->getOperand(0)) << ");\n";
+}
+
+void ModuleEmitter::emitRegion(Region &region) {
+  // This method assumes the region owned by the targeted operation only
+  // contains one MLIR block.
+  addIndent();
+  for (auto &op : region.getBlocks().front()) {
+    emitOperation(&op);
+  }
+  reduceIndent();
 }
 
 void ModuleEmitter::emitOperation(Operation *op) {
