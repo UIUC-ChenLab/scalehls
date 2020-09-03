@@ -5,6 +5,7 @@
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/IR/AffineExprVisitor.h"
 #include "mlir/IR/Function.h"
 #include "mlir/IR/Module.h"
 #include "mlir/IR/StandardTypes.h"
@@ -33,11 +34,14 @@ class HLSCppEmitterState {
 public:
   explicit HLSCppEmitterState(raw_ostream &os) : os(os) {}
 
-  /// The stream to emit to.
+  // The stream to emit to.
   raw_ostream &os;
 
   bool encounteredError = false;
   unsigned currentIndent = 0;
+
+  // This table contains all declared values.
+  DenseMap<Value, SmallString<8>> nameTable;
 
 private:
   HLSCppEmitterState(const HLSCppEmitterState &) = delete;
@@ -65,14 +69,48 @@ public:
   // All of the mutable state we are maintaining.
   HLSCppEmitterState &state;
 
-  /// The stream to emit to.
+  // The stream to emit to.
   raw_ostream &os;
+
+  /// Value name management methods.
+  SmallString<8> addName(Value val, bool isPtr);
+  SmallString<8> getName(Value val);
 
 private:
   HLSCppEmitterBase(const HLSCppEmitterBase &) = delete;
   void operator=(const HLSCppEmitterBase &) = delete;
 };
 } // namespace
+
+SmallString<8> HLSCppEmitterBase::addName(Value val, bool isPtr = false) {
+  assert(state.nameTable[val].empty() && "duplicate value declaration");
+
+  // Temporary naming rule.
+  SmallString<8> newName;
+  if (isPtr)
+    newName += "*";
+  newName += StringRef("val" + to_string(state.nameTable.size()));
+
+  state.nameTable[val] = newName;
+  return newName;
+}
+
+SmallString<8> HLSCppEmitterBase::getName(Value val) {
+  // For constant operations, the constant number will be returned rather than
+  // the value name.
+  if (val.getKind() != Value::Kind::BlockArgument) {
+    if (auto constOp = dyn_cast<ConstantOp>(val.getDefiningOp())) {
+      if (auto floatAttr = constOp.getValue().dyn_cast<FloatAttr>())
+        return StringRef(to_string(floatAttr.getValueAsDouble()));
+      else if (auto intAttr = constOp.getValue().dyn_cast<IntegerAttr>())
+        return StringRef(to_string(intAttr.getInt()));
+      else
+        emitError(constOp, "has unsupported constant type.");
+    }
+  }
+
+  return state.nameTable[val];
+}
 
 namespace {
 /// This class is a visitor for SSACFG operation nodes.
@@ -83,13 +121,11 @@ public:
     auto *thisCast = static_cast<ConcreteType *>(this);
     return TypeSwitch<Operation *, ResultType>(op)
         .template Case<
+            // Affine statements.
+            AffineForOp, AffineIfOp, AffineParallelOp, AffineApplyOp,
+            AffineMaxOp, AffineMinOp, AffineLoadOp, AffineStoreOp,
             // Memref-related statements.
             AllocOp, LoadOp, StoreOp,
-            // Affine statements (with region).
-            AffineForOp, AffineIfOp, AffineParallelOp,
-            // Affine statements (without region).
-            AffineApplyOp, AffineMaxOp, AffineMinOp, AffineLoadOp,
-            AffineStoreOp,
             // Unary expressions.
             AbsFOp, CeilFOp, NegFOp, CosOp, SinOp, TanhOp, SqrtOp, RsqrtOp,
             ExpOp, Exp2Op, LogOp, Log2Op, Log10Op,
@@ -126,22 +162,20 @@ public:
     return static_cast<ConcreteType *>(this)->visitUnhandledOp(op, args...);   \
   }
 
-  // Memref related statements.
-  HANDLE(AllocOp);
-  HANDLE(LoadOp);
-  HANDLE(StoreOp);
-
-  // Affine statements (with region).
+  // Affine statements.
   HANDLE(AffineForOp);
   HANDLE(AffineIfOp);
   HANDLE(AffineParallelOp);
-
-  // Affine statements (without region).
   HANDLE(AffineApplyOp);
   HANDLE(AffineMaxOp);
   HANDLE(AffineMinOp);
   HANDLE(AffineLoadOp);
   HANDLE(AffineStoreOp);
+
+  // Memref-related statements.
+  HANDLE(AllocOp);
+  HANDLE(LoadOp);
+  HANDLE(StoreOp);
 
   // Unary expressions.
   HANDLE(AbsFOp);
@@ -201,36 +235,134 @@ public:
 namespace {
 class ModuleEmitter : public HLSCppEmitterBase {
 public:
+  using operand_range = Operation::operand_range;
   explicit ModuleEmitter(HLSCppEmitterState &state)
       : HLSCppEmitterBase(state) {}
 
-  // Memref-related statement emitters.
-  void emitAlloc(AllocOp *op);
-  void emitLoad(LoadOp *op);
-  void emitStore(StoreOp *op);
-
-  // Affine statement emitters.
+  /// Affine statement emitters.
   void emitAffineFor(AffineForOp *op);
   void emitAffineIf(AffineIfOp *op) {}
   void emitAffineParallel(AffineParallelOp *op) {}
 
-  // Standard expression emitters.
+  /// Memref-related statement emitters.
+  void emitAlloc(AllocOp *op);
+  void emitLoad(LoadOp *op);
+  void emitStore(StoreOp *op);
+
+  /// Standard expression emitters.
   void emitBinary(Operation *op, const char *syntax);
   void emitUnary(Operation *op, const char *syntax);
 
-  // MLIR module emitter.
+  /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
 
 private:
-  DenseMap<Value, SmallString<8>> nameTable;
-  SmallString<8> getName(Value val);
-  SmallString<8> addName(Value val, bool isPtr);
-  void emitValue(Value val, bool isPtr);
-
+  /// MLIR component emitters.
+  void emitValue(Value val, bool isPtr = false);
   void emitRegion(Region &region);
-
   void emitOperation(Operation *op);
   void emitFunction(FuncOp func);
+};
+} // namespace
+
+//===----------------------------------------------------------------------===//
+// AffineEmitter Class
+//===----------------------------------------------------------------------===//
+
+namespace {
+class AffineExprEmitter : public HLSCppEmitterBase,
+                          public AffineExprVisitor<AffineExprEmitter> {
+public:
+  using operand_range = Operation::operand_range;
+  explicit AffineExprEmitter(HLSCppEmitterState &state, unsigned numDim,
+                             operand_range operands)
+      : HLSCppEmitterBase(state), numDim(numDim), operands(operands) {}
+
+  void visitAddExpr(AffineBinaryOpExpr expr) { emitAffineBinary(expr, "+"); }
+  void visitMulExpr(AffineBinaryOpExpr expr) { emitAffineBinary(expr, "*"); }
+  void visitModExpr(AffineBinaryOpExpr expr) { emitAffineBinary(expr, "%"); }
+  void visitFloorDivExpr(AffineBinaryOpExpr expr) {
+    emitAffineBinary(expr, "/");
+  }
+  void visitCeilDivExpr(AffineBinaryOpExpr expr) {
+    // This is super inefficient.
+    os << "(";
+    visit(expr.getLHS());
+    os << " + ";
+    visit(expr.getRHS());
+    os << " - 1) / ";
+    visit(expr.getRHS());
+    os << ")";
+  }
+
+  void visitConstantExpr(AffineConstantExpr expr) {
+    auto exprValue = expr.getValue();
+    if (exprValue < 0)
+      os << "(" << exprValue << ")";
+    else
+      os << exprValue;
+  }
+
+  void visitDimExpr(AffineDimExpr expr) {
+    os << getName(operands[expr.getPosition()]);
+  }
+  void visitSymbolExpr(AffineSymbolExpr expr) {
+    os << getName(operands[numDim + expr.getPosition()]);
+  }
+
+  /// Affine expression emitters.
+  void emitAffineBinary(AffineBinaryOpExpr expr, const char *syntax) {
+    os << "(";
+    visit(expr.getLHS());
+    os << " " << syntax << " ";
+    visit(expr.getRHS());
+    os << ")";
+  }
+
+  void emitAffineExpr(AffineExpr expr) { visit(expr); }
+
+private:
+  unsigned numDim;
+  operand_range operands;
+};
+} // namespace
+
+//===----------------------------------------------------------------------===//
+// StmtVisitor Class
+//===----------------------------------------------------------------------===//
+
+namespace {
+class StmtVisitor : public HLSCppVisitorBase<StmtVisitor, bool> {
+public:
+  StmtVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
+
+  using HLSCppVisitorBase::visitOp;
+  /// Affine statements (with region).
+  bool visitOp(AffineForOp op) { return emitter.emitAffineFor(&op), true; }
+  bool visitOp(AffineIfOp op) { return emitter.emitAffineIf(&op), true; }
+  bool visitOp(AffineParallelOp op) {
+    return emitter.emitAffineParallel(&op), true;
+  }
+
+  /// Affine statements (without region).
+  bool visitOp(AffineApplyOp op) { return true; }
+  bool visitOp(AffineMaxOp op) { return true; }
+  bool visitOp(AffineMinOp op) { return true; }
+  bool visitOp(AffineLoadOp op) { return true; }
+  bool visitOp(AffineStoreOp op) { return true; }
+
+  /// Memref related statements.
+  bool visitOp(AllocOp op) { return emitter.emitAlloc(&op), true; }
+  bool visitOp(LoadOp op) { return emitter.emitLoad(&op), true; }
+  bool visitOp(StoreOp op) { return emitter.emitStore(&op), true; }
+
+  /// Special operations.
+  bool visitOp(AffineYieldOp op) { return true; }
+  bool visitOp(ConstantOp op) { return true; }
+  bool visitOp(ReturnOp op) { return true; }
+
+private:
+  ModuleEmitter &emitter;
 };
 } // namespace
 
@@ -244,7 +376,7 @@ public:
   ExprVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
 
   using HLSCppVisitorBase::visitOp;
-  // Float binary expressions.
+  /// Float binary expressions.
   bool visitOp(CmpFOp op);
   bool visitOp(AddFOp op) { return emitter.emitBinary(op, "+"), true; }
   bool visitOp(SubFOp op) { return emitter.emitBinary(op, "-"), true; }
@@ -252,7 +384,7 @@ public:
   bool visitOp(DivFOp op) { return emitter.emitBinary(op, "/"), true; }
   bool visitOp(RemFOp op) { return emitter.emitBinary(op, "%"), true; }
 
-  // Integer binary expressions.
+  /// Integer binary expressions.
   bool visitOp(CmpIOp op);
   bool visitOp(AddIOp op) { return emitter.emitBinary(op, "+"), true; }
   bool visitOp(SubIOp op) { return emitter.emitBinary(op, "-"), true; }
@@ -272,7 +404,7 @@ public:
     return emitter.emitBinary(op, ">>"), true;
   }
 
-  // Unary expressions.
+  /// Unary expressions.
   bool visitOp(AbsFOp op) { return emitter.emitUnary(op, "abs"), true; }
   bool visitOp(CeilFOp op) { return emitter.emitUnary(op, "ceil"), true; }
   bool visitOp(NegFOp op) { return emitter.emitUnary(op, "-"), true; }
@@ -286,11 +418,6 @@ public:
   bool visitOp(LogOp op) { return emitter.emitUnary(op, "log"), true; }
   bool visitOp(Log2Op op) { return emitter.emitUnary(op, "log2"), true; }
   bool visitOp(Log10Op op) { return emitter.emitUnary(op, "log10"), true; }
-
-  // Special operations.
-  bool visitOp(AffineYieldOp op) { return true; }
-  bool visitOp(ConstantOp op) { return true; }
-  bool visitOp(ReturnOp op) { return true; }
 
 private:
   ModuleEmitter &emitter;
@@ -344,83 +471,95 @@ bool ExprVisitor::visitOp(CmpIOp op) {
 }
 
 //===----------------------------------------------------------------------===//
-// StmtVisitor Class
-//===----------------------------------------------------------------------===//
-
-namespace {
-class StmtVisitor : public HLSCppVisitorBase<StmtVisitor, bool> {
-public:
-  StmtVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
-
-  using HLSCppVisitorBase::visitOp;
-  // Memref related statements.
-  bool visitOp(AllocOp op) { return emitter.emitAlloc(&op), true; }
-  bool visitOp(LoadOp op) { return emitter.emitLoad(&op), true; }
-  bool visitOp(StoreOp op) { return emitter.emitStore(&op), true; }
-
-  // Affine statements (with region).
-  bool visitOp(AffineForOp op) { return emitter.emitAffineFor(&op), true; }
-  bool visitOp(AffineIfOp op) { return emitter.emitAffineIf(&op), true; }
-  bool visitOp(AffineParallelOp op) {
-    return emitter.emitAffineParallel(&op), true;
-  }
-
-  // Affine statements (without region).
-  bool visitOp(AffineApplyOp op) { return true; }
-  bool visitOp(AffineMaxOp op) { return true; }
-  bool visitOp(AffineMinOp op) { return true; }
-  bool visitOp(AffineLoadOp op) { return true; }
-  bool visitOp(AffineStoreOp op) { return true; }
-
-private:
-  ModuleEmitter &emitter;
-};
-} // namespace
-
-//===----------------------------------------------------------------------===//
 // ModuleEmitter Class Implementation
 //===----------------------------------------------------------------------===//
 
-SmallString<8> ModuleEmitter::getName(Value val) {
-  if (val.getKind() == Value::Kind::BlockArgument)
-    return nameTable[val];
+/// Affine statement emitters.
+void ModuleEmitter::emitAffineFor(AffineForOp *op) {
+  indent();
+  os << "for (";
+  auto iterVar = op->getInductionVar();
 
-  // If value is the result of a constant operation, the constant number will be
-  // returned rather than the value name.
-  else if (auto constOp = dyn_cast<ConstantOp>(val.getDefiningOp())) {
-    auto valAttr = constOp.getValue();
-    switch (valAttr.getType().getKind()) {
-    case StandardTypes::F32:
-    case StandardTypes::F64:
-      return StringRef(to_string(valAttr.cast<FloatAttr>().getValueAsDouble()));
+  // Emit lower bound.
+  emitValue(iterVar);
+  os << " = ";
+  AffineExprEmitter(state, op->getLowerBoundMap().getNumDims(),
+                    op->getLowerBoundOperands())
+      .emitAffineExpr(op->getLowerBoundMap().getResult(0));
+  os << "; ";
 
-    case StandardTypes::Index:
-    case StandardTypes::Integer:
-      return StringRef(to_string(valAttr.cast<IntegerAttr>().getInt()));
+  // Emit upper bound.
+  emitValue(iterVar);
+  os << " < ";
+  AffineExprEmitter(state, op->getUpperBoundMap().getNumDims(),
+                    op->getUpperBoundOperands())
+      .emitAffineExpr(op->getUpperBoundMap().getResult(0));
+  os << "; ";
 
-    default:
-      emitError(val.getDefiningOp(), "has unsupported type.");
-      break;
-    }
-  } else
-    return nameTable[val];
+  // Emit increase step.
+  emitValue(iterVar);
+  os << " += " << op->getStep() << ") {\n";
+
+  emitRegion(op->getRegion());
+  indent();
+  os << "}\n";
 }
 
-SmallString<8> ModuleEmitter::addName(Value val, bool isPtr = false) {
-  // Temporary naming rule.
-  SmallString<8> newName;
-  if (isPtr)
-    newName += "*";
-  newName += StringRef("val" + to_string(nameTable.size()));
-
-  // It seems currently addName method is only used by emitValue method,
-  // which has already checked whether the current value has be declared.
-  nameTable[val] = newName;
-  return newName;
+/// Memref-related statement emitters.
+void ModuleEmitter::emitAlloc(AllocOp *op) {
+  indent();
+  emitValue(op->getResult());
+  for (auto &shape : op->getType().getShape())
+    os << "[" << shape << "];\n";
 }
 
-void ModuleEmitter::emitValue(Value val, bool isPtr = false) {
-  // Value has been declared before.
+void ModuleEmitter::emitLoad(LoadOp *op) {
+  indent();
+  emitValue(op->getResult());
+  os << " = ";
+  emitValue(op->getOperand(0));
+  for (auto indice : llvm::drop_begin(op->getOperands(), 1)) {
+    os << "[";
+    emitValue(indice);
+    os << "];\n";
+  }
+}
+
+void ModuleEmitter::emitStore(StoreOp *op) {
+  indent();
+  emitValue(op->getOperand(1));
+  for (auto indice : llvm::drop_begin(op->getOperands(), 2)) {
+    os << "[";
+    emitValue(indice);
+    os << "]";
+  }
+  os << " = ";
+  emitValue(op->getOperand(0));
+  os << ";\n";
+}
+
+/// Standard expression emitters.
+void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
+  indent();
+  emitValue(op->getResult(0));
+  os << " = ";
+  emitValue(op->getOperand(0));
+  os << " " << syntax << " ";
+  emitValue(op->getOperand(1));
+  os << ";\n";
+}
+
+void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
+  indent();
+  emitValue(op->getResult(0));
+  os << " = " << syntax << "(";
+  emitValue(op->getOperand(0));
+  os << ");\n";
+}
+
+/// MLIR component emitters.
+void ModuleEmitter::emitValue(Value val, bool isPtr) {
+  // Value has been declared before or is a constant number.
   auto valName = getName(val);
   if (!valName.empty()) {
     os << valName;
@@ -462,65 +601,6 @@ void ModuleEmitter::emitValue(Value val, bool isPtr = false) {
   // Add the new value to nameTable and emit its name.
   os << addName(val, isPtr);
   return;
-}
-
-void ModuleEmitter::emitAlloc(AllocOp *op) {
-  indent();
-  emitValue(op->getResult());
-  for (auto &shape : op->getType().getShape())
-    os << "[" << shape << "];\n";
-}
-
-void ModuleEmitter::emitLoad(LoadOp *op) {
-  indent();
-  emitValue(op->getResult());
-  os << " = " << getName(op->getOperand(0));
-  for (auto indice : llvm::drop_begin(op->getOperands(), 1))
-    os << "[" << getName(indice) << "];\n";
-}
-
-void ModuleEmitter::emitStore(StoreOp *op) {
-  indent();
-  os << getName(op->getOperand(1));
-  for (auto indice : llvm::drop_begin(op->getOperands(), 2))
-    os << "[" << getName(indice) << "]";
-  os << " = " << getName(op->getOperand(0)) << ";\n";
-}
-
-void ModuleEmitter::emitAffineFor(mlir::AffineForOp *op) {
-  indent();
-  os << "for (";
-  auto iterVar = op->getInductionVar();
-
-  // Emit lower bound.
-  emitValue(iterVar);
-  if (op->hasConstantLowerBound())
-    os << " = " << op->getConstantLowerBound() << "; ";
-
-  // Emit upper bound.
-  if (op->hasConstantUpperBound())
-    os << getName(iterVar) << " < " << op->getConstantUpperBound() << "; ";
-
-  // Emit increase step.
-  os << getName(iterVar) << " += " << op->getStep() << ") {\n";
-
-  emitRegion(op->getRegion());
-  indent();
-  os << "}\n";
-}
-
-void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
-  indent();
-  emitValue(op->getResult(0));
-  os << " = " << getName(op->getOperand(0));
-  os << " " << syntax << " ";
-  os << getName(op->getOperand(1)) << ";\n";
-}
-
-void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
-  indent();
-  emitValue(op->getResult(0));
-  os << " = " << syntax << "(" << getName(op->getOperand(0)) << ");\n";
 }
 
 void ModuleEmitter::emitRegion(Region &region) {
@@ -599,6 +679,7 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   os << "}\n";
 }
 
+/// Top-level MLIR module emitter.
 void ModuleEmitter::emitModule(ModuleOp module) {
   os << R"XXX(
 //===------------------------------------------------------------*- C++ -*-===//
