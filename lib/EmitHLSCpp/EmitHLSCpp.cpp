@@ -7,6 +7,7 @@
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/AffineExprVisitor.h"
 #include "mlir/IR/Function.h"
+#include "mlir/IR/IntegerSet.h"
 #include "mlir/IR/Module.h"
 #include "mlir/IR/StandardTypes.h"
 #include "mlir/Support/LLVM.h"
@@ -17,8 +18,8 @@
 
 #include "EmitHLSCpp.h"
 
-using namespace std;
 using namespace mlir;
+using namespace std;
 
 //===----------------------------------------------------------------------===//
 // Some Base Classes
@@ -241,8 +242,8 @@ public:
 
   /// Affine statement emitters.
   void emitAffineFor(AffineForOp *op);
-  void emitAffineIf(AffineIfOp *op) {}
-  void emitAffineParallel(AffineParallelOp *op) {}
+  void emitAffineIf(AffineIfOp *op);
+  void emitAffineParallel(AffineParallelOp *op);
 
   /// Memref-related statement emitters.
   void emitAlloc(AllocOp *op);
@@ -259,8 +260,8 @@ public:
 private:
   /// MLIR component emitters.
   void emitValue(Value val, bool isPtr = false);
-  void emitRegion(Region &region);
   void emitOperation(Operation *op);
+  void emitBlock(Block &block);
   void emitFunction(FuncOp func);
 };
 } // namespace
@@ -526,10 +527,46 @@ void ModuleEmitter::emitAffineFor(AffineForOp *op) {
   emitValue(iterVar);
   os << " += " << op->getStep() << ") {\n";
 
-  emitRegion(op->getRegion());
+  emitBlock(op->getRegion().front());
   indent();
   os << "}\n";
 }
+
+void ModuleEmitter::emitAffineIf(mlir::AffineIfOp *op) {
+  indent();
+  os << "if (";
+  auto constrSet = op->getIntegerSet();
+  AffineExprEmitter constrEmitter(state, constrSet.getNumDims(),
+                                  op->getOperands());
+
+  // Emit all constraints.
+  unsigned constrIdx = 0;
+  for (auto &expr : constrSet.getConstraints()) {
+    constrEmitter.emitAffineExpr(expr);
+    if (constrSet.isEq(constrIdx))
+      os << " == 0";
+    else
+      os << " >= 0";
+
+    if (constrIdx != constrSet.getNumConstraints() - 1)
+      os << " && ";
+
+    constrIdx += 1;
+  }
+  os << ") {\n";
+  emitBlock(*op->getThenBlock());
+
+  if (op->hasElse()) {
+    indent();
+    os << "} else {\n";
+    emitBlock(*op->getElseBlock());
+  }
+
+  indent();
+  os << "}\n";
+}
+
+void ModuleEmitter::emitAffineParallel(AffineParallelOp *op) { return; }
 
 /// Memref-related statement emitters.
 void ModuleEmitter::emitAlloc(AllocOp *op) {
@@ -629,16 +666,6 @@ void ModuleEmitter::emitValue(Value val, bool isPtr) {
   return;
 }
 
-void ModuleEmitter::emitRegion(Region &region) {
-  // This method assumes the region owned by the targeted operation only
-  // contains one MLIR block.
-  addIndent();
-  for (auto &op : region.getBlocks().front()) {
-    emitOperation(&op);
-  }
-  reduceIndent();
-}
-
 void ModuleEmitter::emitOperation(Operation *op) {
   if (ExprVisitor(*this).dispatchVisitor(op))
     return;
@@ -647,6 +674,14 @@ void ModuleEmitter::emitOperation(Operation *op) {
     return;
 
   emitError(op, "can't be correctly emitted.");
+}
+
+void ModuleEmitter::emitBlock(Block &block) {
+  addIndent();
+  for (auto &op : block) {
+    emitOperation(&op);
+  }
+  reduceIndent();
 }
 
 void ModuleEmitter::emitFunction(FuncOp func) {
@@ -695,13 +730,7 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   os << ") {\n";
 
   // Emit function body.
-  addIndent();
-
-  // Traverse all operations and emit them.
-  for (auto &op : func.front())
-    emitOperation(&op);
-
-  reduceIndent();
+  emitBlock(func.front());
   os << "}\n";
 }
 

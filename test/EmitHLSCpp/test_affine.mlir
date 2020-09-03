@@ -1,6 +1,7 @@
 // RUN: hlsld-translate -emit-hlscpp %s | FileCheck %s
 
 #map0 = affine_map<(d0)[s0] -> (d0 + s0, d0, d0 - s0)>
+#set0 = affine_set<(d0)[s0]: (d0 + s0 - 5 >= 0, d0 >= 0)>
 
 // CHECK:       void test_affine(
 // CHECK-NEXT:    ap_int<32> val[[INT1:.*]],
@@ -19,6 +20,9 @@ func @test_affine(%arg0: i32, %arg1: memref<16xi32>, %arg2: index) -> () {
       %1 = addi %arg0, %0 : i32
       // CHECK: val[[INT2:.*]][val[[INT5:.*]]] = val[[INT7:.*]];
       store %1, %arg1[%j] : memref<16xi32>
+      affine.if #set0(%i)[%c11] {
+        store %0, %arg1[%j] : memref<16xi32>
+      }
     // CHECK: }
     }
   // CHECK: }
