@@ -483,17 +483,43 @@ void ModuleEmitter::emitAffineFor(AffineForOp *op) {
   // Emit lower bound.
   emitValue(iterVar);
   os << " = ";
-  AffineExprEmitter(state, op->getLowerBoundMap().getNumDims(),
-                    op->getLowerBoundOperands())
-      .emitAffineExpr(op->getLowerBoundMap().getResult(0));
+  auto lowerMap = op->getLowerBoundMap();
+  AffineExprEmitter lowerEmitter(state, lowerMap.getNumDims(),
+                                 op->getLowerBoundOperands());
+  if (lowerMap.getNumResults() == 1)
+    lowerEmitter.emitAffineExpr(lowerMap.getResult(0));
+  else {
+    for (unsigned i = 0, e = lowerMap.getNumResults() - 1; i < e; ++i) {
+      os << "max(";
+    }
+    lowerEmitter.emitAffineExpr(lowerMap.getResult(0));
+    for (auto &expr : llvm::drop_begin(lowerMap.getResults(), 1)) {
+      os << ", ";
+      lowerEmitter.emitAffineExpr(expr);
+      os << ")";
+    }
+  }
   os << "; ";
 
   // Emit upper bound.
   emitValue(iterVar);
   os << " < ";
-  AffineExprEmitter(state, op->getUpperBoundMap().getNumDims(),
-                    op->getUpperBoundOperands())
-      .emitAffineExpr(op->getUpperBoundMap().getResult(0));
+  auto upperMap = op->getUpperBoundMap();
+  AffineExprEmitter upperEmitter(state, upperMap.getNumDims(),
+                                 op->getUpperBoundOperands());
+  if (upperMap.getNumResults() == 1)
+    upperEmitter.emitAffineExpr(upperMap.getResult(0));
+  else {
+    for (unsigned i = 0, e = upperMap.getNumResults() - 1; i < e; ++i) {
+      os << "min(";
+    }
+    upperEmitter.emitAffineExpr(upperMap.getResult(0));
+    for (auto &expr : llvm::drop_begin(upperMap.getResults(), 1)) {
+      os << ", ";
+      upperEmitter.emitAffineExpr(expr);
+      os << ")";
+    }
+  }
   os << "; ";
 
   // Emit increase step.
@@ -688,6 +714,7 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 //
 //===----------------------------------------------------------------------===//
 
+#include <algorithm>
 #include <ap_axi_sdata.h>
 #include <ap_fixed.h>
 #include <ap_int.h>
@@ -695,6 +722,8 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 #include <hls_stream.h>
 #include <math.h>
 #include <stdint.h>
+
+using namespace std;
 
 )XXX";
 

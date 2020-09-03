@@ -1,6 +1,6 @@
 // RUN: hlsld-translate -emit-hlscpp %s | FileCheck %s
 
-#map0 = affine_map<(d0)[s0] -> (d0 + s0)>
+#map0 = affine_map<(d0)[s0] -> (d0 + s0, d0, d0 - s0)>
 
 // CHECK:       void test_affine(
 // CHECK-NEXT:    ap_int<32> val[[INT1:.*]],
@@ -9,8 +9,8 @@
 // CHECK-NEXT:  ) {
 func @test_affine(%arg0: i32, %arg1: memref<16xi32>, %arg2: index) -> () {
   %c11 = constant 11 : index
-  // CHECK: for (int val[[INT4:.*]] = 0; val[[INT4:.*]] < (val[[INT3:.*]] + 11); val[[INT4:.*]] += 1) {
-  affine.for %i = 0 to #map0(%arg2)[%c11] {
+  // CHECK: for (int val[[INT4:.*]] = 0; val[[INT4:.*]] < min(min((val[[INT3:.*]] + 11), val[[INT3:.*]]), (val[[INT3:.*]] + (11 * (-1)))); val[[INT4:.*]] += 1) {
+  affine.for %i = 0 to min #map0(%arg2)[%c11] {
     // CHECK: for (int val[[INT5:.*]] = 0; val[[INT5:.*]] < 16; val[[INT5:.*]] += 2) {
     affine.for %j = 0 to 16 step 2 {
       //  ap_int<32> val[[INT6:.*]] = val[[INT2:.*]][val[[INT4:.*]]];
