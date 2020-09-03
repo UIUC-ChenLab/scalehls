@@ -125,6 +125,7 @@ public:
             // Affine statements.
             AffineForOp, AffineIfOp, AffineParallelOp, AffineApplyOp,
             AffineMaxOp, AffineMinOp, AffineLoadOp, AffineStoreOp,
+            AffineYieldOp,
             // Memref-related statements.
             AllocOp, LoadOp, StoreOp,
             // Unary expressions.
@@ -137,10 +138,9 @@ public:
             UnsignedDivIOp, UnsignedRemIOp, XOrOp, AndOp, OrOp, ShiftLeftOp,
             SignedShiftRightOp, UnsignedShiftRightOp,
             // Special operations.
-            AffineYieldOp, ConstantOp, ReturnOp>(
-            [&](auto opNode) -> ResultType {
-              return thisCast->visitOp(opNode, args...);
-            })
+            ConstantOp, ReturnOp>([&](auto opNode) -> ResultType {
+          return thisCast->visitOp(opNode, args...);
+        })
         .Default([&](auto opNode) -> ResultType {
           return thisCast->visitInvalidOp(op, args...);
         });
@@ -172,6 +172,7 @@ public:
   HANDLE(AffineMinOp);
   HANDLE(AffineLoadOp);
   HANDLE(AffineStoreOp);
+  HANDLE(AffineYieldOp);
 
   // Memref-related statements.
   HANDLE(AllocOp);
@@ -218,7 +219,6 @@ public:
   HANDLE(UnsignedShiftRightOp);
 
   // Special operations.
-  HANDLE(AffineYieldOp);
   HANDLE(ConstantOp);
   HANDLE(ReturnOp);
 #undef HANDLE
@@ -244,6 +244,7 @@ public:
   void emitAffineFor(AffineForOp *op);
   void emitAffineIf(AffineIfOp *op);
   void emitAffineParallel(AffineParallelOp *op);
+  void emitAffineYield(AffineYieldOp *op);
 
   /// Memref-related statement emitters.
   void emitAlloc(AllocOp *op);
@@ -344,13 +345,12 @@ public:
   bool visitOp(AffineParallelOp op) {
     return emitter.emitAffineParallel(&op), true;
   }
-
-  /// Affine statements (without region).
   bool visitOp(AffineApplyOp op) { return true; }
   bool visitOp(AffineMaxOp op) { return true; }
   bool visitOp(AffineMinOp op) { return true; }
   bool visitOp(AffineLoadOp op) { return true; }
   bool visitOp(AffineStoreOp op) { return true; }
+  bool visitOp(AffineYieldOp op) { return emitter.emitAffineYield(&op), true; }
 
   /// Memref related statements.
   bool visitOp(AllocOp op) { return emitter.emitAlloc(&op), true; }
@@ -358,7 +358,6 @@ public:
   bool visitOp(StoreOp op) { return emitter.emitStore(&op), true; }
 
   /// Special operations.
-  bool visitOp(AffineYieldOp op) { return true; }
   bool visitOp(ConstantOp op) { return true; }
   bool visitOp(ReturnOp op) { return true; }
 
@@ -532,7 +531,15 @@ void ModuleEmitter::emitAffineFor(AffineForOp *op) {
   os << "}\n";
 }
 
-void ModuleEmitter::emitAffineIf(mlir::AffineIfOp *op) {
+void ModuleEmitter::emitAffineIf(AffineIfOp *op) {
+  // Declare all values returned by AffineYieldOp. They will be further handled
+  // by the AffineYieldOp emitter.
+  for (auto result : op->getResults()) {
+    indent();
+    emitValue(result);
+    os << ";\n";
+  }
+
   indent();
   os << "if (";
   auto constrSet = op->getIntegerSet();
@@ -567,6 +574,21 @@ void ModuleEmitter::emitAffineIf(mlir::AffineIfOp *op) {
 }
 
 void ModuleEmitter::emitAffineParallel(AffineParallelOp *op) { return; }
+
+void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
+  // For now, only AffineIfOp may yield values.
+  if (auto affineIf = dyn_cast<AffineIfOp>(op->getParentOp())) {
+    unsigned resultIdx = 0;
+    for (auto result : affineIf.getResults()) {
+      indent();
+      emitValue(result);
+      os << " = ";
+      emitValue(op->getOperand(resultIdx));
+      os << ";\n";
+      resultIdx += 1;
+    }
+  }
+}
 
 /// Memref-related statement emitters.
 void ModuleEmitter::emitAlloc(AllocOp *op) {
