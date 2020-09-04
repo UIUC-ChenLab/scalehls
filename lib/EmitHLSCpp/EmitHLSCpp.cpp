@@ -126,9 +126,15 @@ public:
             // Affine statements.
             AffineForOp, AffineIfOp, AffineParallelOp, AffineApplyOp,
             AffineMaxOp, AffineMinOp, AffineLoadOp, AffineStoreOp,
-            AffineYieldOp,
+            AffineYieldOp, AffineVectorLoadOp, AffineVectorStoreOp,
+            AffineDmaStartOp, AffineDmaWaitOp,
             // Memref-related statements.
-            AllocOp, LoadOp, StoreOp, DeallocOp,
+            AllocOp, AllocaOp, LoadOp, StoreOp, DeallocOp, DmaStartOp,
+            DmaWaitOp, AtomicRMWOp, GenericAtomicRMWOp, AtomicYieldOp,
+            MemRefCastOp, ViewOp, SubViewOp,
+            // Tensor-related statements.
+            TensorLoadOp, TensorStoreOp, ExtractElementOp, TensorFromElementsOp,
+            SplatOp, TensorCastOp, DimOp, RankOp,
             // Unary expressions.
             AbsFOp, CeilFOp, NegFOp, CosOp, SinOp, TanhOp, SqrtOp, RsqrtOp,
             ExpOp, Exp2Op, LogOp, Log2Op, Log10Op,
@@ -138,7 +144,10 @@ public:
             CmpIOp, AddIOp, SubIOp, MulIOp, SignedDivIOp, SignedRemIOp,
             UnsignedDivIOp, UnsignedRemIOp, XOrOp, AndOp, OrOp, ShiftLeftOp,
             SignedShiftRightOp, UnsignedShiftRightOp,
+            // Complex expressions.
+            AddCFOp, SubCFOp, ImOp, ReOp, CreateComplexOp,
             // Special operations.
+            CopySignOp, TruncateIOp, ZeroExtendIOp, SignExtendIOp, IndexCastOp,
             SelectOp, ConstantOp, CallOp, ReturnOp>(
             [&](auto opNode) -> ResultType {
               return thisCast->visitOp(opNode, args...);
@@ -175,12 +184,35 @@ public:
   HANDLE(AffineLoadOp);
   HANDLE(AffineStoreOp);
   HANDLE(AffineYieldOp);
+  HANDLE(AffineVectorLoadOp);
+  HANDLE(AffineVectorStoreOp);
+  HANDLE(AffineDmaStartOp);
+  HANDLE(AffineDmaWaitOp);
 
   // Memref-related statements.
   HANDLE(AllocOp);
+  HANDLE(AllocaOp);
   HANDLE(LoadOp);
   HANDLE(StoreOp);
   HANDLE(DeallocOp);
+  HANDLE(DmaStartOp);
+  HANDLE(DmaWaitOp);
+  HANDLE(AtomicRMWOp);
+  HANDLE(GenericAtomicRMWOp);
+  HANDLE(AtomicYieldOp);
+  HANDLE(MemRefCastOp);
+  HANDLE(ViewOp);
+  HANDLE(SubViewOp);
+
+  // Tensor-related statements.
+  HANDLE(TensorLoadOp);
+  HANDLE(TensorStoreOp);
+  HANDLE(ExtractElementOp);
+  HANDLE(TensorFromElementsOp);
+  HANDLE(SplatOp);
+  HANDLE(TensorCastOp);
+  HANDLE(DimOp);
+  HANDLE(RankOp);
 
   // Unary expressions.
   HANDLE(AbsFOp);
@@ -221,7 +253,19 @@ public:
   HANDLE(SignedShiftRightOp);
   HANDLE(UnsignedShiftRightOp);
 
+  // Complex expressions.
+  HANDLE(AddCFOp);
+  HANDLE(SubCFOp);
+  HANDLE(ImOp);
+  HANDLE(ReOp);
+  HANDLE(CreateComplexOp);
+
   // Special operations.
+  HANDLE(CopySignOp);
+  HANDLE(TruncateIOp);
+  HANDLE(ZeroExtendIOp);
+  HANDLE(SignExtendIOp);
+  HANDLE(IndexCastOp);
   HANDLE(SelectOp);
   HANDLE(ConstantOp);
   HANDLE(CallOp);
@@ -257,7 +301,8 @@ public:
   void emitAffineYield(AffineYieldOp *op);
 
   /// Memref-related statement emitters.
-  void emitAlloc(AllocOp *op);
+  template <typename OpType>
+  void emitAlloc(OpType *op);
   void emitLoad(LoadOp *op);
   void emitStore(StoreOp *op);
 
@@ -266,6 +311,7 @@ public:
   void emitUnary(Operation *op, const char *syntax);
 
   /// Special operation emitters.
+  void emitIndexCast(IndexCastOp *op);
   void emitSelect(SelectOp *op);
   void emitConstant(ConstantOp *op);
   void emitCall(CallOp *op);
@@ -368,7 +414,8 @@ public:
   bool visitOp(AffineYieldOp op) { return emitter.emitAffineYield(&op), true; }
 
   /// Memref related statements.
-  bool visitOp(AllocOp op) { return emitter.emitAlloc(&op), true; }
+  bool visitOp(AllocOp op) { return emitter.emitAlloc<AllocOp>(&op), true; }
+  bool visitOp(AllocaOp op) { return emitter.emitAlloc<AllocaOp>(&op), true; }
   bool visitOp(LoadOp op) { return emitter.emitLoad(&op), true; }
   bool visitOp(StoreOp op) { return emitter.emitStore(&op), true; }
   bool visitOp(DeallocOp op) { return true; }
@@ -428,7 +475,8 @@ public:
   bool visitOp(Log10Op op) { return emitter.emitUnary(op, "log10"), true; }
 
   /// Special operations.
-  bool visitOp(SelectOp op) { return emitter.emitSelect(&op), true; };
+  bool visitOp(IndexCastOp op) { return emitter.emitIndexCast(&op), true; }
+  bool visitOp(SelectOp op) { return emitter.emitSelect(&op), true; }
   bool visitOp(ConstantOp op) { return emitter.emitConstant(&op), true; }
   bool visitOp(CallOp op) { return emitter.emitCall(&op), true; }
   bool visitOp(ReturnOp op) { return true; }
@@ -828,7 +876,8 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
 }
 
 /// Memref-related statement emitters.
-void ModuleEmitter::emitAlloc(AllocOp *op) {
+template <typename OpType>
+void ModuleEmitter::emitAlloc(OpType *op) {
   // This indicates that the memref is output of the function, and has been
   // declared in the function signature.
   if (!getName(op->getResult()).empty())
@@ -885,6 +934,14 @@ void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
 }
 
 /// Special operation emitters.
+void ModuleEmitter::emitIndexCast(IndexCastOp *op) {
+  indent();
+  emitValue(op->getResult());
+  os << " = ";
+  emitValue(op->getOperand());
+  os << ";\n";
+}
+
 void ModuleEmitter::emitSelect(SelectOp *op) {
   indent();
   emitValue(op->getResult());
