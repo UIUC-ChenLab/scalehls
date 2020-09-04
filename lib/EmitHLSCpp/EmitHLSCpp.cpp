@@ -138,7 +138,7 @@ public:
             UnsignedDivIOp, UnsignedRemIOp, XOrOp, AndOp, OrOp, ShiftLeftOp,
             SignedShiftRightOp, UnsignedShiftRightOp,
             // Special operations.
-            ConstantOp, ReturnOp>([&](auto opNode) -> ResultType {
+            SelectOp, ConstantOp, ReturnOp>([&](auto opNode) -> ResultType {
           return thisCast->visitOp(opNode, args...);
         })
         .Default([&](auto opNode) -> ResultType {
@@ -219,6 +219,7 @@ public:
   HANDLE(UnsignedShiftRightOp);
 
   // Special operations.
+  HANDLE(SelectOp);
   HANDLE(ConstantOp);
   HANDLE(ReturnOp);
 #undef HANDLE
@@ -259,6 +260,7 @@ public:
   /// Standard expression emitters.
   void emitBinary(Operation *op, const char *syntax);
   void emitUnary(Operation *op, const char *syntax);
+  void emitSelect(SelectOp *op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
@@ -335,7 +337,7 @@ private:
 } // namespace
 
 //===----------------------------------------------------------------------===//
-// StmtVisitor Class
+// StmtVisitor and ExprVisitor Classes
 //===----------------------------------------------------------------------===//
 
 namespace {
@@ -362,18 +364,10 @@ public:
   bool visitOp(LoadOp op) { return emitter.emitLoad(&op), true; }
   bool visitOp(StoreOp op) { return emitter.emitStore(&op), true; }
 
-  /// Special operations.
-  bool visitOp(ConstantOp op) { return true; }
-  bool visitOp(ReturnOp op) { return true; }
-
 private:
   ModuleEmitter &emitter;
 };
 } // namespace
-
-//===----------------------------------------------------------------------===//
-// ExprVisitor Class
-//===----------------------------------------------------------------------===//
 
 namespace {
 class ExprVisitor : public HLSCppVisitorBase<ExprVisitor, bool> {
@@ -424,9 +418,14 @@ public:
   bool visitOp(Log2Op op) { return emitter.emitUnary(op, "log2"), true; }
   bool visitOp(Log10Op op) { return emitter.emitUnary(op, "log10"), true; }
 
+  /// Special operations.
+  bool visitOp(SelectOp op) { return emitter.emitSelect(&op), true; };
+  bool visitOp(ConstantOp op) { return true; }
+  bool visitOp(ReturnOp op) { return true; }
+
 private:
   ModuleEmitter &emitter;
-};
+}; // namespace
 } // namespace
 
 bool ExprVisitor::visitOp(CmpFOp op) {
@@ -724,6 +723,18 @@ void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
   os << " = " << syntax << "(";
   emitValue(op->getOperand(0));
   os << ");\n";
+}
+
+void ModuleEmitter::emitSelect(SelectOp *op) {
+  indent();
+  emitValue(op->getResult());
+  os << " = ";
+  emitValue(op->getCondition());
+  os << " ? ";
+  emitValue(op->getTrueValue());
+  os << " : ";
+  emitValue(op->getFalseValue());
+  os << ";\n";
 }
 
 /// MLIR component emitters.

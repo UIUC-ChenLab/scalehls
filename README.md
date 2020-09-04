@@ -1,6 +1,6 @@
 # HLS Large Design Project (HLSLD)
 
-This project aims to create a framework that ultimately converts an algorithm written in a high level language into an efficient hardware implementation. Out of all of the existing deep learning compiler related projects, TVM and MLIR present existing tools that we can leverage in our proposed framework. With multiple levels of intermediate representations (IRs), MLIR appears to be the ideal tool for exploring ways to optimize the eventual design at various levels of abstraction (e.g. various levels of parallelism). Our framework will be based on MLIR, but it will incorporate a frontend for Sitao's powerful domain specific language (DSL) and a backend for high level synthesis (HLS) C/C++ code. However, the key contribution will be our parametrization and optimization of a tremendously large design space. So far, we are familiarizing ourselves with the existing MLIR flow using a toy example (simple neural network for MNIST digit classification) and figure out how to do this parametrization and optimization. 
+This project aims to create a framework that ultimately converts an algorithm written in a high level language into an efficient hardware implementation. With multiple levels of intermediate representations (IRs), MLIR appears to be the ideal tool for exploring ways to optimize the eventual design at various levels of abstraction (e.g. various levels of parallelism). Our framework will be based on MLIR, it will incorporate a backend for high level synthesis (HLS) C/C++ code. However, the key contribution will be our parametrization and optimization of a tremendously large design space.
 
 ## Quick Start
 This setup assumes that you have built LLVM and MLIR in `$LLVM_BUILD_DIR`. To build and launch the tests, run
@@ -11,7 +11,8 @@ cmake --build . --target check-hlsld
 ```
 
 ## Hanchen TODO List
-1. Emitting HLS Cpp code from standard dialect.
+1. Test HLS C++ emitter with some real frontends (e.g., npcomp, onnx-mlir);
+2. Support more operations in Standard and Affine dialect if required.
 
 ## References
 1. [MLIR Documents](https://mlir.llvm.org)
