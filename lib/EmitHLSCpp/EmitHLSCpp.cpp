@@ -3,6 +3,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/AffineExprVisitor.h"
@@ -530,7 +531,10 @@ void ModuleEmitter::emitAffineFor(AffineForOp *op) {
   emitValue(iterVar);
   os << " += " << op->getStep() << ") {\n";
 
-  emitBlock(op->getRegion().front());
+  addIndent();
+  emitBlock(op->getLoopBody().front());
+  reduceIndent();
+
   indent();
   os << "}\n";
 }
@@ -565,19 +569,73 @@ void ModuleEmitter::emitAffineIf(AffineIfOp *op) {
     constrIdx += 1;
   }
   os << ") {\n";
+  addIndent();
   emitBlock(*op->getThenBlock());
+  reduceIndent();
 
   if (op->hasElse()) {
     indent();
     os << "} else {\n";
+    addIndent();
     emitBlock(*op->getElseBlock());
+    reduceIndent();
   }
 
   indent();
   os << "}\n";
 }
 
-void ModuleEmitter::emitAffineParallel(AffineParallelOp *op) { return; }
+void ModuleEmitter::emitAffineParallel(AffineParallelOp *op) {
+  // Declare all values returned by AffineParallelOp. They will be further
+  // handled by the AffineYieldOp emitter.
+  for (auto result : op->getResults()) {
+    indent();
+    emitValue(result);
+    os << ";\n";
+  }
+
+  for (unsigned i = 0, e = op->getNumDims(); i < e; ++i) {
+    indent();
+    os << "for (";
+    auto iterVar = op->getBody()->getArgument(i);
+
+    // Emit lower bound.
+    emitValue(iterVar);
+    os << " = ";
+    auto lowerMap = op->getLowerBoundsValueMap().getAffineMap();
+    AffineExprEmitter lowerEmitter(state, lowerMap.getNumDims(),
+                                   op->getLowerBoundsOperands());
+    lowerEmitter.emitAffineExpr(lowerMap.getResult(i));
+    os << "; ";
+
+    // Emit upper bound.
+    emitValue(iterVar);
+    os << " < ";
+    auto upperMap = op->getUpperBoundsValueMap().getAffineMap();
+    AffineExprEmitter upperEmitter(state, upperMap.getNumDims(),
+                                   op->getUpperBoundsOperands());
+    upperEmitter.emitAffineExpr(upperMap.getResult(i));
+    os << "; ";
+
+    // Emit increase step.
+    emitValue(iterVar);
+    auto step = op->getAttrOfType<ArrayAttr>(op->getStepsAttrName())[i]
+                    .cast<IntegerAttr>()
+                    .getInt();
+    os << " += " << step << ") {\n";
+
+    addIndent();
+  }
+
+  emitBlock(op->getLoopBody().front());
+
+  for (unsigned i = 0, e = op->getNumDims(); i < e; ++i) {
+    reduceIndent();
+
+    indent();
+    os << "}\n";
+  }
+}
 
 void ModuleEmitter::emitAffineApply(AffineApplyOp *op) {
   indent();
@@ -627,7 +685,7 @@ void ModuleEmitter::emitAffineMin(AffineMinOp *op) {
   os << ";\n";
 }
 
-void ModuleEmitter::emitAffineLoad(mlir::AffineLoadOp *op) {
+void ModuleEmitter::emitAffineLoad(AffineLoadOp *op) {
   indent();
   emitValue(op->getResult());
   os << " = ";
@@ -659,10 +717,14 @@ void ModuleEmitter::emitAffineStore(AffineStoreOp *op) {
 }
 
 void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
-  // For now, only AffineIfOp may yield values.
-  if (auto affineIf = dyn_cast<AffineIfOp>(op->getParentOp())) {
+  if (op->getNumOperands() == 0)
+    return;
+
+  // For now, only AffineParallel and AffineFor operations will use AffineYield
+  // to return generated values.
+  if (auto parentOp = dyn_cast<AffineIfOp>(op->getParentOp())) {
     unsigned resultIdx = 0;
-    for (auto result : affineIf.getResults()) {
+    for (auto result : parentOp.getResults()) {
       indent();
       emitValue(result);
       os << " = ";
@@ -670,6 +732,89 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
       os << ";\n";
       resultIdx += 1;
     }
+  } else if (auto parentOp =
+                 dyn_cast<mlir::AffineParallelOp>(op->getParentOp())) {
+    indent();
+    os << "if (";
+    emitValue(parentOp.getBody()->getArgument(0));
+    os << " == 0";
+    for (auto iv : llvm::drop_begin(parentOp.getBody()->getArguments(), 1)) {
+      os << " && ";
+      emitValue(iv);
+      os << " == 0";
+    }
+    os << ") {\n";
+
+    // When all induction values are 0, generated values will be directly
+    // assigned to the current results, correspondingly.
+    addIndent();
+    unsigned resultIdx = 0;
+    for (auto result : parentOp.getResults()) {
+      indent();
+      emitValue(result);
+      os << " = ";
+      emitValue(op->getOperand(resultIdx));
+      os << ";\n";
+      resultIdx += 1;
+    }
+    reduceIndent();
+
+    indent();
+    os << "} else {\n";
+
+    // Otherwise, generated values will be accumulated/reduced to the current
+    // results with corresponding AtomicRMWKind operations.
+    addIndent();
+    resultIdx = 0;
+    for (auto result : parentOp.getResults()) {
+      indent();
+      emitValue(result);
+      switch ((AtomicRMWKind)parentOp
+                  .getAttrOfType<ArrayAttr>(
+                      parentOp.getReductionsAttrName())[resultIdx]
+                  .cast<IntegerAttr>()
+                  .getInt()) {
+      case (AtomicRMWKind::addf):
+      case (AtomicRMWKind::addi):
+        os << " += ";
+        emitValue(op->getOperand(resultIdx));
+        break;
+      case (AtomicRMWKind::assign):
+        os << " = ";
+        emitValue(op->getOperand(resultIdx));
+        break;
+      case (AtomicRMWKind::maxf):
+      case (AtomicRMWKind::maxs):
+      case (AtomicRMWKind::maxu):
+        os << " = max(";
+        emitValue(result);
+        os << ", ";
+        emitValue(op->getOperand(resultIdx));
+        os << ")";
+        break;
+      case (AtomicRMWKind::minf):
+      case (AtomicRMWKind::mins):
+      case (AtomicRMWKind::minu):
+        os << " = min(";
+        emitValue(result);
+        os << ", ";
+        emitValue(op->getOperand(resultIdx));
+        os << ")";
+        break;
+      case (AtomicRMWKind::mulf):
+      case (AtomicRMWKind::muli):
+        os << " *= ";
+        emitValue(op->getOperand(resultIdx));
+        break;
+      }
+
+      os << ";\n";
+      resultIdx += 1;
+    }
+    reduceIndent();
+
+    indent();
+    os << "}\n";
   }
 }
 
@@ -794,11 +939,8 @@ void ModuleEmitter::emitOperation(Operation *op) {
 }
 
 void ModuleEmitter::emitBlock(Block &block) {
-  addIndent();
-  for (auto &op : block) {
+  for (auto &op : block)
     emitOperation(&op);
-  }
-  reduceIndent();
 }
 
 void ModuleEmitter::emitFunction(FuncOp func) {
@@ -847,7 +989,9 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   os << ") {\n";
 
   // Emit function body.
+  addIndent();
   emitBlock(func.front());
+  reduceIndent();
   os << "}\n";
 }
 
