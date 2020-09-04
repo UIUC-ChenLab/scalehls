@@ -244,6 +244,11 @@ public:
   void emitAffineFor(AffineForOp *op);
   void emitAffineIf(AffineIfOp *op);
   void emitAffineParallel(AffineParallelOp *op);
+  void emitAffineApply(AffineApplyOp *op);
+  void emitAffineMax(AffineMaxOp *op);
+  void emitAffineMin(AffineMinOp *op);
+  void emitAffineLoad(AffineLoadOp *op);
+  void emitAffineStore(AffineStoreOp *op);
   void emitAffineYield(AffineYieldOp *op);
 
   /// Memref-related statement emitters.
@@ -345,11 +350,11 @@ public:
   bool visitOp(AffineParallelOp op) {
     return emitter.emitAffineParallel(&op), true;
   }
-  bool visitOp(AffineApplyOp op) { return true; }
-  bool visitOp(AffineMaxOp op) { return true; }
-  bool visitOp(AffineMinOp op) { return true; }
-  bool visitOp(AffineLoadOp op) { return true; }
-  bool visitOp(AffineStoreOp op) { return true; }
+  bool visitOp(AffineApplyOp op) { return emitter.emitAffineApply(&op), true; }
+  bool visitOp(AffineMaxOp op) { return emitter.emitAffineMax(&op), true; }
+  bool visitOp(AffineMinOp op) { return emitter.emitAffineMin(&op), true; }
+  bool visitOp(AffineLoadOp op) { return emitter.emitAffineLoad(&op), true; }
+  bool visitOp(AffineStoreOp op) { return emitter.emitAffineStore(&op), true; }
   bool visitOp(AffineYieldOp op) { return emitter.emitAffineYield(&op), true; }
 
   /// Memref related statements.
@@ -575,6 +580,85 @@ void ModuleEmitter::emitAffineIf(AffineIfOp *op) {
 
 void ModuleEmitter::emitAffineParallel(AffineParallelOp *op) { return; }
 
+void ModuleEmitter::emitAffineApply(AffineApplyOp *op) {
+  indent();
+  emitValue(op->getResult());
+  os << " = ";
+  auto affineMap = op->getAffineMap();
+  AffineExprEmitter(state, affineMap.getNumDims(), op->getOperands())
+      .emitAffineExpr(affineMap.getResult(0));
+  os << ";\n";
+}
+
+void ModuleEmitter::emitAffineMax(AffineMaxOp *op) {
+  indent();
+  emitValue(op->getResult());
+  os << " = ";
+  auto affineMap = op->getAffineMap();
+  AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
+                                  op->getOperands());
+  for (unsigned i = 0, e = affineMap.getNumResults() - 1; i < e; ++i) {
+    os << "max(";
+  }
+  affineEmitter.emitAffineExpr(affineMap.getResult(0));
+  for (auto &expr : llvm::drop_begin(affineMap.getResults(), 1)) {
+    os << ", ";
+    affineEmitter.emitAffineExpr(expr);
+    os << ")";
+  }
+  os << ";\n";
+}
+
+void ModuleEmitter::emitAffineMin(AffineMinOp *op) {
+  indent();
+  emitValue(op->getResult());
+  os << " = ";
+  auto affineMap = op->getAffineMap();
+  AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
+                                  op->getOperands());
+  for (unsigned i = 0, e = affineMap.getNumResults() - 1; i < e; ++i) {
+    os << "min(";
+  }
+  affineEmitter.emitAffineExpr(affineMap.getResult(0));
+  for (auto &expr : llvm::drop_begin(affineMap.getResults(), 1)) {
+    os << ", ";
+    affineEmitter.emitAffineExpr(expr);
+    os << ")";
+  }
+  os << ";\n";
+}
+
+void ModuleEmitter::emitAffineLoad(mlir::AffineLoadOp *op) {
+  indent();
+  emitValue(op->getResult());
+  os << " = ";
+  emitValue(op->getMemRef());
+  auto affineMap = op->getAffineMap();
+  AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
+                                  op->getMapOperands());
+  for (auto indice : affineMap.getResults()) {
+    os << "[";
+    affineEmitter.emitAffineExpr(indice);
+    os << "];\n";
+  }
+}
+
+void ModuleEmitter::emitAffineStore(AffineStoreOp *op) {
+  indent();
+  emitValue(op->getMemRef());
+  auto affineMap = op->getAffineMap();
+  AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
+                                  op->getMapOperands());
+  for (auto indice : affineMap.getResults()) {
+    os << "[";
+    affineEmitter.emitAffineExpr(indice);
+    os << "]";
+  }
+  os << " = ";
+  emitValue(op->getValueToStore());
+  os << ";\n";
+}
+
 void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
   // For now, only AffineIfOp may yield values.
   if (auto affineIf = dyn_cast<AffineIfOp>(op->getParentOp())) {
@@ -602,8 +686,8 @@ void ModuleEmitter::emitLoad(LoadOp *op) {
   indent();
   emitValue(op->getResult());
   os << " = ";
-  emitValue(op->getOperand(0));
-  for (auto indice : llvm::drop_begin(op->getOperands(), 1)) {
+  emitValue(op->getMemRef());
+  for (auto indice : op->getIndices()) {
     os << "[";
     emitValue(indice);
     os << "];\n";
@@ -612,14 +696,14 @@ void ModuleEmitter::emitLoad(LoadOp *op) {
 
 void ModuleEmitter::emitStore(StoreOp *op) {
   indent();
-  emitValue(op->getOperand(1));
-  for (auto indice : llvm::drop_begin(op->getOperands(), 2)) {
+  emitValue(op->getMemRef());
+  for (auto indice : op->getIndices()) {
     os << "[";
     emitValue(indice);
     os << "]";
   }
   os << " = ";
-  emitValue(op->getOperand(0));
+  emitValue(op->getValueToStore());
   os << ";\n";
 }
 

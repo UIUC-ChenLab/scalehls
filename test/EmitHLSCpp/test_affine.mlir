@@ -1,6 +1,7 @@
 // RUN: hlsld-translate -emit-hlscpp %s | FileCheck %s
 
 #map0 = affine_map<(d0)[s0] -> (d0 + s0, d0, d0 - s0)>
+#map1 = affine_map<(d0) -> (d0 * 3)>
 #set0 = affine_set<(d0)[s0]: (d0 + s0 - 5 >= 0, d0 >= 0)>
 
 // CHECK:       void test_affine(
@@ -20,15 +21,15 @@ func @test_affine(%arg0: i32, %arg1: memref<16xi32>, %arg2: index) -> () {
       %1 = addi %arg0, %0 : i32
       // CHECK: val[[INT2:.*]][val[[INT5:.*]]] = val[[INT7:.*]];
       store %1, %arg1[%j] : memref<16xi32>
-      %2:2 = affine.if #set0 (%i)[%c11] -> (i32, i32) {
-        store %0, %arg1[%j] : memref<16xi32>
-        %3 = muli %arg0, %1 : i32
-        %4 = subi %arg0, %1 : i32
-        affine.yield %3, %4 : i32, i32
+      %2 = affine.if #set0 (%i)[%c11] -> index {
+        %3 = affine.load %arg1[%i + %j] : memref<16xi32>
+        %4 = divi_signed %1, %3 : i32
+        affine.store %0, %arg1[%i * 42] : memref<16xi32>
+        %5 = affine.apply #map1 (%i)
+        affine.yield %5 : index
       } else {
-        %5 = shift_left %arg0, %1 : i32
-        %6 = divi_signed %arg0, %1 : i32
-        affine.yield %5, %6 : i32, i32
+        %6 = affine.max #map0 (%i)[%j]
+        affine.yield %6 : index
       }
     // CHECK: }
     }
