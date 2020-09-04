@@ -98,19 +98,19 @@ SmallString<8> HLSCppEmitterBase::addName(Value val, bool isPtr = false) {
 }
 
 SmallString<8> HLSCppEmitterBase::getName(Value val) {
-  // For constant operations, the constant number will be returned rather than
-  // the value name.
+  // For constant scalar operations, the constant number will be returned rather
+  // than the value name.
   if (val.getKind() != Value::Kind::BlockArgument) {
-    if (auto constOp = dyn_cast<ConstantOp>(val.getDefiningOp())) {
-      if (auto floatAttr = constOp.getValue().dyn_cast<FloatAttr>())
+    if (auto constOp = dyn_cast<mlir::ConstantOp>(val.getDefiningOp())) {
+      auto constAttr = constOp.getValue();
+      if (auto floatAttr = constAttr.dyn_cast<FloatAttr>())
         return StringRef(to_string(floatAttr.getValueAsDouble()));
-      else if (auto intAttr = constOp.getValue().dyn_cast<IntegerAttr>())
+      else if (auto intAttr = constAttr.dyn_cast<IntegerAttr>())
         return StringRef(to_string(intAttr.getInt()));
-      else
-        emitError(constOp, "has unsupported constant type.");
+      else if (auto boolAttr = constAttr.dyn_cast<BoolAttr>())
+        return StringRef(to_string(boolAttr.getValue()));
     }
   }
-
   return state.nameTable[val];
 }
 
@@ -128,7 +128,7 @@ public:
             AffineMaxOp, AffineMinOp, AffineLoadOp, AffineStoreOp,
             AffineYieldOp,
             // Memref-related statements.
-            AllocOp, LoadOp, StoreOp,
+            AllocOp, LoadOp, StoreOp, DeallocOp,
             // Unary expressions.
             AbsFOp, CeilFOp, NegFOp, CosOp, SinOp, TanhOp, SqrtOp, RsqrtOp,
             ExpOp, Exp2Op, LogOp, Log2Op, Log10Op,
@@ -139,9 +139,10 @@ public:
             UnsignedDivIOp, UnsignedRemIOp, XOrOp, AndOp, OrOp, ShiftLeftOp,
             SignedShiftRightOp, UnsignedShiftRightOp,
             // Special operations.
-            SelectOp, ConstantOp, ReturnOp>([&](auto opNode) -> ResultType {
-          return thisCast->visitOp(opNode, args...);
-        })
+            SelectOp, ConstantOp, CallOp, ReturnOp>(
+            [&](auto opNode) -> ResultType {
+              return thisCast->visitOp(opNode, args...);
+            })
         .Default([&](auto opNode) -> ResultType {
           return thisCast->visitInvalidOp(op, args...);
         });
@@ -179,6 +180,7 @@ public:
   HANDLE(AllocOp);
   HANDLE(LoadOp);
   HANDLE(StoreOp);
+  HANDLE(DeallocOp);
 
   // Unary expressions.
   HANDLE(AbsFOp);
@@ -222,6 +224,7 @@ public:
   // Special operations.
   HANDLE(SelectOp);
   HANDLE(ConstantOp);
+  HANDLE(CallOp);
   HANDLE(ReturnOp);
 #undef HANDLE
 };
@@ -261,7 +264,11 @@ public:
   /// Standard expression emitters.
   void emitBinary(Operation *op, const char *syntax);
   void emitUnary(Operation *op, const char *syntax);
+
+  /// Special operation emitters.
   void emitSelect(SelectOp *op);
+  void emitConstant(ConstantOp *op);
+  void emitCall(CallOp *op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
@@ -347,7 +354,7 @@ public:
   StmtVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
 
   using HLSCppVisitorBase::visitOp;
-  /// Affine statements (with region).
+  /// Affine statements.
   bool visitOp(AffineForOp op) { return emitter.emitAffineFor(&op), true; }
   bool visitOp(AffineIfOp op) { return emitter.emitAffineIf(&op), true; }
   bool visitOp(AffineParallelOp op) {
@@ -364,6 +371,7 @@ public:
   bool visitOp(AllocOp op) { return emitter.emitAlloc(&op), true; }
   bool visitOp(LoadOp op) { return emitter.emitLoad(&op), true; }
   bool visitOp(StoreOp op) { return emitter.emitStore(&op), true; }
+  bool visitOp(DeallocOp op) { return true; }
 
 private:
   ModuleEmitter &emitter;
@@ -421,7 +429,8 @@ public:
 
   /// Special operations.
   bool visitOp(SelectOp op) { return emitter.emitSelect(&op), true; };
-  bool visitOp(ConstantOp op) { return true; }
+  bool visitOp(ConstantOp op) { return emitter.emitConstant(&op), true; }
+  bool visitOp(CallOp op) { return emitter.emitCall(&op), true; }
   bool visitOp(ReturnOp op) { return true; }
 
 private:
@@ -693,9 +702,9 @@ void ModuleEmitter::emitAffineLoad(AffineLoadOp *op) {
   auto affineMap = op->getAffineMap();
   AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
                                   op->getMapOperands());
-  for (auto indice : affineMap.getResults()) {
+  for (auto index : affineMap.getResults()) {
     os << "[";
-    affineEmitter.emitAffineExpr(indice);
+    affineEmitter.emitAffineExpr(index);
     os << "];\n";
   }
 }
@@ -706,9 +715,9 @@ void ModuleEmitter::emitAffineStore(AffineStoreOp *op) {
   auto affineMap = op->getAffineMap();
   AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
                                   op->getMapOperands());
-  for (auto indice : affineMap.getResults()) {
+  for (auto index : affineMap.getResults()) {
     os << "[";
-    affineEmitter.emitAffineExpr(indice);
+    affineEmitter.emitAffineExpr(index);
     os << "]";
   }
   os << " = ";
@@ -820,6 +829,11 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
 
 /// Memref-related statement emitters.
 void ModuleEmitter::emitAlloc(AllocOp *op) {
+  // This indicates that the memref is output of the function, and has been
+  // declared in the function signature.
+  if (!getName(op->getResult()).empty())
+    return;
+
   indent();
   emitValue(op->getResult());
   for (auto &shape : op->getType().getShape())
@@ -831,9 +845,9 @@ void ModuleEmitter::emitLoad(LoadOp *op) {
   emitValue(op->getResult());
   os << " = ";
   emitValue(op->getMemRef());
-  for (auto indice : op->getIndices()) {
+  for (auto index : op->getIndices()) {
     os << "[";
-    emitValue(indice);
+    emitValue(index);
     os << "];\n";
   }
 }
@@ -841,9 +855,9 @@ void ModuleEmitter::emitLoad(LoadOp *op) {
 void ModuleEmitter::emitStore(StoreOp *op) {
   indent();
   emitValue(op->getMemRef());
-  for (auto indice : op->getIndices()) {
+  for (auto index : op->getIndices()) {
     os << "[";
-    emitValue(indice);
+    emitValue(index);
     os << "]";
   }
   os << " = ";
@@ -870,6 +884,7 @@ void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
   os << ");\n";
 }
 
+/// Special operation emitters.
 void ModuleEmitter::emitSelect(SelectOp *op) {
   indent();
   emitValue(op->getResult());
@@ -880,6 +895,27 @@ void ModuleEmitter::emitSelect(SelectOp *op) {
   os << " : ";
   emitValue(op->getFalseValue());
   os << ";\n";
+}
+
+void ModuleEmitter::emitConstant(ConstantOp *op) {
+  auto constAttr = op->getValue();
+  if (constAttr.isa<FloatAttr>() || constAttr.isa<IntegerAttr>() ||
+      constAttr.isa<BoolAttr>()) {
+    // These kinds of constant operations will be handle by getName method.
+    return;
+  } else if (constAttr.isa<DenseElementsAttr>()) {
+    indent();
+    emitValue(op->getResult());
+    os << " = ";
+    // TODO
+    os << ";\n";
+  } else
+    emitError(*op, "has unsupported type.");
+}
+
+void ModuleEmitter::emitCall(CallOp *op) {
+  // TODO
+  return;
 }
 
 /// MLIR component emitters.
@@ -971,10 +1007,15 @@ void ModuleEmitter::emitFunction(FuncOp func) {
     unsigned resultIdx = 0;
     for (auto result : funcReturn.getOperands()) {
       indent();
-      emitValue(result, /*isPtr=*/true);
-      if (auto memType = result.getType().dyn_cast<MemRefType>())
+      if (auto memType = result.getType().dyn_cast<MemRefType>()) {
+        emitValue(result);
         for (auto &shape : memType.getShape())
           os << "[" << shape << "]";
+      } else {
+        // In Vivado HLS, pointer type indicates an output scalar value.
+        emitValue(result, /*isPtr=*/true);
+      }
+
       if (resultIdx == func.getNumResults() - 1)
         os << "\n";
       else

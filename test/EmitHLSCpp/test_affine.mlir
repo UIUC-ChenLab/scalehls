@@ -35,7 +35,7 @@ func @test_affine(%arg0: i32, %arg1: memref<16xi32>, %arg2: index) -> () {
     }
   // CHECK: }
   }
-  %7:2 = affine.parallel (%x, %y) = (0, 0) to (%c11 + 5, 5) reduce ("maxs", "muli") -> (index, index){
+  %7:2 = affine.parallel (%x, %y) = (0, 0) to (%c11 + 5, 5) step (1, 2) reduce ("maxs", "muli") -> (index, index){
     %8 = muli %x, %y : index
     %9 = shift_left %x, %y : index
     affine.yield %8, %9 : index, index
