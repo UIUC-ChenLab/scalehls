@@ -966,7 +966,7 @@ void ModuleEmitter::emitSelect(SelectOp *op) {
 }
 
 template <typename ResultType>
-void ModuleEmitter::emitCppArray(mlir::ConstantOp *op) {
+void ModuleEmitter::emitCppArray(ConstantOp *op) {
   auto denseAttr = op->getValue().dyn_cast<DenseElementsAttr>();
   auto elementType = op->getType().dyn_cast<ResultType>().getElementType();
   os << "{";
