@@ -306,6 +306,9 @@ public:
   void emitLoad(LoadOp *op);
   void emitStore(StoreOp *op);
 
+  /// Tensor-related statement emitters.
+  // TODO
+
   /// Standard expression emitters.
   void emitBinary(Operation *op, const char *syntax);
   void emitUnary(Operation *op, const char *syntax);
@@ -313,6 +316,8 @@ public:
   /// Special operation emitters.
   void emitIndexCast(IndexCastOp *op);
   void emitSelect(SelectOp *op);
+  template <typename ResultType>
+  void emitCppArray(ConstantOp *op);
   void emitConstant(ConstantOp *op);
   void emitCall(CallOp *op);
 
@@ -413,12 +418,15 @@ public:
   bool visitOp(AffineStoreOp op) { return emitter.emitAffineStore(&op), true; }
   bool visitOp(AffineYieldOp op) { return emitter.emitAffineYield(&op), true; }
 
-  /// Memref related statements.
+  /// Memref-related statements.
   bool visitOp(AllocOp op) { return emitter.emitAlloc<AllocOp>(&op), true; }
   bool visitOp(AllocaOp op) { return emitter.emitAlloc<AllocaOp>(&op), true; }
   bool visitOp(LoadOp op) { return emitter.emitLoad(&op), true; }
   bool visitOp(StoreOp op) { return emitter.emitStore(&op), true; }
   bool visitOp(DeallocOp op) { return true; }
+
+  /// Tensor-related statements.
+  // TODO
 
 private:
   ModuleEmitter &emitter;
@@ -914,6 +922,9 @@ void ModuleEmitter::emitStore(StoreOp *op) {
   os << ";\n";
 }
 
+/// Tensor-related statement emitters.
+// TODO
+
 /// Standard expression emitters.
 void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
   indent();
@@ -954,20 +965,69 @@ void ModuleEmitter::emitSelect(SelectOp *op) {
   os << ";\n";
 }
 
+template <typename ResultType>
+void ModuleEmitter::emitCppArray(mlir::ConstantOp *op) {
+  auto denseAttr = op->getValue().dyn_cast<DenseElementsAttr>();
+  auto elementType = op->getType().dyn_cast<ResultType>().getElementType();
+  os << "{";
+  unsigned elementIdx = 0;
+  if (elementType.isF32()) {
+    for (auto element : denseAttr.getFloatValues()) {
+      os << element.convertToFloat();
+      if (elementIdx == denseAttr.getNumElements() - 1)
+        os << "}";
+      else
+        os << ", ";
+      elementIdx += 1;
+    }
+  } else if (elementType.isF64()) {
+    for (auto element : denseAttr.getFloatValues()) {
+      os << element.convertToDouble();
+      if (elementIdx == denseAttr.getNumElements() - 1)
+        os << "}";
+      else
+        os << ", ";
+      elementIdx += 1;
+    }
+  } else if (elementType.isInteger(1)) {
+    for (auto element : denseAttr.getBoolValues()) {
+      os << element;
+      if (elementIdx == denseAttr.getNumElements() - 1)
+        os << "}";
+      else
+        os << ", ";
+      elementIdx += 1;
+    }
+  } else if (elementType.isIntOrIndex()) {
+    for (auto element : denseAttr.getIntValues()) {
+      os << element;
+      if (elementIdx == denseAttr.getNumElements() - 1)
+        os << "}";
+      else
+        os << ", ";
+      elementIdx += 1;
+    }
+  } else
+    emitError(*op, "has unsupported element type.");
+}
+
 void ModuleEmitter::emitConstant(ConstantOp *op) {
   auto constAttr = op->getValue();
   if (constAttr.isa<FloatAttr>() || constAttr.isa<IntegerAttr>() ||
       constAttr.isa<BoolAttr>()) {
-    // These kinds of constant operations will be handle by getName method.
+    // Scalar constant operations will be handle by getName method.
     return;
   } else if (constAttr.isa<DenseElementsAttr>()) {
     indent();
     emitValue(op->getResult());
     os << " = ";
-    // TODO
+    if (op->getType().isa<TensorType>())
+      emitCppArray<TensorType>(op);
+    else
+      emitCppArray<VectorType>(op);
     os << ";\n";
   } else
-    emitError(*op, "has unsupported type.");
+    emitError(*op, "has unsupported constant type.");
 }
 
 void ModuleEmitter::emitCall(CallOp *op) {
@@ -984,10 +1044,14 @@ void ModuleEmitter::emitValue(Value val, bool isPtr) {
     return;
   }
 
-  // Handle memref type.
+  // Handle memref, tensor, and vector types.
   auto valType = val.getType();
   if (auto memType = valType.dyn_cast<MemRefType>())
     valType = memType.getElementType();
+  else if (auto tensorType = valType.dyn_cast<TensorType>())
+    valType = tensorType.getElementType();
+  else if (auto vectorType = valType.dyn_cast<VectorType>())
+    valType = vectorType.getElementType();
 
   // Emit value type for declaring a new value.
   switch (valType.getKind()) {

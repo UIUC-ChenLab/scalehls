@@ -9,6 +9,8 @@
 // CHECK-NEXT:    float *[[FVAL_3:.*]]
 // CHECK-NEXT:  ) {
 func @test_standard(%val1: i32, %val2: memref<16xi32>, %fval1: f32, %fval2: f32) -> (i32, f32) {
+  %tensor = constant dense<[[11, -11], [42, -42]]> : tensor<2x2xi32>
+  %vector = constant dense<[11.0, -11.0]> : vector<2xf32>
   %index3 = constant 3 : index
   %int11 = constant 11 : i32
   // CHECK: ap_int<32> [[VAL_4:.*]] = [[VAL_2:.*]][3];
