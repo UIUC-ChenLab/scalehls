@@ -15,6 +15,10 @@ func @test_standard(%val1: i32, %val2: memref<16xi32>, %fval1: f32, %fval2: f32)
   %tensor1 = tensor_load %val2 : memref<16xi32>
   tensor_store %tensor1, %val2 : memref<16xi32>
 
+  %c0 = constant 0 : index
+  %dim = dim %tensor1, %c0 : tensor<16xi32>
+  %rank = rank %tensor0 : tensor<2x2xi32>
+
   %index3 = constant 3 : index
   %int11 = constant 11 : i32
   // CHECK: ap_int<32> [[VAL_4:.*]] = [[VAL_2:.*]][3];

@@ -309,6 +309,11 @@ public:
   /// Tensor-related statement emitters.
   void emitTensorLoad(TensorLoadOp *op);
   void emitTensorStore(TensorStoreOp *op);
+  void emitSplat(SplatOp *op);
+  void emitExtractElement(ExtractElementOp *op);
+  void emitTensorFromElements(TensorFromElementsOp *op);
+  void emitDim(DimOp *op);
+  void emitRank(RankOp *op);
 
   /// Standard expression emitters.
   void emitBinary(Operation *op, const char *syntax);
@@ -429,6 +434,15 @@ public:
   /// Tensor-related statements.
   bool visitOp(TensorLoadOp op) { return emitter.emitTensorLoad(&op), true; }
   bool visitOp(TensorStoreOp op) { return emitter.emitTensorStore(&op), true; }
+  bool visitOp(SplatOp op) { return emitter.emitSplat(&op), true; }
+  bool visitOp(ExtractElementOp op) {
+    return emitter.emitExtractElement(&op), true;
+  }
+  bool visitOp(TensorFromElementsOp op) {
+    return emitter.emitTensorFromElements(&op), true;
+  }
+  bool visitOp(DimOp op) { return emitter.emitDim(&op), true; }
+  bool visitOp(RankOp op) { return emitter.emitRank(&op), true; }
 
 private:
   ModuleEmitter &emitter;
@@ -894,6 +908,10 @@ void ModuleEmitter::emitAlloc(OpType *op) {
   if (!getName(op->getResult()).empty())
     return;
 
+  // Vivado HLS only supports static shape on-chip memory.
+  if (!op->getType().hasStaticShape())
+    emitError(*op, "is unranked or has dynamic shape.");
+
   indent();
   emitValue(op->getResult());
   for (auto &shape : op->getType().getShape())
@@ -929,6 +947,9 @@ void ModuleEmitter::emitStore(StoreOp *op) {
 
 /// Tensor-related statement emitters.
 void ModuleEmitter::emitTensorLoad(TensorLoadOp *op) {
+  if (!op->getType().hasStaticShape())
+    emitError(*op, "is unranked or has dynamic shape.");
+
   auto tensorShape = op->getType().getShape();
   // Declare a new tensor.
   indent();
@@ -967,13 +988,16 @@ void ModuleEmitter::emitTensorLoad(TensorLoadOp *op) {
 }
 
 void ModuleEmitter::emitTensorStore(TensorStoreOp *op) {
+  auto tensorType = op->getOperand(0).getType().cast<TensorType>();
+  if (!tensorType.hasStaticShape())
+    emitError(*op, "is unranked or has dynamic shape.");
+
   // Create a nested loop for storing tensor.
-  auto tensorShape = op->getOperand(0).getType().cast<TensorType>().getShape();
-  unsigned numDim = tensorShape.size();
+  unsigned numDim = tensorType.getShape().size();
   for (unsigned i = 0; i < numDim; ++i) {
     indent();
     os << "for (int idx" << i << " = 0; ";
-    os << "idx" << i << " < " << tensorShape[i] << "; ";
+    os << "idx" << i << " < " << tensorType.getShape()[i] << "; ";
     os << "++idx" << i << ") {\n";
 
     addIndent();
@@ -994,6 +1018,65 @@ void ModuleEmitter::emitTensorStore(TensorStoreOp *op) {
 
     indent();
     os << "}\n";
+  }
+}
+
+void ModuleEmitter::emitSplat(SplatOp *op) { return; }
+
+void ModuleEmitter::emitExtractElement(ExtractElementOp *op) { return; }
+
+void ModuleEmitter::emitTensorFromElements(TensorFromElementsOp *op) { return; }
+
+void ModuleEmitter::emitDim(DimOp *op) {
+  if (auto constOp = dyn_cast<ConstantOp>(op->getOperand(1).getDefiningOp())) {
+    auto constVal = constOp.getValue().dyn_cast<IntegerAttr>().getInt();
+
+    if (auto memType = op->getOperand(0).getType().dyn_cast<MemRefType>()) {
+      if (memType.hasStaticShape()) {
+        if (constVal >= 0 && constVal < memType.getShape().size()) {
+          indent();
+          emitValue(op->getResult());
+          os << " = ";
+          os << memType.getShape()[constVal] << ";\n";
+        } else
+          emitError(*op, "index is out of range.");
+      } else
+        emitError(*op, "is unranked or has dynamic shape.");
+    } else if (auto tensorType =
+                   op->getOperand(0).getType().dyn_cast<TensorType>()) {
+      if (tensorType.hasStaticShape()) {
+        if (constVal >= 0 && constVal < tensorType.getShape().size()) {
+          indent();
+          emitValue(op->getResult());
+          os << " = ";
+          os << tensorType.getShape()[constVal] << ";\n";
+        } else
+          emitError(*op, "index is out of range.");
+      } else
+        emitError(*op, "is unranked or has dynamic shape.");
+    }
+  } else
+    emitError(*op, "index is not a constant.");
+}
+
+void ModuleEmitter::emitRank(RankOp *op) {
+  if (auto memType = op->getOperand().getType().dyn_cast<MemRefType>()) {
+    if (memType.hasRank()) {
+      indent();
+      emitValue(op->getResult());
+      os << " = ";
+      os << memType.getRank() << ";\n";
+    } else
+      emitError(*op, "is unranked.");
+  } else if (auto tensorType =
+                 op->getOperand().getType().dyn_cast<TensorType>()) {
+    if (tensorType.hasRank()) {
+      indent();
+      emitValue(op->getResult());
+      os << " = ";
+      os << tensorType.getRank() << ";\n";
+    } else
+      emitError(*op, "is unranked.");
   }
 }
 
