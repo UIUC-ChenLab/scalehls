@@ -12,9 +12,8 @@ cmake --build . --target check-hlsld
 
 ## Hanchen TODO List
 1. Test HLS C++ emitter with some real benchmarks;
-2. Support tensor load and store operations;
-3. Support extract_element, tensor_from_elements, and splat operations;
-4. How to handle AXI4MM input/output with dynamic rank.
+2. Support extract_element, tensor_from_elements, and splat operations;
+3. How to handle AXI4MM input/output with dynamic rank.
 
 ## References
 1. [MLIR Documents](https://mlir.llvm.org)

@@ -307,7 +307,8 @@ public:
   void emitStore(StoreOp *op);
 
   /// Tensor-related statement emitters.
-  // TODO
+  void emitTensorLoad(TensorLoadOp *op);
+  void emitTensorStore(TensorStoreOp *op);
 
   /// Standard expression emitters.
   void emitBinary(Operation *op, const char *syntax);
@@ -426,7 +427,8 @@ public:
   bool visitOp(DeallocOp op) { return true; }
 
   /// Tensor-related statements.
-  // TODO
+  bool visitOp(TensorLoadOp op) { return emitter.emitTensorLoad(&op), true; }
+  bool visitOp(TensorStoreOp op) { return emitter.emitTensorStore(&op), true; }
 
 private:
   ModuleEmitter &emitter;
@@ -761,8 +763,9 @@ void ModuleEmitter::emitAffineLoad(AffineLoadOp *op) {
   for (auto index : affineMap.getResults()) {
     os << "[";
     affineEmitter.emitAffineExpr(index);
-    os << "];\n";
+    os << "]";
   }
+  os << ";\n";
 }
 
 void ModuleEmitter::emitAffineStore(AffineStoreOp *op) {
@@ -894,7 +897,8 @@ void ModuleEmitter::emitAlloc(OpType *op) {
   indent();
   emitValue(op->getResult());
   for (auto &shape : op->getType().getShape())
-    os << "[" << shape << "];\n";
+    os << "[" << shape << "]";
+  os << ";\n";
 }
 
 void ModuleEmitter::emitLoad(LoadOp *op) {
@@ -905,8 +909,9 @@ void ModuleEmitter::emitLoad(LoadOp *op) {
   for (auto index : op->getIndices()) {
     os << "[";
     emitValue(index);
-    os << "];\n";
+    os << "]";
   }
+  os << ";\n";
 }
 
 void ModuleEmitter::emitStore(StoreOp *op) {
@@ -923,7 +928,74 @@ void ModuleEmitter::emitStore(StoreOp *op) {
 }
 
 /// Tensor-related statement emitters.
-// TODO
+void ModuleEmitter::emitTensorLoad(TensorLoadOp *op) {
+  auto tensorShape = op->getType().getShape();
+  // Declare a new tensor.
+  indent();
+  emitValue(op->getResult());
+  for (auto &shape : tensorShape)
+    os << "[" << shape << "]";
+  os << ";\n";
+
+  // Create a nested loop for loading tensor.
+  unsigned numDim = tensorShape.size();
+  for (unsigned i = 0; i < numDim; ++i) {
+    indent();
+    os << "for (int idx" << i << " = 0; ";
+    os << "idx" << i << " < " << tensorShape[i] << "; ";
+    os << "++idx" << i << ") {\n";
+
+    addIndent();
+  }
+
+  indent();
+  emitValue(op->getResult());
+  for (unsigned i = 0; i < numDim; ++i)
+    os << "[idx" << i << "]";
+  os << " = ";
+  emitValue(op->getOperand());
+  for (unsigned i = 0; i < numDim; ++i)
+    os << "[idx" << i << "]";
+  os << ";\n";
+
+  for (unsigned i = 0; i < numDim; ++i) {
+    reduceIndent();
+
+    indent();
+    os << "}\n";
+  }
+}
+
+void ModuleEmitter::emitTensorStore(TensorStoreOp *op) {
+  // Create a nested loop for storing tensor.
+  auto tensorShape = op->getOperand(0).getType().cast<TensorType>().getShape();
+  unsigned numDim = tensorShape.size();
+  for (unsigned i = 0; i < numDim; ++i) {
+    indent();
+    os << "for (int idx" << i << " = 0; ";
+    os << "idx" << i << " < " << tensorShape[i] << "; ";
+    os << "++idx" << i << ") {\n";
+
+    addIndent();
+  }
+
+  indent();
+  emitValue(op->getOperand(1));
+  for (unsigned i = 0; i < numDim; ++i)
+    os << "[idx" << i << "]";
+  os << " = ";
+  emitValue(op->getOperand(0));
+  for (unsigned i = 0; i < numDim; ++i)
+    os << "[idx" << i << "]";
+  os << ";\n";
+
+  for (unsigned i = 0; i < numDim; ++i) {
+    reduceIndent();
+
+    indent();
+    os << "}\n";
+  }
+}
 
 /// Standard expression emitters.
 void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
