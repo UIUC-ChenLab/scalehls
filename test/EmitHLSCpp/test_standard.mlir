@@ -15,6 +15,9 @@ func @test_standard(%val1: i32, %val2: memref<16xi32>, %fval1: f32, %fval2: f32)
   %tensor1 = tensor_load %val2 : memref<16xi32>
   tensor_store %tensor1, %val2 : memref<16xi32>
 
+  %tensor2 = constant dense<[[23, 0], [-23, 0]]> : tensor<2x2xi32>
+  %tensor3 = addi %tensor0, %tensor2 : tensor<2x2xi32>
+
   %c0 = constant 0 : index
   %dim = dim %tensor1, %c0 : tensor<16xi32>
   %rank = rank %tensor0 : tensor<2x2xi32>
