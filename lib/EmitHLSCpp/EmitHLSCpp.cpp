@@ -75,8 +75,15 @@ public:
   raw_ostream &os;
 
   /// Value name management methods.
-  SmallString<8> addName(Value val, bool isPtr);
+  SmallString<8> addName(Value val, bool isPtr = false);
   SmallString<8> getName(Value val);
+  bool isDeclared(Value val) {
+    if (getName(val).empty()) {
+      state.nameTable.erase(val);
+      return false;
+    } else
+      return true;
+  }
 
 private:
   HLSCppEmitterBase(const HLSCppEmitterBase &) = delete;
@@ -84,17 +91,17 @@ private:
 };
 } // namespace
 
-SmallString<8> HLSCppEmitterBase::addName(Value val, bool isPtr = false) {
-  assert(state.nameTable[val].empty() && "duplicate value declaration");
+SmallString<8> HLSCppEmitterBase::addName(Value val, bool isPtr) {
+  assert(!isDeclared(val) && "has been declared before.");
+
+  SmallString<8> valName;
+  if (isPtr)
+    valName += "*";
 
   // Temporary naming rule.
-  SmallString<8> newName;
-  if (isPtr)
-    newName += "*";
-  newName += StringRef("val" + to_string(state.nameTable.size()));
-
-  state.nameTable[val] = newName;
-  return newName;
+  valName += StringRef("val" + to_string(state.nameTable.size()));
+  state.nameTable[val] = valName;
+  return valName;
 }
 
 SmallString<8> HLSCppEmitterBase::getName(Value val) {
@@ -318,18 +325,12 @@ public:
   void emitRank(RankOp *op);
 
   /// Standard expression emitters.
-  template <typename ArrayType>
-  void emitEltWiseBinary(Operation *op, const char *syntax, ArrayType type);
   void emitBinary(Operation *op, const char *syntax);
-  template <typename ArrayType>
-  void emitEltWiseUnary(Operation *op, const char *syntax, ArrayType type);
   void emitUnary(Operation *op, const char *syntax);
 
   /// Special operation emitters.
   void emitIndexCast(IndexCastOp *op);
   void emitSelect(SelectOp *op);
-  template <typename ArrayType>
-  void emitConstantArray(ConstantOp *op, ArrayType type);
   void emitConstant(ConstantOp *op);
   void emitCall(CallOp *op);
 
@@ -337,12 +338,16 @@ public:
   void emitModule(ModuleOp module);
 
 private:
+  /// C++ structure emitters.
+  void emitArrayDecl(Value array);
+  void emitNestedLoopHead(ShapedType type);
+  void emitNestedLoopTail(ShapedType type);
+  void emitNestedLoopArray(ShapedType type, Value val);
+
   /// MLIR component emitters.
-  void emitValue(Value val, bool isPtr = false);
+  void emitValue(Value val, bool isPtr = false, bool isRef = false);
   void emitOperation(Operation *op);
   void emitBlock(Block &block);
-  template <typename ArrayType>
-  void emitArrayDecl(Value val, ArrayType type);
   void emitFunction(FuncOp func);
 };
 } // namespace
@@ -593,9 +598,8 @@ void ModuleEmitter::emitAffineFor(AffineForOp *op) {
   if (lowerMap.getNumResults() == 1)
     lowerEmitter.emitAffineExpr(lowerMap.getResult(0));
   else {
-    for (unsigned i = 0, e = lowerMap.getNumResults() - 1; i < e; ++i) {
+    for (unsigned i = 0, e = lowerMap.getNumResults() - 1; i < e; ++i)
       os << "max(";
-    }
     lowerEmitter.emitAffineExpr(lowerMap.getResult(0));
     for (auto &expr : llvm::drop_begin(lowerMap.getResults(), 1)) {
       os << ", ";
@@ -614,9 +618,8 @@ void ModuleEmitter::emitAffineFor(AffineForOp *op) {
   if (upperMap.getNumResults() == 1)
     upperEmitter.emitAffineExpr(upperMap.getResult(0));
   else {
-    for (unsigned i = 0, e = upperMap.getNumResults() - 1; i < e; ++i) {
+    for (unsigned i = 0, e = upperMap.getNumResults() - 1; i < e; ++i)
       os << "min(";
-    }
     upperEmitter.emitAffineExpr(upperMap.getResult(0));
     for (auto &expr : llvm::drop_begin(upperMap.getResults(), 1)) {
       os << ", ";
@@ -638,6 +641,7 @@ void ModuleEmitter::emitAffineFor(AffineForOp *op) {
   os << "}\n";
 }
 
+/// TODO: support to yield shaped type.
 void ModuleEmitter::emitAffineIf(AffineIfOp *op) {
   // Declare all values returned by AffineYieldOp. They will be further handled
   // by the AffineYieldOp emitter.
@@ -662,10 +666,8 @@ void ModuleEmitter::emitAffineIf(AffineIfOp *op) {
     else
       os << " >= 0";
 
-    if (constrIdx != constrSet.getNumConstraints() - 1)
+    if (constrIdx++ != constrSet.getNumConstraints() - 1)
       os << " && ";
-
-    constrIdx += 1;
   }
   os << ") {\n";
   addIndent();
@@ -684,6 +686,7 @@ void ModuleEmitter::emitAffineIf(AffineIfOp *op) {
   os << "}\n";
 }
 
+/// TODO: support to yield shaped type.
 void ModuleEmitter::emitAffineParallel(AffineParallelOp *op) {
   // Declare all values returned by AffineParallelOp. They will be further
   // handled by the AffineYieldOp emitter.
@@ -754,9 +757,8 @@ void ModuleEmitter::emitAffineMaxMin(OpType *op, const char *syntax) {
   auto affineMap = op->getAffineMap();
   AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
                                   op->getOperands());
-  for (unsigned i = 0, e = affineMap.getNumResults() - 1; i < e; ++i) {
+  for (unsigned i = 0, e = affineMap.getNumResults() - 1; i < e; ++i)
     os << syntax << "(";
-  }
   affineEmitter.emitAffineExpr(affineMap.getResult(0));
   for (auto &expr : llvm::drop_begin(affineMap.getResults(), 1)) {
     os << ", ";
@@ -800,15 +802,13 @@ void ModuleEmitter::emitAffineStore(AffineStoreOp *op) {
 
 void ModuleEmitter::emitAffineVectorLoad(AffineVectorLoadOp *op) {
   // TODO
-  return;
 }
 
 void ModuleEmitter::emitAffineVectorStore(AffineVectorStoreOp *op) {
   // TODO
-  return;
 }
 
-// TODO: Support tensor/vector
+/// TODO: support to yield shaped type.
 void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
   if (op->getNumOperands() == 0)
     return;
@@ -829,12 +829,12 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
                  dyn_cast<mlir::AffineParallelOp>(op->getParentOp())) {
     indent();
     os << "if (";
-    emitValue(parentOp.getBody()->getArgument(0));
-    os << " == 0";
-    for (auto iv : llvm::drop_begin(parentOp.getBody()->getArguments(), 1)) {
-      os << " && ";
+    unsigned ivIdx = 0;
+    for (auto iv : parentOp.getBody()->getArguments()) {
       emitValue(iv);
       os << " == 0";
+      if (ivIdx++ != parentOp.getBody()->getNumArguments() - 1)
+        os << " && ";
     }
     os << ") {\n";
 
@@ -916,17 +916,15 @@ template <typename OpType>
 void ModuleEmitter::emitAlloc(OpType *op) {
   // This indicates that the memref is output of the function, and has been
   // declared in the function signature.
-  if (!getName(op->getResult()).empty())
+  if (isDeclared(op->getResult()))
     return;
 
   // Vivado HLS only supports static shape on-chip memory.
-  if (!op->getType().hasStaticShape()) {
+  if (!op->getType().hasStaticShape())
     emitError(*op, "is unranked or has dynamic shape.");
-    return;
-  }
 
   indent();
-  emitArrayDecl<MemRefType>(op->getResult(), op->getType());
+  emitArrayDecl(op->getResult());
   os << ";\n";
 }
 
@@ -958,206 +956,116 @@ void ModuleEmitter::emitStore(StoreOp *op) {
 
 /// Tensor-related statement emitters.
 void ModuleEmitter::emitTensorLoad(TensorLoadOp *op) {
-  if (!op->getType().hasStaticShape()) {
+  auto type = op->getType();
+  if (!type.hasStaticShape()) {
     emitError(*op, "is unranked or has dynamic shape.");
     return;
   }
 
   // Declare a new tensor.
   indent();
-  emitArrayDecl<TensorType>(op->getResult(), op->getType());
+  emitArrayDecl(op->getResult());
   os << ";\n";
 
   // Create a nested loop for loading tensor.
-  unsigned numDim = op->getType().getShape().size();
-  for (unsigned i = 0; i < numDim; ++i) {
-    indent();
-    os << "for (int idx" << i << " = 0; ";
-    os << "idx" << i << " < " << op->getType().getShape()[i] << "; ";
-    os << "++idx" << i << ") {\n";
-
-    addIndent();
-  }
+  emitNestedLoopHead(type);
 
   indent();
-  emitValue(op->getResult());
-  for (unsigned i = 0; i < numDim; ++i)
-    os << "[idx" << i << "]";
+  emitNestedLoopArray(type, op->getResult());
   os << " = ";
-  emitValue(op->getOperand());
-  for (unsigned i = 0; i < numDim; ++i)
-    os << "[idx" << i << "]";
+  emitNestedLoopArray(type, op->getOperand());
   os << ";\n";
 
-  for (unsigned i = 0; i < numDim; ++i) {
-    reduceIndent();
-
-    indent();
-    os << "}\n";
-  }
+  emitNestedLoopTail(type);
 }
 
 void ModuleEmitter::emitTensorStore(TensorStoreOp *op) {
-  auto tensorType = op->getOperand(0).getType().cast<TensorType>();
-  if (!tensorType.hasStaticShape()) {
+  auto type = op->getOperand(0).getType().cast<TensorType>();
+  if (!type.hasStaticShape()) {
     emitError(*op, "is unranked or has dynamic shape.");
     return;
   }
 
   // Create a nested loop for storing tensor.
-  unsigned numDim = tensorType.getShape().size();
-  for (unsigned i = 0; i < numDim; ++i) {
-    indent();
-    os << "for (int idx" << i << " = 0; ";
-    os << "idx" << i << " < " << tensorType.getShape()[i] << "; ";
-    os << "++idx" << i << ") {\n";
-
-    addIndent();
-  }
+  emitNestedLoopHead(type);
 
   indent();
-  emitValue(op->getOperand(1));
-  for (unsigned i = 0; i < numDim; ++i)
-    os << "[idx" << i << "]";
+  emitNestedLoopArray(type, op->getOperand(1));
   os << " = ";
-  emitValue(op->getOperand(0));
-  for (unsigned i = 0; i < numDim; ++i)
-    os << "[idx" << i << "]";
+  emitNestedLoopArray(type, op->getOperand(0));
   os << ";\n";
 
-  for (unsigned i = 0; i < numDim; ++i) {
-    reduceIndent();
-
-    indent();
-    os << "}\n";
-  }
+  emitNestedLoopTail(type);
 }
 
 void ModuleEmitter::emitSplat(SplatOp *op) {
   // TODO
-  return;
 }
 
 void ModuleEmitter::emitExtractElement(ExtractElementOp *op) {
   // TODO
-  return;
 }
 
 void ModuleEmitter::emitTensorFromElements(TensorFromElementsOp *op) {
   // TODO
-  return;
 }
 
-// TODO: support vector.
 void ModuleEmitter::emitDim(DimOp *op) {
   if (auto constOp = dyn_cast<ConstantOp>(op->getOperand(1).getDefiningOp())) {
-    auto constVal = constOp.getValue().dyn_cast<IntegerAttr>().getInt();
+    auto constVal = constOp.getValue().cast<IntegerAttr>().getInt();
+    auto type = op->getOperand(0).getType().cast<ShapedType>();
 
-    if (auto memType = op->getOperand(0).getType().dyn_cast<MemRefType>()) {
-      if (memType.hasStaticShape()) {
-        if (constVal >= 0 && constVal < memType.getShape().size()) {
-          indent();
-          emitValue(op->getResult());
-          os << " = ";
-          os << memType.getShape()[constVal] << ";\n";
-        } else
-          emitError(*op, "index is out of range.");
+    if (type.hasStaticShape()) {
+      if (constVal >= 0 && constVal < type.getShape().size()) {
+        indent();
+        emitValue(op->getResult());
+        os << " = ";
+        os << type.getShape()[constVal] << ";\n";
       } else
-        emitError(*op, "is unranked or has dynamic shape.");
-    } else if (auto tensorType =
-                   op->getOperand(0).getType().dyn_cast<TensorType>()) {
-      if (tensorType.hasStaticShape()) {
-        if (constVal >= 0 && constVal < tensorType.getShape().size()) {
-          indent();
-          emitValue(op->getResult());
-          os << " = ";
-          os << tensorType.getShape()[constVal] << ";\n";
-        } else
-          emitError(*op, "index is out of range.");
-      } else
-        emitError(*op, "is unranked or has dynamic shape.");
-    }
+        emitError(*op, "index is out of range.");
+    } else
+      emitError(*op, "is unranked or has dynamic shape.");
   } else
     emitError(*op, "index is not a constant.");
 }
 
-// TODO: support vector.
 void ModuleEmitter::emitRank(RankOp *op) {
-  if (auto memType = op->getOperand().getType().dyn_cast<MemRefType>()) {
-    if (memType.hasRank()) {
-      indent();
-      emitValue(op->getResult());
-      os << " = ";
-      os << memType.getRank() << ";\n";
-    } else
-      emitError(*op, "is unranked.");
-  } else if (auto tensorType =
-                 op->getOperand().getType().dyn_cast<TensorType>()) {
-    if (tensorType.hasRank()) {
-      indent();
-      emitValue(op->getResult());
-      os << " = ";
-      os << tensorType.getRank() << ";\n";
-    } else
-      emitError(*op, "is unranked.");
-  }
+  auto type = op->getOperand().getType().cast<ShapedType>();
+  if (type.hasRank()) {
+    indent();
+    emitValue(op->getResult());
+    os << " = ";
+    os << type.getRank() << ";\n";
+  } else
+    emitError(*op, "is unranked.");
 }
 
 /// Standard expression emitters.
-template <typename ArrayType>
-void ModuleEmitter::emitEltWiseBinary(Operation *op, const char *syntax,
-                                      ArrayType type) {
-  if (!type.hasStaticShape()) {
-    emitError(op, "is unranked or has dynamic shape.");
-    return;
-  }
-
-  // Declare a new tensor.
-  indent();
-  emitValue(op->getResult(0));
-  for (auto &shape : type.getShape())
-    os << "[" << shape << "]";
-  os << ";\n";
-
-  // Create a nested loop for loading tensor.
-  unsigned numDim = type.getShape().size();
-  for (unsigned i = 0; i < numDim; ++i) {
-    indent();
-    os << "for (int idx" << i << " = 0; ";
-    os << "idx" << i << " < " << type.getShape()[i] << "; ";
-    os << "++idx" << i << ") {\n";
-
-    addIndent();
-  }
-
-  indent();
-  emitValue(op->getResult(0));
-  for (unsigned i = 0; i < numDim; ++i)
-    os << "[idx" << i << "]";
-  os << " = ";
-  emitValue(op->getOperand(0));
-  for (unsigned i = 0; i < numDim; ++i)
-    os << "[idx" << i << "]";
-  os << " " << syntax << " ";
-  emitValue(op->getOperand(1));
-  for (unsigned i = 0; i < numDim; ++i)
-    os << "[idx" << i << "]";
-  os << ";\n";
-
-  for (unsigned i = 0; i < numDim; ++i) {
-    reduceIndent();
-
-    indent();
-    os << "}\n";
-  }
-}
-
 void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
-  if (auto type = op->getResult(0).getType().dyn_cast<TensorType>())
-    emitEltWiseBinary<TensorType>(op, syntax, type);
-  else if (auto type = op->getResult(0).getType().dyn_cast<VectorType>())
-    emitEltWiseBinary<VectorType>(op, syntax, type);
-  else {
+  if (auto type = op->getResult(0).getType().dyn_cast<ShapedType>()) {
+    if (!type.hasStaticShape()) {
+      emitError(op, "is unranked or has dynamic shape.");
+      return;
+    }
+
+    // Declare a new tensor.
+    indent();
+    emitArrayDecl(op->getResult(0));
+    os << ";\n";
+
+    // Create a nested loop for element-wise binary operation.
+    emitNestedLoopHead(type);
+
+    indent();
+    emitNestedLoopArray(type, op->getResult(0));
+    os << " = ";
+    emitNestedLoopArray(type, op->getOperand(0));
+    os << " " << syntax << " ";
+    emitNestedLoopArray(type, op->getOperand(1));
+    os << ";\n";
+
+    emitNestedLoopTail(type);
+  } else {
     indent();
     emitValue(op->getResult(0));
     os << " = ";
@@ -1168,56 +1076,29 @@ void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
   }
 }
 
-template <typename ArrayType>
-void ModuleEmitter::emitEltWiseUnary(Operation *op, const char *syntax,
-                                     ArrayType type) {
-  if (!type.hasStaticShape()) {
-    emitError(op, "is unranked or has dynamic shape.");
-    return;
-  }
-
-  // Declare a new tensor.
-  indent();
-  emitValue(op->getResult(0));
-  for (auto &shape : type.getShape())
-    os << "[" << shape << "]";
-  os << ";\n";
-
-  // Create a nested loop for loading tensor.
-  unsigned numDim = type.getShape().size();
-  for (unsigned i = 0; i < numDim; ++i) {
-    indent();
-    os << "for (int idx" << i << " = 0; ";
-    os << "idx" << i << " < " << type.getShape()[i] << "; ";
-    os << "++idx" << i << ") {\n";
-
-    addIndent();
-  }
-
-  indent();
-  emitValue(op->getResult(0));
-  for (unsigned i = 0; i < numDim; ++i)
-    os << "[idx" << i << "]";
-  os << " = " << syntax << "(";
-  emitValue(op->getOperand(0));
-  for (unsigned i = 0; i < numDim; ++i)
-    os << "[idx" << i << "]";
-  os << ");\n";
-
-  for (unsigned i = 0; i < numDim; ++i) {
-    reduceIndent();
-
-    indent();
-    os << "}\n";
-  }
-}
-
 void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
-  if (auto type = op->getResult(0).getType().dyn_cast<TensorType>())
-    emitEltWiseUnary<TensorType>(op, syntax, type);
-  else if (auto type = op->getResult(0).getType().dyn_cast<VectorType>())
-    emitEltWiseUnary<VectorType>(op, syntax, type);
-  else {
+  if (auto type = op->getResult(0).getType().dyn_cast<ShapedType>()) {
+    if (!type.hasStaticShape()) {
+      emitError(op, "is unranked or has dynamic shape.");
+      return;
+    }
+
+    // Declare a new tensor.
+    indent();
+    emitArrayDecl(op->getResult(0));
+    os << ";\n";
+
+    // Create a nested loop for element-wise unary operation.
+    emitNestedLoopHead(type);
+
+    indent();
+    emitNestedLoopArray(type, op->getResult(0));
+    os << " = " << syntax << "(";
+    emitNestedLoopArray(type, op->getOperand(0));
+    os << ");\n";
+
+    emitNestedLoopTail(type);
+  } else {
     indent();
     emitValue(op->getResult(0));
     os << " = " << syntax << "(";
@@ -1236,107 +1117,138 @@ void ModuleEmitter::emitIndexCast(IndexCastOp *op) {
 }
 
 void ModuleEmitter::emitSelect(SelectOp *op) {
-  indent();
-  emitValue(op->getResult());
-  os << " = ";
-  emitValue(op->getCondition());
-  os << " ? ";
-  emitValue(op->getTrueValue());
-  os << " : ";
-  emitValue(op->getFalseValue());
-  os << ";\n";
-}
+  if (auto type = op->getResult().getType().dyn_cast<ShapedType>()) {
+    if (!type.hasStaticShape()) {
+      emitError(*op, "is unranked or has dynamic shape.");
+      return;
+    }
 
-template <typename ArrayType>
-void ModuleEmitter::emitConstantArray(ConstantOp *op, ArrayType type) {
-  auto denseAttr = op->getValue().dyn_cast<DenseElementsAttr>();
-  auto elementType = type.getElementType();
-  os << "{";
-  unsigned elementIdx = 0;
-  if (elementType.isF32()) {
-    for (auto element : denseAttr.getFloatValues()) {
-      os << element.convertToFloat();
-      if (elementIdx == denseAttr.getNumElements() - 1)
-        os << "}";
-      else
-        os << ", ";
-      elementIdx += 1;
+    // Declare a new tensor.
+    indent();
+    emitArrayDecl(op->getResult());
+    os << ";\n";
+
+    // Create a nested loop for element-wise select operation.
+    emitNestedLoopHead(type);
+
+    indent();
+    emitNestedLoopArray(type, op->getResult());
+    os << " = ";
+    if (auto condType = op->getCondition().getType().dyn_cast<ShapedType>()) {
+      emitNestedLoopArray(condType, op->getCondition());
+    } else {
+      emitValue(op->getCondition());
     }
-  } else if (elementType.isF64()) {
-    for (auto element : denseAttr.getFloatValues()) {
-      os << element.convertToDouble();
-      if (elementIdx == denseAttr.getNumElements() - 1)
-        os << "}";
-      else
-        os << ", ";
-      elementIdx += 1;
-    }
-  } else if (elementType.isInteger(1)) {
-    for (auto element : denseAttr.getBoolValues()) {
-      os << element;
-      if (elementIdx == denseAttr.getNumElements() - 1)
-        os << "}";
-      else
-        os << ", ";
-      elementIdx += 1;
-    }
-  } else if (elementType.isIntOrIndex()) {
-    for (auto element : denseAttr.getIntValues()) {
-      os << element;
-      if (elementIdx == denseAttr.getNumElements() - 1)
-        os << "}";
-      else
-        os << ", ";
-      elementIdx += 1;
-    }
-  } else
-    emitError(*op, "has unsupported element type.");
+    os << " ? ";
+    emitNestedLoopArray(type, op->getTrueValue());
+    os << " : ";
+    emitNestedLoopArray(type, op->getFalseValue());
+    os << ";\n";
+
+    emitNestedLoopTail(type);
+  } else {
+    indent();
+    emitValue(op->getResult());
+    os << " = ";
+    emitValue(op->getCondition());
+    os << " ? ";
+    emitValue(op->getTrueValue());
+    os << " : ";
+    emitValue(op->getFalseValue());
+    os << ";\n";
+  }
 }
 
 void ModuleEmitter::emitConstant(ConstantOp *op) {
-  auto constAttr = op->getValue();
-  if (constAttr.isa<FloatAttr>() || constAttr.isa<IntegerAttr>() ||
-      constAttr.isa<BoolAttr>()) {
-    // Scalar constant operations will be handle by getName method.
+  if (isDeclared(op->getResult()))
     return;
-  } else if (constAttr.isa<DenseElementsAttr>()) {
+
+  if (auto denseAttr = op->getValue().dyn_cast<DenseElementsAttr>()) {
     indent();
-    if (auto type = op->getType().dyn_cast<TensorType>()) {
-      emitArrayDecl<TensorType>(op->getResult(), type);
-      os << " = ";
-      emitConstantArray<TensorType>(op, type);
-    } else if (auto type = op->getType().dyn_cast<VectorType>()) {
-      emitArrayDecl<VectorType>(op->getResult(), type);
-      os << " = ";
-      emitConstantArray<VectorType>(op, type);
+    emitArrayDecl(op->getResult());
+    os << " = {";
+    auto type = op->getResult().getType().cast<ShapedType>().getElementType();
+
+    unsigned elementIdx = 0;
+    for (auto element : denseAttr.getAttributeValues()) {
+      if (type.isF32())
+        os << element.cast<FloatAttr>().getValue().convertToFloat();
+      else if (type.isF64())
+        os << element.cast<FloatAttr>().getValue().convertToDouble();
+      else if (type.isInteger(1))
+        os << element.cast<BoolAttr>().getValue();
+      else if (type.isIntOrIndex())
+        os << element.cast<IntegerAttr>().getValue();
+      else
+        emitError(*op, "array has unsupported element type.");
+
+      if (elementIdx++ != denseAttr.getNumElements() - 1)
+        os << ", ";
     }
-    os << ";\n";
+    os << "};\n";
   } else
     emitError(*op, "has unsupported constant type.");
 }
 
 void ModuleEmitter::emitCall(CallOp *op) {
   // TODO
-  return;
+}
+
+/// C++ structure emitters.
+void ModuleEmitter::emitArrayDecl(Value array) {
+  assert(!isDeclared(array) && "has been declared before.");
+
+  auto arrayType = array.getType().cast<ShapedType>();
+  if (arrayType.hasStaticShape()) {
+    emitValue(array);
+    for (auto &shape : arrayType.getShape())
+      os << "[" << shape << "]";
+  } else
+    emitValue(array, /*isPtr=*/true);
+}
+
+void ModuleEmitter::emitNestedLoopHead(ShapedType type) {
+  unsigned dimIdx = 0;
+  for (auto &shape : type.getShape()) {
+    indent();
+    os << "for (int idx" << dimIdx << " = 0; ";
+    os << "idx" << dimIdx << " < " << shape << "; ";
+    os << "++idx" << dimIdx << ") {\n";
+
+    addIndent();
+    dimIdx += 1;
+  }
+}
+
+void ModuleEmitter::emitNestedLoopTail(ShapedType type) {
+  for (unsigned i = 0; i < type.getRank(); ++i) {
+    reduceIndent();
+
+    indent();
+    os << "}\n";
+  }
+}
+
+void ModuleEmitter::emitNestedLoopArray(ShapedType type, Value val) {
+  emitValue(val);
+  for (unsigned i = 0; i < type.getRank(); ++i)
+    os << "[idx" << i << "]";
 }
 
 /// MLIR component emitters.
-void ModuleEmitter::emitValue(Value val, bool isPtr) {
+void ModuleEmitter::emitValue(Value val, bool isPtr, bool isRef) {
+  assert(!(isPtr && isRef) && "should be either pointer or reference.");
+
   // Value has been declared before or is a constant number.
-  auto valName = getName(val);
-  if (!valName.empty()) {
-    os << valName;
+  if (isDeclared(val)) {
+    os << getName(val);
     return;
   }
 
   // Handle memref, tensor, and vector types.
   auto valType = val.getType();
-  if (auto type = valType.dyn_cast<MemRefType>())
-    valType = type.getElementType();
-  else if (auto type = valType.dyn_cast<TensorType>())
-    valType = type.getElementType();
-  else if (auto type = valType.dyn_cast<VectorType>())
-    valType = type.getElementType();
+  if (auto arrayType = val.getType().dyn_cast<ShapedType>())
+    valType = arrayType.getElementType();
 
   // Emit value type for declaring a new value.
   switch (valType.getKind()) {
@@ -1366,8 +1278,9 @@ void ModuleEmitter::emitValue(Value val, bool isPtr) {
   }
 
   // Add the new value to nameTable and emit its name.
+  if (isRef)
+    os << "&";
   os << addName(val, isPtr);
-  return;
 }
 
 void ModuleEmitter::emitOperation(Operation *op) {
@@ -1385,75 +1298,44 @@ void ModuleEmitter::emitBlock(Block &block) {
     emitOperation(&op);
 }
 
-template <typename ArrayType>
-void ModuleEmitter::emitArrayDecl(Value array, ArrayType type) {
-  // This indicates that the array has been declared before.
-  if (!getName(array).empty())
-    return;
-
-  if (type.hasStaticShape()) {
-    emitValue(array);
-    for (auto &shape : type.getShape())
-      os << "[" << shape << "]";
-  } else
-    emitValue(array, /*isPtr=*/true);
-}
-
 void ModuleEmitter::emitFunction(FuncOp func) {
   if (func.getBlocks().size() != 1)
     emitError(func, "has more than one basic blocks.");
-  os << "void " << func.getName() << "(\n";
 
   // Emit function signature.
+  os << "void " << func.getName() << "(\n";
   addIndent();
 
   // Handle input arguments.
   unsigned argIdx = 0;
   for (auto &arg : func.getArguments()) {
     indent();
-    if (auto type = arg.getType().dyn_cast<MemRefType>())
-      emitArrayDecl<MemRefType>(arg, type);
-    else if (auto type = arg.getType().dyn_cast<TensorType>())
-      emitArrayDecl<TensorType>(arg, type);
-    else if (auto type = arg.getType().dyn_cast<VectorType>())
-      emitArrayDecl<VectorType>(arg, type);
+    if (arg.getType().isa<ShapedType>())
+      emitArrayDecl(arg);
     else
       emitValue(arg);
 
-    if (argIdx == func.getNumArguments() - 1 && func.getNumResults() == 0)
-      os << "\n";
-    else
+    if (argIdx++ != func.getNumArguments() - 1)
       os << ",\n";
-    argIdx += 1;
   }
 
   // Handle results.
   if (auto funcReturn = dyn_cast<ReturnOp>(func.front().getTerminator())) {
-    unsigned resultIdx = 0;
     for (auto result : funcReturn.getOperands()) {
+      os << ",\n";
       indent();
-      if (auto type = result.getType().dyn_cast<MemRefType>())
-        emitArrayDecl<MemRefType>(result, type);
-      else if (auto type = result.getType().dyn_cast<TensorType>())
-        emitArrayDecl<TensorType>(result, type);
-      else if (auto type = result.getType().dyn_cast<VectorType>())
-        emitArrayDecl<VectorType>(result, type);
+      if (result.getType().isa<ShapedType>())
+        emitArrayDecl(result);
       else
-        // In Vivado HLS, pointer type indicates an output scalar value.
+        // In Vivado HLS, reference indicates the value is an output.
+        // emitValue(result, /*isPtr=*/false, /*isRef=*/true);
         emitValue(result, /*isPtr=*/true);
-
-      if (resultIdx == func.getNumResults() - 1)
-        os << "\n";
-      else
-        os << ",\n";
-      resultIdx += 1;
     }
-  } else {
-    emitError(func, "doesn't have return operation as terminator.");
-  }
+  } else
+    emitError(func, "doesn't have a return operation as terminator.");
 
   reduceIndent();
-  os << ") {\n";
+  os << "\n) {\n";
 
   // Emit function body.
   addIndent();
