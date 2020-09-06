@@ -14,12 +14,12 @@ set(LIBS
   MLIRTranslation
   MLIRSupport
 
-  HLSLDEmitHLSCpp
+  SCALEHLSEmitHLSCpp
   )
 
-add_llvm_executable(hlsld-translate hlsld-translate.cpp)
+add_llvm_executable(scalehls-translate scalehls-translate.cpp)
 
-llvm_update_compile_flags(hlsld-translate)
-target_link_libraries(hlsld-translate PRIVATE ${LIBS})
+llvm_update_compile_flags(scalehls-translate)
+target_link_libraries(scalehls-translate PRIVATE ${LIBS})
 
-mlir_check_link_libraries(hlsld-translate)
+mlir_check_link_libraries(scalehls-translate)

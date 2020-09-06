@@ -31,9 +31,9 @@ config.host_arch = "@HOST_ARCH@"
 config.mlir_src_root = "@MLIR_SOURCE_DIR@"
 config.mlir_obj_root = "@MLIR_BINARY_DIR@"
 config.mlir_tools_dir = "@MLIR_TOOLS_DIR@"
-config.hlsld_src_root = "@HLSLD_SOURCE_DIR@"
-config.hlsld_obj_root = "@HLSLD_BINARY_DIR@"
-config.hlsld_tools_dir = "@HLSLD_TOOLS_DIR@"
+config.scalehls_src_root = "@SCALEHLS_SOURCE_DIR@"
+config.scalehls_obj_root = "@SCALEHLS_BINARY_DIR@"
+config.scalehls_tools_dir = "@SCALEHLS_TOOLS_DIR@"
 
 # Support substitution of the tools_dir with user parameters. This is
 # used when we can't determine the tool dir at configuration time.
@@ -49,4 +49,4 @@ import lit.llvm
 lit.llvm.initialize(lit_config, config)
 
 # Let the main config do the real work.
-lit_config.load_config(config, "@HLSLD_SOURCE_DIR@/test/lit.cfg.py")
+lit_config.load_config(config, "@SCALEHLS_SOURCE_DIR@/test/lit.cfg.py")

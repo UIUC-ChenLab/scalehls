@@ -1,1 +1,2 @@
-add_subdirectory(hlsld-translate)
+add_subdirectory(scalehls-opt)
+add_subdirectory(scalehls-translate)

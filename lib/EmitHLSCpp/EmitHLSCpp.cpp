@@ -311,8 +311,7 @@ public:
   void emitAffineYield(AffineYieldOp *op);
 
   /// Memref-related statement emitters.
-  template <typename OpType>
-  void emitAlloc(OpType *op);
+  template <typename OpType> void emitAlloc(OpType *op);
   void emitLoad(LoadOp *op);
   void emitStore(StoreOp *op);
 
@@ -925,8 +924,7 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
 }
 
 /// Memref-related statement emitters.
-template <typename OpType>
-void ModuleEmitter::emitAlloc(OpType *op) {
+template <typename OpType> void ModuleEmitter::emitAlloc(OpType *op) {
   // This indicates that the memref is output of the function, and has been
   // declared in the function signature.
   if (isDeclared(op->getResult()))
@@ -1315,7 +1313,7 @@ using namespace std;
 }
 
 //===----------------------------------------------------------------------===//
-// Entry of hlsld-translate
+// Entry of scalehls-translate
 //===----------------------------------------------------------------------===//
 
 static LogicalResult emitHLSCpp(ModuleOp module, llvm::raw_ostream &os) {
@@ -1324,6 +1322,6 @@ static LogicalResult emitHLSCpp(ModuleOp module, llvm::raw_ostream &os) {
   return failure(state.encounteredError);
 }
 
-void hlsld::registerHLSCppEmitterTranslation() {
+void scalehls::registerHLSCppEmitterTranslation() {
   static TranslateFromMLIRRegistration toHLSCpp("emit-hlscpp", emitHLSCpp);
 }

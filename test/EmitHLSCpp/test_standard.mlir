@@ -1,4 +1,4 @@
-// RUN: hlsld-translate -emit-hlscpp %s | FileCheck %s
+// RUN: scalehls-translate -emit-hlscpp %s | FileCheck %s
 
 // CHECK:       void test_standard(
 // CHECK-NEXT:    ap_int<32> [[VAL_1:.*]],

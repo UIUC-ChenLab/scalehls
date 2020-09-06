@@ -2,11 +2,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef HLSLD_EMIT_HLSCPP_H
-#define HLSLD_EMIT_HLSCPP_H
+#ifndef SCALEHLS_EMIT_HLSCPP_H
+#define SCALEHLS_EMIT_HLSCPP_H
 
-namespace hlsld {
+namespace scalehls {
 void registerHLSCppEmitterTranslation();
-} // namespace hlsld
+} // namespace scalehls
 
-#endif // HLSLD_EMIT_HLSCPP_H
+#endif // SCALEHLS_EMIT_HLSCPP_H

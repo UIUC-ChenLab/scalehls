@@ -1,4 +1,4 @@
-// RUN: hlsld-translate -emit-hlscpp %s | FileCheck %s
+// RUN: scalehls-translate -emit-hlscpp %s | FileCheck %s
 
 #map0 = affine_map<(d0)[s0] -> (d0 + s0, d0, d0 - s0)>
 #map1 = affine_map<(d0) -> (d0 * 3)>
