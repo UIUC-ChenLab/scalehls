@@ -91,6 +91,7 @@ private:
 };
 } // namespace
 
+// TODO: update naming rule.
 SmallString<8> HLSCppEmitterBase::addName(Value val, bool isPtr) {
   assert(!isDeclared(val) && "has been declared before.");
 
@@ -154,8 +155,8 @@ public:
             // Complex expressions.
             AddCFOp, SubCFOp, ImOp, ReOp, CreateComplexOp,
             // Special operations.
-            CopySignOp, TruncateIOp, ZeroExtendIOp, SignExtendIOp, IndexCastOp,
-            SelectOp, ConstantOp, CallOp, ReturnOp>(
+            SelectOp, ConstantOp, CopySignOp, TruncateIOp, ZeroExtendIOp,
+            SignExtendIOp, IndexCastOp, CallOp, ReturnOp>(
             [&](auto opNode) -> ResultType {
               return thisCast->visitOp(opNode, args...);
             })
@@ -268,13 +269,13 @@ public:
   HANDLE(CreateComplexOp);
 
   // Special operations.
+  HANDLE(SelectOp);
+  HANDLE(ConstantOp);
   HANDLE(CopySignOp);
   HANDLE(TruncateIOp);
   HANDLE(ZeroExtendIOp);
   HANDLE(SignExtendIOp);
   HANDLE(IndexCastOp);
-  HANDLE(SelectOp);
-  HANDLE(ConstantOp);
   HANDLE(CallOp);
   HANDLE(ReturnOp);
 #undef HANDLE
@@ -329,23 +330,22 @@ public:
   void emitUnary(Operation *op, const char *syntax);
 
   /// Special operation emitters.
-  void emitIndexCast(IndexCastOp *op);
   void emitSelect(SelectOp *op);
   void emitConstant(ConstantOp *op);
+  void emitIndexCast(IndexCastOp *op);
   void emitCall(CallOp *op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
 
 private:
-  /// C++ structure emitters.
+  /// C++ component emitters.
+  void emitValue(Value val, unsigned rank = 0, bool isPtr = false);
   void emitArrayDecl(Value array);
-  void emitNestedLoopHead(ShapedType type);
-  void emitNestedLoopTail(ShapedType type);
-  void emitNestedLoopArray(ShapedType type, Value val);
+  unsigned emitNestedLoopHead(Value val);
+  void emitNestedLoopTail(unsigned rank);
 
   /// MLIR component emitters.
-  void emitValue(Value val, bool isPtr = false, bool isRef = false);
   void emitOperation(Operation *op);
   void emitBlock(Block &block);
   void emitFunction(FuncOp func);
@@ -522,9 +522,9 @@ public:
   bool visitOp(Log10Op op) { return emitter.emitUnary(op, "log10"), true; }
 
   /// Special operations.
-  bool visitOp(IndexCastOp op) { return emitter.emitIndexCast(&op), true; }
   bool visitOp(SelectOp op) { return emitter.emitSelect(&op), true; }
   bool visitOp(ConstantOp op) { return emitter.emitConstant(&op), true; }
+  bool visitOp(IndexCastOp op) { return emitter.emitIndexCast(&op), true; }
   bool visitOp(CallOp op) { return emitter.emitCall(&op), true; }
   bool visitOp(ReturnOp op) { return true; }
 
@@ -641,14 +641,18 @@ void ModuleEmitter::emitAffineFor(AffineForOp *op) {
   os << "}\n";
 }
 
-/// TODO: support to yield shaped type.
 void ModuleEmitter::emitAffineIf(AffineIfOp *op) {
   // Declare all values returned by AffineYieldOp. They will be further handled
   // by the AffineYieldOp emitter.
   for (auto result : op->getResults()) {
-    indent();
-    emitValue(result);
-    os << ";\n";
+    if (!isDeclared(result)) {
+      indent();
+      if (result.getType().isa<ShapedType>())
+        emitArrayDecl(result);
+      else
+        emitValue(result);
+      os << ";\n";
+    }
   }
 
   indent();
@@ -686,14 +690,18 @@ void ModuleEmitter::emitAffineIf(AffineIfOp *op) {
   os << "}\n";
 }
 
-/// TODO: support to yield shaped type.
 void ModuleEmitter::emitAffineParallel(AffineParallelOp *op) {
   // Declare all values returned by AffineParallelOp. They will be further
   // handled by the AffineYieldOp emitter.
   for (auto result : op->getResults()) {
-    indent();
-    emitValue(result);
-    os << ";\n";
+    if (!isDeclared(result)) {
+      indent();
+      if (result.getType().isa<ShapedType>())
+        emitArrayDecl(result);
+      else
+        emitValue(result);
+      os << ";\n";
+    }
   }
 
   for (unsigned i = 0, e = op->getNumDims(); i < e; ++i) {
@@ -808,7 +816,10 @@ void ModuleEmitter::emitAffineVectorStore(AffineVectorStoreOp *op) {
   // TODO
 }
 
-/// TODO: support to yield shaped type.
+// TODO: For now, all values created in the affine if/parallel region will be
+// declared in the generated C++. However, values which will be returned by
+// affine yield operation should not be declared again. How to "bind" the pair
+// of values inside/outside of affine if/parallel region needs to be considered.
 void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
   if (op->getNumOperands() == 0)
     return;
@@ -818,12 +829,13 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
   if (auto parentOp = dyn_cast<AffineIfOp>(op->getParentOp())) {
     unsigned resultIdx = 0;
     for (auto result : parentOp.getResults()) {
+      unsigned rank = emitNestedLoopHead(result);
       indent();
-      emitValue(result);
+      emitValue(result, rank);
       os << " = ";
-      emitValue(op->getOperand(resultIdx));
+      emitValue(op->getOperand(resultIdx++), rank);
       os << ";\n";
-      resultIdx += 1;
+      emitNestedLoopTail(rank);
     }
   } else if (auto parentOp =
                  dyn_cast<mlir::AffineParallelOp>(op->getParentOp())) {
@@ -843,12 +855,13 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
     addIndent();
     unsigned resultIdx = 0;
     for (auto result : parentOp.getResults()) {
+      unsigned rank = emitNestedLoopHead(result);
       indent();
-      emitValue(result);
+      emitValue(result, rank);
       os << " = ";
-      emitValue(op->getOperand(resultIdx));
+      emitValue(op->getOperand(resultIdx++), rank);
       os << ";\n";
-      resultIdx += 1;
+      emitNestedLoopTail(rank);
     }
     reduceIndent();
 
@@ -860,8 +873,9 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
     addIndent();
     resultIdx = 0;
     for (auto result : parentOp.getResults()) {
+      unsigned rank = emitNestedLoopHead(result);
       indent();
-      emitValue(result);
+      emitValue(result, rank);
       switch ((AtomicRMWKind)parentOp
                   .getAttrOfType<ArrayAttr>(
                       parentOp.getReductionsAttrName())[resultIdx]
@@ -870,39 +884,38 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
       case (AtomicRMWKind::addf):
       case (AtomicRMWKind::addi):
         os << " += ";
-        emitValue(op->getOperand(resultIdx));
+        emitValue(op->getOperand(resultIdx++), rank);
         break;
       case (AtomicRMWKind::assign):
         os << " = ";
-        emitValue(op->getOperand(resultIdx));
+        emitValue(op->getOperand(resultIdx++), rank);
         break;
       case (AtomicRMWKind::maxf):
       case (AtomicRMWKind::maxs):
       case (AtomicRMWKind::maxu):
         os << " = max(";
-        emitValue(result);
+        emitValue(result, rank);
         os << ", ";
-        emitValue(op->getOperand(resultIdx));
+        emitValue(op->getOperand(resultIdx++), rank);
         os << ")";
         break;
       case (AtomicRMWKind::minf):
       case (AtomicRMWKind::mins):
       case (AtomicRMWKind::minu):
         os << " = min(";
-        emitValue(result);
+        emitValue(result, rank);
         os << ", ";
-        emitValue(op->getOperand(resultIdx));
+        emitValue(op->getOperand(resultIdx++), rank);
         os << ")";
         break;
       case (AtomicRMWKind::mulf):
       case (AtomicRMWKind::muli):
         os << " *= ";
-        emitValue(op->getOperand(resultIdx));
+        emitValue(op->getOperand(resultIdx++), rank);
         break;
       }
-
       os << ";\n";
-      resultIdx += 1;
+      emitNestedLoopTail(rank);
     }
     reduceIndent();
 
@@ -956,46 +969,23 @@ void ModuleEmitter::emitStore(StoreOp *op) {
 
 /// Tensor-related statement emitters.
 void ModuleEmitter::emitTensorLoad(TensorLoadOp *op) {
-  auto type = op->getType();
-  if (!type.hasStaticShape()) {
-    emitError(*op, "is unranked or has dynamic shape.");
-    return;
-  }
-
-  // Declare a new tensor.
+  auto rank = emitNestedLoopHead(op->getResult());
   indent();
-  emitArrayDecl(op->getResult());
-  os << ";\n";
-
-  // Create a nested loop for loading tensor.
-  emitNestedLoopHead(type);
-
-  indent();
-  emitNestedLoopArray(type, op->getResult());
+  emitValue(op->getResult(), rank);
   os << " = ";
-  emitNestedLoopArray(type, op->getOperand());
+  emitValue(op->getOperand(), rank);
   os << ";\n";
-
-  emitNestedLoopTail(type);
+  emitNestedLoopTail(rank);
 }
 
 void ModuleEmitter::emitTensorStore(TensorStoreOp *op) {
-  auto type = op->getOperand(0).getType().cast<TensorType>();
-  if (!type.hasStaticShape()) {
-    emitError(*op, "is unranked or has dynamic shape.");
-    return;
-  }
-
-  // Create a nested loop for storing tensor.
-  emitNestedLoopHead(type);
-
+  auto rank = emitNestedLoopHead(op->getOperand(0));
   indent();
-  emitNestedLoopArray(type, op->getOperand(1));
+  emitValue(op->getOperand(1), rank);
   os << " = ";
-  emitNestedLoopArray(type, op->getOperand(0));
+  emitValue(op->getOperand(0), rank);
   os << ";\n";
-
-  emitNestedLoopTail(type);
+  emitNestedLoopTail(rank);
 }
 
 void ModuleEmitter::emitSplat(SplatOp *op) {
@@ -1042,126 +1032,54 @@ void ModuleEmitter::emitRank(RankOp *op) {
 
 /// Standard expression emitters.
 void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
-  if (auto type = op->getResult(0).getType().dyn_cast<ShapedType>()) {
-    if (!type.hasStaticShape()) {
-      emitError(op, "is unranked or has dynamic shape.");
-      return;
-    }
-
-    // Declare a new tensor.
-    indent();
-    emitArrayDecl(op->getResult(0));
-    os << ";\n";
-
-    // Create a nested loop for element-wise binary operation.
-    emitNestedLoopHead(type);
-
-    indent();
-    emitNestedLoopArray(type, op->getResult(0));
-    os << " = ";
-    emitNestedLoopArray(type, op->getOperand(0));
-    os << " " << syntax << " ";
-    emitNestedLoopArray(type, op->getOperand(1));
-    os << ";\n";
-
-    emitNestedLoopTail(type);
-  } else {
-    indent();
-    emitValue(op->getResult(0));
-    os << " = ";
-    emitValue(op->getOperand(0));
-    os << " " << syntax << " ";
-    emitValue(op->getOperand(1));
-    os << ";\n";
-  }
+  auto rank = emitNestedLoopHead(op->getResult(0));
+  indent();
+  emitValue(op->getResult(0), rank);
+  os << " = ";
+  emitValue(op->getOperand(0), rank);
+  os << " " << syntax << " ";
+  emitValue(op->getOperand(1), rank);
+  os << ";\n";
+  emitNestedLoopTail(rank);
 }
 
 void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
-  if (auto type = op->getResult(0).getType().dyn_cast<ShapedType>()) {
-    if (!type.hasStaticShape()) {
-      emitError(op, "is unranked or has dynamic shape.");
-      return;
-    }
-
-    // Declare a new tensor.
-    indent();
-    emitArrayDecl(op->getResult(0));
-    os << ";\n";
-
-    // Create a nested loop for element-wise unary operation.
-    emitNestedLoopHead(type);
-
-    indent();
-    emitNestedLoopArray(type, op->getResult(0));
-    os << " = " << syntax << "(";
-    emitNestedLoopArray(type, op->getOperand(0));
-    os << ");\n";
-
-    emitNestedLoopTail(type);
-  } else {
-    indent();
-    emitValue(op->getResult(0));
-    os << " = " << syntax << "(";
-    emitValue(op->getOperand(0));
-    os << ");\n";
-  }
+  auto rank = emitNestedLoopHead(op->getResult(0));
+  indent();
+  emitValue(op->getResult(0), rank);
+  os << " = " << syntax << "(";
+  emitValue(op->getOperand(0), rank);
+  os << ");\n";
+  emitNestedLoopTail(rank);
 }
 
 /// Special operation emitters.
-void ModuleEmitter::emitIndexCast(IndexCastOp *op) {
-  indent();
-  emitValue(op->getResult());
-  os << " = ";
-  emitValue(op->getOperand());
-  os << ";\n";
-}
-
 void ModuleEmitter::emitSelect(SelectOp *op) {
-  if (auto type = op->getResult().getType().dyn_cast<ShapedType>()) {
-    if (!type.hasStaticShape()) {
-      emitError(*op, "is unranked or has dynamic shape.");
-      return;
-    }
+  unsigned rank = emitNestedLoopHead(op->getResult());
+  unsigned conditionRank = rank;
+  if (!op->getCondition().getType().isa<ShapedType>())
+    conditionRank = 0;
 
-    // Declare a new tensor.
-    indent();
-    emitArrayDecl(op->getResult());
-    os << ";\n";
-
-    // Create a nested loop for element-wise select operation.
-    emitNestedLoopHead(type);
-
-    indent();
-    emitNestedLoopArray(type, op->getResult());
-    os << " = ";
-    if (auto condType = op->getCondition().getType().dyn_cast<ShapedType>()) {
-      emitNestedLoopArray(condType, op->getCondition());
-    } else {
-      emitValue(op->getCondition());
-    }
-    os << " ? ";
-    emitNestedLoopArray(type, op->getTrueValue());
-    os << " : ";
-    emitNestedLoopArray(type, op->getFalseValue());
-    os << ";\n";
-
-    emitNestedLoopTail(type);
-  } else {
-    indent();
-    emitValue(op->getResult());
-    os << " = ";
-    emitValue(op->getCondition());
-    os << " ? ";
-    emitValue(op->getTrueValue());
-    os << " : ";
-    emitValue(op->getFalseValue());
-    os << ";\n";
-  }
+  indent();
+  emitValue(op->getResult(), rank);
+  os << " = ";
+  emitValue(op->getCondition(), conditionRank);
+  os << " ? ";
+  emitValue(op->getTrueValue(), rank);
+  os << " : ";
+  emitValue(op->getFalseValue(), rank);
+  os << ";\n";
+  emitNestedLoopTail(rank);
 }
 
 void ModuleEmitter::emitConstant(ConstantOp *op) {
-  if (isDeclared(op->getResult()))
+  if (isDeclared(op->getResult())) {
+    // TODO: This case should be supported somehow.
+    if (op->getResult().getType().isa<ShapedType>())
+      emitError(*op, "constant array can't be directly returned for now.");
+    // This indicates the constant type is scalar (float, integer, or bool).
     return;
+  }
 
   if (auto denseAttr = op->getValue().dyn_cast<DenseElementsAttr>()) {
     indent();
@@ -1190,58 +1108,27 @@ void ModuleEmitter::emitConstant(ConstantOp *op) {
     emitError(*op, "has unsupported constant type.");
 }
 
+void ModuleEmitter::emitIndexCast(IndexCastOp *op) {
+  indent();
+  emitValue(op->getResult());
+  os << " = ";
+  emitValue(op->getOperand());
+  os << ";\n";
+}
+
 void ModuleEmitter::emitCall(CallOp *op) {
   // TODO
 }
 
-/// C++ structure emitters.
-void ModuleEmitter::emitArrayDecl(Value array) {
-  assert(!isDeclared(array) && "has been declared before.");
-
-  auto arrayType = array.getType().cast<ShapedType>();
-  if (arrayType.hasStaticShape()) {
-    emitValue(array);
-    for (auto &shape : arrayType.getShape())
-      os << "[" << shape << "]";
-  } else
-    emitValue(array, /*isPtr=*/true);
-}
-
-void ModuleEmitter::emitNestedLoopHead(ShapedType type) {
-  unsigned dimIdx = 0;
-  for (auto &shape : type.getShape()) {
-    indent();
-    os << "for (int idx" << dimIdx << " = 0; ";
-    os << "idx" << dimIdx << " < " << shape << "; ";
-    os << "++idx" << dimIdx << ") {\n";
-
-    addIndent();
-    dimIdx += 1;
-  }
-}
-
-void ModuleEmitter::emitNestedLoopTail(ShapedType type) {
-  for (unsigned i = 0; i < type.getRank(); ++i) {
-    reduceIndent();
-
-    indent();
-    os << "}\n";
-  }
-}
-
-void ModuleEmitter::emitNestedLoopArray(ShapedType type, Value val) {
-  emitValue(val);
-  for (unsigned i = 0; i < type.getRank(); ++i)
-    os << "[idx" << i << "]";
-}
-
-/// MLIR component emitters.
-void ModuleEmitter::emitValue(Value val, bool isPtr, bool isRef) {
-  assert(!(isPtr && isRef) && "should be either pointer or reference.");
+/// C++ component emitters.
+void ModuleEmitter::emitValue(Value val, unsigned rank, bool isPtr) {
+  assert(!(rank && isPtr) && "should be either an array or a pointer.");
 
   // Value has been declared before or is a constant number.
   if (isDeclared(val)) {
     os << getName(val);
+    for (unsigned i = 0; i < rank; ++i)
+      os << "[idx" << i << "]";
     return;
   }
 
@@ -1278,11 +1165,65 @@ void ModuleEmitter::emitValue(Value val, bool isPtr, bool isRef) {
   }
 
   // Add the new value to nameTable and emit its name.
-  if (isRef)
-    os << "&";
   os << addName(val, isPtr);
+  for (unsigned i = 0; i < rank; ++i)
+    os << "[idx" << i << "]";
 }
 
+void ModuleEmitter::emitArrayDecl(Value array) {
+  assert(!isDeclared(array) && "has been declared before.");
+
+  auto arrayType = array.getType().cast<ShapedType>();
+  if (arrayType.hasStaticShape()) {
+    emitValue(array);
+    for (auto &shape : arrayType.getShape())
+      os << "[" << shape << "]";
+  } else
+    emitValue(array, /*rank=*/0, /*isPtr=*/true);
+}
+
+unsigned ModuleEmitter::emitNestedLoopHead(Value val) {
+  unsigned rank = 0;
+
+  if (auto type = val.getType().dyn_cast<ShapedType>()) {
+    if (!type.hasStaticShape()) {
+      emitError(val.getDefiningOp(), "is unranked or has dynamic shape.");
+      return 0;
+    }
+
+    // Declare a new array.
+    if (!isDeclared(val)) {
+      indent();
+      emitArrayDecl(val);
+      os << ";\n";
+    }
+
+    // Create nested loop.
+    unsigned dimIdx = 0;
+    for (auto &shape : type.getShape()) {
+      indent();
+      os << "for (int idx" << dimIdx << " = 0; ";
+      os << "idx" << dimIdx << " < " << shape << "; ";
+      os << "++idx" << dimIdx++ << ") {\n";
+
+      addIndent();
+    }
+    rank = type.getRank();
+  }
+
+  return rank;
+}
+
+void ModuleEmitter::emitNestedLoopTail(unsigned rank) {
+  for (unsigned i = 0; i < rank; ++i) {
+    reduceIndent();
+
+    indent();
+    os << "}\n";
+  }
+}
+
+/// MLIR component emitters.
 void ModuleEmitter::emitOperation(Operation *op) {
   if (ExprVisitor(*this).dispatchVisitor(op))
     return;
@@ -1327,9 +1268,8 @@ void ModuleEmitter::emitFunction(FuncOp func) {
       if (result.getType().isa<ShapedType>())
         emitArrayDecl(result);
       else
-        // In Vivado HLS, reference indicates the value is an output.
-        // emitValue(result, /*isPtr=*/false, /*isRef=*/true);
-        emitValue(result, /*isPtr=*/true);
+        // In Vivado HLS, pointer indicates the value is an output.
+        emitValue(result, /*rank=*/0, /*isPtr=*/true);
     }
   } else
     emitError(func, "doesn't have a return operation as terminator.");

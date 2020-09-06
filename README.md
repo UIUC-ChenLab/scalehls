@@ -13,12 +13,11 @@ After the installation and test successfully completed, you should be able to ru
 ```sh
 bin/hlsld-translate -emit-hlscpp ../test/EmitHLSCpp/test_*.mlir
 ```
-
 ## TODO List
 ### hlsld-translate: EmitHLSCpp
 1. **Test HLS C++ emitter with some real benchmarks;**
-2. Support extract_element/tensor_from_elements/splat operations;
-3. Support call operation;
+2. **TODOs in EmitHLSCpp.cpp;**
+3. **Create testcase for each important operation;**
 4. Support memref/tensor cast/view/subview operations;
 5. Support atomic/complex/extend -related operations.
 
