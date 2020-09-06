@@ -9,15 +9,25 @@ mkdir build && cd build
 cmake -G Ninja .. -DMLIR_DIR=$LLVM_BUILD_DIR/lib/cmake/mlir -DLLVM_EXTERNAL_LIT=$LLVM_BUILD_DIR/bin/llvm-lit
 cmake --build . --target check-hlsld
 ```
+After the installation and test successfully completed, you should be able to run
+```sh
+bin/hlsld-translate -emit-hlscpp ../test/EmitHLSCpp/test_*.mlir
+```
 
-## Hanchen TODO List
-1. Test HLS C++ emitter with some real benchmarks;
-2. How to handle AXI4MM input/output with dynamic rank;
-3. Support extract_element/tensor_from_elements/splat operations;
-4. Support call operation;
-5. Support memref/tensor cast/view/subview operations;
-6. Support atomic/complex/extend -related operations.
+## TODO List
+### hlsld-translate: EmitHLSCpp
+1. **Test HLS C++ emitter with some real benchmarks;**
+2. Support extract_element/tensor_from_elements/splat operations;
+3. Support call operation;
+4. Support memref/tensor cast/view/subview operations;
+5. Support atomic/complex/extend -related operations.
 
+### hlsld-opt
+1. Initial implementation.
+
+### HLSCpp Dialect (?)
+1. **Think about the dialect design.**
+2. Initial implementation.
 
 ## References
 1. [MLIR Documents](https://mlir.llvm.org)
