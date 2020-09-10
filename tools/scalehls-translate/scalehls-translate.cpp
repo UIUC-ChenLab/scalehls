@@ -42,7 +42,7 @@ int main(int argc, char **argv) {
   mlir::registerAllDialects();
   mlir::registerAllTranslations();
 
-  scalehls::registerHLSCppEmitterTranslation();
+  mlir::scalehls::registerHLSCppEmitterTranslation();
 
   llvm::InitLLVM y(argc, argv);
 

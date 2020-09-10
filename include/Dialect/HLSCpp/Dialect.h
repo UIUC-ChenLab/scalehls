@@ -2,15 +2,19 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_EMITHLSCPP_H
-#define SCALEHLS_EMITHLSCPP_H
+#ifndef SCALEHLS_DIALECT_HLSCPP_DIALECT_H
+#define SCALEHLS_DIALECT_HLSCPP_DIALECT_H
+
+#include "mlir/IR/Dialect.h"
 
 namespace mlir {
 namespace scalehls {
+namespace hlscpp {
 
-void registerHLSCppEmitterTranslation();
+#include "Dialect/HLSCpp/HLSCppDialect.h.inc"
 
+} // namespace hlscpp
 } // namespace scalehls
 } // namespace mlir
 
-#endif // SCALEHLS_EMITHLSCPP_H
+#endif // SCALEHLS_DIALECT_HLSCPP_DIALECT_H

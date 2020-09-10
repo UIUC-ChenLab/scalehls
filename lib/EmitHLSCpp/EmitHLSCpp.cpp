@@ -19,8 +19,9 @@
 
 #include "EmitHLSCpp.h"
 
-using namespace mlir;
 using namespace std;
+using namespace mlir;
+using namespace scalehls;
 
 //===----------------------------------------------------------------------===//
 // Some Base Classes
