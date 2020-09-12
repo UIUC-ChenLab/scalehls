@@ -8,7 +8,8 @@ add_mlir_dialect_library(MLIRHLSCpp
 
   DEPENDS
   MLIRHLSCppIncGen
+  MLIRHLSCppInterfacesIncGen
 
-	LINK_LIBS PUBLIC
-	MLIRIR
-	)
+  LINK_LIBS PUBLIC
+  MLIRIR
+  )

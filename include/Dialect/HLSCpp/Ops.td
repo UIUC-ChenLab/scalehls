@@ -2,7 +2,28 @@
 //
 //===----------------------------------------------------------------------===//
 
+#ifndef SCALEHLS_DIALECT_HLSCPP_OPS_TD
+#define SCALEHLS_DIALECT_HLSCPP_OPS_TD
+
+include "Interfaces.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
+
+def HLSCppApplyPragmasOp : HLSCppOp<"apply_pragmas",
+    [NoSideEffect, PragmaOpInterface]> {
+  let summary = "apply_pragmas operation";
+  let description = [{
+    This hlscpp.apply_pragmas operation owns one region containing one or more
+    concrete pragmas, and applies all of them to its parent operation (e.g.,
+    functions, loops, or other regions). This operation should always be
+    inserted to the front of its parent operation.
+
+    This operations takes nothing and returns nothing.
+  }];
+
+  let regions = (region SizedRegion<1> : $pragmaRegion);
+}
+
+
 
 def HLSCppFooOp : HLSCppOp<"foo", [NoSideEffect, SameOperandsAndResultType]> {
   let summary = "Illustrates how to define an operation.";
@@ -28,3 +49,5 @@ def HLSCppFooOp : HLSCppOp<"foo", [NoSideEffect, SameOperandsAndResultType]> {
     $input attr-dict `:` type($input)
   }];
 }
+
+#endif // SCALEHLS_DIALECT_HLSCPP_OPS_TD
