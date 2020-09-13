@@ -18,8 +18,6 @@ HLSCppDialect::HLSCppDialect(mlir::MLIRContext *context)
       >();
 }
 
-// Op classes definations.
-
 #include "Dialect/HLSCpp/HLSCppInterfaces.cpp.inc"
 
 #define GET_OP_CLASSES

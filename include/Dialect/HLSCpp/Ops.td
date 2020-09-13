@@ -23,6 +23,16 @@ def ApplyPragmasOp : HLSCppOp<"apply_pragmas", [
 
   let regions = (region SizedRegion<1> : $pragmaRegion);
 
+  let skipDefaultBuilders = 1;
+  let builders = [OpBuilder<"OpBuilder &builder, OperationState &state", [{
+    auto &pragmaRegion = *state.addRegion();
+    ApplyPragmasOp::ensureTerminator(pragmaRegion, builder, state.location);
+  }]>];
+
+  // TODO: verifier for this op:
+  // (1) is in the front of its parent operation.
+  // (2) only contains hlscpp pragma operation.
+
   let extraClassDeclaration = [{
     OpBuilder getBodyBuilder() {
       assert(!pragmaRegion().empty() && "Unexpected empty pragma region.");
@@ -120,6 +130,10 @@ def PragmaArrayPartitionOp : HLSCppOp<"pragma_array_partition", [
     Confined<UI32Attr, [IntPositive]> : $factor,
     Confined<UI32Attr, [IntNonNegative]> : $dim
   );
+
+  // TODO: verifier for this op:
+  // (1) dim is not larger than variable's dim.
+  // (2) factor is not larger than variable's shape of the corresponding dim.
 
   let extraClassDeclaration = [{
     StringRef getPartitionType() {

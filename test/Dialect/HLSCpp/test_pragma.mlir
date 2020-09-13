@@ -2,5 +2,5 @@
 
 // CHECK-LABEL: func @test_pragma()
 func @test_pragma() {
-
+  return
 }
