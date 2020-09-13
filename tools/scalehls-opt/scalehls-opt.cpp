@@ -15,7 +15,8 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/ToolOutputFile.h"
 
-#include "Dialect/HLSCpp/Ops.h"
+#include "Dialect/HLSCpp/HLSCpp.h"
+#include "Dialect/HLSCpp/Passes.h"
 
 static llvm::cl::opt<std::string> inputFilename(llvm::cl::Positional,
                                                 llvm::cl::desc("<input file>"),
@@ -57,7 +58,7 @@ int main(int argc, char **argv) {
   mlir::registerAllPasses();
 
   mlir::registerDialect<mlir::scalehls::hlscpp::HLSCppDialect>();
-  // TODO: Register HLSCpp passes here.
+  mlir::scalehls::hlscpp::registerHLSCppPasses();
 
   llvm::InitLLVM y(argc, argv);
 

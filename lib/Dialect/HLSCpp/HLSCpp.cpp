@@ -2,8 +2,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Dialect/HLSCpp/Ops.h"
-#include "mlir/IR/OpImplementation.h"
+#include "Dialect/HLSCpp/HLSCpp.h"
+#include "mlir/IR/StandardTypes.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -17,6 +17,8 @@ HLSCppDialect::HLSCppDialect(mlir::MLIRContext *context)
 #include "Dialect/HLSCpp/HLSCpp.cpp.inc"
       >();
 }
+
+// Op classes definations.
 
 #include "Dialect/HLSCpp/HLSCppInterfaces.cpp.inc"
 

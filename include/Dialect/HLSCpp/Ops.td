@@ -6,13 +6,12 @@
 #define SCALEHLS_DIALECT_HLSCPP_OPS_TD
 
 include "Interfaces.td"
-include "mlir/Interfaces/SideEffectInterfaces.td"
 
 def ApplyPragmasOp : HLSCppOp<"apply_pragmas", [
   PragmaOpInterface,
   SingleBlockImplicitTerminator<"EndOp">
 ]> {
-  let summary = "hlscpp.apply_pragmas operation";
+  let summary = "Apply pragmas to the parent operation.";
   let description = [{
     This hlscpp.apply_pragmas operation owns one region containing one or more
     concrete pragmas, and applies all of them to its parent operation (e.g.,
@@ -37,7 +36,7 @@ def PragmaPipelineOp : HLSCppOp<"pragma_pipeline", [
   PragmaOpInterface,
   HasParent<"ApplyPragmasOp">
 ]> {
-  let summary = "hlscpp.pragma_pipeline operation";
+  let summary = "Apply PIPELINE HLS pragma.";
   let description = [{
     This hlscpp.pragma_pipeline operation represent the "#pragma HLS PIPELINE"
     directive in HLS C++.
@@ -73,7 +72,7 @@ def PragmaUnrollOp : HLSCppOp<"pragma_unroll", [
   PragmaOpInterface,
   HasParent<"ApplyPragmasOp">
 ]> {
-  let summary = "hlscpp.pragma_unroll operation";
+  let summary = "Apply UNROLL HLS pragma.";
   let description = [{
     This hlscpp.pragma_unroll operation represent the "#pragma HLS UNROLL"
     directive in HLS C++.
@@ -109,7 +108,7 @@ def LegalPartitionType : AttrConstraint<Or<[
 def PragmaArrayPartitionOp : HLSCppOp<"pragma_array_partition", [
   PragmaOpInterface
 ]> {
-  let summary = "hlscpp.pragma_array_partition operation";
+  let summary = "Apply ARRAY_PARTITION HLS pragma to the input value.";
   let description = [{
     This hlscpp.pragma_array_partition operation represent the "#pragma HLS 
     ARRAY_PARTITION" directive in HLS C++.
@@ -138,7 +137,7 @@ def PragmaArrayPartitionOp : HLSCppOp<"pragma_array_partition", [
 }
 
 def EndOp : HLSCppOp<"end", [Terminator]> {
-  let summary = "hlscpp.end operation";
+  let summary = "Mark the end of a HLSCpp region.";
   let description = [{
     This hlscpp.end operation marks the end of a region in the HLSCpp dialect.
   }];

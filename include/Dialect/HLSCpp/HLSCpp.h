@@ -2,13 +2,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_DIALECT_HLSCPP_OPS_H
-#define SCALEHLS_DIALECT_HLSCPP_OPS_H
+#ifndef SCALEHLS_DIALECT_HLSCPP_HLSCPP_H
+#define SCALEHLS_DIALECT_HLSCPP_HLSCPP_H
 
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/Dialect.h"
-#include "mlir/IR/StandardTypes.h"
-#include "mlir/Interfaces/SideEffectInterfaces.h"
 
 namespace mlir {
 namespace scalehls {
@@ -24,4 +22,4 @@ namespace hlscpp {
 } // namespace scalehls
 } // namespace mlir
 
-#endif // SCALEHLS_DIALECT_HLSCPP_OPS_H
+#endif // SCALEHLS_DIALECT_HLSCPP_HLSCPP_H
