@@ -25,7 +25,12 @@ public:
           auto builder = OpBuilder(returnOp);
           unsigned operandIdx = 0;
           for (auto operand : returnOp.getOperands()) {
+
             if (operand.getKind() == Value::Kind::BlockArgument) {
+              auto newValue = builder.create<AssignOp>(
+                  returnOp.getLoc(), operand.getType(), operand);
+              returnOp.setOperand(operandIdx, newValue);
+            } else if (isa<ConstantOp>(operand.getDefiningOp())) {
               auto newValue = builder.create<AssignOp>(
                   returnOp.getLoc(), operand.getType(), operand);
               returnOp.setOperand(operandIdx, newValue);
