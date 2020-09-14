@@ -1,5 +1,5 @@
 file(GLOB globbed *.cpp)
 
-add_mlir_library(MLIREmitHLSCpp
+add_mlir_library(MLIRConvertToHLSCpp
   ${globbed}
   )

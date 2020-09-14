@@ -17,13 +17,12 @@ struct PragmaInsertion : public PragmaInsertionBase<PragmaInsertion> {
 } // namespace
 
 void PragmaInsertion::runOnOperation() {
-  auto module = getOperation();
-  for (auto &func : module) {
-    if (auto funcOp = dyn_cast<FuncOp>(func)) {
-      if (funcOp.getBlocks().size() != 1)
-        funcOp.emitError("has more than one basic blocks");
+  for (auto &funcOp : getOperation()) {
+    if (auto func = dyn_cast<FuncOp>(funcOp)) {
+      if (func.getBlocks().size() != 1)
+        func.emitError("has zero or more than one basic blocks");
 
-      for (auto &op : funcOp.getBlocks().front()) {
+      for (auto &op : func.front()) {
         if (auto forOp = dyn_cast<mlir::AffineForOp>(op)) {
           Block &loopBody = forOp.getLoopBody().front();
           auto builder = OpBuilder(&loopBody, loopBody.begin());
@@ -39,8 +38,8 @@ void PragmaInsertion::runOnOperation() {
               /*skip_exit_check=*/false);
         }
         if (auto allocOp = dyn_cast<mlir::AllocOp>(op)) {
-          auto builder = OpBuilder(&op);
-          builder.setInsertionPointAfter(&op);
+          auto builder = OpBuilder(allocOp);
+          builder.setInsertionPointAfter(allocOp);
           builder.create<hlscpp::PragmaArrayPartitionOp>(
               allocOp.getLoc(), /*variable=*/allocOp.getResult(),
               /*type=*/"complete", /*factor=*/APInt(32, 2),
@@ -51,7 +50,6 @@ void PragmaInsertion::runOnOperation() {
   }
 }
 
-std::unique_ptr<mlir::Pass>
-mlir::scalehls::hlscpp::createPragmaInsertionPass() {
+std::unique_ptr<mlir::Pass> hlscpp::createPragmaInsertionPass() {
   return std::make_unique<PragmaInsertion>();
 }

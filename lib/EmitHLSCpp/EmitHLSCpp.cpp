@@ -2,6 +2,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "EmitHLSCpp.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/Dialect/SCF/SCF.h"
@@ -16,8 +17,6 @@
 #include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/raw_ostream.h"
-
-#include "EmitHLSCpp.h"
 
 using namespace std;
 using namespace mlir;
@@ -492,8 +491,8 @@ public:
   bool visitOp(SubIOp op) { return emitter.emitBinary(op, "-"), true; }
   bool visitOp(MulIOp op) { return emitter.emitBinary(op, "*"), true; }
   bool visitOp(SignedDivIOp op) { return emitter.emitBinary(op, "/"), true; }
-  bool visitOp(SignedRemIOp op) { return emitter.emitBinary(op, "/"), true; }
-  bool visitOp(UnsignedDivIOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(SignedRemIOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(UnsignedDivIOp op) { return emitter.emitBinary(op, "/"), true; }
   bool visitOp(UnsignedRemIOp op) { return emitter.emitBinary(op, "%"), true; }
   bool visitOp(XOrOp op) { return emitter.emitBinary(op, "^"), true; }
   bool visitOp(AndOp op) { return emitter.emitBinary(op, "&"), true; }
@@ -1240,7 +1239,7 @@ void ModuleEmitter::emitBlock(Block &block) {
 
 void ModuleEmitter::emitFunction(FuncOp func) {
   if (func.getBlocks().size() != 1)
-    emitError(func, "has more than one basic blocks.");
+    emitError(func, "has zero or more than one basic blocks.");
 
   // Emit function signature.
   os << "void " << func.getName() << "(\n";

@@ -150,6 +150,19 @@ def PragmaArrayPartitionOp : HLSCppOp<"pragma_array_partition", [
   }];
 }
 
+def AssignOp : HLSCppOp<"assign", [SameOperandsAndResultType]> {
+  let summary = "Assign input value to the output";
+  let description = [{
+    This hlscpp.assign operation assigns the input value to the output, and can
+    be inserted anywhere without changing the original semantic. This is useful
+    for EmitHLSCpp to handle some weird corner cases (e.g. the operand of return
+    operation is function argument, and etc).
+  }];
+
+  let arguments = (ins AnyType : $input);
+  let results = (outs AnyType : $output);
+}
+
 def EndOp : HLSCppOp<"end", [Terminator]> {
   let summary = "Mark the end of a HLSCpp region.";
   let description = [{

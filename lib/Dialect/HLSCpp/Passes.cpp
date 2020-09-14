@@ -8,7 +8,7 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hlscpp;
 
-void mlir::scalehls::hlscpp::registerHLSCppPasses() {
+void hlscpp::registerHLSCppPasses() {
 #define GEN_PASS_REGISTRATION
 #include "Dialect/HLSCpp/HLSCppPasses.h.inc"
 }

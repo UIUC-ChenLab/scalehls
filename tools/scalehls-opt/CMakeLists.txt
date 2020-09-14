@@ -7,6 +7,7 @@ set(LIBS
   MLIROptLib
 
   MLIRHLSCpp
+  MLIRConvertToHLSCpp
   )
 
 add_llvm_executable(scalehls-opt scalehls-opt.cpp)
