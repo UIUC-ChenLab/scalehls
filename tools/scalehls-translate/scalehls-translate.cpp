@@ -2,6 +2,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "Dialect/HLSCpp/HLSCpp.h"
 #include "EmitHLSCpp.h"
 #include "mlir/IR/AsmState.h"
 #include "mlir/IR/Diagnostics.h"
@@ -40,6 +41,8 @@ static llvm::cl::opt<bool> verifyDiagnostics(
 int main(int argc, char **argv) {
   mlir::registerAllDialects();
   mlir::registerAllTranslations();
+
+  mlir::registerDialect<mlir::scalehls::hlscpp::HLSCppDialect>();
 
   mlir::scalehls::registerHLSCppEmitterTranslation();
 

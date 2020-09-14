@@ -3,6 +3,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "EmitHLSCpp.h"
+#include "Dialect/HLSCpp/HLSCpp.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/Dialect/SCF/SCF.h"
@@ -21,6 +22,7 @@
 using namespace std;
 using namespace mlir;
 using namespace scalehls;
+using namespace hlscpp;
 
 //===----------------------------------------------------------------------===//
 // Some Base Classes
@@ -156,10 +158,12 @@ public:
             AddCFOp, SubCFOp, ImOp, ReOp, CreateComplexOp,
             // Special operations.
             SelectOp, ConstantOp, CopySignOp, TruncateIOp, ZeroExtendIOp,
-            SignExtendIOp, IndexCastOp, CallOp, ReturnOp>(
-            [&](auto opNode) -> ResultType {
-              return thisCast->visitOp(opNode, args...);
-            })
+            SignExtendIOp, IndexCastOp, CallOp, ReturnOp,
+            // HLSCpp operations.
+            AssignOp, ApplyPragmasOp, PragmaPipelineOp, PragmaUnrollOp,
+            PragmaArrayPartitionOp>([&](auto opNode) -> ResultType {
+          return thisCast->visitOp(opNode, args...);
+        })
         .Default([&](auto opNode) -> ResultType {
           return thisCast->visitInvalidOp(op, args...);
         });
@@ -278,6 +282,13 @@ public:
   HANDLE(IndexCastOp);
   HANDLE(CallOp);
   HANDLE(ReturnOp);
+
+  // HLSCpp operations.
+  HANDLE(AssignOp);
+  HANDLE(ApplyPragmasOp);
+  HANDLE(PragmaPipelineOp);
+  HANDLE(PragmaUnrollOp);
+  HANDLE(PragmaArrayPartitionOp);
 #undef HANDLE
 };
 } // namespace
@@ -287,7 +298,7 @@ public:
 //===----------------------------------------------------------------------===//
 
 //===----------------------------------------------------------------------===//
-// ModuleEmitter Class Definition
+// ModuleEmitter Class Declaration
 //===----------------------------------------------------------------------===//
 
 namespace {
@@ -333,6 +344,7 @@ public:
   void emitConstant(ConstantOp *op);
   void emitIndexCast(IndexCastOp *op);
   void emitCall(CallOp *op);
+  void emitAssign(AssignOp *op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
@@ -526,6 +538,7 @@ public:
   bool visitOp(IndexCastOp op) { return emitter.emitIndexCast(&op), true; }
   bool visitOp(CallOp op) { return emitter.emitCall(&op), true; }
   bool visitOp(ReturnOp op) { return true; }
+  bool visitOp(AssignOp op) { return emitter.emitAssign(&op), true; }
 
 private:
   ModuleEmitter &emitter;
@@ -1072,9 +1085,6 @@ void ModuleEmitter::emitSelect(SelectOp *op) {
 
 void ModuleEmitter::emitConstant(ConstantOp *op) {
   if (isDeclared(op->getResult())) {
-    // TODO: This case should be supported somehow.
-    if (op->getResult().getType().isa<ShapedType>())
-      emitError(*op, "constant array can't be directly returned for now.");
     // This indicates the constant type is scalar (float, integer, or bool).
     return;
   }
@@ -1116,6 +1126,16 @@ void ModuleEmitter::emitIndexCast(IndexCastOp *op) {
 
 void ModuleEmitter::emitCall(CallOp *op) {
   // TODO
+}
+
+void ModuleEmitter::emitAssign(hlscpp::AssignOp *op) {
+  unsigned rank = emitNestedLoopHead(op->getResult());
+  indent();
+  emitValue(op->getResult(), rank);
+  os << " = ";
+  emitValue(op->getOperand(), rank);
+  os << ";\n";
+  emitNestedLoopTail(rank);
 }
 
 /// C++ component emitters.
