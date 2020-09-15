@@ -164,9 +164,9 @@ public:
             AddCFOp, SubCFOp, ImOp, ReOp, CreateComplexOp,
             // Special operations.
             SelectOp, ConstantOp, CopySignOp, TruncateIOp, ZeroExtendIOp,
-            SignExtendIOp, IndexCastOp, CallOp, ReturnOp,
-            // HLSCpp operations.
-            AssignOp, ApplyPragmasOp, PragmaPipelineOp, PragmaUnrollOp,
+            SignExtendIOp, IndexCastOp, CallOp, ReturnOp, AssignOp, EndOp,
+            // Pragma operations.
+            ApplyPragmasOp, PragmaPipelineOp, PragmaUnrollOp,
             PragmaArrayPartitionOp>([&](auto opNode) -> ResultType {
           return thisCast->visitOp(opNode, args...);
         })
@@ -288,9 +288,10 @@ public:
   HANDLE(IndexCastOp);
   HANDLE(CallOp);
   HANDLE(ReturnOp);
-
-  // HLSCpp operations.
   HANDLE(AssignOp);
+  HANDLE(EndOp);
+
+  // Pragma operations.
   HANDLE(ApplyPragmasOp);
   HANDLE(PragmaPipelineOp);
   HANDLE(PragmaUnrollOp);
@@ -351,6 +352,12 @@ public:
   void emitIndexCast(IndexCastOp *op);
   void emitCall(CallOp *op);
   void emitAssign(AssignOp *op);
+
+  /// Pragma operation emitters.
+  void emitApplyPragmas(ApplyPragmasOp *op);
+  void emitPragmaPipeline(PragmaPipelineOp *op);
+  void emitPragmaUnroll(PragmaUnrollOp *op);
+  void emitPragmaArrayPartition(PragmaArrayPartitionOp *op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
@@ -459,7 +466,7 @@ private:
 } // namespace
 
 //===----------------------------------------------------------------------===//
-// StmtVisitor and ExprVisitor Classes
+// StmtVisitor, ExprVisitor, and PragmaVisitor Classes
 //===----------------------------------------------------------------------===//
 
 namespace {
@@ -572,10 +579,11 @@ public:
   bool visitOp(CallOp op) { return emitter.emitCall(&op), true; }
   bool visitOp(ReturnOp op) { return true; }
   bool visitOp(AssignOp op) { return emitter.emitAssign(&op), true; }
+  bool visitOp(EndOp op) { return true; }
 
 private:
   ModuleEmitter &emitter;
-}; // namespace
+};
 } // namespace
 
 bool ExprVisitor::visitOp(CmpFOp op) {
@@ -623,6 +631,31 @@ bool ExprVisitor::visitOp(CmpIOp op) {
     return emitter.emitBinary(op, ">="), true;
   }
 }
+
+namespace {
+class PragmaVisitor : public HLSCppVisitorBase<PragmaVisitor, bool> {
+public:
+  PragmaVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
+
+  using HLSCppVisitorBase::visitOp;
+  /// Pragma operations.
+  bool visitOp(ApplyPragmasOp op) {
+    return emitter.emitApplyPragmas(&op), true;
+  }
+  bool visitOp(PragmaPipelineOp op) {
+    return emitter.emitPragmaPipeline(&op), true;
+  }
+  bool visitOp(PragmaUnrollOp op) {
+    return emitter.emitPragmaUnroll(&op), true;
+  }
+  bool visitOp(PragmaArrayPartitionOp op) {
+    return emitter.emitPragmaArrayPartition(&op), true;
+  }
+
+private:
+  ModuleEmitter &emitter;
+};
+} // namespace
 
 //===----------------------------------------------------------------------===//
 // ModuleEmitter Class Implementation
@@ -1161,7 +1194,7 @@ void ModuleEmitter::emitCall(CallOp *op) {
   // TODO
 }
 
-void ModuleEmitter::emitAssign(hlscpp::AssignOp *op) {
+void ModuleEmitter::emitAssign(AssignOp *op) {
   unsigned rank = emitNestedLoopHead(op->getResult());
   indent();
   emitValue(op->getResult(), rank);
@@ -1169,6 +1202,51 @@ void ModuleEmitter::emitAssign(hlscpp::AssignOp *op) {
   emitValue(op->getOperand(), rank);
   os << ";\n";
   emitNestedLoopTail(rank);
+}
+
+/// Pragma operation emitters.
+void ModuleEmitter::emitApplyPragmas(ApplyPragmasOp *op) {
+  emitBlock(*op->getBody());
+  os << "\n";
+}
+
+void ModuleEmitter::emitPragmaPipeline(PragmaPipelineOp *op) {
+  indent();
+  os << "#pragma HLS pipeline";
+  if (op->isOff())
+    os << " off\n";
+  else {
+    os << " II=" << op->getII();
+    if (op->isRewind())
+      os << " rewind";
+    if (op->isEnableFlush())
+      os << " enable_flush";
+    os << "\n";
+  }
+}
+
+void ModuleEmitter::emitPragmaUnroll(PragmaUnrollOp *op) {
+  indent();
+  os << "#pragma HLS unroll";
+  // TODO: default factor.
+  os << " factor=" << op->getFactor();
+  if (op->isRegion())
+    os << " region";
+  if (op->isSkipExitCheck())
+    os << " skip_exit_check";
+  os << "\n";
+}
+
+void ModuleEmitter::emitPragmaArrayPartition(PragmaArrayPartitionOp *op) {
+  indent();
+  os << "#pragma HLS array_partition";
+  os << " variable=";
+  emitValue(op->getOperand());
+  os << " " << op->getPartitionType();
+  if (op->getPartitionType() != "complete")
+    os << " factor=" << op->getFactor();
+  os << " dim=" << op->getDim();
+  os << "\n\n";
 }
 
 /// C++ component emitters.
@@ -1280,6 +1358,9 @@ void ModuleEmitter::emitOperation(Operation *op) {
     return;
 
   if (StmtVisitor(*this).dispatchVisitor(op))
+    return;
+
+  if (PragmaVisitor(*this).dispatchVisitor(op))
     return;
 
   emitError(op, "can't be correctly emitted.");

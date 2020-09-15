@@ -31,18 +31,18 @@ void PragmaInsertion::runOnOperation() {
           auto applyBuilder = applyOp.getBodyBuilder();
 
           applyBuilder.create<hlscpp::PragmaPipelineOp>(
-              applyOp.getLoc(), /*II=*/APInt(32, 1), /*enable_flush=*/false,
-              /*rewind=*/false, /*off=*/false);
+              applyOp.getLoc(), /*II=*/APInt(32, 1), /*enable_flush=*/true,
+              /*rewind=*/true, /*off=*/true);
           applyBuilder.create<hlscpp::PragmaUnrollOp>(
               applyOp.getLoc(), /*factor=*/APInt(32, 2), /*region=*/false,
-              /*skip_exit_check=*/false);
+              /*skip_exit_check=*/true);
         }
         if (auto allocOp = dyn_cast<mlir::AllocOp>(op)) {
           auto builder = OpBuilder(allocOp);
           builder.setInsertionPointAfter(allocOp);
           builder.create<hlscpp::PragmaArrayPartitionOp>(
               allocOp.getLoc(), /*variable=*/allocOp.getResult(),
-              /*type=*/"complete", /*factor=*/APInt(32, 2),
+              /*type=*/"cyclic", /*factor=*/APInt(32, 2),
               /*dim=*/APInt(32, 0));
         }
       }
