@@ -1,6 +1,6 @@
 // RUN: scalehls-opt -convert-to-hlscpp %s | scalehls-translate -emit-hlscpp | FileCheck %s
 
-func @test_standard(%arg0: i32) -> (i32, tensor<2x2xi32>, vector<2xi32>, i32) {
+func @test_constant(%arg0: i32) -> (i32, tensor<2x2xi32>, vector<2xi32>, i32) {
 
   // CHECK: ap_int<32> [[VAL_0:.*]][2][2] = {11, 0, 0, -42};
   // CHECK: float [[VAL_1:.*]][2][2] = {1.100000e+01, 0.000000e+00, 0.000000e+00, -4.200000e+01};
