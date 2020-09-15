@@ -411,6 +411,33 @@ public:
   /// Affine expression emitters.
   void emitAffineBinary(AffineBinaryOpExpr expr, const char *syntax) {
     os << "(";
+    if (auto constRHS = expr.getRHS().dyn_cast<AffineConstantExpr>()) {
+      if (syntax == "*" && constRHS.getValue() == -1) {
+        os << "-";
+        visit(expr.getLHS());
+        os << ")";
+        return;
+      }
+      if (syntax == "+" && constRHS.getValue() < 0) {
+        visit(expr.getLHS());
+        os << " - ";
+        os << -constRHS.getValue();
+        os << ")";
+        return;
+      }
+    }
+    if (auto binaryRHS = expr.getRHS().dyn_cast<AffineBinaryOpExpr>()) {
+      if (auto constRHS = binaryRHS.getRHS().dyn_cast<AffineConstantExpr>()) {
+        if (syntax == "+" && constRHS.getValue() == -1 &&
+            binaryRHS.getKind() == AffineExprKind::Mul) {
+          visit(expr.getLHS());
+          os << " - ";
+          visit(binaryRHS.getLHS());
+          os << ")";
+          return;
+        }
+      }
+    }
     visit(expr.getLHS());
     os << " " << syntax << " ";
     visit(expr.getRHS());

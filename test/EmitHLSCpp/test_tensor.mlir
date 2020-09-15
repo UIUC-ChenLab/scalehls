@@ -11,8 +11,8 @@ func @test_tensor_expr(%arg0: tensor<16x8xi1>, %arg1: i1, %arg2: tensor<16x8xf32
   %0 = select %arg0, %arg2, %arg3 : tensor<16x8xi1>, tensor<16x8xf32>
 
   // CHECK: [[VAL_1:.*]][idx0][idx1] = [[ARG_1:.*]] ? [[ARG_2:.*]][idx0][idx1] : [[ARG_3:.*]][idx0][idx1];
-
   %1 = select %arg1, %arg2, %arg3 : i1, tensor<16x8xf32>
+
   // CHECK: [[VAL_2:.*]][idx0][idx1] = [[ARG_2:.*]][idx0][idx1] + [[VAL_1:.*]][idx0][idx1];
   %2 = addf %arg2, %1 : tensor<16x8xf32>
 

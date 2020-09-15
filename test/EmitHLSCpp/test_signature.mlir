@@ -37,18 +37,19 @@ func @test_signature(
   memref<16x8xf32>, tensor<16x8xf32>, vector<16xf32>,
   memref<16x8xi32>, tensor<16x8xi32>, vector<16xi32>
 ) {
-
   %c0 = constant 0 : index
   %c1 = constant 1 : index
 
   // CHECK: int [[VAL_26:.*]] = 16;
-  // CHECK: int [[VAL_27:.*]] = 8;
   %0 = dim %arg7, %c0 : memref<16x8xf32>
+
+  // CHECK: int [[VAL_27:.*]] = 8;
   %1 = dim %arg8, %c1 : tensor<16x8xf32>
 
   // CHECK: int [[VAL_28:.*]] = 2;
-  // CHECK: int [[VAL_29:.*]] = 2;
   %3 = rank %arg7 : memref<16x8xf32>
+
+  // CHECK: int [[VAL_29:.*]] = 2;
   %4 = rank %arg8 : tensor<16x8xf32>
 
   // CHECK: *[[VAL_13:.*]] = [[VAL_0:.*]];
