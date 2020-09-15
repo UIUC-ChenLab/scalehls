@@ -113,11 +113,17 @@ SmallString<8> HLSCppEmitterBase::getName(Value val) {
   if (val.getKind() != Value::Kind::BlockArgument) {
     if (auto constOp = dyn_cast<mlir::ConstantOp>(val.getDefiningOp())) {
       auto constAttr = constOp.getValue();
-      if (auto floatAttr = constAttr.dyn_cast<FloatAttr>())
-        return StringRef(to_string(floatAttr.getValueAsDouble()));
-      else if (auto intAttr = constAttr.dyn_cast<IntegerAttr>())
-        return StringRef(to_string(intAttr.getInt()));
-      else if (auto boolAttr = constAttr.dyn_cast<BoolAttr>())
+      if (auto floatAttr = constAttr.dyn_cast<FloatAttr>()) {
+        auto value = floatAttr.getValueAsDouble();
+        if (value < 0)
+          return StringRef("(" + to_string(value) + ")");
+        return StringRef(to_string(value));
+      } else if (auto intAttr = constAttr.dyn_cast<IntegerAttr>()) {
+        auto value = intAttr.getInt();
+        if (value < 0)
+          return StringRef("(" + to_string(value) + ")");
+        return StringRef(to_string(value));
+      } else if (auto boolAttr = constAttr.dyn_cast<BoolAttr>())
         return StringRef(to_string(boolAttr.getValue()));
     }
   }
@@ -855,10 +861,10 @@ void ModuleEmitter::emitAffineVectorStore(AffineVectorStoreOp *op) {
   // TODO
 }
 
-// TODO: For now, all values created in the affine if/parallel region will be
-// declared in the generated C++. However, values which will be returned by
-// affine yield operation should not be declared again. How to "bind" the pair
-// of values inside/outside of affine if/parallel region needs to be considered.
+// TODO: For now, all values created in the AffineIf region will be declared in
+// the generated C++. However, values which will be returned by affine yield
+// operation should not be declared again. How to "bind" the pair of values
+// inside/outside of AffineIf region needs to be considered.
 void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
   if (op->getNumOperands() == 0)
     return;
