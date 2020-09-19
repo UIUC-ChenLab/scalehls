@@ -20,22 +20,31 @@ scalehls-opt -convert-to-hlscpp -hlscpp-pragma-insertion test/EmitHLSCpp/test_*.
 ```
 
 ## TODOs List
-### EstimateQoR (scalehls-estimator)
-1. EstimateQoR and scalehls-estimator implementation.
+### HLSCpp Dialect
+1. **Implement HLSCpp/ParameterOps.td details;**
+2. TODOs in HLSCpp/PragmaOps.td.
+
+### StaticAnalysis Pass
+1. **Define profiling & constraint file format;**
+2. **Define pass options and statistics;**
+3. Pass implementation.
+
+### QoREstimation Pass
+
+### ParallelOpt Pass
+
+### PragmaInsertion Pass
+1. **Pass Implementation.**
 
 ### EmitHLSCpp
-1. **Test HLS C++ emitter with some real benchmarks;**
+1. **Test HLS C++ emitter with onnx/npcomp;**
 2. TODOs in EmitHLSCpp.cpp;
-4. Support memref/tensor cast/view/subview operations;
-5. Support atomic/complex/extention -related operations.
-
-### PragmaInsertion
-
-### HLSCpp Dialect
-1. TODOs in HLSCpp/Ops.td.
+3. Support memref/tensor cast/view/subview operations;
+4. Support atomic/complex/extention -related operations.
 
 ## References
 1. [MLIR Documents](https://mlir.llvm.org)
 2. [mlir-npcomp github](https://github.com/llvm/mlir-npcomp)
-3. [circt github](https://github.com/llvm/circt)
-4. [onnx-mlir github](https://github.com/onnx/onnx-mlir)
+3. [onnx-mlir github](https://github.com/onnx/onnx-mlir)
+4. [circt github](https://github.com/llvm/circt)
+5. [comba github](https://github.com/zjru/COMBA)
