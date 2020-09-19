@@ -1266,32 +1266,22 @@ void ModuleEmitter::emitValue(Value val, unsigned rank, bool isPtr) {
   if (auto arrayType = val.getType().dyn_cast<ShapedType>())
     valType = arrayType.getElementType();
 
-  // Emit value type for declaring a new value.
-  switch (valType.getKind()) {
   // Handle float types.
-  case StandardTypes::F32:
+  if (valType.isa<Float32Type>())
     os << "float ";
-    break;
-  case StandardTypes::F64:
+  else if (valType.isa<Float64Type>())
     os << "double ";
-    break;
 
   // Handle integer types.
-  case StandardTypes::Index:
+  else if (valType.isa<IndexType>())
     os << "int ";
-    break;
-  case StandardTypes::Integer: {
-    auto intType = valType.cast<IntegerType>();
+  else if (auto intType = valType.dyn_cast<IntegerType>()) {
     os << "ap_";
     if (intType.getSignedness() == IntegerType::SignednessSemantics::Unsigned)
       os << "u";
     os << "int<" << intType.getWidth() << "> ";
-    break;
-  }
-  default:
+  } else
     emitError(val.getDefiningOp(), "has unsupported type.");
-    break;
-  }
 
   // Add the new value to nameTable and emit its name.
   os << addName(val, isPtr);

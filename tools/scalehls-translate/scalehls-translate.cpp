@@ -39,10 +39,14 @@ static llvm::cl::opt<bool> verifyDiagnostics(
     llvm::cl::init(false));
 
 int main(int argc, char **argv) {
+  mlir::enableGlobalDialectRegistry(true);
+
   mlir::registerAllDialects();
   mlir::registerAllTranslations();
 
   mlir::registerDialect<mlir::scalehls::hlscpp::HLSCppDialect>();
+  mlir::registerDialect<mlir::StandardOpsDialect>();
+  mlir::registerDialect<mlir::AffineDialect>();
 
   mlir::scalehls::registerHLSCppEmitterTranslation();
 

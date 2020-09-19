@@ -9,8 +9,7 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hlscpp;
 
-HLSCppDialect::HLSCppDialect(mlir::MLIRContext *context)
-    : Dialect(getDialectNamespace(), context) {
+void HLSCppDialect::initialize() {
 
   addOperations<
 #define GET_OP_LIST

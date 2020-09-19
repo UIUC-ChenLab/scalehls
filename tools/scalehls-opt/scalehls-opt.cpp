@@ -57,7 +57,11 @@ int main(int argc, char **argv) {
   mlir::registerAllDialects();
   mlir::registerAllPasses();
 
-  mlir::registerDialect<mlir::scalehls::hlscpp::HLSCppDialect>();
+  mlir::DialectRegistry registry;
+  registry.insert<mlir::scalehls::hlscpp::HLSCppDialect>();
+  registry.insert<mlir::StandardOpsDialect>();
+  registry.insert<mlir::AffineDialect>();
+
   mlir::scalehls::hlscpp::registerHLSCppPasses();
 
   mlir::scalehls::hlscpp::registerConvertToHLSCppPass();
@@ -72,10 +76,10 @@ int main(int argc, char **argv) {
   llvm::cl::ParseCommandLineOptions(argc, argv,
                                     "MLIR modular optimizer driver\n");
 
+  mlir::MLIRContext context;
   if (showDialects) {
-    mlir::MLIRContext context;
     llvm::outs() << "Registered Dialects:\n";
-    for (mlir::Dialect *dialect : context.getRegisteredDialects()) {
+    for (mlir::Dialect *dialect : context.getLoadedDialects()) {
       llvm::outs() << dialect->getNamespace() << "\n";
     }
     return 0;
@@ -95,7 +99,7 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
-  if (failed(MlirOptMain(output->os(), std::move(file), passPipeline,
+  if (failed(MlirOptMain(output->os(), std::move(file), passPipeline, registry,
                          splitInputFile, verifyDiagnostics, verifyPasses,
                          allowUnregisteredDialects))) {
     return 1;

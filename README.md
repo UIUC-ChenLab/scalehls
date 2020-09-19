@@ -20,17 +20,16 @@ scalehls-opt -convert-to-hlscpp -hlscpp-pragma-insertion test/EmitHLSCpp/test_*.
 ```
 
 ## TODOs List
-### scalehls-estimator: EstimateQoR
-1. **Research on the estimation methodology;**
-2. EstimateQoR and scalehls-estimator implementation.
+### EstimateQoR (scalehls-estimator)
+1. EstimateQoR and scalehls-estimator implementation.
 
-### scalehls-translate: EmitHLSCpp
+### EmitHLSCpp
 1. **Test HLS C++ emitter with some real benchmarks;**
 2. TODOs in EmitHLSCpp.cpp;
 4. Support memref/tensor cast/view/subview operations;
 5. Support atomic/complex/extention -related operations.
 
-### scalehls-opt: PragmaInsertion
+### PragmaInsertion
 
 ### HLSCpp Dialect
 1. TODOs in HLSCpp/Ops.td.
