@@ -5,8 +5,10 @@
 #ifndef SCALEHLS_DIALECT_HLSCPP_HLSCPP_H
 #define SCALEHLS_DIALECT_HLSCPP_HLSCPP_H
 
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/Dialect.h"
+#include "mlir/IR/Function.h"
 
 namespace mlir {
 namespace scalehls {

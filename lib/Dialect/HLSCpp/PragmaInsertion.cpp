@@ -4,7 +4,6 @@
 
 #include "Dialect/HLSCpp/HLSCpp.h"
 #include "Dialect/HLSCpp/Passes.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
 
 using namespace mlir;
 using namespace scalehls;

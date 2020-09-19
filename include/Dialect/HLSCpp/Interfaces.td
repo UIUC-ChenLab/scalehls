@@ -10,7 +10,14 @@ include "mlir/IR/OpBase.td"
 def PragmaOpInterface : OpInterface<"PragmaOpInterface"> {
   let description = [{
     This interface indicates the operation represents one pragma directive or a
-    set of pragmas.
+    group of pragmas.
+  }];
+}
+
+def ParameterOpInterface : OpInterface<"ParameterOpInterface"> {
+  let description = [{
+    This interface indicates the operation represents a group of parameters of
+    its parent region.
   }];
 }
 
