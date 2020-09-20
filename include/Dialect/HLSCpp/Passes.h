@@ -18,7 +18,7 @@ namespace hlscpp {
 
 std::unique_ptr<mlir::Pass> createStaticAnalysisPass();
 std::unique_ptr<mlir::Pass> createQoREstimationPass();
-std::unique_ptr<mlir::Pass> createParallelOptPass();
+std::unique_ptr<mlir::Pass> createPragmaDSEPass();
 std::unique_ptr<mlir::Pass> createPragmaInsertionPass();
 
 void registerHLSCppPasses();

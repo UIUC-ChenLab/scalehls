@@ -10,11 +10,11 @@ using namespace scalehls;
 using namespace hlscpp;
 
 namespace {
-struct ParallelOpt : public ParallelOptBase<ParallelOpt> {
+struct PragmaDSE : public PragmaDSEBase<PragmaDSE> {
   void runOnOperation() {}
 };
 } // namespace
 
-std::unique_ptr<mlir::Pass> hlscpp::createParallelOptPass() {
-  return std::make_unique<ParallelOpt>();
+std::unique_ptr<mlir::Pass> hlscpp::createPragmaDSEPass() {
+  return std::make_unique<PragmaDSE>();
 }

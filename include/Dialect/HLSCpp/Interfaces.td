@@ -14,7 +14,7 @@ def PragmaOpInterface : OpInterface<"PragmaOpInterface"> {
   }];
 }
 
-def ParameterOpInterface : OpInterface<"ParameterOpInterface"> {
+def ParamOpInterface : OpInterface<"ParamOpInterface"> {
   let description = [{
     This interface indicates the operation represents a group of parameters of
     its parent region.

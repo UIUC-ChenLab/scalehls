@@ -30,19 +30,20 @@ def QoREstimation : Pass<"hlscpp-qor-estimation", "ModuleOp"> {
   let constructor = "mlir::scalehls::hlscpp::createQoREstimationPass()";
 }
 
-def ParallelOpt : Pass<"hlscpp-parallel-opt", "ModuleOp"> {
-  let summary = "Optimize parallel strategy of each optimizable region";
+def PragmaDSE : Pass<"hlscpp-pragma-dse", "ModuleOp"> {
+  let summary = "Optimize pragma configuration of each optimizable region";
   let description = [{
-    This hlscpp-parallel-opt pass will automatically tune HLS parallel strategy
+    This hlscpp-pragma-dse pass will automatically tune HLS pragma optimization
     of each optimizable region for performance and area opt. By calling methods
     provided by hlscpp-qor-estimation, this pass is able to rapidly obtain the
     QoR estimation of the current design point, and feed it back to the design
     space exploration engine for an efficient convergence.
   }];
 
-  let constructor = "mlir::scalehls::hlscpp::createParallelOptPass()";
+  let constructor = "mlir::scalehls::hlscpp::createPragmaDSEPass()";
 }
 
+/// Deprecated. Will be removed in the future.
 def PragmaInsertion : Pass<"hlscpp-pragma-insertion", "ModuleOp"> {
   let summary = "Insert HLS pragmas according to optimization results";
   let description = [{

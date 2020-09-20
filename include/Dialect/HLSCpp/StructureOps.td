@@ -5,8 +5,6 @@
 #ifndef SCALEHLS_DIALECT_HLSCPP_STRUCTUREOPS_TD
 #define SCALEHLS_DIALECT_HLSCPP_STRUCTUREOPS_TD
 
-include "Interfaces.td"
-
 def AssignOp : HLSCppOp<"assign", [SameOperandsAndResultType]> {
   let summary = "Assign input value to the output";
   let description = [{

@@ -23,8 +23,11 @@ def HLSCppDialect : Dialect {
 class HLSCppOp<string mnemonic, list<OpTrait> traits = []> :
     Op<HLSCppDialect, mnemonic, traits>;
 
-include "PragmaOps.td"
-include "ParameterOps.td"
+include "Interfaces.td"
+include "Attributes.td"
+
+include "ParamOps.td"
 include "StructureOps.td"
+include "PragmaOps.td"
 
 #endif // SCALEHLS_DIALECT_HLSCPP_HLSCPP_TD

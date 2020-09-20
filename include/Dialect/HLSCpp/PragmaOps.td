@@ -2,10 +2,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+/// Deprecated. Will be removed in the future.
+
 #ifndef SCALEHLS_DIALECT_HLSCPP_PRAGMAOPS_TD
 #define SCALEHLS_DIALECT_HLSCPP_PRAGMAOPS_TD
-
-include "Interfaces.td"
 
 def ApplyPragmasOp : HLSCppOp<"apply_pragmas", [
   PragmaOpInterface,
@@ -108,12 +108,6 @@ def PragmaUnrollOp : HLSCppOp<"pragma_unroll", [
     }
   }];
 }
-
-def LegalPartitionType : AttrConstraint<Or<[
-  CPred<"$_self.cast<StringAttr>().getValue() == \"cyclic\"">,
-  CPred<"$_self.cast<StringAttr>().getValue() == \"block\"">,
-  CPred<"$_self.cast<StringAttr>().getValue() == \"complete\"">
-]>>;
 
 def PragmaArrayPartitionOp : HLSCppOp<"pragma_array_partition", [
   PragmaOpInterface
