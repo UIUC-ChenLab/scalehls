@@ -15,8 +15,7 @@ After the installation and test successfully completed, you should be able to ru
 ```sh
 cd $SCALEHLS_DIR
 scalehls-opt -convert-to-hlscpp test/Conversion/ConvertToHLSCpp/test_*.mlir
-# scalehls-opt -convert-to-hlscpp -hlscpp-pragma-insertion test/Dialect/HLSCpp/test_*.mlir
-scalehls-opt -convert-to-hlscpp -hlscpp-pragma-insertion test/EmitHLSCpp/test_*.mlir | scalehls-translate -emit-hlscpp
+scalehls-opt -convert-to-hlscpp test/EmitHLSCpp/test_*.mlir | scalehls-translate -emit-hlscpp
 ```
 
 ## TODOs List
@@ -31,10 +30,7 @@ scalehls-opt -convert-to-hlscpp -hlscpp-pragma-insertion test/EmitHLSCpp/test_*.
 
 ### QoREstimation Pass
 
-### ParallelOpt Pass
-
-### PragmaInsertion Pass
-1. **Pass Implementation.**
+### PragmaDSE Pass
 
 ### EmitHLSCpp
 1. **Test HLS C++ emitter with onnx/npcomp;**

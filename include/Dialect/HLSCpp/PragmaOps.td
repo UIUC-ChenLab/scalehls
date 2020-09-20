@@ -2,7 +2,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-/// Deprecated. Will be removed in the future.
+/// This file is deprecated and will be removed in the future.
 
 #ifndef SCALEHLS_DIALECT_HLSCPP_PRAGMAOPS_TD
 #define SCALEHLS_DIALECT_HLSCPP_PRAGMAOPS_TD

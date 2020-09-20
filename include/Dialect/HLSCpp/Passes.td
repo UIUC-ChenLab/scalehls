@@ -43,15 +43,4 @@ def PragmaDSE : Pass<"hlscpp-pragma-dse", "ModuleOp"> {
   let constructor = "mlir::scalehls::hlscpp::createPragmaDSEPass()";
 }
 
-/// Deprecated. Will be removed in the future.
-def PragmaInsertion : Pass<"hlscpp-pragma-insertion", "ModuleOp"> {
-  let summary = "Insert HLS pragmas according to optimization results";
-  let description = [{
-    This hlscpp-pragma-insertion pass will insert HLSCpp pragma operations
-    according to the results of hlscpp-parallel-opt.
-  }];
-
-  let constructor = "mlir::scalehls::hlscpp::createPragmaInsertionPass()";
-}
-
 #endif // SCALEHLS_DIALECT_HLSCPP_PASSES_TD
