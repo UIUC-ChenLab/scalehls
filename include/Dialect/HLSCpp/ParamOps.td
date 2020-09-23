@@ -20,8 +20,8 @@ def FuncParamOp : HLSCppOp<"func_param", [
 
   let arguments = (ins
     // Pragma configuration parameters
-    BoolAttr : $enable_pipeline,
-    PositiveUI32Attr : $initial_interval,
+    // BoolAttr : $enable_pipeline,
+    // PositiveUI32Attr : $initial_interval,
 
     // Resource utilization parameters
     UI32Attr : $lut,
@@ -50,16 +50,38 @@ def LoopParamOp : HLSCppOp<"loop_param", [
     PositiveUI32Attr : $unroll_factor,
 
     // Performance parameters
-    UI32Attr : $bound,
-    UI32Attr : $nonperfect_latency,
+    UI32Attr : $loop_bound,
+    UI32Attr : $nonproc_latency,
     UI32Attr : $iteration_latency,
-    UI32Attr : $loop_latency,
+    UI32Attr : $latency,
 
     // Resource utilization parameters
     UI32Attr : $lut,
     UI32Attr : $dsp,
     UI32Attr : $bram
   );
+
+  let extraClassDeclaration = [{
+    unsigned getUnrollFactor() {
+      return getAttrOfType<IntegerAttr>("unroll_factor").getUInt();
+    }
+
+    unsigned getLoopBound() {
+      return getAttrOfType<IntegerAttr>("loop_bound").getUInt();
+    }
+
+    unsigned getNonprocLatency() {
+      return getAttrOfType<IntegerAttr>("nonproc_latency").getUInt();
+    }
+
+    unsigned getIterationLatency() {
+      return getAttrOfType<IntegerAttr>("iteration_latency").getUInt();
+    }
+
+    unsigned getLatency() {
+      return getAttrOfType<IntegerAttr>("latency").getUInt();
+    }
+  }];
 }
 
 //===----------------------------------------------------------------------===//
@@ -101,8 +123,8 @@ def ArrayParamOp : HLSCppOp<"array_param", [
 
   let arguments = (ins
     // Pragma configuration parameters
-    Confined<StrAttr, [LegalStorageType]> : $storage_type,
-    Confined<StrAttr, [LegalPartitionType]> : $partition_type,
+    StorageTypeAttr : $storage_type,
+    PartitionTypeAttr : $partition_type,
     PositiveUI32ArrayAttr : $partition_factor,
 
     // Performance parameters

@@ -28,6 +28,15 @@ def QoREstimation : Pass<"hlscpp-qor-estimation", "ModuleOp"> {
   }];
 
   let constructor = "mlir::scalehls::hlscpp::createQoREstimationPass()";
+
+  let options = [
+    Option<"toolConfig", "tool-config", "std::string",
+           /*default=*/"\"../config/tool-config.ini\"", 
+           "Config file path: global configurations for the ScaleHLS tools">,
+    Option<"opLatency", "op-latency", "std::string",
+           /*default=*/"\"../config/op-latency.ini\"", 
+           "Config file path: profiling data for operation latency">
+  ];
 }
 
 def PragmaDSE : Pass<"hlscpp-pragma-dse", "ModuleOp"> {
