@@ -39,14 +39,8 @@ static llvm::cl::opt<bool> verifyDiagnostics(
     llvm::cl::init(false));
 
 int main(int argc, char **argv) {
-  mlir::enableGlobalDialectRegistry(true);
-
   mlir::registerAllDialects();
   mlir::registerAllTranslations();
-
-  mlir::registerDialect<mlir::scalehls::hlscpp::HLSCppDialect>();
-  mlir::registerDialect<mlir::StandardOpsDialect>();
-  mlir::registerDialect<mlir::AffineDialect>();
 
   mlir::scalehls::registerHLSCppEmitterTranslation();
 
@@ -77,6 +71,10 @@ int main(int argc, char **argv) {
   auto processBuffer = [&](std::unique_ptr<llvm::MemoryBuffer> ownedBuffer,
                            llvm::raw_ostream &os) {
     mlir::MLIRContext context;
+
+    context.loadDialect<mlir::scalehls::hlscpp::HLSCppDialect,
+                        mlir::StandardOpsDialect, mlir::AffineDialect>();
+
     context.allowUnregisteredDialects();
     context.printOpOnDiagnostic(!verifyDiagnostics);
     llvm::SourceMgr sourceMgr;

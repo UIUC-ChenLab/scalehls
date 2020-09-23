@@ -4,7 +4,7 @@
 
 #include "Conversion/ConvertToHLSCpp.h"
 #include "Dialect/HLSCpp/HLSCpp.h"
-#include "Dialect/HLSCpp/Passes.h"
+#include "Transforms/Passes.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/InitAllDialects.h"
@@ -62,7 +62,7 @@ int main(int argc, char **argv) {
   registry.insert<mlir::StandardOpsDialect>();
   registry.insert<mlir::AffineDialect>();
 
-  mlir::scalehls::hlscpp::registerHLSCppPasses();
+  mlir::scalehls::registerTransformsPasses();
 
   mlir::scalehls::hlscpp::registerConvertToHLSCppPass();
 
@@ -79,8 +79,8 @@ int main(int argc, char **argv) {
   mlir::MLIRContext context;
   if (showDialects) {
     llvm::outs() << "Registered Dialects:\n";
-    for (mlir::Dialect *dialect : context.getLoadedDialects()) {
-      llvm::outs() << dialect->getNamespace() << "\n";
+    for (const auto &nameAndRegistrationIt : registry) {
+      llvm::outs() << nameAndRegistrationIt.first << "\n";
     }
     return 0;
   }

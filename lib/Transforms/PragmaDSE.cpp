@@ -3,11 +3,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "Dialect/HLSCpp/HLSCpp.h"
-#include "Dialect/HLSCpp/Passes.h"
+#include "Transforms/INIReader.h"
+#include "Transforms/Passes.h"
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
 
 namespace {
 struct PragmaDSE : public PragmaDSEBase<PragmaDSE> {
@@ -15,6 +15,6 @@ struct PragmaDSE : public PragmaDSEBase<PragmaDSE> {
 };
 } // namespace
 
-std::unique_ptr<mlir::Pass> hlscpp::createPragmaDSEPass() {
+std::unique_ptr<mlir::Pass> scalehls::createPragmaDSEPass() {
   return std::make_unique<PragmaDSE>();
 }

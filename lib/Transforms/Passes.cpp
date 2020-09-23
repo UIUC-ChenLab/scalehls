@@ -2,15 +2,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Dialect/HLSCpp/Passes.h"
+#include "Transforms/Passes.h"
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
 
 namespace {
 #define GEN_PASS_REGISTRATION
-#include "Dialect/HLSCpp/HLSCppPasses.h.inc"
+#include "Transforms/Passes.h.inc"
 } // namespace
 
-void hlscpp::registerHLSCppPasses() { registerPasses(); }
+void scalehls::registerTransformsPasses() { registerPasses(); }
