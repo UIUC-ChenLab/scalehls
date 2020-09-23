@@ -6,8 +6,10 @@
 #include "Transforms/INIReader.h"
 #include "Transforms/Passes.h"
 
+using namespace std;
 using namespace mlir;
 using namespace scalehls;
+using namespace hlscpp;
 
 namespace {
 struct PragmaDSE : public PragmaDSEBase<PragmaDSE> {

@@ -50,19 +50,4 @@ def LegalPartitionType : AttrConstraint<Or<[
 
 def PartitionTypeAttr : Confined<StrAttr, [LegalPartitionType]> {}
 
-//===----------------------------------------------------------------------===//
-// Pragma bind_op Constraints
-//===----------------------------------------------------------------------===//
-
-def LegalOpImpl : AttrConstraint<Or<[
-  CPred<"$_self.cast<StringAttr>().getValue() == \"dsp\"">,
-  CPred<"$_self.cast<StringAttr>().getValue() == \"fabric\"">,
-  CPred<"$_self.cast<StringAttr>().getValue() == \"meddsp\"">,
-  CPred<"$_self.cast<StringAttr>().getValue() == \"fulldsp\"">,
-  CPred<"$_self.cast<StringAttr>().getValue() == \"maxdsp\"">,
-  CPred<"$_self.cast<StringAttr>().getValue() == \"primitivedsp\"">
-]>>;
-
-def OpImplAttr : Confined<StrAttr, [LegalOpImpl]> {}
-
 #endif // SCALEHLS_DIALECT_HLSCPP_ATTRIBUTES_TD
