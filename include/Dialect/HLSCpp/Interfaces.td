@@ -14,11 +14,4 @@ def PragmaOpInterface : OpInterface<"PragmaOpInterface"> {
   }];
 }
 
-def ParamOpInterface : OpInterface<"ParamOpInterface"> {
-  let description = [{
-    This interface indicates the operation represents a group of parameters of
-    its parent region.
-  }];
-}
-
 #endif // SCALEHLS_DIALECT_HLSCPP_INTERFACES_TD

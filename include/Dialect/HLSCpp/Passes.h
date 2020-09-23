@@ -16,7 +16,6 @@ namespace mlir {
 namespace scalehls {
 namespace hlscpp {
 
-std::unique_ptr<mlir::Pass> createStaticAnalysisPass();
 std::unique_ptr<mlir::Pass> createQoREstimationPass();
 std::unique_ptr<mlir::Pass> createPragmaDSEPass();
 

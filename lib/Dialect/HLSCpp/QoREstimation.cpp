@@ -10,6 +10,7 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hlscpp;
 
+/*
 namespace {
 class QoREstimator {
 public:
@@ -104,10 +105,12 @@ void QoREstimator::estimateModule(ModuleOp module) {
   }
 }
 
+*/
+
 namespace {
 struct QoREstimation : public QoREstimationBase<QoREstimation> {
   void runOnOperation() override {
-    QoREstimator(toolConfig, opLatency).estimateModule(getOperation());
+    // QoREstimator(toolConfig, opLatency).estimateModule(getOperation());
   }
 };
 } // namespace

@@ -164,10 +164,12 @@ public:
             AddCFOp, SubCFOp, ImOp, ReOp, CreateComplexOp,
             // Special operations.
             SelectOp, ConstantOp, CopySignOp, TruncateIOp, ZeroExtendIOp,
-            SignExtendIOp, IndexCastOp, CallOp, ReturnOp, AssignOp, EndOp>(
-            [&](auto opNode) -> ResultType {
-              return thisCast->visitOp(opNode, args...);
-            })
+            SignExtendIOp, IndexCastOp, CallOp, ReturnOp, AssignOp, EndOp,
+            // Pragma operations.
+            ApplyPragmasOp, PragmaPipelineOp, PragmaUnrollOp,
+            PragmaArrayPartitionOp>([&](auto opNode) -> ResultType {
+          return thisCast->visitOp(opNode, args...);
+        })
         .Default([&](auto opNode) -> ResultType {
           return thisCast->visitInvalidOp(op, args...);
         });
@@ -288,6 +290,12 @@ public:
   HANDLE(ReturnOp);
   HANDLE(AssignOp);
   HANDLE(EndOp);
+
+  // Pragma operations.
+  HANDLE(ApplyPragmasOp);
+  HANDLE(PragmaPipelineOp);
+  HANDLE(PragmaUnrollOp);
+  HANDLE(PragmaArrayPartitionOp);
 #undef HANDLE
 };
 } // namespace
@@ -340,6 +348,12 @@ public:
   void emitIndexCast(IndexCastOp *op);
   void emitCall(CallOp *op);
   void emitAssign(AssignOp *op);
+
+  /// Pragma operation emitters.
+  void emitApplyPragmas(ApplyPragmasOp *op);
+  void emitPragmaPipeline(PragmaPipelineOp *op);
+  void emitPragmaUnroll(PragmaUnrollOp *op);
+  void emitPragmaArrayPartition(PragmaArrayPartitionOp *op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
@@ -620,6 +634,20 @@ public:
   PragmaVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
 
   using HLSCppVisitorBase::visitOp;
+
+  /// Pragma operations.
+  bool visitOp(ApplyPragmasOp op) {
+    return emitter.emitApplyPragmas(&op), true;
+  }
+  bool visitOp(PragmaPipelineOp op) {
+    return emitter.emitPragmaPipeline(&op), true;
+  }
+  bool visitOp(PragmaUnrollOp op) {
+    return emitter.emitPragmaUnroll(&op), true;
+  }
+  bool visitOp(PragmaArrayPartitionOp op) {
+    return emitter.emitPragmaArrayPartition(&op), true;
+  }
 
 private:
   ModuleEmitter &emitter;
@@ -1171,6 +1199,51 @@ void ModuleEmitter::emitAssign(AssignOp *op) {
   emitValue(op->getOperand(), rank);
   os << ";\n";
   emitNestedLoopTail(rank);
+}
+
+/// Pragma operation emitters.
+void ModuleEmitter::emitApplyPragmas(ApplyPragmasOp *op) {
+  emitBlock(*op->getBody());
+  os << "\n";
+}
+
+void ModuleEmitter::emitPragmaPipeline(PragmaPipelineOp *op) {
+  indent();
+  os << "#pragma HLS pipeline";
+  if (op->isOff())
+    os << " off\n";
+  else {
+    os << " II=" << op->getII();
+    if (op->isRewind())
+      os << " rewind";
+    if (op->isEnableFlush())
+      os << " enable_flush";
+    os << "\n";
+  }
+}
+
+void ModuleEmitter::emitPragmaUnroll(PragmaUnrollOp *op) {
+  indent();
+  os << "#pragma HLS unroll";
+  // TODO: default factor.
+  os << " factor=" << op->getFactor();
+  if (op->isRegion())
+    os << " region";
+  if (op->isSkipExitCheck())
+    os << " skip_exit_check";
+  os << "\n";
+}
+
+void ModuleEmitter::emitPragmaArrayPartition(PragmaArrayPartitionOp *op) {
+  indent();
+  os << "#pragma HLS array_partition";
+  os << " variable=";
+  emitValue(op->getOperand());
+  os << " " << op->getPartitionType();
+  if (op->getPartitionType() != "complete")
+    os << " factor=" << op->getFactor();
+  os << " dim=" << op->getDim();
+  os << "\n\n";
 }
 
 /// C++ component emitters.
