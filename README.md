@@ -20,15 +20,10 @@ scalehls-opt -convert-to-hlscpp test/EmitHLSCpp/test_*.mlir | scalehls-translate
 
 ## TODOs List
 ### HLSCpp Dialect
-1. **Implement HLSCpp/ParameterOps.td details;**
-2. TODOs in HLSCpp/PragmaOps.td.
-
-### StaticAnalysis Pass
-1. **Define profiling & constraint file format;**
-2. **Define pass options and statistics;**
-3. Pass implementation.
+1. TODOs in HLSCpp/PragmaOps.td.
 
 ### QoREstimation Pass
+1. **Performance estimator implementation.**
 
 ### PragmaDSE Pass
 
@@ -44,3 +39,4 @@ scalehls-opt -convert-to-hlscpp test/EmitHLSCpp/test_*.mlir | scalehls-translate
 3. [onnx-mlir github](https://github.com/onnx/onnx-mlir)
 4. [circt github](https://github.com/llvm/circt)
 5. [comba github](https://github.com/zjru/COMBA)
+6. [dahlia github](https://github.com/cucapra/dahlia)
