@@ -2,6 +2,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "Analysis/Passes.h"
 #include "Conversion/ConvertToHLSCpp.h"
 #include "Dialect/HLSCpp/HLSCpp.h"
 #include "Transforms/Passes.h"
@@ -63,6 +64,7 @@ int main(int argc, char **argv) {
   registry.insert<mlir::AffineDialect>();
 
   mlir::scalehls::registerTransformsPasses();
+  mlir::scalehls::registerAnalysisPasses();
 
   mlir::scalehls::hlscpp::registerConvertToHLSCppPass();
 

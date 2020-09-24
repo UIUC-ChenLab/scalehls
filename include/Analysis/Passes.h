@@ -2,8 +2,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_TRANSFORMS_PASSES_H
-#define SCALEHLS_TRANSFORMS_PASSES_H
+#ifndef SCALEHLS_ANALYSIS_PASSES_H
+#define SCALEHLS_ANALYSIS_PASSES_H
 
 #include "mlir/Pass/Pass.h"
 #include <memory>
@@ -15,14 +15,14 @@ class Pass;
 namespace mlir {
 namespace scalehls {
 
-std::unique_ptr<mlir::Pass> createPragmaDSEPass();
+std::unique_ptr<mlir::Pass> createQoREstimationPass();
 
-void registerTransformsPasses();
+void registerAnalysisPasses();
 
 #define GEN_PASS_CLASSES
-#include "Transforms/Passes.h.inc"
+#include "Analysis/Passes.h.inc"
 
 } // namespace scalehls
 } // namespace mlir
 
-#endif // SCALEHLS_TRANSFORMS_PASSES_H
+#endif // SCALEHLS_ANALYSIS_PASSES_H

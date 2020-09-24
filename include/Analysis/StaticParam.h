@@ -2,8 +2,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_TRANSFORMS_STATICPARAM_H
-#define SCALEHLS_TRANSFORMS_STATICPARAM_H
+#ifndef SCALEHLS_ANALYSIS_STATICPARAM_H
+#define SCALEHLS_ANALYSIS_STATICPARAM_H
 
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/Value.h"
@@ -91,4 +91,4 @@ class MemParam : public ParamBase<MemParamKind, Value> {};
 } // namespace scalehls
 } // namespace mlir
 
-#endif // SCALEHLS_TRANSFORMS_STATICPARAM_H
+#endif // SCALEHLS_ANALYSIS_STATICPARAM_H

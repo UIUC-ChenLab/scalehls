@@ -2,10 +2,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Transforms/QoREstimation.h"
+#include "Analysis/QoREstimation.h"
+#include "Analysis/Passes.h"
 #include "Dialect/HLSCpp/HLSCpp.h"
-#include "Transforms/INIReader.h"
-#include "Transforms/Passes.h"
+#include "INIReader.h"
 #include "Visitor.h"
 
 using namespace std;

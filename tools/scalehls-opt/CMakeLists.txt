@@ -9,6 +9,7 @@ set(LIBS
   MLIRHLSCpp
   MLIRConvertToHLSCpp
   MLIRScaleHLSTransforms
+  MLIRScaleHLSAnalysis
   )
 
 add_llvm_executable(scalehls-opt scalehls-opt.cpp)

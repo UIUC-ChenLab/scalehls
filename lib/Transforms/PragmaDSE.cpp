@@ -2,10 +2,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "Analysis/QoREstimation.h"
 #include "Dialect/HLSCpp/HLSCpp.h"
-#include "Transforms/INIReader.h"
+#include "INIReader.h"
 #include "Transforms/Passes.h"
-#include "Transforms/QoREstimation.h"
 
 using namespace std;
 using namespace mlir;

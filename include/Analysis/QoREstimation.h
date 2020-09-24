@@ -2,10 +2,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_TRANSFORMS_QORESTIMATION_H
-#define SCALEHLS_TRANSFORMS_QORESTIMATION_H
+#ifndef SCALEHLS_ANALYSIS_QORESTIMATION_H
+#define SCALEHLS_ANALYSIS_QORESTIMATION_H
 
-#include "StaticParam.h"
+#include "Analysis/StaticParam.h"
 #include "Visitor.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Pass/Pass.h"
@@ -75,4 +75,4 @@ public:
 } // namespace scalehls
 } // namespace mlir
 
-#endif // SCALEHLS_TRANSFORMS_QORESTIMATION_H
+#endif // SCALEHLS_ANALYSIS_QORESTIMATION_H
