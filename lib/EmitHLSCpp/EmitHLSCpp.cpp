@@ -178,10 +178,9 @@ public:
   void emitAssign(AssignOp *op);
 
   /// Pragma operation emitters.
-  void emitApplyPragmas(ApplyPragmasOp *op);
-  void emitPragmaPipeline(PragmaPipelineOp *op);
-  void emitPragmaUnroll(PragmaUnrollOp *op);
-  void emitPragmaArrayPartition(PragmaArrayPartitionOp *op);
+  void emitLoopPragma(LoopPragmaOp *op);
+  void emitFuncPragma(FuncPragmaOp *op);
+  void emitArrayPragma(ArrayPragmaOp *op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
@@ -464,18 +463,9 @@ public:
   using HLSCppVisitorBase::visitOp;
 
   /// Pragma operations.
-  bool visitOp(ApplyPragmasOp op) {
-    return emitter.emitApplyPragmas(&op), true;
-  }
-  bool visitOp(PragmaPipelineOp op) {
-    return emitter.emitPragmaPipeline(&op), true;
-  }
-  bool visitOp(PragmaUnrollOp op) {
-    return emitter.emitPragmaUnroll(&op), true;
-  }
-  bool visitOp(PragmaArrayPartitionOp op) {
-    return emitter.emitPragmaArrayPartition(&op), true;
-  }
+  bool visitOp(LoopPragmaOp op) { return emitter.emitLoopPragma(&op), true; }
+  bool visitOp(FuncPragmaOp op) { return emitter.emitFuncPragma(&op), true; }
+  bool visitOp(ArrayPragmaOp op) { return emitter.emitArrayPragma(&op), true; }
 
 private:
   ModuleEmitter &emitter;
@@ -1030,12 +1020,33 @@ void ModuleEmitter::emitAssign(AssignOp *op) {
 }
 
 /// Pragma operation emitters.
-void ModuleEmitter::emitApplyPragmas(ApplyPragmasOp *op) {
-  emitBlock(*op->getBody());
+
+void ModuleEmitter::emitLoopPragma(LoopPragmaOp *op) {
+  indent();
+  os << "#pragma HLS pipeline";
+  if (op->isOff())
+    os << " off\n";
+  else {
+    os << " II=" << op->getII();
+    if (op->isRewind())
+      os << " rewind";
+    if (op->isEnableFlush())
+      os << " enable_flush";
+    os << "\n";
+  }
+
+  indent();
+  os << "#pragma HLS unroll";
+  // TODO: default factor.
+  os << " factor=" << op->getFactor();
+  if (op->isRegion())
+    os << " region";
+  if (op->isSkipExitCheck())
+    os << " skip_exit_check";
   os << "\n";
 }
 
-void ModuleEmitter::emitPragmaPipeline(PragmaPipelineOp *op) {
+void ModuleEmitter::emitFuncPragma(FuncPragmaOp *op) {
   indent();
   os << "#pragma HLS pipeline";
   if (op->isOff())
@@ -1050,19 +1061,7 @@ void ModuleEmitter::emitPragmaPipeline(PragmaPipelineOp *op) {
   }
 }
 
-void ModuleEmitter::emitPragmaUnroll(PragmaUnrollOp *op) {
-  indent();
-  os << "#pragma HLS unroll";
-  // TODO: default factor.
-  os << " factor=" << op->getFactor();
-  if (op->isRegion())
-    os << " region";
-  if (op->isSkipExitCheck())
-    os << " skip_exit_check";
-  os << "\n";
-}
-
-void ModuleEmitter::emitPragmaArrayPartition(PragmaArrayPartitionOp *op) {
+void ModuleEmitter::emitArrayPragma(ArrayPragmaOp *op) {
   indent();
   os << "#pragma HLS array_partition";
   os << " variable=";

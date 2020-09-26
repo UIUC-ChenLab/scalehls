@@ -49,10 +49,10 @@ public:
             SelectOp, ConstantOp, CopySignOp, TruncateIOp, ZeroExtendIOp,
             SignExtendIOp, IndexCastOp, CallOp, ReturnOp, AssignOp, EndOp,
             // Pragma operations.
-            ApplyPragmasOp, PragmaPipelineOp, PragmaUnrollOp,
-            PragmaArrayPartitionOp>([&](auto opNode) -> ResultType {
-          return thisCast->visitOp(opNode, args...);
-        })
+            LoopPragmaOp, FuncPragmaOp, ArrayPragmaOp>(
+            [&](auto opNode) -> ResultType {
+              return thisCast->visitOp(opNode, args...);
+            })
         .Default([&](auto opNode) -> ResultType {
           return thisCast->visitInvalidOp(op, args...);
         });
@@ -175,10 +175,9 @@ public:
   HANDLE(EndOp);
 
   // Pragma operations.
-  HANDLE(ApplyPragmasOp);
-  HANDLE(PragmaPipelineOp);
-  HANDLE(PragmaUnrollOp);
-  HANDLE(PragmaArrayPartitionOp);
+  HANDLE(LoopPragmaOp);
+  HANDLE(FuncPragmaOp);
+  HANDLE(ArrayPragmaOp);
 #undef HANDLE
 };
 } // namespace scalehls

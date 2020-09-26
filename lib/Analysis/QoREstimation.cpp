@@ -86,9 +86,7 @@ bool QoREstimator::visitOp(AffineForOp op) {
   // Recursively estimate latency of sub-elements, including functions and
   // loops. These sub-elements will be considered as a normal node in the CDFG
   // for function latency estimzation.
-  for (auto &op : body.front()) {
-    estimateOperation(&op);
-  }
+  estimateBlock(body.front());
 
   // Estimate iteration latency.
   unsigned iterLatency = searchLongestPath(body.front());
