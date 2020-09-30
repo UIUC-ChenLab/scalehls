@@ -18,7 +18,7 @@ namespace scalehls {
 template <typename ParamKind, typename KeyType> class ParamBase {
 public:
   void init(KeyType key) {
-    for (unsigned i = 0, e = (unsigned)ParamKind::KindNum; i < e; ++i)
+    for (unsigned i = 0; i < (unsigned)ParamKind::KindNum; ++i)
       Params[key].push_back(0);
   }
 

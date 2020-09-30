@@ -17,7 +17,7 @@ def HLSCppDialect : Dialect {
     in this dialect can optimize and generate IRs, which can be translated to
     synthesizable HLS C++ code by EmitHLSCpp tool.
   }];
-  let cppNamespace = "hlscpp";
+  let cppNamespace = "::mlir::scalehls::hlscpp";
 }
 
 class HLSCppOp<string mnemonic, list<OpTrait> traits = []> :
