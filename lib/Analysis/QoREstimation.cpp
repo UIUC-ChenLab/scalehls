@@ -17,7 +17,63 @@ using namespace hlscpp;
 // HLSCppAnalyzer Class Definition
 //===----------------------------------------------------------------------===//
 
-bool HLSCppAnalyzer::visitOp(AffineForOp op) { return true; }
+bool HLSCppAnalyzer::visitOp(AffineForOp op) {
+  auto &body = op.getLoopBody();
+  if (body.getBlocks().size() != 1)
+    op.emitError("has zero or more than one basic blocks.");
+
+  if (procParam.Params[op].empty())
+    procParam.init(op);
+
+  // Recursively analyze all childs.
+  analyzeBlock(body.front());
+
+  // Pragma configurations.
+  unsigned unrollFactor = 1;
+  if (auto loopPragma = dyn_cast<LoopPragmaOp>(body.front().front())) {
+    procParam.set(op, ProcParamKind::EnablePipeline, !loopPragma.off());
+    procParam.set(op, ProcParamKind::UnrollFactor, loopPragma.factor());
+    unrollFactor = loopPragma.factor();
+  }
+
+  // Loop statistics.
+  if (!op.getUpperBoundMap().isSingleConstant() ||
+      !op.getLowerBoundMap().isSingleConstant())
+    op.emitError("has variable upper or lower bound.");
+
+  unsigned upperBound = op.getUpperBoundMap().getSingleConstantResult();
+  unsigned lowerBound = op.getLowerBoundMap().getSingleConstantResult();
+  unsigned step = op.getStep();
+
+  procParam.set(op, ProcParamKind::UpperBound, upperBound);
+  procParam.set(op, ProcParamKind::LowerBound, lowerBound);
+  procParam.set(op, ProcParamKind::IterNumber,
+                (upperBound - lowerBound) / step / unrollFactor);
+
+  unsigned opNum = 0;
+  unsigned loopNum = 0;
+  bool isPerfect = false;
+  for (auto &bodyOp : op.getRegion().front()) {
+    if (!isa<LoopPragmaOp>(bodyOp) && !isa<AffineYieldOp>(bodyOp)) {
+      opNum += 1;
+      if (auto forOp = dyn_cast<AffineForOp>(bodyOp)) {
+        loopNum += 1;
+        isPerfect = procParam.get(forOp, ProcParamKind::IsPerfect);
+      }
+    }
+  }
+
+  // Perfect nested loop.
+  if (opNum == 1 && loopNum == 1 && isPerfect)
+    procParam.set(op, ProcParamKind::IsPerfect, 1);
+  // The inner loop.
+  else if (loopNum == 0)
+    procParam.set(op, ProcParamKind::IsPerfect, 1);
+  else
+    procParam.set(op, ProcParamKind::IsPerfect, 0);
+
+  return true;
+}
 
 bool HLSCppAnalyzer::visitOp(AffineParallelOp op) { return true; }
 
@@ -32,7 +88,14 @@ void HLSCppAnalyzer::analyzeOperation(Operation *op) {
   op->emitError("can't be correctly analyzed.");
 }
 
-void HLSCppAnalyzer::analyzeFunc(FuncOp func) { procParam.init(func); }
+void HLSCppAnalyzer::analyzeFunc(FuncOp func) {
+  if (func.getBlocks().size() != 1)
+    func.emitError("has zero or more than one basic blocks.");
+
+  procParam.init(func);
+
+  analyzeBlock(func.front());
+}
 
 void HLSCppAnalyzer::analyzeBlock(Block &block) {
   for (auto &op : block)
@@ -57,6 +120,9 @@ void HLSCppAnalyzer::analyzeModule(ModuleOp module) {
 QoREstimator::QoREstimator(ProcParam &procParam, MemParam &memParam,
                            string targetSpecPath, string opLatencyPath)
     : procParam(procParam), memParam(memParam) {
+
+  inPipeline = false;
+
   INIReader targetSpec(targetSpecPath);
   if (targetSpec.ParseError())
     llvm::outs() << "error: target spec file parse fail, please refer to "
@@ -67,83 +133,129 @@ QoREstimator::QoREstimator(ProcParam &procParam, MemParam &memParam,
     llvm::outs() << "error: Op latency file parse fail, please refer to "
                     "--help option and pass in correct file path\n";
 
+  // TODO: Support estimator initiation from profiling data.
   auto freq = targetSpec.Get("config", "frequency", "200MHz");
   auto latency = opLatency.GetInteger(freq, "op", 0);
   llvm::outs() << latency << "\n";
 }
 
-/// For now, estimation for unrolled loops are following the analytical model
-/// of COMBA, which is suspected to be wrong. Meanwhile, we assume the absence
-/// of function call in the loop body.
-///
-/// This method will update ProcParam::IterLatency and ProcParam::Latency of the
-/// current affine for loop.
+void QoREstimator::alignBlockSchedule(Block &block, OpDenseMap &opScheduleMap,
+                                      unsigned opSchedule) {
+  for (auto &op : block) {
+    if (auto child = dyn_cast<mlir::AffineForOp>(op))
+      alignBlockSchedule(child.getRegion().front(), opScheduleMap, opSchedule);
+    opScheduleMap[&op] = opSchedule;
+  }
+}
+
+unsigned QoREstimator::getBlockSchedule(Block &block,
+                                        OpDenseMap &opScheduleMap) {
+  unsigned blockSchedule = 0;
+
+  for (auto &op : block) {
+    unsigned opSchedule = 0;
+
+    // Add the latest scheduled time among all predecessors.
+    for (auto operand : op.getOperands()) {
+      if (operand.getKind() != Value::Kind::BlockArgument)
+        opSchedule = max(opSchedule, opScheduleMap[operand.getDefiningOp()]);
+    }
+
+    // Add latency of the current operation.
+    unsigned childSchedule = 0;
+    if (auto child = dyn_cast<mlir::AffineForOp>(op)) {
+      opSchedule += procParam.get(child, ProcParamKind::Latency);
+      if (inPipeline)
+        childSchedule =
+            getBlockSchedule(child.getRegion().front(), opScheduleMap);
+      else
+        alignBlockSchedule(child.getRegion().front(), opScheduleMap,
+                           opSchedule);
+    } else {
+      // For now we make a simple assumption tha all standard operations has an
+      // unit latency.
+      // TODO: Support estimation from profiling data.
+      opSchedule += 1;
+    }
+
+    opScheduleMap[&op] = opSchedule;
+    blockSchedule = max({blockSchedule, childSchedule, opSchedule});
+  }
+  return blockSchedule;
+}
+
 bool QoREstimator::visitOp(AffineForOp op) {
   auto &body = op.getLoopBody();
   if (body.getBlocks().size() != 1)
     op.emitError("has zero or more than one basic blocks.");
 
-  // Recursively estimate latency of sub-elements, including functions and
-  // loops. These sub-elements will be considered as a normal node in the CDFG
-  // for function latency estimzation.
-  estimateBlock(body.front());
+  if (procParam.get(op, ProcParamKind::EnablePipeline)) {
+    inPipeline = true;
 
-  // Estimate iteration latency.
-  unsigned iterLatency = searchLongestPath(body.front());
-  procParam.set(op, ProcParamKind::IterLatency, iterLatency);
+    OpDenseMap opScheduleMap;
+    auto iterLatency = getBlockSchedule(body.front(), opScheduleMap);
+    procParam.set(op, ProcParamKind::IterLatency, iterLatency);
 
-  // Estimate affine for loop latency.
-  unsigned latency = iterLatency;
-  if (procParam.get(op, ProcParamKind::LoopBound) != 1)
-    latency *= procParam.get(op, ProcParamKind::LoopBound) *
-               procParam.get(op, ProcParamKind::UnrollFactor);
-  procParam.set(op, ProcParamKind::Latency, latency);
+    // For now we make a simple assumption that II is equal to 1.
+    auto iterNumber = procParam.get(op, ProcParamKind::IterNumber);
+    procParam.set(op, ProcParamKind::PipeIterNumber, iterNumber);
+    procParam.set(op, ProcParamKind::Latency, iterLatency + iterNumber - 1);
+
+    // TODO: Calculate initial interval.
+    procParam.set(op, ProcParamKind::InitInterval, 1);
+
+  } else {
+    // Recursively estimate each operation, mainly AffineFor operation for now.
+    estimateBlock(body.front());
+
+    // This simply means the current loop can be merged into the child loop
+    // pipeline. This will increase the total IterNumber without changing the
+    // IterLatency.
+    if (inPipeline && procParam.get(op, ProcParamKind::IsPerfect)) {
+      if (auto child = dyn_cast<AffineForOp>(
+              std::next(op.getLoopBody().front().begin()))) {
+        auto initInterval = procParam.get(child, ProcParamKind::InitInterval);
+        auto iterLatency = procParam.get(child, ProcParamKind::IterLatency);
+        auto pipeIterNumber =
+            procParam.get(child, ProcParamKind::PipeIterNumber) *
+            procParam.get(op, ProcParamKind::IterNumber);
+
+        procParam.set(op, ProcParamKind::InitInterval, initInterval);
+        procParam.set(op, ProcParamKind::IterLatency, iterLatency);
+        procParam.set(op, ProcParamKind::PipeIterNumber, pipeIterNumber);
+        procParam.set(op, ProcParamKind::Latency,
+                      iterLatency + initInterval * (pipeIterNumber - 1));
+      } else {
+        inPipeline = false;
+        op.emitError("is not a perfect loop.");
+      }
+    }
+
+    // This branch take cares of all unpipelined or imperfect loops.
+    else {
+      inPipeline = false;
+
+      OpDenseMap opScheduleMap;
+      auto iterLatency = getBlockSchedule(body.front(), opScheduleMap);
+      procParam.set(op, ProcParamKind::IterLatency, iterLatency);
+
+      // For now we follow the COMBA approach for unrooled loops.
+      unsigned latency = iterLatency;
+      if (procParam.get(op, ProcParamKind::IterNumber) != 1)
+        latency *= procParam.get(op, ProcParamKind::IterNumber) *
+                   procParam.get(op, ProcParamKind::UnrollFactor);
+      procParam.set(op, ProcParamKind::Latency, latency);
+
+      // TODO: Calculate initial interval.
+      procParam.set(op, ProcParamKind::InitInterval, 1);
+    }
+  }
+  return true;
 }
 
 bool QoREstimator::visitOp(AffineParallelOp op) { return true; }
 
 bool QoREstimator::visitOp(AffineIfOp op) { return true; }
-
-/// This method recursively update the time stamp of all values (1) directly
-/// generated as result by the current operation or (2) generated by any
-/// operations insided of the region held by the current operation.
-void QoREstimator::updateValueTimeStamp(
-    Operation *currentOp, unsigned opTimeStamp,
-    DenseMap<Value, unsigned> &valueTimeStampMap) {
-  for (auto result : currentOp->getResults())
-    valueTimeStampMap[result] = opTimeStamp;
-  for (auto &region : currentOp->getRegions()) {
-    for (auto &op : region.front())
-      updateValueTimeStamp(&op, opTimeStamp, valueTimeStampMap);
-  }
-}
-
-/// This method will search the longest path in a DAG block using a ASAP (As
-/// Soon As Possible) manner. Loop, function, if, and other operation owning
-/// regions will be considered as a whole.
-unsigned QoREstimator::searchLongestPath(Block &block) {
-  DenseMap<Value, unsigned> valueTimeStampMap;
-  unsigned blockTimeStamp = 0;
-
-  for (auto &op : block) {
-    unsigned opTimeStamp = 0;
-
-    // Add the latest ready time among all predecessors.
-    for (auto operand : op.getOperands())
-      opTimeStamp = max(opTimeStamp, valueTimeStampMap[operand]);
-
-    // Add latency of the current operation.
-    if (auto subAffineFor = dyn_cast<AffineForOp>(op))
-      opTimeStamp += procParam.get(subAffineFor, ProcParamKind::Latency);
-    else
-      opTimeStamp += 1;
-    blockTimeStamp = max(blockTimeStamp, opTimeStamp);
-
-    // Update ready time of each value generated by the current operation.
-    updateValueTimeStamp(&op, opTimeStamp, valueTimeStampMap);
-  }
-  return blockTimeStamp;
-}
 
 void QoREstimator::estimateOperation(Operation *op) {
   if (dispatchVisitor(op))
@@ -152,19 +264,14 @@ void QoREstimator::estimateOperation(Operation *op) {
   op->emitError("can't be correctly estimated.");
 }
 
-/// For now, function pipelining and task-level dataflow optimizations are not
-/// considered for simplicity. Meanwhile, we assume the absence of function call
-/// in the loop body.
-///
-/// This method will update ProcParam::Latency of the current function.
 void QoREstimator::estimateFunc(FuncOp func) {
   if (func.getBlocks().size() != 1)
     func.emitError("has zero or more than one basic blocks.");
 
   estimateBlock(func.front());
 
-  // Estimate function latency.
-  unsigned latency = searchLongestPath(func.front());
+  OpDenseMap opScheduleMap;
+  auto latency = getBlockSchedule(func.front(), opScheduleMap);
   procParam.set(func, ProcParamKind::Latency, latency);
 }
 
@@ -187,7 +294,7 @@ void QoREstimator::estimateModule(ModuleOp module) {
 //===----------------------------------------------------------------------===//
 
 namespace {
-struct QoREstimation : public QoREstimationBase<QoREstimation> {
+struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
   void runOnOperation() override {
     ProcParam procParam;
     MemParam memParam;
@@ -200,6 +307,26 @@ struct QoREstimation : public QoREstimationBase<QoREstimation> {
     QoREstimator estimator(analyzer.procParam, analyzer.memParam, targetSpec,
                            opLatency);
     estimator.estimateModule(getOperation());
+
+    for (auto item : procParam.Params) {
+      llvm::outs() << "EnablePipeline:"
+                   << item.second[(unsigned)ProcParamKind::EnablePipeline]
+                   << "\nUnrollFactor:"
+                   << item.second[(unsigned)ProcParamKind::UnrollFactor]
+                   << "\nIterNumber:"
+                   << item.second[(unsigned)ProcParamKind::IterNumber]
+                   << "\nIsPerfect:"
+                   << item.second[(unsigned)ProcParamKind::IsPerfect]
+                   << "\nInitInterval:"
+                   << item.second[(unsigned)ProcParamKind::InitInterval]
+                   << "\nIterLatency:"
+                   << item.second[(unsigned)ProcParamKind::IterLatency]
+                   << "\nPipeIterNumber:"
+                   << item.second[(unsigned)ProcParamKind::PipeIterNumber]
+                   << "\nLatency:"
+                   << item.second[(unsigned)ProcParamKind::Latency] << "\n";
+      llvm::outs() << *item.first << "\n";
+    }
   }
 };
 } // namespace

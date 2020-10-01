@@ -30,7 +30,6 @@ public:
     Params[key][(unsigned)kind] = param;
   }
 
-private:
   DenseMap<KeyType, SmallVector<unsigned, 16>> Params;
 };
 
@@ -41,12 +40,18 @@ private:
 enum class ProcParamKind {
   // Process-related pragam configurations.
   EnablePipeline,
-  InitialInterval,
   UnrollFactor,
 
+  // Process attributes.
+  LowerBound,
+  UpperBound,
+  IterNumber,
+  IsPerfect,
+
   // Performance parameters.
-  LoopBound,
+  InitInterval,
   IterLatency,
+  PipeIterNumber,
   Latency,
 
   // Resource parameters.

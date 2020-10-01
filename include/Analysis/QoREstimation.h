@@ -23,6 +23,8 @@ public:
   explicit HLSCppAnalyzer(ProcParam &procParam, MemParam &memParam)
       : procParam(procParam), memParam(memParam) {}
 
+  bool inPipeline;
+
   ProcParam &procParam;
   MemParam &memParam;
 
@@ -48,6 +50,11 @@ public:
   explicit QoREstimator(ProcParam &procParam, MemParam &memParam,
                         std::string targetSpecPath, std::string opLatencyPath);
 
+  using OpDenseMap = DenseMap<Operation *, unsigned>;
+  // This flag indicates that currently the estimator is in a pipelined region,
+  // which will impact the estimation strategy.
+  bool inPipeline;
+
   ProcParam &procParam;
   MemParam &memParam;
 
@@ -61,9 +68,9 @@ public:
   bool visitOp(AffineIfOp op);
 
   /// These methods are used for searching longest path in a DAG.
-  void updateValueTimeStamp(Operation *currentOp, unsigned opTimeStamp,
-                            DenseMap<Value, unsigned> &valueTimeStampMap);
-  unsigned searchLongestPath(Block &block);
+  void alignBlockSchedule(Block &block, OpDenseMap &opScheduleMap,
+                          unsigned opSchedule);
+  unsigned getBlockSchedule(Block &block, OpDenseMap &opScheduleMap);
 
   /// MLIR component estimators.
   void estimateOperation(Operation *op);

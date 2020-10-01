@@ -1024,13 +1024,13 @@ void ModuleEmitter::emitAssign(AssignOp *op) {
 void ModuleEmitter::emitLoopPragma(LoopPragmaOp *op) {
   indent();
   os << "#pragma HLS pipeline";
-  if (op->isOff())
+  if (op->off())
     os << " off\n";
   else {
-    os << " II=" << op->getII();
-    if (op->isRewind())
+    os << " II=" << op->II();
+    if (op->rewind())
       os << " rewind";
-    if (op->isEnableFlush())
+    if (op->enable_flush())
       os << " enable_flush";
     os << "\n";
   }
@@ -1038,10 +1038,10 @@ void ModuleEmitter::emitLoopPragma(LoopPragmaOp *op) {
   indent();
   os << "#pragma HLS unroll";
   // TODO: default factor.
-  os << " factor=" << op->getFactor();
-  if (op->isRegion())
+  os << " factor=" << op->factor();
+  if (op->region())
     os << " region";
-  if (op->isSkipExitCheck())
+  if (op->skip_exit_check())
     os << " skip_exit_check";
   os << "\n";
 }
@@ -1049,13 +1049,13 @@ void ModuleEmitter::emitLoopPragma(LoopPragmaOp *op) {
 void ModuleEmitter::emitFuncPragma(FuncPragmaOp *op) {
   indent();
   os << "#pragma HLS pipeline";
-  if (op->isOff())
+  if (op->off())
     os << " off\n";
   else {
-    os << " II=" << op->getII();
-    if (op->isRewind())
+    os << " II=" << op->II();
+    if (op->rewind())
       os << " rewind";
-    if (op->isEnableFlush())
+    if (op->enable_flush())
       os << " enable_flush";
     os << "\n";
   }
@@ -1066,10 +1066,10 @@ void ModuleEmitter::emitArrayPragma(ArrayPragmaOp *op) {
   os << "#pragma HLS array_partition";
   os << " variable=";
   emitValue(op->getOperand());
-  os << " " << op->getPartitionType();
-  if (op->getPartitionType() != "complete")
-    os << " factor=" << op->getFactor();
-  os << " dim=" << op->getDim();
+  os << " " << op->type();
+  if (op->type() != "complete")
+    os << " factor=" << op->factor();
+  os << " dim=" << op->dim();
   os << "\n\n";
 }
 

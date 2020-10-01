@@ -28,32 +28,7 @@ def LoopPragmaOp : HLSCppOp<"loop_pragma", [
     BoolAttr : $skip_exit_check
   );
 
-  let extraClassDeclaration = [{
-    // Pipeline pragma-related methods.
-    unsigned getII() {
-      return getAttrOfType<IntegerAttr>("II").getUInt();
-    }
-    bool isEnableFlush() {
-      return getAttrOfType<BoolAttr>("enable_flush").getValue();
-    }
-    bool isRewind() {
-      return getAttrOfType<BoolAttr>("rewind").getValue();
-    }
-    bool isOff() {
-      return getAttrOfType<BoolAttr>("off").getValue();
-    }
-
-    // Unroll pragma-related methods.
-    unsigned getFactor() {
-      return getAttrOfType<IntegerAttr>("factor").getUInt();
-    }
-    bool isRegion() {
-      return getAttrOfType<BoolAttr>("region").getValue();
-    }
-    bool isSkipExitCheck() {
-      return getAttrOfType<BoolAttr>("skip_exit_check").getValue();
-    }
-  }];
+  let extraClassDeclaration = [{}];
 }
 
 def FuncPragmaOp : HLSCppOp<"func_pragma", [
@@ -77,26 +52,7 @@ def FuncPragmaOp : HLSCppOp<"func_pragma", [
     BoolAttr : $dataflow
   );
 
-  let extraClassDeclaration = [{
-    // Pipeline pragma-related methods.
-    unsigned getII() {
-      return getAttrOfType<IntegerAttr>("II").getUInt();
-    }
-    bool isEnableFlush() {
-      return getAttrOfType<BoolAttr>("enable_flush").getValue();
-    }
-    bool isRewind() {
-      return getAttrOfType<BoolAttr>("rewind").getValue();
-    }
-    bool isOff() {
-      return getAttrOfType<BoolAttr>("off").getValue();
-    }
-
-    // Dataflow pragma-related methods.
-    bool isDataflow() {
-      return getAttrOfType<BoolAttr>("dataflow").getValue();
-    }
-  }];
+  let extraClassDeclaration = [{}];
 }
 
 def ArrayPragmaOp : HLSCppOp<"array_pragma", [
@@ -119,17 +75,7 @@ def ArrayPragmaOp : HLSCppOp<"array_pragma", [
   // (1) dim is not larger than variable's dim.
   // (2) factor is not larger than variable's shape of the corresponding dim.
 
-  let extraClassDeclaration = [{
-    StringRef getPartitionType() {
-      return getAttrOfType<StringAttr>("type").getValue();
-    }
-    unsigned getFactor() {
-      return getAttrOfType<IntegerAttr>("factor").getUInt();
-    }
-    unsigned getDim() {
-      return getAttrOfType<IntegerAttr>("dim").getUInt();
-    }
-  }];
+  let extraClassDeclaration = [{}];
 }
 
 #endif // SCALEHLS_DIALECT_HLSCPP_PRAGMAOPS_TD

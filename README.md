@@ -28,10 +28,9 @@ scalehls-opt -convert-to-hlscpp test/EmitHLSCpp/test_*.mlir | scalehls-translate
 ### PragmaDSE Pass
 
 ### EmitHLSCpp
-1. **Test HLS C++ emitter with onnx/npcomp;**
-2. TODOs in EmitHLSCpp.cpp;
-3. Support memref/tensor cast/view/subview operations;
-4. Support atomic/complex/extention -related operations.
+1. TODOs in EmitHLSCpp.cpp;
+2. Support memref/tensor cast/view/subview operations;
+3. Support atomic/complex/extention -related operations.
 
 ## References
 1. [MLIR Documents](https://mlir.llvm.org)
