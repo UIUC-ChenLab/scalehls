@@ -32,7 +32,6 @@ public:
 
   using HLSCppVisitorBase::visitOp;
   bool visitOp(AffineForOp op);
-  bool visitOp(AffineParallelOp op);
   bool visitOp(AffineIfOp op);
 
   void analyzeOperation(Operation *op);
@@ -50,7 +49,10 @@ public:
   explicit QoREstimator(ProcParam &procParam, MemParam &memParam,
                         std::string targetSpecPath, std::string opLatencyPath);
 
-  using OpDenseMap = DenseMap<Operation *, unsigned>;
+  using ScheduleMap = llvm::SmallDenseMap<Operation *, unsigned, 8>;
+  using MemAccess = std::pair<Value, Operation *>;
+  using MemAccessList = SmallVector<MemAccess, 8>;
+
   // This flag indicates that currently the estimator is in a pipelined region,
   // which will impact the estimation strategy.
   bool inPipeline;
@@ -64,13 +66,15 @@ public:
   /// These methods can estimate the performance and resource utilization of a
   /// specific MLIR structure, and update them in procParams or memroyParams.
   bool visitOp(AffineForOp op);
-  bool visitOp(AffineParallelOp op);
   bool visitOp(AffineIfOp op);
 
   /// These methods are used for searching longest path in a DAG.
-  void alignBlockSchedule(Block &block, OpDenseMap &opScheduleMap,
+  void alignBlockSchedule(Block &block, ScheduleMap &opScheduleMap,
                           unsigned opSchedule);
-  unsigned getBlockSchedule(Block &block, OpDenseMap &opScheduleMap);
+  unsigned getBlockSchedule(Block &block, ScheduleMap &opScheduleMap);
+  unsigned getBlockII(Block &block, ScheduleMap &opScheduleMap,
+                      MemAccessList &memLoadList, MemAccessList &memStoreList,
+                      unsigned initInterval);
 
   /// MLIR component estimators.
   void estimateOperation(Operation *op);

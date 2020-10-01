@@ -75,8 +75,6 @@ enum class MemParamKind {
   WriteNum,
   ReadPorts,
   WritePorts,
-  DepdcyLatency,
-  DepdcyDistance,
 
   // Resource parameters.
   LUT,

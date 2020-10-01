@@ -56,9 +56,9 @@ bool HLSCppAnalyzer::visitOp(AffineForOp op) {
   for (auto &bodyOp : op.getRegion().front()) {
     if (!isa<LoopPragmaOp>(bodyOp) && !isa<AffineYieldOp>(bodyOp)) {
       opNum += 1;
-      if (auto forOp = dyn_cast<AffineForOp>(bodyOp)) {
+      if (auto child = dyn_cast<AffineForOp>(bodyOp)) {
         loopNum += 1;
-        isPerfect = procParam.get(forOp, ProcParamKind::IsPerfect);
+        isPerfect = procParam.get(child, ProcParamKind::IsPerfect);
       }
     }
   }
@@ -74,8 +74,6 @@ bool HLSCppAnalyzer::visitOp(AffineForOp op) {
 
   return true;
 }
-
-bool HLSCppAnalyzer::visitOp(AffineParallelOp op) { return true; }
 
 bool HLSCppAnalyzer::visitOp(AffineIfOp op) { return true; }
 
@@ -139,7 +137,7 @@ QoREstimator::QoREstimator(ProcParam &procParam, MemParam &memParam,
   llvm::outs() << latency << "\n";
 }
 
-void QoREstimator::alignBlockSchedule(Block &block, OpDenseMap &opScheduleMap,
+void QoREstimator::alignBlockSchedule(Block &block, ScheduleMap &opScheduleMap,
                                       unsigned opSchedule) {
   for (auto &op : block) {
     if (auto child = dyn_cast<mlir::AffineForOp>(op))
@@ -149,7 +147,7 @@ void QoREstimator::alignBlockSchedule(Block &block, OpDenseMap &opScheduleMap,
 }
 
 unsigned QoREstimator::getBlockSchedule(Block &block,
-                                        OpDenseMap &opScheduleMap) {
+                                        ScheduleMap &opScheduleMap) {
   unsigned blockSchedule = 0;
 
   for (auto &op : block) {
@@ -184,6 +182,54 @@ unsigned QoREstimator::getBlockSchedule(Block &block,
   return blockSchedule;
 }
 
+unsigned QoREstimator::getBlockII(Block &block, ScheduleMap &opScheduleMap,
+                                  MemAccessList &memLoadList,
+                                  MemAccessList &memStoreList,
+                                  unsigned initInterval) {
+  for (auto &op : block) {
+
+    // Handle load operations.
+    if (auto loadOp = dyn_cast<LoadOp>(op)) {
+      for (auto memStore : memStoreList) {
+        if (loadOp.getMemRef() == memStore.first) {
+          // TODO: For now, we simply assume the distance between dependency
+          // always takes 1. Thus the II is equal to the latency between
+          // dependency.
+          unsigned RAWLatency =
+              opScheduleMap[loadOp] - opScheduleMap[memStore.second];
+          initInterval = max(initInterval, RAWLatency);
+        }
+      }
+      memLoadList.push_back(MemAccess(loadOp.getMemRef(), loadOp));
+    }
+
+    // Handle Store operations.
+    else if (auto storeOp = dyn_cast<StoreOp>(op)) {
+      for (auto memStore : memStoreList) {
+        if (loadOp.getMemRef() == memStore.first) {
+          unsigned WAWLatency =
+              opScheduleMap[storeOp] - opScheduleMap[memStore.second];
+          initInterval = max(initInterval, WAWLatency);
+        }
+      }
+      for (auto memLoad : memLoadList) {
+        if (storeOp.getMemRef() == memLoad.first) {
+          unsigned WARLatency =
+              opScheduleMap[storeOp] - opScheduleMap[memLoad.second];
+          initInterval = max(initInterval, WARLatency);
+        }
+      }
+      memStoreList.push_back(MemAccess(storeOp.getMemRef(), storeOp));
+    }
+
+    else if (auto child = dyn_cast<AffineForOp>(op))
+      initInterval = getBlockII(child.getRegion().front(), opScheduleMap,
+                                memLoadList, memStoreList, initInterval);
+  }
+
+  return initInterval;
+}
+
 bool QoREstimator::visitOp(AffineForOp op) {
   auto &body = op.getLoopBody();
   if (body.getBlocks().size() != 1)
@@ -192,20 +238,32 @@ bool QoREstimator::visitOp(AffineForOp op) {
   if (procParam.get(op, ProcParamKind::EnablePipeline)) {
     inPipeline = true;
 
-    OpDenseMap opScheduleMap;
+    ScheduleMap opScheduleMap;
     auto iterLatency = getBlockSchedule(body.front(), opScheduleMap);
     procParam.set(op, ProcParamKind::IterLatency, iterLatency);
 
     // For now we make a simple assumption that II is equal to 1.
     auto iterNumber = procParam.get(op, ProcParamKind::IterNumber);
     procParam.set(op, ProcParamKind::PipeIterNumber, iterNumber);
-    procParam.set(op, ProcParamKind::Latency, iterLatency + iterNumber - 1);
 
-    // TODO: Calculate initial interval.
-    procParam.set(op, ProcParamKind::InitInterval, 1);
+    // Calculate initial interval.
+    MemAccessList memLoadList;
+    MemAccessList memStoreList;
+    unsigned initInterval = 1;
+    initInterval = getBlockII(body.front(), opScheduleMap, memLoadList,
+                              memStoreList, initInterval);
+    procParam.set(op, ProcParamKind::InitInterval, initInterval);
 
-  } else {
-    // Recursively estimate each operation, mainly AffineFor operation for now.
+    procParam.set(op, ProcParamKind::Latency,
+                  iterLatency + initInterval * (iterNumber - 1));
+  }
+
+  // If the loop is not pipelined, the estimation is much different and requires
+  // to recursively enter each child loop for estimating the overall latency of
+  // the current loop.
+  else {
+    // Recursively estimate each operation, mainly AffineFor operation will be
+    // differently handled for now.
     estimateBlock(body.front());
 
     // This simply means the current loop can be merged into the child loop
@@ -223,6 +281,7 @@ bool QoREstimator::visitOp(AffineForOp op) {
         procParam.set(op, ProcParamKind::InitInterval, initInterval);
         procParam.set(op, ProcParamKind::IterLatency, iterLatency);
         procParam.set(op, ProcParamKind::PipeIterNumber, pipeIterNumber);
+
         procParam.set(op, ProcParamKind::Latency,
                       iterLatency + initInterval * (pipeIterNumber - 1));
       } else {
@@ -235,7 +294,7 @@ bool QoREstimator::visitOp(AffineForOp op) {
     else {
       inPipeline = false;
 
-      OpDenseMap opScheduleMap;
+      ScheduleMap opScheduleMap;
       auto iterLatency = getBlockSchedule(body.front(), opScheduleMap);
       procParam.set(op, ProcParamKind::IterLatency, iterLatency);
 
@@ -253,8 +312,6 @@ bool QoREstimator::visitOp(AffineForOp op) {
   return true;
 }
 
-bool QoREstimator::visitOp(AffineParallelOp op) { return true; }
-
 bool QoREstimator::visitOp(AffineIfOp op) { return true; }
 
 void QoREstimator::estimateOperation(Operation *op) {
@@ -270,7 +327,7 @@ void QoREstimator::estimateFunc(FuncOp func) {
 
   estimateBlock(func.front());
 
-  OpDenseMap opScheduleMap;
+  ScheduleMap opScheduleMap;
   auto latency = getBlockSchedule(func.front(), opScheduleMap);
   procParam.set(func, ProcParamKind::Latency, latency);
 }
