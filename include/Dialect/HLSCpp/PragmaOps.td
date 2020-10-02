@@ -42,12 +42,6 @@ def FuncPragmaOp : HLSCppOp<"func_pragma", [
   }];
 
   let arguments = (ins
-    // Pipeline pragma-related attributes.
-    Confined<UI32Attr, [IntPositive]> : $II,
-    BoolAttr : $enable_flush,
-    BoolAttr : $rewind,
-    BoolAttr : $off,
-
     // Dataflow pragma-related attributes.
     BoolAttr : $dataflow
   );

@@ -1047,17 +1047,9 @@ void ModuleEmitter::emitLoopPragma(LoopPragmaOp *op) {
 }
 
 void ModuleEmitter::emitFuncPragma(FuncPragmaOp *op) {
-  indent();
-  os << "#pragma HLS pipeline";
-  if (op->off())
-    os << " off\n";
-  else {
-    os << " II=" << op->II();
-    if (op->rewind())
-      os << " rewind";
-    if (op->enable_flush())
-      os << " enable_flush";
-    os << "\n";
+  if (op->dataflow()) {
+    indent();
+    os << "#pragma HLS dataflow\n";
   }
 }
 

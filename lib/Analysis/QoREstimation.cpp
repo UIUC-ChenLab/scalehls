@@ -189,7 +189,7 @@ unsigned QoREstimator::getBlockII(Block &block, ScheduleMap &opScheduleMap,
   for (auto &op : block) {
 
     // Handle load operations.
-    if (auto loadOp = dyn_cast<LoadOp>(op)) {
+    if (auto loadOp = dyn_cast<AffineLoadOp>(op)) {
       for (auto memStore : memStoreList) {
         if (loadOp.getMemRef() == memStore.first) {
           // TODO: For now, we simply assume the distance between dependency
@@ -204,7 +204,7 @@ unsigned QoREstimator::getBlockII(Block &block, ScheduleMap &opScheduleMap,
     }
 
     // Handle Store operations.
-    else if (auto storeOp = dyn_cast<StoreOp>(op)) {
+    else if (auto storeOp = dyn_cast<AffineStoreOp>(op)) {
       for (auto memStore : memStoreList) {
         if (loadOp.getMemRef() == memStore.first) {
           unsigned WAWLatency =

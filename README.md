@@ -20,18 +20,24 @@ scalehls-opt -convert-to-hlscpp test/EmitHLSCpp/test_*.mlir | scalehls-translate
 
 ## TODOs List
 ### HLSCpp Dialect
-1. TODOs in HLSCpp/PragmaOps.td.
+1. Enhance array_pragma operation.
+2. Update attributes definition.
+3. TODOs in HLSCpp/PragmaOps.td.
 
 ### QoREstimation Pass
-1. **Performance estimator implementation.**
+1. Implement comprehensive partition-aware II analysis.
+2. Consider the case of flattened inner loop under a pipelined region.
+3. Support read latency from profiling data.
+4. Support operation chainning.
 
 ### PragmaDSE Pass
 
 ### EmitHLSCpp
-1. Support AffineFor iter_args feature;
-2. TODOs in EmitHLSCpp.cpp;
-3. Support memref/tensor cast/view/subview operations;
-4. Support atomic/complex/extention -related operations.
+1. Emitting array_pragma operation.
+2. Support AffineFor iter_args feature.
+3. TODOs in EmitHLSCpp.cpp.
+4. Support memref/tensor cast/view/subview operations.
+5. Support atomic/complex/extention -related operations.
 
 ## References
 1. [MLIR Documents](https://mlir.llvm.org)
