@@ -14,7 +14,7 @@ using namespace hlscpp;
 
 namespace {
 struct PragmaDSE : public PragmaDSEBase<PragmaDSE> {
-  void runOnOperation() {}
+  void runOnOperation() override {}
 };
 } // namespace
 

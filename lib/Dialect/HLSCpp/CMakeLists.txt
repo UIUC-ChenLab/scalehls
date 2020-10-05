@@ -6,4 +6,5 @@ add_mlir_dialect_library(MLIRHLSCpp
   DEPENDS
   MLIRHLSCppIncGen
   MLIRHLSCppInterfacesIncGen
+  MLIRHLSCppEnumsIncGen
   )

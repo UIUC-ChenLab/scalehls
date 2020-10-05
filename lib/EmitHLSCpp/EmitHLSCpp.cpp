@@ -248,13 +248,13 @@ public:
   void emitAffineBinary(AffineBinaryOpExpr expr, const char *syntax) {
     os << "(";
     if (auto constRHS = expr.getRHS().dyn_cast<AffineConstantExpr>()) {
-      if (syntax == "*" && constRHS.getValue() == -1) {
+      if ((unsigned)*syntax == (unsigned)*"*" && constRHS.getValue() == -1) {
         os << "-";
         visit(expr.getLHS());
         os << ")";
         return;
       }
-      if (syntax == "+" && constRHS.getValue() < 0) {
+      if ((unsigned)*syntax == (unsigned)*"+" && constRHS.getValue() < 0) {
         visit(expr.getLHS());
         os << " - ";
         os << -constRHS.getValue();
@@ -264,7 +264,7 @@ public:
     }
     if (auto binaryRHS = expr.getRHS().dyn_cast<AffineBinaryOpExpr>()) {
       if (auto constRHS = binaryRHS.getRHS().dyn_cast<AffineConstantExpr>()) {
-        if (syntax == "+" && constRHS.getValue() == -1 &&
+        if ((unsigned)*syntax == (unsigned)*"+" && constRHS.getValue() == -1 &&
             binaryRHS.getKind() == AffineExprKind::Mul) {
           visit(expr.getLHS());
           os << " - ";
@@ -430,7 +430,8 @@ bool ExprVisitor::visitOp(CmpFOp op) {
   case CmpFPredicate::UGE:
     return emitter.emitBinary(op, ">="), true;
   default:
-    return true;
+    op.emitError("has unsupported compare type.");
+    return false;
   }
 }
 
@@ -452,6 +453,9 @@ bool ExprVisitor::visitOp(CmpIOp op) {
   case CmpIPredicate::sge:
   case CmpIPredicate::uge:
     return emitter.emitBinary(op, ">="), true;
+  default:
+    op.emitError("has unsupported compare type.");
+    return false;
   }
 }
 
@@ -717,7 +721,7 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
   if (op->getNumOperands() == 0)
     return;
 
-  // For now, only AffineParallel and AffineFor operations will use AffineYield
+  // For now, only AffineParallel and AffineIf operations will use AffineYield
   // to return generated values.
   if (auto parentOp = dyn_cast<AffineIfOp>(op->getParentOp())) {
     unsigned resultIdx = 0;
@@ -898,7 +902,7 @@ void ModuleEmitter::emitDim(DimOp *op) {
     auto type = op->getOperand(0).getType().cast<ShapedType>();
 
     if (type.hasStaticShape()) {
-      if (constVal >= 0 && constVal < type.getShape().size()) {
+      if (constVal >= 0 && constVal < (int64_t)type.getShape().size()) {
         indent();
         emitValue(op->getResult());
         os << " = ";
@@ -1023,26 +1027,20 @@ void ModuleEmitter::emitAssign(AssignOp *op) {
 
 void ModuleEmitter::emitLoopPragma(LoopPragmaOp *op) {
   indent();
-  os << "#pragma HLS pipeline";
-  if (op->off())
-    os << " off\n";
-  else {
-    os << " II=" << op->II();
-    if (op->rewind())
-      os << " rewind";
-    if (op->enable_flush())
-      os << " enable_flush";
-    os << "\n";
-  }
-
-  indent();
   os << "#pragma HLS unroll";
   // TODO: default factor.
-  os << " factor=" << op->factor();
-  if (op->region())
-    os << " region";
-  if (op->skip_exit_check())
-    os << " skip_exit_check";
+  os << " factor=" << op->unroll_factor();
+  os << " skip_exit_check\n";
+
+  indent();
+  os << "#pragma HLS pipeline";
+  if (op->pipeline()) {
+    os << " II=" << op->pipeline_II();
+    os << " rewind\n";
+  } else
+    os << " off\n";
+
+  // An empty line.
   os << "\n";
 }
 
@@ -1050,19 +1048,56 @@ void ModuleEmitter::emitFuncPragma(FuncPragmaOp *op) {
   if (op->dataflow()) {
     indent();
     os << "#pragma HLS dataflow\n";
+
+    // An empty line.
+    os << "\n";
   }
 }
 
 void ModuleEmitter::emitArrayPragma(ArrayPragmaOp *op) {
-  indent();
-  os << "#pragma HLS array_partition";
-  os << " variable=";
-  emitValue(op->getOperand());
-  os << " " << op->type();
-  if (op->type() != "complete")
-    os << " factor=" << op->factor();
-  os << " dim=" << op->dim();
-  os << "\n\n";
+  if (op->interface()) {
+
+    // Emit interface pragma.
+    indent();
+    os << "#pragma HLS interface";
+    os << " " << op->interface_mode();
+    os << " port=";
+    emitValue(op->getOperand());
+    if (op->interface_mode() == "m_axi") {
+      os << " depth=" << op->interface_depth();
+      os << " offset=slave\n";
+    } else
+      os << " storage_type=" << op->storage_type() << "\n";
+  } else {
+
+    // Emit bind_storage pragma.
+    indent();
+    os << "#pragma HLS bind_storage";
+    os << " variable=";
+    emitValue(op->getOperand());
+    os << " type=" << op->storage_type();
+    os << " impl=" << op->storage_impl() << "\n";
+  }
+
+  auto type = op->getOperand().getType().cast<ShapedType>();
+  if (op->partition() && type.hasStaticShape()) {
+
+    // Emit array_partition pragma(s).
+    for (unsigned dim = 0; dim < type.getRank(); ++dim) {
+      indent();
+      os << "#pragma HLS array_partition";
+      os << " variable=";
+      emitValue(op->getOperand());
+      auto partitionType =
+          op->partition_type()[dim].cast<StringAttr>().getValue();
+      os << " " << partitionType;
+      if (partitionType != "complete")
+        os << " factor="
+           << op->partition_factor()[dim].cast<IntegerAttr>().getUInt();
+      os << " dim=" << dim + 1 << "\n";
+    }
+  }
+  os << "\n";
 }
 
 /// C++ component emitters.
@@ -1185,14 +1220,19 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   os << "void " << func.getName() << "(\n";
   addIndent();
 
+  // This vector is to record all scalar ports.
+  SmallVector<Value, 8> portList;
+
   // Handle input arguments.
   unsigned argIdx = 0;
   for (auto &arg : func.getArguments()) {
     indent();
     if (arg.getType().isa<ShapedType>())
       emitArrayDecl(arg);
-    else
+    else {
       emitValue(arg);
+      portList.push_back(arg);
+    }
 
     if (argIdx++ != func.getNumArguments() - 1)
       os << ",\n";
@@ -1205,9 +1245,11 @@ void ModuleEmitter::emitFunction(FuncOp func) {
       indent();
       if (result.getType().isa<ShapedType>())
         emitArrayDecl(result);
-      else
+      else {
         // In Vivado HLS, pointer indicates the value is an output.
         emitValue(result, /*rank=*/0, /*isPtr=*/true);
+        portList.push_back(result);
+      }
     }
   } else
     emitError(func, "doesn't have a return operation as terminator.");
@@ -1217,9 +1259,27 @@ void ModuleEmitter::emitFunction(FuncOp func) {
 
   // Emit function body.
   addIndent();
+
+  // TODO: only top function should emit these pragmas.
+  if (true) {
+    indent();
+    os << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
+
+    // Interface pragma for array ports will be seperately handled since they
+    // are much more complicated.
+    for (auto &port : portList) {
+      indent();
+      os << "#pragma HLS interface s_axilite";
+      os << " port=";
+      emitValue(port);
+      os << " bundle=ctrl\n";
+    }
+    os << "\n";
+  }
+
   emitBlock(func.front());
   reduceIndent();
-  os << "}\n";
+  os << "}\n\n";
 }
 
 /// Top-level MLIR module emitter.

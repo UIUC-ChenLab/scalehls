@@ -17,6 +17,7 @@ void HLSCppDialect::initialize() {
       >();
 }
 
+#include "Dialect/HLSCpp/HLSCppEnums.cpp.inc"
 #include "Dialect/HLSCpp/HLSCppInterfaces.cpp.inc"
 
 #define GET_OP_CLASSES

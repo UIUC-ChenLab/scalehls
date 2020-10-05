@@ -6,48 +6,61 @@
 #define SCALEHLS_DIALECT_HLSCPP_ATTRIBUTES_TD
 
 //===----------------------------------------------------------------------===//
-// Customized Scalar and Array Attributes
+// Customized ui32 Attributes
 //===----------------------------------------------------------------------===//
 
 def PositiveUI32Attr : Confined<UI32Attr, [IntPositive]> {}
-def PositiveUI32ArrayAttr : TypedArrayAttrBase<PositiveUI32Attr, ""> {}
 
 def UI32ArrayAttr : TypedArrayAttrBase<UI32Attr, ""> {}
+def PositiveUI32ArrayAttr : TypedArrayAttrBase<PositiveUI32Attr, ""> {}
+
+//===----------------------------------------------------------------------===//
+// Pragma array_partition Attributes
+//===----------------------------------------------------------------------===//
+
+def PartitionTypeAttr : StrEnumAttr<"PartitionType", "", [
+  StrEnumAttrCase<"cyclic", 0>,
+  StrEnumAttrCase<"block", 1>,
+  StrEnumAttrCase<"complete", 2>
+]> {
+  let cppNamespace = "::mlir::scalehls::hlscpp";
+}
+
+def PartitionTypeArrayAttr : TypedArrayAttrBase<PartitionTypeAttr, ""> {}
 
 //===----------------------------------------------------------------------===//
 // Pragma bind_storage Attributes
 //===----------------------------------------------------------------------===//
 
-def LegalStorageType : AttrConstraint<Or<[
-  CPred<"$_self.cast<StringAttr>().getValue() == \"fifo\"">,
-  CPred<"$_self.cast<StringAttr>().getValue() == \"ram_1p\"">,
-  CPred<"$_self.cast<StringAttr>().getValue() == \"ram_1wnr\"">,
-  CPred<"$_self.cast<StringAttr>().getValue() == \"ram_2p\"">,
-  CPred<"$_self.cast<StringAttr>().getValue() == \"ram_s2p\"">,
-  CPred<"$_self.cast<StringAttr>().getValue() == \"ram_t2p\"">
-]>>;
+def StorageImplAttr : StrEnumAttr<"StorageImpl", "", [
+  StrEnumAttrCase<"bram", 0>,
+  StrEnumAttrCase<"lutram", 1>,
+  StrEnumAttrCase<"uram", 2>,
+  StrEnumAttrCase<"srl", 3>
+]> {
+  let cppNamespace = "::mlir::scalehls::hlscpp";
+}
 
-def StorageTypeAttr : Confined<StrAttr, [LegalStorageType]> {}
-
-def LegalStorageImpl : AttrConstraint<Or<[
-  CPred<"$_self.cast<StringAttr>().getValue() == \"bram\"">,
-  CPred<"$_self.cast<StringAttr>().getValue() == \"lutram\"">,
-  CPred<"$_self.cast<StringAttr>().getValue() == \"uram\"">,
-  CPred<"$_self.cast<StringAttr>().getValue() == \"srl\"">
-]>>;
-
-def StorageImplAttr : Confined<StrAttr, [LegalStorageImpl]> {}
+def StorageTypeAttr : StrEnumAttr<"StorageType", "", [
+  StrEnumAttrCase<"fifo", 0>,
+  StrEnumAttrCase<"ram_1p", 1>,
+  StrEnumAttrCase<"ram_1wnr", 2>,
+  StrEnumAttrCase<"ram_2p", 3>,
+  StrEnumAttrCase<"ram_s2p", 4>,
+  StrEnumAttrCase<"ram_t2p", 5>
+]> {
+  let cppNamespace = "::mlir::scalehls::hlscpp";
+}
 
 //===----------------------------------------------------------------------===//
-// Pragma array_partition Constraints
+// Pragma Interface Attributes (for array rather than scalar ports)
 //===----------------------------------------------------------------------===//
 
-def LegalPartitionType : AttrConstraint<Or<[
-  CPred<"$_self.cast<StringAttr>().getValue() == \"cyclic\"">,
-  CPred<"$_self.cast<StringAttr>().getValue() == \"block\"">,
-  CPred<"$_self.cast<StringAttr>().getValue() == \"complete\"">
-]>>;
-
-def PartitionTypeAttr : Confined<StrAttr, [LegalPartitionType]> {}
+def InterfaceModeAttr : StrEnumAttr<"InterfaceMode", "", [
+  StrEnumAttrCase<"bram", 0>,
+  StrEnumAttrCase<"m_axi", 1>
+]> {
+  let cppNamespace = "::mlir::scalehls::hlscpp";
+}
 
 #endif // SCALEHLS_DIALECT_HLSCPP_ATTRIBUTES_TD

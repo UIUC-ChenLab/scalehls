@@ -20,6 +20,8 @@ namespace hlscpp {
 } // namespace scalehls
 } // namespace mlir
 
+#include "Dialect/HLSCpp/HLSCppEnums.h.inc"
+
 #include "Dialect/HLSCpp/HLSCppDialect.h.inc"
 
 #define GET_OP_CLASSES

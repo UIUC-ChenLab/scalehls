@@ -20,9 +20,7 @@ scalehls-opt -convert-to-hlscpp test/EmitHLSCpp/test_*.mlir | scalehls-translate
 
 ## TODOs List
 ### HLSCpp Dialect
-1. Enhance array_pragma operation.
-2. Update attributes definition.
-3. TODOs in HLSCpp/PragmaOps.td.
+1. Verifiers for pragma operations.
 
 ### QoREstimation Pass
 1. Implement comprehensive partition-aware II analysis.

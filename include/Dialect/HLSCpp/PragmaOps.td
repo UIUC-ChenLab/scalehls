@@ -5,6 +5,38 @@
 #ifndef SCALEHLS_DIALECT_HLSCPP_PRAGMAOPS_TD
 #define SCALEHLS_DIALECT_HLSCPP_PRAGMAOPS_TD
 
+def ArrayPragmaOp : HLSCppOp<"array_pragma", [
+  PragmaOpInterface
+]> {
+  let summary = "Apply array pragmas";
+  let description = [{
+    This hlscpp.func_pragma operation represent pragmas for arrays, such as
+    array partition, interface, and bind storage pragma.
+  }];
+
+  let arguments = (ins
+    // Targeted array.
+    Type<IsShapedTypePred> : $variable,
+
+    // Interface-related attributes.
+    DefaultValuedAttr<BoolAttr, "false"> : $interface,
+    DefaultValuedAttr<InterfaceModeAttr, "m_axi"> : $interface_mode,
+    DefaultValuedAttr<PositiveUI32Attr, "1024"> : $interface_depth,
+
+    // BindStorage-related attributes.
+    DefaultValuedAttr<StorageTypeAttr, "ram_2p"> : $storage_type,
+    DefaultValuedAttr<StorageImplAttr, "bram"> : $storage_impl,
+
+    // ArrayPartition-related attributes.
+    DefaultValuedAttr<BoolAttr, "false"> : $partition,
+    DefaultValuedAttr<PartitionTypeArrayAttr, "{}"> : $partition_type,
+    DefaultValuedAttr<PositiveUI32ArrayAttr, "{}"> : $partition_factor
+  );
+
+  let assemblyFormat = [{`(` $variable `)` attr-dict `:` type($variable)}];
+  let extraClassDeclaration = [{}];
+}
+
 def LoopPragmaOp : HLSCppOp<"loop_pragma", [
   PragmaOpInterface,
   HasParent<"AffineForOp">
@@ -16,18 +48,15 @@ def LoopPragmaOp : HLSCppOp<"loop_pragma", [
   }];
 
   let arguments = (ins
-    // Pipeline pragma-related attributes.
-    Confined<UI32Attr, [IntPositive]> : $II,
-    BoolAttr : $enable_flush,
-    BoolAttr : $rewind,
-    BoolAttr : $off,
+    // Pipeline-related attributes.
+    DefaultValuedAttr<BoolAttr, "false"> : $pipeline,
+    DefaultValuedAttr<PositiveUI32Attr, "1"> : $pipeline_II,
 
-    // Unroll pragma-related attributes.
-    Confined<UI32Attr, [IntPositive]> : $factor,
-    BoolAttr : $region,
-    BoolAttr : $skip_exit_check
+    // Unroll-related attributes.
+    DefaultValuedAttr<PositiveUI32Attr, "1"> : $unroll_factor
   );
 
+  let assemblyFormat = [{attr-dict}];
   let extraClassDeclaration = [{}];
 }
 
@@ -42,33 +71,10 @@ def FuncPragmaOp : HLSCppOp<"func_pragma", [
   }];
 
   let arguments = (ins
-    // Dataflow pragma-related attributes.
-    BoolAttr : $dataflow
+    DefaultValuedAttr<BoolAttr, "false"> : $dataflow
   );
 
-  let extraClassDeclaration = [{}];
-}
-
-def ArrayPragmaOp : HLSCppOp<"array_pragma", [
-  PragmaOpInterface
-]> {
-  let summary = "Apply array pragmas";
-  let description = [{
-    This hlscpp.func_pragma operation represent pragmas for arrays, such as
-    array partition, interface, and bind storage pragma.
-  }];
-
-  let arguments = (ins 
-    Type<IsShapedTypePred> : $variable,
-    Confined<StrAttr, [LegalPartitionType]> : $type,
-    Confined<UI32Attr, [IntPositive]> : $factor,
-    Confined<UI32Attr, [IntNonNegative]> : $dim
-  );
-
-  // TODO: verifier for this op:
-  // (1) dim is not larger than variable's dim.
-  // (2) factor is not larger than variable's shape of the corresponding dim.
-
+  let assemblyFormat = [{attr-dict}];
   let extraClassDeclaration = [{}];
 }
 

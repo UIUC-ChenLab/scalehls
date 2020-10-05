@@ -31,9 +31,9 @@ bool HLSCppAnalyzer::visitOp(AffineForOp op) {
   // Pragma configurations.
   unsigned unrollFactor = 1;
   if (auto loopPragma = dyn_cast<LoopPragmaOp>(body.front().front())) {
-    procParam.set(op, ProcParamKind::EnablePipeline, !loopPragma.off());
-    procParam.set(op, ProcParamKind::UnrollFactor, loopPragma.factor());
-    unrollFactor = loopPragma.factor();
+    procParam.set(op, ProcParamKind::EnablePipeline, loopPragma.pipeline());
+    procParam.set(op, ProcParamKind::UnrollFactor, loopPragma.unroll_factor());
+    unrollFactor = loopPragma.unroll_factor();
   }
 
   // Loop statistics.
