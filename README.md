@@ -24,18 +24,16 @@ scalehls-opt -convert-to-hlscpp test/EmitHLSCpp/test_*.mlir | scalehls-translate
 
 ### QoREstimation Pass
 1. Implement comprehensive partition-aware II analysis.
-2. Consider the case of flattened inner loop under a pipelined region.
-3. Support read latency from profiling data.
-4. Support operation chainning.
+2. Support read latency from profiling data.
+3. Support operation chainning.
 
 ### PragmaDSE Pass
 
 ### EmitHLSCpp
-1. Emitting array_pragma operation.
-2. Support AffineFor iter_args feature.
-3. TODOs in EmitHLSCpp.cpp.
-4. Support memref/tensor cast/view/subview operations.
-5. Support atomic/complex/extention -related operations.
+1. Support AffineFor iter_args feature.
+2. TODOs in EmitHLSCpp.cpp.
+3. Support memref/tensor cast/view/subview operations.
+4. Support atomic/complex/extention -related operations.
 
 ## References
 1. [MLIR Documents](https://mlir.llvm.org)

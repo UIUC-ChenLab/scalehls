@@ -5,6 +5,7 @@
 #ifndef SCALEHLS_ANALYSIS_QORESTIMATION_H
 #define SCALEHLS_ANALYSIS_QORESTIMATION_H
 
+#include "INIReader.h"
 #include "Visitor.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Pass/Pass.h"
@@ -74,14 +75,14 @@ public:
 };
 
 //===----------------------------------------------------------------------===//
-// QoREstimator Class Declaration
+// HLSCppEstimator Class Declaration
 //===----------------------------------------------------------------------===//
 
-class QoREstimator : public HLSCppVisitorBase<QoREstimator, bool>,
-                     public HLSCppToolBase {
+class HLSCppEstimator : public HLSCppVisitorBase<HLSCppEstimator, bool>,
+                        public HLSCppToolBase {
 public:
-  explicit QoREstimator(OpBuilder &builder, std::string targetSpecPath,
-                        std::string opLatencyPath);
+  explicit HLSCppEstimator(OpBuilder &builder, std::string targetSpecPath,
+                           std::string opLatencyPath);
 
   // For storing the scheduled time stamp of operations;
   using ScheduleMap = llvm::SmallDenseMap<Operation *, unsigned, 16>;

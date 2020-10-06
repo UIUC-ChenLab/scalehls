@@ -1,5 +1,5 @@
 //===-------------------------------------------------------*- tablegen -*-===//
-//  Deprecated
+//  Deprecated. Will be removed somehow in someday.
 //===----------------------------------------------------------------------===//
 
 #ifndef SCALEHLS_DIALECT_HLSCPP_PRAGMAOPS_TD

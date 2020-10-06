@@ -5,8 +5,6 @@
 #include "Analysis/QoREstimation.h"
 #include "Analysis/Passes.h"
 #include "Dialect/HLSCpp/HLSCpp.h"
-#include "INIReader.h"
-#include "Visitor.h"
 
 using namespace std;
 using namespace mlir;
@@ -90,12 +88,12 @@ void HLSCppAnalyzer::analyzeModule(ModuleOp module) {
 }
 
 //===----------------------------------------------------------------------===//
-// QoREstimator Class Definition
+// HLSCppEstimator Class Definition
 //===----------------------------------------------------------------------===//
 
 /// Estimator constructor.
-QoREstimator::QoREstimator(OpBuilder &builder, string targetSpecPath,
-                           string opLatencyPath)
+HLSCppEstimator::HLSCppEstimator(OpBuilder &builder, string targetSpecPath,
+                                 string opLatencyPath)
     : HLSCppToolBase(builder) {
 
   inPipeline = false;
@@ -116,8 +114,9 @@ QoREstimator::QoREstimator(OpBuilder &builder, string targetSpecPath,
   llvm::outs() << latency << "\n";
 }
 
-void QoREstimator::alignBlockSchedule(Block &block, ScheduleMap &opScheduleMap,
-                                      unsigned opSchedule) {
+void HLSCppEstimator::alignBlockSchedule(Block &block,
+                                         ScheduleMap &opScheduleMap,
+                                         unsigned opSchedule) {
   for (auto &op : block) {
     if (auto child = dyn_cast<mlir::AffineForOp>(op))
       alignBlockSchedule(child.getRegion().front(), opScheduleMap, opSchedule);
@@ -125,8 +124,8 @@ void QoREstimator::alignBlockSchedule(Block &block, ScheduleMap &opScheduleMap,
   }
 }
 
-unsigned QoREstimator::getBlockSchedule(Block &block,
-                                        ScheduleMap &opScheduleMap) {
+unsigned HLSCppEstimator::getBlockSchedule(Block &block,
+                                           ScheduleMap &opScheduleMap) {
   unsigned blockSchedule = 0;
 
   for (auto &op : block) {
@@ -161,10 +160,10 @@ unsigned QoREstimator::getBlockSchedule(Block &block,
   return blockSchedule;
 }
 
-unsigned QoREstimator::getBlockII(Block &block, ScheduleMap &opScheduleMap,
-                                  MemAccessList &memLoadList,
-                                  MemAccessList &memStoreList,
-                                  unsigned initInterval) {
+unsigned HLSCppEstimator::getBlockII(Block &block, ScheduleMap &opScheduleMap,
+                                     MemAccessList &memLoadList,
+                                     MemAccessList &memStoreList,
+                                     unsigned initInterval) {
   for (auto &op : block) {
 
     // Handle load operations.
@@ -209,7 +208,7 @@ unsigned QoREstimator::getBlockII(Block &block, ScheduleMap &opScheduleMap,
   return initInterval;
 }
 
-bool QoREstimator::visitOp(AffineForOp op) {
+bool HLSCppEstimator::visitOp(AffineForOp op) {
   auto &body = op.getLoopBody();
   if (body.getBlocks().size() != 1)
     op.emitError("has zero or more than one basic blocks.");
@@ -298,9 +297,9 @@ bool QoREstimator::visitOp(AffineForOp op) {
   return true;
 }
 
-bool QoREstimator::visitOp(AffineIfOp op) { return true; }
+bool HLSCppEstimator::visitOp(AffineIfOp op) { return true; }
 
-void QoREstimator::estimateBlock(Block &block) {
+void HLSCppEstimator::estimateBlock(Block &block) {
   for (auto &op : block) {
     if (dispatchVisitor(&op))
       continue;
@@ -308,7 +307,7 @@ void QoREstimator::estimateBlock(Block &block) {
   }
 }
 
-void QoREstimator::estimateFunc(FuncOp func) {
+void HLSCppEstimator::estimateFunc(FuncOp func) {
   if (func.getBlocks().size() != 1)
     func.emitError("has zero or more than one basic blocks.");
 
@@ -319,7 +318,7 @@ void QoREstimator::estimateFunc(FuncOp func) {
   setAttrValue(func, "latency", latency);
 }
 
-void QoREstimator::estimateModule(ModuleOp module) {
+void HLSCppEstimator::estimateModule(ModuleOp module) {
   for (auto &op : module) {
     if (auto func = dyn_cast<FuncOp>(op)) {
       estimateFunc(func);
@@ -342,7 +341,7 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     analyzer.analyzeModule(getOperation());
 
     // Estimate performance and resource utilization.
-    QoREstimator estimator(builder, targetSpec, opLatency);
+    HLSCppEstimator estimator(builder, targetSpec, opLatency);
     estimator.estimateModule(getOperation());
   }
 };

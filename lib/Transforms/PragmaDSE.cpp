@@ -4,7 +4,6 @@
 
 #include "Analysis/QoREstimation.h"
 #include "Dialect/HLSCpp/HLSCpp.h"
-#include "INIReader.h"
 #include "Transforms/Passes.h"
 
 using namespace std;
