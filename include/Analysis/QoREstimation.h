@@ -5,7 +5,6 @@
 #ifndef SCALEHLS_ANALYSIS_QORESTIMATION_H
 #define SCALEHLS_ANALYSIS_QORESTIMATION_H
 
-#include "Analysis/StaticParam.h"
 #include "Visitor.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Pass/Pass.h"
@@ -15,18 +14,53 @@ namespace mlir {
 namespace scalehls {
 
 //===----------------------------------------------------------------------===//
+// HLSCppToolBase Class Declaration
+//===----------------------------------------------------------------------===//
+
+class HLSCppToolBase {
+public:
+  explicit HLSCppToolBase(OpBuilder &builder) : builder(builder) {}
+
+  /// Get value methods.
+  unsigned getUIntAttrValue(Operation *op, StringRef name) {
+    return op->getAttrOfType<IntegerAttr>(name).getUInt();
+  }
+
+  bool getBoolAttrValue(Operation *op, StringRef name) {
+    return op->getAttrOfType<BoolAttr>(name).getValue();
+  }
+
+  StringRef getStrAttrValue(Operation *op, StringRef name) {
+    return op->getAttrOfType<StringAttr>(name).getValue();
+  }
+
+  /// Set value methods.
+  void setAttrValue(Operation *op, StringRef name, unsigned value) {
+    op->setAttr(name, builder.getUI32IntegerAttr(value));
+  }
+
+  void setAttrValue(Operation *op, StringRef name, bool value) {
+    op->setAttr(name, builder.getBoolAttr(value));
+  }
+
+  void setAttrValue(Operation *op, StringRef name, StringRef value) {
+    op->setAttr(name, builder.getStringAttr(value));
+  }
+
+private:
+  OpBuilder &builder;
+};
+
+//===----------------------------------------------------------------------===//
 // HLSCppAnalyzer Class Declaration
 //===----------------------------------------------------------------------===//
 
-class HLSCppAnalyzer : public HLSCppVisitorBase<HLSCppAnalyzer, bool> {
+class HLSCppAnalyzer : public HLSCppVisitorBase<HLSCppAnalyzer, bool>,
+                       public HLSCppToolBase {
 public:
-  explicit HLSCppAnalyzer(ProcParam &procParam, MemParam &memParam)
-      : procParam(procParam), memParam(memParam) {}
+  explicit HLSCppAnalyzer(OpBuilder &builder) : HLSCppToolBase(builder) {}
 
   bool inPipeline;
-
-  ProcParam &procParam;
-  MemParam &memParam;
 
   bool visitUnhandledOp(Operation *op) { return true; }
 
@@ -34,9 +68,8 @@ public:
   bool visitOp(AffineForOp op);
   bool visitOp(AffineIfOp op);
 
-  void analyzeOperation(Operation *op);
-  void analyzeFunc(FuncOp func);
   void analyzeBlock(Block &block);
+  void analyzeFunc(FuncOp func);
   void analyzeModule(ModuleOp module);
 };
 
@@ -44,10 +77,11 @@ public:
 // QoREstimator Class Declaration
 //===----------------------------------------------------------------------===//
 
-class QoREstimator : public HLSCppVisitorBase<QoREstimator, bool> {
+class QoREstimator : public HLSCppVisitorBase<QoREstimator, bool>,
+                     public HLSCppToolBase {
 public:
-  explicit QoREstimator(ProcParam &procParam, MemParam &memParam,
-                        std::string targetSpecPath, std::string opLatencyPath);
+  explicit QoREstimator(OpBuilder &builder, std::string targetSpecPath,
+                        std::string opLatencyPath);
 
   // For storing the scheduled time stamp of operations;
   using ScheduleMap = llvm::SmallDenseMap<Operation *, unsigned, 16>;
@@ -64,9 +98,6 @@ public:
   // This flag indicates that currently the estimator is in a pipelined region,
   // which will impact the estimation strategy.
   bool inPipeline;
-
-  ProcParam &procParam;
-  MemParam &memParam;
 
   bool visitUnhandledOp(Operation *op) { return true; }
 

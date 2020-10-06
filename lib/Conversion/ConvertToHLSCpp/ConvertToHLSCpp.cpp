@@ -23,7 +23,7 @@ static void convertBlock(Block &block) {
   for (auto &op : block) {
     if (isa<ArrayOp>(op))
       continue;
-    auto b = OpBuilder(&op);
+    auto builder = OpBuilder(&op);
 
     // ArrayOp will be inserted after each ShapedType value from declaration
     // or function signature.
@@ -41,19 +41,19 @@ static void convertBlock(Block &block) {
 
         if (insertArrayOp) {
           // Insert array operation and set attributes.
-          b.setInsertionPointAfterValue(operand);
+          builder.setInsertionPointAfterValue(operand);
           auto arrayOp =
-              b.create<ArrayOp>(op.getLoc(), operand.getType(), operand);
+              builder.create<ArrayOp>(op.getLoc(), operand.getType(), operand);
           operand.replaceAllUsesExcept(arrayOp.getResult(),
                                        SmallPtrSet<Operation *, 1>{arrayOp});
 
           // Set array pragma attributes, default array instance is ram_1p
           // bram. Other attributes are not set here since they requires more
           // analysis to be determined.
-          arrayOp.setAttr("interface", b.getBoolAttr(false));
-          arrayOp.setAttr("storage_type", b.getStringAttr("ram_1p"));
-          arrayOp.setAttr("storage_impl", b.getStringAttr("bram"));
-          arrayOp.setAttr("partition", b.getBoolAttr(false));
+          arrayOp.setAttr("interface", builder.getBoolAttr(false));
+          arrayOp.setAttr("storage_type", builder.getStringAttr("ram_1p"));
+          arrayOp.setAttr("storage_impl", builder.getStringAttr("bram"));
+          arrayOp.setAttr("partition", builder.getBoolAttr(false));
         }
       }
     }
@@ -63,9 +63,9 @@ static void convertBlock(Block &block) {
         forOp.emitError("has zero or more than one basic blocks");
 
       // Set loop pragma attributes.
-      forOp.setAttr("pipeline", b.getBoolAttr(false));
-      forOp.setAttr("pipeline_II", b.getUI32IntegerAttr(1));
-      forOp.setAttr("unroll_factor", b.getUI32IntegerAttr(1));
+      forOp.setAttr("pipeline", builder.getBoolAttr(false));
+      forOp.setAttr("pipeline_II", builder.getUI32IntegerAttr(1));
+      forOp.setAttr("unroll_factor", builder.getUI32IntegerAttr(1));
 
       convertBlock(forOp.getLoopBody().front());
     }

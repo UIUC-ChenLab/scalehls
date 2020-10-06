@@ -26,85 +26,60 @@ bool HLSCppAnalyzer::visitOp(AffineForOp op) {
   if (body.getBlocks().size() != 1)
     op.emitError("has zero or more than one basic blocks.");
 
-  if (procParam.Params[op].empty())
-    procParam.init(op);
-
   // Recursively analyze all childs.
   analyzeBlock(body.front());
 
-  // Pragma configurations.
-  unsigned unrollFactor = 1;
-  if (auto loopPragma = dyn_cast<LoopPragmaOp>(body.front().front())) {
-    procParam.set(op, ProcParamKind::EnablePipeline, loopPragma.pipeline());
-    procParam.set(op, ProcParamKind::UnrollFactor, loopPragma.unroll_factor());
-    unrollFactor = loopPragma.unroll_factor();
-  }
-
-  // Loop statistics.
-  if (!op.getUpperBoundMap().isSingleConstant() ||
-      !op.getLowerBoundMap().isSingleConstant())
+  // Set an attribute indicating iteration number .
+  if (!op.hasConstantLowerBound() || !op.hasConstantUpperBound())
     op.emitError("has variable upper or lower bound.");
 
-  unsigned upperBound = op.getUpperBoundMap().getSingleConstantResult();
-  unsigned lowerBound = op.getLowerBoundMap().getSingleConstantResult();
-  unsigned step = op.getStep();
+  unsigned iterNumber =
+      (op.getConstantUpperBound() - op.getConstantLowerBound()) /
+      getUIntAttrValue(op, "unroll_factor") / op.getStep();
 
-  procParam.set(op, ProcParamKind::UpperBound, upperBound);
-  procParam.set(op, ProcParamKind::LowerBound, lowerBound);
-  procParam.set(op, ProcParamKind::IterNumber,
-                (upperBound - lowerBound) / step / unrollFactor);
+  setAttrValue(op, "iter_number", iterNumber);
 
+  // Set an attribute indicating this loop is perfect or not.
   unsigned opNum = 0;
   unsigned loopNum = 0;
-  bool isPerfect = false;
-  for (auto &bodyOp : op.getRegion().front()) {
-    if (!isa<LoopPragmaOp>(bodyOp) && !isa<AffineYieldOp>(bodyOp)) {
+  bool childPerfect = false;
+  for (auto &bodyOp : body.front()) {
+    if (!isa<AffineYieldOp>(bodyOp))
       opNum += 1;
-      if (auto child = dyn_cast<AffineForOp>(bodyOp)) {
-        loopNum += 1;
-        isPerfect = procParam.get(child, ProcParamKind::IsPerfect);
-      }
+
+    if (auto child = dyn_cast<AffineForOp>(bodyOp)) {
+      loopNum += 1;
+      childPerfect = getBoolAttrValue(child, "perfect");
     }
   }
 
-  // Perfect nested loop.
-  if (opNum == 1 && loopNum == 1 && isPerfect)
-    procParam.set(op, ProcParamKind::IsPerfect, 1);
-  // The inner loop.
+  if (opNum == 1 && loopNum == 1 && childPerfect)
+    setAttrValue(op, "perfect", true);
   else if (loopNum == 0)
-    procParam.set(op, ProcParamKind::IsPerfect, 1);
+    setAttrValue(op, "perfect", true);
   else
-    procParam.set(op, ProcParamKind::IsPerfect, 0);
+    setAttrValue(op, "perfect", false);
 
   return true;
 }
 
 bool HLSCppAnalyzer::visitOp(AffineIfOp op) { return true; }
 
-/// This method will update all parameters except IterLatency, Latency, LUT,
-/// BRAM, and DSP through static analysis.
-void HLSCppAnalyzer::analyzeOperation(Operation *op) {
-  if (dispatchVisitor(op))
-    return;
-
-  op->emitError("can't be correctly analyzed.");
+void HLSCppAnalyzer::analyzeBlock(Block &block) {
+  for (auto &op : block) {
+    if (dispatchVisitor(&op))
+      continue;
+    op.emitError("can't be correctly analyzed.");
+  }
 }
 
 void HLSCppAnalyzer::analyzeFunc(FuncOp func) {
   if (func.getBlocks().size() != 1)
     func.emitError("has zero or more than one basic blocks.");
 
-  procParam.init(func);
-
   analyzeBlock(func.front());
 }
 
-void HLSCppAnalyzer::analyzeBlock(Block &block) {
-  for (auto &op : block)
-    analyzeOperation(&op);
-}
-
-/// This method is a wrapper for recursively calling operation analyzer.
 void HLSCppAnalyzer::analyzeModule(ModuleOp module) {
   for (auto &op : module) {
     if (auto func = dyn_cast<FuncOp>(op)) {
@@ -119,9 +94,9 @@ void HLSCppAnalyzer::analyzeModule(ModuleOp module) {
 //===----------------------------------------------------------------------===//
 
 /// Estimator constructor.
-QoREstimator::QoREstimator(ProcParam &procParam, MemParam &memParam,
-                           string targetSpecPath, string opLatencyPath)
-    : procParam(procParam), memParam(memParam) {
+QoREstimator::QoREstimator(OpBuilder &builder, string targetSpecPath,
+                           string opLatencyPath)
+    : HLSCppToolBase(builder) {
 
   inPipeline = false;
 
@@ -166,7 +141,7 @@ unsigned QoREstimator::getBlockSchedule(Block &block,
     // Add latency of the current operation.
     unsigned childSchedule = 0;
     if (auto child = dyn_cast<mlir::AffineForOp>(op)) {
-      opSchedule += procParam.get(child, ProcParamKind::Latency);
+      opSchedule += getUIntAttrValue(child, "latency");
       if (inPipeline)
         childSchedule =
             getBlockSchedule(child.getRegion().front(), opScheduleMap);
@@ -239,16 +214,16 @@ bool QoREstimator::visitOp(AffineForOp op) {
   if (body.getBlocks().size() != 1)
     op.emitError("has zero or more than one basic blocks.");
 
-  if (procParam.get(op, ProcParamKind::EnablePipeline)) {
+  if (getBoolAttrValue(op, "pipeline")) {
     inPipeline = true;
 
     ScheduleMap opScheduleMap;
     auto iterLatency = getBlockSchedule(body.front(), opScheduleMap);
-    procParam.set(op, ProcParamKind::IterLatency, iterLatency);
+    getUIntAttrValue(op, "iter_latency");
 
     // For now we make a simple assumption that II is equal to 1.
-    auto iterNumber = procParam.get(op, ProcParamKind::IterNumber);
-    procParam.set(op, ProcParamKind::PipeIterNumber, iterNumber);
+    auto iterNumber = getUIntAttrValue(op, "iter_number");
+    setAttrValue(op, "pipeline_iter", iterNumber);
 
     // Calculate initial interval.
     MemAccessList memLoadList;
@@ -266,10 +241,8 @@ bool QoREstimator::visitOp(AffineForOp op) {
     for (auto &op : body.front()) {
     }
 
-    procParam.set(op, ProcParamKind::InitInterval, initInterval);
-
-    procParam.set(op, ProcParamKind::Latency,
-                  iterLatency + initInterval * (iterNumber - 1));
+    setAttrValue(op, "pipeline_II", initInterval);
+    setAttrValue(op, "latency", iterLatency + initInterval * (iterNumber - 1));
   }
 
   // If the loop is not pipelined, the estimation is much different and requires
@@ -283,21 +256,20 @@ bool QoREstimator::visitOp(AffineForOp op) {
     // This simply means the current loop can be merged into the child loop
     // pipeline. This will increase the total IterNumber without changing the
     // IterLatency.
-    if (inPipeline && procParam.get(op, ProcParamKind::IsPerfect)) {
+    if (inPipeline && getBoolAttrValue(op, "perfect")) {
       if (auto child = dyn_cast<AffineForOp>(
               std::next(op.getLoopBody().front().begin()))) {
-        auto initInterval = procParam.get(child, ProcParamKind::InitInterval);
-        auto iterLatency = procParam.get(child, ProcParamKind::IterLatency);
-        auto pipeIterNumber =
-            procParam.get(child, ProcParamKind::PipeIterNumber) *
-            procParam.get(op, ProcParamKind::IterNumber);
+        auto initInterval = getUIntAttrValue(child, "pipeline_II");
+        auto iterLatency = getUIntAttrValue(child, "iter_latency");
+        auto pipeIterNumber = getUIntAttrValue(child, "pipeline_iter") *
+                              getUIntAttrValue(op, "iter_number");
 
-        procParam.set(op, ProcParamKind::InitInterval, initInterval);
-        procParam.set(op, ProcParamKind::IterLatency, iterLatency);
-        procParam.set(op, ProcParamKind::PipeIterNumber, pipeIterNumber);
+        setAttrValue(op, "pipeline_II", initInterval);
+        setAttrValue(op, "iter_latency", iterLatency);
+        setAttrValue(op, "pipeline_iter", pipeIterNumber);
 
-        procParam.set(op, ProcParamKind::Latency,
-                      iterLatency + initInterval * (pipeIterNumber - 1));
+        setAttrValue(op, "latency",
+                     iterLatency + initInterval * (pipeIterNumber - 1));
       } else {
         inPipeline = false;
         op.emitError("is not a perfect loop.");
@@ -310,17 +282,17 @@ bool QoREstimator::visitOp(AffineForOp op) {
 
       ScheduleMap opScheduleMap;
       auto iterLatency = getBlockSchedule(body.front(), opScheduleMap);
-      procParam.set(op, ProcParamKind::IterLatency, iterLatency);
+      setAttrValue(op, "iter_latency", iterLatency);
 
       // For now we follow the COMBA approach for unrooled loops.
       unsigned latency = iterLatency;
-      if (procParam.get(op, ProcParamKind::IterNumber) != 1)
-        latency *= procParam.get(op, ProcParamKind::IterNumber) *
-                   procParam.get(op, ProcParamKind::UnrollFactor);
-      procParam.set(op, ProcParamKind::Latency, latency);
+      if (getUIntAttrValue(op, "iter_number") != 1)
+        latency *= getUIntAttrValue(op, "iter_number") *
+                   getUIntAttrValue(op, "unroll_factor");
+      setAttrValue(op, "latency", latency);
 
       // TODO: Calculate initial interval.
-      procParam.set(op, ProcParamKind::InitInterval, 1);
+      setAttrValue(op, "iter_latency", (unsigned)1);
     }
   }
   return true;
@@ -328,11 +300,12 @@ bool QoREstimator::visitOp(AffineForOp op) {
 
 bool QoREstimator::visitOp(AffineIfOp op) { return true; }
 
-void QoREstimator::estimateOperation(Operation *op) {
-  if (dispatchVisitor(op))
-    return;
-
-  op->emitError("can't be correctly estimated.");
+void QoREstimator::estimateBlock(Block &block) {
+  for (auto &op : block) {
+    if (dispatchVisitor(&op))
+      continue;
+    op.emitError("can't be correctly analyzed.");
+  }
 }
 
 void QoREstimator::estimateFunc(FuncOp func) {
@@ -343,12 +316,7 @@ void QoREstimator::estimateFunc(FuncOp func) {
 
   ScheduleMap opScheduleMap;
   auto latency = getBlockSchedule(func.front(), opScheduleMap);
-  procParam.set(func, ProcParamKind::Latency, latency);
-}
-
-void QoREstimator::estimateBlock(Block &block) {
-  for (auto &op : block)
-    estimateOperation(&op);
+  setAttrValue(func, "latency", latency);
 }
 
 void QoREstimator::estimateModule(ModuleOp module) {
@@ -367,37 +335,15 @@ void QoREstimator::estimateModule(ModuleOp module) {
 namespace {
 struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
   void runOnOperation() override {
-    ProcParam procParam;
-    MemParam memParam;
+    auto builder = OpBuilder(getOperation());
 
     // Extract all static parameters and current pragma configurations.
-    HLSCppAnalyzer analyzer(procParam, memParam);
+    HLSCppAnalyzer analyzer(builder);
     analyzer.analyzeModule(getOperation());
 
     // Estimate performance and resource utilization.
-    QoREstimator estimator(analyzer.procParam, analyzer.memParam, targetSpec,
-                           opLatency);
+    QoREstimator estimator(builder, targetSpec, opLatency);
     estimator.estimateModule(getOperation());
-
-    for (auto item : procParam.Params) {
-      llvm::outs() << "EnablePipeline:"
-                   << item.second[(unsigned)ProcParamKind::EnablePipeline]
-                   << "\nUnrollFactor:"
-                   << item.second[(unsigned)ProcParamKind::UnrollFactor]
-                   << "\nIterNumber:"
-                   << item.second[(unsigned)ProcParamKind::IterNumber]
-                   << "\nIsPerfect:"
-                   << item.second[(unsigned)ProcParamKind::IsPerfect]
-                   << "\nInitInterval:"
-                   << item.second[(unsigned)ProcParamKind::InitInterval]
-                   << "\nIterLatency:"
-                   << item.second[(unsigned)ProcParamKind::IterLatency]
-                   << "\nPipeIterNumber:"
-                   << item.second[(unsigned)ProcParamKind::PipeIterNumber]
-                   << "\nLatency:"
-                   << item.second[(unsigned)ProcParamKind::Latency] << "\n";
-      llvm::outs() << *item.first << "\n";
-    }
   }
 };
 } // namespace
