@@ -47,7 +47,9 @@ public:
             AddCFOp, SubCFOp, ImOp, ReOp, CreateComplexOp,
             // Special operations.
             SelectOp, ConstantOp, CopySignOp, TruncateIOp, ZeroExtendIOp,
-            SignExtendIOp, IndexCastOp, CallOp, ReturnOp, AssignOp, EndOp,
+            SignExtendIOp, IndexCastOp, CallOp, ReturnOp,
+            // Structure operations.
+            AssignOp, ArrayOp, EndOp,
             // Pragma operations.
             LoopPragmaOp, FuncPragmaOp, ArrayPragmaOp>(
             [&](auto opNode) -> ResultType {
@@ -171,7 +173,10 @@ public:
   HANDLE(IndexCastOp);
   HANDLE(CallOp);
   HANDLE(ReturnOp);
+
+  // Structure operations.
   HANDLE(AssignOp);
+  HANDLE(ArrayOp);
   HANDLE(EndOp);
 
   // Pragma operations.

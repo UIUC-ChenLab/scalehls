@@ -49,9 +49,17 @@ public:
   explicit QoREstimator(ProcParam &procParam, MemParam &memParam,
                         std::string targetSpecPath, std::string opLatencyPath);
 
-  using ScheduleMap = llvm::SmallDenseMap<Operation *, unsigned, 8>;
+  // For storing the scheduled time stamp of operations;
+  using ScheduleMap = llvm::SmallDenseMap<Operation *, unsigned, 16>;
+
+  // For storing each memory access operations indexed by its targed memory
+  // value symbol.
   using MemAccess = std::pair<Value, Operation *>;
-  using MemAccessList = SmallVector<MemAccess, 8>;
+  using MemAccessList = SmallVector<MemAccess, 16>;
+
+  // For storing required memory ports for each partition of each array.
+  using MemPort = SmallVector<unsigned, 16>;
+  using MemPortMap = llvm::SmallDenseMap<Value, MemPort, 16>;
 
   // This flag indicates that currently the estimator is in a pipelined region,
   // which will impact the estimation strategy.

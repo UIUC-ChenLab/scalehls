@@ -18,6 +18,36 @@ def AssignOp : HLSCppOp<"assign", [SameOperandsAndResultType]> {
   let results = (outs AnyType : $output);
 }
 
+def ArrayOp : HLSCppOp<"array", [SameOperandsAndResultType]> {
+  let summary = "A C++ array instance";
+  let description = [{
+    This hlscpp.array operation represent an array in C++. All shaped type value
+    (e.g., memref, tensor, and vector) should be passed through this operation
+    after declared by an allocation (e.g., Alloc, etc.) operation or in the
+    signature of a function. This will help the compiler to easily manage the
+    attributs and statistics of arrays.
+  }];
+
+  let arguments = (ins Type<IsShapedTypePred> : $input,
+
+    // Interface-related attributes.
+    OptionalAttr<BoolAttr> : $interface,
+    OptionalAttr<InterfaceModeAttr> : $interface_mode,
+    OptionalAttr<PositiveUI32Attr> : $interface_depth,
+
+    // BindStorage-related attributes.
+    OptionalAttr<StorageTypeAttr> : $storage_type,
+    OptionalAttr<StorageImplAttr> : $storage_impl,
+
+    // ArrayPartition-related attributes.
+    OptionalAttr<BoolAttr> : $partition,
+    OptionalAttr<PartitionTypeArrayAttr> : $partition_type,
+    OptionalAttr<PositiveUI32ArrayAttr> : $partition_factor
+  );
+
+  let results = (outs Type<IsShapedTypePred> : $output);
+}
+
 def EndOp : HLSCppOp<"end", [Terminator]> {
   let summary = "Mark the end of a HLSCpp region";
   let description = [{

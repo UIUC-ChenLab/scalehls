@@ -14,6 +14,10 @@ using namespace scalehls;
 using namespace hlscpp;
 
 //===----------------------------------------------------------------------===//
+// Utils
+//===----------------------------------------------------------------------===//
+
+//===----------------------------------------------------------------------===//
 // HLSCppAnalyzer Class Definition
 //===----------------------------------------------------------------------===//
 
@@ -252,6 +256,16 @@ bool QoREstimator::visitOp(AffineForOp op) {
     unsigned initInterval = 1;
     initInterval = getBlockII(body.front(), opScheduleMap, memLoadList,
                               memStoreList, initInterval);
+
+    // Calculate initial interval caused by limited memory ports. For now, we
+    // just consider the memory access inside of the pipeline region, aks the
+    // extra memory ports caused by unroll optimization out of the pipeline
+    // region are not calculated.
+    MemPortMap memLoadPortMap;
+    MemPortMap memStorePortMap;
+    for (auto &op : body.front()) {
+    }
+
     procParam.set(op, ProcParamKind::InitInterval, initInterval);
 
     procParam.set(op, ProcParamKind::Latency,

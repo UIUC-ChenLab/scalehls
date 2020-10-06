@@ -1,13 +1,11 @@
 //===-------------------------------------------------------*- tablegen -*-===//
-//
+//  Deprecated
 //===----------------------------------------------------------------------===//
 
 #ifndef SCALEHLS_DIALECT_HLSCPP_PRAGMAOPS_TD
 #define SCALEHLS_DIALECT_HLSCPP_PRAGMAOPS_TD
 
-def ArrayPragmaOp : HLSCppOp<"array_pragma", [
-  PragmaOpInterface
-]> {
+def ArrayPragmaOp : HLSCppOp<"array_pragma", [PragmaOpInterface]> {
   let summary = "Apply array pragmas";
   let description = [{
     This hlscpp.func_pragma operation represent pragmas for arrays, such as

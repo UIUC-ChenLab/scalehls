@@ -175,7 +175,10 @@ public:
   void emitConstant(ConstantOp *op);
   void emitIndexCast(IndexCastOp *op);
   void emitCall(CallOp *op);
+
+  /// Structure operations emitters.
   void emitAssign(AssignOp *op);
+  void emitArray(ArrayOp *op);
 
   /// Pragma operation emitters.
   void emitLoopPragma(LoopPragmaOp *op);
@@ -401,8 +404,6 @@ public:
   bool visitOp(IndexCastOp op) { return emitter.emitIndexCast(&op), true; }
   bool visitOp(CallOp op) { return emitter.emitCall(&op), true; }
   bool visitOp(ReturnOp op) { return true; }
-  bool visitOp(AssignOp op) { return emitter.emitAssign(&op), true; }
-  bool visitOp(EndOp op) { return true; }
 
 private:
   ModuleEmitter &emitter;
@@ -465,6 +466,11 @@ public:
   PragmaVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
 
   using HLSCppVisitorBase::visitOp;
+
+  /// Structure operations.
+  bool visitOp(AssignOp op) { return emitter.emitAssign(&op), true; }
+  bool visitOp(ArrayOp op) { return emitter.emitArray(&op), true; }
+  bool visitOp(EndOp op) { return true; }
 
   /// Pragma operations.
   bool visitOp(LoopPragmaOp op) { return emitter.emitLoopPragma(&op), true; }
@@ -1013,6 +1019,7 @@ void ModuleEmitter::emitCall(CallOp *op) {
   // TODO
 }
 
+/// Structure operation emitters.
 void ModuleEmitter::emitAssign(AssignOp *op) {
   unsigned rank = emitNestedLoopHead(op->getResult());
   indent();
@@ -1023,8 +1030,9 @@ void ModuleEmitter::emitAssign(AssignOp *op) {
   emitNestedLoopTail(rank);
 }
 
-/// Pragma operation emitters.
+void ModuleEmitter::emitArray(ArrayOp *op) {}
 
+/// Pragma operation emitters.
 void ModuleEmitter::emitLoopPragma(LoopPragmaOp *op) {
   indent();
   os << "#pragma HLS unroll";
