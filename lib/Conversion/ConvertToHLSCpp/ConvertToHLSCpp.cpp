@@ -32,7 +32,8 @@ static void convertBlock(Block &block) {
         bool insertArrayOp = false;
         if (operand.getKind() == Value::Kind::BlockArgument)
           insertArrayOp = true;
-        else if (!isa<ArrayOp>(operand.getDefiningOp())) {
+        else if (!isa<ArrayOp>(operand.getDefiningOp()) &&
+                 !isa<AssignOp>(operand.getDefiningOp())) {
           insertArrayOp = true;
           if (!arrayType.hasStaticShape())
             operand.getDefiningOp()->emitError(
@@ -51,8 +52,7 @@ static void convertBlock(Block &block) {
           // bram. Other attributes are not set here since they requires more
           // analysis to be determined.
           arrayOp.setAttr("interface", builder.getBoolAttr(false));
-          arrayOp.setAttr("storage_type", builder.getStringAttr("ram_1p"));
-          arrayOp.setAttr("storage_impl", builder.getStringAttr("bram"));
+          arrayOp.setAttr("storage", builder.getBoolAttr(false));
           arrayOp.setAttr("partition", builder.getBoolAttr(false));
         }
       }
@@ -64,8 +64,8 @@ static void convertBlock(Block &block) {
 
       // Set loop pragma attributes.
       forOp.setAttr("pipeline", builder.getBoolAttr(false));
-      forOp.setAttr("pipeline_II", builder.getUI32IntegerAttr(1));
-      forOp.setAttr("unroll_factor", builder.getUI32IntegerAttr(1));
+      forOp.setAttr("unroll", builder.getBoolAttr(false));
+      forOp.setAttr("flatten", builder.getBoolAttr(false));
 
       convertBlock(forOp.getLoopBody().front());
     }

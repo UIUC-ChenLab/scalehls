@@ -31,18 +31,19 @@ def ArrayOp : HLSCppOp<"array", [SameOperandsAndResultType]> {
   let arguments = (ins Type<IsShapedTypePred> : $input,
 
     // Interface-related attributes.
-    OptionalAttr<BoolAttr> : $interface,
-    OptionalAttr<InterfaceModeAttr> : $interface_mode,
-    OptionalAttr<PositiveUI32Attr> : $interface_depth,
+    DefaultValuedAttr<BoolAttr, "false"> : $interface,
+    DefaultValuedAttr<InterfaceModeAttr, "m_axi"> : $interface_mode,
+    DefaultValuedAttr<PositiveUI32Attr, "1024"> : $interface_depth,
 
     // BindStorage-related attributes.
-    OptionalAttr<StorageTypeAttr> : $storage_type,
-    OptionalAttr<StorageImplAttr> : $storage_impl,
+    DefaultValuedAttr<BoolAttr, "false"> : $storage,
+    DefaultValuedAttr<StorageTypeAttr, "ram_2p"> : $storage_type,
+    DefaultValuedAttr<StorageImplAttr, "bram"> : $storage_impl,
 
     // ArrayPartition-related attributes.
-    OptionalAttr<BoolAttr> : $partition,
-    OptionalAttr<PartitionTypeArrayAttr> : $partition_type,
-    OptionalAttr<PositiveUI32ArrayAttr> : $partition_factor
+    DefaultValuedAttr<BoolAttr, "false"> : $partition,
+    DefaultValuedAttr<PartitionTypeArrayAttr, "{}"> : $partition_type,
+    DefaultValuedAttr<PositiveUI32ArrayAttr, "{}"> : $partition_factor
   );
 
   let results = (outs Type<IsShapedTypePred> : $output);

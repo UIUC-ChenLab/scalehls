@@ -22,6 +22,7 @@ def ArrayPragmaOp : HLSCppOp<"array_pragma", [PragmaOpInterface]> {
     DefaultValuedAttr<PositiveUI32Attr, "1024"> : $interface_depth,
 
     // BindStorage-related attributes.
+    DefaultValuedAttr<BoolAttr, "false"> : $storage,
     DefaultValuedAttr<StorageTypeAttr, "ram_2p"> : $storage_type,
     DefaultValuedAttr<StorageImplAttr, "bram"> : $storage_impl,
 
@@ -50,8 +51,9 @@ def LoopPragmaOp : HLSCppOp<"loop_pragma", [
     DefaultValuedAttr<BoolAttr, "false"> : $pipeline,
     DefaultValuedAttr<PositiveUI32Attr, "1"> : $pipeline_II,
 
-    // Unroll-related attributes.
-    DefaultValuedAttr<PositiveUI32Attr, "1"> : $unroll_factor
+    // Loop-related attributes.
+    DefaultValuedAttr<BoolAttr, "false"> : $flatten,
+    DefaultValuedAttr<BoolAttr, "false"> : $unroll
   );
 
   let assemblyFormat = [{attr-dict}];

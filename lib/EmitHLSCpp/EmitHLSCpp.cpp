@@ -1035,18 +1035,16 @@ void ModuleEmitter::emitArray(ArrayOp *op) {}
 /// Pragma operation emitters.
 void ModuleEmitter::emitLoopPragma(LoopPragmaOp *op) {
   indent();
-  os << "#pragma HLS unroll";
-  // TODO: default factor.
-  os << " factor=" << op->unroll_factor();
-  os << " skip_exit_check\n";
-
-  indent();
   os << "#pragma HLS pipeline";
-  if (op->pipeline()) {
+  if (op->pipeline())
     os << " II=" << op->pipeline_II();
-    os << " rewind\n";
-  } else
+  else
     os << " off\n";
+
+  if (op->unroll()) {
+    indent();
+    os << "#pragma HLS unroll\n";
+  }
 
   // An empty line.
   os << "\n";
