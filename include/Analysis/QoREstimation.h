@@ -9,6 +9,7 @@
 #include "Visitor.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Pass/Pass.h"
+#include "mlir/Transforms/LoopUtils.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 namespace mlir {
@@ -23,29 +24,55 @@ public:
   explicit HLSCppToolBase(OpBuilder &builder) : builder(builder) {}
 
   /// Get value methods.
+  int64_t getIntAttrValue(Operation *op, StringRef name) {
+    if (auto attr = op->getAttrOfType<IntegerAttr>(name))
+      return attr.getInt();
+    else
+      return -1;
+  }
+
   unsigned getUIntAttrValue(Operation *op, StringRef name) {
-    return op->getAttrOfType<IntegerAttr>(name).getUInt();
+    if (auto attr = op->getAttrOfType<IntegerAttr>(name))
+      return attr.getUInt();
+    else
+      return 0;
   }
 
   bool getBoolAttrValue(Operation *op, StringRef name) {
-    return op->getAttrOfType<BoolAttr>(name).getValue();
+    if (auto attr = op->getAttrOfType<BoolAttr>(name))
+      return attr.getValue();
+    else
+      return false;
   }
 
   StringRef getStrAttrValue(Operation *op, StringRef name) {
-    return op->getAttrOfType<StringAttr>(name).getValue();
+    if (auto attr = op->getAttrOfType<StringAttr>(name))
+      return attr.getValue();
+    else
+      return "";
   }
 
-  StringRef getPartitionType(ArrayOp *op, unsigned dim) {
-    return op->partition_type()[dim].cast<StringAttr>().getValue();
+  StringRef getPartitionType(ArrayOp op, unsigned dim) {
+    if (auto attr = op.partition_type()[dim].cast<StringAttr>())
+      return attr.getValue();
+    else
+      return "";
   }
 
-  unsigned getPartitionFactor(ArrayOp *op, unsigned dim) {
-    return op->partition_factor()[dim].cast<IntegerAttr>().getUInt();
+  unsigned getPartitionFactor(ArrayOp op, unsigned dim) {
+    if (auto attr = op.partition_factor()[dim].cast<IntegerAttr>())
+      return attr.getUInt();
+    else
+      return 0;
   }
 
   /// Set value methods.
   void setAttrValue(Operation *op, StringRef name, unsigned value) {
     op->setAttr(name, builder.getUI32IntegerAttr(value));
+  }
+
+  void setAttrValue(Operation *op, StringRef name, int32_t value) {
+    op->setAttr(name, builder.getI32IntegerAttr(value));
   }
 
   void setAttrValue(Operation *op, StringRef name, bool value) {
@@ -65,11 +92,10 @@ public:
     return getAffineDimExpr(value, builder.getContext());
   }
 
-  AffineExpr getConstExpr(unsigned value) {
+  AffineExpr getConstExpr(int64_t value) {
     return getAffineConstantExpr(value, builder.getContext());
   }
 
-private:
   OpBuilder &builder;
 };
 
@@ -97,20 +123,30 @@ public:
 // HLSCppEstimator Class Declaration
 //===----------------------------------------------------------------------===//
 
-// For storing the scheduled time stamp of operations.
-using OpScheduleMap = llvm::SmallDenseMap<Operation *, unsigned, 16>;
+// Indicate the unoccupied memory ports number.
+struct PortNum {
+  PortNum(unsigned rdPort = 0, unsigned wrPort = 0, unsigned rdwrPort = 0)
+      : rdPort(rdPort), wrPort(wrPort), rdwrPort(rdwrPort) {}
 
-// For storing each memory access operations indexed by its targed memory
-// value symbol.
-using MemAccess = SmallVector<Operation *, 4>;
-using MemAccessDict = llvm::SmallDenseMap<Value, MemAccess, 16>;
+  unsigned rdPort;
+  unsigned wrPort;
+  unsigned rdwrPort;
+};
 
-// For storing memory access and schedule information of pipelined region.
-struct PipelineInfo {
-  PipelineInfo(unsigned baseII) : II(baseII) {}
+// For storing ports number information of each memory instance.
+using MemPort = llvm::SmallDenseMap<Operation *, SmallVector<PortNum, 16>, 8>;
 
-  unsigned II;
-  OpScheduleMap opScheduleMap;
+// For storing MemPort indexed by the pipeline stage (a basic block).
+using MemPortList = SmallVector<MemPort, 16>;
+
+// For storing each memory access operations (including AffineLoadOp and
+// AffineStoreOp) indexed by the array instantce (ArrayOp).
+using MemAccess = SmallVector<Operation *, 16>;
+using MemAccessDict = llvm::SmallDenseMap<Operation *, MemAccess, 8>;
+
+// An aggregate information structure for storing memory load and store
+// MemAccessDict in the scope of loop/function/other region.
+struct MemInfo {
   MemAccessDict memLoadDict;
   MemAccessDict memStoreDict;
 };
@@ -126,11 +162,6 @@ struct InductionInfo {
 };
 using InductionInfoList = SmallVector<InductionInfo, 8>;
 
-// This records the number of accesses for each partition.
-using AccessNum = SmallVector<unsigned, 16>;
-// This records the AccessNum of each dimension of an array.
-using AccessNumList = SmallVector<AccessNum, 8>;
-
 class HLSCppEstimator : public HLSCppVisitorBase<HLSCppEstimator, bool>,
                         public HLSCppToolBase {
 public:
@@ -143,14 +174,12 @@ public:
   bool visitOp(AffineForOp op);
   bool visitOp(AffineIfOp op);
 
-  void setBlockSchedule(Block &block, unsigned opSchedule,
-                        OpScheduleMap &opScheduleMap);
-  unsigned getBlockSchedule(Block &block, bool innerFlatten,
-                            OpScheduleMap &opScheduleMap);
+  int32_t getPartitionIdx(AffineMap map, ArrayOp op);
+  void getMemInfo(Block &block, MemInfo &info);
 
-  void getPipelineInfo(Block &block, PipelineInfo &info);
-
-  template <typename OpType> void getAccessNum(OpType op, ArrayOp arrayOp);
+  unsigned getLoadStoreSchedule(Operation *op, ArrayOp arrayOp,
+                                MemPortList &memPortList, unsigned begin);
+  unsigned getBlockSchedule(Block &block, MemInfo memInfo);
 
   void estimateOperation(Operation *op);
   void estimateFunc(FuncOp func);

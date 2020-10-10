@@ -5,6 +5,7 @@
 #include "Analysis/QoREstimation.h"
 #include "Analysis/Passes.h"
 #include "Dialect/HLSCpp/HLSCpp.h"
+#include "mlir/IR/PatternMatch.h"
 
 using namespace std;
 using namespace mlir;
@@ -16,14 +17,41 @@ using namespace hlscpp;
 //===----------------------------------------------------------------------===//
 
 bool HLSCppAnalyzer::visitOp(AffineForOp op) {
+  // If the current loop is annotated as unroll, all inner loops and itself are
+  // automatically unrolled.
+  if (getBoolAttrValue(op, "unroll")) {
+    op.emitRemark("this loop and all inner loops are automatically unrolled.");
+    op.walk([&](AffineForOp forOp) {
+      if (forOp.getLoopBody().getBlocks().size() != 1)
+        op.emitError("has zero or more than one basic blocks.");
+      loopUnrollFull(forOp);
+    });
+    return true;
+  }
+
+  // If the current loop is annotated as pipeline, all intter loops are
+  // automatically unrolled.
+  if (getBoolAttrValue(op, "pipeline")) {
+    op.emitRemark("all inner loops are automatically unrolled.");
+    op.walk([&](AffineForOp forOp) {
+      if (forOp != op) {
+        if (forOp.getLoopBody().getBlocks().size() != 1)
+          op.emitError("has zero or more than one basic blocks.");
+        loopUnrollFull(forOp);
+      }
+    });
+  }
+
+  // We assume loop contains a single basic block.
   auto &body = op.getLoopBody();
   if (body.getBlocks().size() != 1)
     op.emitError("has zero or more than one basic blocks.");
 
-  // Recursively analyze all childs.
+  // Recursively analyze all inner loops.
   analyzeBlock(body.front());
 
-  // Set an attribute indicating trip count.
+  // Set an attribute indicating the trip count. For now, we assume all loops
+  // have static loop bound.
   if (!op.hasConstantLowerBound() || !op.hasConstantUpperBound())
     op.emitError("has variable upper or lower bound.");
 
@@ -31,25 +59,24 @@ bool HLSCppAnalyzer::visitOp(AffineForOp op) {
       (op.getConstantUpperBound() - op.getConstantLowerBound()) / op.getStep();
   setAttrValue(op, "trip_count", tripCount);
 
-  // Set attributes indicating this loop is perfect or not.
+  // Set attributes indicating this loop can be flatten or not.
   unsigned opNum = 0;
-  unsigned childNum = 0;
-  bool childPerfect = false;
+  unsigned forNum = 0;
+  bool innerFlatten = false;
+
   for (auto &bodyOp : body.front()) {
     if (!isa<AffineYieldOp>(bodyOp))
       opNum += 1;
-    if (auto child = dyn_cast<AffineForOp>(bodyOp)) {
-      childNum += 1;
-      childPerfect = getBoolAttrValue(child, "perfect");
+    if (isa<AffineForOp>(bodyOp)) {
+      forNum += 1;
+      innerFlatten = getBoolAttrValue(&bodyOp, "flatten");
     }
   }
 
-  if (opNum == 1 && childNum == 1 && childPerfect)
-    setAttrValue(op, "perfect", true);
-  else if (childNum == 0)
-    setAttrValue(op, "perfect", true);
+  if (forNum == 0 || (opNum == 1 && innerFlatten))
+    setAttrValue(op, "flatten", true);
   else
-    setAttrValue(op, "perfect", false);
+    setAttrValue(op, "flatten", false);
 
   return true;
 }
@@ -105,205 +132,200 @@ HLSCppEstimator::HLSCppEstimator(OpBuilder &builder, string targetSpecPath,
   llvm::outs() << latency << "\n";
 }
 
-void HLSCppEstimator::setBlockSchedule(Block &block, unsigned opSchedule,
-                                       OpScheduleMap &opScheduleMap) {
+/// Calculate the partition index according to the affine map of a memory access
+/// operation, and store the results as attribute.
+int32_t HLSCppEstimator::getPartitionIdx(AffineMap map, ArrayOp op) {
+  int32_t partitionIdx = 0;
+  unsigned accumFactor = 1;
+  unsigned dim = 0;
+  for (auto expr : map.getResults()) {
+    auto idxExpr = getConstExpr(0);
+    unsigned factor = 1;
+    if (op.partition()) {
+      auto type = getPartitionType(op, dim);
+      factor = getPartitionFactor(op, dim);
+
+      if (type == "cyclic")
+        idxExpr = expr % getConstExpr(factor);
+      else if (type == "block") {
+        auto size = op.getType().cast<ShapedType>().getShape()[dim];
+        idxExpr = expr.floorDiv(getConstExpr((size + factor - 1) / factor));
+      }
+    }
+    if (auto constExpr = idxExpr.dyn_cast<AffineConstantExpr>()) {
+      if (dim == 0)
+        partitionIdx = constExpr.getValue();
+      else
+        partitionIdx += constExpr.getValue() * accumFactor;
+    } else {
+      partitionIdx = -1;
+      break;
+    }
+
+    accumFactor *= factor;
+    dim += 1;
+  }
+  return partitionIdx;
+}
+
+void HLSCppEstimator::getMemInfo(Block &block, MemInfo &info) {
   for (auto &op : block) {
-    if (auto child = dyn_cast<AffineForOp>(op))
-      setBlockSchedule(child.getRegion().front(), opSchedule, opScheduleMap);
-    opScheduleMap[&op] = opSchedule;
+    if (auto loadOp = dyn_cast<AffineLoadOp>(op)) {
+      auto arrayOp = cast<ArrayOp>(loadOp.getMemRef().getDefiningOp());
+      info.memLoadDict[arrayOp].push_back(loadOp);
+      setAttrValue(loadOp, "partition_index",
+                   getPartitionIdx(loadOp.getAffineMap(), arrayOp));
+      // TODO: consider RAW, WAR, WAW dependency for scheduling.
+
+    } else if (auto storeOp = dyn_cast<AffineStoreOp>(op)) {
+      auto arrayOp = cast<ArrayOp>(storeOp.getMemRef().getDefiningOp());
+      info.memLoadDict[arrayOp].push_back(storeOp);
+      setAttrValue(storeOp, "partition_index",
+                   getPartitionIdx(storeOp.getAffineMap(), arrayOp));
+    }
   }
 }
 
-unsigned HLSCppEstimator::getBlockSchedule(Block &block, bool innerUnroll,
-                                           OpScheduleMap &opScheduleMap) {
-  unsigned blockSchedule = 0;
+unsigned HLSCppEstimator::getLoadStoreSchedule(Operation *op, ArrayOp arrayOp,
+                                               MemPortList &memPortList,
+                                               unsigned begin) {
+  auto partitionIdx = getIntAttrValue(op, "partition_index");
+
+  // Try to avoid memory port violation until a legal schedule is found.
+  // Since an infinite length pipeline can be generated, this while loop can
+  // be proofed to have an end.
+  while (true) {
+    auto partitionPortNum = memPortList[begin][arrayOp];
+    bool memEmpty = false;
+    // Partition factor.
+    unsigned factor = 1;
+
+    // If the memory has not been occupied by the current stage, it should
+    // be initialized according to its storage type. Note that each
+    // partition should have one PortNum structure.
+    if (partitionPortNum.empty()) {
+      memEmpty = true;
+
+      if (getBoolAttrValue(arrayOp, "partition")) {
+        for (unsigned dim = 0;
+             dim < arrayOp.getType().cast<ShapedType>().getRank(); ++dim)
+          factor *= getPartitionFactor(arrayOp, dim);
+      }
+
+      auto storagetType = getStrAttrValue(arrayOp, "storage_type");
+      for (unsigned p = 0; p < factor; ++p) {
+        unsigned rdPort = 0;
+        unsigned wrPort = 0;
+        unsigned rdwrPort = 0;
+
+        if (storagetType == "ram_s2p")
+          rdPort = 1, wrPort = 1;
+        else if (storagetType == "ram_2p" || storagetType == "ram_t2p")
+          rdwrPort = 2;
+        else if (storagetType == "ram_1p")
+          rdwrPort = 1;
+        else {
+          rdwrPort = 2;
+          arrayOp.emitError("unsupported storage type.");
+        }
+        PortNum portNum(rdPort, wrPort, rdwrPort);
+        partitionPortNum.push_back(portNum);
+      }
+    }
+
+    // TODO: When partition index can't be determined, this operation will be
+    // considered to occupy all ports.
+    if (partitionIdx == -1) {
+      if (memEmpty) {
+        for (unsigned p = 0; p < factor; ++p) {
+          partitionPortNum[partitionIdx].rdPort = 0;
+          partitionPortNum[partitionIdx].wrPort = 0;
+          partitionPortNum[partitionIdx].rdwrPort = 0;
+        }
+        memPortList[begin][arrayOp] = partitionPortNum;
+        break;
+      } else {
+        if (++begin >= memPortList.size()) {
+          MemPort memPort;
+          memPortList.push_back(memPort);
+        }
+      }
+    }
+
+    // Find whether the current schedule meets memory port limitation. If
+    // not, the schedule will increase by 1.
+    if (partitionPortNum[partitionIdx].rdPort > 0) {
+      partitionPortNum[partitionIdx].rdPort -= 1;
+      memPortList[begin][arrayOp] = partitionPortNum;
+      break;
+    } else if (partitionPortNum[partitionIdx].rdwrPort > 0) {
+      partitionPortNum[partitionIdx].rdwrPort -= 1;
+      memPortList[begin][arrayOp] = partitionPortNum;
+      break;
+    } else {
+      if (++begin >= memPortList.size()) {
+        MemPort memPort;
+        memPortList.push_back(memPort);
+      }
+    }
+  }
+  return begin;
+}
+
+unsigned HLSCppEstimator::getBlockSchedule(Block &block, MemInfo memInfo) {
+  unsigned blockEnd = 0;
+  MemPortList memPortList;
 
   for (auto &op : block) {
-    unsigned opSchedule = 0;
-
-    // Add the latest scheduled time among all predecessors.
+    // Find the latest predecessor dominating the current operation. This should
+    // be considered as the earliest stage that the current operation can be
+    // scheduled.
+    unsigned begin = 0;
+    unsigned end = 0;
     for (auto operand : op.getOperands()) {
       if (operand.getKind() != Value::Kind::BlockArgument)
-        opSchedule = max(opSchedule, opScheduleMap[operand.getDefiningOp()]);
+        begin = max(begin,
+                    getUIntAttrValue(operand.getDefiningOp(), "schedule_end"));
     }
 
-    // Add latency of the current operation.
-    unsigned childSchedule = 0;
-    if (auto child = dyn_cast<AffineForOp>(op)) {
-      if (innerUnroll) {
-        setAttrValue(child, "unroll", true);
-        setAttrValue(child, "flatten", false);
-        childSchedule = getBlockSchedule(child.getRegion().front(),
-                                         /*innerUnroll=*/true, opScheduleMap);
-      } else {
-        // Two extra clock cycles will be required to enter and exit child loop.
-        opSchedule += getUIntAttrValue(child, "latency") + 2;
-        setBlockSchedule(child.getRegion().front(), opSchedule, opScheduleMap);
-      }
-    } else {
-      // For now we make a simple assumption tha all standard operations has an
-      // unit latency.
-      // TODO: Support estimation from profiling data.
-      opSchedule += 1;
+    // Insert new pipeline stages.
+    while (begin >= memPortList.size()) {
+      MemPort memPort;
+      memPortList.push_back(memPort);
     }
 
-    opScheduleMap[&op] = opSchedule;
-    blockSchedule = max({blockSchedule, childSchedule, opSchedule});
-  }
-  return blockSchedule;
-}
-
-void HLSCppEstimator::getPipelineInfo(Block &block, PipelineInfo &info) {
-  for (auto &op : block) {
-    // Handle load operations and RAW dependencies.
+    // Handle load operations, ensure the current schedule meets memory port
+    // limitation.
     if (auto loadOp = dyn_cast<AffineLoadOp>(op)) {
-      for (auto prevOp : info.memStoreDict[loadOp.getMemRef()]) {
-        unsigned RAWLatency =
-            info.opScheduleMap[loadOp] - info.opScheduleMap[prevOp];
-        info.II = max(info.II, RAWLatency);
-      }
-      info.memLoadDict[loadOp.getMemRef()].push_back(loadOp);
+      auto arrayOp = cast<ArrayOp>(loadOp.getMemRef().getDefiningOp());
+      begin = getLoadStoreSchedule(loadOp, arrayOp, memPortList, begin);
+      end = begin + 1;
     }
-
-    // Handle Store operations and RAW/WAW dependencies.
+    // Handle store operations.
     else if (auto storeOp = dyn_cast<AffineStoreOp>(op)) {
-      for (auto prevOp : info.memLoadDict[storeOp.getMemRef()]) {
-        unsigned WARLatency =
-            info.opScheduleMap[storeOp] - info.opScheduleMap[prevOp];
-        info.II = max(info.II, WARLatency);
-      }
-      for (auto prevOp : info.memStoreDict[storeOp.getMemRef()]) {
-        unsigned WAWLatency =
-            info.opScheduleMap[storeOp] - info.opScheduleMap[prevOp];
-        info.II = max(info.II, WAWLatency);
-      }
-      info.memStoreDict[storeOp.getMemRef()].push_back(storeOp);
+      auto arrayOp = cast<ArrayOp>(storeOp.getMemRef().getDefiningOp());
+      begin = getLoadStoreSchedule(storeOp, arrayOp, memPortList, begin);
+      end = begin + 1;
+    }
+    // Handle loop operations.
+    else if (auto forOp = dyn_cast<AffineForOp>(op)) {
+      // Child loop is considered as a large node, and two extra clock cycles
+      // will be required to enter and exit the child loop.
+      end = begin + getUIntAttrValue(forOp, "latency") + 2;
+    }
+    // Default case. All normal expressions and operations will be handled by
+    // this branch.
+    else {
+      // TODO: For now, we assume all operations take one clock cycle to
+      // execute, should support to accept profiling data.
+      end = begin + 1;
     }
 
-    // Recursively handle child loops.
-    else if (auto child = dyn_cast<AffineForOp>(op))
-      getPipelineInfo(child.getRegion().front(), info);
+    setAttrValue(&op, "schedule_begin", begin);
+    setAttrValue(&op, "schedule_end", end);
+    blockEnd = max(blockEnd, end);
   }
-}
-
-template <typename OpType>
-void HLSCppEstimator::getAccessNum(OpType op, ArrayOp arrayOp) {
-  InductionInfoList inductionInfoList;
-  SmallVector<AffineExpr, 8> replacements;
-  SmallVector<unsigned, 8> unrollDims;
-  unsigned unrollTripCount = 1;
-
-  // Collect loop information, including induction & unroll information,
-  // and etc. Note that we assume all operands are dims.
-  unsigned operandIdx = 0;
-  for (auto operand : op.getMapOperands()) {
-    if (auto forOp = getForInductionVarOwner(operand)) {
-      auto lowerBound = forOp.getConstantLowerBound();
-      auto upperBound = forOp.getConstantUpperBound();
-      auto step = forOp.getStep();
-      inductionInfoList.push_back(InductionInfo(lowerBound, upperBound, step));
-
-      auto unroll = getBoolAttrValue(forOp, "unroll");
-      auto tripCount = getUIntAttrValue(forOp, "trip_count");
-      if (unroll) {
-        unrollDims.push_back(operandIdx);
-        unrollTripCount *= tripCount;
-      }
-
-      if (unroll)
-        replacements.push_back(getConstExpr(lowerBound));
-      else
-        replacements.push_back(getDimExpr(operandIdx));
-    } else
-      op.emitError("has index constructed by dynamic values.");
-    operandIdx += 1;
-  }
-
-  // Initialize number of accesses for each partition of each array
-  // dimension as zero.
-  AccessNumList accessNumList;
-  for (auto dim : unrollDims) {
-    AccessNum accessNum;
-    if (arrayOp.partition()) {
-      for (unsigned i = 0; i < getPartitionFactor(&arrayOp, dim); ++i)
-        accessNum.push_back(0);
-    } else
-      accessNum.push_back(0);
-    accessNumList.push_back(accessNum);
-  }
-
-  // Trace all possible index to find potential violations regarding
-  // memory ports number. Violations may cause increasement of iteration
-  // latency or initial interval. This will update the accessNumList.
-  for (unsigned i = 0; i < unrollTripCount; ++i) {
-
-    // Calculate number of accesses for each partition of each array dimension.
-    unsigned idx = 0;
-    for (auto dim : unrollDims) {
-      AffineExpr expr = op.getAffineMap().getResult(dim);
-      auto indexExpr = expr.replaceDimsAndSymbols(replacements, {});
-
-      // Calculate which partition is falled in.
-      if (arrayOp.partition()) {
-        auto type = getPartitionType(&arrayOp, dim);
-        auto factor = getPartitionFactor(&arrayOp, dim);
-        if (type == "cyclic")
-          indexExpr = indexExpr % getConstExpr(factor);
-        else if (type == "block") {
-          auto dimSize = arrayOp.getType().cast<ShapedType>().getShape()[dim];
-          indexExpr =
-              indexExpr.floorDiv(getConstExpr((dimSize + factor - 1) / factor));
-        }
-      } else
-        indexExpr = getConstExpr(0);
-
-      // According to partition information.
-      if (auto constExpr = indexExpr.dyn_cast<AffineConstantExpr>()) {
-        auto partitionId = constExpr.getValue();
-        accessNumList[idx][partitionId] += 1;
-      } else {
-      }
-      idx += 1;
-    }
-
-    // Update replacement.
-    unsigned order = 0;
-    for (auto dim : unrollDims) {
-      auto value = replacements[dim].cast<AffineConstantExpr>().getValue();
-
-      // The little-end value will always increase with a stride of
-      // step.
-      if (order == 0)
-        value += inductionInfoList[dim].step;
-
-      // The value of the current dimension should return to lowerBound
-      // if is greater or equal to upperBound.
-      if (value >= inductionInfoList[dim].upperBound) {
-        value = inductionInfoList[dim].lowerBound;
-
-        // Update the value of the next dimension.
-        if (order < unrollDims.size() - 1) {
-          auto nextDim = unrollDims[order + 1];
-          auto nextValue =
-              replacements[nextDim].cast<AffineConstantExpr>().getValue();
-          nextValue += inductionInfoList[nextDim].step;
-          replacements[nextDim] = getConstExpr(nextValue);
-        }
-      }
-
-      // Update the value of the current dimension.
-      replacements[dim] = getConstExpr(value);
-      order += 1;
-    }
-  }
-
-  // update
-  for (auto accessNum : accessNumList) {
-    llvm::outs() << "new dim\n";
-    for (auto num : accessNum) {
-      llvm::outs() << num << "\n";
-    }
-  }
+  return blockEnd;
 }
 
 bool HLSCppEstimator::visitOp(AffineForOp op) {
@@ -311,95 +333,58 @@ bool HLSCppEstimator::visitOp(AffineForOp op) {
   if (body.getBlocks().size() != 1)
     op.emitError("has zero or more than one basic blocks.");
 
-  // If loop is unrolled, all inner loops will be unrolled accordingly.
-  if (getBoolAttrValue(op, "unroll")) {
-    setAttrValue(op, "pipeline", false);
-    setAttrValue(op, "flatten", false);
-    op.emitRemark("all inner loops are automatically unrolled.");
-
-    OpScheduleMap opScheduleMap;
-    auto latency =
-        getBlockSchedule(body.front(), /*innerUnroll=*/true, opScheduleMap);
-    setAttrValue(op, "latency", latency);
-    return true;
-  }
-
-  // If loop is pipelined, the pipelined loop will be estimated as a whole since
-  // all loops inside of a pipeline will be automatically fully unrolled.
+  // If the current loop is annotated as pipeline, extra dependency and II
+  // analysis will be executed.
   if (getBoolAttrValue(op, "pipeline")) {
-    setAttrValue(op, "flatten", true);
-    op.emitRemark("all inner loops are automatically unrolled.");
+    MemInfo memInfo;
+    getMemInfo(body.front(), memInfo);
 
     // Calculate latency of each iteration.
-    PipelineInfo pipelineInfo(/*baseII=*/1);
-    auto iterLatency = getBlockSchedule(body.front(), /*innerUnroll=*/true,
-                                        pipelineInfo.opScheduleMap);
+    auto iterLatency = getBlockSchedule(body.front(), memInfo);
     setAttrValue(op, "iter_latency", iterLatency);
 
     // For now we make a simple assumption that II is equal to 1.
     auto tripCount = getUIntAttrValue(op, "trip_count");
     setAttrValue(op, "flatten_trip_count", tripCount);
 
-    // Collect pipeline information including II and memory access information.
-    getPipelineInfo(body.front(), pipelineInfo);
-
-    // Calculate latency and II considering memory ports violations.
-    for (auto &memLoad : pipelineInfo.memLoadDict) {
-      auto arrayOp = dyn_cast<ArrayOp>(memLoad.first.getDefiningOp());
-      if (!arrayOp)
-        op.emitError("is accessing an array that is not defined by ArrayOp.");
-
-      for (auto loadOp : memLoad.second) {
-        getAccessNum<AffineLoadOp>(cast<AffineLoadOp>(loadOp), arrayOp);
-      }
-    }
-
-    setAttrValue(op, "init_interval", pipelineInfo.II);
-    setAttrValue(op, "latency",
-                 iterLatency + pipelineInfo.II * (tripCount - 1));
+    setAttrValue(op, "init_interval", (unsigned)1);
+    setAttrValue(op, "latency", iterLatency + 1 * (tripCount - 1));
     return true;
   }
 
-  // If the loop is not pipelined or unrolled, the estimation is different and
-  // requires to recursively enter each child loop for estimating the overall
-  // latency of the current loop.
+  // Recursively estimate all inner loops.
   estimateBlock(body.front());
 
   // This simply means the current loop can be flattened into the child loop
   // pipeline. This will increase the flattened loop trip count without
   // changing the iteration latency. Note that this will be propogated above
   // until meeting an imperfect loop.
-  if (getBoolAttrValue(op, "perfect")) {
-    if (auto child = dyn_cast<AffineForOp>(op.getLoopBody().front().front())) {
-      if (getBoolAttrValue(child, "flatten")) {
-        setAttrValue(op, "flatten", true);
-        op.emitRemark("this loop is flattened into its child loop.");
+  if (getBoolAttrValue(op, "flatten")) {
+    auto child = cast<AffineForOp>(op.getLoopBody().front().front());
+    op.emitRemark("this loop is flattened into its inner loop.");
 
-        auto II = getUIntAttrValue(child, "init_interval");
-        auto iterLatency = getUIntAttrValue(child, "iter_latency");
-        auto flattenTripCount = getUIntAttrValue(child, "flatten_trip_count") *
-                                getUIntAttrValue(op, "trip_count");
+    auto II = getUIntAttrValue(child, "init_interval");
+    auto iterLatency = getUIntAttrValue(child, "iter_latency");
+    auto flattenTripCount = getUIntAttrValue(child, "flatten_trip_count") *
+                            getUIntAttrValue(op, "trip_count");
 
-        setAttrValue(op, "init_interval", II);
-        setAttrValue(op, "iter_latency", iterLatency);
-        setAttrValue(op, "flatten_trip_count", flattenTripCount);
+    setAttrValue(op, "init_interval", II);
+    setAttrValue(op, "iter_latency", iterLatency);
+    setAttrValue(op, "flatten_trip_count", flattenTripCount);
 
-        setAttrValue(op, "latency", iterLatency + II * (flattenTripCount - 1));
-        return true;
-      }
-    }
+    setAttrValue(op, "latency", iterLatency + II * (flattenTripCount - 1));
   }
+  // Default case, aka !pipeline && !flatten.
+  else {
+    MemInfo memInfo;
+    getMemInfo(body.front(), memInfo);
 
-  // Default case, aka !unroll && !pipeline && !(perfect && child.flatten).
-  setAttrValue(op, "flatten", false);
+    auto iterLatency = getBlockSchedule(body.front(), memInfo);
+    setAttrValue(op, "iter_latency", iterLatency);
 
-  OpScheduleMap opScheduleMap;
-  auto iterLatency =
-      getBlockSchedule(body.front(), /*innerUnroll=*/false, opScheduleMap);
-  setAttrValue(op, "iter_latency", iterLatency);
-
-  unsigned latency = iterLatency * getUIntAttrValue(op, "trip_count");
-  setAttrValue(op, "latency", latency);
+    unsigned latency = iterLatency * getUIntAttrValue(op, "trip_count");
+    setAttrValue(op, "latency", latency);
+  }
   return true;
 }
 
@@ -419,9 +404,10 @@ void HLSCppEstimator::estimateFunc(FuncOp func) {
 
   estimateBlock(func.front());
 
-  OpScheduleMap opScheduleMap;
-  auto latency =
-      getBlockSchedule(func.front(), /*innerUnroll=*/false, opScheduleMap);
+  MemInfo memInfo;
+  getMemInfo(func.front(), memInfo);
+
+  auto latency = getBlockSchedule(func.front(), memInfo);
   setAttrValue(func, "latency", latency);
 }
 
@@ -446,6 +432,16 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     // Extract all static parameters and current pragma configurations.
     HLSCppAnalyzer analyzer(builder);
     analyzer.analyzeModule(getOperation());
+
+    // Canonicalize the analyzed IR.
+    OwningRewritePatternList patterns;
+
+    auto *context = &getContext();
+    for (auto *op : context->getRegisteredOperations())
+      op->getCanonicalizationPatterns(patterns, context);
+
+    Operation *op = getOperation();
+    applyPatternsAndFoldGreedily(op->getRegions(), patterns);
 
     // Estimate performance and resource utilization.
     HLSCppEstimator estimator(builder, targetSpec, opLatency);
