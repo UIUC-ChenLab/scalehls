@@ -6,7 +6,6 @@
 #map5 = affine_map<() -> (3)>
 #map6 = affine_map<() -> (1)>
 
-
 module {
   func @main_graph(%arg0: memref<1x3x227x227xf32>) -> memref<1x3x113x113xf32> {
     %cst = constant 0.000000e+00 : f32

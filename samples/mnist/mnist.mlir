@@ -22,7 +22,6 @@
 #map21 = affine_map<()[s0] -> (0, s0)>
 #map22 = affine_map<() -> (10)>
 
-
 module {
   func @main_graph(%arg0: memref<1x1x28x28xf32>, %14: memref<256x10xf32>, %16: memref<8x1x5x5xf32>, %17: memref<8x1x1xf32>, %18: memref<16x8x5x5xf32>, %19: memref<16x1x1xf32>, %20: memref<1x10xf32>) -> memref<1x10xf32> {
     %cst = constant 0xFF800000 : f32

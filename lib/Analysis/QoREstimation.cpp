@@ -438,8 +438,6 @@ bool HLSCppEstimator::visitOp(AffineForOp op) {
     MemAccessDict dict;
     getMemAccessInfo(body.front(), dict);
 
-    llvm::outs() << op << "\n";
-
     // Calculate latency of each iteration.
     auto iterLatency = getBlockSchedule(body.front());
     setAttrValue(op, "iter_latency", iterLatency);

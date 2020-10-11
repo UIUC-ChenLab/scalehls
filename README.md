@@ -16,16 +16,18 @@ After the installation and test successfully completed, you should be able to ru
 cd $SCALEHLS_DIR
 scalehls-opt -convert-to-hlscpp test/Conversion/ConvertToHLSCpp/test_*.mlir
 scalehls-opt -convert-to-hlscpp test/EmitHLSCpp/test_*.mlir | scalehls-translate -emit-hlscpp
+scalehls-opt -qor-estimation test/Analysis/QoREstimation/test_for.mlir
 ```
 
 ## TODOs List
 ### HLSCpp Dialect
-1. Verifiers for pragma operations.
+1. Verifiers for cutomized operations.
 
 ### QoREstimation Pass
-1. Implement comprehensive partition-aware II analysis.
-2. Support read latency from profiling data.
-3. Support operation chainning.
+1. Support fetch latency information from profiling data.
+2. Support operation chaining.
+3. Detailed case study and refine the estimator.
+3. Implement dependency-aware II analysis.
 
 ### PragmaDSE Pass
 
