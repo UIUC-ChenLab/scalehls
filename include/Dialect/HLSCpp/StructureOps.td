@@ -32,7 +32,7 @@ def ArrayOp : HLSCppOp<"array", [SameOperandsAndResultType]> {
 
     // Interface-related attributes.
     DefaultValuedAttr<BoolAttr, "false"> : $interface,
-    DefaultValuedAttr<InterfaceModeAttr, "m_axi"> : $interface_mode,
+    DefaultValuedAttr<InterfaceModeAttr, "bram"> : $interface_mode,
     DefaultValuedAttr<PositiveUI32Attr, "1024"> : $interface_depth,
 
     // BindStorage-related attributes.

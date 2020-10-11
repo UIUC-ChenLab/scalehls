@@ -76,7 +76,15 @@ public:
 
   /// Value name management methods.
   SmallString<8> addName(Value val, bool isPtr = false);
+
+  SmallString<8> addAlias(Value val, Value alias) {
+    assert(isDeclared(val) && "hasn't been declared before.");
+    state.nameTable[alias] = state.nameTable[val];
+    return state.nameTable[val];
+  }
+
   SmallString<8> getName(Value val);
+
   bool isDeclared(Value val) {
     if (getName(val).empty()) {
       state.nameTable.erase(val);
@@ -537,6 +545,30 @@ void ModuleEmitter::emitAffineFor(AffineForOp *op) {
   os << " += " << op->getStep() << ") {\n";
 
   addIndent();
+
+  if (auto pipeline = op->getAttrOfType<BoolAttr>("pipeline")) {
+    indent();
+    if (pipeline.getValue())
+      os << "#pragma HLS pipeline\n";
+    else
+      os << "#pragma HLS pipeline off\n";
+  }
+
+  // if (auto flatten = op->getAttrOfType<BoolAttr>("flatten")) {
+  //  indent();
+  //  if (flatten.getValue())
+  //    os << "#pragma HLS loop_flatten\n";
+  //  else
+  //    os << "#pragma HLS loop_flatten off\n";
+  //}
+
+  if (auto unroll = op->getAttrOfType<BoolAttr>("unroll")) {
+    if (unroll.getValue()) {
+      indent();
+      os << "#pragma HLS unroll\n";
+    }
+  }
+
   emitBlock(op->getLoopBody().front());
   reduceIndent();
 
@@ -1030,9 +1062,57 @@ void ModuleEmitter::emitAssign(AssignOp *op) {
   emitNestedLoopTail(rank);
 }
 
-void ModuleEmitter::emitArray(ArrayOp *op) {}
+void ModuleEmitter::emitArray(ArrayOp *op) {
+  addAlias(op->getOperand(), op->getResult());
 
-/// Pragma operation emitters.
+  if (op->interface()) {
+
+    // Emit interface pragma.
+    indent();
+    os << "#pragma HLS interface";
+    os << " " << op->interface_mode();
+    os << " port=";
+    emitValue(op->getOperand());
+    if (op->interface_mode() == "m_axi") {
+      os << " depth=" << op->interface_depth();
+      os << " offset=slave\n";
+    } else {
+      os << "\n";
+      // os << " storage_type=" << op->storage_type() << "\n";
+    }
+  } else {
+
+    // Emit bind_storage pragma.
+    // indent();
+    // os << "#pragma HLS bind_storage";
+    // os << " variable=";
+    // emitValue(op->getOperand());
+    // os << " type=" << op->storage_type();
+    // os << " impl=" << op->storage_impl() << "\n";
+  }
+
+  auto type = op->getOperand().getType().cast<ShapedType>();
+  if (op->partition() && type.hasStaticShape()) {
+
+    // Emit array_partition pragma(s).
+    for (unsigned dim = 0; dim < type.getRank(); ++dim) {
+      indent();
+      os << "#pragma HLS array_partition";
+      os << " variable=";
+      emitValue(op->getOperand());
+      auto partitionType =
+          op->partition_type()[dim].cast<StringAttr>().getValue();
+      os << " " << partitionType;
+      if (partitionType != "complete")
+        os << " factor="
+           << op->partition_factor()[dim].cast<IntegerAttr>().getUInt();
+      os << " dim=" << dim + 1 << "\n";
+    }
+  }
+  os << "\n";
+}
+
+/// Pragma operation emitters. (deprecated)
 void ModuleEmitter::emitLoopPragma(LoopPragmaOp *op) {
   indent();
   os << "#pragma HLS pipeline";
@@ -1266,6 +1346,16 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   // Emit function body.
   addIndent();
 
+  if (auto dataflow = func.getAttrOfType<BoolAttr>("dataflow")) {
+    if (dataflow.getValue()) {
+      indent();
+      os << "#pragma HLS dataflow\n";
+
+      // An empty line.
+      os << "\n";
+    }
+  }
+
   // TODO: only top function should emit these pragmas.
   if (true) {
     indent();
@@ -1285,7 +1375,10 @@ void ModuleEmitter::emitFunction(FuncOp func) {
 
   emitBlock(func.front());
   reduceIndent();
-  os << "}\n\n";
+  os << "}\n";
+
+  // An empty line.
+  os << "\n";
 }
 
 /// Top-level MLIR module emitter.
