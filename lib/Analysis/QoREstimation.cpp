@@ -5,6 +5,7 @@
 #include "Analysis/QoREstimation.h"
 #include "Analysis/Passes.h"
 #include "Dialect/HLSCpp/HLSCpp.h"
+#include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
 
 using namespace std;
@@ -15,6 +16,17 @@ using namespace hlscpp;
 //===----------------------------------------------------------------------===//
 // HLSCppAnalyzer Class Definition
 //===----------------------------------------------------------------------===//
+
+bool HLSCppAnalyzer::visitOp(ArrayOp op) {
+  unsigned factor = 1;
+  if (getBoolAttrValue(op, "partition")) {
+    for (unsigned i = 0, e = op.getType().cast<ShapedType>().getRank(); i < e;
+         ++i)
+      factor *= getPartitionFactor(op, i);
+  }
+  setAttrValue(op, "partition_num", factor);
+  return true;
+}
 
 bool HLSCppAnalyzer::visitOp(AffineForOp op) {
   // If the current loop is annotated as unroll, all inner loops and itself are
@@ -168,18 +180,16 @@ int32_t HLSCppEstimator::getPartitionIdx(AffineMap map, ArrayOp op) {
   return partitionIdx;
 }
 
-void HLSCppEstimator::getMemInfo(Block &block, MemInfo &info) {
+void HLSCppEstimator::getMemAccessInfo(Block &block, MemAccessDict &dict) {
   for (auto &op : block) {
     if (auto loadOp = dyn_cast<AffineLoadOp>(op)) {
       auto arrayOp = cast<ArrayOp>(loadOp.getMemRef().getDefiningOp());
-      info.memLoadDict[arrayOp].push_back(loadOp);
+      dict[arrayOp].push_back(loadOp);
       setAttrValue(loadOp, "partition_index",
                    getPartitionIdx(loadOp.getAffineMap(), arrayOp));
-      // TODO: consider RAW, WAR, WAW dependency for scheduling.
-
     } else if (auto storeOp = dyn_cast<AffineStoreOp>(op)) {
       auto arrayOp = cast<ArrayOp>(storeOp.getMemRef().getDefiningOp());
-      info.memLoadDict[arrayOp].push_back(storeOp);
+      dict[arrayOp].push_back(storeOp);
       setAttrValue(storeOp, "partition_index",
                    getPartitionIdx(storeOp.getAffineMap(), arrayOp));
     }
@@ -187,94 +197,90 @@ void HLSCppEstimator::getMemInfo(Block &block, MemInfo &info) {
 }
 
 unsigned HLSCppEstimator::getLoadStoreSchedule(Operation *op, ArrayOp arrayOp,
-                                               MemPortList &memPortList,
+                                               MemPortDictList &list,
                                                unsigned begin) {
   auto partitionIdx = getIntAttrValue(op, "partition_index");
+  auto partitionNum = getUIntAttrValue(arrayOp, "partition_num");
+  auto storageType = getStrAttrValue(arrayOp, "storage_type");
 
   // Try to avoid memory port violation until a legal schedule is found.
   // Since an infinite length pipeline can be generated, this while loop can
   // be proofed to have an end.
   while (true) {
-    auto partitionPortNum = memPortList[begin][arrayOp];
-    bool memEmpty = false;
-    // Partition factor.
-    unsigned factor = 1;
+    auto memPort = list[begin][arrayOp];
+    bool memPortEmpty = memPort.empty();
 
     // If the memory has not been occupied by the current stage, it should
     // be initialized according to its storage type. Note that each
     // partition should have one PortNum structure.
-    if (partitionPortNum.empty()) {
-      memEmpty = true;
-
-      if (getBoolAttrValue(arrayOp, "partition")) {
-        for (unsigned dim = 0;
-             dim < arrayOp.getType().cast<ShapedType>().getRank(); ++dim)
-          factor *= getPartitionFactor(arrayOp, dim);
-      }
-
-      auto storagetType = getStrAttrValue(arrayOp, "storage_type");
-      for (unsigned p = 0; p < factor; ++p) {
+    if (memPortEmpty) {
+      for (unsigned p = 0; p < partitionNum; ++p) {
         unsigned rdPort = 0;
         unsigned wrPort = 0;
         unsigned rdwrPort = 0;
 
-        if (storagetType == "ram_s2p")
+        if (storageType == "ram_s2p")
           rdPort = 1, wrPort = 1;
-        else if (storagetType == "ram_2p" || storagetType == "ram_t2p")
+        else if (storageType == "ram_2p" || storageType == "ram_t2p")
           rdwrPort = 2;
-        else if (storagetType == "ram_1p")
+        else if (storageType == "ram_1p")
           rdwrPort = 1;
         else {
           rdwrPort = 2;
           arrayOp.emitError("unsupported storage type.");
         }
-        PortNum portNum(rdPort, wrPort, rdwrPort);
-        partitionPortNum.push_back(portNum);
+        PortInfo portInfo(rdPort, wrPort, rdwrPort);
+        memPort.push_back(portInfo);
       }
     }
 
     // TODO: When partition index can't be determined, this operation will be
     // considered to occupy all ports.
     if (partitionIdx == -1) {
-      if (memEmpty) {
-        for (unsigned p = 0; p < factor; ++p) {
-          partitionPortNum[partitionIdx].rdPort = 0;
-          partitionPortNum[partitionIdx].wrPort = 0;
-          partitionPortNum[partitionIdx].rdwrPort = 0;
+      if (memPortEmpty) {
+        for (unsigned p = 0; p < partitionNum; ++p) {
+          memPort[p].rdPort = 0;
+          memPort[p].wrPort = 0;
+          memPort[p].rdwrPort = 0;
         }
-        memPortList[begin][arrayOp] = partitionPortNum;
+        list[begin][arrayOp] = memPort;
         break;
       } else {
-        if (++begin >= memPortList.size()) {
-          MemPort memPort;
-          memPortList.push_back(memPort);
+        if (++begin >= list.size()) {
+          MemPortDict memPortDict;
+          list.push_back(memPortDict);
         }
       }
     }
 
     // Find whether the current schedule meets memory port limitation. If
     // not, the schedule will increase by 1.
-    if (partitionPortNum[partitionIdx].rdPort > 0) {
-      partitionPortNum[partitionIdx].rdPort -= 1;
-      memPortList[begin][arrayOp] = partitionPortNum;
+    PortInfo portInfo = memPort[partitionIdx];
+    if (isa<AffineLoadOp>(op) && portInfo.rdPort > 0) {
+      memPort[partitionIdx].rdPort -= 1;
+      list[begin][arrayOp] = memPort;
       break;
-    } else if (partitionPortNum[partitionIdx].rdwrPort > 0) {
-      partitionPortNum[partitionIdx].rdwrPort -= 1;
-      memPortList[begin][arrayOp] = partitionPortNum;
+    } else if (isa<AffineStoreOp>(op) && portInfo.wrPort > 0) {
+      memPort[partitionIdx].wrPort -= 1;
+      list[begin][arrayOp] = memPort;
+      break;
+    } else if (portInfo.rdwrPort > 0) {
+      memPort[partitionIdx].rdwrPort -= 1;
+      list[begin][arrayOp] = memPort;
       break;
     } else {
-      if (++begin >= memPortList.size()) {
-        MemPort memPort;
-        memPortList.push_back(memPort);
+      if (++begin >= list.size()) {
+        MemPortDict memPortDict;
+        list.push_back(memPortDict);
       }
     }
   }
   return begin;
 }
 
-unsigned HLSCppEstimator::getBlockSchedule(Block &block, MemInfo memInfo) {
+unsigned HLSCppEstimator::getBlockSchedule(Block &block) {
   unsigned blockEnd = 0;
-  MemPortList memPortList;
+  MemPortDictList list;
 
   for (auto &op : block) {
     // Find the latest predecessor dominating the current operation. This should
@@ -284,27 +290,27 @@ unsigned HLSCppEstimator::getBlockSchedule(Block &block, MemInfo memInfo) {
     unsigned end = 0;
     for (auto operand : op.getOperands()) {
       if (operand.getKind() != Value::Kind::BlockArgument)
-        begin = max(begin,
-                    getUIntAttrValue(operand.getDefiningOp(), "schedule_end"));
+        begin = max(getUIntAttrValue(operand.getDefiningOp(), "schedule_end"),
+                    begin);
     }
 
     // Insert new pipeline stages.
-    while (begin >= memPortList.size()) {
-      MemPort memPort;
-      memPortList.push_back(memPort);
+    while (begin >= list.size()) {
+      MemPortDict memPortDict;
+      list.push_back(memPortDict);
     }
 
     // Handle load operations, ensure the current schedule meets memory port
     // limitation.
     if (auto loadOp = dyn_cast<AffineLoadOp>(op)) {
       auto arrayOp = cast<ArrayOp>(loadOp.getMemRef().getDefiningOp());
-      begin = getLoadStoreSchedule(loadOp, arrayOp, memPortList, begin);
+      begin = getLoadStoreSchedule(loadOp, arrayOp, list, begin);
       end = begin + 1;
     }
     // Handle store operations.
     else if (auto storeOp = dyn_cast<AffineStoreOp>(op)) {
       auto arrayOp = cast<ArrayOp>(storeOp.getMemRef().getDefiningOp());
-      begin = getLoadStoreSchedule(storeOp, arrayOp, memPortList, begin);
+      begin = getLoadStoreSchedule(storeOp, arrayOp, list, begin);
       end = begin + 1;
     }
     // Handle loop operations.
@@ -328,6 +334,99 @@ unsigned HLSCppEstimator::getBlockSchedule(Block &block, MemInfo memInfo) {
   return blockEnd;
 }
 
+static int32_t getDimId(Operation *op, Value value) {
+  int32_t dimId = -1;
+  if (auto loadOp = dyn_cast<AffineLoadOp>(op)) {
+    auto operand = std::find(loadOp.getMapOperands().begin(),
+                             loadOp.getMapOperands().end(), value);
+    if (operand != loadOp.getMapOperands().end())
+      dimId = operand.getIndex();
+  } else if (auto storeOp = dyn_cast<AffineStoreOp>(op)) {
+    auto operand = std::find(storeOp.getMapOperands().begin(),
+                             storeOp.getMapOperands().end(), value);
+    if (operand != storeOp.getMapOperands().end())
+      dimId = operand.getIndex();
+  }
+  return dimId;
+}
+
+unsigned HLSCppEstimator::getMinII(AffineForOp forOp, MemAccessDict dict) {
+  auto value = forOp.getInductionVar();
+  unsigned II = 1;
+
+  for (auto &pair : dict) {
+    auto arrayOp = cast<ArrayOp>(pair.first);
+    unsigned partitionNum = getUIntAttrValue(arrayOp, "partition_num");
+    auto storageType = getStrAttrValue(arrayOp, "storage_type");
+
+    SmallVector<unsigned, 16> readNum;
+    SmallVector<unsigned, 16> writeNum;
+    for (unsigned i = 0, e = partitionNum; i < e; ++i) {
+      readNum.push_back(0);
+      writeNum.push_back(0);
+    }
+
+    auto memAccess = pair.second;
+
+    unsigned opIdx = 0;
+    for (auto op : memAccess) {
+      // Calculate resource-aware minimal II.
+      auto partitionIdx = getIntAttrValue(op, "partition_index");
+      if (partitionIdx == -1) {
+        unsigned accessNum = 1;
+        if (storageType == "ram_s2p")
+          accessNum = 1;
+        else if (storageType == "ram_2p" || "ram_t2p")
+          accessNum = 2;
+        else if (storageType == "ram_1p")
+          accessNum = 1;
+
+        // The rationale here is an undetermined partition access will introduce
+        // a large mux which will avoid Vivado HLS to process any concurrent
+        // data access among all partitions. This is equivalent to increase read
+        // or write number for all partitions.
+        for (unsigned p = 0, e = partitionNum; p < e; ++p) {
+          if (isa<AffineLoadOp>(op))
+            readNum[p] += accessNum;
+          else if (isa<AffineStoreOp>(op))
+            writeNum[p] += accessNum;
+        }
+      } else if (isa<AffineLoadOp>(op))
+        readNum[partitionIdx] += 1;
+      else if (isa<AffineStoreOp>(op))
+        writeNum[partitionIdx] += 1;
+
+      // TODO: Calculate dependency-aware II.
+      auto dimId = getDimId(op, value);
+      for (auto depOp : llvm::drop_begin(memAccess, ++opIdx)) {
+        auto depDimId = getDimId(depOp, value);
+
+        // This means both of the two memory operaions access static memory
+        // address in different pipeline stage.
+        if (dimId == -1 && depDimId == -1) {
+        }
+      }
+    }
+
+    unsigned minII = 1;
+    if (storageType == "ram_s2p") {
+      minII = max({minII, *std::max_element(readNum.begin(), readNum.end()),
+                   *std::max_element(writeNum.begin(), writeNum.end())});
+    } else if (storageType == "ram_2p" || storageType == "ram_t2p") {
+      for (unsigned i = 0, e = partitionNum; i < e; ++i) {
+        minII = max(minII, (readNum[i] + writeNum[i] + 1) / 2);
+      }
+    } else if (storageType == "ram_1p") {
+      for (unsigned i = 0, e = partitionNum; i < e; ++i) {
+        minII = max(minII, readNum[i] + writeNum[i]);
+      }
+    }
+
+    II = max(II, minII);
+  }
+  return II;
+}
+
 bool HLSCppEstimator::visitOp(AffineForOp op) {
   auto &body = op.getLoopBody();
   if (body.getBlocks().size() != 1)
@@ -336,19 +435,23 @@ bool HLSCppEstimator::visitOp(AffineForOp op) {
   // If the current loop is annotated as pipeline, extra dependency and II
   // analysis will be executed.
   if (getBoolAttrValue(op, "pipeline")) {
-    MemInfo memInfo;
-    getMemInfo(body.front(), memInfo);
+    MemAccessDict dict;
+    getMemAccessInfo(body.front(), dict);
+
+    llvm::outs() << op << "\n";
 
     // Calculate latency of each iteration.
-    auto iterLatency = getBlockSchedule(body.front(), memInfo);
+    auto iterLatency = getBlockSchedule(body.front());
     setAttrValue(op, "iter_latency", iterLatency);
 
-    // For now we make a simple assumption that II is equal to 1.
+    // Calculate initial interval.
+    auto II = getMinII(op, dict);
+    setAttrValue(op, "init_interval", II);
+
     auto tripCount = getUIntAttrValue(op, "trip_count");
     setAttrValue(op, "flatten_trip_count", tripCount);
 
-    setAttrValue(op, "init_interval", (unsigned)1);
-    setAttrValue(op, "latency", iterLatency + 1 * (tripCount - 1));
+    setAttrValue(op, "latency", iterLatency + II * (tripCount - 1));
     return true;
   }
 
@@ -363,23 +466,24 @@ bool HLSCppEstimator::visitOp(AffineForOp op) {
     auto child = cast<AffineForOp>(op.getLoopBody().front().front());
     op.emitRemark("this loop is flattened into its inner loop.");
 
-    auto II = getUIntAttrValue(child, "init_interval");
     auto iterLatency = getUIntAttrValue(child, "iter_latency");
+    setAttrValue(op, "iter_latency", iterLatency);
+
+    auto II = getUIntAttrValue(child, "init_interval");
+    setAttrValue(op, "init_interval", II);
+
     auto flattenTripCount = getUIntAttrValue(child, "flatten_trip_count") *
                             getUIntAttrValue(op, "trip_count");
-
-    setAttrValue(op, "init_interval", II);
-    setAttrValue(op, "iter_latency", iterLatency);
     setAttrValue(op, "flatten_trip_count", flattenTripCount);
 
     setAttrValue(op, "latency", iterLatency + II * (flattenTripCount - 1));
   }
   // Default case, aka !pipeline && !flatten.
   else {
-    MemInfo memInfo;
-    getMemInfo(body.front(), memInfo);
+    MemAccessDict dict;
+    getMemAccessInfo(body.front(), dict);
 
-    auto iterLatency = getBlockSchedule(body.front(), memInfo);
+    auto iterLatency = getBlockSchedule(body.front());
     setAttrValue(op, "iter_latency", iterLatency);
 
     unsigned latency = iterLatency * getUIntAttrValue(op, "trip_count");
@@ -404,10 +508,10 @@ void HLSCppEstimator::estimateFunc(FuncOp func) {
 
   estimateBlock(func.front());
 
-  MemInfo memInfo;
-  getMemInfo(func.front(), memInfo);
+  MemAccessDict dict;
+  getMemAccessInfo(func.front(), dict);
 
-  auto latency = getBlockSchedule(func.front(), memInfo);
+  auto latency = getBlockSchedule(func.front());
   setAttrValue(func, "latency", latency);
 }
 

@@ -111,6 +111,7 @@ public:
   bool visitUnhandledOp(Operation *op) { return true; }
 
   using HLSCppVisitorBase::visitOp;
+  bool visitOp(ArrayOp op);
   bool visitOp(AffineForOp op);
   bool visitOp(AffineIfOp op);
 
@@ -124,8 +125,8 @@ public:
 //===----------------------------------------------------------------------===//
 
 // Indicate the unoccupied memory ports number.
-struct PortNum {
-  PortNum(unsigned rdPort = 0, unsigned wrPort = 0, unsigned rdwrPort = 0)
+struct PortInfo {
+  PortInfo(unsigned rdPort = 0, unsigned wrPort = 0, unsigned rdwrPort = 0)
       : rdPort(rdPort), wrPort(wrPort), rdwrPort(rdwrPort) {}
 
   unsigned rdPort;
@@ -133,23 +134,17 @@ struct PortNum {
   unsigned rdwrPort;
 };
 
-// For storing ports number information of each memory instance.
-using MemPort = llvm::SmallDenseMap<Operation *, SmallVector<PortNum, 16>, 8>;
-
-// For storing MemPort indexed by the pipeline stage (a basic block).
-using MemPortList = SmallVector<MemPort, 16>;
-
-// For storing each memory access operations (including AffineLoadOp and
+// For storing all memory access operations (including AffineLoadOp and
 // AffineStoreOp) indexed by the array instantce (ArrayOp).
 using MemAccess = SmallVector<Operation *, 16>;
 using MemAccessDict = llvm::SmallDenseMap<Operation *, MemAccess, 8>;
 
-// An aggregate information structure for storing memory load and store
-// MemAccessDict in the scope of loop/function/other region.
-struct MemInfo {
-  MemAccessDict memLoadDict;
-  MemAccessDict memStoreDict;
-};
+// For storing ports number information of each memory instance.
+using MemPort = SmallVector<PortInfo, 16>;
+using MemPortDict = llvm::SmallDenseMap<Operation *, MemPort, 8>;
+
+// For storing MemPort indexed by the pipeline stage (a basic block).
+using MemPortDictList = SmallVector<MemPortDict, 16>;
 
 // For storing loop induction information.
 struct InductionInfo {
@@ -174,12 +169,17 @@ public:
   bool visitOp(AffineForOp op);
   bool visitOp(AffineIfOp op);
 
+  /// Memory access -related methods.
   int32_t getPartitionIdx(AffineMap map, ArrayOp op);
-  void getMemInfo(Block &block, MemInfo &info);
+  void getMemAccessInfo(Block &block, MemAccessDict &info);
 
+  /// Scheduling-related methods.
   unsigned getLoadStoreSchedule(Operation *op, ArrayOp arrayOp,
-                                MemPortList &memPortList, unsigned begin);
-  unsigned getBlockSchedule(Block &block, MemInfo memInfo);
+                                MemPortDictList &memPortList, unsigned begin);
+  unsigned getBlockSchedule(Block &block);
+
+  /// Initial interval -related methods.
+  unsigned getMinII(AffineForOp forOp, MemAccessDict dict);
 
   void estimateOperation(Operation *op);
   void estimateFunc(FuncOp func);

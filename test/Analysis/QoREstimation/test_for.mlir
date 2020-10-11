@@ -11,8 +11,8 @@ func @test_for(%arg0: memref<16x4x4xindex>, %arg1: memref<16x4x4xindex>) attribu
         %1 = affine.load %array1[%i, %j, %k] : memref<16x4x4xindex>
         %2 = muli %0, %1 : index
         affine.store %2, %array1[%i, %j, %k] : memref<16x4x4xindex>
-      } {pipeline = false, unroll = false, flatten = false}
-    } {pipeline = true, unroll = false, flatten = false}
+      } {pipeline = true, unroll = false, flatten = false}
+    } {pipeline = false, unroll = false, flatten = false}
   } {pipeline = false, unroll = false, flatten = false}
   return
 }
