@@ -20,25 +20,32 @@ scalehls-opt -qor-estimation test/Analysis/QoREstimation/test_for.mlir
 ```
 
 ## TODOs List
+### Benchmark Dialect
+1. **Implement definition and lowering of DNN building blocks.**
+
+### Benchmark Generation
+1. **Start of implementation.**
+
 ### HLSCpp Dialect
 1. Verifiers for cutomized operations.
 
 ### QoREstimation Pass
-1. Support fetch latency information from profiling data.
+1. **Support fetch latency information from profiling data.**
 2. Support operation chaining.
 3. Detailed case study and refine the estimator.
-3. Implement dependency-aware II analysis.
+3. **Implement dependency-aware II analysis.**
 
 ### PragmaDSE Pass
+1. Support simple automatic pragma insertion.
 
 ### EmitHLSCpp
-1. Support AffineFor iter_args feature.
+1. **Support AffineFor iter_args feature.**
 2. TODOs in EmitHLSCpp.cpp.
 3. Support memref/tensor cast/view/subview operations.
 4. Support atomic/complex/extention -related operations.
 
 ## References
-1. [MLIR Documents](https://mlir.llvm.org)
+1. [MLIR documents](https://mlir.llvm.org)
 2. [mlir-npcomp github](https://github.com/llvm/mlir-npcomp)
 3. [onnx-mlir github](https://github.com/onnx/onnx-mlir)
 4. [circt github](https://github.com/llvm/circt)
