@@ -9,10 +9,10 @@ func @test_for(%arg0: memref<16x4x4xindex>, %arg1: memref<16x4x4xindex>) attribu
       affine.for %k = 0 to 4 {
         %0 = affine.load %array0[%i, %j, %k] : memref<16x4x4xindex>
         %1 = affine.load %array1[%i, %j, %k] : memref<16x4x4xindex>
-        %2 = muli %0, %1 : index
+        %2 = addi %0, %1 : index
         affine.store %2, %array1[%i, %j, %k] : memref<16x4x4xindex>
-      } {pipeline = true, unroll = false, flatten = false}
-    } {pipeline = false, unroll = false, flatten = false}
+      } {pipeline = false, unroll = false, flatten = false}
+    } {pipeline = true, unroll = false, flatten = false}
   } {pipeline = false, unroll = false, flatten = false}
   return
 }
