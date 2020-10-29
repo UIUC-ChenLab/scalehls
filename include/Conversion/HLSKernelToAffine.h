@@ -2,17 +2,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_CONVERSION_BENCHMARKTOAFFINE_H_
-#define SCALEHLS_CONVERSION_BENCHMARKTOAFFINE_H_
+#ifndef SCALEHLS_CONVERSION_HLSKERNELTOAFFINE_H_
+#define SCALEHLS_CONVERSION_HLSKERNELTOAFFINE_H_
 
 namespace mlir {
 namespace scalehls {
-namespace benchmark {
+namespace hlskernel {
 
-void registerBenchmarkToAffinePass();
+void registerHLSKernelToAffinePass();
 
-} // namespace benchmark
+} // namespace hlskernel
 } // namespace scalehls
 } // namespace mlir
 
-#endif // SCALEHLS_CONVERSION_BENCHMARKTOAFFINE_H_
+#endif // SCALEHLS_CONVERSION_HLSKERNELTOAFFINE_H_

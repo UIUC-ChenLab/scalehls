@@ -6,9 +6,9 @@ set(LIBS
   ${conversion_libs}
   MLIROptLib
 
-  MLIRBenchmark
+  MLIRHLSKernel
   MLIRHLSCpp
-  MLIRBenchmarkToAffine
+  MLIRHLSKernelToAffine
   MLIRConvertToHLSCpp
   MLIRScaleHLSTransforms
   MLIRScaleHLSAnalysis

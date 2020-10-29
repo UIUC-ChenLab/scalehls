@@ -3,10 +3,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "Analysis/Passes.h"
-#include "Conversion/BenchmarkToAffine.h"
 #include "Conversion/ConvertToHLSCpp.h"
-#include "Dialect/Benchmark/Benchmark.h"
+#include "Conversion/HLSKernelToAffine.h"
 #include "Dialect/HLSCpp/HLSCpp.h"
+#include "Dialect/HLSKernel/HLSKernel.h"
 #include "Transforms/Passes.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/MLIRContext.h"
@@ -62,7 +62,7 @@ int main(int argc, char **argv) {
 
   mlir::DialectRegistry registry;
   registry.insert<mlir::scalehls::hlscpp::HLSCppDialect>();
-  registry.insert<mlir::scalehls::benchmark::BenchmarkDialect>();
+  registry.insert<mlir::scalehls::hlskernel::HLSKernelDialect>();
   registry.insert<mlir::StandardOpsDialect>();
   registry.insert<mlir::AffineDialect>();
 
@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
   mlir::scalehls::registerAnalysisPasses();
 
   mlir::scalehls::hlscpp::registerConvertToHLSCppPass();
-  mlir::scalehls::benchmark::registerBenchmarkToAffinePass();
+  mlir::scalehls::hlskernel::registerHLSKernelToAffinePass();
 
   llvm::InitLLVM y(argc, argv);
 

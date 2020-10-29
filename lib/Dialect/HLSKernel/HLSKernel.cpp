@@ -2,20 +2,20 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Dialect/Benchmark/Benchmark.h"
+#include "Dialect/HLSKernel/HLSKernel.h"
 #include "mlir/IR/StandardTypes.h"
 
 using namespace mlir;
 using namespace scalehls;
-using namespace benchmark;
+using namespace hlskernel;
 
-void BenchmarkDialect::initialize() {
+void HLSKernelDialect::initialize() {
 
   addOperations<
 #define GET_OP_LIST
-#include "Dialect/Benchmark/Benchmark.cpp.inc"
+#include "Dialect/HLSKernel/HLSKernel.cpp.inc"
       >();
 }
 
 #define GET_OP_CLASSES
-#include "Dialect/Benchmark/Benchmark.cpp.inc"
+#include "Dialect/HLSKernel/HLSKernel.cpp.inc"

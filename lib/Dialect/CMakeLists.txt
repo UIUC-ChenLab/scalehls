@@ -1,2 +1,2 @@
 add_subdirectory(HLSCpp)
-add_subdirectory(Benchmark)
+add_subdirectory(HLSKernel)

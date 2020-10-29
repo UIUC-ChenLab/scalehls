@@ -1,2 +1,2 @@
 add_subdirectory(ConvertToHLSCpp)
-add_subdirectory(BenchmarkToAffine)
+add_subdirectory(HLSKernelToAffine)
