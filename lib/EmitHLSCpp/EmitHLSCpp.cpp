@@ -4,7 +4,7 @@
 
 #include "EmitHLSCpp.h"
 #include "Dialect/HLSCpp/HLSCpp.h"
-#include "Visitor.h"
+#include "Dialect/HLSCpp/Visitor.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/Dialect/SCF/SCF.h"

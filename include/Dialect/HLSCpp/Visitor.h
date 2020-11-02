@@ -2,8 +2,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_VISITOR_H
-#define SCALEHLS_VISITOR_H
+#ifndef SCALEHLS_DIALECT_HLSCPP_VISITOR_H
+#define SCALEHLS_DIALECT_HLSCPP_VISITOR_H
 
 #include "Dialect/HLSCpp/HLSCpp.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
@@ -188,4 +188,4 @@ public:
 } // namespace scalehls
 } // namespace mlir
 
-#endif // SCALEHLS_VISITOR_H
+#endif // SCALEHLS_DIALECT_HLSCPP_VISITOR_H

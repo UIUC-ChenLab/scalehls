@@ -21,6 +21,8 @@ def HLSKernelDialect : Dialect {
 class HLSKernelOp<string mnemonic, list<OpTrait> traits = []> :
     Op<HLSKernelDialect, mnemonic, traits>;
 
+include "Interfaces.td"
+
 include "Ops.td"
 
 #endif // SCALEHLS_DIALECT_HLSKERNEL_HLSKERNEL_TD

@@ -17,5 +17,7 @@ void HLSKernelDialect::initialize() {
       >();
 }
 
+#include "Dialect/HLSCpp/HLSCppInterfaces.cpp.inc"
+
 #define GET_OP_CLASSES
 #include "Dialect/HLSKernel/HLSKernel.cpp.inc"

@@ -5,8 +5,8 @@
 #ifndef SCALEHLS_ANALYSIS_QORESTIMATION_H
 #define SCALEHLS_ANALYSIS_QORESTIMATION_H
 
+#include "Dialect/HLSCpp/Visitor.h"
 #include "INIReader.h"
-#include "Visitor.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/LoopUtils.h"

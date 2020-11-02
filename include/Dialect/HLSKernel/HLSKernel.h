@@ -10,6 +10,16 @@
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/Function.h"
 
+namespace mlir {
+namespace scalehls {
+namespace hlskernel {
+
+#include "Dialect/HLSKernel/HLSKernelInterfaces.h.inc"
+
+} // namespace hlskernel
+} // namespace scalehls
+} // namespace mlir
+
 #include "Dialect/HLSKernel/HLSKernelDialect.h.inc"
 
 #define GET_OP_CLASSES
