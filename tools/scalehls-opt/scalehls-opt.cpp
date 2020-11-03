@@ -57,14 +57,14 @@ static llvm::cl::opt<bool>
                  llvm::cl::init(false));
 
 int main(int argc, char **argv) {
-  mlir::registerAllDialects();
-  mlir::registerAllPasses();
-
   mlir::DialectRegistry registry;
   registry.insert<mlir::scalehls::hlscpp::HLSCppDialect>();
   registry.insert<mlir::scalehls::hlskernel::HLSKernelDialect>();
   registry.insert<mlir::StandardOpsDialect>();
   registry.insert<mlir::AffineDialect>();
+
+  mlir::registerAllDialects(registry);
+  mlir::registerAllPasses();
 
   mlir::scalehls::registerTransformsPasses();
   mlir::scalehls::registerAnalysisPasses();

@@ -7,6 +7,7 @@
 #include "Dialect/HLSCpp/HLSCpp.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 
 using namespace std;
 using namespace mlir;
@@ -554,7 +555,7 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
       op->getCanonicalizationPatterns(patterns, context);
 
     Operation *op = getOperation();
-    applyPatternsAndFoldGreedily(op->getRegions(), patterns);
+    applyPatternsAndFoldGreedily(op->getRegions(), std::move(patterns));
 
     // Estimate performance and resource utilization.
     HLSCppEstimator estimator(builder, targetSpec, opLatency);
