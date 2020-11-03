@@ -38,25 +38,25 @@ bool HLSKernelVisitor::visitOp(ConvOp op) {
   auto B = op.getOperand(2);
   auto Y = op.getResult();
 
-  auto XShape = X.getType().cast<MemRefType>().getShape();
   auto WShape = W.getType().cast<MemRefType>().getShape();
+  auto YShape = Y.getType().cast<MemRefType>().getShape();
 
   auto newY = builder.create<mlir::AllocOp>(op.getLoc(),
                                             Y.getType().cast<MemRefType>());
   Y.replaceAllUsesWith(newY);
 
   // Create batch loop.
-  auto gLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, XShape[0]);
+  auto gLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, YShape[0]);
   builder.setInsertionPointToStart(&gLoop.getLoopBody().front());
   auto g = gLoop.getInductionVar();
 
   // Create feature map height loop.
-  auto hLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, XShape[2]);
+  auto hLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, YShape[2]);
   builder.setInsertionPointToStart(&hLoop.getLoopBody().front());
   auto h = hLoop.getInductionVar();
 
   // Create feature map width loop.
-  auto wLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, XShape[3]);
+  auto wLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, YShape[3]);
   builder.setInsertionPointToStart(&wLoop.getLoopBody().front());
   auto w = wLoop.getInductionVar();
 

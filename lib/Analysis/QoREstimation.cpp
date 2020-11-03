@@ -461,32 +461,43 @@ bool HLSCppEstimator::visitOp(AffineForOp op) {
   // changing the iteration latency. Note that this will be propogated above
   // until meeting an imperfect loop.
   if (getBoolAttrValue(op, "flatten")) {
-    auto child = cast<AffineForOp>(op.getLoopBody().front().front());
-    op.emitRemark("this loop is flattened into its inner loop.");
+    if (auto child = dyn_cast<AffineForOp>(op.getLoopBody().front().front())) {
+      // This means the inner loop is pipelined, because otherwise II will be
+      // equal to zero. So that in this case, this loop will be flattened into
+      // the inner pipelined loop.
+      if (auto II = getUIntAttrValue(child, "init_interval")) {
+        op.emitRemark("this loop is flattened into its inner loop.");
 
-    auto iterLatency = getUIntAttrValue(child, "iter_latency");
-    setAttrValue(op, "iter_latency", iterLatency);
+        setAttrValue(op, "init_interval", II);
 
-    auto II = getUIntAttrValue(child, "init_interval");
-    setAttrValue(op, "init_interval", II);
+        auto iterLatency = getUIntAttrValue(child, "iter_latency");
+        setAttrValue(op, "iter_latency", iterLatency);
 
-    auto flattenTripCount = getUIntAttrValue(child, "flatten_trip_count") *
-                            getUIntAttrValue(op, "trip_count");
-    setAttrValue(op, "flatten_trip_count", flattenTripCount);
+        auto flattenTripCount = getUIntAttrValue(child, "flatten_trip_count") *
+                                getUIntAttrValue(op, "trip_count");
+        setAttrValue(op, "flatten_trip_count", flattenTripCount);
 
-    setAttrValue(op, "latency", iterLatency + II * (flattenTripCount - 1));
+        setAttrValue(op, "latency", iterLatency + II * (flattenTripCount - 1));
+      } else {
+        auto iterLatency = getUIntAttrValue(child, "latency");
+        setAttrValue(op, "iter_latency", iterLatency);
+
+        unsigned latency = iterLatency * getUIntAttrValue(op, "trip_count");
+        setAttrValue(op, "latency", latency);
+      }
+      return true;
+    }
   }
+
   // Default case, aka !pipeline && !flatten.
-  else {
-    MemAccessDict dict;
-    getMemAccessInfo(body.front(), dict);
+  MemAccessDict dict;
+  getMemAccessInfo(body.front(), dict);
 
-    auto iterLatency = getBlockSchedule(body.front());
-    setAttrValue(op, "iter_latency", iterLatency);
+  auto iterLatency = getBlockSchedule(body.front());
+  setAttrValue(op, "iter_latency", iterLatency);
 
-    unsigned latency = iterLatency * getUIntAttrValue(op, "trip_count");
-    setAttrValue(op, "latency", latency);
-  }
+  unsigned latency = iterLatency * getUIntAttrValue(op, "trip_count");
+  setAttrValue(op, "latency", latency);
   return true;
 }
 
