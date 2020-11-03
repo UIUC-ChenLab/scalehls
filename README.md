@@ -3,7 +3,7 @@
 This project aims to create a framework that ultimately converts an algorithm written in a high level language into an efficient hardware implementation. With multiple levels of intermediate representations (IRs), MLIR appears to be the ideal tool for exploring ways to optimize the eventual design at various levels of abstraction (e.g. various levels of parallelism). Our framework will be based on MLIR, it will incorporate a backend for high level synthesis (HLS) C/C++ code. However, the key contribution will be our parametrization and optimization of a tremendously large design space.
 
 ## Quick Start
-This setup assumes that you have built LLVM and MLIR in `$LLVM_BUILD_DIR` and this repository is cloned to `$SCALEHLS_DIR`. To build and launch the tests, run
+This setup assumes that you have built LLVM cloned from (https://github.com/circt/llvm) with MLIR enabled in `$LLVM_BUILD_DIR` and this repository is cloned to `$SCALEHLS_DIR`. To build and launch the tests, run
 ```sh
 mkdir $SCALEHLS_DIR/build
 cd $SCALEHLS_DIR/build
