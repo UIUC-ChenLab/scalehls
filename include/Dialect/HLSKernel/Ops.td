@@ -11,8 +11,7 @@ def ConvOp : HLSKernelOp<"conv", [HLSKernelOpInterface]> {
     Convolution operation. For now, only static shaped 4-dims X (batch, channel,
     row, and col), 4-dims W (input channel, output channel, kernel row, and
     kernel col), 1-dim B (output channel), and 4-dims Y (batch, channel, row,
-    and col) are supported. Meanwhile, in the current lowering, padding is not
-    allowed. Verifiers will ensure the legalness of the operation.
+    and col) is supported. Verifiers will ensure the legalness of the operation.
   }];
 
   let arguments = (ins
