@@ -3,20 +3,41 @@
 This project aims to create a framework that ultimately converts an algorithm written in a high level language into an efficient hardware implementation. With multiple levels of intermediate representations (IRs), MLIR appears to be the ideal tool for exploring ways to optimize the eventual design at various levels of abstraction (e.g. various levels of parallelism). Our framework will be based on MLIR, it will incorporate a backend for high level synthesis (HLS) C/C++ code. However, the key contribution will be our parametrization and optimization of a tremendously large design space.
 
 ## Quick Start
-This setup assumes that you have built LLVM cloned from (https://github.com/circt/llvm) with MLIR enabled in `$LLVM_DIR` and this repository is cloned to `$SCALEHLS_DIR`. To build and launch the tests, run
+### 1. Install LLVM and MLIR
+**IMPORTANT** This step assumes that you have cloned LLVM from (https://github.com/circt/llvm) to `$LLVM_DIR`. To build LLVM and MLIR, run
 ```sh
-mkdir $SCALEHLS_DIR/build
-cd $SCALEHLS_DIR/build
-cmake -G Ninja .. -DMLIR_DIR=$LLVM_DIR/build/lib/cmake/mlir -DLLVM_DIR=$LLVM_DIR/build/lib/cmake/llvm -DLLVM_ENABLE_ASSERTIONS=ON -DCMAKE_BUILD_TYPE=DEBUG
-cmake --build . --target check-scalehls
-export PATH=$SCALEHLS_DIR/build/bin:$PATH
+$ mkdir $LLVM_DIR/build
+$ cd $LLVM_DIR/build
+$ cmake -G Ninja ../llvm \
+    -DLLVM_ENABLE_PROJECTS="mlir" \
+    -DLLVM_TARGETS_TO_BUILD="X86;RISCV" \
+    -DLLVM_ENABLE_ASSERTIONS=ON \
+    -DCMAKE_BUILD_TYPE=DEBUG
+$ ninja
+$ ninja check-mlir
 ```
-After the installation and test successfully completed, you should be able to run
+
+### 2. Install ScaleHLS
+This step assumes this repository is cloned to `$SCALEHLS_DIR`. To build and launch the tests, run
 ```sh
-cd $SCALEHLS_DIR
-scalehls-opt -convert-to-hlscpp test/Conversion/ConvertToHLSCpp/test_*.mlir
-scalehls-opt -convert-to-hlscpp test/EmitHLSCpp/test_*.mlir | scalehls-translate -emit-hlscpp
-scalehls-opt -qor-estimation test/Analysis/QoREstimation/test_for.mlir
+$ mkdir $SCALEHLS_DIR/build
+$ cd $SCALEHLS_DIR/build
+$ cmake -G Ninja .. \
+    -DMLIR_DIR=$LLVM_DIR/build/lib/cmake/mlir \
+    -DLLVM_DIR=$LLVM_DIR/build/lib/cmake/llvm \
+    -DLLVM_ENABLE_ASSERTIONS=ON \
+    -DCMAKE_BUILD_TYPE=DEBUG
+$ ninja check-scalehls
+```
+
+After the installation and test successfully completed, you should be able to play with
+```sh
+$ export PATH=$SCALEHLS_DIR/build/bin:$PATH
+$ cd $SCALEHLS_DIR
+$ scalehls-opt -convert-to-hlscpp test/Conversion/ConvertToHLSCpp/test_*.mlir
+$ scalehls-opt -convert-to-hlscpp test/EmitHLSCpp/test_*.mlir | scalehls-translate -emit-hlscpp
+$ scalehls-opt -qor-estimation test/Analysis/QoREstimation/test_for.mlir
+$ scalehls-opt -hlskernel-to-affine test/Conversion/HLSKernelToAffine/test_*.mlir
 ```
 
 ## References
