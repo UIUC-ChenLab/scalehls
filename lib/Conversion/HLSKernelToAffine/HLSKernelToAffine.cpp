@@ -27,6 +27,9 @@ public:
 
   using HLSKernelVisitorBase::visitOp;
   bool visitOp(ConvOp op);
+  bool visitOp(MaxPoolOp op);
+  bool visitOp(ReluOp op);
+  bool visitOp(GemmOp op);
 };
 } // namespace
 
@@ -112,6 +115,12 @@ bool HLSKernelVisitor::visitOp(ConvOp op) {
   return true;
 }
 
+bool HLSKernelVisitor::visitOp(MaxPoolOp op) { return true; }
+
+bool HLSKernelVisitor::visitOp(ReluOp op) { return true; }
+
+bool HLSKernelVisitor::visitOp(GemmOp op) { return true; }
+
 //===----------------------------------------------------------------------===//
 // HLSkernel to Affine Lowering Pass
 //===----------------------------------------------------------------------===//
@@ -130,9 +139,9 @@ void HLSKernelToAffinePass::runOnOperation() {
   for (auto &op : getOperation()) {
     if (auto func = dyn_cast<FuncOp>(op)) {
       func.walk([&](HLSKernelOpInterface kernelOp) {
-        if (visitor.dispatchVisitor(kernelOp))
-          kernelOp.erase();
-        else
+        if (visitor.dispatchVisitor(kernelOp)) {
+          // kernelOp.erase();
+        } else
           kernelOp.emitError("can't be correctly lowered.");
       });
     } else if (!isa<ModuleTerminatorOp>(op))

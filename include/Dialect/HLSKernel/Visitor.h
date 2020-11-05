@@ -21,7 +21,7 @@ public:
     return TypeSwitch<Operation *, ResultType>(op)
         .template Case<
             // HLSKernel operations.
-            ConvOp>([&](auto opNode) -> ResultType {
+            ConvOp, MaxPoolOp, ReluOp, GemmOp>([&](auto opNode) -> ResultType {
           return thisCast->visitOp(opNode, args...);
         })
         .Default([&](auto opNode) -> ResultType {
@@ -48,6 +48,9 @@ public:
 
   // HLSKernel operations.
   HANDLE(ConvOp);
+  HANDLE(MaxPoolOp);
+  HANDLE(ReluOp);
+  HANDLE(GemmOp);
 
 #undef HANDLE
 };
