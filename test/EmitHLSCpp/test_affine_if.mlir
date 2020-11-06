@@ -2,7 +2,7 @@
 
 #set0 = affine_set<(d0)[s0]: (d0 + s0 >= 0, d0 * s0 == 0)>
 
-func @test_affine(%arg0: index, %arg1: memref<16xindex>) {
+func @test_affine_if(%arg0: index, %arg1: memref<16xindex>) {
   %c11 = constant 11 : index
 
   // CHECK: int val2;

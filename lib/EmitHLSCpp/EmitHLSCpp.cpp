@@ -147,6 +147,11 @@ public:
   explicit ModuleEmitter(HLSCppEmitterState &state)
       : HLSCppEmitterBase(state) {}
 
+  /// SCF statement emitters.
+  void emitScfFor(scf::ForOp *op);
+  void emitScfIf(scf::IfOp *op);
+  void emitScfYield(scf::YieldOp *op);
+
   /// Affine statement emitters.
   void emitAffineFor(AffineForOp *op);
   void emitAffineIf(AffineIfOp *op);
@@ -310,12 +315,12 @@ public:
 
   using HLSCppVisitorBase::visitOp;
   /// SCF statements.
-  bool visitOp(scf::ForOp) { return true; };
-  bool visitOp(scf::IfOp) { return true; };
-  bool visitOp(scf::ParallelOp) { return true; };
-  bool visitOp(scf::ReduceOp) { return true; };
-  bool visitOp(scf::ReduceReturnOp) { return true; };
-  bool visitOp(scf::YieldOp) { return true; };
+  bool visitOp(scf::ForOp op) { return emitter.emitScfFor(&op), true; };
+  bool visitOp(scf::IfOp op) { return emitter.emitScfIf(&op), true; };
+  bool visitOp(scf::ParallelOp op) { return true; };
+  bool visitOp(scf::ReduceOp op) { return true; };
+  bool visitOp(scf::ReduceReturnOp op) { return true; };
+  bool visitOp(scf::YieldOp op) { return emitter.emitScfYield(&op), true; };
 
   /// Affine statements.
   bool visitOp(AffineForOp op) { return emitter.emitAffineFor(&op), true; }
@@ -502,6 +507,116 @@ private:
 // ModuleEmitter Class Definition
 //===----------------------------------------------------------------------===//
 
+/// SCF statement emitters.
+void ModuleEmitter::emitScfFor(scf::ForOp *op) {
+  indent();
+  os << "for (";
+  auto iterVar = op->getInductionVar();
+
+  // Emit lower bound.
+  emitValue(iterVar);
+  os << " = ";
+  emitValue(op->lowerBound());
+  os << "; ";
+
+  // Emit upper bound.
+  emitValue(iterVar);
+  os << " < ";
+  emitValue(op->upperBound());
+  os << "; ";
+
+  // Emit increase step.
+  emitValue(iterVar);
+  os << " += ";
+  emitValue(op->step());
+  os << ") {\n";
+
+  addIndent();
+
+  if (auto pipeline = op->getAttrOfType<BoolAttr>("pipeline")) {
+    indent();
+    if (pipeline.getValue())
+      os << "#pragma HLS pipeline\n";
+    else
+      os << "#pragma HLS pipeline off\n";
+  }
+
+  // if (auto flatten = op->getAttrOfType<BoolAttr>("flatten")) {
+  //  indent();
+  //  if (flatten.getValue())
+  //    os << "#pragma HLS loop_flatten\n";
+  //  else
+  //    os << "#pragma HLS loop_flatten off\n";
+  //}
+
+  if (auto unroll = op->getAttrOfType<BoolAttr>("unroll")) {
+    if (unroll.getValue()) {
+      indent();
+      os << "#pragma HLS unroll\n";
+    }
+  }
+
+  emitBlock(op->getLoopBody().front());
+  reduceIndent();
+
+  indent();
+  os << "}\n";
+}
+
+void ModuleEmitter::emitScfIf(scf::IfOp *op) {
+  // Declare all values returned by scf::YieldOp. They will be further handled
+  // by the scf::YieldOp emitter.
+  for (auto result : op->getResults()) {
+    if (!isDeclared(result)) {
+      indent();
+      if (result.getType().isa<ShapedType>())
+        emitArrayDecl(result);
+      else
+        emitValue(result);
+      os << ";\n";
+    }
+  }
+
+  indent();
+  os << "if (";
+  emitValue(op->condition());
+  os << ") {\n";
+  addIndent();
+  emitBlock(op->thenRegion().front());
+  reduceIndent();
+
+  if (!op->elseRegion().empty()) {
+    indent();
+    os << "} else {\n";
+    addIndent();
+    emitBlock(op->elseRegion().front());
+    reduceIndent();
+  }
+
+  indent();
+  os << "}\n";
+}
+
+void ModuleEmitter::emitScfYield(scf::YieldOp *op) {
+  if (op->getNumOperands() == 0)
+    return;
+
+  // For now, only and scf::If operations will use scf::Yield to return
+  // generated values.
+  if (auto parentOp = dyn_cast<scf::IfOp>(op->getParentOp())) {
+    unsigned resultIdx = 0;
+    for (auto result : parentOp.getResults()) {
+      unsigned rank = emitNestedLoopHead(result);
+      indent();
+      emitValue(result, rank);
+      os << " = ";
+      emitValue(op->getOperand(resultIdx++), rank);
+      os << ";\n";
+      emitNestedLoopTail(rank);
+    }
+  }
+}
+
 /// Affine statement emitters.
 void ModuleEmitter::emitAffineFor(AffineForOp *op) {
   indent();
@@ -585,8 +700,8 @@ void ModuleEmitter::emitAffineFor(AffineForOp *op) {
 }
 
 void ModuleEmitter::emitAffineIf(AffineIfOp *op) {
-  // Declare all values returned by AffineYieldOp. They will be further handled
-  // by the AffineYieldOp emitter.
+  // Declare all values returned by AffineYieldOp. They will be further
+  // handled by the AffineYieldOp emitter.
   for (auto result : op->getResults()) {
     if (!isDeclared(result)) {
       indent();
@@ -759,16 +874,16 @@ void ModuleEmitter::emitAffineVectorStore(AffineVectorStoreOp *op) {
   // TODO
 }
 
-// TODO: For now, all values created in the AffineIf region will be declared in
-// the generated C++. However, values which will be returned by affine yield
-// operation should not be declared again. How to "bind" the pair of values
-// inside/outside of AffineIf region needs to be considered.
+// TODO: For now, all values created in the AffineIf region will be declared
+// in the generated C++. However, values which will be returned by affine
+// yield operation should not be declared again. How to "bind" the pair of
+// values inside/outside of AffineIf region needs to be considered.
 void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
   if (op->getNumOperands() == 0)
     return;
 
-  // For now, only AffineParallel and AffineIf operations will use AffineYield
-  // to return generated values.
+  // For now, only AffineParallel and AffineIf operations will use
+  // AffineYield to return generated values.
   if (auto parentOp = dyn_cast<AffineIfOp>(op->getParentOp())) {
     unsigned resultIdx = 0;
     for (auto result : parentOp.getResults()) {
@@ -811,8 +926,8 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
     indent();
     os << "} else {\n";
 
-    // Otherwise, generated values will be accumulated/reduced to the current
-    // results with corresponding AtomicRMWKind operations.
+    // Otherwise, generated values will be accumulated/reduced to the
+    // current results with corresponding AtomicRMWKind operations.
     addIndent();
     resultIdx = 0;
     for (auto result : parentOp.getResults()) {
@@ -1369,8 +1484,8 @@ void ModuleEmitter::emitFunction(FuncOp func) {
     indent();
     os << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
 
-    // Interface pragma for array ports will be seperately handled since they
-    // are much more complicated.
+    // Interface pragma for array ports will be seperately handled since
+    // they are much more complicated.
     for (auto &port : portList) {
       indent();
       os << "#pragma HLS interface s_axilite";

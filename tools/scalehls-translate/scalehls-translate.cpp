@@ -74,7 +74,8 @@ int main(int argc, char **argv) {
     mlir::MLIRContext context;
 
     context.loadDialect<mlir::scalehls::hlscpp::HLSCppDialect,
-                        mlir::StandardOpsDialect, mlir::AffineDialect>();
+                        mlir::StandardOpsDialect, mlir::AffineDialect,
+                        mlir::scf::SCFDialect>();
 
     context.allowUnregisteredDialects();
     context.printOpOnDiagnostic(!verifyDiagnostics);
