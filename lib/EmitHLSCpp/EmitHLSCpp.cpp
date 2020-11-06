@@ -309,6 +309,14 @@ public:
   StmtVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
 
   using HLSCppVisitorBase::visitOp;
+  /// SCF statements.
+  bool visitOp(scf::ForOp) { return true; };
+  bool visitOp(scf::IfOp) { return true; };
+  bool visitOp(scf::ParallelOp) { return true; };
+  bool visitOp(scf::ReduceOp) { return true; };
+  bool visitOp(scf::ReduceReturnOp) { return true; };
+  bool visitOp(scf::YieldOp) { return true; };
+
   /// Affine statements.
   bool visitOp(AffineForOp op) { return emitter.emitAffineFor(&op), true; }
   bool visitOp(AffineIfOp op) { return emitter.emitAffineIf(&op), true; }

@@ -7,6 +7,7 @@
 
 #include "Dialect/HLSCpp/HLSCpp.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 
 namespace mlir {
@@ -22,6 +23,9 @@ public:
     auto *thisCast = static_cast<ConcreteType *>(this);
     return TypeSwitch<Operation *, ResultType>(op)
         .template Case<
+            // SCF statements.
+            scf::ForOp, scf::IfOp, scf::ParallelOp, scf::ReduceOp,
+            scf::ReduceReturnOp, scf::YieldOp,
             // Affine statements.
             AffineForOp, AffineIfOp, AffineParallelOp, AffineApplyOp,
             AffineMaxOp, AffineMinOp, AffineLoadOp, AffineStoreOp,
@@ -76,6 +80,14 @@ public:
   ResultType visitOp(OPTYPE op, ExtraArgs... args) {                           \
     return static_cast<ConcreteType *>(this)->visitUnhandledOp(op, args...);   \
   }
+
+  // SCF statements.
+  HANDLE(scf::ForOp);
+  HANDLE(scf::IfOp);
+  HANDLE(scf::ParallelOp);
+  HANDLE(scf::ReduceOp);
+  HANDLE(scf::ReduceReturnOp);
+  HANDLE(scf::YieldOp);
 
   // Affine statements.
   HANDLE(AffineForOp);
