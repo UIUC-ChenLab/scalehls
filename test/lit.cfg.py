@@ -54,7 +54,8 @@ llvm_config.with_environment('PATH', config.llvm_tools_dir, append_path=True)
 tool_dirs = [config.scalehls_tools_dir, config.mlir_tools_dir, config.llvm_tools_dir]
 tools = [
     'scalehls-opt',
-    'scalehls-translate'
+    'scalehls-translate',
+    'benchmark-gen'
 ]
 
 llvm_config.add_tool_substitutions(tools, tool_dirs)

@@ -9,6 +9,7 @@ set(SCALEHLS_TEST_DEPENDS
   FileCheck count not
   scalehls-opt
   scalehls-translate
+  benchmark-gen
   )
 
 add_lit_testsuite(check-scalehls "Running the scalehls regression tests"
