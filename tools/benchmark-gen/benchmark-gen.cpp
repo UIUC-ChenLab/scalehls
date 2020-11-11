@@ -4,6 +4,7 @@
 
 #include "Analysis/Passes.h"
 #include "Dialect/HLSKernel/HLSKernel.h"
+#include "INIReader.h"
 #include "Transforms/Passes.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/MLIRContext.h"
@@ -24,6 +25,19 @@ using namespace scalehls;
 using namespace hlskernel;
 
 static llvm::cl::opt<std::string>
+    benchmarkType("type", llvm::cl::desc("Benchmark type"),
+                  llvm::cl::value_desc("cnn/image"), llvm::cl::init("cnn"));
+
+static llvm::cl::opt<std::string>
+    configFilename("config", llvm::cl::desc("Configuration filename"),
+                   llvm::cl::value_desc("filename"),
+                   llvm::cl::init("../config/cnn-config.ini"));
+
+static llvm::cl::opt<unsigned>
+    benchmarkNumber("number", llvm::cl::desc("Benchmark number"),
+                    llvm::cl::value_desc("positive number"), llvm::cl::init(1));
+
+static llvm::cl::opt<std::string>
     outputFilename("o", llvm::cl::desc("Output filename"),
                    llvm::cl::value_desc("filename"), llvm::cl::init("-"));
 
@@ -32,12 +46,25 @@ static LogicalResult benchmarkGen(raw_ostream &os) {
   context.loadDialect<HLSKernelDialect>();
   auto module = ModuleOp::create(UnknownLoc::get(&context));
   OpBuilder builder(module.getBodyRegion());
-  SmallVector<mlir::Type, 4> types;
-  builder.create<FuncOp>(module.getLoc(), "new_func",
-                         builder.getFunctionType(types, types));
 
-  module.print(os);
-  os << "\n\n";
+  if (benchmarkType == "cnn") {
+    INIReader cnnConfig(configFilename);
+    if (cnnConfig.ParseError())
+      llvm::outs() << "error: cnn configuration file parse fail\n";
+
+    auto inputHeight = cnnConfig.GetInteger("config", "inputHeight", 224);
+    llvm::outs() << inputHeight << "\n";
+
+    SmallVector<mlir::Type, 4> types;
+    builder.create<FuncOp>(module.getLoc(), "new_func",
+                           builder.getFunctionType(types, types));
+
+    module.print(os);
+    os << "\n\n";
+  } else if (benchmarkType == "image") {
+  } else {
+    return failure();
+  }
   return success();
 }
 

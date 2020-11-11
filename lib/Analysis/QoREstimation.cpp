@@ -140,7 +140,7 @@ HLSCppEstimator::HLSCppEstimator(OpBuilder &builder, string targetSpecPath,
                     "--help option and pass in correct file path\n";
 
   // TODO: Support estimator initiation from profiling data.
-  auto freq = targetSpec.Get("config", "frequency", "200MHz");
+  auto freq = targetSpec.Get("spec", "frequency", "200MHz");
   auto latency = opLatency.GetInteger(freq, "op", 0);
   llvm::outs() << latency << "\n";
 }
