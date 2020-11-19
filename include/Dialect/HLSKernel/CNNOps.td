@@ -2,8 +2,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_DIALECT_HLSKERNEL_OPS_TD
-#define SCALEHLS_DIALECT_HLSKERNEL_OPS_TD
+#ifndef SCALEHLS_DIALECT_HLSKERNEL_CNNOPS_TD
+#define SCALEHLS_DIALECT_HLSKERNEL_CNNOPS_TD
 
 def ConvOp : HLSKernelOp<"conv", [HLSKernelOpInterface]> {
   let summary = "convolution operation";
@@ -15,14 +15,14 @@ def ConvOp : HLSKernelOp<"conv", [HLSKernelOpInterface]> {
   }];
 
   let arguments = (ins
-    AnyTypeOf<[TensorOf<[F16]>, TensorOf<[F32]>, TensorOf<[F64]>, AnyMemRef]>:$X,
-    AnyTypeOf<[TensorOf<[F16]>, TensorOf<[F32]>, TensorOf<[F64]>, AnyMemRef]>:$W,
-    AnyTypeOf<[TensorOf<[F16]>, TensorOf<[F32]>, TensorOf<[F64]>, AnyMemRef, NoneType]>:$B,
+    AnyTypeOf<[AnyTensor, AnyMemRef]>:$X,
+    AnyTypeOf<[AnyTensor, AnyMemRef]>:$W,
+    AnyTypeOf<[AnyTensor, AnyMemRef, NoneType]>:$B,
     OptionalAttr<I64ArrayAttr>:$pads,
     OptionalAttr<I64ArrayAttr>:$strides
   );
   let results = (outs
-    AnyTypeOf<[TensorOf<[F16]>, TensorOf<[F32]>, TensorOf<[F64]>, AnyMemRef, NoneType]>:$Y
+    AnyTypeOf<[AnyTensor, AnyMemRef, NoneType]>:$Y
   );
 }
 
@@ -35,13 +35,13 @@ def MaxPoolOp : HLSKernelOp<"maxpool", [HLSKernelOpInterface]> {
   }];
 
   let arguments = (ins
-    AnyTypeOf<[TensorOf<[F16]>, TensorOf<[F32]>, TensorOf<[F64]>, AnyMemRef]>:$X,
+    AnyTypeOf<[AnyTensor, AnyMemRef]>:$X,
     I64ArrayAttr:$kernel_shape,
     OptionalAttr<I64ArrayAttr>:$pads,
     OptionalAttr<I64ArrayAttr>:$strides
   );
   let results = (outs
-    AnyTypeOf<[TensorOf<[F16]>, TensorOf<[F32]>, TensorOf<[F64]>, AnyMemRef, NoneType]>:$Y
+    AnyTypeOf<[AnyTensor, AnyMemRef, NoneType]>:$Y
   );
 }
 
@@ -54,31 +54,30 @@ def ReluOp : HLSKernelOp<"relu", [HLSKernelOpInterface]> {
   }];
 
   let arguments = (ins
-    AnyTypeOf<[TensorOf<[F16]>, TensorOf<[F32]>, TensorOf<[F64]>, AnyMemRef]>:$X
+    AnyTypeOf<[AnyTensor, AnyMemRef]>:$X
   );
   let results = (outs
-    AnyTypeOf<[TensorOf<[F16]>, TensorOf<[F32]>, TensorOf<[F64]>, AnyMemRef, NoneType]>:$Y
+    AnyTypeOf<[AnyTensor, AnyMemRef, NoneType]>:$Y
   );
 }
 
-def GemmOp : HLSKernelOp<"gemm", [HLSKernelOpInterface]> {
-  let summary = "gemm operation";
+def DenseOp : HLSKernelOp<"dense", [HLSKernelOpInterface]> {
+  let summary = "dense operation";
   let description = [{
-    GEMM operation. For now, only static shaped 2-dims X (batch and channel),
+    Dense operation. For now, only static shaped 2-dims X (batch and channel),
     2-dims W (input and output channel), 1-dim B (output channel), and 2-dims Y
     (batch and channel) are supported. Verifiers will ensure the legalness of
     the operation.
   }];
 
   let arguments = (ins
-    AnyTypeOf<[TensorOf<[F16]>, TensorOf<[F32]>, TensorOf<[F64]>, AnyMemRef]>:$X,
-    AnyTypeOf<[TensorOf<[F16]>, TensorOf<[F32]>, TensorOf<[F64]>, AnyMemRef]>:$W,
-    AnyTypeOf<[TensorOf<[F16]>, TensorOf<[F32]>, TensorOf<[F64]>, AnyMemRef, NoneType]>:$B
+    AnyTypeOf<[AnyTensor, AnyMemRef]>:$X,
+    AnyTypeOf<[AnyTensor, AnyMemRef]>:$W,
+    AnyTypeOf<[AnyTensor, AnyMemRef, NoneType]>:$B
   );
   let results = (outs
-    AnyTypeOf<[TensorOf<[F16]>, TensorOf<[F32]>, TensorOf<[F64]>, AnyMemRef, NoneType]>:$Y
+    AnyTypeOf<[AnyTensor, AnyMemRef, NoneType]>:$Y
   );
 }
 
-
-#endif // SCALEHLS_DIALECT_HLSKERNEL_OPS_TD
+#endif // SCALEHLS_DIALECT_HLSKERNEL_CNNOPS_TD

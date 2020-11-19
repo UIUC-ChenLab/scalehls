@@ -23,13 +23,14 @@ class HLSKernelVisitor : public HLSKernelVisitorBase<HLSKernelVisitor, bool> {
 public:
   explicit HLSKernelVisitor() {}
 
+  bool visitInvaliddOp(Operation *op) { return false; }
   bool visitUnhandledOp(Operation *op) { return true; }
 
   using HLSKernelVisitorBase::visitOp;
   bool visitOp(ConvOp op);
   bool visitOp(MaxPoolOp op);
   bool visitOp(ReluOp op);
-  bool visitOp(GemmOp op);
+  bool visitOp(DenseOp op);
 };
 } // namespace
 
@@ -254,7 +255,7 @@ bool HLSKernelVisitor::visitOp(ReluOp op) {
   return true;
 }
 
-bool HLSKernelVisitor::visitOp(GemmOp op) {
+bool HLSKernelVisitor::visitOp(DenseOp op) {
   OpBuilder builder(op);
 
   auto X = op.getOperand(0);

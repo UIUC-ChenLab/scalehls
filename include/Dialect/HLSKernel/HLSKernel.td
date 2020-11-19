@@ -23,6 +23,8 @@ class HLSKernelOp<string mnemonic, list<OpTrait> traits = []> :
 
 include "Interfaces.td"
 
-include "Ops.td"
+include "CNNOps.td"
+include "ISPOps.td"
+include "BLASOps.td"
 
 #endif // SCALEHLS_DIALECT_HLSKERNEL_HLSKERNEL_TD

@@ -20,8 +20,11 @@ public:
     auto *thisCast = static_cast<ConcreteType *>(this);
     return TypeSwitch<Operation *, ResultType>(op)
         .template Case<
-            // HLSKernel operations.
-            ConvOp, MaxPoolOp, ReluOp, GemmOp>([&](auto opNode) -> ResultType {
+            // CNN operations.
+            ConvOp, MaxPoolOp, ReluOp, DenseOp,
+            // ISP operations.
+            // BLAS operations.
+            GemmOp>([&](auto opNode) -> ResultType {
           return thisCast->visitOp(opNode, args...);
         })
         .Default([&](auto opNode) -> ResultType {
@@ -46,10 +49,15 @@ public:
     return static_cast<ConcreteType *>(this)->visitUnhandledOp(op, args...);   \
   }
 
-  // HLSKernel operations.
+  // CNN operations.
   HANDLE(ConvOp);
   HANDLE(MaxPoolOp);
   HANDLE(ReluOp);
+  HANDLE(DenseOp);
+
+  // ISP operations.
+
+  // BLAS operations.
   HANDLE(GemmOp);
 
 #undef HANDLE

@@ -5,6 +5,7 @@
 #include "Analysis/Passes.h"
 #include "Conversion/ConvertToHLSCpp.h"
 #include "Conversion/HLSKernelToAffine.h"
+#include "Conversion/HLSKernelToLinalg.h"
 #include "Dialect/HLSCpp/HLSCpp.h"
 #include "Dialect/HLSKernel/HLSKernel.h"
 #include "Transforms/Passes.h"
@@ -71,6 +72,7 @@ int main(int argc, char **argv) {
 
   mlir::scalehls::hlscpp::registerConvertToHLSCppPass();
   mlir::scalehls::hlskernel::registerHLSKernelToAffinePass();
+  mlir::scalehls::hlskernel::registerHLSKernelToLinalgPass();
 
   llvm::InitLLVM y(argc, argv);
 
