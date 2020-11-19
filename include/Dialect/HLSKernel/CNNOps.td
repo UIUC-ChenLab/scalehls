@@ -80,4 +80,8 @@ def DenseOp : HLSKernelOp<"dense", [HLSKernelOpInterface]> {
   );
 }
 
+def ConcatOp : HLSKernelOp<"concat", [HLSKernelOpInterface]> {
+  let summary = "concatenate operation";
+}
+
 #endif // SCALEHLS_DIALECT_HLSKERNEL_CNNOPS_TD

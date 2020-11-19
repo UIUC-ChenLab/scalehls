@@ -21,12 +21,14 @@ public:
     return TypeSwitch<Operation *, ResultType>(op)
         .template Case<
             // CNN operations.
-            ConvOp, MaxPoolOp, ReluOp, DenseOp,
+            ConvOp, MaxPoolOp, ReluOp, DenseOp, ConcatOp,
             // ISP operations.
+            CpOp, SobelOp, HarrisOp, DeblurOp, UpsampleOp, DownsampleOp,
             // BLAS operations.
-            GemmOp>([&](auto opNode) -> ResultType {
-          return thisCast->visitOp(opNode, args...);
-        })
+            GemmOp, SymmOp, SyrkOp, Syr2kOp, TrmmOp>(
+            [&](auto opNode) -> ResultType {
+              return thisCast->visitOp(opNode, args...);
+            })
         .Default([&](auto opNode) -> ResultType {
           return thisCast->visitInvalidOp(op, args...);
         });
@@ -54,11 +56,22 @@ public:
   HANDLE(MaxPoolOp);
   HANDLE(ReluOp);
   HANDLE(DenseOp);
+  HANDLE(ConcatOp);
 
   // ISP operations.
+  HANDLE(CpOp);
+  HANDLE(SobelOp);
+  HANDLE(HarrisOp);
+  HANDLE(DeblurOp);
+  HANDLE(UpsampleOp);
+  HANDLE(DownsampleOp);
 
   // BLAS operations.
   HANDLE(GemmOp);
+  HANDLE(SymmOp);
+  HANDLE(SyrkOp);
+  HANDLE(Syr2kOp);
+  HANDLE(TrmmOp);
 
 #undef HANDLE
 };
