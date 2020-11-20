@@ -989,6 +989,15 @@ template <typename OpType> void ModuleEmitter::emitAlloc(OpType *op) {
   if (isDeclared(op->getResult()))
     return;
 
+  // This indicates that the memref is output of the function, and has been
+  // declared in the function signature.
+  for (auto &use : op->getResult().getUses()) {
+    if (auto arrayOp = dyn_cast<ArrayOp>(use.getOwner())) {
+      if (isDeclared(arrayOp.getResult()))
+        return;
+    }
+  }
+
   // Vivado HLS only supports static shape on-chip memory.
   if (!op->getType().hasStaticShape())
     emitError(*op, "is unranked or has dynamic shape.");
@@ -1186,7 +1195,7 @@ void ModuleEmitter::emitAssign(AssignOp *op) {
 }
 
 void ModuleEmitter::emitArray(ArrayOp *op) {
-  addAlias(op->getOperand(), op->getResult());
+  // addAlias(op->getOperand(), op->getResult());
 
   if (op->interface()) {
 
