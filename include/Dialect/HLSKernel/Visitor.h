@@ -21,7 +21,7 @@ public:
     return TypeSwitch<Operation *, ResultType>(op)
         .template Case<
             // CNN operations.
-            ConvOp, MaxPoolOp, ReluOp, DenseOp, ConcatOp,
+            DenseOp, ConvOp, MaxPoolOp, ReluOp, MergeOp,
             // ISP operations.
             CpOp, SobelOp, HarrisOp, DeblurOp, UpsampleOp, DownsampleOp,
             // BLAS operations.
@@ -52,11 +52,11 @@ public:
   }
 
   // CNN operations.
+  HANDLE(DenseOp);
   HANDLE(ConvOp);
   HANDLE(MaxPoolOp);
   HANDLE(ReluOp);
-  HANDLE(DenseOp);
-  HANDLE(ConcatOp);
+  HANDLE(MergeOp);
 
   // ISP operations.
   HANDLE(CpOp);

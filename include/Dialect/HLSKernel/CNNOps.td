@@ -5,83 +5,98 @@
 #ifndef SCALEHLS_DIALECT_HLSKERNEL_CNNOPS_TD
 #define SCALEHLS_DIALECT_HLSKERNEL_CNNOPS_TD
 
-def ConvOp : HLSKernelOp<"conv", [HLSKernelOpInterface]> {
-  let summary = "convolution operation";
+def DenseOp : HLSKernelOp<"dense", [HLSKernelOpInterface]> {
+  let summary = "dense operation";
   let description = [{
-    Convolution operation. For now, only static shaped 4-dims X (batch, channel,
-    row, and col), 4-dims W (input channel, output channel, kernel row, and
-    kernel col), 1-dim B (output channel), and 4-dims Y (batch, channel, row,
-    and col) is supported. Verifiers will ensure the legalness of the operation.
+    Dense layer (fully-connected layer).
+
+    I: (N, C)
+    K: (F, C)
+    B: (F)
+    O: (N, F)
   }];
 
   let arguments = (ins
-    AnyTypeOf<[AnyTensor, AnyMemRef]>:$X,
-    AnyTypeOf<[AnyTensor, AnyMemRef]>:$W,
-    AnyTypeOf<[AnyTensor, AnyMemRef, NoneType]>:$B,
-    OptionalAttr<I64ArrayAttr>:$pads,
-    OptionalAttr<I64ArrayAttr>:$strides
+    AnyMemRef:$I,
+    AnyMemRef:$K,
+    AnyMemRef:$B,
+    AnyMemRef:$O
   );
-  let results = (outs
-    AnyTypeOf<[AnyTensor, AnyMemRef, NoneType]>:$Y
+}
+
+def ConvOp : HLSKernelOp<"conv", [HLSKernelOpInterface]> {
+  let summary = "convolution operation";
+  let description = [{
+    Convolutional layer.
+
+    I: (N, C, H, W)
+    K: (F, C, KH, KW)
+    B: (F)
+    O: (N, F, H, W)
+
+    Strides and padding are integer attributes of the same rank as the number of
+    window dimensions. The padding attribute specifies the amount of zero
+    padding to be applied to the base area, which is a n-d array of (low, high)
+    padding. Each pair has the low padding as the first element and the high
+    padding as the second element. Using padding is equivalent to inserting
+    those same zero values into the input before the convolution.
+  }];
+
+  let arguments = (ins
+    AnyMemRef:$I,
+    AnyMemRef:$K,
+    AnyMemRef:$B,
+    AnyMemRef:$O,
+    OptionalAttr<I64ArrayAttr>:$strides,
+    OptionalAttr<I64ElementsAttr>:$padding
   );
 }
 
 def MaxPoolOp : HLSKernelOp<"maxpool", [HLSKernelOpInterface]> {
   let summary = "max pooling operation";
   let description = [{
-    Max pooling operation. For now, only static shaped 4-dims X (batch, channel,
-    row, and col) and 4-dims Y (batch, channel, row, and col) are supported.
-    Verifiers will ensure the legalness of the operation.
+    Max pooling layer. Only support 2D pooling, aka dimension of kernel_shape
+    attribute is 2.
+
+    I: (N, C, H, W)
+    O: (N, C, H, W)
   }];
 
   let arguments = (ins
-    AnyTypeOf<[AnyTensor, AnyMemRef]>:$X,
-    I64ArrayAttr:$kernel_shape,
-    OptionalAttr<I64ArrayAttr>:$pads,
-    OptionalAttr<I64ArrayAttr>:$strides
-  );
-  let results = (outs
-    AnyTypeOf<[AnyTensor, AnyMemRef, NoneType]>:$Y
+    AnyMemRef:$I,
+    AnyMemRef:$O,
+    OptionalAttr<I64ArrayAttr>:$kernel_shape,
+    OptionalAttr<I64ArrayAttr>:$strides,
+    OptionalAttr<I64ElementsAttr>:$padding
   );
 }
 
 def ReluOp : HLSKernelOp<"relu", [HLSKernelOpInterface]> {
   let summary = "relu operation";
   let description = [{
-    ReLU operation. For now, only static shaped 4-dims X (batch, channel, row,
-    and col) and 4-dims Y (batch, channel, row, and col) are supported.
-    Verifiers will ensure the legalness of the operation.
+    ReLU activation layer.
+
+    I: (N, C, H, W) or (N, C)
+    O: (N, C, H, W) or (N, C)
   }];
 
   let arguments = (ins
-    AnyTypeOf<[AnyTensor, AnyMemRef]>:$X
-  );
-  let results = (outs
-    AnyTypeOf<[AnyTensor, AnyMemRef, NoneType]>:$Y
+    AnyMemRef:$I,
+    AnyMemRef:$O
   );
 }
 
-def DenseOp : HLSKernelOp<"dense", [HLSKernelOpInterface]> {
-  let summary = "dense operation";
+def MergeOp : HLSKernelOp<"merge", [HLSKernelOpInterface]> {
+  let summary = "merge operation";
   let description = [{
-    Dense operation. For now, only static shaped 2-dims X (batch and channel),
-    2-dims W (input and output channel), 1-dim B (output channel), and 2-dims Y
-    (batch and channel) are supported. Verifiers will ensure the legalness of
-    the operation.
+    Element-wisely add I0 with I1, where I0 and I1 should have identical shape.
   }];
 
   let arguments = (ins
-    AnyTypeOf<[AnyTensor, AnyMemRef]>:$X,
-    AnyTypeOf<[AnyTensor, AnyMemRef]>:$W,
-    AnyTypeOf<[AnyTensor, AnyMemRef, NoneType]>:$B
+    AnyMemRef:$I0,
+    AnyMemRef:$I1,
+    AnyMemRef:$O
   );
-  let results = (outs
-    AnyTypeOf<[AnyTensor, AnyMemRef, NoneType]>:$Y
-  );
-}
-
-def ConcatOp : HLSKernelOp<"concat", [HLSKernelOpInterface]> {
-  let summary = "concatenate operation";
 }
 
 #endif // SCALEHLS_DIALECT_HLSKERNEL_CNNOPS_TD

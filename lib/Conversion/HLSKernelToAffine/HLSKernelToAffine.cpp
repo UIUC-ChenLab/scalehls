@@ -21,290 +21,251 @@ using namespace hlskernel;
 namespace {
 class HLSKernelVisitor : public HLSKernelVisitorBase<HLSKernelVisitor, bool> {
 public:
-  explicit HLSKernelVisitor() {}
+  explicit HLSKernelVisitor(OpBuilder &builder, Location loc)
+      : builder(builder), loc(loc) {}
 
   bool visitInvaliddOp(Operation *op) { return false; }
   bool visitUnhandledOp(Operation *op) { return true; }
 
   using HLSKernelVisitorBase::visitOp;
+  bool visitOp(DenseOp op);
   bool visitOp(ConvOp op);
   bool visitOp(MaxPoolOp op);
   bool visitOp(ReluOp op);
-  bool visitOp(DenseOp op);
+  // bool visitOp(MergeOp op);
+
+private:
+  OpBuilder &builder;
+  Location loc;
+
+  // Helpers for creating loops, loads, stores and binary operations.
+  Value createLoop(unsigned upper, unsigned step = 1, unsigned lower = 0) {
+    auto loop = builder.create<mlir::AffineForOp>(loc, lower, upper, step);
+    builder.setInsertionPointToStart(&loop.getLoopBody().front());
+    return loop.getInductionVar();
+  }
+
+  Value createLoad(Value array, std::initializer_list<Value> index) {
+    return builder.create<mlir::AffineLoadOp>(loc, array,
+                                              ArrayRef<Value>(index));
+  }
+
+  void createStore(Value valToStore, Value array,
+                   std::initializer_list<Value> index) {
+    builder.create<mlir::AffineStoreOp>(loc, valToStore, array,
+                                        ArrayRef<Value>(index));
+  }
+
+  template <typename OpType>
+  Value createBinaryOp(Value lhs, Value rhs, Type resultType = nullptr) {
+    if (!resultType) {
+      return builder.create<OpType>(loc, lhs.getType(), lhs, rhs);
+    } else {
+      return builder.create<OpType>(loc, resultType, lhs, rhs);
+    }
+  }
+
+  AffineExpr getDim(unsigned pos) { return builder.getAffineDimExpr(pos); }
+  AffineExpr getConst(int64_t val) {
+    return builder.getAffineConstantExpr(val);
+  }
 };
 } // namespace
 
-/// Padding is not suppored.
-bool HLSKernelVisitor::visitOp(ConvOp op) {
-  OpBuilder builder(op);
-
-  auto X = op.getOperand(0);
-  auto W = op.getOperand(1);
+bool HLSKernelVisitor::visitOp(DenseOp op) {
+  auto I = op.getOperand(0);
+  auto K = op.getOperand(1);
   auto B = op.getOperand(2);
-  auto Y = op.getResult();
+  auto O = op.getOperand(3);
 
-  auto WShape = W.getType().cast<MemRefType>().getShape();
-  auto YShape = Y.getType().cast<MemRefType>().getShape();
+  auto KShape = K.getType().cast<MemRefType>().getShape();
+  auto OShape = O.getType().cast<MemRefType>().getShape();
 
-  auto newY = builder.create<mlir::AllocOp>(op.getLoc(),
-                                            Y.getType().cast<MemRefType>());
-  Y.replaceAllUsesWith(newY);
+  // Set insertion point of builder.
+  builder.setInsertionPoint(op);
 
   // Create batch loop.
-  auto gLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, YShape[0]);
-  builder.setInsertionPointToStart(&gLoop.getLoopBody().front());
-  auto g = gLoop.getInductionVar();
+  auto n = createLoop(OShape[0]);
 
-  // Create feature map height loop.
-  auto hLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, YShape[2]);
-  builder.setInsertionPointToStart(&hLoop.getLoopBody().front());
-  auto h = hLoop.getInductionVar();
+  // Create output channel loop.
+  auto f = createLoop(KShape[0]);
 
-  // Create feature map width loop.
-  auto wLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, YShape[3]);
-  builder.setInsertionPointToStart(&wLoop.getLoopBody().front());
-  auto w = wLoop.getInductionVar();
+  // Load bias into O array.
+  auto bias = createLoad(B, {f});
+  createStore(bias, O, {n, f});
 
-  // Create kernel number loop.
-  auto kLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, WShape[0]);
-  builder.setInsertionPointToStart(&kLoop.getLoopBody().front());
-  auto k = kLoop.getInductionVar();
+  // Create input channel loop.
+  auto c = createLoop(KShape[1]);
 
-  // Load bias into newY array.
-  auto bias = builder.create<mlir::AffineLoadOp>(op.getLoc(), B, k);
-  builder.create<mlir::AffineStoreOp>(op.getLoc(), bias, newY,
-                                      ArrayRef<Value>({g, k, h, w}));
-
-  // Create channel number loop.
-  auto cLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, WShape[1]);
-  builder.setInsertionPointToStart(&cLoop.getLoopBody().front());
-  auto c = cLoop.getInductionVar();
-
-  // Create kernel height loop.
-  auto rLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, WShape[2]);
-  builder.setInsertionPointToStart(&rLoop.getLoopBody().front());
-  auto r = rLoop.getInductionVar();
-
-  // Create kernel width loop.
-  auto sLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, WShape[3]);
-  builder.setInsertionPointToStart(&sLoop.getLoopBody().front());
-  auto s = sLoop.getInductionVar();
-
-  // Fetch feature map.
-  SmallVector<AffineExpr, 4> idxExprs;
-  idxExprs.push_back(builder.getAffineDimExpr(0));
-  idxExprs.push_back(builder.getAffineDimExpr(1));
-  idxExprs.push_back(builder.getAffineDimExpr(2) + builder.getAffineDimExpr(4));
-  idxExprs.push_back(builder.getAffineDimExpr(3) + builder.getAffineDimExpr(5));
-  auto fmap = builder.create<mlir::AffineLoadOp>(
-      op.getLoc(), X, AffineMap::get(6, 0, idxExprs, op.getContext()),
-      ArrayRef<Value>({g, c, h, w, r, s}));
-
-  // Fetch weight and carry out multiplication.
-  auto weight = builder.create<mlir::AffineLoadOp>(
-      op.getLoc(), W, ArrayRef<Value>({k, c, r, s}));
-  auto multi =
-      builder.create<mlir::MulFOp>(op.getLoc(), fmap.getType(), fmap, weight);
+  // Fetch feature map, kernel and carry out multiplication.
+  auto fmap = createLoad(I, {n, c});
+  auto kernel = createLoad(K, {f, c});
+  auto mult = createBinaryOp<mlir::MulFOp>(fmap, kernel);
 
   // Fetch partial result and carry out accumulation.
-  auto partial = builder.create<mlir::AffineLoadOp>(
-      op.getLoc(), newY, ArrayRef<Value>({g, k, h, w}));
-  auto accum =
-      builder.create<mlir::AddFOp>(op.getLoc(), fmap.getType(), partial, multi);
-  builder.create<mlir::AffineStoreOp>(op.getLoc(), accum, newY,
-                                      ArrayRef<Value>({g, k, h, w}));
+  auto partial = createLoad(O, {n, f});
+  auto accum = createBinaryOp<mlir::AddFOp>(partial, mult);
+  createStore(accum, O, {n, f});
 
   return true;
 }
 
-// Only support when kernel size is equal to stride size.
-bool HLSKernelVisitor::visitOp(MaxPoolOp op) {
-  OpBuilder builder(op);
+/// Padding and strides has not been suppored.
+bool HLSKernelVisitor::visitOp(ConvOp op) {
+  auto I = op.getOperand(0);
+  auto K = op.getOperand(1);
+  auto B = op.getOperand(2);
+  auto O = op.getOperand(3);
 
+  auto KShape = K.getType().cast<MemRefType>().getShape();
+  auto OShape = O.getType().cast<MemRefType>().getShape();
+
+  // Set insertion point of builder.
+  builder.setInsertionPoint(op);
+
+  // Create batch loop.
+  auto n = createLoop(OShape[0]);
+
+  // Create feature map height loop.
+  auto h = createLoop(OShape[2]);
+
+  // Create feature map width loop.
+  auto w = createLoop(OShape[3]);
+
+  // Create filter number loop.
+  auto f = createLoop(KShape[0]);
+
+  // Load bias into newY array.
+  auto bias = createLoad(B, {f});
+  createStore(bias, O, {n, f, h, w});
+
+  // Create channel number loop.
+  auto c = createLoop(KShape[1]);
+
+  // Create kernel height loop.
+  auto r = createLoop(KShape[2]);
+
+  // Create kernel width loop.
+  auto s = createLoop(KShape[3]);
+
+  // Fetch feature map.
+  SmallVector<AffineExpr, 4> indexExprs;
+  indexExprs.push_back(getDim(0));
+  indexExprs.push_back(getDim(1));
+  indexExprs.push_back(getDim(2) + getDim(4));
+  indexExprs.push_back(getDim(3) + getDim(5));
+  auto fmap = builder.create<mlir::AffineLoadOp>(
+      op.getLoc(), I, AffineMap::get(6, 0, indexExprs, op.getContext()),
+      ArrayRef<Value>({n, c, h, w, r, s}));
+
+  // Fetch weight and carry out multiplication.
+  auto kernel = createLoad(K, {f, c, r, s});
+  auto multi = createBinaryOp<mlir::MulFOp>(fmap, kernel);
+
+  // Fetch partial result and carry out accumulation.
+  auto partial = createLoad(O, {n, f, h, w});
+  auto accum = createBinaryOp<mlir::AddFOp>(partial, multi);
+  createStore(accum, O, {n, f, h, w});
+
+  return true;
+}
+
+// Padding and strides has not been suppored. Only support when kernel size is
+// equal to stride size.
+bool HLSKernelVisitor::visitOp(MaxPoolOp op) {
   SmallVector<int64_t, 2> kernelShape;
   for (auto shape : op.getAttrOfType<ArrayAttr>("kernel_shape"))
     kernelShape.push_back(shape.cast<IntegerAttr>().getInt());
 
-  auto X = op.getOperand();
-  auto Y = op.getResult();
+  auto I = op.getOperand(0);
+  auto O = op.getOperand(1);
 
-  auto YShape = Y.getType().cast<MemRefType>().getShape();
-  auto dataType = Y.getType().cast<MemRefType>().getElementType();
+  auto OShape = O.getType().cast<MemRefType>().getShape();
 
-  auto newY = builder.create<mlir::AllocOp>(op.getLoc(),
-                                            Y.getType().cast<MemRefType>());
-  Y.replaceAllUsesWith(newY);
+  // Set insertion point of builder.
+  builder.setInsertionPoint(op);
 
   // Create batch loop.
-  auto gLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, YShape[0]);
-  builder.setInsertionPointToStart(&gLoop.getLoopBody().front());
-  auto g = gLoop.getInductionVar();
-
-  // Create channel loop.
-  auto cLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, YShape[1]);
-  builder.setInsertionPointToStart(&cLoop.getLoopBody().front());
-  auto c = cLoop.getInductionVar();
+  auto n = createLoop(OShape[0]);
 
   // Create height loop.
-  auto hLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, YShape[2]);
-  builder.setInsertionPointToStart(&hLoop.getLoopBody().front());
-  auto h = hLoop.getInductionVar();
+  auto h = createLoop(OShape[2]);
 
   // Create width loop.
-  auto wLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, YShape[3]);
-  builder.setInsertionPointToStart(&wLoop.getLoopBody().front());
-  auto w = wLoop.getInductionVar();
+  auto w = createLoop(OShape[3]);
+
+  // Create channel loop.
+  auto c = createLoop(OShape[1]);
 
   // Set largest value as zero.
-  auto zeroConstant = builder.create<mlir::ConstantOp>(
+  auto dataType = O.getType().cast<MemRefType>().getElementType();
+  auto zeroConst = builder.create<mlir::ConstantOp>(
       op.getLoc(), builder.getZeroAttr(dataType));
-  builder.create<mlir::AffineStoreOp>(op.getLoc(), zeroConstant, newY,
-                                      ArrayRef<Value>({g, c, h, w}));
+  createStore(zeroConst, O, {h, c, h, w});
 
   // Create kernel height loop.
-  auto rLoop =
-      builder.create<mlir::AffineForOp>(op.getLoc(), 0, kernelShape[0]);
-  builder.setInsertionPointToStart(&rLoop.getLoopBody().front());
-  auto r = rLoop.getInductionVar();
+  auto r = createLoop(kernelShape[0]);
 
   // Create kernel width loop.
-  auto sLoop =
-      builder.create<mlir::AffineForOp>(op.getLoc(), 0, kernelShape[1]);
-  builder.setInsertionPointToStart(&sLoop.getLoopBody().front());
-  auto s = sLoop.getInductionVar();
+  auto s = createLoop(kernelShape[1]);
 
   // Fetch feature map.
-  SmallVector<AffineExpr, 4> idxExprs;
-  idxExprs.push_back(builder.getAffineDimExpr(0));
-  idxExprs.push_back(builder.getAffineDimExpr(1));
-  idxExprs.push_back(builder.getAffineDimExpr(2) *
-                         builder.getAffineConstantExpr(kernelShape[0]) +
-                     builder.getAffineDimExpr(4));
-  idxExprs.push_back(builder.getAffineDimExpr(3) *
-                         builder.getAffineConstantExpr(kernelShape[1]) +
-                     builder.getAffineDimExpr(5));
+  SmallVector<AffineExpr, 4> indexExprs;
+  indexExprs.push_back(getDim(0));
+  indexExprs.push_back(getDim(1));
+  indexExprs.push_back(getDim(2) * getConst(kernelShape[0]) + getDim(4));
+  indexExprs.push_back(getDim(3) * getConst(kernelShape[1]) + getDim(5));
   auto fmap = builder.create<mlir::AffineLoadOp>(
-      op.getLoc(), X, AffineMap::get(6, 0, idxExprs, op.getContext()),
-      ArrayRef<Value>({g, c, h, w, r, s}));
+      op.getLoc(), I, AffineMap::get(6, 0, indexExprs, op.getContext()),
+      ArrayRef<Value>({n, c, h, w, r, s}));
 
-  // Fetch current greatest value.
-  auto tmpGreatest = builder.create<mlir::AffineLoadOp>(
-      op.getLoc(), newY, ArrayRef<Value>({g, c, h, w}));
+  // Carry out comparison.
+  auto tmpGreatest = createLoad(O, {n, c, h, w});
   auto greaterThanTmp = builder.create<mlir::CmpFOp>(
       op.getLoc(), CmpFPredicate::OGT, fmap, tmpGreatest);
 
+  // Carry out selection and store the greater value.
   auto newGreatest = builder.create<mlir::SelectOp>(op.getLoc(), greaterThanTmp,
                                                     fmap, tmpGreatest);
-
-  // Store back the greater value.
-  builder.create<mlir::AffineStoreOp>(op.getLoc(), newGreatest, newY,
-                                      ArrayRef<Value>({g, c, h, w}));
+  createStore(newGreatest, O, {h, c, h, w});
 
   return true;
 }
 
 bool HLSKernelVisitor::visitOp(ReluOp op) {
-  OpBuilder builder(op);
+  auto I = op.getOperand(0);
+  auto O = op.getOperand(1);
 
-  auto X = op.getOperand();
-  auto Y = op.getResult();
+  auto OShape = O.getType().cast<MemRefType>().getShape();
 
-  auto YShape = Y.getType().cast<MemRefType>().getShape();
-
-  auto newY = builder.create<mlir::AllocOp>(op.getLoc(),
-                                            Y.getType().cast<MemRefType>());
-  Y.replaceAllUsesWith(newY);
+  // Set insertion point of builder.
+  builder.setInsertionPoint(op);
 
   // Create batch loop.
-  auto gLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, YShape[0]);
-  builder.setInsertionPointToStart(&gLoop.getLoopBody().front());
-  auto g = gLoop.getInductionVar();
-
-  // Create channel loop.
-  auto cLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, YShape[1]);
-  builder.setInsertionPointToStart(&cLoop.getLoopBody().front());
-  auto c = cLoop.getInductionVar();
+  auto n = createLoop(OShape[0]);
 
   // Create height loop.
-  auto hLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, YShape[2]);
-  builder.setInsertionPointToStart(&hLoop.getLoopBody().front());
-  auto h = hLoop.getInductionVar();
+  auto h = createLoop(OShape[2]);
 
   // Create width loop.
-  auto wLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, YShape[3]);
-  builder.setInsertionPointToStart(&wLoop.getLoopBody().front());
-  auto w = wLoop.getInductionVar();
+  auto w = createLoop(OShape[3]);
+
+  // Create channel loop.
+  auto c = createLoop(OShape[1]);
 
   // Load original value from input array.
-  auto fmap = builder.create<mlir::AffineLoadOp>(op.getLoc(), X,
-                                                 ArrayRef<Value>({g, c, h, w}));
+  auto fmap = createLoad(I, {n, c, h, w});
 
-  // Carry out activation.
+  // Carry out comparison.
   auto zeroConstant = builder.create<mlir::ConstantOp>(
       op.getLoc(), builder.getZeroAttr(fmap.getType()));
   auto greaterThanZero = builder.create<mlir::CmpFOp>(
       op.getLoc(), CmpFPredicate::OGT, fmap, zeroConstant);
 
+  // Carry out selection and store the activation.
   auto activ = builder.create<mlir::SelectOp>(op.getLoc(), greaterThanZero,
                                               fmap, zeroConstant);
-
-  // Store back the activations.
-  builder.create<mlir::AffineStoreOp>(op.getLoc(), activ, newY,
-                                      ArrayRef<Value>({g, c, h, w}));
-
-  return true;
-}
-
-bool HLSKernelVisitor::visitOp(DenseOp op) {
-  OpBuilder builder(op);
-
-  auto X = op.getOperand(0);
-  auto W = op.getOperand(1);
-  auto B = op.getOperand(2);
-  auto Y = op.getResult();
-
-  auto WShape = W.getType().cast<MemRefType>().getShape();
-  auto YShape = Y.getType().cast<MemRefType>().getShape();
-
-  auto newY = builder.create<mlir::AllocOp>(op.getLoc(),
-                                            Y.getType().cast<MemRefType>());
-  Y.replaceAllUsesWith(newY);
-
-  // Create batch loop.
-  auto gLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, YShape[0]);
-  builder.setInsertionPointToStart(&gLoop.getLoopBody().front());
-  auto g = gLoop.getInductionVar();
-
-  // Create output channel loop.
-  auto kLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, WShape[0]);
-  builder.setInsertionPointToStart(&kLoop.getLoopBody().front());
-  auto k = kLoop.getInductionVar();
-
-  // Load bias into newY array.
-  auto bias = builder.create<mlir::AffineLoadOp>(op.getLoc(), B, k);
-  builder.create<mlir::AffineStoreOp>(op.getLoc(), bias, newY,
-                                      ArrayRef<Value>({g, k}));
-
-  // Create input channel loop.
-  auto cLoop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, WShape[1]);
-  builder.setInsertionPointToStart(&cLoop.getLoopBody().front());
-  auto c = cLoop.getInductionVar();
-
-  // Fetch feature map, weight and carry out multiplication.
-  auto fmap = builder.create<mlir::AffineLoadOp>(op.getLoc(), X,
-                                                 ArrayRef<Value>({g, c}));
-  auto weight = builder.create<mlir::AffineLoadOp>(op.getLoc(), W,
-                                                   ArrayRef<Value>({k, c}));
-  auto multi =
-      builder.create<mlir::MulFOp>(op.getLoc(), fmap.getType(), fmap, weight);
-
-  // Fetch partial result and carry out accumulation.
-  auto partial = builder.create<mlir::AffineLoadOp>(op.getLoc(), newY,
-                                                    ArrayRef<Value>({g, k}));
-  auto accum =
-      builder.create<mlir::AddFOp>(op.getLoc(), fmap.getType(), partial, multi);
-  builder.create<mlir::AffineStoreOp>(op.getLoc(), accum, newY,
-                                      ArrayRef<Value>({g, k}));
+  createStore(activ, O, {n, c, h, w});
 
   return true;
 }
@@ -322,9 +283,11 @@ public:
 } // namespace
 
 void HLSKernelToAffinePass::runOnOperation() {
-  HLSKernelVisitor visitor;
+  auto module = getOperation();
+  OpBuilder builder(module);
+  HLSKernelVisitor visitor(builder, module.getLoc());
 
-  for (auto &op : getOperation()) {
+  for (auto &op : module) {
     if (auto func = dyn_cast<FuncOp>(op)) {
       func.walk([&](HLSKernelOpInterface kernelOp) {
         if (visitor.dispatchVisitor(kernelOp)) {

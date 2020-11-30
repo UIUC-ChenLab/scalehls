@@ -9,7 +9,6 @@ set(LIBS
   MLIRHLSKernel
   MLIRHLSCpp
   MLIRHLSKernelToAffine
-  MLIRHLSKernelToLinalg
   MLIRConvertToHLSCpp
   MLIRScaleHLSTransforms
   MLIRScaleHLSAnalysis
