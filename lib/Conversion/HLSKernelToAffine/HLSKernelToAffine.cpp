@@ -7,6 +7,7 @@
 #include "Dialect/HLSKernel/Visitor.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/IR/IntegerSet.h"
 #include "mlir/Pass/Pass.h"
 #include "llvm/ADT/TypeSwitch.h"
 
@@ -429,32 +430,33 @@ bool HLSKernelVisitor::visitOp(SymmOp op) {
   auto betaC = createBinaryOp<mlir::MulFOp>(beta, initC);
   createStore(betaC, C, {m, n});
 
-  // TODO: use if statement instead of two seperate loop.
-  // Create K dimension loop for lower triangle.
-  auto lk = createLoop(0, m);
+  // Create K dimension loop.
+  auto k = createLoop(0, CShape[0]);
+
+  // Create if condition for fetching value from array A. The then block of the
+  // AffineIf operation is corresponding to lower triangle and vice versa.
+  auto dataType = A.getType().cast<MemRefType>().getElementType();
+  auto conditionSet = IntegerSet::get(2, 0, getDim(0) - getDim(1), false);
+  auto lowerUpperIf = builder.create<mlir::AffineIfOp>(
+      loc, dataType, conditionSet, ArrayRef<Value>({m, k}), true);
+
+  builder.setInsertionPointToStart(lowerUpperIf.getThenBlock());
+  auto trueValA = createLoad(A, {m, k});
+  builder.create<mlir::AffineYieldOp>(loc, trueValA);
+
+  builder.setInsertionPointToStart(lowerUpperIf.getElseBlock());
+  auto falseValA = createLoad(A, {k, m});
+  builder.create<mlir::AffineYieldOp>(loc, falseValA);
 
   // Accumulate C with alpha * A * B.
-  auto valA = createLoad(A, {m, lk});
-  auto valB = createLoad(B, {lk, n});
+  builder.setInsertionPointAfter(lowerUpperIf);
+  auto valA = lowerUpperIf.getResult(0);
+  auto valB = createLoad(B, {k, n});
   auto valC = createLoad(C, {m, n});
 
   auto alphaA = createBinaryOp<mlir::MulFOp>(alpha, valA);
   auto alphaAB = createBinaryOp<mlir::MulFOp>(alphaA, valB);
   auto accumC = createBinaryOp<mlir::AddFOp>(alphaAB, valC);
-  createStore(accumC, C, {m, n});
-
-  // Create K dimension loop for upper triangle.
-  builder.setInsertionPoint(n.getParentBlock()->getTerminator());
-  auto hk = createLoop(m, CShape[0]);
-
-  // Accumulate C with alpha * A * B.
-  valA = createLoad(A, {hk, m});
-  valB = createLoad(B, {hk, n});
-  valC = createLoad(C, {m, n});
-
-  alphaA = createBinaryOp<mlir::MulFOp>(alpha, valA);
-  alphaAB = createBinaryOp<mlir::MulFOp>(alphaA, valB);
-  accumC = createBinaryOp<mlir::AddFOp>(alphaAB, valC);
   createStore(accumC, C, {m, n});
 
   return true;
