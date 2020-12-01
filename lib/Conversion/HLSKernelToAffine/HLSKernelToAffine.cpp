@@ -34,6 +34,12 @@ public:
   bool visitOp(ReluOp op);
   bool visitOp(MergeOp op);
 
+  bool visitOp(GemmOp op);
+  bool visitOp(SymmOp op);
+  bool visitOp(SyrkOp op);
+  bool visitOp(Syr2kOp op);
+  bool visitOp(TrmmOp op);
+
 private:
   OpBuilder &builder;
   Location loc;
@@ -72,6 +78,10 @@ private:
   }
 };
 } // namespace
+
+//===----------------------------------------------------------------------===//
+// CNNOps Handler
+//===----------------------------------------------------------------------===//
 
 bool HLSKernelVisitor::visitOp(DenseOp op) {
   auto I = op.getOperand(0);
@@ -303,6 +313,21 @@ bool HLSKernelVisitor::visitOp(MergeOp op) {
 
   return true;
 }
+
+//===----------------------------------------------------------------------===//
+// BLASOps Handler
+//===----------------------------------------------------------------------===//
+
+// Only default attributes configuration are supported.
+bool HLSKernelVisitor::visitOp(GemmOp op) { return true; }
+
+bool HLSKernelVisitor::visitOp(SymmOp op) { return true; }
+
+bool HLSKernelVisitor::visitOp(SyrkOp op) { return true; }
+
+bool HLSKernelVisitor::visitOp(Syr2kOp op) { return true; }
+
+bool HLSKernelVisitor::visitOp(TrmmOp op) { return true; }
 
 //===----------------------------------------------------------------------===//
 // HLSkernel to Affine Lowering Pass
