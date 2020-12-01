@@ -40,7 +40,7 @@ def SymmOp : HLSKernelOp<"symm", [HLSKernelOpInterface]> {
     C = alpha * B * A + beta * C,
     A: N x N, symmetric,
 
-    UPLO (false / true): A is upper / lower triangular,
+    UPLO (false / true): A is lower / upper triangular,
 
     B: M x N,
     C: M x N
@@ -68,7 +68,7 @@ def SyrkOp : HLSKernelOp<"syrk", [HLSKernelOpInterface]> {
     C = alpha * A^T * A + beta * C,
     A: K x N,
 
-    UPLO (false / true): C is upper / lower triangular,
+    UPLO (false / true): C is lower / upper triangular,
 
     C: N x N, symmetric
   }];
@@ -96,7 +96,7 @@ def Syr2kOp : HLSKernelOp<"syr2k", [HLSKernelOpInterface]> {
     A: K x N,
     B: K x N,
 
-    UPLO (false / true): C is upper / lower triangular,
+    UPLO (false / true): C is lower / upper triangular,
 
     C: N x N, symmetric
   }];
@@ -123,7 +123,7 @@ def TrmmOp : HLSKernelOp<"trmm", [HLSKernelOpInterface]> {
     B = alpha * B * op(A),
     A: N x N, triangular,
 
-    UPLO (false / true): A is upper / lower triangular,
+    UPLO (false / true): A is lower / upper triangular,
     TRANSA (false / true): op(A) = A / op(A) = A^T,
     DIAG (false / true): A is non-unit / unit triangular,
 

@@ -44,13 +44,42 @@ private:
   OpBuilder &builder;
   Location loc;
 
-  // Helpers for creating loops, loads, stores and binary operations.
-  Value createLoop(unsigned upper, unsigned step = 1, unsigned lower = 0) {
+  // Helpers for creating loops.
+  // Constant upper and lower bound.
+  Value createLoop(int64_t upper, int64_t lower = 0, int64_t step = 1) {
     auto loop = builder.create<mlir::AffineForOp>(loc, lower, upper, step);
     builder.setInsertionPointToStart(&loop.getLoopBody().front());
     return loop.getInductionVar();
   }
 
+  // General case.
+  Value createLoop(std::initializer_list<Value> upper, AffineMap upperMap,
+                   std::initializer_list<Value> lower, AffineMap lowerMap,
+                   int64_t step = 1) {
+    auto loop = builder.create<mlir::AffineForOp>(loc, lower, lowerMap, upper,
+                                                  upperMap, step);
+    builder.setInsertionPointToStart(&loop.getLoopBody().front());
+    return loop.getInductionVar();
+  }
+
+  Value createLoop(Value upper, Value lower, int64_t step = 1) {
+    auto indexMap = AffineMap::get(1, 0, getDim(0), builder.getContext());
+    return createLoop({upper}, indexMap, {lower}, indexMap);
+  }
+
+  Value createLoop(int64_t upper, Value lower, int64_t step = 1) {
+    auto lowerMap = AffineMap::get(1, 0, getDim(0), builder.getContext());
+    auto upperMap = AffineMap::get(0, 0, getConst(upper), builder.getContext());
+    return createLoop({}, upperMap, {lower}, lowerMap);
+  }
+
+  Value createLoop(Value upper, int64_t lower, int64_t step = 1) {
+    auto lowerMap = AffineMap::get(0, 0, getConst(lower), builder.getContext());
+    auto upperMap = AffineMap::get(1, 0, getDim(0), builder.getContext());
+    return createLoop({upper}, upperMap, {}, lowerMap);
+  }
+
+  // Helpers for creating loads, stores and binary operations.
   Value createLoad(Value array, std::initializer_list<Value> index) {
     return builder.create<mlir::AffineLoadOp>(loc, array,
                                               ArrayRef<Value>(index));
@@ -319,9 +348,100 @@ bool HLSKernelVisitor::visitOp(MergeOp op) {
 //===----------------------------------------------------------------------===//
 
 // Only default attributes configuration are supported.
-bool HLSKernelVisitor::visitOp(GemmOp op) { return true; }
+bool HLSKernelVisitor::visitOp(GemmOp op) {
+  auto alpha = op.getOperand(0);
+  auto beta = op.getOperand(1);
 
-bool HLSKernelVisitor::visitOp(SymmOp op) { return true; }
+  auto A = op.getOperand(2);
+  auto B = op.getOperand(3);
+  auto C = op.getOperand(4);
+
+  auto AShape = A.getType().cast<MemRefType>().getShape();
+  auto CShape = C.getType().cast<MemRefType>().getShape();
+
+  // Set insertion point of builder.
+  builder.setInsertionPoint(op);
+
+  // Create M dimension loop.
+  auto m = createLoop(CShape[0]);
+
+  // Create N dimension loop.
+  auto n = createLoop(CShape[1]);
+
+  // Update C with beta * C.
+  auto initC = createLoad(C, {m, n});
+  auto betaC = createBinaryOp<mlir::MulFOp>(beta, initC);
+  createStore(betaC, C, {m, n});
+
+  // Create K dimension loop.
+  auto k = createLoop(AShape[1]);
+
+  // Accumulate C with alpha * A * B.
+  auto valA = createLoad(A, {m, k});
+  auto valB = createLoad(B, {k, n});
+  auto valC = createLoad(C, {m, n});
+
+  auto alphaA = createBinaryOp<mlir::MulFOp>(alpha, valA);
+  auto alphaAB = createBinaryOp<mlir::MulFOp>(alphaA, valB);
+  auto accumC = createBinaryOp<mlir::AddFOp>(alphaAB, valC);
+  createStore(accumC, C, {m, n});
+
+  return true;
+}
+
+bool HLSKernelVisitor::visitOp(SymmOp op) {
+  auto alpha = op.getOperand(0);
+  auto beta = op.getOperand(1);
+
+  auto A = op.getOperand(2);
+  auto B = op.getOperand(3);
+  auto C = op.getOperand(4);
+
+  auto CShape = C.getType().cast<MemRefType>().getShape();
+
+  // Set insertion point of builder.
+  builder.setInsertionPoint(op);
+
+  // Create M dimension loop.
+  auto m = createLoop(CShape[0]);
+
+  // Create N dimension loop.
+  auto n = createLoop(CShape[1]);
+
+  // Update C with beta * C.
+  auto initC = createLoad(C, {m, n});
+  auto betaC = createBinaryOp<mlir::MulFOp>(beta, initC);
+  createStore(betaC, C, {m, n});
+
+  // Create K dimension loop for lower triangle.
+  auto lk = createLoop(m, 0);
+
+  // Accumulate C with alpha * A * B.
+  auto valA = createLoad(A, {m, lk});
+  auto valB = createLoad(B, {lk, n});
+  auto valC = createLoad(C, {m, n});
+
+  auto alphaA = createBinaryOp<mlir::MulFOp>(alpha, valA);
+  auto alphaAB = createBinaryOp<mlir::MulFOp>(alphaA, valB);
+  auto accumC = createBinaryOp<mlir::AddFOp>(alphaAB, valC);
+  createStore(accumC, C, {m, n});
+
+  // Create K dimension loop for upper triangle.
+  builder.setInsertionPoint(n.getParentBlock()->getTerminator());
+  auto hk = createLoop(CShape[0], m);
+
+  // Accumulate C with alpha * A * B.
+  valA = createLoad(A, {hk, m});
+  valB = createLoad(B, {hk, n});
+  valC = createLoad(C, {m, n});
+
+  alphaA = createBinaryOp<mlir::MulFOp>(alpha, valA);
+  alphaAB = createBinaryOp<mlir::MulFOp>(alphaA, valB);
+  accumC = createBinaryOp<mlir::AddFOp>(alphaAB, valC);
+  createStore(accumC, C, {m, n});
+
+  return true;
+}
 
 bool HLSKernelVisitor::visitOp(SyrkOp op) { return true; }
 
