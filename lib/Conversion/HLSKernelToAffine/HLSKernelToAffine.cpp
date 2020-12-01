@@ -46,15 +46,15 @@ private:
 
   // Helpers for creating loops.
   // Constant upper and lower bound.
-  Value createLoop(int64_t upper, int64_t lower = 0, int64_t step = 1) {
+  Value createLoop(int64_t lower, int64_t upper, int64_t step = 1) {
     auto loop = builder.create<mlir::AffineForOp>(loc, lower, upper, step);
     builder.setInsertionPointToStart(&loop.getLoopBody().front());
     return loop.getInductionVar();
   }
 
   // General case.
-  Value createLoop(std::initializer_list<Value> upper, AffineMap upperMap,
-                   std::initializer_list<Value> lower, AffineMap lowerMap,
+  Value createLoop(std::initializer_list<Value> lower, AffineMap lowerMap,
+                   std::initializer_list<Value> upper, AffineMap upperMap,
                    int64_t step = 1) {
     auto loop = builder.create<mlir::AffineForOp>(loc, lower, lowerMap, upper,
                                                   upperMap, step);
@@ -62,24 +62,40 @@ private:
     return loop.getInductionVar();
   }
 
-  Value createLoop(Value upper, Value lower, int64_t step = 1) {
-    auto indexMap = AffineMap::get(1, 0, getDim(0), builder.getContext());
-    return createLoop({upper}, indexMap, {lower}, indexMap);
+  Value createLoop(Value lower, Value upper, int64_t step = 1) {
+    auto indexMap = AffineMap::get(1, 0, getDim(0));
+    return createLoop({lower}, indexMap, {upper}, indexMap);
   }
 
-  Value createLoop(int64_t upper, Value lower, int64_t step = 1) {
-    auto lowerMap = AffineMap::get(1, 0, getDim(0), builder.getContext());
-    auto upperMap = AffineMap::get(0, 0, getConst(upper), builder.getContext());
-    return createLoop({}, upperMap, {lower}, lowerMap);
+  Value createLoop(Value lower, int64_t upper, int64_t step = 1) {
+    auto lowerMap = AffineMap::get(1, 0, getDim(0));
+    auto upperMap = AffineMap::get(0, 0, getConst(upper));
+    return createLoop({lower}, lowerMap, {}, upperMap);
   }
 
-  Value createLoop(Value upper, int64_t lower, int64_t step = 1) {
-    auto lowerMap = AffineMap::get(0, 0, getConst(lower), builder.getContext());
-    auto upperMap = AffineMap::get(1, 0, getDim(0), builder.getContext());
-    return createLoop({upper}, upperMap, {}, lowerMap);
+  Value createLoop(int64_t lower, Value upper, int64_t step = 1) {
+    auto lowerMap = AffineMap::get(0, 0, getConst(lower));
+    auto upperMap = AffineMap::get(1, 0, getDim(0));
+    return createLoop({}, lowerMap, {upper}, upperMap);
   }
 
-  // Helpers for creating loads, stores and binary operations.
+  // Helpers for creating constant, loads, stores and binary operations.
+  Value createConst(int64_t val, Type valType) {
+    if (valType.isa<IntegerType>())
+      return builder.create<mlir::ConstantOp>(
+          loc, valType, builder.getIntegerAttr(valType, val));
+    else if (valType.isa<FloatType>())
+      return builder.create<mlir::ConstantOp>(
+          loc, valType, builder.getFloatAttr(valType, val));
+    else if (valType.isa<IndexType>())
+      return builder.create<mlir::ConstantOp>(loc, valType,
+                                              builder.getIndexAttr(val));
+    else {
+      assert("unsupported value type when creating constant operation");
+      return nullptr;
+    }
+  }
+
   Value createLoad(Value array, std::initializer_list<Value> index) {
     return builder.create<mlir::AffineLoadOp>(loc, array,
                                               ArrayRef<Value>(index));
@@ -125,17 +141,17 @@ bool HLSKernelVisitor::visitOp(DenseOp op) {
   builder.setInsertionPoint(op);
 
   // Create batch loop.
-  auto n = createLoop(OShape[0]);
+  auto n = createLoop(0, OShape[0]);
 
   // Create output channel loop.
-  auto f = createLoop(KShape[0]);
+  auto f = createLoop(0, KShape[0]);
 
   // Load bias into O array.
   auto bias = createLoad(B, {f});
   createStore(bias, O, {n, f});
 
   // Create input channel loop.
-  auto c = createLoop(KShape[1]);
+  auto c = createLoop(0, KShape[1]);
 
   // Fetch feature map, kernel and carry out multiplication.
   auto fmap = createLoad(I, {n, c});
@@ -164,29 +180,29 @@ bool HLSKernelVisitor::visitOp(ConvOp op) {
   builder.setInsertionPoint(op);
 
   // Create batch loop.
-  auto n = createLoop(OShape[0]);
+  auto n = createLoop(0, OShape[0]);
 
   // Create feature map height loop.
-  auto h = createLoop(OShape[2]);
+  auto h = createLoop(0, OShape[2]);
 
   // Create feature map width loop.
-  auto w = createLoop(OShape[3]);
+  auto w = createLoop(0, OShape[3]);
 
   // Create filter number loop.
-  auto f = createLoop(KShape[0]);
+  auto f = createLoop(0, KShape[0]);
 
   // Load bias into newY array.
   auto bias = createLoad(B, {f});
   createStore(bias, O, {n, f, h, w});
 
   // Create channel number loop.
-  auto c = createLoop(KShape[1]);
+  auto c = createLoop(0, KShape[1]);
 
   // Create kernel height loop.
-  auto r = createLoop(KShape[2]);
+  auto r = createLoop(0, KShape[2]);
 
   // Create kernel width loop.
-  auto s = createLoop(KShape[3]);
+  auto s = createLoop(0, KShape[3]);
 
   // Fetch feature map.
   SmallVector<AffineExpr, 4> indexExprs;
@@ -226,16 +242,16 @@ bool HLSKernelVisitor::visitOp(MaxPoolOp op) {
   builder.setInsertionPoint(op);
 
   // Create batch loop.
-  auto n = createLoop(OShape[0]);
+  auto n = createLoop(0, OShape[0]);
 
   // Create height loop.
-  auto h = createLoop(OShape[2]);
+  auto h = createLoop(0, OShape[2]);
 
   // Create width loop.
-  auto w = createLoop(OShape[3]);
+  auto w = createLoop(0, OShape[3]);
 
   // Create channel loop.
-  auto c = createLoop(OShape[1]);
+  auto c = createLoop(0, OShape[1]);
 
   // Set largest value as zero.
   auto dataType = O.getType().cast<MemRefType>().getElementType();
@@ -244,10 +260,10 @@ bool HLSKernelVisitor::visitOp(MaxPoolOp op) {
   createStore(zeroConst, O, {h, c, h, w});
 
   // Create kernel height loop.
-  auto r = createLoop(kernelShape[0]);
+  auto r = createLoop(0, kernelShape[0]);
 
   // Create kernel width loop.
-  auto s = createLoop(kernelShape[1]);
+  auto s = createLoop(0, kernelShape[1]);
 
   // Fetch feature map.
   SmallVector<AffineExpr, 4> indexExprs;
@@ -282,16 +298,16 @@ bool HLSKernelVisitor::visitOp(ReluOp op) {
   builder.setInsertionPoint(op);
 
   // Create batch loop.
-  auto n = createLoop(OShape[0]);
+  auto n = createLoop(0, OShape[0]);
 
   // Create height loop.
-  auto h = createLoop(OShape[2]);
+  auto h = createLoop(0, OShape[2]);
 
   // Create width loop.
-  auto w = createLoop(OShape[3]);
+  auto w = createLoop(0, OShape[3]);
 
   // Create channel loop.
-  auto c = createLoop(OShape[1]);
+  auto c = createLoop(0, OShape[1]);
 
   // Load original value from input array.
   auto fmap = createLoad(I, {n, c, h, w});
@@ -321,16 +337,16 @@ bool HLSKernelVisitor::visitOp(MergeOp op) {
   builder.setInsertionPoint(op);
 
   // Create batch loop.
-  auto n = createLoop(OShape[0]);
+  auto n = createLoop(0, OShape[0]);
 
   // Create height loop.
-  auto h = createLoop(OShape[2]);
+  auto h = createLoop(0, OShape[2]);
 
   // Create width loop.
-  auto w = createLoop(OShape[3]);
+  auto w = createLoop(0, OShape[3]);
 
   // Create channel loop.
-  auto c = createLoop(OShape[1]);
+  auto c = createLoop(0, OShape[1]);
 
   // Load original value from input array.
   auto fmap0 = createLoad(I0, {n, c, h, w});
@@ -363,10 +379,10 @@ bool HLSKernelVisitor::visitOp(GemmOp op) {
   builder.setInsertionPoint(op);
 
   // Create M dimension loop.
-  auto m = createLoop(CShape[0]);
+  auto m = createLoop(0, CShape[0]);
 
   // Create N dimension loop.
-  auto n = createLoop(CShape[1]);
+  auto n = createLoop(0, CShape[1]);
 
   // Update C with beta * C.
   auto initC = createLoad(C, {m, n});
@@ -374,7 +390,7 @@ bool HLSKernelVisitor::visitOp(GemmOp op) {
   createStore(betaC, C, {m, n});
 
   // Create K dimension loop.
-  auto k = createLoop(AShape[1]);
+  auto k = createLoop(0, AShape[1]);
 
   // Accumulate C with alpha * A * B.
   auto valA = createLoad(A, {m, k});
@@ -403,18 +419,19 @@ bool HLSKernelVisitor::visitOp(SymmOp op) {
   builder.setInsertionPoint(op);
 
   // Create M dimension loop.
-  auto m = createLoop(CShape[0]);
+  auto m = createLoop(0, CShape[0]);
 
   // Create N dimension loop.
-  auto n = createLoop(CShape[1]);
+  auto n = createLoop(0, CShape[1]);
 
   // Update C with beta * C.
   auto initC = createLoad(C, {m, n});
   auto betaC = createBinaryOp<mlir::MulFOp>(beta, initC);
   createStore(betaC, C, {m, n});
 
+  // TODO: use if statement instead of two seperate loop.
   // Create K dimension loop for lower triangle.
-  auto lk = createLoop(m, 0);
+  auto lk = createLoop(0, m);
 
   // Accumulate C with alpha * A * B.
   auto valA = createLoad(A, {m, lk});
@@ -428,7 +445,7 @@ bool HLSKernelVisitor::visitOp(SymmOp op) {
 
   // Create K dimension loop for upper triangle.
   builder.setInsertionPoint(n.getParentBlock()->getTerminator());
-  auto hk = createLoop(CShape[0], m);
+  auto hk = createLoop(m, CShape[0]);
 
   // Accumulate C with alpha * A * B.
   valA = createLoad(A, {hk, m});
@@ -443,11 +460,122 @@ bool HLSKernelVisitor::visitOp(SymmOp op) {
   return true;
 }
 
-bool HLSKernelVisitor::visitOp(SyrkOp op) { return true; }
+bool HLSKernelVisitor::visitOp(SyrkOp op) {
+  auto alpha = op.getOperand(0);
+  auto beta = op.getOperand(1);
 
-bool HLSKernelVisitor::visitOp(Syr2kOp op) { return true; }
+  auto A = op.getOperand(2);
+  auto C = op.getOperand(3);
 
-bool HLSKernelVisitor::visitOp(TrmmOp op) { return true; }
+  auto AShape = A.getType().cast<MemRefType>().getShape();
+
+  // Set insertion point of builder.
+  builder.setInsertionPoint(op);
+
+  // Create M dimension loop, M == N.
+  auto m = createLoop(0, AShape[0]);
+
+  // Create N dimension loop.
+  auto n = createLoop(0, m);
+
+  // Update C with beta * C.
+  auto initC = createLoad(C, {m, n});
+  auto betaC = createBinaryOp<mlir::MulFOp>(beta, initC);
+  createStore(betaC, C, {m, n});
+
+  // Create K dimension loop.
+  auto k = createLoop(0, AShape[1]);
+
+  // Accumulate C with alpha * A * B.
+  auto valA = createLoad(A, {m, k});
+  auto valAT = createLoad(A, {n, k});
+  auto valC = createLoad(C, {m, n});
+
+  auto alphaA = createBinaryOp<mlir::MulFOp>(alpha, valA);
+  auto alphaAAT = createBinaryOp<mlir::MulFOp>(alphaA, valAT);
+  auto accumC = createBinaryOp<mlir::AddFOp>(alphaAAT, valC);
+  createStore(accumC, C, {m, n});
+  return true;
+}
+
+bool HLSKernelVisitor::visitOp(Syr2kOp op) {
+  auto alpha = op.getOperand(0);
+  auto beta = op.getOperand(1);
+
+  auto A = op.getOperand(2);
+  auto B = op.getOperand(3);
+  auto C = op.getOperand(4);
+
+  auto AShape = A.getType().cast<MemRefType>().getShape();
+
+  // Set insertion point of builder.
+  builder.setInsertionPoint(op);
+
+  // Create M dimension loop, M == N.
+  auto m = createLoop(0, AShape[0]);
+
+  // Create N dimension loop.
+  auto n = createLoop(0, m);
+
+  // Update C with beta * C.
+  auto initC = createLoad(C, {m, n});
+  auto betaC = createBinaryOp<mlir::MulFOp>(beta, initC);
+  createStore(betaC, C, {m, n});
+
+  // Create K dimension loop.
+  auto k = createLoop(0, AShape[1]);
+
+  // Accumulate C with alpha * A * BT and alpha * AT * B.
+  auto valA = createLoad(A, {m, k});
+  auto valBT = createLoad(B, {n, k});
+  auto valB = createLoad(B, {m, k});
+  auto valAT = createLoad(A, {n, k});
+  auto valC = createLoad(C, {m, n});
+
+  auto alphaA = createBinaryOp<mlir::MulFOp>(alpha, valA);
+  auto alphaABT = createBinaryOp<mlir::MulFOp>(alphaA, valBT);
+  auto alphaB = createBinaryOp<mlir::MulFOp>(alpha, valB);
+  auto alphaBAT = createBinaryOp<mlir::MulFOp>(alphaB, valAT);
+
+  auto accumC = createBinaryOp<mlir::AddFOp>(alphaABT, valC);
+  auto accum2C = createBinaryOp<mlir::AddFOp>(alphaBAT, accumC);
+  createStore(accum2C, C, {m, n});
+  return true;
+}
+
+bool HLSKernelVisitor::visitOp(TrmmOp op) {
+  auto alpha = op.getOperand(0);
+
+  auto A = op.getOperand(1);
+  auto B = op.getOperand(2);
+
+  auto BShape = B.getType().cast<MemRefType>().getShape();
+
+  // Set insertion point of builder.
+  builder.setInsertionPoint(op);
+
+  // Create M dimension loop.
+  auto m = createLoop(0, BShape[0]);
+
+  // Create N dimension loop.
+  auto n = createLoop(0, BShape[1]);
+
+  // Create K dimension loop, K == M.
+  auto lowerMap = AffineMap::get(1, 0, getDim(0) + getConst(1));
+  auto upperMap = AffineMap::get(0, 0, getConst(BShape[0]));
+  auto k = createLoop({m}, lowerMap, {}, upperMap);
+
+  // Accumulate C with alpha * A * B.
+  auto valA = createLoad(A, {m, k});
+  auto valB = createLoad(B, {k, n});
+  auto valBout = createLoad(B, {m, n});
+
+  auto alphaA = createBinaryOp<mlir::MulFOp>(alpha, valA);
+  auto alphaAB = createBinaryOp<mlir::MulFOp>(alphaA, valB);
+  auto accumB = createBinaryOp<mlir::AddFOp>(alphaAB, valBout);
+  createStore(accumB, B, {m, n});
+  return true;
+}
 
 //===----------------------------------------------------------------------===//
 // HLSkernel to Affine Lowering Pass

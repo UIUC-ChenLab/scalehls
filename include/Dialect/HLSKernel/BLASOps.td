@@ -136,7 +136,6 @@ def TrmmOp : HLSKernelOp<"trmm", [HLSKernelOpInterface]> {
     DefaultValuedAttr<BoolAttr, "false">:$TRANSA,
     DefaultValuedAttr<BoolAttr, "false">:$DIAG,
     AnyType:$alpha,
-    AnyType:$beta,
     AnyTypeOf<[AnyTensor, AnyMemRef]>:$A,
     AnyTypeOf<[AnyTensor, AnyMemRef]>:$B
   );
