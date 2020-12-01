@@ -169,11 +169,16 @@ bool HLSKernelVisitor::visitOp(DenseOp op) {
 
 /// Padding and strides has not been suppored.
 bool HLSKernelVisitor::visitOp(ConvOp op) {
+  SmallVector<int64_t, 4> padding;
+  for (auto pad : op.getAttrOfType<DenseIntElementsAttr>("padding"))
+    padding.push_back(pad.getSExtValue());
+
   auto I = op.getOperand(0);
   auto K = op.getOperand(1);
   auto B = op.getOperand(2);
   auto O = op.getOperand(3);
 
+  auto IShape = I.getType().cast<MemRefType>().getShape();
   auto KShape = K.getType().cast<MemRefType>().getShape();
   auto OShape = O.getType().cast<MemRefType>().getShape();
 
@@ -205,17 +210,42 @@ bool HLSKernelVisitor::visitOp(ConvOp op) {
   // Create kernel width loop.
   auto s = createLoop(0, KShape[3]);
 
+  // Create if condition for padding input feature map.
+  SmallVector<AffineExpr, 4> conditionExprs;
+  conditionExprs.push_back(getDim(0) + getDim(2) - getConst(padding[0]));
+  conditionExprs.push_back(getConst(IShape[2] - 1) - getDim(0) - getDim(2) +
+                           getConst(padding[0]));
+  conditionExprs.push_back(getDim(1) + getDim(3) - getConst(padding[2]));
+  conditionExprs.push_back(getConst(IShape[3] - 1) - getDim(1) - getDim(3) +
+                           getConst(padding[2]));
+  auto conditionSet =
+      IntegerSet::get(4, 0, conditionExprs, {false, false, false, false});
+
+  auto dataType = I.getType().cast<MemRefType>().getElementType();
+  auto paddingIf = builder.create<mlir::AffineIfOp>(
+      loc, dataType, conditionSet, ArrayRef<Value>({h, w, r, s}), true);
+
   // Fetch feature map.
+  builder.setInsertionPointToStart(paddingIf.getThenBlock());
   SmallVector<AffineExpr, 4> indexExprs;
   indexExprs.push_back(getDim(0));
   indexExprs.push_back(getDim(1));
-  indexExprs.push_back(getDim(2) + getDim(4));
-  indexExprs.push_back(getDim(3) + getDim(5));
-  auto fmap = builder.create<mlir::AffineLoadOp>(
+  indexExprs.push_back(getDim(2) + getDim(4) - getConst(padding[0]));
+  indexExprs.push_back(getDim(3) + getDim(5) - getConst(padding[2]));
+  auto trueFmap = builder.create<mlir::AffineLoadOp>(
       op.getLoc(), I, AffineMap::get(6, 0, indexExprs, op.getContext()),
       ArrayRef<Value>({n, c, h, w, r, s}));
+  builder.create<mlir::AffineYieldOp>(op.getLoc(), trueFmap.getResult());
+
+  // Padding.
+  builder.setInsertionPointToStart(paddingIf.getElseBlock());
+  auto zeroFmap = builder.create<mlir::ConstantOp>(
+      op.getLoc(), builder.getZeroAttr(dataType));
+  builder.create<mlir::AffineYieldOp>(op.getLoc(), zeroFmap.getResult());
 
   // Fetch weight and carry out multiplication.
+  builder.setInsertionPointAfter(paddingIf);
+  auto fmap = paddingIf.getResult(0);
   auto kernel = createLoad(K, {f, c, r, s});
   auto multi = createBinaryOp<mlir::MulFOp>(fmap, kernel);
 
@@ -438,15 +468,15 @@ bool HLSKernelVisitor::visitOp(SymmOp op) {
   auto dataType = A.getType().cast<MemRefType>().getElementType();
   auto conditionSet = IntegerSet::get(2, 0, getDim(0) - getDim(1), false);
   auto lowerUpperIf = builder.create<mlir::AffineIfOp>(
-      loc, dataType, conditionSet, ArrayRef<Value>({m, k}), true);
+      op.getLoc(), dataType, conditionSet, ArrayRef<Value>({m, k}), true);
 
   builder.setInsertionPointToStart(lowerUpperIf.getThenBlock());
   auto trueValA = createLoad(A, {m, k});
-  builder.create<mlir::AffineYieldOp>(loc, trueValA);
+  builder.create<mlir::AffineYieldOp>(op.getLoc(), trueValA);
 
   builder.setInsertionPointToStart(lowerUpperIf.getElseBlock());
   auto falseValA = createLoad(A, {k, m});
-  builder.create<mlir::AffineYieldOp>(loc, falseValA);
+  builder.create<mlir::AffineYieldOp>(op.getLoc(), falseValA);
 
   // Accumulate C with alpha * A * B.
   builder.setInsertionPointAfter(lowerUpperIf);
