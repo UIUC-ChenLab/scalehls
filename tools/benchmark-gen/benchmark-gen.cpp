@@ -73,15 +73,19 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
     llvm::outs() << "error: cnn configuration file parse fail\n";
 
   const auto inputChannel = config.GetInteger("config", "inputChannel", 3);
-  const auto inputHeight = config.GetInteger("config", "inputHeight", 224);
-  const auto inputWidth = config.GetInteger("config", "inputWidth", 224);
-  const auto outputChannel = config.GetInteger("config", "outputChannel", 1000);
+  const auto inputHeight = config.GetInteger("config", "inputHeight", 32);
+  const auto inputWidth = config.GetInteger("config", "inputWidth", 32);
+  const auto outputChannel = config.GetInteger("config", "outputChannel", 10);
 
   const auto batchSize = config.GetInteger("config", "batchSize", 1);
-  const auto minChannel = config.GetInteger("config", "minChannel", 64);
-  const auto maxChannel = config.GetInteger("config", "maxChannel", 512);
-  const auto poolingNumber = config.GetInteger("config", "poolingNumber", 5);
+  const auto minChannel = config.GetInteger("config", "minChannel", 8);
+  const auto maxChannel = config.GetInteger("config", "maxChannel", 64);
+  const auto poolingNumber = config.GetInteger("config", "poolingNumber", 3);
   // const auto bypassNumber = config.GetInteger("config", "bypassNumber", 0);
+
+  const auto includeRelu = config.GetInteger("config", "includeRelu", 0);
+  const auto doubleChannel = config.GetInteger("config", "doubleChannel", 2);
+  const auto includePooling = config.GetInteger("config", "includePooling", 2);
 
   // Create a new builder in the target module.
   OpBuilder builder(module.getBodyRegion());
@@ -96,14 +100,15 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
   auto getKernelShape = [&]() { return std::rand() % 3 * 2 + 3; };
 
   auto getChannel = [&](int current) {
-    if (std::rand() % 4 == 0 && current < maxChannel)
+    if (std::rand() % doubleChannel == 0 && current < maxChannel)
       return current * 2;
     else
       return current;
   };
 
   auto getPoolingFlag = [&](int current) {
-    if ((std::rand() % 4 == 0 || current == 0) && current < poolingNumber)
+    if ((std::rand() % includePooling == 0 || current == 0) &&
+        current < poolingNumber)
       return true;
     else
       return false;
@@ -157,9 +162,11 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
         builder.getI64ArrayAttr({padding, padding, padding, padding}));
 
     // Create ReLU layer.
-    fmaps.push_back(builder.create<mlir::AllocOp>(
-        loc, getMemType({batchSize, btmChannel, topHeight, topWidth})));
-    builder.create<ReluOp>(loc, *std::prev(fmaps.end(), 2), fmaps.back());
+    if (includeRelu) {
+      fmaps.push_back(builder.create<mlir::AllocOp>(
+          loc, getMemType({batchSize, btmChannel, topHeight, topWidth})));
+      builder.create<ReluOp>(loc, *std::prev(fmaps.end(), 2), fmaps.back());
+    }
 
     // Create max pooling layer if applied.
     if (poolingFlag) {
