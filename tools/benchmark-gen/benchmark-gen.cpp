@@ -41,6 +41,10 @@ static llvm::cl::opt<std::string>
     outputFilename("o", llvm::cl::desc("Output filename"),
                    llvm::cl::value_desc("filename"), llvm::cl::init("-"));
 
+//===----------------------------------------------------------------------===//
+// Benchmark Generator Class Definition
+//===----------------------------------------------------------------------===//
+
 namespace {
 /// Class for automatically generating benchmarks.
 class BenchmarkGenerator {
@@ -57,6 +61,10 @@ public:
   LogicalResult genISP(INIReader config) { return failure(); }
 }; // namespace
 } // namespace
+
+//===----------------------------------------------------------------------===//
+// CNN Benchmark Generation Logic
+//===----------------------------------------------------------------------===//
 
 /// Currently bypass have not been supported.
 LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
@@ -192,6 +200,10 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
   os << module << "\n";
   return success();
 }
+
+//===----------------------------------------------------------------------===//
+// Benchmark Generation Entry
+//===----------------------------------------------------------------------===//
 
 static LogicalResult processBenchmarkGen(raw_ostream &os) {
   // Create a new MLIR context and module.

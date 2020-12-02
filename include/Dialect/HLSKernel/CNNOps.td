@@ -22,6 +22,8 @@ def DenseOp : HLSKernelOp<"dense", [HLSKernelOpInterface]> {
     AnyMemRef:$B,
     AnyMemRef:$O
   );
+
+  let verifier = [{ return ::verify(*this); }];
 }
 
 def ConvOp : HLSKernelOp<"conv", [HLSKernelOpInterface]> {
@@ -48,6 +50,8 @@ def ConvOp : HLSKernelOp<"conv", [HLSKernelOpInterface]> {
     OptionalAttr<I64ArrayAttr>:$strides,
     OptionalAttr<I64ArrayAttr>:$padding
   );
+
+  let verifier = [{ return ::verify(*this); }];
 }
 
 def MaxPoolOp : HLSKernelOp<"maxpool", [HLSKernelOpInterface]> {
@@ -67,6 +71,8 @@ def MaxPoolOp : HLSKernelOp<"maxpool", [HLSKernelOpInterface]> {
     OptionalAttr<I64ArrayAttr>:$strides,
     OptionalAttr<I64ArrayAttr>:$padding
   );
+
+  let verifier = [{ return ::verify(*this); }];
 }
 
 def ReluOp : HLSKernelOp<"relu", [HLSKernelOpInterface]> {
@@ -82,6 +88,8 @@ def ReluOp : HLSKernelOp<"relu", [HLSKernelOpInterface]> {
     AnyMemRef:$I,
     AnyMemRef:$O
   );
+
+  let verifier = [{ return ::verify(*this); }];
 }
 
 def MergeOp : HLSKernelOp<"merge", [HLSKernelOpInterface]> {
@@ -95,6 +103,8 @@ def MergeOp : HLSKernelOp<"merge", [HLSKernelOpInterface]> {
     AnyMemRef:$I1,
     AnyMemRef:$O
   );
+
+  let verifier = [{ return ::verify(*this); }];
 }
 
 #endif // SCALEHLS_DIALECT_HLSKERNEL_CNNOPS_TD

@@ -185,7 +185,7 @@ bool HLSKernelVisitor::visitOp(DenseOp op) {
   return true;
 }
 
-/// Padding and strides has not been suppored.
+/// Strides has not been suppored.
 bool HLSKernelVisitor::visitOp(ConvOp op) {
   SmallVector<int64_t, 4> padding;
   for (auto pad : op.getAttrOfType<ArrayAttr>("padding"))
