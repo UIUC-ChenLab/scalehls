@@ -45,15 +45,15 @@ private:
   OpBuilder &builder;
   Location loc;
 
-  // Helpers for creating loops.
-  // Constant upper and lower bound.
+  /// Helpers for creating loops.
+  /// Constant upper and lower bound.
   Value createLoop(int64_t lower, int64_t upper, int64_t step = 1) {
     auto loop = builder.create<mlir::AffineForOp>(loc, lower, upper, step);
     builder.setInsertionPointToStart(&loop.getLoopBody().front());
     return loop.getInductionVar();
   }
 
-  // General case.
+  /// General case loop boundary.
   Value createLoop(std::initializer_list<Value> lower, AffineMap lowerMap,
                    std::initializer_list<Value> upper, AffineMap upperMap,
                    int64_t step = 1) {
@@ -80,7 +80,7 @@ private:
     return createLoop({}, lowerMap, {upper}, upperMap);
   }
 
-  // Helpers for creating constant, loads, stores and binary operations.
+  /// Helpers for creating constant, loads, stores and binary operations.
   Value createConst(int64_t val, Type valType) {
     if (valType.isa<IntegerType>())
       return builder.create<mlir::ConstantOp>(
@@ -170,8 +170,8 @@ bool HLSKernelVisitor::visitOp(DenseOp op) {
 /// Padding and strides has not been suppored.
 bool HLSKernelVisitor::visitOp(ConvOp op) {
   SmallVector<int64_t, 4> padding;
-  for (auto pad : op.getAttrOfType<DenseIntElementsAttr>("padding"))
-    padding.push_back(pad.getSExtValue());
+  for (auto pad : op.getAttrOfType<ArrayAttr>("padding"))
+    padding.push_back(pad.cast<IntegerAttr>().getInt());
 
   auto I = op.getOperand(0);
   auto K = op.getOperand(1);
@@ -257,8 +257,8 @@ bool HLSKernelVisitor::visitOp(ConvOp op) {
   return true;
 }
 
-// Padding and strides has not been suppored. Only support when kernel size is
-// equal to stride size.
+/// Padding and strides has not been suppored. Only support when kernel size is
+/// equal to stride size.
 bool HLSKernelVisitor::visitOp(MaxPoolOp op) {
   SmallVector<int64_t, 2> kernelShape;
   for (auto shape : op.getAttrOfType<ArrayAttr>("kernel_shape"))
@@ -394,7 +394,7 @@ bool HLSKernelVisitor::visitOp(MergeOp op) {
 // BLASOps Handler
 //===----------------------------------------------------------------------===//
 
-// Only default attributes configuration are supported.
+/// Only default attributes configuration are supported.
 bool HLSKernelVisitor::visitOp(GemmOp op) {
   auto alpha = op.getOperand(0);
   auto beta = op.getOperand(1);

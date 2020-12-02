@@ -36,10 +36,8 @@ def ConvOp : HLSKernelOp<"conv", [HLSKernelOpInterface]> {
 
     Strides and padding are integer attributes of the same rank as the number of
     window dimensions. The padding attribute specifies the amount of zero
-    padding to be applied to the base area, which is a n-d array of (low, high)
-    padding. Each pair has the low padding as the first element and the high
-    padding as the second element. Using padding is equivalent to inserting
-    those same zero values into the input before the convolution.
+    padding to be applied to the base area, which is a 4-d array of (top,
+    bottom, left, right) padding.
   }];
 
   let arguments = (ins
@@ -48,7 +46,7 @@ def ConvOp : HLSKernelOp<"conv", [HLSKernelOpInterface]> {
     AnyMemRef:$B,
     AnyMemRef:$O,
     OptionalAttr<I64ArrayAttr>:$strides,
-    OptionalAttr<I64ElementsAttr>:$padding
+    OptionalAttr<I64ArrayAttr>:$padding
   );
 }
 
@@ -67,7 +65,7 @@ def MaxPoolOp : HLSKernelOp<"maxpool", [HLSKernelOpInterface]> {
     AnyMemRef:$O,
     OptionalAttr<I64ArrayAttr>:$kernel_shape,
     OptionalAttr<I64ArrayAttr>:$strides,
-    OptionalAttr<I64ElementsAttr>:$padding
+    OptionalAttr<I64ArrayAttr>:$padding
   );
 }
 
