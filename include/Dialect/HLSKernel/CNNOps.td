@@ -10,8 +10,8 @@ def DenseOp : HLSKernelOp<"dense", [HLSKernelOpInterface]> {
   let description = [{
     Dense layer (fully-connected layer).
 
-    I: (N, C)
-    K: (F, C)
+    I: (N, C) or (N, C, H, W)
+    K: (F, C) or (F, C, H, W)
     B: (F)
     O: (N, F)
   }];

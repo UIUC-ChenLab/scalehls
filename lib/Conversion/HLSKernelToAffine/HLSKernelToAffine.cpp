@@ -135,7 +135,7 @@ bool HLSKernelVisitor::visitOp(DenseOp op) {
   auto B = op.getOperand(2);
   auto O = op.getOperand(3);
 
-  auto KShape = K.getType().cast<MemRefType>().getShape();
+  auto IShape = I.getType().cast<MemRefType>().getShape();
   auto OShape = O.getType().cast<MemRefType>().getShape();
 
   // Set insertion point of builder.
@@ -145,24 +145,42 @@ bool HLSKernelVisitor::visitOp(DenseOp op) {
   auto n = createLoop(0, OShape[0]);
 
   // Create output channel loop.
-  auto f = createLoop(0, KShape[0]);
+  auto f = createLoop(0, OShape[1]);
 
   // Load bias into O array.
   auto bias = createLoad(B, {f});
   createStore(bias, O, {n, f});
 
   // Create input channel loop.
-  auto c = createLoop(0, KShape[1]);
+  auto c = createLoop(0, IShape[1]);
 
-  // Fetch feature map, kernel and carry out multiplication.
-  auto fmap = createLoad(I, {n, c});
-  auto kernel = createLoad(K, {f, c});
-  auto mult = createBinaryOp<mlir::MulFOp>(fmap, kernel);
+  if (IShape.size() == 2) {
+    // Fetch feature map, kernel and carry out multiplication.
+    auto fmap = createLoad(I, {n, c});
+    auto kernel = createLoad(K, {f, c});
+    auto mult = createBinaryOp<mlir::MulFOp>(fmap, kernel);
 
-  // Fetch partial result and carry out accumulation.
-  auto partial = createLoad(O, {n, f});
-  auto accum = createBinaryOp<mlir::AddFOp>(partial, mult);
-  createStore(accum, O, {n, f});
+    // Fetch partial result and carry out accumulation.
+    auto partial = createLoad(O, {n, f});
+    auto accum = createBinaryOp<mlir::AddFOp>(partial, mult);
+    createStore(accum, O, {n, f});
+  } else {
+    // Create kernel height loop.
+    auto r = createLoop(0, IShape[2]);
+
+    // Create kernel width loop.
+    auto s = createLoop(0, IShape[3]);
+
+    // Fetch feature map, kernel and carry out multiplication.
+    auto fmap = createLoad(I, {n, c, r, s});
+    auto kernel = createLoad(K, {f, c, r, s});
+    auto mult = createBinaryOp<mlir::MulFOp>(fmap, kernel);
+
+    // Fetch partial result and carry out accumulation.
+    auto partial = createLoad(O, {n, f});
+    auto accum = createBinaryOp<mlir::AddFOp>(partial, mult);
+    createStore(accum, O, {n, f});
+  }
 
   return true;
 }

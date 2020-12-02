@@ -34,10 +34,14 @@ After the installation and test successfully completed, you should be able to pl
 ```sh
 $ export PATH=$SCALEHLS_DIR/build/bin:$PATH
 $ cd $SCALEHLS_DIR
+$
+$ benchmark-gen -type "cnn" -config "$SCALEHLS_DIR/config/cnn-config.ini" -number 1
+$ scalehls-opt -hlskernel-to-affine test/Conversion/HLSKernelToAffine/test_*.mlir
+$
 $ scalehls-opt -convert-to-hlscpp test/Conversion/ConvertToHLSCpp/test_*.mlir
 $ scalehls-opt -convert-to-hlscpp test/EmitHLSCpp/test_*.mlir | scalehls-translate -emit-hlscpp
+$
 $ scalehls-opt -qor-estimation test/Analysis/QoREstimation/test_for.mlir
-$ scalehls-opt -hlskernel-to-affine test/Conversion/HLSKernelToAffine/test_*.mlir
 ```
 
 ## References

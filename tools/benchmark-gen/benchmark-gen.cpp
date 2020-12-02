@@ -105,7 +105,7 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
   SmallVector<mlir::Type, 2> inputTypes;
   inputTypes.push_back(
       getMemType({batchSize, inputChannel, inputHeight, inputWidth}));
-  inputTypes.push_back(getMemType({outputChannel}));
+  inputTypes.push_back(getMemType({batchSize, outputChannel}));
   SmallVector<mlir::Type, 2> outputTypes;
 
   auto func = builder.create<FuncOp>(
@@ -178,10 +178,17 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
     btmWidth = poolingFlag ? topWidth / 2 : topWidth;
   }
 
-  // TODO: Create the last dense layer.
+  // Create the last dense layer.
+  fmaps.push_back(func.getArgument(1));
+  kernels.push_back(builder.create<mlir::AllocOp>(
+      loc, getMemType({outputChannel, topChannel, topHeight, topWidth})));
+  biases.push_back(
+      builder.create<mlir::AllocOp>(loc, getMemType({outputChannel})));
+
+  builder.create<DenseOp>(loc, *std::prev(fmaps.end(), 2), kernels.back(),
+                          biases.back(), fmaps.back());
 
   builder.create<mlir::ReturnOp>(loc);
-
   os << module << "\n";
   return success();
 }
