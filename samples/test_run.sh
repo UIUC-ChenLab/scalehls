@@ -1,17 +1,17 @@
 #!/bin/bash
 
+# Generate HLS C++ files.
+if [ ! -d "cpp_src" ]
+then
+  mkdir cpp_src
+fi
+for file in ../test/Conversion/HLSKernelToAffine/*
+do
+  scalehls-opt -hlskernel-to-affine $file | scalehls-translate -emit-hlscpp -o "cpp_src/${file##*Affine/}.cpp"
+done
+
 if [ $1 == "rerun" ]
 then
-  # Generate HLS C++ files.
-  if [ ! -d "cpp_src" ]
-  then
-    mkdir cpp_src
-  fi
-  for file in ../test/Conversion/HLSKernelToAffine/*
-  do
-    scalehls-opt -hlskernel-to-affine $file | scalehls-translate -emit-hlscpp -o "cpp_src/${file##*Affine/}.cpp"
-  done
-
   # Run HLS synthesis.
   if [ ! -d "hls_proj" ]
   then

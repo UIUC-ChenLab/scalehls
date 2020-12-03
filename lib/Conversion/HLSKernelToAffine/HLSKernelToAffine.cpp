@@ -615,15 +615,20 @@ bool HLSKernelVisitor::visitOp(TrmmOp op) {
   auto upperMap = AffineMap::get(0, 0, getConst(BShape[0]));
   auto k = createLoop({m}, lowerMap, {}, upperMap);
 
-  // Accumulate C with alpha * A * B.
+  // Accumulate B with A * B.
   auto valA = createLoad(A, {m, k});
   auto valB = createLoad(B, {k, n});
   auto valBout = createLoad(B, {m, n});
 
-  auto alphaA = createBinaryOp<mlir::MulFOp>(alpha, valA);
-  auto alphaAB = createBinaryOp<mlir::MulFOp>(alphaA, valB);
-  auto accumB = createBinaryOp<mlir::AddFOp>(alphaAB, valBout);
+  auto AB = createBinaryOp<mlir::MulFOp>(valA, valB);
+  auto accumB = createBinaryOp<mlir::AddFOp>(AB, valBout);
   createStore(accumB, B, {m, n});
+
+  // Update B with alpha * B.
+  builder.setInsertionPoint(n.getParentBlock()->getTerminator());
+  auto initB = createLoad(B, {m, n});
+  auto alphaB = createBinaryOp<mlir::MulFOp>(alpha, initB);
+  createStore(alphaB, B, {m, n});
   return true;
 }
 

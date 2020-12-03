@@ -1,9 +1,7 @@
 // RUN: scalehls-opt -hlskernel-to-affine %s | FileCheck %s
 
 // CHECK: module {
-func @test_syr2k(%A: memref<16x16xf32>, %B: memref<16x16xf32>, %C: memref<16x16xf32>) -> () {
-  %alpha = constant 11.0 : f32
-  %beta = constant 42.0 : f32
+func @test_syr2k(%alpha: f32, %beta: f32, %A: memref<16x16xf32>, %B: memref<16x16xf32>, %C: memref<16x16xf32>) -> () {
   "hlskernel.syr2k" (%alpha, %beta, %A, %B, %C) {} : (f32, f32, memref<16x16xf32>, memref<16x16xf32>, memref<16x16xf32>) -> ()
   return
 }
