@@ -1,3 +1,7 @@
 .vscode
 
 build
+samples/hls_proj
+samples/cpp_src
+
+*.log

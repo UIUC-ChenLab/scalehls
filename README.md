@@ -30,6 +30,7 @@ $ cmake -G Ninja .. \
 $ ninja check-scalehls
 ```
 
+### 3. Test ScaleHLS
 After the installation and test successfully completed, you should be able to play with
 ```sh
 $ export PATH=$SCALEHLS_DIR/build/bin:$PATH
@@ -42,6 +43,12 @@ $ scalehls-opt -convert-to-hlscpp test/Conversion/ConvertToHLSCpp/test_*.mlir
 $ scalehls-opt -convert-to-hlscpp test/EmitHLSCpp/test_*.mlir | scalehls-translate -emit-hlscpp
 $
 $ scalehls-opt -qor-estimation test/Analysis/QoREstimation/test_for.mlir
+```
+
+If Vivado HLS (2019.1 tested) is installed on your machine, running the following script will report the HLS results for some benchmarks.
+```sh
+$ cd $SCALEHLS_DIR/sample
+$ source ./test_run.sh rerun
 ```
 
 ## References
