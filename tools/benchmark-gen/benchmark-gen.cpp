@@ -147,7 +147,7 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
   fmaps.push_back(func.getArgument(0));
 
   // Generate CNN model.
-  while (poolingCount < poolingNumber || btmChannel < maxChannel) {
+  while (poolingCount < poolingNumber || topChannel < maxChannel) {
     // Create convolutional layer.
     fmaps.push_back(builder.create<mlir::AllocOp>(
         loc, getMemType({batchSize, btmChannel, topHeight, topWidth})));
