@@ -138,13 +138,9 @@ bool HLSKernelVisitor::visitOp(DenseOp op) {
   auto IShape = I.getType().cast<MemRefType>().getShape();
   auto OShape = O.getType().cast<MemRefType>().getShape();
 
-  // Set insertion point of builder.
+  // Set insertion point of builder. Create batch and output channel loop.
   builder.setInsertionPoint(op);
-
-  // Create batch loop.
   auto n = createLoop(0, OShape[0]);
-
-  // Create output channel loop.
   auto f = createLoop(0, OShape[1]);
 
   // Load bias into O array.
@@ -200,32 +196,21 @@ bool HLSKernelVisitor::visitOp(ConvOp op) {
   auto KShape = K.getType().cast<MemRefType>().getShape();
   auto OShape = O.getType().cast<MemRefType>().getShape();
 
-  // Set insertion point of builder.
+  // Set insertion point of builder. Create batch, feature map height, feature
+  // map width, and filter number loop.
   builder.setInsertionPoint(op);
-
-  // Create batch loop.
   auto n = createLoop(0, OShape[0]);
-
-  // Create feature map height loop.
   auto h = createLoop(0, OShape[2]);
-
-  // Create feature map width loop.
   auto w = createLoop(0, OShape[3]);
-
-  // Create filter number loop.
   auto f = createLoop(0, KShape[0]);
 
   // Load bias into newY array.
   auto bias = createLoad(B, {f});
   createStore(bias, O, {n, f, h, w});
 
-  // Create channel number loop.
+  // Create channel number, kernel height, and kernel width loop.
   auto c = createLoop(0, KShape[1]);
-
-  // Create kernel height loop.
   auto r = createLoop(0, KShape[2]);
-
-  // Create kernel width loop.
   auto s = createLoop(0, KShape[3]);
 
   // Create if condition for padding input feature map.
@@ -287,19 +272,12 @@ bool HLSKernelVisitor::visitOp(MaxPoolOp op) {
 
   auto OShape = O.getType().cast<MemRefType>().getShape();
 
-  // Set insertion point of builder.
+  // Set insertion point of builder. Create batch, height, width, and channel
+  // loop.
   builder.setInsertionPoint(op);
-
-  // Create batch loop.
   auto n = createLoop(0, OShape[0]);
-
-  // Create height loop.
   auto h = createLoop(0, OShape[2]);
-
-  // Create width loop.
   auto w = createLoop(0, OShape[3]);
-
-  // Create channel loop.
   auto c = createLoop(0, OShape[1]);
 
   // Set largest value as zero.
@@ -308,10 +286,8 @@ bool HLSKernelVisitor::visitOp(MaxPoolOp op) {
       op.getLoc(), builder.getZeroAttr(dataType));
   createStore(zeroConst, O, {h, c, h, w});
 
-  // Create kernel height loop.
+  // Create kernel height, and kernel width loop.
   auto r = createLoop(0, kernelShape[0]);
-
-  // Create kernel width loop.
   auto s = createLoop(0, kernelShape[1]);
 
   // Fetch feature map.
@@ -343,19 +319,12 @@ bool HLSKernelVisitor::visitOp(ReluOp op) {
 
   auto OShape = O.getType().cast<MemRefType>().getShape();
 
-  // Set insertion point of builder.
+  // Set insertion point of builder. Create batch, height, width, and channel
+  // loop.
   builder.setInsertionPoint(op);
-
-  // Create batch loop.
   auto n = createLoop(0, OShape[0]);
-
-  // Create height loop.
   auto h = createLoop(0, OShape[2]);
-
-  // Create width loop.
   auto w = createLoop(0, OShape[3]);
-
-  // Create channel loop.
   auto c = createLoop(0, OShape[1]);
 
   // Load original value from input array.
@@ -382,19 +351,12 @@ bool HLSKernelVisitor::visitOp(MergeOp op) {
 
   auto OShape = O.getType().cast<MemRefType>().getShape();
 
-  // Set insertion point of builder.
+  // Set insertion point of builder. Create batch, height, width, and channel
+  // loop.
   builder.setInsertionPoint(op);
-
-  // Create batch loop.
   auto n = createLoop(0, OShape[0]);
-
-  // Create height loop.
   auto h = createLoop(0, OShape[2]);
-
-  // Create width loop.
   auto w = createLoop(0, OShape[3]);
-
-  // Create channel loop.
   auto c = createLoop(0, OShape[1]);
 
   // Load original value from input array.
@@ -424,13 +386,9 @@ bool HLSKernelVisitor::visitOp(GemmOp op) {
   auto AShape = A.getType().cast<MemRefType>().getShape();
   auto CShape = C.getType().cast<MemRefType>().getShape();
 
-  // Set insertion point of builder.
+  // Set insertion point of builder. Create M and N dimension loop.
   builder.setInsertionPoint(op);
-
-  // Create M dimension loop.
   auto m = createLoop(0, CShape[0]);
-
-  // Create N dimension loop.
   auto n = createLoop(0, CShape[1]);
 
   // Update C with beta * C.
@@ -464,13 +422,9 @@ bool HLSKernelVisitor::visitOp(SymmOp op) {
 
   auto CShape = C.getType().cast<MemRefType>().getShape();
 
-  // Set insertion point of builder.
+  // Set insertion point of builder. Create M and N dimension loop.
   builder.setInsertionPoint(op);
-
-  // Create M dimension loop.
   auto m = createLoop(0, CShape[0]);
-
-  // Create N dimension loop.
   auto n = createLoop(0, CShape[1]);
 
   // Update C with beta * C.
@@ -519,13 +473,9 @@ bool HLSKernelVisitor::visitOp(SyrkOp op) {
 
   auto AShape = A.getType().cast<MemRefType>().getShape();
 
-  // Set insertion point of builder.
+  // Set insertion point of builder. Create M (M == N) and N dimension loop.
   builder.setInsertionPoint(op);
-
-  // Create M dimension loop, M == N.
   auto m = createLoop(0, AShape[0]);
-
-  // Create N dimension loop.
   auto n = createLoop(0, m);
 
   // Update C with beta * C.
@@ -558,13 +508,9 @@ bool HLSKernelVisitor::visitOp(Syr2kOp op) {
 
   auto AShape = A.getType().cast<MemRefType>().getShape();
 
-  // Set insertion point of builder.
+  // Set insertion point of builder. Create M (M == N) and N dimension loop.
   builder.setInsertionPoint(op);
-
-  // Create M dimension loop, M == N.
   auto m = createLoop(0, AShape[0]);
-
-  // Create N dimension loop.
   auto n = createLoop(0, m);
 
   // Update C with beta * C.
@@ -601,19 +547,11 @@ bool HLSKernelVisitor::visitOp(TrmmOp op) {
 
   auto BShape = B.getType().cast<MemRefType>().getShape();
 
-  // Set insertion point of builder.
+  // Set insertion point of builder. Create M, N, and K (K == M) dimension loop.
   builder.setInsertionPoint(op);
-
-  // Create M dimension loop.
   auto m = createLoop(0, BShape[0]);
-
-  // Create N dimension loop.
   auto n = createLoop(0, BShape[1]);
-
-  // Create K dimension loop, K == M.
-  auto lowerMap = AffineMap::get(1, 0, getDim(0) + getConst(1));
-  auto upperMap = AffineMap::get(0, 0, getConst(BShape[0]));
-  auto k = createLoop({m}, lowerMap, {}, upperMap);
+  auto k = createLoop(0, m);
 
   // Accumulate B with A * B.
   auto valA = createLoad(A, {m, k});
