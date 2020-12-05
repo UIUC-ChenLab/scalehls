@@ -20,4 +20,16 @@ def PragmaDSE : Pass<"pragma-dse", "ModuleOp"> {
   let constructor = "mlir::scalehls::createPragmaDSEPass()";
 }
 
+def AffineLoopPerfection : Pass<"affine-loop-perfection", "ModuleOp"> {
+  let summary = "Try to perfect a nested loop";
+  let description = [{
+    This affine-loop-perfection pass will try to perfect affine loops.
+    Specifically, this pass will move operations under non-innermost loops into
+    innermost loop and create an affine if region to ensure the correctness of
+    the transformation.
+  }];
+
+  let constructor = "mlir::scalehls::createAffineLoopPerfectionPass()";
+}
+
 #endif // SCALEHLS_TRANSFORMS_PASSES_TD

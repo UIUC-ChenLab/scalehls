@@ -7,7 +7,7 @@ then
 fi
 for file in ../test/Conversion/HLSKernelToAffine/*
 do
-  scalehls-opt -hlskernel-to-affine $file | scalehls-translate -emit-hlscpp -o "cpp_src/${file##*Affine/}.cpp"
+  scalehls-opt -hlskernel-to-affine -affine-loop-perfection $file | scalehls-translate -emit-hlscpp -o "cpp_src/${file##*Affine/}.cpp"
 done
 
 if [ $1 == "rerun" ]
