@@ -1,2 +1,12 @@
-add_subdirectory(ConvertToHLSCpp)
-add_subdirectory(HLSKernelToAffine)
+file(GLOB globbed *.cpp)
+
+add_mlir_library(MLIRScaleHLSConversion
+  ${globbed}
+
+  DEPENDS
+  MLIRScaleHLSConversionIncGen
+
+  LINK_LIBS PUBLIC
+  MLIRHLSCpp
+  MLIRHLSKernel
+  )

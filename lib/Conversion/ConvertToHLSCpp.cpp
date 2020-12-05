@@ -2,7 +2,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Conversion/ConvertToHLSCpp.h"
+#include "Conversion/Passes.h"
 #include "Dialect/HLSCpp/HLSCpp.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/Pass/Pass.h"
@@ -12,8 +12,7 @@ using namespace scalehls;
 using namespace hlscpp;
 
 namespace {
-class ConvertToHLSCppPass
-    : public mlir::PassWrapper<ConvertToHLSCppPass, OperationPass<ModuleOp>> {
+struct ConvertToHLSCpp : public ConvertToHLSCppBase<ConvertToHLSCpp> {
 public:
   void runOnOperation() override;
 };
@@ -72,7 +71,7 @@ static void convertBlock(Block &block) {
   }
 }
 
-void ConvertToHLSCppPass::runOnOperation() {
+void ConvertToHLSCpp::runOnOperation() {
   for (auto func : getOperation().getOps<FuncOp>()) {
     auto b = OpBuilder(func);
 
@@ -106,7 +105,6 @@ void ConvertToHLSCppPass::runOnOperation() {
   }
 }
 
-void hlscpp::registerConvertToHLSCppPass() {
-  PassRegistration<ConvertToHLSCppPass>(
-      "convert-to-hlscpp", "Convert to HLS C++ emittable representation.");
+std::unique_ptr<mlir::Pass> scalehls::createConvertToHLSCppPass() {
+  return std::make_unique<ConvertToHLSCpp>();
 }

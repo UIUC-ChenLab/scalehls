@@ -2,7 +2,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Conversion/HLSKernelToAffine.h"
+#include "Conversion/Passes.h"
 #include "Dialect/HLSKernel/HLSKernel.h"
 #include "Dialect/HLSKernel/Visitor.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
@@ -575,14 +575,13 @@ bool HLSKernelVisitor::visitOp(TrmmOp op) {
 //===----------------------------------------------------------------------===//
 
 namespace {
-class HLSKernelToAffinePass
-    : public mlir::PassWrapper<HLSKernelToAffinePass, OperationPass<ModuleOp>> {
+struct HLSKernelToAffine : public HLSKernelToAffineBase<HLSKernelToAffine> {
 public:
   void runOnOperation() override;
 };
 } // namespace
 
-void HLSKernelToAffinePass::runOnOperation() {
+void HLSKernelToAffine::runOnOperation() {
   auto module = getOperation();
   OpBuilder builder(module);
   HLSKernelVisitor visitor(builder, module.getLoc());
@@ -600,8 +599,6 @@ void HLSKernelToAffinePass::runOnOperation() {
   }
 }
 
-void hlskernel::registerHLSKernelToAffinePass() {
-  PassRegistration<HLSKernelToAffinePass>(
-      "hlskernel-to-affine",
-      "Lower hlskernel operations to corresponding affine representation.");
+std::unique_ptr<mlir::Pass> scalehls::createHLSKernelToAffinePass() {
+  return std::make_unique<HLSKernelToAffine>();
 }

@@ -8,8 +8,7 @@ set(LIBS
 
   MLIRHLSKernel
   MLIRHLSCpp
-  MLIRHLSKernelToAffine
-  MLIRConvertToHLSCpp
+  MLIRScaleHLSConversion
   MLIRScaleHLSTransforms
   MLIRScaleHLSAnalysis
   )
