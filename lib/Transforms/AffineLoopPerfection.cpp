@@ -55,25 +55,35 @@ void AffineLoopPerfection::runOnOperation() {
             SmallVector<AffineExpr, 4> ifExprs;
             SmallVector<bool, 4> ifEqFlags;
             SmallVector<Value, 4> ifOperands;
-            unsigned idx = 0;
+            unsigned dim = 0;
             for (auto innerLoop : loops) {
-              // Ensure constant lower bound.
-              // TODO: Support variable bound. This is definitely possible.
-              if (!innerLoop.hasConstantLowerBound()) {
-                innerLoop.emitError(
-                    "has non-constant lower bound, not supported");
-                return;
-              }
-
               // Create all components required by constructing if operation.
-              ifExprs.push_back(
-                  getAffineDimExpr(idx++, module.getContext()) -
-                  getAffineConstantExpr(innerLoop.getConstantLowerBound(),
-                                        module.getContext()));
+              if (innerLoop.hasConstantLowerBound()) {
+                ifExprs.push_back(
+                    getAffineDimExpr(dim++, module.getContext()) -
+                    getAffineConstantExpr(innerLoop.getConstantLowerBound(),
+                                          module.getContext()));
+                ifOperands.push_back(innerLoop.getInductionVar());
+              } else {
+                // Non-constant case requires to integrate the bound affine
+                // expression and operands into the condition integer set.
+                auto lowerExpr = innerLoop.getLowerBoundMap().getResult(0);
+                auto lowerOperands = innerLoop.getLowerBoundOperands();
+                SmallVector<AffineExpr, 4> newDims;
+                for (unsigned i = 0, e = lowerOperands.size(); i < e; ++i)
+                  newDims.push_back(
+                      getAffineDimExpr(i + dim + 1, module.getContext()));
+                lowerExpr = lowerExpr.replaceDimsAndSymbols(newDims, {});
+
+                ifExprs.push_back(getAffineDimExpr(dim++, module.getContext()) -
+                                  lowerExpr);
+                ifOperands.push_back(innerLoop.getInductionVar());
+                ifOperands.append(lowerOperands.begin(), lowerOperands.end());
+                dim += lowerOperands.size();
+              }
               ifEqFlags.push_back(true);
-              ifOperands.push_back(innerLoop.getInductionVar());
             }
-            auto ifCondition = IntegerSet::get(idx, 0, ifExprs, ifEqFlags);
+            auto ifCondition = IntegerSet::get(dim, 0, ifExprs, ifEqFlags);
 
             // Set builder insertion point and create AffineIf operation.
             builder.setInsertionPointToStart(innermostLoop.getBody());
@@ -115,25 +125,36 @@ void AffineLoopPerfection::runOnOperation() {
             SmallVector<AffineExpr, 4> ifExprs;
             SmallVector<bool, 4> ifEqFlags;
             SmallVector<Value, 4> ifOperands;
-            unsigned idx = 0;
+            unsigned dim = 0;
             for (auto innerLoop : loops) {
-              // Ensure constant upper bound.
-              // TODO: Support variable bound. This is definitely possible.
-              if (!innerLoop.hasConstantUpperBound()) {
-                innerLoop.emitError(
-                    "has non-constant upper bound, not supported");
-                return;
-              }
-
               // Create all components required by constructing if operation.
-              ifExprs.push_back(
-                  getAffineConstantExpr(innerLoop.getConstantUpperBound() - 1,
-                                        module.getContext()) -
-                  getAffineDimExpr(idx++, module.getContext()));
+              if (innerLoop.hasConstantUpperBound()) {
+                ifExprs.push_back(
+                    getAffineConstantExpr(innerLoop.getConstantUpperBound() - 1,
+                                          module.getContext()) -
+                    getAffineDimExpr(dim++, module.getContext()));
+                ifOperands.push_back(innerLoop.getInductionVar());
+              } else {
+                // Non-constant case requires to integrate the bound affine
+                // expression and operands into the condition integer set.
+                auto upperExpr = innerLoop.getUpperBoundMap().getResult(0);
+                auto upperOperands = innerLoop.getUpperBoundOperands();
+                SmallVector<AffineExpr, 4> newDims;
+                for (unsigned i = 0, e = upperOperands.size(); i < e; ++i)
+                  newDims.push_back(
+                      getAffineDimExpr(i + dim + 1, module.getContext()));
+                upperExpr = upperExpr.replaceDimsAndSymbols(newDims, {});
+
+                ifExprs.push_back(
+                    upperExpr - getAffineConstantExpr(1, module.getContext()) -
+                    getAffineDimExpr(dim++, module.getContext()));
+                ifOperands.push_back(innerLoop.getInductionVar());
+                ifOperands.append(upperOperands.begin(), upperOperands.end());
+                dim += upperOperands.size();
+              }
               ifEqFlags.push_back(true);
-              ifOperands.push_back(innerLoop.getInductionVar());
             }
-            auto ifCondition = IntegerSet::get(idx, 0, ifExprs, ifEqFlags);
+            auto ifCondition = IntegerSet::get(dim, 0, ifExprs, ifEqFlags);
 
             // Set builder insertion point and create AffineIf operation.
             builder.setInsertionPoint(innermostLoop.getBody()->getTerminator());
