@@ -20,6 +20,21 @@ def PragmaDSE : Pass<"pragma-dse", "ModuleOp"> {
   let constructor = "mlir::scalehls::createPragmaDSEPass()";
 }
 
+def InsertPipelinePragma : Pass<"insert-pipeline-pragma", "ModuleOp"> {
+  let summary = "Insert pipeline pragma";
+  let description = [{
+    This insert-pipeline-pragma pass will insert pipeline pragma to the
+    innermost loop level.
+  }];
+
+  let constructor = "mlir::scalehls::createInsertPipelinePragmaPass()";
+
+  let options = [
+    Option<"insertLevel", "insert-level", "unsigned", /*default=*/"1", 
+           "Positive number: loop level to be pipelined (from innermost)">
+  ];
+}
+
 def AffineLoopPerfection : Pass<"affine-loop-perfection", "ModuleOp"> {
   let summary = "Try to perfect a nested loop";
   let description = [{
@@ -43,7 +58,7 @@ def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "ModuleOp"> {
 
   let constructor = "mlir::scalehls::createPartialAffineLoopTilePass()";
 
-    let options = [
+  let options = [
     Option<"tileLevel", "tile-level", "unsigned", /*default=*/"1", 
            "Positive number: the level of loops to be tiles">,
     Option<"tileSize", "tile-size", "unsigned", /*default=*/"2", 
