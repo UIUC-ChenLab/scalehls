@@ -3,7 +3,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "Transforms/Passes.h"
-#include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/IR/Builders.h"
@@ -17,8 +16,6 @@ namespace {
 struct PartialAffineLoopTile
     : public PartialAffineLoopTileBase<PartialAffineLoopTile> {
   void runOnOperation() override;
-  void getTileSizes(ArrayRef<mlir::AffineForOp> band,
-                    SmallVectorImpl<unsigned> *tileSizes);
 };
 } // namespace
 

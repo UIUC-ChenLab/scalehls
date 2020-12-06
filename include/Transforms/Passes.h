@@ -18,6 +18,7 @@ namespace scalehls {
 std::unique_ptr<mlir::Pass> createPragmaDSEPass();
 std::unique_ptr<mlir::Pass> createAffineLoopPerfectionPass();
 std::unique_ptr<mlir::Pass> createPartialAffineLoopTilePass();
+std::unique_ptr<mlir::Pass> createRemoveVarLoopBoundPass();
 
 void registerTransformsPasses();
 

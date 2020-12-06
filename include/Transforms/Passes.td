@@ -33,7 +33,7 @@ def AffineLoopPerfection : Pass<"affine-loop-perfection", "ModuleOp"> {
 }
 
 def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "ModuleOp"> {
-  let summary = "Try to perfect a nested loop";
+  let summary = "Partially tile affine nested loops";
   let description = [{
     This partial-affine-loop-tile pass will try to tile the nested loops. The
     difference with the official affine-loop-tile pass is this pass will only
@@ -49,6 +49,18 @@ def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "ModuleOp"> {
     Option<"tileSize", "tile-size", "unsigned", /*default=*/"2", 
            "Positive number: the size of tiling">
   ];
+}
+
+def RemoveVarLoopBound : Pass<"remove-val-loop-bound", "ModuleOp"> {
+  let summary = "Try to remove variable loop bounds";
+  let description = [{
+    This remove-val-loop-bound pass will try to remove the variable loop bounds.
+    Specifically, this is only possible when the variable loop bound is an
+    affine expression of induction variables of other loops with constant lower
+    or upper bound.
+  }];
+
+  let constructor = "mlir::scalehls::createRemoveVarLoopBoundPass()";
 }
 
 #endif // SCALEHLS_TRANSFORMS_PASSES_TD
