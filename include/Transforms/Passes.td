@@ -23,13 +23,32 @@ def PragmaDSE : Pass<"pragma-dse", "ModuleOp"> {
 def AffineLoopPerfection : Pass<"affine-loop-perfection", "ModuleOp"> {
   let summary = "Try to perfect a nested loop";
   let description = [{
-    This affine-loop-perfection pass will try to perfect affine loops.
+    This affine-loop-perfection pass will try to perfect all affine loops.
     Specifically, this pass will move operations under non-innermost loops into
-    innermost loop and create an affine if region to ensure the correctness of
-    the transformation.
+    innermost loop and create affine if regions to ensure the correctness of the
+    movement.
   }];
 
   let constructor = "mlir::scalehls::createAffineLoopPerfectionPass()";
+}
+
+def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "ModuleOp"> {
+  let summary = "Try to perfect a nested loop";
+  let description = [{
+    This partial-affine-loop-tile pass will try to tile the nested loops. The
+    difference with the official affine-loop-tile pass is this pass will only
+    tile the first "tileLevel" outermost loop levels rather than all loops
+    levels.
+  }];
+
+  let constructor = "mlir::scalehls::createPartialAffineLoopTilePass()";
+
+    let options = [
+    Option<"tileLevel", "tile-level", "unsigned", /*default=*/"1", 
+           "Positive number: the level of loops to be tiles">,
+    Option<"tileSize", "tile-size", "unsigned", /*default=*/"2", 
+           "Positive number: the size of tiling">
+  ];
 }
 
 #endif // SCALEHLS_TRANSFORMS_PASSES_TD
