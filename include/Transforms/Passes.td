@@ -20,6 +20,17 @@ def PragmaDSE : Pass<"pragma-dse", "ModuleOp"> {
   let constructor = "mlir::scalehls::createPragmaDSEPass()";
 }
 
+def ArrayPartition : Pass<"array-partition", "ModuleOp"> {
+  let summary = "Insert pipeline pragma";
+  let description = [{
+    This array-partition pass will automatically search for the best array
+    partition solution of each on-chip memory instance and insert array
+    partition pragmas.
+  }];
+
+  let constructor = "mlir::scalehls::createArrayPartitionPass()";
+}
+
 def InsertPipelinePragma : Pass<"insert-pipeline-pragma", "ModuleOp"> {
   let summary = "Insert pipeline pragma";
   let description = [{
