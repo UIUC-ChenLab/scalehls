@@ -113,3 +113,50 @@ do
 
   let n++
 done
+
+# Generate report summary.
+echo -e "test summary" > test_summary.log
+echo -e "benchmark\tdsp\tlut\tcycles" >> test_summary.log
+
+n=2
+for file in cpp_src/*
+do
+  name=${file##*cpp_src/}
+  name=${name%.mlir*}
+
+  idx=0
+  for result in test_results/*
+  do
+    case $idx in
+      0) echo -e "$name\t\c" >> test_summary.log ;;
+
+      # Apply pipeline.
+      1) echo -e "p0\t\c" >> test_summary.log ;;
+      2) echo -e "p1\t\c" >> test_summary.log ;;
+      3) echo -e "p2\t\c" >> test_summary.log ;;
+      4) echo -e "p3\t\c" >> test_summary.log ;;
+
+      # Apply loop perfection + pipeline.
+      5) echo -e "pft+p0\t\c" >> test_summary.log ;;
+      6) echo -e "pft+p1\t\c" >> test_summary.log ;;
+      7) echo -e "pft+p2\t\c" >> test_summary.log ;;
+      8) echo -e "pft+p3\t\c" >> test_summary.log ;;
+
+      # Apply loop perfection + remove variable bound + pipeline.
+      9) echo -e "pft+rvb+p0\t\c" >> test_summary.log ;;
+      10) echo -e "pft+rvb+p1\t\c" >> test_summary.log ;;
+      11) echo -e "pft+rvb+p2\t\c" >> test_summary.log ;;
+      12) echo -e "pft+rvb+p3\t\c" >> test_summary.log ;;
+
+      # Apply loop perfection + remove variable bound + loop tiling + pipeline.
+      13) echo -e "pft+rvb+t1+p1\t\c" >> test_summary.log ;;
+      14) echo -e "pft+rvb+t2+p2\t\c" >> test_summary.log ;;
+      15) echo -e "pft+rvb+t3+p3\t\c" >> test_summary.log ;;
+    esac
+
+    cat $result | awk "NR==$n{OFS=\"\t\";print \$2,\$3,\$4}" >> test_summary.log
+    let idx++
+  done
+
+  let n++
+done
