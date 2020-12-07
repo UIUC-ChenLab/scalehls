@@ -66,10 +66,10 @@ def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "ModuleOp"> {
   ];
 }
 
-def RemoveVarLoopBound : Pass<"remove-val-loop-bound", "ModuleOp"> {
+def RemoveVarLoopBound : Pass<"remove-var-loop-bound", "ModuleOp"> {
   let summary = "Try to remove variable loop bounds";
   let description = [{
-    This remove-val-loop-bound pass will try to remove the variable loop bounds.
+    This remove-var-loop-bound pass will try to remove the variable loop bounds.
     Specifically, this is only possible when the variable loop bound is an
     affine expression of induction variables of other loops with constant lower
     or upper bound.

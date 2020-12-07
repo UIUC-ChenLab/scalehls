@@ -1,7 +1,9 @@
 .vscode
+.ipynb_checkpoints
 
 build
 samples/hls_proj
 samples/cpp_src
+samples/test_results
 
 *.log

@@ -27,11 +27,11 @@ void InsertPipelinePragma::runOnOperation() {
   for (auto func : module.getOps<FuncOp>()) {
     for (auto forOp : func.getOps<mlir::AffineForOp>()) {
       SmallVector<mlir::AffineForOp, 4> nestedLoops;
-      getPerfectlyNestedLoops(nestedLoops, forOp);
+      forOp.walk([&](mlir::AffineForOp loop) { nestedLoops.push_back(loop); });
 
-      auto targetLoop = nestedLoops.front();
+      auto targetLoop = nestedLoops.back();
       if (nestedLoops.size() > insertLevel)
-        targetLoop = *std::prev(nestedLoops.end(), insertLevel);
+        targetLoop = *std::next(nestedLoops.begin(), insertLevel);
 
       targetLoop.setAttr("pipeline", builder.getBoolAttr(true));
     }
