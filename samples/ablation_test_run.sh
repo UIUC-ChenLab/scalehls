@@ -118,16 +118,18 @@ done
 echo -e "test summary" > test_summary.log
 echo -e "benchmark\tdsp\tlut\tcycles" >> test_summary.log
 
-n=2
+idx=2
 for file in cpp_src/*
 do
   name=${file##*cpp_src/}
   name=${name%.mlir*}
 
-  idx=0
-  for result in test_results/*
+  n=0
+  while [ $n -lt $ablation_number ]
   do
-    case $idx in
+    result=test_results/test_result$n.log
+
+    case $n in
       0) echo -e "$name\t\c" >> test_summary.log ;;
 
       # Apply pipeline.
@@ -154,9 +156,9 @@ do
       15) echo -e "pft+rvb+t3+p3\t\c" >> test_summary.log ;;
     esac
 
-    cat $result | awk "NR==$n{OFS=\"\t\";print \$2,\$3,\$4}" >> test_summary.log
-    let idx++
+    cat $result | awk "NR==$idx{OFS=\"\t\";print \$2,\$3,\$4}" >> test_summary.log
+    let n++
   done
 
-  let n++
+  let idx++
 done
