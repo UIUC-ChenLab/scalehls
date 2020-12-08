@@ -46,12 +46,12 @@ $ scalehls-opt -qor-estimation test/Analysis/QoREstimation/test_for.mlir
 ```
 
 ### 4. Ablation study
-If Vivado HLS (2019.1 tested) is installed on your machine, running the following script will report the HLS results for some benchmarks (around 2 hours on AMD Ryzen7 3800X for all 16 tests).
+If Vivado HLS (2019.1 tested) is installed on your machine, running the following script will report the HLS results for some benchmarks (around 8 hours on AMD Ryzen7 3800X for all 33 tests).
 
-For the `ablation_test_run.sh` script, `-n` determines the number of tests to be processed, the maximum supported value of which is 16; `-c` determines whether to run Vivado HLS C synthesis; `-r` determines whether to run report generation. The generated C++ source code will be written to `sample/cpp_src`; the Vivado HLS project will be established in `sample/hls_proj`; the generated report will be written to `sample/test_results`.
+For the `ablation_test_run.sh` script, `-n` determines the number of tests to be processed, the maximum supported value of which is 33; `-c` determines from which test to begin to rerun the C++ synthesis and report collection. The generated C++ source code will be written to `sample/cpp_src`; the Vivado HLS project will be established in `sample/hls_proj`; the collected report will be written to `sample/test_results`; the test summary will be generated to `sample`.
 ```sh
 $ cd $SCALEHLS_DIR/sample
-$ ./ablation_test_run.sh -n 16 -c true -r true
+$ ./ablation_test_run.sh -n 33 -c 0
 ```
 
 ## References

@@ -1195,7 +1195,7 @@ void ModuleEmitter::emitAssign(AssignOp *op) {
 }
 
 void ModuleEmitter::emitArray(ArrayOp *op) {
-  // addAlias(op->getOperand(), op->getResult());
+  addAlias(op->getOperand(), op->getResult());
 
   if (op->interface()) {
 

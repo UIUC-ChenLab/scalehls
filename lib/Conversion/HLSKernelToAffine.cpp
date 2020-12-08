@@ -284,7 +284,7 @@ bool HLSKernelVisitor::visitOp(MaxPoolOp op) {
   auto dataType = O.getType().cast<MemRefType>().getElementType();
   auto zeroConst = builder.create<mlir::ConstantOp>(
       op.getLoc(), builder.getZeroAttr(dataType));
-  createStore(zeroConst, O, {h, c, h, w});
+  createStore(zeroConst, O, {n, c, h, w});
 
   // Create kernel height, and kernel width loop.
   auto r = createLoop(0, kernelShape[0]);
@@ -308,7 +308,7 @@ bool HLSKernelVisitor::visitOp(MaxPoolOp op) {
   // Carry out selection and store the greater value.
   auto newGreatest = builder.create<mlir::SelectOp>(op.getLoc(), greaterThanTmp,
                                                     fmap, tmpGreatest);
-  createStore(newGreatest, O, {h, c, h, w});
+  createStore(newGreatest, O, {n, c, h, w});
 
   return true;
 }

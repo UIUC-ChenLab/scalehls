@@ -80,9 +80,14 @@ void ConvertToHLSCpp::runOnOperation() {
             // Set array pragma attributes, default array instance is ram_1p
             // bram. Other attributes are not set here since they requires more
             // analysis to be determined.
-            arrayOp.setAttr("interface", builder.getBoolAttr(false));
-            arrayOp.setAttr("storage", builder.getBoolAttr(false));
-            arrayOp.setAttr("partition", builder.getBoolAttr(false));
+            if (!arrayOp.getAttr("interface"))
+              arrayOp.setAttr("interface", builder.getBoolAttr(false));
+
+            if (!arrayOp.getAttr("storage"))
+              arrayOp.setAttr("storage", builder.getBoolAttr(false));
+
+            if (!arrayOp.getAttr("partition"))
+              arrayOp.setAttr("partition", builder.getBoolAttr(false));
           }
         }
       }
@@ -92,9 +97,14 @@ void ConvertToHLSCpp::runOnOperation() {
           forOp.emitError("has zero or more than one basic blocks");
 
         // Set loop pragma attributes.
-        forOp.setAttr("pipeline", builder.getBoolAttr(false));
-        forOp.setAttr("unroll", builder.getBoolAttr(false));
-        forOp.setAttr("flatten", builder.getBoolAttr(false));
+        if (!forOp.getAttr("pipeline"))
+          forOp.setAttr("pipeline", builder.getBoolAttr(false));
+
+        if (!forOp.getAttr("unroll"))
+          forOp.setAttr("unroll", builder.getBoolAttr(false));
+
+        if (!forOp.getAttr("flatten"))
+          forOp.setAttr("flatten", builder.getBoolAttr(false));
       }
     });
   }
