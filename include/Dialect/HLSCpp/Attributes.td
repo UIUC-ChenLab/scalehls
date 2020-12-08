@@ -21,7 +21,8 @@ def PositiveUI32ArrayAttr : TypedArrayAttrBase<PositiveUI32Attr, ""> {}
 def PartitionTypeAttr : StrEnumAttr<"PartitionType", "", [
   StrEnumAttrCase<"cyclic", 0>,
   StrEnumAttrCase<"block", 1>,
-  StrEnumAttrCase<"complete", 2>
+  StrEnumAttrCase<"complete", 2>,
+  StrEnumAttrCase<"none", 3>
 ]> {
   let cppNamespace = "::mlir::scalehls::hlscpp";
 }

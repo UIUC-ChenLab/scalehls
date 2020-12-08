@@ -33,11 +33,13 @@ bool HLSCppAnalyzer::visitOp(AffineForOp op) {
   // If the current loop is annotated as unroll, all inner loops and itself are
   // automatically unrolled.
   if (getBoolAttrValue(op, "unroll")) {
-    op.emitRemark("this loop and all inner loops are automatically unrolled.");
     op.walk([&](AffineForOp forOp) {
       if (forOp.getLoopBody().getBlocks().size() != 1)
         op.emitError("has zero or more than one basic blocks.");
-      loopUnrollFull(forOp);
+      if (failed(loopUnrollFull(forOp))) {
+        forOp.emitError("failed to be fully unrolled.");
+        return;
+      }
     });
     return true;
   }
@@ -45,12 +47,14 @@ bool HLSCppAnalyzer::visitOp(AffineForOp op) {
   // If the current loop is annotated as pipeline, all intter loops are
   // automatically unrolled.
   if (getBoolAttrValue(op, "pipeline")) {
-    op.emitRemark("all inner loops are automatically unrolled.");
     op.walk([&](AffineForOp forOp) {
       if (forOp != op) {
         if (forOp.getLoopBody().getBlocks().size() != 1)
           op.emitError("has zero or more than one basic blocks.");
-        loopUnrollFull(forOp);
+        if (failed(loopUnrollFull(forOp))) {
+          forOp.emitError("failed to be fully unrolled.");
+          return;
+        }
       }
     });
   }
@@ -129,6 +133,7 @@ HLSCppEstimator::HLSCppEstimator(OpBuilder &builder, string targetSpecPath,
                                  string opLatencyPath)
     : HLSCppToolBase(builder) {
 
+  /*
   INIReader targetSpec(targetSpecPath);
   if (targetSpec.ParseError())
     llvm::outs() << "error: target spec file parse fail, please refer to "
@@ -143,6 +148,7 @@ HLSCppEstimator::HLSCppEstimator(OpBuilder &builder, string targetSpecPath,
   auto freq = targetSpec.Get("spec", "frequency", "200MHz");
   auto latency = opLatency.GetInteger(freq, "op", 0);
   llvm::outs() << latency << "\n";
+  */
 }
 
 /// Calculate the partition index according to the affine map of a memory access
@@ -467,8 +473,6 @@ bool HLSCppEstimator::visitOp(AffineForOp op) {
       // equal to zero. So that in this case, this loop will be flattened into
       // the inner pipelined loop.
       if (auto II = getUIntAttrValue(child, "init_interval")) {
-        op.emitRemark("this loop is flattened into its inner loop.");
-
         setAttrValue(op, "init_interval", II);
 
         auto iterLatency = getUIntAttrValue(child, "iter_latency");
