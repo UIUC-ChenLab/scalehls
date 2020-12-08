@@ -1227,21 +1227,28 @@ void ModuleEmitter::emitArray(ArrayOp *op) {
   if (op->partition() && type.hasStaticShape()) {
 
     // Emit array_partition pragma(s).
+    bool emitFlag = false;
     for (unsigned dim = 0; dim < type.getRank(); ++dim) {
-      indent();
-      os << "#pragma HLS array_partition";
-      os << " variable=";
-      emitValue(op->getOperand());
       auto partitionType =
           op->partition_type()[dim].cast<StringAttr>().getValue();
-      os << " " << partitionType;
-      if (partitionType != "complete")
-        os << " factor="
-           << op->partition_factor()[dim].cast<IntegerAttr>().getUInt();
-      os << " dim=" << dim + 1 << "\n";
+      if (partitionType != "none") {
+        indent();
+        os << "#pragma HLS array_partition";
+        os << " variable=";
+        emitValue(op->getOperand());
+        os << " " << partitionType;
+        if (partitionType != "complete")
+          os << " factor="
+             << op->partition_factor()[dim].cast<IntegerAttr>().getUInt();
+        os << " dim=" << dim + 1 << "\n";
+        emitFlag = true;
+      }
     }
+
+    // Emit an empty line.
+    if (emitFlag)
+      os << "\n";
   }
-  os << "\n";
 }
 
 /// Pragma operation emitters. (deprecated)
