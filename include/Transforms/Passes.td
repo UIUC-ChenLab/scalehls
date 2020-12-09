@@ -7,6 +7,10 @@
 
 include "mlir/Pass/PassBase.td"
 
+//===----------------------------------------------------------------------===//
+// Pragma Optimization Passes
+//===----------------------------------------------------------------------===//
+
 def PragmaDSE : Pass<"pragma-dse", "ModuleOp"> {
   let summary = "Optimize pragma configuration of each optimizable region";
   let description = [{
@@ -21,7 +25,7 @@ def PragmaDSE : Pass<"pragma-dse", "ModuleOp"> {
 }
 
 def ArrayPartition : Pass<"array-partition", "ModuleOp"> {
-  let summary = "Insert pipeline pragma";
+  let summary = "Apply optimized array partition optimization";
   let description = [{
     This array-partition pass will automatically search for the best array
     partition solution of each on-chip memory instance and insert array
@@ -45,6 +49,10 @@ def InsertPipelinePragma : Pass<"insert-pipeline-pragma", "ModuleOp"> {
            "Positive number: loop level to be pipelined (from innermost)">
   ];
 }
+
+//===----------------------------------------------------------------------===//
+// Loop Optimization Passes
+//===----------------------------------------------------------------------===//
 
 def AffineLoopPerfection : Pass<"affine-loop-perfection", "ModuleOp"> {
   let summary = "Try to perfect a nested loop";
@@ -87,6 +95,21 @@ def RemoveVarLoopBound : Pass<"remove-var-loop-bound", "ModuleOp"> {
   }];
 
   let constructor = "mlir::scalehls::createRemoveVarLoopBoundPass()";
+}
+
+//===----------------------------------------------------------------------===//
+// Dataflow Optimization Passes
+//===----------------------------------------------------------------------===//
+
+def SplitFunction : Pass<"split-function", "ModuleOp"> {
+  let summary = "Split function for enabling dataflow";
+  let description = [{
+    This split-function pass should be applied in HLSKernel level. This pass
+    will split each HLSKernel operation into a separate function for applying
+    dataflow pragma to the top function.
+  }];
+
+  let constructor = "mlir::scalehls::createSplitFunctionPass()";
 }
 
 #endif // SCALEHLS_TRANSFORMS_PASSES_TD

@@ -15,12 +15,18 @@ class Pass;
 namespace mlir {
 namespace scalehls {
 
+/// Pragma optimization passes.
 std::unique_ptr<mlir::Pass> createPragmaDSEPass();
+std::unique_ptr<mlir::Pass> createInsertPipelinePragmaPass();
+std::unique_ptr<mlir::Pass> createArrayPartitionPass();
+
+/// Loop optimization passes.
 std::unique_ptr<mlir::Pass> createAffineLoopPerfectionPass();
 std::unique_ptr<mlir::Pass> createPartialAffineLoopTilePass();
 std::unique_ptr<mlir::Pass> createRemoveVarLoopBoundPass();
-std::unique_ptr<mlir::Pass> createInsertPipelinePragmaPass();
-std::unique_ptr<mlir::Pass> createArrayPartitionPass();
+
+/// Dataflow optimization passes.
+std::unique_ptr<mlir::Pass> createSplitFunctionPass();
 
 void registerTransformsPasses();
 
