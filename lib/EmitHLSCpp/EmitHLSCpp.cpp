@@ -1180,7 +1180,43 @@ void ModuleEmitter::emitIndexCast(IndexCastOp *op) {
 }
 
 void ModuleEmitter::emitCall(CallOp *op) {
-  // TODO
+  // Handle returned value by the callee.
+  for (auto result : op->getResults()) {
+    if (!isDeclared(result)) {
+      indent();
+      if (result.getType().isa<ShapedType>())
+        emitArrayDecl(result);
+      else
+        emitValue(result);
+      os << ";\n";
+    }
+  }
+
+  // Emit the function call.
+  indent();
+  os << op->getCallee() << "(";
+
+  // Handle input arguments.
+  unsigned argIdx = 0;
+  for (auto arg : op->getOperands()) {
+    emitValue(arg);
+
+    if (argIdx++ != op->getNumOperands() - 1)
+      os << ", ";
+  }
+
+  // Handle output arguments.
+  for (auto result : op->getResults()) {
+    // The address should be passed in for scalar result arguments.
+    if (result.getType().isa<ShapedType>())
+      os << ", ";
+    else
+      os << ", &";
+
+    emitValue(result);
+  }
+
+  os << ");\n";
 }
 
 /// Structure operation emitters.
@@ -1468,6 +1504,8 @@ void ModuleEmitter::emitFunction(FuncOp func) {
     for (auto result : funcReturn.getOperands()) {
       os << ",\n";
       indent();
+      // TODO: a known bug, cannot return a value twice, e.g. return %0, %0 :
+      // index, index. However, typically this should not happen.
       if (result.getType().isa<ShapedType>())
         emitArrayDecl(result);
       else {
@@ -1506,7 +1544,12 @@ void ModuleEmitter::emitFunction(FuncOp func) {
       indent();
       os << "#pragma HLS interface s_axilite";
       os << " port=";
-      emitValue(port);
+
+      // TODO: This is a temporary solution.
+      auto name = getName(port);
+      if (name.front() == "*"[0])
+        name.erase(name.begin());
+      os << name;
       os << " bundle=ctrl\n";
     }
     os << "\n";
