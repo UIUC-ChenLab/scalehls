@@ -163,25 +163,26 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
         builder.create<mlir::AllocOp>(loc, getMemType({btmChannel})));
 
     builder.create<ConvOp>(
-        loc, *std::prev(fmaps.end(), 2), kernels.back(), biases.back(),
-        fmaps.back(), builder.getI64ArrayAttr({1, 1}),
+        loc, ArrayRef<mlir::Type>(), *std::prev(fmaps.end(), 2), kernels.back(),
+        biases.back(), fmaps.back(), builder.getI64ArrayAttr({1, 1}),
         builder.getI64ArrayAttr({padding, padding, padding, padding}));
 
     // Create ReLU layer.
     if (includeRelu) {
       fmaps.push_back(builder.create<mlir::AllocOp>(
           loc, getMemType({batchSize, btmChannel, topHeight, topWidth})));
-      builder.create<ReluOp>(loc, *std::prev(fmaps.end(), 2), fmaps.back());
+      builder.create<ReluOp>(loc, ArrayRef<mlir::Type>(),
+                             *std::prev(fmaps.end(), 2), fmaps.back());
     }
 
     // Create max pooling layer if applied.
     if (poolingFlag) {
       fmaps.push_back(builder.create<mlir::AllocOp>(
           loc, getMemType({batchSize, btmChannel, btmHeight, btmWidth})));
-      builder.create<MaxPoolOp>(loc, *std::prev(fmaps.end(), 2), fmaps.back(),
-                                builder.getI64ArrayAttr({2, 2}),
-                                builder.getI64ArrayAttr({2, 2}),
-                                builder.getI64ArrayAttr({0, 0, 0, 0}));
+      builder.create<MaxPoolOp>(
+          loc, ArrayRef<mlir::Type>(), *std::prev(fmaps.end(), 2), fmaps.back(),
+          builder.getI64ArrayAttr({2, 2}), builder.getI64ArrayAttr({2, 2}),
+          builder.getI64ArrayAttr({0, 0, 0, 0}));
     }
 
     // Update status registers.
@@ -206,7 +207,8 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
   biases.push_back(
       builder.create<mlir::AllocOp>(loc, getMemType({outputChannel})));
 
-  builder.create<DenseOp>(loc, *std::prev(fmaps.end(), 2), kernels.back(),
+  builder.create<DenseOp>(loc, ArrayRef<mlir::Type>(),
+                          *std::prev(fmaps.end(), 2), kernels.back(),
                           biases.back(), fmaps.back());
 
   builder.create<mlir::ReturnOp>(loc);
@@ -262,7 +264,7 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
       auto kernelWidth = startFmapShape[2] / endFmapShape[3];
 
       builder.create<MaxPoolOp>(
-          loc, startFmap, newStartFmap,
+          loc, ArrayRef<mlir::Type>(), startFmap, newStartFmap,
           builder.getI64ArrayAttr({kernelHeight, kernelWidth}),
           builder.getI64ArrayAttr({kernelHeight, kernelWidth}),
           builder.getI64ArrayAttr({0, 0, 0, 0}));
@@ -282,8 +284,9 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
       biases.push_back(
           builder.create<mlir::AllocOp>(loc, getMemType({endFmapShape[1]})));
 
-      builder.create<ConvOp>(loc, startFmap, kernels.back(), biases.back(),
-                             newStartFmap, builder.getI64ArrayAttr({1, 1}),
+      builder.create<ConvOp>(loc, ArrayRef<mlir::Type>(), startFmap,
+                             kernels.back(), biases.back(), newStartFmap,
+                             builder.getI64ArrayAttr({1, 1}),
                              builder.getI64ArrayAttr({0, 0, 0, 0}));
 
       // Update start fmap information.
@@ -296,7 +299,8 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
         loc, getMemType({batchSize, endFmapShape[1], endFmapShape[2],
                          endFmapShape[3]}));
     endFmap.replaceAllUsesWith(newEndFmap);
-    builder.create<MergeOp>(loc, startFmap, endFmap, newEndFmap);
+    builder.create<MergeOp>(loc, ArrayRef<mlir::Type>(), startFmap, endFmap,
+                            newEndFmap);
   }
 
   // Create a new function taking all kernels and biases as arguments. This will

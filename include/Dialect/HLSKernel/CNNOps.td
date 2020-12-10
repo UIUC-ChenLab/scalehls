@@ -17,10 +17,13 @@ def DenseOp : HLSKernelOp<"dense", [HLSKernelOpInterface]> {
   }];
 
   let arguments = (ins
-    AnyMemRef:$I,
-    AnyMemRef:$K,
-    AnyMemRef:$B,
-    AnyMemRef:$O
+    AnyShaped:$I,
+    AnyShaped:$K,
+    AnyShaped:$B,
+    Optional<AnyMemRef>:$O
+  );
+  let results = (outs
+    Optional<AnyRankedTensor>:$tensorO
   );
 
   let verifier = [{ return ::verify(*this); }];
@@ -43,12 +46,15 @@ def ConvOp : HLSKernelOp<"conv", [HLSKernelOpInterface]> {
   }];
 
   let arguments = (ins
-    AnyMemRef:$I,
-    AnyMemRef:$K,
-    AnyMemRef:$B,
-    AnyMemRef:$O,
+    AnyShaped:$I,
+    AnyShaped:$K,
+    AnyShaped:$B,
+    Optional<AnyMemRef>:$O,
     OptionalAttr<I64ArrayAttr>:$strides,
     OptionalAttr<I64ArrayAttr>:$padding
+  );
+  let results = (outs
+    Optional<AnyRankedTensor>:$tensorO
   );
 
   let verifier = [{ return ::verify(*this); }];
@@ -65,11 +71,14 @@ def MaxPoolOp : HLSKernelOp<"maxpool", [HLSKernelOpInterface]> {
   }];
 
   let arguments = (ins
-    AnyMemRef:$I,
-    AnyMemRef:$O,
+    AnyShaped:$I,
+    Optional<AnyMemRef>:$O,
     OptionalAttr<I64ArrayAttr>:$kernel_shape,
     OptionalAttr<I64ArrayAttr>:$strides,
     OptionalAttr<I64ArrayAttr>:$padding
+  );
+  let results = (outs
+    Optional<AnyRankedTensor>:$tensorO
   );
 
   let verifier = [{ return ::verify(*this); }];
@@ -85,8 +94,11 @@ def ReluOp : HLSKernelOp<"relu", [HLSKernelOpInterface]> {
   }];
 
   let arguments = (ins
-    AnyMemRef:$I,
-    AnyMemRef:$O
+    AnyShaped:$I,
+    Optional<AnyMemRef>:$O
+  );
+  let results = (outs
+    Optional<AnyRankedTensor>:$tensorO
   );
 
   let verifier = [{ return ::verify(*this); }];
@@ -99,9 +111,12 @@ def MergeOp : HLSKernelOp<"merge", [HLSKernelOpInterface]> {
   }];
 
   let arguments = (ins
-    AnyMemRef:$I0,
-    AnyMemRef:$I1,
-    AnyMemRef:$O
+    AnyShaped:$I0,
+    AnyShaped:$I1,
+    Optional<AnyMemRef>:$O
+  );
+  let results = (outs
+    Optional<AnyRankedTensor>:$tensorO
   );
 
   let verifier = [{ return ::verify(*this); }];
