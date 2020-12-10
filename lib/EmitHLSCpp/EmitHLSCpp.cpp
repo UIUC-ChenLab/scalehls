@@ -79,8 +79,8 @@ public:
 
   SmallString<8> addAlias(Value val, Value alias) {
     assert(isDeclared(val) && "hasn't been declared before.");
-    state.nameTable[alias] = state.nameTable[val];
-    return state.nameTable[val];
+    state.nameTable[alias] = getName(val);
+    return getName(val);
   }
 
   SmallString<8> getName(Value val);
