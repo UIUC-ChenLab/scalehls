@@ -64,61 +64,64 @@ do
   # Generate HLS C++ files.
   for file in ../test/Conversion/HLSKernelToAffine/*
   do
+    name=${file##*Affine/}
+    name=top-function=${name%.mlir*}
     output="cpp_src/${file##*Affine/}.cpp"
+
     case $n in
-      0) scalehls-opt $hta $cth $can $file | scalehls-translate $emit -o $output ;;
+      0) scalehls-opt $hta $cth="$name" $can $file | scalehls-translate $emit -o $output ;;
 
       # Apply pipeline.
-      1) scalehls-opt $hta $cth "$p0" $can $file | scalehls-translate $emit -o $output ;;
-      2) scalehls-opt $hta $cth "$p1" $can $file | scalehls-translate $emit -o $output ;;
-      3) scalehls-opt $hta $cth "$p2" $can $file | scalehls-translate $emit -o $output ;;
-      4) scalehls-opt $hta $cth "$p3" $can $file | scalehls-translate $emit -o $output ;;
+      1) scalehls-opt $hta $cth="$name" "$p0" $can $file | scalehls-translate $emit -o $output ;;
+      2) scalehls-opt $hta $cth="$name" "$p1" $can $file | scalehls-translate $emit -o $output ;;
+      3) scalehls-opt $hta $cth="$name" "$p2" $can $file | scalehls-translate $emit -o $output ;;
+      4) scalehls-opt $hta $cth="$name" "$p3" $can $file | scalehls-translate $emit -o $output ;;
 
       # Apply pipeline + array partition.
-      5) scalehls-opt $hta $cth "$p0" $par $can $file | scalehls-translate $emit -o $output ;;
-      6) scalehls-opt $hta $cth "$p1" $par $can $file | scalehls-translate $emit -o $output ;;
-      7) scalehls-opt $hta $cth "$p2" $par $can $file | scalehls-translate $emit -o $output ;;
-      8) scalehls-opt $hta $cth "$p3" $par $can $file | scalehls-translate $emit -o $output ;;
+      5) scalehls-opt $hta $cth="$name" "$p0" $par $can $file | scalehls-translate $emit -o $output ;;
+      6) scalehls-opt $hta $cth="$name" "$p1" $par $can $file | scalehls-translate $emit -o $output ;;
+      7) scalehls-opt $hta $cth="$name" "$p2" $par $can $file | scalehls-translate $emit -o $output ;;
+      8) scalehls-opt $hta $cth="$name" "$p3" $par $can $file | scalehls-translate $emit -o $output ;;
 
       # Apply loop perfection + remove variable bound + pipeline.
-      9) scalehls-opt $hta $alp $rvb $cth "$p0" $can $file | scalehls-translate $emit -o $output ;;
-      10) scalehls-opt $hta $alp $rvb $cth "$p1" $can $file | scalehls-translate $emit -o $output ;;
-      11) scalehls-opt $hta $alp $rvb $cth "$p2" $can $file | scalehls-translate $emit -o $output ;;
-      12) scalehls-opt $hta $alp $rvb $cth "$p3" $can $file | scalehls-translate $emit -o $output ;;
+      9) scalehls-opt $hta $alp $rvb $cth="$name" "$p0" $can $file | scalehls-translate $emit -o $output ;;
+      10) scalehls-opt $hta $alp $rvb $cth="$name" "$p1" $can $file | scalehls-translate $emit -o $output ;;
+      11) scalehls-opt $hta $alp $rvb $cth="$name" "$p2" $can $file | scalehls-translate $emit -o $output ;;
+      12) scalehls-opt $hta $alp $rvb $cth="$name" "$p3" $can $file | scalehls-translate $emit -o $output ;;
 
       # Apply loop perfection + remove variable bound + pipeline + array partition.
-      13) scalehls-opt $hta $alp $rvb $cth "$p0" $par $can $file | scalehls-translate $emit -o $output ;;
-      14) scalehls-opt $hta $alp $rvb $cth "$p1" $par $can $file | scalehls-translate $emit -o $output ;;
-      15) scalehls-opt $hta $alp $rvb $cth "$p2" $par $can $file | scalehls-translate $emit -o $output ;;
-      16) scalehls-opt $hta $alp $rvb $cth "$p3" $par $can $file | scalehls-translate $emit -o $output ;;
+      13) scalehls-opt $hta $alp $rvb $cth="$name" "$p0" $par $can $file | scalehls-translate $emit -o $output ;;
+      14) scalehls-opt $hta $alp $rvb $cth="$name" "$p1" $par $can $file | scalehls-translate $emit -o $output ;;
+      15) scalehls-opt $hta $alp $rvb $cth="$name" "$p2" $par $can $file | scalehls-translate $emit -o $output ;;
+      16) scalehls-opt $hta $alp $rvb $cth="$name" "$p3" $par $can $file | scalehls-translate $emit -o $output ;;
 
       # Apply ... + 1st-level loop tiling + pipeline.
-      17) scalehls-opt $hta $alp $rvb "$t1s2" $cth "$p1" "$u1" $can $file | scalehls-translate $emit -o $output ;;
-      18) scalehls-opt $hta $alp $rvb "$t1s4" $cth "$p1" "$u1" $can $file | scalehls-translate $emit -o $output ;;
-      19) scalehls-opt $hta $alp $rvb "$t1s8" $cth "$p1" "$u1" $can $file | scalehls-translate $emit -o $output ;;
+      17) scalehls-opt $hta $alp $rvb "$t1s2" $cth="$name" "$p1" "$u1" $can $file | scalehls-translate $emit -o $output ;;
+      18) scalehls-opt $hta $alp $rvb "$t1s4" $cth="$name" "$p1" "$u1" $can $file | scalehls-translate $emit -o $output ;;
+      19) scalehls-opt $hta $alp $rvb "$t1s8" $cth="$name" "$p1" "$u1" $can $file | scalehls-translate $emit -o $output ;;
 
       # Apply ... + 1st-level loop tiling + pipeline + array partition.
-      20) scalehls-opt $hta $alp $rvb "$t1s2" $cth "$p1" "$u1" $par $can $file | scalehls-translate $emit -o $output ;;
-      21) scalehls-opt $hta $alp $rvb "$t1s4" $cth "$p1" "$u1" $par $can $file | scalehls-translate $emit -o $output ;;
-      22) scalehls-opt $hta $alp $rvb "$t1s8" $cth "$p1" "$u1" $par $can $file | scalehls-translate $emit -o $output ;;
+      20) scalehls-opt $hta $alp $rvb "$t1s2" $cth="$name" "$p1" "$u1" $par $can $file | scalehls-translate $emit -o $output ;;
+      21) scalehls-opt $hta $alp $rvb "$t1s4" $cth="$name" "$p1" "$u1" $par $can $file | scalehls-translate $emit -o $output ;;
+      22) scalehls-opt $hta $alp $rvb "$t1s8" $cth="$name" "$p1" "$u1" $par $can $file | scalehls-translate $emit -o $output ;;
 
       # Apply ... + 2nd-level loop tiling + pipeline.
-      23) scalehls-opt $hta $alp $rvb "$t2s2" $cth "$p2" "$u2" $can $file | scalehls-translate $emit -o $output ;;
-      24) scalehls-opt $hta $alp $rvb "$t2s4" $cth "$p2" "$u2" $can $file | scalehls-translate $emit -o $output ;;
-      25) scalehls-opt $hta $alp $rvb "$t2s8" $cth "$p2" "$u2" $can $file | scalehls-translate $emit -o $output ;;
+      23) scalehls-opt $hta $alp $rvb "$t2s2" $cth="$name" "$p2" "$u2" $can $file | scalehls-translate $emit -o $output ;;
+      24) scalehls-opt $hta $alp $rvb "$t2s4" $cth="$name" "$p2" "$u2" $can $file | scalehls-translate $emit -o $output ;;
+      25) scalehls-opt $hta $alp $rvb "$t2s8" $cth="$name" "$p2" "$u2" $can $file | scalehls-translate $emit -o $output ;;
 
       # Apply ... + 2nd-level loop tiling + pipeline + array partition.
-      26) scalehls-opt $hta $alp $rvb "$t2s2" $cth "$p2" "$u2" $par $can $file | scalehls-translate $emit -o $output ;;
-      27) scalehls-opt $hta $alp $rvb "$t2s4" $cth "$p2" "$u2" $par $can $file | scalehls-translate $emit -o $output ;;
-      28) scalehls-opt $hta $alp $rvb "$t2s8" $cth "$p2" "$u2" $par $can $file | scalehls-translate $emit -o $output ;;
+      26) scalehls-opt $hta $alp $rvb "$t2s2" $cth="$name" "$p2" "$u2" $par $can $file | scalehls-translate $emit -o $output ;;
+      27) scalehls-opt $hta $alp $rvb "$t2s4" $cth="$name" "$p2" "$u2" $par $can $file | scalehls-translate $emit -o $output ;;
+      28) scalehls-opt $hta $alp $rvb "$t2s8" $cth="$name" "$p2" "$u2" $par $can $file | scalehls-translate $emit -o $output ;;
 
       # Apply ... + 3rd-level loop tiling + pipeline.
-      29) scalehls-opt $hta $alp $rvb "$t3s2" $cth "$p3" "$u3" $can $file | scalehls-translate $emit -o $output ;;
-      30) scalehls-opt $hta $alp $rvb "$t3s4" $cth "$p3" "$u3" $can $file | scalehls-translate $emit -o $output ;;
+      29) scalehls-opt $hta $alp $rvb "$t3s2" $cth="$name" "$p3" "$u3" $can $file | scalehls-translate $emit -o $output ;;
+      30) scalehls-opt $hta $alp $rvb "$t3s4" $cth="$name" "$p3" "$u3" $can $file | scalehls-translate $emit -o $output ;;
 
       # Apply ... + 3rd-level loop tiling + pipeline + array partition.
-      31) scalehls-opt $hta $cth $alp $rvb "$t3s2" "$p3" "$u3" $par $can $file | scalehls-translate $emit -o $output ;;
-      32) scalehls-opt $hta $cth $alp $rvb "$t3s4" "$p3" "$u3" $par $can $file | scalehls-translate $emit -o $output ;;
+      31) scalehls-opt $hta $alp $rvb "$t3s2" $cth="$name" "$p3" "$u3" $par $can $file | scalehls-translate $emit -o $output ;;
+      32) scalehls-opt $hta $alp $rvb "$t3s4" $cth="$name" "$p3" "$u3" $par $can $file | scalehls-translate $emit -o $output ;;
     esac
   done
 

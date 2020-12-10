@@ -27,8 +27,13 @@ void ConvertToHLSCpp::runOnOperation() {
 
     // Set function pragma attributes.
     func.setAttr("dataflow", b.getBoolAttr(false));
+    if (func.getName() == TopFunction)
+      func.setAttr("top_function", b.getBoolAttr(true));
+    else
+      func.setAttr("top_function", b.getBoolAttr(false));
 
-    // Insert AssignOp.
+    // Insert AssignOp when an arguments or result of ConstantOp are directly
+    // connected to ReturnOp.
     if (auto returnOp = dyn_cast<ReturnOp>(func.front().getTerminator())) {
       b.setInsertionPoint(returnOp);
       unsigned idx = 0;
@@ -77,10 +82,23 @@ void ConvertToHLSCpp::runOnOperation() {
             operand.replaceAllUsesExcept(arrayOp.getResult(),
                                          SmallPtrSet<Operation *, 1>{arrayOp});
 
-            // Set array pragma attributes, default array instance is ram_1p
-            // bram. Other attributes are not set here since they requires more
-            // analysis to be determined.
-            if (!arrayOp.getAttr("interface"))
+            // Set array pragma attributes.
+            // TODO: A known bug is if ArrayOp is connected to ReturnOp through
+            // an AssignOp, it will always not be annotated as interface. This
+            // is acceptable because AssignOp is only used to handle some weird
+            // corner cases that rarely happen.
+            if (!arrayOp.getAttr("interface") &&
+                func.getName() == TopFunction) {
+              // Only if when the array is an block arguments or a returned
+              // value, it will be annotated as interface.
+              bool interfaceFlag =
+                  operand.getKind() == Value::Kind::BlockArgument;
+              for (auto &use : arrayOp.getResult().getUses())
+                if (isa<mlir::ReturnOp>(use.getOwner()))
+                  interfaceFlag = true;
+
+              arrayOp.setAttr("interface", builder.getBoolAttr(interfaceFlag));
+            } else
               arrayOp.setAttr("interface", builder.getBoolAttr(false));
 
             if (!arrayOp.getAttr("storage"))

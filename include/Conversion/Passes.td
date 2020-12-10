@@ -15,6 +15,11 @@ def ConvertToHLSCpp : Pass<"convert-to-hlscpp", "ModuleOp"> {
   }];
 
   let constructor = "mlir::scalehls::createConvertToHLSCppPass()";
+
+  let options = [
+    Option<"TopFunction", "top-function", "std::string", /*default=*/"\"main\"", 
+           "The top function for HLS synthesis">,
+  ];
 }
 
 def HLSKernelToAffine : Pass<"hlskernel-to-affine", "ModuleOp"> {

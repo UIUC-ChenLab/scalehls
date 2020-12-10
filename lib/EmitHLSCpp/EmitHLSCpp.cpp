@@ -1232,8 +1232,10 @@ void ModuleEmitter::emitAssign(AssignOp *op) {
 
 void ModuleEmitter::emitArray(ArrayOp *op) {
   addAlias(op->getOperand(), op->getResult());
+  bool emitPragmaFlag = false;
 
   if (op->interface()) {
+    emitPragmaFlag = true;
 
     // Emit interface pragma.
     indent();
@@ -1243,31 +1245,33 @@ void ModuleEmitter::emitArray(ArrayOp *op) {
     emitValue(op->getOperand());
     if (op->interface_mode() == "m_axi") {
       os << " depth=" << op->interface_depth();
-      os << " offset=slave\n";
-    } else {
-      os << "\n";
-      // os << " storage_type=" << op->storage_type() << "\n";
-    }
-  } else {
+      os << " offset=slave";
+    } else if (op->storage())
+      os << " storage_type=" << op->storage_type();
 
-    // Emit bind_storage pragma.
-    // indent();
-    // os << "#pragma HLS bind_storage";
-    // os << " variable=";
-    // emitValue(op->getOperand());
-    // os << " type=" << op->storage_type();
-    // os << " impl=" << op->storage_impl() << "\n";
+    os << "\n";
   }
+  // This branch is prepared for 2020.1 or higher version.
+  // else {
+  //  Emit bind_storage pragma.
+  //  indent();
+  //  os << "#pragma HLS bind_storage";
+  //  os << " variable=";
+  //  emitValue(op->getOperand());
+  //  os << " type=" << op->storage_type();
+  //  os << " impl=" << op->storage_impl() << "\n";
+  //}
 
   auto type = op->getOperand().getType().cast<ShapedType>();
   if (op->partition() && type.hasStaticShape()) {
 
     // Emit array_partition pragma(s).
-    bool emitFlag = false;
     for (unsigned dim = 0; dim < type.getRank(); ++dim) {
       auto partitionType =
           op->partition_type()[dim].cast<StringAttr>().getValue();
       if (partitionType != "none") {
+        emitPragmaFlag = true;
+
         indent();
         os << "#pragma HLS array_partition";
         os << " variable=";
@@ -1277,14 +1281,13 @@ void ModuleEmitter::emitArray(ArrayOp *op) {
           os << " factor="
              << op->partition_factor()[dim].cast<IntegerAttr>().getUInt();
         os << " dim=" << dim + 1 << "\n";
-        emitFlag = true;
       }
     }
-
-    // Emit an empty line.
-    if (emitFlag)
-      os << "\n";
   }
+
+  // Emit an empty line.
+  if (emitPragmaFlag)
+    os << "\n";
 }
 
 /// Pragma operation emitters. (deprecated)
@@ -1533,26 +1536,28 @@ void ModuleEmitter::emitFunction(FuncOp func) {
     }
   }
 
-  // TODO: only top function should emit these pragmas.
-  if (true) {
-    indent();
-    os << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
-
-    // Interface pragma for array ports will be seperately handled since
-    // they are much more complicated.
-    for (auto &port : portList) {
+  // Only top function should emit these pragmas.
+  if (auto topFlag = func.getAttrOfType<BoolAttr>("top_function")) {
+    if (topFlag.getValue()) {
       indent();
-      os << "#pragma HLS interface s_axilite";
-      os << " port=";
+      os << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
 
-      // TODO: This is a temporary solution.
-      auto name = getName(port);
-      if (name.front() == "*"[0])
-        name.erase(name.begin());
-      os << name;
-      os << " bundle=ctrl\n";
+      // Interface pragma for array ports will be seperately handled since
+      // they are much more complicated.
+      for (auto &port : portList) {
+        indent();
+        os << "#pragma HLS interface s_axilite";
+        os << " port=";
+
+        // TODO: This is a temporary solution.
+        auto name = getName(port);
+        if (name.front() == "*"[0])
+          name.erase(name.begin());
+        os << name;
+        os << " bundle=ctrl\n";
+      }
+      os << "\n";
     }
-    os << "\n";
   }
 
   emitBlock(func.front());

@@ -1,9 +1,9 @@
-// RUN: scalehls-opt -convert-to-hlscpp %s | FileCheck %s
+// RUN: scalehls-opt -convert-to-hlscpp="top-function=test_conversion" %s | FileCheck %s
 
 // CHECK-LABEL: func @test_conversion(
-// CHECK-SAME:  %arg0: f32, %arg1: memref<16xf32>) -> (f32, memref<16xf32>, i32, tensor<2x2xi32>) attributes {dataflow = false} {
+// CHECK-SAME:  %arg0: f32, %arg1: memref<16xf32>) -> (f32, memref<16xf32>, i32, tensor<2x2xi32>) attributes {dataflow = false, top_function = true} {
 func @test_conversion(%arg0: f32, %arg1: memref<16xf32>) -> (f32, memref<16xf32>, i32, tensor<2x2xi32>) {
-  // CHECK: %[[VAL_0:.*]] = "hlscpp.array"(%[[ARG_1:.*]]) {interface = false, partition = false, storage = false} : (memref<16xf32>) -> memref<16xf32>
+  // CHECK: %[[VAL_0:.*]] = "hlscpp.array"(%[[ARG_1:.*]]) {interface = true, partition = false, storage = false} : (memref<16xf32>) -> memref<16xf32>
   %c11_i32 = constant 11 : i32
   %cst = constant dense<[[11, 0], [0, -42]]> : tensor<2x2xi32>
 
