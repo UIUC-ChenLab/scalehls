@@ -18,6 +18,7 @@
 #include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/ToolOutputFile.h"
+#include <numeric>
 
 using namespace llvm;
 using namespace mlir;
@@ -81,7 +82,12 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
   const auto minChannel = config.GetInteger("config", "minChannel", 8);
   const auto maxChannel = config.GetInteger("config", "maxChannel", 64);
   const auto poolingNumber = config.GetInteger("config", "poolingNumber", 3);
-  // const auto bypassNumber = config.GetInteger("config", "bypassNumber", 0);
+
+  const auto bypassNumber = config.GetInteger("config", "bypassNumber", 1);
+  const auto minBypassLength =
+      config.GetInteger("config", "minBypassLength", 2);
+  const auto maxBypassLength =
+      config.GetInteger("config", "maxBypassLength", 4);
 
   const auto includeRelu = config.GetInteger("config", "includeRelu", 0);
   const auto doubleChannel = config.GetInteger("config", "doubleChannel", 2);
@@ -204,6 +210,94 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
                           biases.back(), fmaps.back());
 
   builder.create<mlir::ReturnOp>(loc);
+
+  // Add bypass paths to the current model.
+  // Ensure the specified bypass number is available. Since the last dense layer
+  // will never be bypassed, (fmaps.size() - 2) is the number of available
+  // layers that can be bypassed.
+  int maxBypassNumber = (fmaps.size() - 2) / maxBypassLength;
+  if (bypassNumber > maxBypassNumber)
+    func.emitError("bypass number or maximum bypass length is too large");
+
+  // Generate a random vector to determine the length of each bypass path.
+  SmallVector<unsigned, 4> lengthVec;
+  for (unsigned i = 0, e = bypassNumber; i < e; ++i)
+    lengthVec.push_back(std::rand() % (maxBypassLength + 1 - minBypassLength) +
+                        minBypassLength);
+
+  // Generate a random vector to determine the start point and end point pair of
+  // each bypass path.
+  unsigned minStartPoint = 0;
+  unsigned maxStartPoint =
+      fmaps.size() - 2 - std::accumulate(lengthVec.begin(), lengthVec.end(), 0);
+
+  SmallVector<std::pair<unsigned, unsigned>, 4> bypassVec;
+  for (unsigned i = 0, e = bypassNumber; i < e; ++i) {
+    unsigned startPoint =
+        std::rand() % (maxStartPoint + 1 - minStartPoint) + minStartPoint;
+    bypassVec.push_back({startPoint, startPoint + lengthVec[i]});
+
+    minStartPoint = startPoint + lengthVec[i];
+    maxStartPoint += lengthVec[i];
+  }
+
+  // Create bypass path between each pair of start point and end point.
+  for (auto bypass : bypassVec) {
+    auto startFmap = fmaps[bypass.first];
+    auto endFmap = fmaps[bypass.second];
+
+    auto startFmapShape = startFmap.getType().cast<MemRefType>().getShape();
+    auto endFmapShape = endFmap.getType().cast<MemRefType>().getShape();
+
+    // Set builder insertion point to the end of block.
+    builder.setInsertionPointAfterValue(endFmap);
+
+    // Insert max pooling layer to align height and width.
+    if (startFmapShape[2] != endFmapShape[2] ||
+        startFmapShape[3] != endFmapShape[3]) {
+      auto newStartFmap = builder.create<mlir::AllocOp>(
+          loc, getMemType({batchSize, startFmapShape[1], endFmapShape[2],
+                           endFmapShape[3]}));
+      auto kernelHeight = startFmapShape[2] / endFmapShape[2];
+      auto kernelWidth = startFmapShape[2] / endFmapShape[3];
+
+      builder.create<MaxPoolOp>(
+          loc, startFmap, newStartFmap,
+          builder.getI64ArrayAttr({kernelHeight, kernelWidth}),
+          builder.getI64ArrayAttr({kernelHeight, kernelWidth}),
+          builder.getI64ArrayAttr({0, 0, 0, 0}));
+
+      // Update start fmap information.
+      startFmap = newStartFmap;
+      startFmapShape = startFmap.getType().cast<MemRefType>().getShape();
+    }
+
+    // Insert 1x1 convolutional layer to align channel size.
+    if (startFmapShape[1] != endFmapShape[1]) {
+      auto newStartFmap = builder.create<mlir::AllocOp>(
+          loc, getMemType({batchSize, endFmapShape[1], endFmapShape[2],
+                           endFmapShape[3]}));
+      kernels.push_back(builder.create<mlir::AllocOp>(
+          loc, getMemType({endFmapShape[1], startFmapShape[1], 1, 1})));
+      biases.push_back(
+          builder.create<mlir::AllocOp>(loc, getMemType({endFmapShape[1]})));
+
+      builder.create<ConvOp>(loc, startFmap, kernels.back(), biases.back(),
+                             newStartFmap, builder.getI64ArrayAttr({1, 1}),
+                             builder.getI64ArrayAttr({0, 0, 0, 0}));
+
+      // Update start fmap information.
+      startFmap = newStartFmap;
+      startFmapShape = startFmap.getType().cast<MemRefType>().getShape();
+    }
+
+    // Insert MergeOp to merge the bypass path and original path.
+    auto newEndFmap = builder.create<mlir::AllocOp>(
+        loc, getMemType({batchSize, endFmapShape[1], endFmapShape[2],
+                         endFmapShape[3]}));
+    endFmap.replaceAllUsesWith(newEndFmap);
+    builder.create<MergeOp>(loc, startFmap, endFmap, newEndFmap);
+  }
 
   // Create a new function taking all kernels and biases as arguments. This will
   // eliminate all the AllocOp for kernels and biases in the generated code.
