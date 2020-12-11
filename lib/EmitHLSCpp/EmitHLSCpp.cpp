@@ -1231,7 +1231,8 @@ void ModuleEmitter::emitAssign(AssignOp *op) {
 }
 
 void ModuleEmitter::emitArray(ArrayOp *op) {
-  addAlias(op->getOperand(), op->getResult());
+  if (!isDeclared(op->getResult()))
+    addAlias(op->getOperand(), op->getResult());
   bool emitPragmaFlag = false;
 
   if (op->interface()) {
@@ -1425,8 +1426,19 @@ unsigned ModuleEmitter::emitNestedLoopHead(Value val) {
       return 0;
     }
 
+    // This indicates that the tensor is not the output of the function.
+    bool emitFlag = true;
+    for (auto &use : val.getUses()) {
+      if (auto arrayOp = dyn_cast<ArrayOp>(use.getOwner())) {
+        if (isDeclared(arrayOp.getResult())) {
+          addAlias(arrayOp.getResult(), val);
+          emitFlag = false;
+        }
+      }
+    }
+
     // Declare a new array.
-    if (!isDeclared(val)) {
+    if (!isDeclared(val) && emitFlag) {
       indent();
       emitArrayDecl(val);
       os << ";\n";
