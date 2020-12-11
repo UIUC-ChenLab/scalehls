@@ -26,7 +26,7 @@ void HLSKernelDialect::initialize() {
 /// Verify that all memref operands of the operation have static shape.
 static bool verifyStaticShape(Operation *op) {
   for (auto operand : op->getOperands()) {
-    if (auto operandType = operand.getType().dyn_cast<MemRefType>()) {
+    if (auto operandType = operand.getType().dyn_cast<ShapedType>()) {
       if (!operandType.hasStaticShape())
         return false;
     }
@@ -42,10 +42,14 @@ static LogicalResult verify(DenseOp op) {
   if (!verifyStaticShape(op))
     return op.emitError("not all operands have static shape");
 
-  auto IShape = op.getOperand(0).getType().cast<MemRefType>().getShape();
-  auto KShape = op.getOperand(1).getType().cast<MemRefType>().getShape();
-  auto BShape = op.getOperand(2).getType().cast<MemRefType>().getShape();
-  auto OShape = op.getOperand(3).getType().cast<MemRefType>().getShape();
+  auto IShape = op.getOperand(0).getType().cast<ShapedType>().getShape();
+  auto KShape = op.getOperand(1).getType().cast<ShapedType>().getShape();
+  auto BShape = op.getOperand(2).getType().cast<ShapedType>().getShape();
+  ArrayRef<int64_t> OShape;
+  if (op.getNumResults())
+    OShape = op.getResult(0).getType().cast<ShapedType>().getShape();
+  else
+    OShape = op.getOperand(3).getType().cast<ShapedType>().getShape();
 
   if ((IShape.size() != 2 && IShape.size() != 4) ||
       (KShape.size() != 2 && KShape.size() != 4) || BShape.size() != 1 ||
@@ -78,10 +82,14 @@ static LogicalResult verify(ConvOp op) {
   if (!verifyStaticShape(op))
     return op.emitError("not all operands have static shape");
 
-  auto IShape = op.getOperand(0).getType().cast<MemRefType>().getShape();
-  auto KShape = op.getOperand(1).getType().cast<MemRefType>().getShape();
-  auto BShape = op.getOperand(2).getType().cast<MemRefType>().getShape();
-  auto OShape = op.getOperand(3).getType().cast<MemRefType>().getShape();
+  auto IShape = op.getOperand(0).getType().cast<ShapedType>().getShape();
+  auto KShape = op.getOperand(1).getType().cast<ShapedType>().getShape();
+  auto BShape = op.getOperand(2).getType().cast<ShapedType>().getShape();
+  ArrayRef<int64_t> OShape;
+  if (op.getNumResults())
+    OShape = op.getResult(0).getType().cast<ShapedType>().getShape();
+  else
+    OShape = op.getOperand(3).getType().cast<ShapedType>().getShape();
 
   SmallVector<int64_t, 2> padding;
   for (auto shape : op.getAttrOfType<ArrayAttr>("padding"))
@@ -125,8 +133,12 @@ static LogicalResult verify(MaxPoolOp op) {
   if (!verifyStaticShape(op))
     return op.emitError("not all operands have static shape");
 
-  auto IShape = op.getOperand(0).getType().cast<MemRefType>().getShape();
-  auto OShape = op.getOperand(1).getType().cast<MemRefType>().getShape();
+  auto IShape = op.getOperand(0).getType().cast<ShapedType>().getShape();
+  ArrayRef<int64_t> OShape;
+  if (op.getNumResults())
+    OShape = op.getResult(0).getType().cast<ShapedType>().getShape();
+  else
+    OShape = op.getOperand(1).getType().cast<ShapedType>().getShape();
 
   SmallVector<int64_t, 2> kernelShape;
   for (auto shape : op.getAttrOfType<ArrayAttr>("kernel_shape"))
@@ -176,8 +188,12 @@ static LogicalResult verify(ReluOp op) {
   if (!verifyStaticShape(op))
     return op.emitError("not all operands have static shape");
 
-  auto IShape = op.getOperand(0).getType().cast<MemRefType>().getShape();
-  auto OShape = op.getOperand(1).getType().cast<MemRefType>().getShape();
+  auto IShape = op.getOperand(0).getType().cast<ShapedType>().getShape();
+  ArrayRef<int64_t> OShape;
+  if (op.getNumResults())
+    OShape = op.getResult(0).getType().cast<ShapedType>().getShape();
+  else
+    OShape = op.getOperand(1).getType().cast<ShapedType>().getShape();
 
   if (IShape != OShape)
     return op.emitError("incorrect operand shape, please refer to the op "
@@ -194,9 +210,13 @@ static LogicalResult verify(MergeOp op) {
   if (!verifyStaticShape(op))
     return op.emitError("not all operands have static shape");
 
-  auto I0Shape = op.getOperand(0).getType().cast<MemRefType>().getShape();
-  auto I1Shape = op.getOperand(1).getType().cast<MemRefType>().getShape();
-  auto OShape = op.getOperand(2).getType().cast<MemRefType>().getShape();
+  auto I0Shape = op.getOperand(0).getType().cast<ShapedType>().getShape();
+  auto I1Shape = op.getOperand(1).getType().cast<ShapedType>().getShape();
+  ArrayRef<int64_t> OShape;
+  if (op.getNumResults())
+    OShape = op.getResult(0).getType().cast<ShapedType>().getShape();
+  else
+    OShape = op.getOperand(2).getType().cast<ShapedType>().getShape();
 
   if (I0Shape != OShape || I1Shape != OShape)
     return op.emitError("incorrect operand shape, please refer to the op "

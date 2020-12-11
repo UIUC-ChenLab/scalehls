@@ -128,8 +128,8 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
   SmallVector<mlir::Type, 2> inputTypes;
   inputTypes.push_back(
       getTensorType({batchSize, inputChannel, inputHeight, inputWidth}));
-  inputTypes.push_back(getTensorType({batchSize, outputChannel}));
   SmallVector<mlir::Type, 2> outputTypes;
+  outputTypes.push_back(getTensorType({batchSize, outputChannel}));
 
   auto func = builder.create<FuncOp>(
       loc, "tmp", builder.getFunctionType(inputTypes, outputTypes));
@@ -205,17 +205,17 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
   }
 
   // Create the last dense layer.
-  fmaps.push_back(func.getArgument(1));
   kernels.push_back(builder.create<mlir::AllocOp>(
       loc, getMemType({outputChannel, topChannel, topHeight, topWidth})));
   biases.push_back(
       builder.create<mlir::AllocOp>(loc, getMemType({outputChannel})));
 
-  builder.create<DenseOp>(loc, ArrayRef<mlir::Type>(),
-                          *std::prev(fmaps.end(), 2), kernels.back(),
-                          biases.back(), fmaps.back());
+  auto denseLayer = builder.create<DenseOp>(
+      loc, getTensorType({batchSize, outputChannel}), fmaps.back(),
+      kernels.back(), biases.back(), nullptr);
+  fmaps.push_back(denseLayer.getResult(0));
 
-  builder.create<mlir::ReturnOp>(loc);
+  builder.create<mlir::ReturnOp>(loc, denseLayer.getResult(0));
 
   // Add bypass paths to the current model.
   // Ensure the specified bypass number is available. Since the last dense layer
