@@ -103,6 +103,10 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
     return MemRefType::get(shape, builder.getF32Type());
   };
 
+  auto getTensorType = [&](std::initializer_list<int64_t> shape) {
+    return RankedTensorType::get(shape, builder.getF32Type());
+  };
+
   auto getKernelShape = [&]() { return std::rand() % 3 * 2 + 3; };
 
   auto getChannel = [&](int current) {
@@ -123,8 +127,8 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
   // Generate function signature and create a new function.
   SmallVector<mlir::Type, 2> inputTypes;
   inputTypes.push_back(
-      getMemType({batchSize, inputChannel, inputHeight, inputWidth}));
-  inputTypes.push_back(getMemType({batchSize, outputChannel}));
+      getTensorType({batchSize, inputChannel, inputHeight, inputWidth}));
+  inputTypes.push_back(getTensorType({batchSize, outputChannel}));
   SmallVector<mlir::Type, 2> outputTypes;
 
   auto func = builder.create<FuncOp>(
@@ -155,34 +159,34 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
   // Generate CNN model.
   while (poolingCount < poolingNumber || topChannel < maxChannel) {
     // Create convolutional layer.
-    fmaps.push_back(builder.create<mlir::AllocOp>(
-        loc, getMemType({batchSize, btmChannel, topHeight, topWidth})));
     kernels.push_back(builder.create<mlir::AllocOp>(
         loc, getMemType({btmChannel, topChannel, kernelShape, kernelShape})));
     biases.push_back(
         builder.create<mlir::AllocOp>(loc, getMemType({btmChannel})));
 
-    builder.create<ConvOp>(
-        loc, ArrayRef<mlir::Type>(), *std::prev(fmaps.end(), 2), kernels.back(),
-        biases.back(), fmaps.back(), builder.getI64ArrayAttr({1, 1}),
+    auto convLayer = builder.create<ConvOp>(
+        loc, getTensorType({batchSize, btmChannel, topHeight, topWidth}),
+        fmaps.back(), kernels.back(), biases.back(), nullptr,
+        builder.getI64ArrayAttr({1, 1}),
         builder.getI64ArrayAttr({padding, padding, padding, padding}));
+    fmaps.push_back(convLayer.getResult(0));
 
     // Create ReLU layer.
     if (includeRelu) {
-      fmaps.push_back(builder.create<mlir::AllocOp>(
-          loc, getMemType({batchSize, btmChannel, topHeight, topWidth})));
-      builder.create<ReluOp>(loc, ArrayRef<mlir::Type>(),
-                             *std::prev(fmaps.end(), 2), fmaps.back());
+      auto reluLayer = builder.create<ReluOp>(
+          loc, getTensorType({batchSize, btmChannel, topHeight, topWidth}),
+          fmaps.back(), nullptr);
+      fmaps.push_back(reluLayer.getResult(0));
     }
 
     // Create max pooling layer if applied.
     if (poolingFlag) {
-      fmaps.push_back(builder.create<mlir::AllocOp>(
-          loc, getMemType({batchSize, btmChannel, btmHeight, btmWidth})));
-      builder.create<MaxPoolOp>(
-          loc, ArrayRef<mlir::Type>(), *std::prev(fmaps.end(), 2), fmaps.back(),
-          builder.getI64ArrayAttr({2, 2}), builder.getI64ArrayAttr({2, 2}),
+      auto poolLayer = builder.create<MaxPoolOp>(
+          loc, getTensorType({batchSize, btmChannel, btmHeight, btmWidth}),
+          fmaps.back(), nullptr, builder.getI64ArrayAttr({2, 2}),
+          builder.getI64ArrayAttr({2, 2}),
           builder.getI64ArrayAttr({0, 0, 0, 0}));
+      fmaps.push_back(poolLayer.getResult(0));
     }
 
     // Update status registers.
@@ -248,8 +252,8 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
     auto startFmap = fmaps[bypass.first];
     auto endFmap = fmaps[bypass.second];
 
-    auto startFmapShape = startFmap.getType().cast<MemRefType>().getShape();
-    auto endFmapShape = endFmap.getType().cast<MemRefType>().getShape();
+    auto startFmapShape = startFmap.getType().cast<ShapedType>().getShape();
+    auto endFmapShape = endFmap.getType().cast<ShapedType>().getShape();
 
     // Set builder insertion point to the end of block.
     builder.setInsertionPointAfterValue(endFmap);
@@ -257,50 +261,48 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
     // Insert max pooling layer to align height and width.
     if (startFmapShape[2] != endFmapShape[2] ||
         startFmapShape[3] != endFmapShape[3]) {
-      auto newStartFmap = builder.create<mlir::AllocOp>(
-          loc, getMemType({batchSize, startFmapShape[1], endFmapShape[2],
-                           endFmapShape[3]}));
       auto kernelHeight = startFmapShape[2] / endFmapShape[2];
       auto kernelWidth = startFmapShape[2] / endFmapShape[3];
 
-      builder.create<MaxPoolOp>(
-          loc, ArrayRef<mlir::Type>(), startFmap, newStartFmap,
+      auto poolType = getTensorType(
+          {batchSize, startFmapShape[1], endFmapShape[2], endFmapShape[3]});
+      auto poolLayer = builder.create<MaxPoolOp>(
+          loc, poolType, startFmap, nullptr,
           builder.getI64ArrayAttr({kernelHeight, kernelWidth}),
           builder.getI64ArrayAttr({kernelHeight, kernelWidth}),
           builder.getI64ArrayAttr({0, 0, 0, 0}));
 
       // Update start fmap information.
-      startFmap = newStartFmap;
-      startFmapShape = startFmap.getType().cast<MemRefType>().getShape();
+      startFmap = poolLayer.getResult(0);
+      startFmapShape = startFmap.getType().cast<ShapedType>().getShape();
     }
 
     // Insert 1x1 convolutional layer to align channel size.
     if (startFmapShape[1] != endFmapShape[1]) {
-      auto newStartFmap = builder.create<mlir::AllocOp>(
-          loc, getMemType({batchSize, endFmapShape[1], endFmapShape[2],
-                           endFmapShape[3]}));
       kernels.push_back(builder.create<mlir::AllocOp>(
           loc, getMemType({endFmapShape[1], startFmapShape[1], 1, 1})));
       biases.push_back(
           builder.create<mlir::AllocOp>(loc, getMemType({endFmapShape[1]})));
 
-      builder.create<ConvOp>(loc, ArrayRef<mlir::Type>(), startFmap,
-                             kernels.back(), biases.back(), newStartFmap,
-                             builder.getI64ArrayAttr({1, 1}),
-                             builder.getI64ArrayAttr({0, 0, 0, 0}));
+      auto convType = getTensorType(
+          {batchSize, endFmapShape[1], endFmapShape[2], endFmapShape[3]});
+      auto convLayer = builder.create<ConvOp>(
+          loc, convType, startFmap, kernels.back(), biases.back(), nullptr,
+          builder.getI64ArrayAttr({1, 1}),
+          builder.getI64ArrayAttr({0, 0, 0, 0}));
 
       // Update start fmap information.
-      startFmap = newStartFmap;
-      startFmapShape = startFmap.getType().cast<MemRefType>().getShape();
+      startFmap = convLayer.getResult(0);
+      startFmapShape = startFmap.getType().cast<ShapedType>().getShape();
     }
 
     // Insert MergeOp to merge the bypass path and original path.
-    auto newEndFmap = builder.create<mlir::AllocOp>(
-        loc, getMemType({batchSize, endFmapShape[1], endFmapShape[2],
-                         endFmapShape[3]}));
-    endFmap.replaceAllUsesWith(newEndFmap);
-    builder.create<MergeOp>(loc, ArrayRef<mlir::Type>(), startFmap, endFmap,
-                            newEndFmap);
+    auto mergeType = getTensorType(
+        {batchSize, endFmapShape[1], endFmapShape[2], endFmapShape[3]});
+    auto mergeLayer =
+        builder.create<MergeOp>(loc, mergeType, startFmap, endFmap, nullptr);
+    endFmap.replaceAllUsesExcept(mergeLayer.getResult(0),
+                                 SmallPtrSet<Operation *, 1>{mergeLayer});
   }
 
   // Create a new function taking all kernels and biases as arguments. This will
