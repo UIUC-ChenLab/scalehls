@@ -112,6 +112,17 @@ def SplitFunction : Pass<"split-function", "ModuleOp"> {
   let constructor = "mlir::scalehls::createSplitFunctionPass()";
 }
 
+def LegalizeDataflow : Pass<"legalize-dataflow", "ModuleOp"> {
+  let summary = "Legalize code for the dataflow pragma";
+  let description = [{
+    This legalize-dataflow pass will legalize the dataflow by inserting some
+    dummy nodes and grouping nodes in the same level to meet the requirements of
+    the dataflow pragma: 1) single-producer single-consumer 2) no bypass.
+  }];
+
+  let constructor = "mlir::scalehls::createLegalizeDataflowPass()";
+}
+
 //===----------------------------------------------------------------------===//
 // Bufferization Passes
 //===----------------------------------------------------------------------===//

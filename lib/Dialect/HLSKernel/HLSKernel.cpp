@@ -226,6 +226,28 @@ static LogicalResult verify(MergeOp op) {
 }
 
 //===----------------------------------------------------------------------===//
+// CopyOp
+//===----------------------------------------------------------------------===//
+
+static LogicalResult verify(CopyOp op) {
+  if (!verifyStaticShape(op))
+    return op.emitError("not all operands have static shape");
+
+  auto IShape = op.getOperand(0).getType().cast<ShapedType>().getShape();
+  ArrayRef<int64_t> OShape;
+  if (op.getNumResults())
+    OShape = op.getResult(0).getType().cast<ShapedType>().getShape();
+  else
+    OShape = op.getOperand(1).getType().cast<ShapedType>().getShape();
+
+  if (IShape != OShape)
+    return op.emitError("incorrect operand shape, please refer to the op "
+                        "description in include/Dialect/HLSKernel/CNNOps.td");
+
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
 // Include Logics Generated from TableGen
 //===----------------------------------------------------------------------===//
 

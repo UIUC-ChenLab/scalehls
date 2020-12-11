@@ -108,11 +108,35 @@ def MergeOp : HLSKernelOp<"merge", [HLSKernelOpInterface]> {
   let summary = "merge operation";
   let description = [{
     Element-wisely add I0 with I1, where I0 and I1 should have identical shape.
+
+    I0: (N, C, H, W)
+    I1: (N, C, H, W)
+    O: (N, C, H, W)
   }];
 
   let arguments = (ins
     AnyShaped:$I0,
     AnyShaped:$I1,
+    Optional<AnyMemRef>:$O
+  );
+  let results = (outs
+    Optional<AnyRankedTensor>:$tensorO
+  );
+
+  let verifier = [{ return ::verify(*this); }];
+}
+
+def CopyOp : HLSKernelOp<"copy", [HLSKernelOpInterface]> {
+  let summary = "copy operation";
+  let description = [{
+    Copy I to O.
+
+    I: (N, C, H, W)
+    O: (N, C, H, W)
+  }];
+
+  let arguments = (ins
+    AnyShaped:$I,
     Optional<AnyMemRef>:$O
   );
   let results = (outs

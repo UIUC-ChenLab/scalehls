@@ -27,6 +27,7 @@ std::unique_ptr<mlir::Pass> createRemoveVarLoopBoundPass();
 
 /// Dataflow optimization passes.
 std::unique_ptr<mlir::Pass> createSplitFunctionPass();
+std::unique_ptr<mlir::Pass> createLegalizeDataflowPass();
 
 /// Bufferization passes.
 std::unique_ptr<mlir::Pass> createHLSKernelBufferizePass();

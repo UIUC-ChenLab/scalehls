@@ -34,6 +34,7 @@ public:
   bool visitOp(MaxPoolOp op);
   bool visitOp(ReluOp op);
   bool visitOp(MergeOp op);
+  bool visitOp(CopyOp op);
 
   bool visitOp(GemmOp op);
   bool visitOp(SymmOp op);
@@ -366,6 +367,29 @@ bool HLSKernelVisitor::visitOp(MergeOp op) {
   // Carry out add and store the result.
   auto result = createBinaryOp<mlir::AddFOp>(fmap0, fmap1);
   createStore(result, O, {n, c, h, w});
+
+  return true;
+}
+
+bool HLSKernelVisitor::visitOp(CopyOp op) {
+  auto I = op.getOperand(0);
+  auto O = op.getOperand(1);
+
+  auto OShape = O.getType().cast<MemRefType>().getShape();
+
+  // Set insertion point of builder. Create batch, height, width, and channel
+  // loop.
+  builder.setInsertionPoint(op);
+  auto n = createLoop(0, OShape[0]);
+  auto h = createLoop(0, OShape[2]);
+  auto w = createLoop(0, OShape[3]);
+  auto c = createLoop(0, OShape[1]);
+
+  // Load original value from input array.
+  auto fmap = createLoad(I, {n, c, h, w});
+
+  // Store the result.
+  createStore(fmap, O, {n, c, h, w});
 
   return true;
 }
