@@ -28,6 +28,9 @@ std::unique_ptr<mlir::Pass> createRemoveVarLoopBoundPass();
 /// Dataflow optimization passes.
 std::unique_ptr<mlir::Pass> createSplitFunctionPass();
 
+/// Bufferization passes.
+std::unique_ptr<mlir::Pass> createHLSKernelBufferizePass();
+
 void registerTransformsPasses();
 
 #define GEN_PASS_CLASSES

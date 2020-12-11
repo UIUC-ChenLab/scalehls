@@ -112,4 +112,17 @@ def SplitFunction : Pass<"split-function", "ModuleOp"> {
   let constructor = "mlir::scalehls::createSplitFunctionPass()";
 }
 
+//===----------------------------------------------------------------------===//
+// Bufferization Passes
+//===----------------------------------------------------------------------===//
+
+def HLSKernelBufferize : Pass<"hlskernel-bufferize", "ModuleOp"> {
+  let summary = "Bufferize HLSKernel operations";
+  let description = [{
+    This hlskernel-bufferize pass will bufferize HLSKernel operations.
+  }];
+
+  let constructor = "mlir::scalehls::createHLSKernelBufferizePass()";
+}
+
 #endif // SCALEHLS_TRANSFORMS_PASSES_TD
