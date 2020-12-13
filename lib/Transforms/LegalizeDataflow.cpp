@@ -74,6 +74,26 @@ void LegalizeDataflow::runOnOperation() {
         }
       }
     }
+
+    // Reorder operations that are legalized.
+    DenseMap<int64_t, SmallVector<Operation *, 2>> dataflowOps;
+    func.walk([&](hlskernel::HLSKernelOpInterface kernelOp) {
+      if (auto attr = kernelOp.getAttrOfType<IntegerAttr>("dataflow_level"))
+        dataflowOps[attr.getInt()].push_back(kernelOp.getOperation());
+    });
+
+    for (auto pair : dataflowOps) {
+      auto ops = pair.second;
+      auto firstOp = ops.front();
+
+      for (auto op : llvm::drop_begin(ops, 1)) {
+        op->moveBefore(firstOp);
+        firstOp = op;
+      }
+    }
+
+    // Set dataflow attribute.
+    func.setAttr("dataflow", builder.getBoolAttr(true));
   }
 }
 

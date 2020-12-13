@@ -26,7 +26,9 @@ void ConvertToHLSCpp::runOnOperation() {
       func.emitError("has zero or more than one basic blocks.");
 
     // Set function pragma attributes.
-    func.setAttr("dataflow", b.getBoolAttr(false));
+    if (!func.getAttr("dataflow"))
+      func.setAttr("dataflow", b.getBoolAttr(false));
+
     if (func.getName() == TopFunction)
       func.setAttr("top_function", b.getBoolAttr(true));
     else
