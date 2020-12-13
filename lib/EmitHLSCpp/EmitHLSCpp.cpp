@@ -79,15 +79,16 @@ public:
 
   SmallString<8> addAlias(Value val, Value alias) {
     assert(isDeclared(val) && "hasn't been declared before.");
-    state.nameTable[alias] = getName(val);
-    return getName(val);
+
+    auto name = getName(val);
+    state.nameTable[alias] = name;
+    return name;
   }
 
   SmallString<8> getName(Value val);
 
   bool isDeclared(Value val) {
     if (getName(val).empty()) {
-      state.nameTable.erase(val);
       return false;
     } else
       return true;
@@ -101,39 +102,53 @@ private:
 
 // TODO: update naming rule.
 SmallString<8> HLSCppEmitterBase::addName(Value val, bool isPtr) {
-  assert(!isDeclared(val) && "has been declared before.");
+  // assert(!isDeclared(val) && "has been declared before.");
 
   SmallString<8> valName;
   if (isPtr)
     valName += "*";
 
-  // Temporary naming rule.
   valName += StringRef("val" + to_string(state.nameTable.size()));
   state.nameTable[val] = valName;
+
+  // If the definition operation is ArrayOp, then the ArrayOp operand should be
+  // an alias of the current value.
+  if (auto defOp = val.getDefiningOp())
+    if (auto arrayOp = dyn_cast<ArrayOp>(defOp))
+      state.nameTable[arrayOp.getOperand()] = valName;
+
+  // If the first user is ArrayOp, then the ArrayOp result should be an alias of
+  // the current value.
+  if (!val.getUsers().empty())
+    if (auto arrayOp = dyn_cast<ArrayOp>(*val.getUsers().begin()))
+      return state.nameTable[arrayOp.getResult()] = valName;
+
   return valName;
 }
 
 SmallString<8> HLSCppEmitterBase::getName(Value val) {
   // For constant scalar operations, the constant number will be returned rather
   // than the value name.
-  if (val.getKind() != Value::Kind::BlockArgument) {
-    if (auto constOp = dyn_cast<mlir::ConstantOp>(val.getDefiningOp())) {
+  if (auto defOp = val.getDefiningOp()) {
+    if (auto constOp = dyn_cast<mlir::ConstantOp>(defOp)) {
       auto constAttr = constOp.getValue();
       if (auto floatAttr = constAttr.dyn_cast<FloatAttr>()) {
         auto value = floatAttr.getValueAsDouble();
         if (value < 0)
           return StringRef("(" + to_string(value) + ")");
         return StringRef(to_string(value));
+
       } else if (auto intAttr = constAttr.dyn_cast<IntegerAttr>()) {
         auto value = intAttr.getInt();
         if (value < 0)
           return StringRef("(" + to_string(value) + ")");
         return StringRef(to_string(value));
+
       } else if (auto boolAttr = constAttr.dyn_cast<BoolAttr>())
         return StringRef(to_string(boolAttr.getValue()));
     }
   }
-  return state.nameTable[val];
+  return state.nameTable.lookup(val);
 }
 
 //===----------------------------------------------------------------------===//
@@ -984,19 +999,10 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
 
 /// Memref-related statement emitters.
 template <typename OpType> void ModuleEmitter::emitAlloc(OpType *op) {
-  // This indicates that the memref is output of the function, and has been
-  // declared in the function signature.
+  // A declared result indicates that the memref is output of the function, and
+  // has been declared in the function signature.
   if (isDeclared(op->getResult()))
     return;
-
-  // This indicates that the memref is output of the function, and has been
-  // declared in the function signature.
-  for (auto &use : op->getResult().getUses()) {
-    if (auto arrayOp = dyn_cast<ArrayOp>(use.getOwner())) {
-      if (isDeclared(arrayOp.getResult()))
-        return;
-    }
-  }
 
   // Vivado HLS only supports static shape on-chip memory.
   if (!op->getType().hasStaticShape())
@@ -1139,10 +1145,9 @@ void ModuleEmitter::emitSelect(SelectOp *op) {
 }
 
 void ModuleEmitter::emitConstant(ConstantOp *op) {
-  if (isDeclared(op->getResult())) {
-    // This indicates the constant type is scalar (float, integer, or bool).
+  // This indicates the constant type is scalar (float, integer, or bool).
+  if (isDeclared(op->getResult()))
     return;
-  }
 
   if (auto denseAttr = op->getValue().dyn_cast<DenseElementsAttr>()) {
     indent();
@@ -1231,8 +1236,6 @@ void ModuleEmitter::emitAssign(AssignOp *op) {
 }
 
 void ModuleEmitter::emitArray(ArrayOp *op) {
-  if (!isDeclared(op->getResult()))
-    addAlias(op->getOperand(), op->getResult());
   bool emitPragmaFlag = false;
 
   if (op->interface()) {
@@ -1426,19 +1429,8 @@ unsigned ModuleEmitter::emitNestedLoopHead(Value val) {
       return 0;
     }
 
-    // This indicates that the tensor is not the output of the function.
-    bool emitFlag = true;
-    for (auto &use : val.getUses()) {
-      if (auto arrayOp = dyn_cast<ArrayOp>(use.getOwner())) {
-        if (isDeclared(arrayOp.getResult())) {
-          addAlias(arrayOp.getResult(), val);
-          emitFlag = false;
-        }
-      }
-    }
-
     // Declare a new array.
-    if (!isDeclared(val) && emitFlag) {
+    if (!isDeclared(val)) {
       indent();
       emitArrayDecl(val);
       os << ";\n";

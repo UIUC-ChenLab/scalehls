@@ -20,33 +20,33 @@ public:
 
 void ConvertToHLSCpp::runOnOperation() {
   for (auto func : getOperation().getOps<FuncOp>()) {
-    auto b = OpBuilder(func);
+    auto builder = OpBuilder(func);
 
     if (func.getBlocks().size() != 1)
       func.emitError("has zero or more than one basic blocks.");
 
     // Set function pragma attributes.
     if (!func.getAttr("dataflow"))
-      func.setAttr("dataflow", b.getBoolAttr(false));
+      func.setAttr("dataflow", builder.getBoolAttr(false));
 
     if (func.getName() == TopFunction)
-      func.setAttr("top_function", b.getBoolAttr(true));
+      func.setAttr("top_function", builder.getBoolAttr(true));
     else
-      func.setAttr("top_function", b.getBoolAttr(false));
+      func.setAttr("top_function", builder.getBoolAttr(false));
 
     // Insert AssignOp when an arguments or result of ConstantOp are directly
     // connected to ReturnOp.
     if (auto returnOp = dyn_cast<ReturnOp>(func.front().getTerminator())) {
-      b.setInsertionPoint(returnOp);
+      builder.setInsertionPoint(returnOp);
       unsigned idx = 0;
       for (auto operand : returnOp.getOperands()) {
         if (operand.getKind() == Value::Kind::BlockArgument) {
-          auto value =
-              b.create<AssignOp>(returnOp.getLoc(), operand.getType(), operand);
+          auto value = builder.create<AssignOp>(returnOp.getLoc(),
+                                                operand.getType(), operand);
           returnOp.setOperand(idx, value);
         } else if (isa<ConstantOp>(operand.getDefiningOp())) {
-          auto value =
-              b.create<AssignOp>(returnOp.getLoc(), operand.getType(), operand);
+          auto value = builder.create<AssignOp>(returnOp.getLoc(),
+                                                operand.getType(), operand);
           returnOp.setOperand(idx, value);
         }
         idx += 1;
@@ -56,8 +56,6 @@ void ConvertToHLSCpp::runOnOperation() {
 
     // Recursively convert every for loop body blocks.
     func.walk([&](Operation *op) {
-      auto builder = OpBuilder(op);
-
       // ArrayOp will be inserted after each ShapedType value from declaration
       // or function signature.
       for (auto operand : op->getOperands()) {
@@ -95,8 +93,8 @@ void ConvertToHLSCpp::runOnOperation() {
               // value, it will be annotated as interface.
               bool interfaceFlag =
                   operand.getKind() == Value::Kind::BlockArgument;
-              for (auto &use : arrayOp.getResult().getUses())
-                if (isa<mlir::ReturnOp>(use.getOwner()))
+              for (auto user : arrayOp.getResult().getUsers())
+                if (isa<mlir::ReturnOp>(user))
                   interfaceFlag = true;
 
               arrayOp.setAttr("interface", builder.getBoolAttr(interfaceFlag));
