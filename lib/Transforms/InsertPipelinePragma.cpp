@@ -20,21 +20,19 @@ struct InsertPipelinePragma
 } // namespace
 
 void InsertPipelinePragma::runOnOperation() {
-  auto module = getOperation();
-  auto builder = OpBuilder(module);
+  auto func = getOperation();
+  auto builder = OpBuilder(func);
 
   // Walk through all functions and loops.
-  for (auto func : module.getOps<FuncOp>()) {
-    for (auto forOp : func.getOps<mlir::AffineForOp>()) {
-      SmallVector<mlir::AffineForOp, 4> nestedLoops;
-      forOp.walk([&](mlir::AffineForOp loop) { nestedLoops.push_back(loop); });
+  for (auto forOp : func.getOps<mlir::AffineForOp>()) {
+    SmallVector<mlir::AffineForOp, 4> nestedLoops;
+    forOp.walk([&](mlir::AffineForOp loop) { nestedLoops.push_back(loop); });
 
-      auto targetLoop = nestedLoops.back();
-      if (nestedLoops.size() > insertLevel)
-        targetLoop = *std::next(nestedLoops.begin(), insertLevel);
+    auto targetLoop = nestedLoops.back();
+    if (nestedLoops.size() > insertLevel)
+      targetLoop = *std::next(nestedLoops.begin(), insertLevel);
 
-      targetLoop.setAttr("pipeline", builder.getBoolAttr(true));
-    }
+    targetLoop.setAttr("pipeline", builder.getBoolAttr(true));
   }
 }
 

@@ -107,19 +107,17 @@ static void applyArrayPartition(MemAccessDict &accessDict, OpBuilder &builder) {
 }
 
 void ArrayPartition::runOnOperation() {
-  auto module = getOperation();
-  auto builder = OpBuilder(module);
+  auto func = getOperation();
+  auto builder = OpBuilder(func);
 
   // If the current loop is annotated as pipeline, all intter loops are
   // automatically unrolled.
-  for (auto func : module.getOps<FuncOp>()) {
-    for (auto forOp : func.getOps<mlir::AffineForOp>()) {
-      auto outermost = getPipelineLoop(forOp);
-      outermost.walk([&](mlir::AffineForOp loop) {
-        if (loop != outermost)
-          loopUnrollFull(loop);
-      });
-    }
+  for (auto forOp : func.getOps<mlir::AffineForOp>()) {
+    auto outermost = getPipelineLoop(forOp);
+    outermost.walk([&](mlir::AffineForOp loop) {
+      if (loop != outermost)
+        loopUnrollFull(loop);
+    });
   }
 
   // Canonicalize the analyzed IR.
@@ -133,27 +131,25 @@ void ArrayPartition::runOnOperation() {
   applyPatternsAndFoldGreedily(op->getRegions(), std::move(patterns));
 
   // Apply array partition.
-  for (auto func : module.getOps<FuncOp>()) {
-    for (auto forOp : func.getOps<mlir::AffineForOp>()) {
-      auto outermost = getPipelineLoop(forOp);
+  for (auto forOp : func.getOps<mlir::AffineForOp>()) {
+    auto outermost = getPipelineLoop(forOp);
 
-      // Collect memory access information.
-      MemAccessDict loadDict;
-      outermost.walk([&](mlir::AffineLoadOp loadOp) {
-        auto arrayOp = cast<ArrayOp>(loadOp.getMemRef().getDefiningOp());
-        loadDict[arrayOp].push_back(loadOp);
-      });
+    // Collect memory access information.
+    MemAccessDict loadDict;
+    outermost.walk([&](mlir::AffineLoadOp loadOp) {
+      auto arrayOp = cast<ArrayOp>(loadOp.getMemRef().getDefiningOp());
+      loadDict[arrayOp].push_back(loadOp);
+    });
 
-      MemAccessDict storeDict;
-      outermost.walk([&](mlir::AffineStoreOp storeOp) {
-        auto arrayOp = cast<ArrayOp>(storeOp.getMemRef().getDefiningOp());
-        storeDict[arrayOp].push_back(storeOp);
-      });
+    MemAccessDict storeDict;
+    outermost.walk([&](mlir::AffineStoreOp storeOp) {
+      auto arrayOp = cast<ArrayOp>(storeOp.getMemRef().getDefiningOp());
+      storeDict[arrayOp].push_back(storeOp);
+    });
 
-      // Apply array partition pragma.
-      applyArrayPartition<mlir::AffineLoadOp>(loadDict, builder);
-      applyArrayPartition<mlir::AffineStoreOp>(storeDict, builder);
-    }
+    // Apply array partition pragma.
+    applyArrayPartition<mlir::AffineLoadOp>(loadDict, builder);
+    applyArrayPartition<mlir::AffineStoreOp>(storeDict, builder);
   }
 }
 

@@ -606,21 +606,16 @@ public:
 } // namespace
 
 void HLSKernelToAffine::runOnOperation() {
-  auto module = getOperation();
-  OpBuilder builder(module);
-  HLSKernelVisitor visitor(builder, module.getLoc());
+  auto func = getOperation();
+  OpBuilder builder(func);
+  HLSKernelVisitor visitor(builder, func.getLoc());
 
-  for (auto &op : module) {
-    if (auto func = dyn_cast<FuncOp>(op)) {
-      func.walk([&](HLSKernelOpInterface kernelOp) {
-        if (visitor.dispatchVisitor(kernelOp)) {
-          kernelOp.erase();
-        } else
-          kernelOp.emitError("can't be correctly lowered.");
-      });
-    } else if (!isa<ModuleTerminatorOp>(op))
-      op.emitError("is unsupported operation.");
-  }
+  func.walk([&](HLSKernelOpInterface kernelOp) {
+    if (visitor.dispatchVisitor(kernelOp)) {
+      kernelOp.erase();
+    } else
+      kernelOp.emitError("can't be correctly lowered.");
+  });
 }
 
 std::unique_ptr<mlir::Pass> scalehls::createHLSKernelToAffinePass() {

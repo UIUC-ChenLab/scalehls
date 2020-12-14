@@ -7,7 +7,7 @@
 
 include "mlir/Pass/PassBase.td"
 
-def ConvertToHLSCpp : Pass<"convert-to-hlscpp", "ModuleOp"> {
+def ConvertToHLSCpp : Pass<"convert-to-hlscpp", "FuncOp"> {
   let summary = "Convert to emittable MLIR code";
   let description = [{
     This convert-to-hlscpp converts MLIR code in Affine/Standard/SCF level to
@@ -22,7 +22,7 @@ def ConvertToHLSCpp : Pass<"convert-to-hlscpp", "ModuleOp"> {
   ];
 }
 
-def HLSKernelToAffine : Pass<"hlskernel-to-affine", "ModuleOp"> {
+def HLSKernelToAffine : Pass<"hlskernel-to-affine", "FuncOp"> {
   let summary = "Convert HLSKernel operation to Affine loops";
   let description = [{
     This hlskernel-to-affine converts HLSKernel operations to their Affine level

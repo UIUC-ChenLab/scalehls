@@ -24,7 +24,7 @@ def PragmaDSE : Pass<"pragma-dse", "ModuleOp"> {
   let constructor = "mlir::scalehls::createPragmaDSEPass()";
 }
 
-def ArrayPartition : Pass<"array-partition", "ModuleOp"> {
+def ArrayPartition : Pass<"array-partition", "FuncOp"> {
   let summary = "Apply optimized array partition optimization";
   let description = [{
     This array-partition pass will automatically search for the best array
@@ -35,7 +35,7 @@ def ArrayPartition : Pass<"array-partition", "ModuleOp"> {
   let constructor = "mlir::scalehls::createArrayPartitionPass()";
 }
 
-def InsertPipelinePragma : Pass<"insert-pipeline-pragma", "ModuleOp"> {
+def InsertPipelinePragma : Pass<"insert-pipeline-pragma", "FuncOp"> {
   let summary = "Insert pipeline pragma";
   let description = [{
     This insert-pipeline-pragma pass will insert pipeline pragma to the
@@ -54,7 +54,7 @@ def InsertPipelinePragma : Pass<"insert-pipeline-pragma", "ModuleOp"> {
 // Loop Optimization Passes
 //===----------------------------------------------------------------------===//
 
-def AffineLoopPerfection : Pass<"affine-loop-perfection", "ModuleOp"> {
+def AffineLoopPerfection : Pass<"affine-loop-perfection", "FuncOp"> {
   let summary = "Try to perfect a nested loop";
   let description = [{
     This affine-loop-perfection pass will try to perfect all affine loops.
@@ -66,7 +66,7 @@ def AffineLoopPerfection : Pass<"affine-loop-perfection", "ModuleOp"> {
   let constructor = "mlir::scalehls::createAffineLoopPerfectionPass()";
 }
 
-def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "ModuleOp"> {
+def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "FuncOp"> {
   let summary = "Partially tile affine nested loops";
   let description = [{
     This partial-affine-loop-tile pass will try to tile the nested loops. The
@@ -85,7 +85,7 @@ def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "ModuleOp"> {
   ];
 }
 
-def RemoveVarLoopBound : Pass<"remove-var-loop-bound", "ModuleOp"> {
+def RemoveVarLoopBound : Pass<"remove-var-loop-bound", "FuncOp"> {
   let summary = "Try to remove variable loop bounds";
   let description = [{
     This remove-var-loop-bound pass will try to remove the variable loop bounds.
@@ -112,7 +112,7 @@ def SplitFunction : Pass<"split-function", "ModuleOp"> {
   let constructor = "mlir::scalehls::createSplitFunctionPass()";
 }
 
-def LegalizeDataflow : Pass<"legalize-dataflow", "ModuleOp"> {
+def LegalizeDataflow : Pass<"legalize-dataflow", "FuncOp"> {
   let summary = "Legalize code for the dataflow pragma";
   let description = [{
     This legalize-dataflow pass will legalize the dataflow by inserting some
@@ -127,7 +127,7 @@ def LegalizeDataflow : Pass<"legalize-dataflow", "ModuleOp"> {
 // Bufferization Passes
 //===----------------------------------------------------------------------===//
 
-def HLSKernelBufferize : Pass<"hlskernel-bufferize", "ModuleOp"> {
+def HLSKernelBufferize : Pass<"hlskernel-bufferize", "FuncOp"> {
   let summary = "Bufferize HLSKernel operations";
   let description = [{
     This hlskernel-bufferize pass will bufferize HLSKernel operations.
