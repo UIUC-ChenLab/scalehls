@@ -5,6 +5,8 @@
 #include "Analysis/QoREstimation.h"
 #include "Analysis/Passes.h"
 #include "Dialect/HLSCpp/HLSCpp.h"
+#include "mlir/Analysis/AffineAnalysis.h"
+#include "mlir/Analysis/AffineStructures.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
@@ -115,40 +117,23 @@ void HLSCppAnalyzer::analyzeFunc(FuncOp func) {
   analyzeBlock(func.front());
 }
 
-void HLSCppAnalyzer::analyzeModule(ModuleOp module) {
-  for (auto &op : module) {
-    if (auto func = dyn_cast<FuncOp>(op)) {
-      analyzeFunc(func);
-    } else if (!isa<ModuleTerminatorOp>(op))
-      op.emitError("is unsupported operation.");
-  }
-}
-
 //===----------------------------------------------------------------------===//
 // HLSCppEstimator Class Definition
 //===----------------------------------------------------------------------===//
 
 /// Estimator constructor.
-HLSCppEstimator::HLSCppEstimator(OpBuilder &builder, string targetSpecPath,
-                                 string opLatencyPath)
+HLSCppEstimator::HLSCppEstimator(OpBuilder &builder, string targetSpecPath)
     : HLSCppToolBase(builder) {
 
-  /*
   INIReader targetSpec(targetSpecPath);
   if (targetSpec.ParseError())
     llvm::outs() << "error: target spec file parse fail, please refer to "
                     "--help option and pass in correct file path\n";
 
-  INIReader opLatency(opLatencyPath);
-  if (opLatency.ParseError())
-    llvm::outs() << "error: Op latency file parse fail, please refer to "
-                    "--help option and pass in correct file path\n";
-
   // TODO: Support estimator initiation from profiling data.
   auto freq = targetSpec.Get("spec", "frequency", "200MHz");
-  auto latency = opLatency.GetInteger(freq, "op", 0);
+  auto latency = targetSpec.GetInteger(freq, "op", 0);
   llvm::outs() << latency << "\n";
-  */
 }
 
 /// Calculate the partition index according to the affine map of a memory access
@@ -529,15 +514,6 @@ void HLSCppEstimator::estimateFunc(FuncOp func) {
   setAttrValue(func, "latency", latency);
 }
 
-void HLSCppEstimator::estimateModule(ModuleOp module) {
-  for (auto &op : module) {
-    if (auto func = dyn_cast<FuncOp>(op)) {
-      estimateFunc(func);
-    } else if (!isa<ModuleTerminatorOp>(op))
-      op.emitError("is unsupported operation.");
-  }
-}
-
 //===----------------------------------------------------------------------===//
 // Entry of scalehls-opt
 //===----------------------------------------------------------------------===//
@@ -549,7 +525,7 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
 
     // Extract all static parameters and current pragma configurations.
     HLSCppAnalyzer analyzer(builder);
-    analyzer.analyzeModule(getOperation());
+    analyzer.analyzeFunc(getOperation());
 
     // Canonicalize the analyzed IR.
     OwningRewritePatternList patterns;
@@ -562,8 +538,8 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     applyPatternsAndFoldGreedily(op->getRegions(), std::move(patterns));
 
     // Estimate performance and resource utilization.
-    HLSCppEstimator estimator(builder, targetSpec, opLatency);
-    estimator.estimateModule(getOperation());
+    HLSCppEstimator estimator(builder, targetSpec);
+    estimator.estimateFunc(getOperation());
   }
 };
 } // namespace

@@ -117,7 +117,6 @@ public:
 
   void analyzeBlock(Block &block);
   void analyzeFunc(FuncOp func);
-  void analyzeModule(ModuleOp module);
 };
 
 //===----------------------------------------------------------------------===//
@@ -146,22 +145,10 @@ using MemPortDict = llvm::SmallDenseMap<Operation *, MemPort, 8>;
 // For storing MemPort indexed by the pipeline stage (a basic block).
 using MemPortDictList = SmallVector<MemPortDict, 16>;
 
-// For storing loop induction information.
-struct InductionInfo {
-  InductionInfo(unsigned lowerBound, unsigned upperBound, unsigned step)
-      : lowerBound(lowerBound), upperBound(upperBound), step(step) {}
-
-  unsigned lowerBound;
-  unsigned upperBound;
-  unsigned step;
-};
-using InductionInfoList = SmallVector<InductionInfo, 8>;
-
 class HLSCppEstimator : public HLSCppVisitorBase<HLSCppEstimator, bool>,
                         public HLSCppToolBase {
 public:
-  explicit HLSCppEstimator(OpBuilder &builder, std::string targetSpecPath,
-                           std::string opLatencyPath);
+  explicit HLSCppEstimator(OpBuilder &builder, std::string targetSpecPath);
 
   bool visitUnhandledOp(Operation *op) { return true; }
 
@@ -184,7 +171,6 @@ public:
   void estimateOperation(Operation *op);
   void estimateFunc(FuncOp func);
   void estimateBlock(Block &block);
-  void estimateModule(ModuleOp module);
 };
 
 } // namespace scalehls
