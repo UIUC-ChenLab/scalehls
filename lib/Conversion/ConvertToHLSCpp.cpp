@@ -29,7 +29,7 @@ void ConvertToHLSCpp::runOnOperation() {
   if (!func.getAttr("dataflow"))
     func.setAttr("dataflow", builder.getBoolAttr(false));
 
-  if (func.getName() == TopFunction)
+  if (func.getName() == topFunction)
     func.setAttr("top_function", builder.getBoolAttr(true));
   else
     func.setAttr("top_function", builder.getBoolAttr(false));
@@ -87,7 +87,7 @@ void ConvertToHLSCpp::runOnOperation() {
           // an AssignOp, it will always not be annotated as interface. This
           // is acceptable because AssignOp is only used to handle some weird
           // corner cases that rarely happen.
-          if (!arrayOp.getAttr("interface") && func.getName() == TopFunction) {
+          if (!arrayOp.getAttr("interface") && func.getName() == topFunction) {
             // Only if when the array is an block arguments or a returned
             // value, it will be annotated as interface.
             bool interfaceFlag =

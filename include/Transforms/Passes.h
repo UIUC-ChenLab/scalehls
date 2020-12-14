@@ -17,7 +17,7 @@ namespace scalehls {
 
 /// Pragma optimization passes.
 std::unique_ptr<mlir::Pass> createPragmaDSEPass();
-std::unique_ptr<mlir::Pass> createInsertPipelinePragmaPass();
+std::unique_ptr<mlir::Pass> createLoopPipeliningPass();
 std::unique_ptr<mlir::Pass> createArrayPartitionPass();
 
 /// Loop optimization passes.

@@ -111,24 +111,24 @@ void ArrayPartition::runOnOperation() {
 
   // Apply array partition.
   for (auto forOp : func.getOps<mlir::AffineForOp>()) {
-    auto outermost = getPipelineLoop(forOp);
+    if (auto outermost = getPipelineLoop(forOp)) {
+      // Collect memory access information.
+      MemAccessDict loadDict;
+      outermost.walk([&](mlir::AffineLoadOp loadOp) {
+        auto arrayOp = cast<ArrayOp>(loadOp.getMemRef().getDefiningOp());
+        loadDict[arrayOp].push_back(loadOp);
+      });
 
-    // Collect memory access information.
-    MemAccessDict loadDict;
-    outermost.walk([&](mlir::AffineLoadOp loadOp) {
-      auto arrayOp = cast<ArrayOp>(loadOp.getMemRef().getDefiningOp());
-      loadDict[arrayOp].push_back(loadOp);
-    });
+      MemAccessDict storeDict;
+      outermost.walk([&](mlir::AffineStoreOp storeOp) {
+        auto arrayOp = cast<ArrayOp>(storeOp.getMemRef().getDefiningOp());
+        storeDict[arrayOp].push_back(storeOp);
+      });
 
-    MemAccessDict storeDict;
-    outermost.walk([&](mlir::AffineStoreOp storeOp) {
-      auto arrayOp = cast<ArrayOp>(storeOp.getMemRef().getDefiningOp());
-      storeDict[arrayOp].push_back(storeOp);
-    });
-
-    // Apply array partition pragma.
-    applyArrayPartition<mlir::AffineLoadOp>(loadDict, builder);
-    applyArrayPartition<mlir::AffineStoreOp>(storeDict, builder);
+      // Apply array partition pragma.
+      applyArrayPartition<mlir::AffineLoadOp>(loadDict, builder);
+      applyArrayPartition<mlir::AffineStoreOp>(storeDict, builder);
+    }
   }
 }
 

@@ -35,17 +35,17 @@ def ArrayPartition : Pass<"array-partition", "FuncOp"> {
   let constructor = "mlir::scalehls::createArrayPartitionPass()";
 }
 
-def InsertPipelinePragma : Pass<"insert-pipeline-pragma", "FuncOp"> {
-  let summary = "Insert pipeline pragma";
+def LoopPipelining : Pass<"loop-pipelining", "FuncOp"> {
+  let summary = "Apply loop pipelining";
   let description = [{
-    This insert-pipeline-pragma pass will insert pipeline pragma to the
-    innermost loop level.
+    This loop-pipelining pass will insert pipeline pragma to the innermost n-th
+    loop level, and automatically unroll all inner loops.
   }];
 
-  let constructor = "mlir::scalehls::createInsertPipelinePragmaPass()";
+  let constructor = "mlir::scalehls::createLoopPipeliningPass()";
 
   let options = [
-    Option<"insertLevel", "insert-level", "unsigned", /*default=*/"1", 
+    Option<"pipelineLevel", "pipeline-level", "unsigned", /*default=*/"1", 
            "Positive number: loop level to be pipelined (from innermost)">
   ];
 }

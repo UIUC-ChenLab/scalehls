@@ -7,7 +7,7 @@
 
 include "mlir/Pass/PassBase.td"
 
-def QoREstimation : Pass<"qor-estimation", "FuncOp"> {
+def QoREstimation : Pass<"qor-estimation", "ModuleOp"> {
   let summary = "Estimate the performance and resource utilization";
   let description = [{
     This qor-estimation pass will analyze the input CDFG and pragma operations
@@ -21,6 +21,8 @@ def QoREstimation : Pass<"qor-estimation", "FuncOp"> {
     Option<"targetSpec", "target-spec", "std::string",
            /*default=*/"\"../config/target-spec.ini\"", 
            "File path: target backend specifications and configurations">,
+    Option<"topFunction", "top-function", "std::string", /*default=*/"", 
+           "The top function for HLS synthesis">
   ];
 }
 

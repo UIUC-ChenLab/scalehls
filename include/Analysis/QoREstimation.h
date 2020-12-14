@@ -16,7 +16,7 @@ namespace mlir {
 namespace scalehls {
 
 //===----------------------------------------------------------------------===//
-// HLSCppToolBase Class Declaration
+// HLSCppToolBase Class Declaration and Definition
 //===----------------------------------------------------------------------===//
 
 class HLSCppToolBase {
@@ -97,26 +97,6 @@ public:
   }
 
   OpBuilder &builder;
-};
-
-//===----------------------------------------------------------------------===//
-// HLSCppAnalyzer Class Declaration
-//===----------------------------------------------------------------------===//
-
-class HLSCppAnalyzer : public HLSCppVisitorBase<HLSCppAnalyzer, bool>,
-                       public HLSCppToolBase {
-public:
-  explicit HLSCppAnalyzer(OpBuilder &builder) : HLSCppToolBase(builder) {}
-
-  bool visitUnhandledOp(Operation *op) { return true; }
-
-  using HLSCppVisitorBase::visitOp;
-  bool visitOp(ArrayOp op);
-  bool visitOp(AffineForOp op);
-  bool visitOp(AffineIfOp op);
-
-  void analyzeBlock(Block &block);
-  void analyzeFunc(FuncOp func);
 };
 
 //===----------------------------------------------------------------------===//

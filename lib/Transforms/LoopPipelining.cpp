@@ -14,13 +14,12 @@ using namespace mlir;
 using namespace scalehls;
 
 namespace {
-struct InsertPipelinePragma
-    : public InsertPipelinePragmaBase<InsertPipelinePragma> {
+struct LoopPipelining : public LoopPipeliningBase<LoopPipelining> {
   void runOnOperation() override;
 };
 } // namespace
 
-void InsertPipelinePragma::runOnOperation() {
+void LoopPipelining::runOnOperation() {
   auto func = getOperation();
   auto builder = OpBuilder(func);
 
@@ -30,8 +29,8 @@ void InsertPipelinePragma::runOnOperation() {
     forOp.walk([&](mlir::AffineForOp loop) { nestedLoops.push_back(loop); });
 
     auto targetLoop = nestedLoops.back();
-    if (nestedLoops.size() > insertLevel)
-      targetLoop = *std::next(nestedLoops.begin(), insertLevel);
+    if (nestedLoops.size() > pipelineLevel)
+      targetLoop = *std::next(nestedLoops.begin(), pipelineLevel);
 
     targetLoop.setAttr("pipeline", builder.getBoolAttr(true));
 
@@ -53,6 +52,6 @@ void InsertPipelinePragma::runOnOperation() {
                                std::move(patterns));
 }
 
-std::unique_ptr<mlir::Pass> scalehls::createInsertPipelinePragmaPass() {
-  return std::make_unique<InsertPipelinePragma>();
+std::unique_ptr<mlir::Pass> scalehls::createLoopPipeliningPass() {
+  return std::make_unique<LoopPipelining>();
 }

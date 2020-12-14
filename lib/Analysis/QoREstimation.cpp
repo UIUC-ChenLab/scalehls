@@ -7,6 +7,7 @@
 #include "Dialect/HLSCpp/HLSCpp.h"
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Analysis/AffineStructures.h"
+#include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
@@ -15,107 +16,6 @@ using namespace std;
 using namespace mlir;
 using namespace scalehls;
 using namespace hlscpp;
-
-//===----------------------------------------------------------------------===//
-// HLSCppAnalyzer Class Definition
-//===----------------------------------------------------------------------===//
-
-bool HLSCppAnalyzer::visitOp(ArrayOp op) {
-  unsigned factor = 1;
-  if (getBoolAttrValue(op, "partition")) {
-    for (unsigned i = 0, e = op.getType().cast<ShapedType>().getRank(); i < e;
-         ++i)
-      factor *= getPartitionFactor(op, i);
-  }
-  setAttrValue(op, "partition_num", factor);
-  return true;
-}
-
-bool HLSCppAnalyzer::visitOp(AffineForOp op) {
-  // If the current loop is annotated as unroll, all inner loops and itself are
-  // automatically unrolled.
-  if (getBoolAttrValue(op, "unroll")) {
-    op.walk([&](AffineForOp forOp) {
-      if (forOp.getLoopBody().getBlocks().size() != 1)
-        op.emitError("has zero or more than one basic blocks.");
-      if (failed(loopUnrollFull(forOp))) {
-        forOp.emitError("failed to be fully unrolled.");
-        return;
-      }
-    });
-    return true;
-  }
-
-  // If the current loop is annotated as pipeline, all intter loops are
-  // automatically unrolled.
-  if (getBoolAttrValue(op, "pipeline")) {
-    op.walk([&](AffineForOp forOp) {
-      if (forOp != op) {
-        if (forOp.getLoopBody().getBlocks().size() != 1)
-          op.emitError("has zero or more than one basic blocks.");
-        if (failed(loopUnrollFull(forOp))) {
-          forOp.emitError("failed to be fully unrolled.");
-          return;
-        }
-      }
-    });
-  }
-
-  // We assume loop contains a single basic block.
-  auto &body = op.getLoopBody();
-  if (body.getBlocks().size() != 1)
-    op.emitError("has zero or more than one basic blocks.");
-
-  // Recursively analyze all inner loops.
-  analyzeBlock(body.front());
-
-  // Set an attribute indicating the trip count. For now, we assume all loops
-  // have static loop bound.
-  if (!op.hasConstantLowerBound() || !op.hasConstantUpperBound())
-    op.emitError("has variable upper or lower bound.");
-
-  unsigned tripCount =
-      (op.getConstantUpperBound() - op.getConstantLowerBound()) / op.getStep();
-  setAttrValue(op, "trip_count", tripCount);
-
-  // Set attributes indicating this loop can be flatten or not.
-  unsigned opNum = 0;
-  unsigned forNum = 0;
-  bool innerFlatten = false;
-
-  for (auto &bodyOp : body.front()) {
-    if (!isa<AffineYieldOp>(bodyOp))
-      opNum += 1;
-    if (isa<AffineForOp>(bodyOp)) {
-      forNum += 1;
-      innerFlatten = getBoolAttrValue(&bodyOp, "flatten");
-    }
-  }
-
-  if (forNum == 0 || (opNum == 1 && innerFlatten))
-    setAttrValue(op, "flatten", true);
-  else
-    setAttrValue(op, "flatten", false);
-
-  return true;
-}
-
-bool HLSCppAnalyzer::visitOp(AffineIfOp op) { return true; }
-
-void HLSCppAnalyzer::analyzeBlock(Block &block) {
-  for (auto &op : block) {
-    if (dispatchVisitor(&op))
-      continue;
-    op.emitError("can't be correctly analyzed.");
-  }
-}
-
-void HLSCppAnalyzer::analyzeFunc(FuncOp func) {
-  if (func.getBlocks().size() != 1)
-    func.emitError("has zero or more than one basic blocks.");
-
-  analyzeBlock(func.front());
-}
 
 //===----------------------------------------------------------------------===//
 // HLSCppEstimator Class Definition
@@ -505,6 +405,48 @@ void HLSCppEstimator::estimateFunc(FuncOp func) {
   if (func.getBlocks().size() != 1)
     func.emitError("has zero or more than one basic blocks.");
 
+  // Extract all static parameters and current pragma configurations.
+  func.walk([&](ArrayOp op) {
+    unsigned factor = 1;
+    if (getBoolAttrValue(op, "partition")) {
+      for (unsigned i = 0, e = op.getType().cast<ShapedType>().getRank(); i < e;
+           ++i)
+        factor *= getPartitionFactor(op, i);
+    }
+    setAttrValue(op, "partition_num", factor);
+  });
+
+  func.walk([&](AffineForOp op) {
+    // We assume loop contains a single basic block.
+    auto &body = op.getLoopBody();
+    if (body.getBlocks().size() != 1)
+      op.emitError("has zero or more than one basic blocks.");
+
+    // Set an attribute indicating the trip count. For now, we assume all
+    // loops have static loop bound.
+    unsigned tripCount = getConstantTripCount(op).getValue();
+    setAttrValue(op, "trip_count", tripCount);
+
+    // Set attributes indicating this loop can be flatten or not.
+    unsigned opNum = 0;
+    unsigned forNum = 0;
+    bool innerFlatten = false;
+
+    for (auto &bodyOp : body.front()) {
+      if (!isa<AffineYieldOp>(bodyOp))
+        opNum += 1;
+      if (isa<AffineForOp>(bodyOp)) {
+        forNum += 1;
+        innerFlatten = getBoolAttrValue(&bodyOp, "flatten");
+      }
+    }
+
+    if (forNum == 0 || (opNum == 1 && innerFlatten))
+      setAttrValue(op, "flatten", true);
+    else
+      setAttrValue(op, "flatten", false);
+  });
+
   estimateBlock(func.front());
 
   MemAccessDict dict;
@@ -521,25 +463,13 @@ void HLSCppEstimator::estimateFunc(FuncOp func) {
 namespace {
 struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
   void runOnOperation() override {
-    auto builder = OpBuilder(getOperation());
-
-    // Extract all static parameters and current pragma configurations.
-    HLSCppAnalyzer analyzer(builder);
-    analyzer.analyzeFunc(getOperation());
-
-    // Canonicalize the analyzed IR.
-    OwningRewritePatternList patterns;
-
-    auto *context = &getContext();
-    for (auto *op : context->getRegisteredOperations())
-      op->getCanonicalizationPatterns(patterns, context);
-
-    Operation *op = getOperation();
-    applyPatternsAndFoldGreedily(op->getRegions(), std::move(patterns));
+    auto module = getOperation();
+    auto builder = OpBuilder(module);
 
     // Estimate performance and resource utilization.
     HLSCppEstimator estimator(builder, targetSpec);
-    estimator.estimateFunc(getOperation());
+    for (auto func : module.getOps<FuncOp>())
+      estimator.estimateFunc(func);
   }
 };
 } // namespace

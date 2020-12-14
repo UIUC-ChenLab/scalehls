@@ -40,7 +40,6 @@ void RemoveVarLoopBound::runOnOperation() {
 
         // For now, only if the variable bound is the induction variable of
         // one of the outer loops, the removal is possible.
-        unsigned idx = 0;
         if (auto valOwner = getForInductionVarOwner(val)) {
           if (valOwner.hasConstantUpperBound()) {
             // Set new constant loop bound.
