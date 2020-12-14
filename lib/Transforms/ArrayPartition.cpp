@@ -7,7 +7,6 @@
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/IR/Builders.h"
-#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/LoopUtils.h"
 
 using namespace std;
@@ -109,26 +108,6 @@ static void applyArrayPartition(MemAccessDict &accessDict, OpBuilder &builder) {
 void ArrayPartition::runOnOperation() {
   auto func = getOperation();
   auto builder = OpBuilder(func);
-
-  // If the current loop is annotated as pipeline, all intter loops are
-  // automatically unrolled.
-  for (auto forOp : func.getOps<mlir::AffineForOp>()) {
-    auto outermost = getPipelineLoop(forOp);
-    outermost.walk([&](mlir::AffineForOp loop) {
-      if (loop != outermost)
-        loopUnrollFull(loop);
-    });
-  }
-
-  // Canonicalize the analyzed IR.
-  OwningRewritePatternList patterns;
-
-  auto *context = &getContext();
-  for (auto *op : context->getRegisteredOperations())
-    op->getCanonicalizationPatterns(patterns, context);
-
-  Operation *op = getOperation();
-  applyPatternsAndFoldGreedily(op->getRegions(), std::move(patterns));
 
   // Apply array partition.
   for (auto forOp : func.getOps<mlir::AffineForOp>()) {
