@@ -31,8 +31,8 @@ static mlir::AffineForOp getPipelineLoop(mlir::AffineForOp root) {
 }
 
 template <typename OpType>
-static void applyArrayPartition(MemAccessDict &accessDict, OpBuilder &builder) {
-  for (auto pair : accessDict) {
+static void applyArrayPartition(LoadStoreDict &dict, OpBuilder &builder) {
+  for (auto pair : dict) {
     auto arrayOp = cast<ArrayOp>(pair.first);
     auto arrayType = arrayOp.getType().cast<MemRefType>();
     auto arrayAccesses = pair.second;
@@ -113,13 +113,13 @@ void ArrayPartition::runOnOperation() {
   for (auto forOp : func.getOps<mlir::AffineForOp>()) {
     if (auto outermost = getPipelineLoop(forOp)) {
       // Collect memory access information.
-      MemAccessDict loadDict;
+      LoadStoreDict loadDict;
       outermost.walk([&](mlir::AffineLoadOp loadOp) {
         auto arrayOp = cast<ArrayOp>(loadOp.getMemRef().getDefiningOp());
         loadDict[arrayOp].push_back(loadOp);
       });
 
-      MemAccessDict storeDict;
+      LoadStoreDict storeDict;
       outermost.walk([&](mlir::AffineStoreOp storeOp) {
         auto arrayOp = cast<ArrayOp>(storeOp.getMemRef().getDefiningOp());
         storeDict[arrayOp].push_back(storeOp);

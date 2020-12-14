@@ -103,6 +103,11 @@ public:
 // HLSCppEstimator Class Declaration
 //===----------------------------------------------------------------------===//
 
+// For storing all memory access operations (including AffineLoadOp and
+// AffineStoreOp) indexed by the array instantce (ArrayOp).
+using LoadStore = SmallVector<Operation *, 16>;
+using LoadStoreDict = llvm::SmallDenseMap<Operation *, LoadStore, 8>;
+
 // Indicate the unoccupied memory ports number.
 struct PortInfo {
   PortInfo(unsigned rdPort = 0, unsigned wrPort = 0, unsigned rdwrPort = 0)
@@ -113,17 +118,12 @@ struct PortInfo {
   unsigned rdwrPort;
 };
 
-// For storing all memory access operations (including AffineLoadOp and
-// AffineStoreOp) indexed by the array instantce (ArrayOp).
-using MemAccess = SmallVector<Operation *, 16>;
-using MemAccessDict = llvm::SmallDenseMap<Operation *, MemAccess, 8>;
-
 // For storing ports number information of each memory instance.
 using MemPort = SmallVector<PortInfo, 16>;
 using MemPortDict = llvm::SmallDenseMap<Operation *, MemPort, 8>;
 
-// For storing MemPort indexed by the pipeline stage (a basic block).
-using MemPortDictList = SmallVector<MemPortDict, 16>;
+// For storing MemPort indexed by the pipeline stage.
+using MemPortDicts = SmallVector<MemPortDict, 16>;
 
 class HLSCppEstimator : public HLSCppVisitorBase<HLSCppEstimator, bool>,
                         public HLSCppToolBase {
@@ -134,21 +134,16 @@ public:
 
   using HLSCppVisitorBase::visitOp;
   bool visitOp(AffineForOp op);
-  bool visitOp(AffineIfOp op);
 
-  /// Memory access -related methods.
-  int32_t getPartitionIdx(AffineMap map, ArrayOp op);
-  void getMemAccessInfo(Block &block, MemAccessDict &info);
+  void getBlockMemInfo(Block &block, LoadStoreDict &info);
 
-  /// Scheduling-related methods.
-  unsigned getLoadStoreSchedule(Operation *op, ArrayOp arrayOp,
-                                MemPortDictList &memPortList, unsigned begin);
+  unsigned getLoadStoreSchedule(Operation *op, unsigned begin,
+                                MemPortDicts &dicts);
   unsigned getBlockSchedule(Block &block);
 
-  /// Initial interval -related methods.
-  unsigned getMinII(AffineForOp forOp, MemAccessDict dict);
+  unsigned getResMinII(AffineForOp forOp, LoadStoreDict dict);
+  unsigned getDepMinII(AffineForOp forOp, LoadStoreDict dict);
 
-  void estimateOperation(Operation *op);
   void estimateFunc(FuncOp func);
   void estimateBlock(Block &block);
 };
