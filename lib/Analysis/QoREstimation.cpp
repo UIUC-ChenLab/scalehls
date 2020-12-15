@@ -7,6 +7,7 @@
 #include "Dialect/HLSCpp/HLSCpp.h"
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Analysis/AffineStructures.h"
+#include "mlir/Analysis/Liveness.h"
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/IR/Operation.h"
@@ -124,7 +125,7 @@ unsigned HLSCppEstimator::getLoadStoreSchedule(Operation *op, unsigned begin,
           rdwrPort = 1;
         else {
           rdwrPort = 2;
-          arrayOp.emitError("unsupported storage type.");
+          // arrayOp.emitError("unsupported storage type.");
         }
         PortInfo portInfo(rdPort, wrPort, rdwrPort);
         memPort.push_back(portInfo);
@@ -175,7 +176,30 @@ unsigned HLSCppEstimator::getLoadStoreSchedule(Operation *op, unsigned begin,
   return begin;
 }
 
-/// Calculate scheduling information of the block.
+void HLSCppEstimator::updateChildBlockSchedule(Block &block, unsigned begin) {
+  for (auto &op : block) {
+    unsigned newBegin = begin;
+    unsigned newEnd = begin;
+
+    // Update the schedule of all operations in the child block.
+    if (getUIntAttrValue(&op, "schedule_end")) {
+      newBegin += getUIntAttrValue(&op, "schedule_begin");
+      newEnd += getUIntAttrValue(&op, "schedule_end");
+      setAttrValue(&op, "schedule_begin", newBegin);
+      setAttrValue(&op, "schedule_end", newEnd);
+    }
+
+    // Recursively apply to all child blocks.
+    if (op.getNumRegions()) {
+      for (auto &region : op.getRegions()) {
+        for (auto &block : region.getBlocks())
+          updateChildBlockSchedule(block, begin);
+      }
+    }
+  }
+}
+
+/// Schedule the block with ASAP algorithm.
 unsigned HLSCppEstimator::getBlockSchedule(Block &block) {
   unsigned blockEnd = 0;
   MemPortDicts dicts;
@@ -191,24 +215,60 @@ unsigned HLSCppEstimator::getBlockSchedule(Block &block) {
         begin = max(getUIntAttrValue(defOp, "schedule_end"), begin);
     }
 
-    // Insert new pipeline stages to the memory port dicts.
-    while (begin >= dicts.size()) {
-      MemPortDict memPortDict;
-      dicts.push_back(memPortDict);
-    }
-
-    // Handle load/store operations, ensure the current schedule meets memory
-    // port limitation.
-    if (isa<mlir::AffineReadOpInterface, mlir::AffineWriteOpInterface>(op)) {
-      begin = getLoadStoreSchedule(&op, begin, dicts);
-      end = begin + 1;
-    }
     // Handle loop operations.
-    else if (auto forOp = dyn_cast<AffineForOp>(op)) {
+    if (auto forOp = dyn_cast<AffineForOp>(op)) {
+      // Live ins of the for loop body will also impact the schedule begin.
+      Liveness liveness(block.getParentOp());
+      for (auto liveIn : liveness.getLiveIn(&forOp.getLoopBody().front())) {
+        if (auto defOp = liveIn.getDefiningOp())
+          begin = max(getUIntAttrValue(defOp, "schedule_end"), begin);
+      }
+
+      // Update the schedule of all operations in the loop body.
+      updateChildBlockSchedule(forOp.getLoopBody().front(), begin);
+
       // Child loop is considered as a large node, and two extra clock cycles
       // will be required to enter and exit the child loop.
       end = begin + getUIntAttrValue(forOp, "latency") + 2;
     }
+
+    // Handle if operations.
+    else if (auto ifOp = dyn_cast<AffineIfOp>(op)) {
+      // Live ins of the if body will also impact the schedule begin.
+      Liveness liveness(block.getParentOp());
+      for (auto liveIn : liveness.getLiveIn(ifOp.getThenBlock())) {
+        if (auto defOp = liveIn.getDefiningOp())
+          begin = max(getUIntAttrValue(defOp, "schedule_end"), begin);
+      }
+
+      if (ifOp.hasElse()) {
+        for (auto liveIn : liveness.getLiveIn(ifOp.getElseBlock())) {
+          if (auto defOp = liveIn.getDefiningOp())
+            begin = max(getUIntAttrValue(defOp, "schedule_end"), begin);
+        }
+        // Update the schedule of all operations in the else block.
+        updateChildBlockSchedule(*ifOp.getElseBlock(), begin);
+      }
+
+      // Update the schedule of all operations in the then block.
+      updateChildBlockSchedule(*ifOp.getThenBlock(), begin);
+
+      end = begin + getUIntAttrValue(ifOp, "latency");
+    }
+
+    // Handle load/store operations.
+    else if (isa<AffineReadOpInterface, AffineWriteOpInterface>(op)) {
+      // Insert new schedule level to the memory port dicts.
+      while (begin >= dicts.size()) {
+        MemPortDict memPortDict;
+        dicts.push_back(memPortDict);
+      }
+
+      // Ensure the current schedule meets memory port limitation.
+      begin = getLoadStoreSchedule(&op, begin, dicts);
+      end = begin + 1;
+    }
+
     // Default case. All normal expressions and operations will be handled by
     // this branch.
     else {
@@ -253,6 +313,10 @@ unsigned HLSCppEstimator::getResMinII(AffineForOp forOp, LoadStoreDict dict) {
           accessNum = 2;
         else if (storageType == "ram_1p")
           accessNum = 1;
+        else {
+          accessNum = 2;
+          // arrayOp.emitError("unsupported storage type.");
+        }
 
         // The rationale here is an undetermined partition access will
         // introduce a large mux which will avoid Vivado HLS to process any
@@ -364,8 +428,24 @@ unsigned HLSCppEstimator::getDepMinII(AffineForOp forOp, LoadStoreDict dict) {
 
 bool HLSCppEstimator::visitOp(AffineForOp op) {
   auto &body = op.getLoopBody();
-  if (body.getBlocks().size() != 1)
+  if (body.getBlocks().size() != 1) {
     op.emitError("has zero or more than one basic blocks.");
+    return false;
+  }
+
+  // Recursively estimate all contained operations.
+  if (!estimateBlock(body.front()))
+    return false;
+
+  // Set an attribute indicating the trip count. For now, we assume all
+  // loops have static loop bound.
+  if (auto tripCount = getConstantTripCount(op))
+    setAttrValue(op, "trip_count", (unsigned)tripCount.getValue());
+  else {
+    setAttrValue(op, "trip_count", (unsigned)0);
+    op.emitError("has undetermined trip count");
+    return false;
+  }
 
   // If the current loop is annotated as pipeline, extra dependency and II
   // analysis will be executed.
@@ -388,13 +468,10 @@ bool HLSCppEstimator::visitOp(AffineForOp op) {
     return true;
   }
 
-  // Recursively estimate all inner loops.
-  estimateBlock(body.front());
-
-  // This simply means the current loop can be flattened into the child loop
-  // pipeline. This will increase the flattened loop trip count without
-  // changing the iteration latency. Note that this will be propogated above
-  // until meeting an imperfect loop.
+  // This means the current loop can be flattened into the child loop. If the
+  // child loop is pipelined, this will increase the flattened loop trip count
+  // without changing the iteration latency. Note that this will be propogated
+  // above until meeting an imperfect loop.
   if (getBoolAttrValue(op, "flatten")) {
     if (auto child = dyn_cast<AffineForOp>(op.getLoopBody().front().front())) {
       // This means the inner loop is pipelined, because otherwise II will be
@@ -434,71 +511,70 @@ bool HLSCppEstimator::visitOp(AffineForOp op) {
   return true;
 }
 
-void HLSCppEstimator::estimateBlock(Block &block) {
+bool HLSCppEstimator::visitOp(AffineIfOp op) {
+  auto thenBlock = op.getThenBlock();
+  if (!estimateBlock(*thenBlock))
+    return false;
+
+  LoadStoreDict dict;
+  getBlockMemInfo(*thenBlock, dict);
+  auto latency = getBlockSchedule(*thenBlock);
+
+  // Handle else block if required.
+  if (op.hasElse()) {
+    auto elseBlock = op.getElseBlock();
+    if (!estimateBlock(*elseBlock))
+      return false;
+
+    getBlockMemInfo(*elseBlock, dict);
+    latency = max(latency, getBlockSchedule(*elseBlock));
+  }
+
+  setAttrValue(op, "latency", latency);
+  return true;
+}
+
+bool HLSCppEstimator::visitOp(ArrayOp op) {
+  unsigned partitionNum = 1;
+  if (op.partition()) {
+    auto rank = op.getType().cast<ShapedType>().getRank();
+    for (unsigned i = 0; i < rank; ++i) {
+      if (auto factor = getPartitionFactor(op, i))
+        partitionNum *= factor;
+    }
+  }
+  setAttrValue(op, "partition_num", partitionNum);
+  return true;
+}
+
+bool HLSCppEstimator::estimateBlock(Block &block) {
   for (auto &op : block) {
     if (dispatchVisitor(&op))
       continue;
-    op.emitError("can't be correctly estimated.");
+    else {
+      op.emitError("can't be correctly estimated.");
+      return false;
+    }
   }
+  return true;
 }
 
-void HLSCppEstimator::estimateFunc(FuncOp func) {
-  if (func.getBlocks().size() != 1)
+bool HLSCppEstimator::estimateFunc(FuncOp func) {
+  if (func.getBlocks().size() != 1) {
     func.emitError("has zero or more than one basic blocks.");
+    return false;
+  }
 
-  // Extract all static parameters and current pragma configurations.
-  func.walk([&](ArrayOp op) {
-    unsigned factor = 1;
-    if (getBoolAttrValue(op, "partition")) {
-      for (unsigned i = 0, e = op.getType().cast<ShapedType>().getRank(); i < e;
-           ++i)
-        factor *= getPartitionFactor(op, i);
-    }
-    setAttrValue(op, "partition_num", factor);
-  });
-
-  func.walk([&](AffineForOp op) {
-    // We assume loop contains a single basic block.
-    auto &body = op.getLoopBody();
-    if (body.getBlocks().size() != 1)
-      op.emitError("has zero or more than one basic blocks.");
-
-    // Set an attribute indicating the trip count. For now, we assume all
-    // loops have static loop bound.
-    if (auto tripCount = getConstantTripCount(op))
-      setAttrValue(op, "trip_count", (unsigned)tripCount.getValue());
-    else {
-      setAttrValue(op, "trip_count", (unsigned)0);
-      op.emitError("has variable trip count");
-    }
-
-    // Set attributes indicating this loop can be flatten or not.
-    unsigned opNum = 0;
-    unsigned forNum = 0;
-    bool innerFlatten = false;
-
-    for (auto &bodyOp : body.front()) {
-      if (!isa<AffineYieldOp>(bodyOp))
-        opNum++;
-      if (isa<AffineForOp>(bodyOp)) {
-        forNum++;
-        innerFlatten = getBoolAttrValue(&bodyOp, "flatten");
-      }
-    }
-
-    if (forNum == 0 || (opNum == 1 && innerFlatten))
-      setAttrValue(op, "flatten", true);
-    else
-      setAttrValue(op, "flatten", false);
-  });
-
-  estimateBlock(func.front());
+  // Recursively estimate all contained operations.
+  if (!estimateBlock(func.front()))
+    return false;
 
   LoadStoreDict dict;
   getBlockMemInfo(func.front(), dict);
 
   auto latency = getBlockSchedule(func.front());
   setAttrValue(func, "latency", latency);
+  return true;
 }
 
 //===----------------------------------------------------------------------===//

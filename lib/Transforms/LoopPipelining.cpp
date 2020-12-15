@@ -34,10 +34,32 @@ void LoopPipelining::runOnOperation() {
 
     targetLoop.setAttr("pipeline", builder.getBoolAttr(true));
 
-    // All intter loops of the pipelined loop are automatically unrolled.
+    // All inner loops of the pipelined loop are automatically unrolled.
     targetLoop.walk([&](mlir::AffineForOp loop) {
       if (loop != targetLoop)
         loopUnrollFull(loop);
+    });
+
+    // All outer loops that perfect nest the pipelined loop can be flattened.
+    forOp.walk([&](mlir::AffineForOp loop) {
+      unsigned opNum = 0;
+      unsigned forNum = 0;
+      bool innerFlatten = false;
+
+      for (auto &bodyOp : loop.getLoopBody().front()) {
+        if (!isa<AffineYieldOp>(bodyOp))
+          opNum++;
+        if (isa<AffineForOp>(bodyOp)) {
+          forNum++;
+          if (auto flatten = bodyOp.getAttrOfType<BoolAttr>("flatten"))
+            innerFlatten = flatten.getValue();
+        }
+      }
+
+      if (forNum == 0 || (opNum == 1 && innerFlatten))
+        loop.setAttr("flatten", builder.getBoolAttr(true));
+      else
+        loop.setAttr("flatten", builder.getBoolAttr(false));
     });
   }
 

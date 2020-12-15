@@ -134,18 +134,21 @@ public:
 
   using HLSCppVisitorBase::visitOp;
   bool visitOp(AffineForOp op);
+  bool visitOp(AffineIfOp op);
+  bool visitOp(ArrayOp op);
 
   void getBlockMemInfo(Block &block, LoadStoreDict &info);
 
   unsigned getLoadStoreSchedule(Operation *op, unsigned begin,
                                 MemPortDicts &dicts);
+  void updateChildBlockSchedule(Block &block, unsigned begin);
   unsigned getBlockSchedule(Block &block);
 
   unsigned getResMinII(AffineForOp forOp, LoadStoreDict dict);
   unsigned getDepMinII(AffineForOp forOp, LoadStoreDict dict);
 
-  void estimateFunc(FuncOp func);
-  void estimateBlock(Block &block);
+  bool estimateFunc(FuncOp func);
+  bool estimateBlock(Block &block);
 };
 
 } // namespace scalehls
