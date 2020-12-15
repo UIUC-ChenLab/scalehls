@@ -27,7 +27,10 @@ static mlir::AffineForOp getPipelineLoop(mlir::AffineForOp root) {
         nestedLoops.push_back(loop);
     }
   });
-  return nestedLoops.back();
+  if (nestedLoops.empty())
+    return nullptr;
+  else
+    return nestedLoops.back();
 }
 
 template <typename OpType>

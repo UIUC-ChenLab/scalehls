@@ -8,6 +8,7 @@
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Analysis/AffineStructures.h"
 #include "mlir/Analysis/LoopAnalysis.h"
+#include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
@@ -36,31 +37,16 @@ HLSCppEstimator::HLSCppEstimator(OpBuilder &builder, string targetSpecPath)
   llvm::outs() << latency << "\n";
 }
 
-static Value getMemRef(Operation *op) {
-  if (auto loadOp = dyn_cast<mlir::AffineReadOpInterface>(op))
-    return loadOp.getMemRef();
-  else if (auto storeOp = dyn_cast<mlir::AffineWriteOpInterface>(op))
-    return storeOp.getMemRef();
-  else
-    return nullptr;
-}
-
-static AffineMap getAffineMap(Operation *op) {
-  if (auto loadOp = dyn_cast<mlir::AffineReadOpInterface>(op))
-    return loadOp.getAffineMap();
-  else if (auto storeOp = dyn_cast<mlir::AffineWriteOpInterface>(op))
-    return storeOp.getAffineMap();
-  else
-    return AffineMap();
-}
-
 /// Collect memory access information of the block.
 void HLSCppEstimator::getBlockMemInfo(Block &block, LoadStoreDict &dict) {
   // Walk through all load/store operations in the current block.
   block.walk([&](Operation *op) {
-    if (auto memRef = getMemRef(op)) {
-      auto map = getAffineMap(op);
-      auto arrayOp = cast<ArrayOp>(getMemRef(op).getDefiningOp());
+    if (isa<mlir::AffineReadOpInterface, mlir::AffineWriteOpInterface>(op)) {
+      auto memAccess = MemRefAccess(op);
+      auto arrayOp = cast<ArrayOp>(memAccess.memref.getDefiningOp());
+
+      AffineValueMap accessMap;
+      memAccess.getAccessMap(&accessMap);
 
       dict[arrayOp].push_back(op);
 
@@ -69,7 +55,7 @@ void HLSCppEstimator::getBlockMemInfo(Block &block, LoadStoreDict &dict) {
       int32_t partitionIdx = 0;
       unsigned accumFactor = 1;
       unsigned dim = 0;
-      for (auto expr : map.getResults()) {
+      for (auto expr : accessMap.getAffineMap().getResults()) {
         auto idxExpr = getConstExpr(0);
         unsigned factor = 1;
         if (arrayOp.partition()) {
@@ -94,7 +80,7 @@ void HLSCppEstimator::getBlockMemInfo(Block &block, LoadStoreDict &dict) {
         }
 
         accumFactor *= factor;
-        dim += 1;
+        dim++;
       }
 
       // Set partition index attribute.
@@ -107,7 +93,8 @@ void HLSCppEstimator::getBlockMemInfo(Block &block, LoadStoreDict &dict) {
 /// limitation. This method will be called by getBlockSchedule method.
 unsigned HLSCppEstimator::getLoadStoreSchedule(Operation *op, unsigned begin,
                                                MemPortDicts &dicts) {
-  auto arrayOp = cast<ArrayOp>(getMemRef(op).getDefiningOp());
+  auto memAccess = MemRefAccess(op);
+  auto arrayOp = cast<ArrayOp>(memAccess.memref.getDefiningOp());
 
   auto partitionIdx = getIntAttrValue(op, "partition_index");
   auto partitionNum = getUIntAttrValue(arrayOp, "partition_num");
@@ -212,7 +199,7 @@ unsigned HLSCppEstimator::getBlockSchedule(Block &block) {
 
     // Handle load/store operations, ensure the current schedule meets memory
     // port limitation.
-    if (isa<AffineReadOpInterface, AffineWriteOpInterface>(op)) {
+    if (isa<mlir::AffineReadOpInterface, mlir::AffineWriteOpInterface>(op)) {
       begin = getLoadStoreSchedule(&op, begin, dicts);
       end = begin + 1;
     }
@@ -237,22 +224,6 @@ unsigned HLSCppEstimator::getBlockSchedule(Block &block) {
   return blockEnd;
 }
 
-static int32_t getDimId(Operation *op, Value value) {
-  int32_t dimId = -1;
-  if (auto loadOp = dyn_cast<AffineLoadOp>(op)) {
-    auto operand = std::find(loadOp.getMapOperands().begin(),
-                             loadOp.getMapOperands().end(), value);
-    if (operand != loadOp.getMapOperands().end())
-      dimId = operand.getIndex();
-  } else if (auto storeOp = dyn_cast<AffineStoreOp>(op)) {
-    auto operand = std::find(storeOp.getMapOperands().begin(),
-                             storeOp.getMapOperands().end(), value);
-    if (operand != storeOp.getMapOperands().end())
-      dimId = operand.getIndex();
-  }
-  return dimId;
-}
-
 /// Calculate the minimum resource II.
 unsigned HLSCppEstimator::getResMinII(AffineForOp forOp, LoadStoreDict dict) {
   unsigned II = 1;
@@ -269,9 +240,9 @@ unsigned HLSCppEstimator::getResMinII(AffineForOp forOp, LoadStoreDict dict) {
       writeNum.push_back(0);
     }
 
-    auto LoadStore = pair.second;
+    auto loadStores = pair.second;
 
-    for (auto op : LoadStore) {
+    for (auto op : loadStores) {
       // Calculate resource-aware minimal II.
       auto partitionIdx = getIntAttrValue(op, "partition_index");
       if (partitionIdx == -1) {
@@ -294,9 +265,9 @@ unsigned HLSCppEstimator::getResMinII(AffineForOp forOp, LoadStoreDict dict) {
             writeNum[p] += accessNum;
         }
       } else if (isa<AffineLoadOp>(op))
-        readNum[partitionIdx] += 1;
+        readNum[partitionIdx]++;
       else if (isa<AffineStoreOp>(op))
-        writeNum[partitionIdx] += 1;
+        writeNum[partitionIdx]++;
     }
 
     unsigned minII = 1;
@@ -320,7 +291,75 @@ unsigned HLSCppEstimator::getResMinII(AffineForOp forOp, LoadStoreDict dict) {
 
 /// Calculate the minimum dependency II.
 unsigned HLSCppEstimator::getDepMinII(AffineForOp forOp, LoadStoreDict dict) {
-  return 0;
+  unsigned II = 1;
+
+  // Collect start and end level of the pipeline.
+  unsigned endLevel = 1;
+  unsigned startLevel = 1;
+  auto currentLoop = forOp;
+  while (true) {
+    if (auto outerLoop = dyn_cast<AffineForOp>(currentLoop.getParentOp())) {
+      currentLoop = outerLoop;
+      endLevel++;
+      if (!getBoolAttrValue(outerLoop, "flatten"))
+        startLevel++;
+    } else
+      break;
+  }
+
+  for (auto &pair : dict) {
+    auto loadStores = pair.second;
+
+    // Walk through each pair of source and destination, and each loop level
+    // that are pipelined.
+    for (auto loopDepth = startLevel; loopDepth <= endLevel; ++loopDepth) {
+      unsigned dstIndex = 1;
+      for (auto dstOp : loadStores) {
+        MemRefAccess dstAccess(dstOp);
+
+        for (auto srcOp : llvm::drop_begin(loadStores, dstIndex)) {
+          MemRefAccess srcAccess(srcOp);
+
+          FlatAffineConstraints depConstrs;
+          SmallVector<DependenceComponent, 2> depComps;
+
+          DependenceResult result = checkMemrefAccessDependence(
+              srcAccess, dstAccess, loopDepth, &depConstrs, &depComps);
+
+          if (hasDependence(result)) {
+            SmallVector<unsigned, 2> flattenTripCounts;
+            flattenTripCounts.push_back(1);
+            unsigned distance = 0;
+
+            // Calculate the distance of this dependency.
+            for (auto it = depComps.rbegin(); it < depComps.rend(); ++it) {
+              auto dep = *it;
+              auto tripCount = getUIntAttrValue(dep.op, "trip_count");
+
+              if (dep.ub)
+                distance += flattenTripCounts.back() * dep.ub.getValue();
+              else if (dep.lb)
+                distance += flattenTripCounts.back() * dep.lb.getValue();
+              else
+                distance += flattenTripCounts.back() * tripCount;
+
+              flattenTripCounts.push_back(flattenTripCounts.back() * tripCount);
+            }
+
+            unsigned delay = getUIntAttrValue(srcOp, "schedule_begin") -
+                             getUIntAttrValue(dstOp, "schedule_begin");
+
+            if (distance != 0) {
+              unsigned minII = ceil((float)delay / distance);
+              II = max(II, minII);
+            }
+          }
+        }
+        dstIndex++;
+      }
+    }
+  }
+  return II;
 }
 
 bool HLSCppEstimator::visitOp(AffineForOp op) {
@@ -339,8 +378,7 @@ bool HLSCppEstimator::visitOp(AffineForOp op) {
     setAttrValue(op, "iter_latency", iterLatency);
 
     // Calculate initial interval.
-    auto II = getResMinII(op, dict);
-    // II = min(II, getDepMinII());
+    auto II = max(getResMinII(op, dict), getDepMinII(op, dict));
     setAttrValue(op, "init_interval", II);
 
     auto tripCount = getUIntAttrValue(op, "trip_count");
@@ -427,8 +465,12 @@ void HLSCppEstimator::estimateFunc(FuncOp func) {
 
     // Set an attribute indicating the trip count. For now, we assume all
     // loops have static loop bound.
-    unsigned tripCount = getConstantTripCount(op).getValue();
-    setAttrValue(op, "trip_count", tripCount);
+    if (auto tripCount = getConstantTripCount(op))
+      setAttrValue(op, "trip_count", (unsigned)tripCount.getValue());
+    else {
+      setAttrValue(op, "trip_count", (unsigned)0);
+      op.emitError("has variable trip count");
+    }
 
     // Set attributes indicating this loop can be flatten or not.
     unsigned opNum = 0;
@@ -437,9 +479,9 @@ void HLSCppEstimator::estimateFunc(FuncOp func) {
 
     for (auto &bodyOp : body.front()) {
       if (!isa<AffineYieldOp>(bodyOp))
-        opNum += 1;
+        opNum++;
       if (isa<AffineForOp>(bodyOp)) {
-        forNum += 1;
+        forNum++;
         innerFlatten = getBoolAttrValue(&bodyOp, "flatten");
       }
     }
