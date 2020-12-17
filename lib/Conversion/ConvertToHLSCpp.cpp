@@ -117,8 +117,8 @@ void ConvertToHLSCpp::runOnOperation() {
       if (!forOp.getAttr("pipeline"))
         forOp.setAttr("pipeline", builder.getBoolAttr(false));
 
-      if (!forOp.getAttr("unroll"))
-        forOp.setAttr("unroll", builder.getBoolAttr(false));
+      // if (!forOp.getAttr("unroll"))
+      //  forOp.setAttr("unroll", builder.getBoolAttr(false));
 
       if (!forOp.getAttr("flatten"))
         forOp.setAttr("flatten", builder.getBoolAttr(false));

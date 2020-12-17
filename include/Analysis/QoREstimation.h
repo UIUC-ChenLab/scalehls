@@ -7,6 +7,8 @@
 
 #include "Dialect/HLSCpp/Visitor.h"
 #include "INIReader.h"
+#include "mlir/Analysis/AffineAnalysis.h"
+#include "mlir/Analysis/Liveness.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/LoopUtils.h"
@@ -21,10 +23,12 @@ namespace scalehls {
 
 class HLSCppToolBase {
 public:
-  explicit HLSCppToolBase(OpBuilder &builder) : builder(builder) {}
+  explicit HLSCppToolBase(OpBuilder builder) : builder(builder) {}
 
-  /// Get value methods.
-  int64_t getIntAttrValue(Operation *op, StringRef name) {
+  OpBuilder builder;
+
+  /// Get attribute value methods.
+  int32_t getIntAttrValue(Operation *op, StringRef name) {
     if (auto attr = op->getAttrOfType<IntegerAttr>(name))
       return attr.getInt();
     else
@@ -52,6 +56,7 @@ public:
       return "";
   }
 
+  /// Get partition information methods.
   StringRef getPartitionType(ArrayOp op, unsigned dim) {
     if (auto attr = op.partition_type()[dim].cast<StringAttr>())
       return attr.getValue();
@@ -66,13 +71,13 @@ public:
       return 0;
   }
 
-  /// Set value methods.
-  void setAttrValue(Operation *op, StringRef name, unsigned value) {
-    op->setAttr(name, builder.getUI32IntegerAttr(value));
-  }
-
+  /// Set attribute value methods.
   void setAttrValue(Operation *op, StringRef name, int32_t value) {
     op->setAttr(name, builder.getI32IntegerAttr(value));
+  }
+
+  void setAttrValue(Operation *op, StringRef name, unsigned value) {
+    op->setAttr(name, builder.getUI32IntegerAttr(value));
   }
 
   void setAttrValue(Operation *op, StringRef name, bool value) {
@@ -82,21 +87,6 @@ public:
   void setAttrValue(Operation *op, StringRef name, StringRef value) {
     op->setAttr(name, builder.getStringAttr(value));
   }
-
-  /// Get expression methods.
-  AffineExpr getSymbolExpr(unsigned value) {
-    return getAffineSymbolExpr(value, builder.getContext());
-  }
-
-  AffineExpr getDimExpr(unsigned value) {
-    return getAffineDimExpr(value, builder.getContext());
-  }
-
-  AffineExpr getConstExpr(int64_t value) {
-    return getAffineConstantExpr(value, builder.getContext());
-  }
-
-  OpBuilder &builder;
 };
 
 //===----------------------------------------------------------------------===//
@@ -104,9 +94,13 @@ public:
 //===----------------------------------------------------------------------===//
 
 // For storing all memory access operations (including AffineLoadOp and
-// AffineStoreOp) indexed by the array instantce (ArrayOp).
-using LoadStore = SmallVector<Operation *, 16>;
-using LoadStoreDict = llvm::SmallDenseMap<Operation *, LoadStore, 8>;
+// AffineStoreOp) indexed by the array instance (ArrayOp).
+using LoadStores = SmallVector<Operation *, 16>;
+using LoadStoresMap = DenseMap<Operation *, LoadStores>;
+
+// For storing all dependent operations indexed by the source operation.
+using Depends = SmallVector<Operation *, 16>;
+using DependsMap = DenseMap<Operation *, Depends>;
 
 // Indicate the unoccupied memory ports number.
 struct PortInfo {
@@ -118,37 +112,49 @@ struct PortInfo {
   unsigned rdwrPort;
 };
 
-// For storing ports number information of each memory instance.
-using MemPort = SmallVector<PortInfo, 16>;
-using MemPortDict = llvm::SmallDenseMap<Operation *, MemPort, 8>;
+// For storing ports number of all partitions indexed by the array instance
+// (ArrayOp).
+using Ports = SmallVector<PortInfo, 16>;
+using PortsMap = DenseMap<Operation *, Ports>;
 
-// For storing MemPort indexed by the pipeline stage.
-using MemPortDicts = SmallVector<MemPortDict, 16>;
+// For storing PortsMap indexed by the scheduling level.
+using PortsMapDict = DenseMap<unsigned, PortsMap>;
 
-class HLSCppEstimator : public HLSCppVisitorBase<HLSCppEstimator, bool>,
-                        public HLSCppToolBase {
+class HLSCppEstimator
+    : public HLSCppVisitorBase<HLSCppEstimator, Optional<unsigned>, unsigned>,
+      public HLSCppToolBase {
 public:
-  explicit HLSCppEstimator(OpBuilder &builder, std::string targetSpecPath);
+  explicit HLSCppEstimator(FuncOp &func)
+      : HLSCppToolBase(OpBuilder(func)), func(func), liveness(Liveness(func)) {
+    getFuncMemRefDepends();
+  }
 
-  bool visitUnhandledOp(Operation *op) { return true; }
-
+  void getFuncMemRefDepends();
   using HLSCppVisitorBase::visitOp;
-  bool visitOp(AffineForOp op);
-  bool visitOp(AffineIfOp op);
-  bool visitOp(ArrayOp op);
+  Optional<unsigned> visitUnhandledOp(Operation *op, unsigned begin) {
+    // Default latency of any unhandled operation is 1.
+    return begin + 1;
+  }
 
-  void getBlockMemInfo(Block &block, LoadStoreDict &info);
+  int32_t getPartitionIndex(Operation *op);
+  unsigned getLoadStoreSchedule(Operation *op, unsigned begin);
+  Optional<unsigned> visitOp(AffineLoadOp op, unsigned begin);
+  Optional<unsigned> visitOp(AffineStoreOp op, unsigned begin);
 
-  unsigned getLoadStoreSchedule(Operation *op, unsigned begin,
-                                MemPortDicts &dicts);
-  void updateChildBlockSchedule(Block &block, unsigned begin);
-  unsigned getBlockSchedule(Block &block);
+  unsigned getResMinII(AffineForOp forOp, LoadStoresMap &map);
+  unsigned getDepMinII(AffineForOp forOp, LoadStoresMap &map);
+  Optional<unsigned> visitOp(AffineForOp op, unsigned begin);
 
-  unsigned getResMinII(AffineForOp forOp, LoadStoreDict dict);
-  unsigned getDepMinII(AffineForOp forOp, LoadStoreDict dict);
+  Optional<unsigned> visitOp(AffineIfOp op, unsigned begin);
+  Optional<unsigned> visitOp(ArrayOp op, unsigned begin);
 
-  bool estimateFunc(FuncOp func);
-  bool estimateBlock(Block &block);
+  Optional<unsigned> estimateBlock(Block &block, unsigned blockBegin);
+  void estimateFunc();
+
+  FuncOp &func;
+  Liveness liveness;
+  DependsMap dependsMap;
+  PortsMapDict portsMapDict;
 };
 
 } // namespace scalehls

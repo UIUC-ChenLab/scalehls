@@ -34,8 +34,8 @@ static mlir::AffineForOp getPipelineLoop(mlir::AffineForOp root) {
 }
 
 template <typename OpType>
-static void applyArrayPartition(LoadStoreDict &dict, OpBuilder &builder) {
-  for (auto pair : dict) {
+static void applyArrayPartition(LoadStoresMap &map, OpBuilder &builder) {
+  for (auto pair : map) {
     auto arrayOp = cast<ArrayOp>(pair.first);
     auto arrayType = arrayOp.getType().cast<MemRefType>();
     auto arrayAccesses = pair.second;
@@ -116,21 +116,21 @@ void ArrayPartition::runOnOperation() {
   for (auto forOp : func.getOps<mlir::AffineForOp>()) {
     if (auto outermost = getPipelineLoop(forOp)) {
       // Collect memory access information.
-      LoadStoreDict loadDict;
+      LoadStoresMap loadMap;
       outermost.walk([&](mlir::AffineLoadOp loadOp) {
         auto arrayOp = cast<ArrayOp>(loadOp.getMemRef().getDefiningOp());
-        loadDict[arrayOp].push_back(loadOp);
+        loadMap[arrayOp].push_back(loadOp);
       });
 
-      LoadStoreDict storeDict;
+      LoadStoresMap storeMap;
       outermost.walk([&](mlir::AffineStoreOp storeOp) {
         auto arrayOp = cast<ArrayOp>(storeOp.getMemRef().getDefiningOp());
-        storeDict[arrayOp].push_back(storeOp);
+        storeMap[arrayOp].push_back(storeOp);
       });
 
       // Apply array partition pragma.
-      applyArrayPartition<mlir::AffineLoadOp>(loadDict, builder);
-      applyArrayPartition<mlir::AffineStoreOp>(storeDict, builder);
+      applyArrayPartition<mlir::AffineLoadOp>(loadMap, builder);
+      applyArrayPartition<mlir::AffineStoreOp>(storeMap, builder);
     }
   }
 }

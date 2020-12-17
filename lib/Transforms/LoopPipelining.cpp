@@ -41,26 +41,22 @@ void LoopPipelining::runOnOperation() {
     });
 
     // All outer loops that perfect nest the pipelined loop can be flattened.
-    forOp.walk([&](mlir::AffineForOp loop) {
-      unsigned opNum = 0;
-      unsigned forNum = 0;
-      bool innerFlatten = false;
-
-      for (auto &bodyOp : loop.getLoopBody().front()) {
-        if (!isa<AffineYieldOp>(bodyOp))
-          opNum++;
-        if (isa<AffineForOp>(bodyOp)) {
-          forNum++;
-          if (auto flatten = bodyOp.getAttrOfType<BoolAttr>("flatten"))
-            innerFlatten = flatten.getValue();
-        }
-      }
-
-      if (forNum == 0 || (opNum == 1 && innerFlatten))
-        loop.setAttr("flatten", builder.getBoolAttr(true));
-      else
-        loop.setAttr("flatten", builder.getBoolAttr(false));
-    });
+    SmallVector<mlir::AffineForOp, 4> flattenedLoops;
+    flattenedLoops.push_back(targetLoop);
+    while (true) {
+      auto currentLoop = flattenedLoops.back();
+      if (auto outerLoop = currentLoop.getParentOfType<mlir::AffineForOp>()) {
+        // Only if the current loop is the only child loop of the outer loop,
+        // the outer loop can be flattened into the current loop.
+        auto &body = outerLoop.getLoopBody().front();
+        if (&body.front() == currentLoop && body.getOperations().size() == 2) {
+          flattenedLoops.push_back(outerLoop);
+          outerLoop.setAttr("flatten", builder.getBoolAttr("true"));
+        } else
+          break;
+      } else
+        break;
+    }
   }
 
   // Canonicalize the IR after loop unrolling.
