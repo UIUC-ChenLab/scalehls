@@ -87,6 +87,20 @@ public:
   void setAttrValue(Operation *op, StringRef name, StringRef value) {
     op->setAttr(name, builder.getStringAttr(value));
   }
+
+  /// Schedule attribute related methods.
+  void setScheduleValue(Operation *op, unsigned begin, unsigned end) {
+    setAttrValue(op, "schedule_begin", begin);
+    setAttrValue(op, "schedule_end", end);
+  }
+
+  unsigned getLatencyValue(Operation *op) {
+    if (auto latency = getUIntAttrValue(op, "latency"))
+      return latency;
+    else
+      return getUIntAttrValue(op, "schedule_end") -
+             getUIntAttrValue(op, "schedule_begin");
+  }
 };
 
 //===----------------------------------------------------------------------===//
@@ -133,6 +147,7 @@ public:
   using HLSCppVisitorBase::visitOp;
   Optional<unsigned> visitUnhandledOp(Operation *op, unsigned begin) {
     // Default latency of any unhandled operation is 1.
+    setScheduleValue(op, begin, begin + 1);
     return begin + 1;
   }
 
@@ -148,7 +163,8 @@ public:
   Optional<unsigned> visitOp(AffineIfOp op, unsigned begin);
   Optional<unsigned> visitOp(ArrayOp op, unsigned begin);
 
-  Optional<unsigned> estimateBlock(Block &block, unsigned blockBegin);
+  Optional<std::pair<unsigned, unsigned>> estimateBlock(Block &block,
+                                                        unsigned begin);
   void estimateFunc();
 
   FuncOp &func;

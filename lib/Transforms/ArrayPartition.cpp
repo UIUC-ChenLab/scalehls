@@ -114,6 +114,7 @@ void ArrayPartition::runOnOperation() {
 
   // Apply array partition.
   for (auto forOp : func.getOps<mlir::AffineForOp>()) {
+    // TODO: support imperfect loop.
     if (auto outermost = getPipelineLoop(forOp)) {
       // Collect memory access information.
       LoadStoresMap loadMap;

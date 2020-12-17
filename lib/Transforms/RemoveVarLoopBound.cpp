@@ -26,12 +26,13 @@ void RemoveVarLoopBound::runOnOperation() {
   // Walk through all functions and loops.
   for (auto forOp : func.getOps<mlir::AffineForOp>()) {
     SmallVector<mlir::AffineForOp, 4> nestedLoops;
+    // TODO: support imperfect loops.
     getPerfectlyNestedLoops(nestedLoops, forOp);
 
     SmallVector<Value, 4> inductionVars;
     for (auto loop : nestedLoops) {
-      // TODO: support affine expression with more than one operand as
-      // variable loop bound.
+      // TODO: support affine expression with more than one operand as ariable
+      // loop bound.
       // TODO: support remove variable lower bound.
       if (!loop.hasConstantUpperBound() &&
           loop.getUpperBoundMap().getResult(0).getKind() ==

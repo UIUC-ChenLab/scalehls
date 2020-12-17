@@ -25,6 +25,7 @@ void LoopPipelining::runOnOperation() {
 
   // Walk through loops in the function.
   for (auto forOp : func.getOps<mlir::AffineForOp>()) {
+    // TODO: support more fine-grained pipeline insertion configuration.
     SmallVector<mlir::AffineForOp, 4> nestedLoops;
     forOp.walk([&](mlir::AffineForOp loop) { nestedLoops.push_back(loop); });
 
