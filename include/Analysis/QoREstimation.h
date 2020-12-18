@@ -8,7 +8,6 @@
 #include "Dialect/HLSCpp/Visitor.h"
 #include "INIReader.h"
 #include "mlir/Analysis/AffineAnalysis.h"
-#include "mlir/Analysis/Liveness.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/LoopUtils.h"
@@ -88,24 +87,19 @@ public:
     op->setAttr(name, builder.getStringAttr(value));
   }
 
-  /// Schedule attribute related methods.
+  /// Set schedule attribute methods.
   void setScheduleValue(Operation *op, unsigned begin, unsigned end) {
     setAttrValue(op, "schedule_begin", begin);
     setAttrValue(op, "schedule_end", end);
-  }
-
-  unsigned getLatencyValue(Operation *op) {
-    if (auto latency = getUIntAttrValue(op, "latency"))
-      return latency;
-    else
-      return getUIntAttrValue(op, "schedule_end") -
-             getUIntAttrValue(op, "schedule_begin");
   }
 };
 
 //===----------------------------------------------------------------------===//
 // HLSCppEstimator Class Declaration
 //===----------------------------------------------------------------------===//
+
+// Profiled latency map.
+using LatencyMap = llvm::StringMap<unsigned>;
 
 // For storing all memory access operations (including AffineLoadOp and
 // AffineStoreOp) indexed by the array instance (ArrayOp).
@@ -138,8 +132,8 @@ class HLSCppEstimator
     : public HLSCppVisitorBase<HLSCppEstimator, Optional<unsigned>, unsigned>,
       public HLSCppToolBase {
 public:
-  explicit HLSCppEstimator(FuncOp &func)
-      : HLSCppToolBase(OpBuilder(func)), func(func), liveness(Liveness(func)) {
+  explicit HLSCppEstimator(FuncOp &func, LatencyMap &latencyMap)
+      : HLSCppToolBase(OpBuilder(func)), func(func), latencyMap(latencyMap) {
     getFuncMemRefDepends();
   }
 
@@ -156,21 +150,34 @@ public:
   Optional<unsigned> visitOp(AffineLoadOp op, unsigned begin);
   Optional<unsigned> visitOp(AffineStoreOp op, unsigned begin);
 
-  unsigned getResMinII(AffineForOp forOp, LoadStoresMap &map);
+  unsigned getOpMinII(AffineForOp forOp);
+  unsigned getResMinII(LoadStoresMap &map);
   unsigned getDepMinII(AffineForOp forOp, LoadStoresMap &map);
   Optional<unsigned> visitOp(AffineForOp op, unsigned begin);
 
   Optional<unsigned> visitOp(AffineIfOp op, unsigned begin);
   Optional<unsigned> visitOp(ArrayOp op, unsigned begin);
 
-  Optional<std::pair<unsigned, unsigned>> estimateBlock(Block &block,
-                                                        unsigned begin);
+#define HANDLE(OPTYPE, KEYNAME)                                                \
+  Optional<unsigned> visitOp(OPTYPE op, unsigned begin) {                      \
+    auto end = begin + latencyMap[KEYNAME] + 1;                                \
+    setScheduleValue(op, begin, end);                                          \
+    return end;                                                                \
+  }
+  HANDLE(AddFOp, "fadd");
+  HANDLE(MulFOp, "fmul");
+  HANDLE(DivFOp, "fdiv");
+  HANDLE(CmpFOp, "fcmp");
+  HANDLE(SelectOp, "fselect");
+#undef HANDLE
+
+  Optional<unsigned> estimateBlock(Block &block, unsigned begin);
   void estimateFunc();
 
   FuncOp &func;
-  Liveness liveness;
   DependsMap dependsMap;
   PortsMapDict portsMapDict;
+  LatencyMap &latencyMap;
 };
 
 } // namespace scalehls

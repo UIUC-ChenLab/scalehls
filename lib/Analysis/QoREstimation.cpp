@@ -324,9 +324,16 @@ unsigned HLSCppEstimator::getLoadStoreSchedule(Operation *op, unsigned begin) {
       begin++;
   }
 
-  // Memory load/store operation always consumes 1 clock cycle.
-  setScheduleValue(op, begin, begin + 1);
-  return begin + 1;
+  // Memory load consumes 2 clock cyles, while other memory access including
+  // store consumes 1 clock cycle.
+  unsigned end = begin;
+  if (isa<AffineLoadOp>(op))
+    end += 2;
+  else
+    end++;
+
+  setScheduleValue(op, begin, end);
+  return end;
 }
 
 Optional<unsigned> HLSCppEstimator::visitOp(AffineLoadOp op, unsigned begin) {
@@ -341,8 +348,23 @@ Optional<unsigned> HLSCppEstimator::visitOp(AffineStoreOp op, unsigned begin) {
 // AffineForOp Related Methods
 //===----------------------------------------------------------------------===//
 
+unsigned HLSCppEstimator::getOpMinII(AffineForOp forOp) {
+  unsigned II = 1;
+  forOp.walk([&](Operation *op) {
+    unsigned minII = 0;
+    if (auto latency = getUIntAttrValue(op, "latency"))
+      minII = latency;
+    else
+      minII = getUIntAttrValue(op, "schedule_end") -
+              getUIntAttrValue(op, "schedule_begin");
+
+    II = max(II, minII);
+  });
+  return II;
+}
+
 /// Calculate the minimum resource II.
-unsigned HLSCppEstimator::getResMinII(AffineForOp forOp, LoadStoresMap &map) {
+unsigned HLSCppEstimator::getResMinII(LoadStoresMap &map) {
   unsigned II = 1;
 
   for (auto &pair : map) {
@@ -454,17 +476,13 @@ unsigned HLSCppEstimator::getDepMinII(AffineForOp forOp, LoadStoresMap &map) {
               auto dep = *it;
               auto tripCount = getUIntAttrValue(dep.op, "trip_count");
 
-              if (dep.ub)
-                distance += flattenTripCounts.back() * dep.ub.getValue();
-              else if (dep.lb)
+              if (dep.lb)
                 distance += flattenTripCounts.back() * dep.lb.getValue();
-              else
-                distance += flattenTripCounts.back() * tripCount;
 
               flattenTripCounts.push_back(flattenTripCounts.back() * tripCount);
             }
 
-            unsigned delay = getUIntAttrValue(srcOp, "schedule_end") -
+            unsigned delay = getUIntAttrValue(srcOp, "schedule_begin") -
                              getUIntAttrValue(dstOp, "schedule_end");
 
             if (distance > 0) {
@@ -505,10 +523,9 @@ Optional<unsigned> HLSCppEstimator::visitOp(AffineForOp op, unsigned begin) {
       }
 
   // Estimate the loop block.
-  if (auto schedule = estimateBlock(loopBlock, begin)) {
-    begin = max(begin, schedule.getValue().first);
-    end = max(end, schedule.getValue().second);
-  } else
+  if (auto schedule = estimateBlock(loopBlock, begin))
+    end = max(end, schedule.getValue());
+  else
     return Optional<unsigned>();
 
   // If the current loop is annotated as pipeline, extra dependency and
@@ -519,7 +536,7 @@ Optional<unsigned> HLSCppEstimator::visitOp(AffineForOp op, unsigned begin) {
     setAttrValue(op, "iter_latency", iterLatency);
 
     // Calculate initial interval.
-    auto II = max(getResMinII(op, map), getDepMinII(op, map));
+    auto II = max({getOpMinII(op), getResMinII(map), getDepMinII(op, map)});
     setAttrValue(op, "init_interval", II);
 
     auto tripCount = getUIntAttrValue(op, "trip_count");
@@ -579,7 +596,7 @@ Optional<unsigned> HLSCppEstimator::visitOp(AffineIfOp op, unsigned begin) {
 
   // Estimate then block.
   if (auto schedule = estimateBlock(*thenBlock, begin))
-    end = max(end, schedule.getValue().second);
+    end = max(end, schedule.getValue());
   else
     return Optional<unsigned>();
 
@@ -588,7 +605,7 @@ Optional<unsigned> HLSCppEstimator::visitOp(AffineIfOp op, unsigned begin) {
     auto elseBlock = op.getElseBlock();
 
     if (auto schedule = estimateBlock(*elseBlock, begin))
-      end = max(end, schedule.getValue().second);
+      end = max(end, schedule.getValue());
     else
       return Optional<unsigned>();
   }
@@ -620,10 +637,10 @@ Optional<unsigned> HLSCppEstimator::visitOp(ArrayOp op, unsigned begin) {
 // Block Scheduler and Estimator
 //===----------------------------------------------------------------------===//
 
-/// Estimate the latency of a block with ASAP scheduling strategy, return a pair
-/// of schedule begin and schedule end.
-Optional<std::pair<unsigned, unsigned>>
-HLSCppEstimator::estimateBlock(Block &block, unsigned begin) {
+/// Estimate the latency of a block with ASAP scheduling strategy, return the
+/// end level of schedule.
+Optional<unsigned> HLSCppEstimator::estimateBlock(Block &block,
+                                                  unsigned begin) {
   unsigned blockBegin = begin;
   unsigned blockEnd = begin;
 
@@ -642,20 +659,19 @@ HLSCppEstimator::estimateBlock(Block &block, unsigned begin) {
     if (auto scheduleEnd = dispatchVisitor(&op, opBegin))
       opEnd = max(opEnd, scheduleEnd.getValue());
     else
-      return Optional<std::pair<unsigned, unsigned>>();
+      return Optional<unsigned>();
 
     // Update the block schedule begin and end.
     blockBegin = min(blockBegin, opBegin);
     blockEnd = max(blockEnd, opEnd);
   }
-  return std::pair<unsigned, unsigned>(blockBegin, blockEnd);
+  return blockEnd;
 }
 
 void HLSCppEstimator::estimateFunc() {
   // Recursively estimate blocks in the function.
   if (auto schedule = estimateBlock(func.front(), 0))
-    setAttrValue(func, "latency",
-                 schedule.getValue().second - schedule.getValue().first);
+    setAttrValue(func, "latency", schedule.getValue());
   else
     setAttrValue(func, "latency", -1);
 }
@@ -663,6 +679,15 @@ void HLSCppEstimator::estimateFunc() {
 //===----------------------------------------------------------------------===//
 // Entry of scalehls-opt
 //===----------------------------------------------------------------------===//
+
+static void getLatencyMap(INIReader &spec, std::string freq,
+                          LatencyMap &latencyMap) {
+  latencyMap["fadd"] = spec.GetInteger(freq, "fadd", 4);
+  latencyMap["fmul"] = spec.GetInteger(freq, "fmul", 3);
+  latencyMap["fdiv"] = spec.GetInteger(freq, "fdiv", 15);
+  latencyMap["fcmp"] = spec.GetInteger(freq, "fcmp", 1);
+  latencyMap["fselect"] = spec.GetInteger(freq, "fselect", 0);
+}
 
 namespace {
 struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
@@ -673,14 +698,14 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
       llvm::outs() << "error: target spec file parse fail, please refer to "
                       "--help option and pass in correct file path\n";
 
-    // TODO: Support estimator initiation from profiling data, constructing a
-    // unique data structure for holding latency and resource information.
-    auto freq = spec.Get("spec", "frequency", "200MHz");
-    auto latency = spec.GetInteger(freq, "op", 0);
+    // Collect profiling latency data.
+    auto freq = spec.Get("specification", "frequency", "100MHz");
+    LatencyMap latencyMap;
+    getLatencyMap(spec, freq, latencyMap);
 
     // Estimate performance and resource utilization.
     for (auto func : getOperation().getOps<FuncOp>()) {
-      HLSCppEstimator estimator(func);
+      HLSCppEstimator estimator(func, latencyMap);
       estimator.estimateFunc();
     }
   }
