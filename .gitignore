@@ -7,3 +7,5 @@ samples/cpp_src
 samples/test_results
 
 *.log
+*.gv
+*.png
