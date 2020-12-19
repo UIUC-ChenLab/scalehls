@@ -15,7 +15,7 @@ class Pass;
 namespace mlir {
 namespace scalehls {
 
-std::unique_ptr<mlir::Pass> createQoREstimationPass();
+std::unique_ptr<Pass> createQoREstimationPass();
 
 void registerAnalysisPasses();
 

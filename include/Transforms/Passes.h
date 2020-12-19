@@ -16,21 +16,22 @@ namespace mlir {
 namespace scalehls {
 
 /// Pragma optimization passes.
-std::unique_ptr<mlir::Pass> createPragmaDSEPass();
-std::unique_ptr<mlir::Pass> createLoopPipeliningPass();
-std::unique_ptr<mlir::Pass> createArrayPartitionPass();
+std::unique_ptr<Pass> createPragmaDSEPass();
+std::unique_ptr<Pass> createLoopPipeliningPass();
+std::unique_ptr<Pass> createArrayPartitionPass();
 
 /// Loop optimization passes.
-std::unique_ptr<mlir::Pass> createAffineLoopPerfectionPass();
-std::unique_ptr<mlir::Pass> createPartialAffineLoopTilePass();
-std::unique_ptr<mlir::Pass> createRemoveVarLoopBoundPass();
+std::unique_ptr<Pass> createAffineLoopPerfectionPass();
+std::unique_ptr<Pass> createPartialAffineLoopTilePass();
+std::unique_ptr<Pass> createRemoveVarLoopBoundPass();
 
 /// Dataflow optimization passes.
-std::unique_ptr<mlir::Pass> createSplitFunctionPass();
-std::unique_ptr<mlir::Pass> createLegalizeDataflowPass();
+std::unique_ptr<Pass> createSplitFunctionPass();
+std::unique_ptr<Pass> createLegalizeDataflowPass();
 
 /// Bufferization passes.
-std::unique_ptr<mlir::Pass> createHLSKernelBufferizePass();
+std::unique_ptr<Pass> createHLSKernelBufferizePass();
+std::unique_ptr<Pass> createStoreForwardPass();
 
 void registerTransformsPasses();
 

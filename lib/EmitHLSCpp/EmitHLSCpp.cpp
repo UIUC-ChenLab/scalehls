@@ -201,11 +201,6 @@ public:
   void emitAssign(AssignOp *op);
   void emitArray(ArrayOp *op);
 
-  /// Pragma operation emitters.
-  void emitLoopPragma(LoopPragmaOp *op);
-  void emitFuncPragma(FuncPragmaOp *op);
-  void emitArrayPragma(ArrayPragmaOp *op);
-
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
 
@@ -500,11 +495,6 @@ public:
   bool visitOp(AssignOp op) { return emitter.emitAssign(&op), true; }
   bool visitOp(ArrayOp op) { return emitter.emitArray(&op), true; }
   bool visitOp(EndOp op) { return true; }
-
-  /// Pragma operations.
-  bool visitOp(LoopPragmaOp op) { return emitter.emitLoopPragma(&op), true; }
-  bool visitOp(FuncPragmaOp op) { return emitter.emitFuncPragma(&op), true; }
-  bool visitOp(ArrayPragmaOp op) { return emitter.emitArrayPragma(&op), true; }
 
 private:
   ModuleEmitter &emitter;
@@ -1285,80 +1275,6 @@ void ModuleEmitter::emitArray(ArrayOp *op) {
   // Emit an empty line.
   if (emitPragmaFlag)
     os << "\n";
-}
-
-/// Pragma operation emitters. (deprecated)
-void ModuleEmitter::emitLoopPragma(LoopPragmaOp *op) {
-  indent();
-  os << "#pragma HLS pipeline";
-  if (op->pipeline())
-    os << " II=" << op->pipeline_II();
-  else
-    os << " off\n";
-
-  if (op->unroll()) {
-    indent();
-    os << "#pragma HLS unroll\n";
-  }
-
-  // An empty line.
-  os << "\n";
-}
-
-void ModuleEmitter::emitFuncPragma(FuncPragmaOp *op) {
-  if (op->dataflow()) {
-    indent();
-    os << "#pragma HLS dataflow\n";
-
-    // An empty line.
-    os << "\n";
-  }
-}
-
-void ModuleEmitter::emitArrayPragma(ArrayPragmaOp *op) {
-  if (op->interface()) {
-
-    // Emit interface pragma.
-    indent();
-    os << "#pragma HLS interface";
-    os << " " << op->interface_mode();
-    os << " port=";
-    emitValue(op->getOperand());
-    if (op->interface_mode() == "m_axi") {
-      os << " depth=" << op->interface_depth();
-      os << " offset=slave\n";
-    } else
-      os << " storage_type=" << op->storage_type() << "\n";
-  } else {
-
-    // Emit bind_storage pragma.
-    indent();
-    os << "#pragma HLS bind_storage";
-    os << " variable=";
-    emitValue(op->getOperand());
-    os << " type=" << op->storage_type();
-    os << " impl=" << op->storage_impl() << "\n";
-  }
-
-  auto type = op->getOperand().getType().cast<ShapedType>();
-  if (op->partition() && type.hasStaticShape()) {
-
-    // Emit array_partition pragma(s).
-    for (unsigned dim = 0; dim < type.getRank(); ++dim) {
-      indent();
-      os << "#pragma HLS array_partition";
-      os << " variable=";
-      emitValue(op->getOperand());
-      auto partitionType =
-          op->partition_type()[dim].cast<StringAttr>().getValue();
-      os << " " << partitionType;
-      if (partitionType != "complete")
-        os << " factor="
-           << op->partition_factor()[dim].cast<IntegerAttr>().getUInt();
-      os << " dim=" << dim + 1 << "\n";
-    }
-  }
-  os << "\n";
 }
 
 /// C++ component emitters.

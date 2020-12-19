@@ -15,8 +15,8 @@ class Pass;
 namespace mlir {
 namespace scalehls {
 
-std::unique_ptr<mlir::Pass> createConvertToHLSCppPass();
-std::unique_ptr<mlir::Pass> createHLSKernelToAffinePass();
+std::unique_ptr<Pass> createConvertToHLSCppPass();
+std::unique_ptr<Pass> createHLSKernelToAffinePass();
 
 void registerConversionPasses();
 

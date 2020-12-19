@@ -35,7 +35,7 @@ template <typename OpType>
 static void applyArrayPartition(LoadStoresMap &map, OpBuilder &builder) {
   for (auto pair : map) {
     auto arrayOp = cast<ArrayOp>(pair.first);
-    auto arrayType = arrayOp.getType().cast<MemRefType>();
+    auto arrayShape = arrayOp.getShapedType().getShape();
     auto arrayAccesses = pair.second;
 
     // Walk through each dimension of the targeted array.
@@ -43,7 +43,7 @@ static void applyArrayPartition(LoadStoresMap &map, OpBuilder &builder) {
     SmallVector<StringRef, 4> partitionType;
     unsigned partitionNum = 1;
 
-    for (size_t dim = 0, e = arrayType.getShape().size(); dim < e; ++dim) {
+    for (size_t dim = 0, e = arrayShape.size(); dim < e; ++dim) {
       // Collect all array access indices of the current dimension.
       SmallVector<AffineExpr, 4> indices;
       for (auto accessOp : arrayAccesses) {

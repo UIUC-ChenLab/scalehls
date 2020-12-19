@@ -47,6 +47,12 @@ def ArrayOp : HLSCppOp<"array", [SameOperandsAndResultType]> {
   );
 
   let results = (outs Type<IsShapedTypePred> : $output);
+
+  let extraClassDeclaration = [{
+    ShapedType getShapedType() {
+      return getType().cast<ShapedType>();
+    }
+  }];
 }
 
 def EndOp : HLSCppOp<"end", [Terminator]> {
