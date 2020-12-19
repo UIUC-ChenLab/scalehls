@@ -85,9 +85,11 @@ Operation *scalehls::getSameLevelDstOp(Operation *srcOp, Operation *dstOp) {
   return nullptr;
 }
 
-/// Get the definition ArrayOp given any memory access operation.
-hlscpp::ArrayOp scalehls::getArrayOp(Operation *op) {
-  auto defOp = MemRefAccess(op).memref.getDefiningOp();
+/// Get the definition ArrayOp given any memref or memory access operation.
+hlscpp::ArrayOp scalehls::getArrayOp(Value memref) {
+  assert(memref.getType().isa<MemRefType>() && "isn't a MemRef type value");
+
+  auto defOp = memref.getDefiningOp();
   assert(defOp && "MemRef is block argument");
 
   auto arrayOp = dyn_cast<hlscpp::ArrayOp>(defOp);
@@ -96,11 +98,15 @@ hlscpp::ArrayOp scalehls::getArrayOp(Operation *op) {
   return arrayOp;
 }
 
+hlscpp::ArrayOp scalehls::getArrayOp(Operation *op) {
+  return getArrayOp(MemRefAccess(op).memref);
+}
+
 /// Collect all load and store operations in the block.
 void scalehls::getLoadStoresMap(Block &block, LoadStoresMap &map) {
   for (auto &op : block) {
     if (isa<AffineReadOpInterface, AffineWriteOpInterface>(op))
-      map[getArrayOp(&op)].push_back(&op);
+      map[MemRefAccess(&op).memref].push_back(&op);
     else if (op.getNumRegions()) {
       for (auto &region : op.getRegions())
         for (auto &block : region)

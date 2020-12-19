@@ -88,9 +88,9 @@ public:
 //===----------------------------------------------------------------------===//
 
 // For storing all affine memory access operations (including AffineLoadOp and
-// AffineStoreOp) indexed by the array (ArrayOp).
+// AffineStoreOp) indexed by the corresponding memref.
 using LoadStores = SmallVector<Operation *, 16>;
-using LoadStoresMap = DenseMap<Operation *, LoadStores>;
+using LoadStoresMap = DenseMap<Value, LoadStores>;
 
 // Check if the lhsOp and rhsOp is at the same scheduling level. In this check,
 // AffineIfOp is transparent.
@@ -101,7 +101,9 @@ Optional<std::pair<Operation *, Operation *>> checkSameLevel(Operation *lhsOp,
 // level with dstOp's any parent loop.
 Operation *getSameLevelDstOp(Operation *srcOp, Operation *dstOp);
 
-/// Get the definition ArrayOp given any memory access operation.
+/// Get the definition ArrayOp given any memref or memory access operation.
+hlscpp::ArrayOp getArrayOp(Value memref);
+
 hlscpp::ArrayOp getArrayOp(Operation *op);
 
 /// Collect all load and store operations in the block.

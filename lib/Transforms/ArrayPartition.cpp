@@ -34,7 +34,7 @@ static mlir::AffineForOp getPipelineLoop(mlir::AffineForOp root) {
 template <typename OpType>
 static void applyArrayPartition(LoadStoresMap &map, OpBuilder &builder) {
   for (auto pair : map) {
-    auto arrayOp = cast<ArrayOp>(pair.first);
+    auto arrayOp = getArrayOp(pair.first);
     auto arrayShape = arrayOp.getShapedType().getShape();
     auto arrayAccesses = pair.second;
 
@@ -120,14 +120,12 @@ void ArrayPartition::runOnOperation() {
       // Collect memory access information.
       LoadStoresMap loadMap;
       outermost.walk([&](mlir::AffineLoadOp loadOp) {
-        auto arrayOp = loadOp.getMemRef().getDefiningOp();
-        loadMap[arrayOp].push_back(loadOp);
+        loadMap[loadOp.getMemRef()].push_back(loadOp);
       });
 
       LoadStoresMap storeMap;
       outermost.walk([&](mlir::AffineStoreOp storeOp) {
-        auto arrayOp = storeOp.getMemRef().getDefiningOp();
-        storeMap[arrayOp].push_back(storeOp);
+        storeMap[storeOp.getMemRef()].push_back(storeOp);
       });
 
       // Apply array partition pragma.

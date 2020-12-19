@@ -31,7 +31,10 @@ std::unique_ptr<Pass> createLegalizeDataflowPass();
 
 /// Bufferization passes.
 std::unique_ptr<Pass> createHLSKernelBufferizePass();
+
+/// MemRef Optimization Passes.
 std::unique_ptr<Pass> createStoreOpForwardPass();
+std::unique_ptr<Pass> createSimplifyMemRefAccessPass();
 
 void registerTransformsPasses();
 

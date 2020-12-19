@@ -136,6 +136,10 @@ def HLSKernelBufferize : Pass<"hlskernel-bufferize", "FuncOp"> {
   let constructor = "mlir::scalehls::createHLSKernelBufferizePass()";
 }
 
+//===----------------------------------------------------------------------===//
+// MemRef Optimization Passes
+//===----------------------------------------------------------------------===//
+
 def StoreOpForward : Pass<"store-op-forward", "FuncOp"> {
   let summary = "Forward store to load, including conditional stores";
   let description = [{
@@ -144,6 +148,16 @@ def StoreOpForward : Pass<"store-op-forward", "FuncOp"> {
   }];
 
   let constructor = "mlir::scalehls::createStoreOpForwardPass()";
+}
+
+def SimplifyMemRefAccess : Pass<"simplify-memref-access", "FuncOp"> {
+  let summary = "Forward store to load, including conditional stores";
+  let description = [{
+    This simplify-memref-access pass will eliminate the known redundant load and
+    store operations for simplifying the memref access.
+  }];
+
+  let constructor = "mlir::scalehls::createSimplifyMemRefAccessPass()";
 }
 
 #endif // SCALEHLS_TRANSFORMS_PASSES_TD

@@ -329,7 +329,7 @@ unsigned HLSCppEstimator::getResMinII(LoadStoresMap &map) {
   unsigned II = 1;
 
   for (auto &pair : map) {
-    auto arrayOp = pair.first;
+    auto arrayOp = getArrayOp(pair.first);
     // Partition number should at least be 1.
     auto partitionNum =
         max((unsigned)1, getUIntAttrValue(arrayOp, "partition_num"));
