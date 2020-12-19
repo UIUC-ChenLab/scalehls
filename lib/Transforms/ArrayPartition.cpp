@@ -43,6 +43,7 @@ static void applyArrayPartition(LoadStoresMap &map, OpBuilder &builder) {
     // Walk through each dimension of the targeted array.
     SmallVector<Attribute, 4> partitionFactor;
     SmallVector<StringRef, 4> partitionType;
+    unsigned partitionNum = 1;
 
     for (size_t dim = 0, e = arrayType.getShape().size(); dim < e; ++dim) {
       // Collect all array access indices of the current dimension.
@@ -69,8 +70,6 @@ static void applyArrayPartition(LoadStoresMap &map, OpBuilder &builder) {
             unsigned distance = abs(constDistance.getValue());
             maxDistance = max(maxDistance, distance);
           } else {
-            // The array partition mechanism will fail if the distance is
-            // not a constant number.
             // failFlag = true;
             // break;
           }
@@ -81,30 +80,34 @@ static void applyArrayPartition(LoadStoresMap &map, OpBuilder &builder) {
 
       // Determine array partition strategy.
       maxDistance += 1;
+      unsigned factor = 1;
       if (failFlag || maxDistance == 1) {
         // This means all accesses have the same index, and this dimension
         // should not be partitioned.
         partitionType.push_back("none");
-        partitionFactor.push_back(builder.getUI32IntegerAttr(1));
 
       } else if (accessNum >= maxDistance) {
         // This means some elements are accessed more than once or exactly
         // once, and successive elements are accessed. In most cases,
         // apply "cyclic" partition should be the best solution.
         partitionType.push_back("cyclic");
-        partitionFactor.push_back(builder.getUI32IntegerAttr(maxDistance));
+        factor = maxDistance;
 
       } else {
         // This means discrete elements are accessed. Typically, "block"
         // partition will be most benefit for this occasion.
         partitionType.push_back("block");
-        partitionFactor.push_back(builder.getUI32IntegerAttr(accessNum));
+        factor = accessNum;
       }
+
+      partitionFactor.push_back(builder.getUI32IntegerAttr(factor));
+      partitionNum *= factor;
     }
 
     arrayOp.setAttr("partition", builder.getBoolAttr(true));
     arrayOp.setAttr("partition_type", builder.getStrArrayAttr(partitionType));
     arrayOp.setAttr("partition_factor", builder.getArrayAttr(partitionFactor));
+    arrayOp.setAttr("partition_num", builder.getUI32IntegerAttr(partitionNum));
   }
 }
 

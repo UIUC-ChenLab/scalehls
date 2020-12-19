@@ -7,7 +7,9 @@
 #include "Dialect/HLSCpp/HLSCpp.h"
 #include "mlir/Analysis/AffineStructures.h"
 #include "mlir/Analysis/LoopAnalysis.h"
+#include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
+#include "mlir/IR/Block.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
 
@@ -27,24 +29,25 @@ static bool checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
   if (lhsOp->getBlock() == rhsOp->getBlock())
     return true;
 
-  // Get all nested parent AffineIfOps, include lhsOp and rhsOp.
-  auto getNests = ([&](Operation *op, SmallVector<Operation *, 4> &nests) {
-    nests.push_back(op);
-    auto currentOp = op;
-    while (true) {
-      if (auto parentOp = currentOp->getParentOfType<AffineIfOp>()) {
-        nests.push_back(parentOp);
-        currentOp = parentOp;
-      } else
-        break;
-    }
-  });
+  // Helper to get all surrounding AffineIfOps.
+  auto getSurroundIfs =
+      ([&](Operation *op, SmallVector<Operation *, 4> &nests) {
+        nests.push_back(op);
+        auto currentOp = op;
+        while (true) {
+          if (auto parentOp = currentOp->getParentOfType<AffineIfOp>()) {
+            nests.push_back(parentOp);
+            currentOp = parentOp;
+          } else
+            break;
+        }
+      });
 
   SmallVector<Operation *, 4> lhsNests;
   SmallVector<Operation *, 4> rhsNests;
 
-  getNests(lhsOp, lhsNests);
-  getNests(rhsOp, rhsNests);
+  getSurroundIfs(lhsOp, lhsNests);
+  getSurroundIfs(rhsOp, rhsNests);
 
   // If any parent of lhsOp and any parent of rhsOp are at the same level,
   // return true.
@@ -56,42 +59,41 @@ static bool checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
   return false;
 }
 
-/// Get all nested parent AffineForOps. Since AffineIfOps are transparent,
-/// AffineIfOps are skipped during the procedure.
-static void getLoopNests(Operation *op, SmallVector<Operation *, 4> &nests) {
-  auto currentOp = op;
-  while (true) {
-    if (auto parentOp = currentOp->getParentOfType<AffineForOp>()) {
-      nests.push_back(parentOp);
-      currentOp = parentOp;
-    } else if (auto parentOp = currentOp->getParentOfType<AffineIfOp>())
-      currentOp = parentOp;
-    else
-      break;
-  }
-}
-
 // Get the pointer of the scrOp's parent loop, which should locate at the same
 // level with dstOp's any parent loop.
-static Operation *getSameLevelSourceOp(Operation *srcOp, Operation *dstOp) {
+static Operation *getSameLevelDstOp(Operation *srcOp, Operation *dstOp) {
   // If srcOp and dstOp are already at the same level, return the srcOp.
   if (checkSameLevel(srcOp, dstOp))
-    return srcOp;
+    return dstOp;
+
+  // Helper to get all surrouding AffineForOps. AffineIfOps are skipped.
+  auto getSurroundFors =
+      ([&](Operation *op, SmallVector<Operation *, 4> &nests) {
+        nests.push_back(op);
+        auto currentOp = op;
+        while (true) {
+          if (auto parentOp = currentOp->getParentOfType<AffineForOp>()) {
+            nests.push_back(parentOp);
+            currentOp = parentOp;
+          } else if (auto parentOp = currentOp->getParentOfType<AffineIfOp>())
+            currentOp = parentOp;
+          else
+            break;
+        }
+      });
 
   SmallVector<Operation *, 4> srcNests;
   SmallVector<Operation *, 4> dstNests;
-  srcNests.push_back(srcOp);
-  dstNests.push_back(dstOp);
 
-  getLoopNests(srcOp, srcNests);
-  getLoopNests(dstOp, dstNests);
+  getSurroundFors(srcOp, srcNests);
+  getSurroundFors(dstOp, dstNests);
 
   // If any parent of srcOp (or itself) and any parent of dstOp (or itself) are
   // at the same level, return the pointer.
   for (auto src : srcNests)
     for (auto dst : dstNests)
       if (checkSameLevel(src, dst))
-        return src;
+        return dst;
 
   return nullptr;
 }
@@ -124,32 +126,9 @@ static void getLoadStoresMap(Block &block, LoadStoresMap &map) {
 // MemRef Dependency Collection Methods
 //===----------------------------------------------------------------------===//
 
-/// Get the common loop depth shared by lhsOp and rhsOp.
-static unsigned getCommonLoopDepth(Operation *lhsOp, Operation *rhsOp) {
-  // Collect all parent nested loops.
-  SmallVector<Operation *, 4> lhsLoopNests;
-  SmallVector<Operation *, 4> rhsLoopNests;
-
-  getLoopNests(lhsOp, lhsLoopNests);
-  getLoopNests(rhsOp, rhsLoopNests);
-
-  // Calculate common loop depth.
-  auto lhsDepth = lhsLoopNests.size();
-  auto rhsDepth = rhsLoopNests.size();
-  unsigned commonLoopDepth = 0;
-
-  for (unsigned i = 0, e = min(lhsDepth, rhsDepth); i < e; ++i) {
-    if (lhsLoopNests[lhsDepth - 1 - i] == rhsLoopNests[rhsDepth - 1 - i])
-      commonLoopDepth++;
-    else
-      break;
-  }
-
-  return commonLoopDepth;
-}
-
 /// Collect all dependencies detected in the function.
 void HLSCppEstimator::getFuncMemRefDepends() {
+  // TODO: This can be simplified by traversing each ArrayOp in the function.
   LoadStoresMap loadStoresMap;
   getLoadStoresMap(func.front(), loadStoresMap);
 
@@ -158,7 +137,7 @@ void HLSCppEstimator::getFuncMemRefDepends() {
     auto loadStores = pair.second;
 
     // Walk through each pair of source and destination. Note that for intra
-    // dependencies, srcOp is always before dstOp.
+    // iteration dependencies, srcOp is always before dstOp.
     unsigned srcIndex = 1;
     for (auto srcOp : loadStores) {
       MemRefAccess srcAccess(srcOp);
@@ -166,21 +145,21 @@ void HLSCppEstimator::getFuncMemRefDepends() {
         MemRefAccess dstAccess(dstOp);
 
         bool dependFlag = false;
-        auto commonLoopDepth = getCommonLoopDepth(srcOp, dstOp);
+        auto commonLoopDepth = getNumCommonSurroundingLoops(*srcOp, *dstOp);
         for (unsigned depth = 1; depth <= commonLoopDepth + 1; ++depth) {
-          // Initialize constraints and components.
+          // Initialize constraints.
           FlatAffineConstraints dependConstrs;
-          SmallVector<DependenceComponent, 2> dependComps;
 
           // Check dependency.
           DependenceResult result = checkMemrefAccessDependence(
-              srcAccess, dstAccess, depth, &dependConstrs, &dependComps);
+              srcAccess, dstAccess, depth, &dependConstrs,
+              /*dependenceComponents=*/nullptr);
           dependFlag = hasDependence(result);
         }
 
         // All dependencies are pushed into the dependsMap output.
         if (dependFlag)
-          dependsMap[dstOp].push_back(srcOp);
+          dependsMap[srcOp].push_back(dstOp);
       }
       srcIndex++;
     }
@@ -239,9 +218,9 @@ int32_t HLSCppEstimator::getPartitionIndex(Operation *op) {
 /// Schedule load/store operation honoring the memory ports number limitation.
 unsigned HLSCppEstimator::getLoadStoreSchedule(Operation *op, unsigned begin) {
   // Check dependencies of the operation and update schedule level.
-  for (auto srcOp : dependsMap[op]) {
-    auto sameLevelSrcOp = getSameLevelSourceOp(srcOp, op);
-    begin = max(getUIntAttrValue(sameLevelSrcOp, "schedule_end"), begin);
+  for (auto dstOp : dependsMap[op]) {
+    auto sameLevelDstOp = getSameLevelDstOp(op, dstOp);
+    begin = max(getUIntAttrValue(sameLevelDstOp, "schedule_end"), begin);
   }
 
   // Calculate partition index.
@@ -249,7 +228,8 @@ unsigned HLSCppEstimator::getLoadStoreSchedule(Operation *op, unsigned begin) {
   setAttrValue(op, "partition_index", partitionIdx);
 
   auto arrayOp = getArrayOp(op);
-  auto partitionNum = getUIntAttrValue(arrayOp, "partition_num");
+  auto partitionNum =
+      max((unsigned)1, getUIntAttrValue(arrayOp, "partition_num"));
   auto storageType = getStrAttrValue(arrayOp, "storage_type");
 
   // Try to avoid memory port violation until a legal schedule is found. Since
@@ -336,14 +316,6 @@ unsigned HLSCppEstimator::getLoadStoreSchedule(Operation *op, unsigned begin) {
   return end;
 }
 
-Optional<unsigned> HLSCppEstimator::visitOp(AffineLoadOp op, unsigned begin) {
-  return getLoadStoreSchedule(op, begin);
-}
-
-Optional<unsigned> HLSCppEstimator::visitOp(AffineStoreOp op, unsigned begin) {
-  return getLoadStoreSchedule(op, begin);
-}
-
 //===----------------------------------------------------------------------===//
 // AffineForOp Related Methods
 //===----------------------------------------------------------------------===//
@@ -369,7 +341,9 @@ unsigned HLSCppEstimator::getResMinII(LoadStoresMap &map) {
 
   for (auto &pair : map) {
     auto arrayOp = pair.first;
-    unsigned partitionNum = getUIntAttrValue(arrayOp, "partition_num");
+    // Partition number should at least be 1.
+    auto partitionNum =
+        max((unsigned)1, getUIntAttrValue(arrayOp, "partition_num"));
     auto storageType = getStrAttrValue(arrayOp, "storage_type");
 
     SmallVector<unsigned, 16> readNum;
@@ -516,10 +490,10 @@ Optional<unsigned> HLSCppEstimator::visitOp(AffineForOp op, unsigned begin) {
 
   // Check dependencies of all load/store operations and update schedule level.
   for (auto pair : map)
-    for (auto dstOp : pair.second)
-      for (auto srcOp : dependsMap[dstOp]) {
-        auto sameLevelSrcOp = getSameLevelSourceOp(srcOp, dstOp);
-        begin = max(getUIntAttrValue(sameLevelSrcOp, "schedule_end"), begin);
+    for (auto srcOp : pair.second)
+      for (auto dstOp : dependsMap[srcOp]) {
+        auto sameLevelDstOp = getSameLevelDstOp(srcOp, dstOp);
+        begin = max(getUIntAttrValue(sameLevelDstOp, "schedule_end"), begin);
       }
 
   // Estimate the loop block.
@@ -616,19 +590,16 @@ Optional<unsigned> HLSCppEstimator::visitOp(AffineIfOp op, unsigned begin) {
   return end;
 }
 
-Optional<unsigned> HLSCppEstimator::visitOp(ArrayOp op, unsigned begin) {
-  // Annotate the total parition number of the array.
-  unsigned partitionNum = 1;
-  if (op.partition()) {
-    auto rank = op.getType().cast<ShapedType>().getRank();
-    for (unsigned dim = 0; dim < rank; ++dim) {
-      if (auto factor = getPartitionFactor(op, dim))
-        partitionNum *= factor;
-    }
-  }
-  setAttrValue(op, "partition_num", partitionNum);
+Optional<unsigned> HLSCppEstimator::visitOp(ReturnOp op, unsigned begin) {
+  setScheduleValue(op, begin, begin);
+  return begin;
+}
 
-  // ArrayOp is a dummy memory instance which does not consume any clock cycles.
+Optional<unsigned> HLSCppEstimator::visitOp(ArrayOp op, unsigned begin) {
+  for (auto user : op.getResult().getUsers()) {
+    auto sameLevelDstOp = getSameLevelDstOp(op, user);
+    begin = max(getUIntAttrValue(sameLevelDstOp, "schedule_end"), begin);
+  }
   setScheduleValue(op, begin, begin);
   return begin;
 }
@@ -637,32 +608,30 @@ Optional<unsigned> HLSCppEstimator::visitOp(ArrayOp op, unsigned begin) {
 // Block Scheduler and Estimator
 //===----------------------------------------------------------------------===//
 
-/// Estimate the latency of a block with ASAP scheduling strategy, return the
+/// Estimate the latency of a block with ALAP scheduling strategy, return the
 /// end level of schedule.
 Optional<unsigned> HLSCppEstimator::estimateBlock(Block &block,
                                                   unsigned begin) {
-  unsigned blockBegin = begin;
   unsigned blockEnd = begin;
 
-  for (auto &op : block) {
+  // Reversely walk through all operations in the block.
+  for (auto it = block.rbegin(), e = block.rend(); it != e; ++it) {
+    auto op = &*it;
     unsigned opBegin = begin;
     unsigned opEnd = begin;
 
-    // Find the latest arrived predecessor dominating the current operation.
-    // This should be considered as the earliest possible scheduling level that
-    // the current operation can be scheduled.
-    for (auto operand : op.getOperands())
-      if (auto defOp = operand.getDefiningOp())
-        opBegin = max(opBegin, getUIntAttrValue(defOp, "schedule_end"));
+    // Fine the latest arrived successor relying on the current operation.
+    for (auto result : op->getResults())
+      for (auto user : result.getUsers())
+        opBegin = max(opBegin, getUIntAttrValue(user, "schedule_end"));
 
     // Estimate the current operation.
-    if (auto scheduleEnd = dispatchVisitor(&op, opBegin))
+    if (auto scheduleEnd = dispatchVisitor(op, opBegin))
       opEnd = max(opEnd, scheduleEnd.getValue());
     else
       return Optional<unsigned>();
 
-    // Update the block schedule begin and end.
-    blockBegin = min(blockBegin, opBegin);
+    // Update the block schedule end.
     blockEnd = max(blockEnd, opEnd);
   }
   return blockEnd;
@@ -670,9 +639,16 @@ Optional<unsigned> HLSCppEstimator::estimateBlock(Block &block,
 
 void HLSCppEstimator::estimateFunc() {
   // Recursively estimate blocks in the function.
-  if (auto schedule = estimateBlock(func.front(), 0))
-    setAttrValue(func, "latency", schedule.getValue());
-  else
+  if (auto schedule = estimateBlock(func.front(), 0)) {
+    auto latency = schedule.getValue();
+    setAttrValue(func, "latency", latency);
+
+    // func.walk([&](Operation *op) {
+    //  auto begin = getUIntAttrValue(op, "schedule_begin");
+    //  auto end = getUIntAttrValue(op, "schedule_end");
+    //  setScheduleValue(op, latency - end, latency - begin);
+    // });
+  } else
     setAttrValue(func, "latency", -1);
 }
 

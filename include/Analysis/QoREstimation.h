@@ -147,8 +147,12 @@ public:
 
   int32_t getPartitionIndex(Operation *op);
   unsigned getLoadStoreSchedule(Operation *op, unsigned begin);
-  Optional<unsigned> visitOp(AffineLoadOp op, unsigned begin);
-  Optional<unsigned> visitOp(AffineStoreOp op, unsigned begin);
+  Optional<unsigned> visitOp(AffineLoadOp op, unsigned begin) {
+    return getLoadStoreSchedule(op, begin);
+  }
+  Optional<unsigned> visitOp(AffineStoreOp op, unsigned begin) {
+    return getLoadStoreSchedule(op, begin);
+  }
 
   unsigned getOpMinII(AffineForOp forOp);
   unsigned getResMinII(LoadStoresMap &map);
@@ -156,8 +160,10 @@ public:
   Optional<unsigned> visitOp(AffineForOp op, unsigned begin);
 
   Optional<unsigned> visitOp(AffineIfOp op, unsigned begin);
+  Optional<unsigned> visitOp(ReturnOp op, unsigned begin);
   Optional<unsigned> visitOp(ArrayOp op, unsigned begin);
 
+  /// Handle operations with profiled latency.
 #define HANDLE(OPTYPE, KEYNAME)                                                \
   Optional<unsigned> visitOp(OPTYPE op, unsigned begin) {                      \
     auto end = begin + latencyMap[KEYNAME] + 1;                                \
