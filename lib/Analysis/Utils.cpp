@@ -10,10 +10,11 @@ using namespace scalehls;
 
 // Check if the lhsOp and rhsOp is at the same scheduling level. In this check,
 // AffineIfOp is transparent.
-bool scalehls::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
+Optional<std::pair<Operation *, Operation *>>
+scalehls::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
   // If lhsOp and rhsOp are already at the same level, return true.
   if (lhsOp->getBlock() == rhsOp->getBlock())
-    return true;
+    return std::pair<Operation *, Operation *>(lhsOp, rhsOp);
 
   // Helper to get all surrounding AffineIfOps.
   auto getSurroundIfs =
@@ -40,9 +41,9 @@ bool scalehls::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
   for (auto lhs : lhsNests)
     for (auto rhs : rhsNests)
       if (lhs->getBlock() == rhs->getBlock())
-        return true;
+        return std::pair<Operation *, Operation *>(lhs, rhs);
 
-  return false;
+  return Optional<std::pair<Operation *, Operation *>>();
 }
 
 // Get the pointer of the scrOp's parent loop, which should locate at the same

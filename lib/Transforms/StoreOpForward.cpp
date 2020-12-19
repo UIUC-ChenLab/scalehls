@@ -9,6 +9,7 @@
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/Dominance.h"
+#include "mlir/IR/IntegerSet.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include <algorithm>
 
@@ -48,15 +49,13 @@ namespace {
 // currently only eliminates the stores only if no other loads/uses (other
 // than dealloc) remain.
 //
-struct StoreForward : public StoreForwardBase<StoreForward> {
+struct StoreOpForward : public StoreOpForwardBase<StoreOpForward> {
   void runOnOperation() override;
 
   void forwardStoreToLoad(AffineReadOpInterface loadOp);
 
   // A list of memref's that are potentially dead / could be eliminated.
   SmallPtrSet<Value, 4> memrefsToErase;
-  // Load op's whose results were replaced by those forwarded from stores.
-  SmallVector<Operation *, 8> loadOpsToErase;
 
   DominanceInfo *domInfo = nullptr;
   PostDominanceInfo *postDomInfo = nullptr;
@@ -66,13 +65,13 @@ struct StoreForward : public StoreForwardBase<StoreForward> {
 
 /// Creates a pass to perform optimizations relying on memref dataflow such as
 /// store to load forwarding, elimination of dead stores, and dead allocs.
-std::unique_ptr<Pass> scalehls::createStoreForwardPass() {
-  return std::make_unique<StoreForward>();
+std::unique_ptr<Pass> scalehls::createStoreOpForwardPass() {
+  return std::make_unique<StoreOpForward>();
 }
 
 // This is a straightforward implementation not optimized for speed. Optimize
 // if needed.
-void StoreForward::forwardStoreToLoad(AffineReadOpInterface loadOp) {
+void StoreOpForward::forwardStoreToLoad(AffineReadOpInterface loadOp) {
   // First pass over the use list to get the minimum number of surrounding
   // loops common between the load op and the store op, with min taken across
   // all store ops.
@@ -129,12 +128,21 @@ void StoreForward::forwardStoreToLoad(AffineReadOpInterface loadOp) {
       continue;
 
     // 2. The store has to dominate the load op to be candidate.
-    if (!domInfo->dominates(storeOp, loadOp)) {
-      llvm::outs() << *loadOp.getOperation() << "\n";
-      llvm::outs() << *storeOp << "\n";
-      llvm::outs() << "does not dominate\n";
+    // if (!domInfo->dominates(storeOp, loadOp))
+    //  continue;
+
+    // Check whether storeOp and loadOp is ai the same level.
+    auto pair = checkSameLevel(storeOp, loadOp);
+    if (!pair)
       continue;
-    }
+
+    // TODO: support the case when loadOp is also surrounded by ifOp.
+    if (pair.getValue().second != loadOp)
+      continue;
+
+    // Check whether the surrounding ifOp of storeOp dominates loadOp.
+    if (!domInfo->dominates(pair.getValue().first, loadOp))
+      continue;
 
     // We now have a candidate for forwarding.
     fwdingCandidates.push_back(storeOp);
@@ -149,6 +157,9 @@ void StoreForward::forwardStoreToLoad(AffineReadOpInterface loadOp) {
   Operation *lastWriteStoreOp = nullptr;
   for (auto *storeOp : fwdingCandidates) {
     if (llvm::all_of(depSrcStores, [&](Operation *depStore) {
+          if (auto pair = checkSameLevel(storeOp, depStore))
+            return postDomInfo->postDominates(pair.getValue().first,
+                                              pair.getValue().second);
           return postDomInfo->postDominates(storeOp, depStore);
         })) {
       lastWriteStoreOp = storeOp;
@@ -159,16 +170,48 @@ void StoreForward::forwardStoreToLoad(AffineReadOpInterface loadOp) {
     return;
 
   // Perform the actual store to load forwarding.
+  auto storeSameLevelOp =
+      checkSameLevel(lastWriteStoreOp, loadOp).getValue().first;
   Value storeVal =
       cast<AffineWriteOpInterface>(lastWriteStoreOp).getValueToStore();
-  loadOp.getValue().replaceAllUsesWith(storeVal);
+
+  if (storeSameLevelOp == lastWriteStoreOp) {
+    loadOp.getValue().replaceAllUsesWith(storeVal);
+    loadOp.erase();
+  } else {
+    auto ifOp = cast<mlir::AffineIfOp>(storeSameLevelOp);
+    // TODO: support AffineIfOp nests and AffineIfOp with else block.
+    if (ifOp.hasElse() || ifOp.getThenBlock() != lastWriteStoreOp->getBlock())
+      return;
+
+    // Create a new if operation before the loadOp.
+    OpBuilder builder(loadOp);
+    builder.setInsertionPointAfter(loadOp);
+    auto newIfOp = builder.create<mlir::AffineIfOp>(
+        loadOp.getLoc(), loadOp.getValue().getType(), ifOp.getIntegerSet(),
+        ifOp.getOperands(), /*withElseRegion=*/true);
+    loadOp.getValue().replaceAllUsesWith(newIfOp.getResult(0));
+
+    // The lastWriteStoreOp can be forwarded to the then block loadOp.
+    builder.setInsertionPointToEnd(newIfOp.getThenBlock());
+    builder.create<mlir::AffineYieldOp>(newIfOp.getLoc(), storeVal);
+    lastWriteStoreOp->moveBefore(newIfOp.getThenBlock()->getTerminator());
+
+    // Since lastWriteStoreOp is conditionally executed, it cannot be forwarded
+    // to the else block loadOp.
+    builder.setInsertionPointToEnd(newIfOp.getElseBlock());
+    builder.create<mlir::AffineYieldOp>(newIfOp.getLoc(), loadOp.getValue());
+
+    // Eliminate emptry ifOp.
+    if (ifOp.getThenBlock()->getTerminator() == &ifOp.getThenBlock()->front())
+      ifOp.erase();
+  }
+
   // Record the memref for a later sweep to optimize away.
   memrefsToErase.insert(loadOp.getMemRef());
-  // Record this to erase later.
-  loadOpsToErase.push_back(loadOp);
 }
 
-void StoreForward::runOnOperation() {
+void StoreOpForward::runOnOperation() {
   // Only supports single block functions at the moment.
   FuncOp f = getOperation();
   if (!llvm::hasSingleElement(f)) {
@@ -179,15 +222,10 @@ void StoreForward::runOnOperation() {
   domInfo = &getAnalysis<DominanceInfo>();
   postDomInfo = &getAnalysis<PostDominanceInfo>();
 
-  loadOpsToErase.clear();
   memrefsToErase.clear();
 
   // Walk all load's and perform store to load forwarding.
   f.walk([&](AffineReadOpInterface loadOp) { forwardStoreToLoad(loadOp); });
-
-  // Erase all load op's whose results were replaced with store fwd'ed ones.
-  for (auto *loadOp : loadOpsToErase)
-    loadOp->erase();
 
   // Check if the store fwd'ed memrefs are now left with only stores and can
   // thus be completely deleted. Note: the canonicalize pass should be able

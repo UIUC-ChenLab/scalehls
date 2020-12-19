@@ -31,7 +31,7 @@ std::unique_ptr<Pass> createLegalizeDataflowPass();
 
 /// Bufferization passes.
 std::unique_ptr<Pass> createHLSKernelBufferizePass();
-std::unique_ptr<Pass> createStoreForwardPass();
+std::unique_ptr<Pass> createStoreOpForwardPass();
 
 void registerTransformsPasses();
 

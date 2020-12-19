@@ -136,14 +136,14 @@ def HLSKernelBufferize : Pass<"hlskernel-bufferize", "FuncOp"> {
   let constructor = "mlir::scalehls::createHLSKernelBufferizePass()";
 }
 
-def StoreForward : Pass<"store-forward", "FuncOp"> {
+def StoreOpForward : Pass<"store-op-forward", "FuncOp"> {
   let summary = "Forward store to load, including conditional stores";
   let description = [{
-    This store-forward pass is similar to memref-dataflow-opt, but support to
+    This store-op-forward pass is similar to memref-dataflow-opt, but support to
     forward stores in if statements.
   }];
 
-  let constructor = "mlir::scalehls::createStoreForwardPass()";
+  let constructor = "mlir::scalehls::createStoreOpForwardPass()";
 }
 
 #endif // SCALEHLS_TRANSFORMS_PASSES_TD

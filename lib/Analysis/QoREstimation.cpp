@@ -176,6 +176,9 @@ int32_t HLSCppEstimator::getPartitionIndex(Operation *op) {
       auto type = getPartitionType(arrayOp, dim);
       factor = getPartitionFactor(arrayOp, dim);
 
+      // TODO: detect the step size.
+      // %i = 0 to 16 step 4
+      // %i % 4 = 0
       if (type == "cyclic")
         idxExpr = expr % builder.getAffineConstantExpr(factor);
       else if (type == "block") {

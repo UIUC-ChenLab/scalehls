@@ -94,7 +94,8 @@ using LoadStoresMap = DenseMap<Operation *, LoadStores>;
 
 // Check if the lhsOp and rhsOp is at the same scheduling level. In this check,
 // AffineIfOp is transparent.
-bool checkSameLevel(Operation *lhsOp, Operation *rhsOp);
+Optional<std::pair<Operation *, Operation *>> checkSameLevel(Operation *lhsOp,
+                                                             Operation *rhsOp);
 
 // Get the pointer of the scrOp's parent loop, which should locate at the same
 // level with dstOp's any parent loop.
