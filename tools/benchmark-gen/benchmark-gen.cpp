@@ -5,18 +5,10 @@
 #include "Analysis/Passes.h"
 #include "Dialect/HLSKernel/HLSKernel.h"
 #include "INIReader.h"
-#include "Transforms/Passes.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/MLIRContext.h"
-#include "mlir/IR/Types.h"
-#include "mlir/InitAllDialects.h"
-#include "mlir/InitAllPasses.h"
-#include "mlir/Pass/Pass.h"
-#include "mlir/Pass/PassManager.h"
 #include "mlir/Support/FileUtilities.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/InitLLVM.h"
-#include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/ToolOutputFile.h"
 #include <numeric>
 
@@ -384,12 +376,6 @@ static LogicalResult processBenchmarkGen(raw_ostream &os) {
 }
 
 int main(int argc, char **argv) {
-  llvm::InitLLVM y(argc, argv);
-
-  // Register any pass manager command line options.
-  mlir::registerPassManagerCLOptions();
-  mlir::PassPipelineCLParser passPipeline("", "Compiler passes to run");
-
   // Parse pass names in main to ensure static initialization completed.
   llvm::cl::ParseCommandLineOptions(argc, argv,
                                     "MLIR modular optimizer driver\n");

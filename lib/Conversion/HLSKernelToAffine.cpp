@@ -8,8 +8,6 @@
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/IntegerSet.h"
-#include "mlir/Pass/Pass.h"
-#include "llvm/ADT/TypeSwitch.h"
 
 using namespace mlir;
 using namespace scalehls;

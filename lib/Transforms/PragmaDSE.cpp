@@ -2,7 +2,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Analysis/QoREstimation.h"
+#include "Analysis/Utils.h"
 #include "Dialect/HLSCpp/HLSCpp.h"
 #include "Transforms/Passes.h"
 

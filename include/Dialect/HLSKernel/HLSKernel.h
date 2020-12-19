@@ -8,7 +8,6 @@
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/Dialect.h"
-#include "mlir/IR/Function.h"
 
 namespace mlir {
 namespace scalehls {

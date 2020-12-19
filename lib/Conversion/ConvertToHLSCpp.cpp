@@ -5,7 +5,6 @@
 #include "Conversion/Passes.h"
 #include "Dialect/HLSCpp/HLSCpp.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
-#include "mlir/Pass/Pass.h"
 
 using namespace mlir;
 using namespace scalehls;

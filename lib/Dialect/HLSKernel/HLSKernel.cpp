@@ -3,7 +3,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "Dialect/HLSKernel/HLSKernel.h"
-#include "mlir/IR/StandardTypes.h"
 
 using namespace mlir;
 using namespace scalehls;

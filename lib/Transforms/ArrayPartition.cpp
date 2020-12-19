@@ -2,16 +2,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Analysis/QoREstimation.h"
+#include "Analysis/Utils.h"
 #include "Transforms/Passes.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/Dialect/Affine/Passes.h"
-#include "mlir/IR/Builders.h"
-#include "mlir/Transforms/LoopUtils.h"
 
 using namespace std;
 using namespace mlir;
 using namespace scalehls;
+using namespace hlscpp;
 
 namespace {
 struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
@@ -122,13 +120,13 @@ void ArrayPartition::runOnOperation() {
       // Collect memory access information.
       LoadStoresMap loadMap;
       outermost.walk([&](mlir::AffineLoadOp loadOp) {
-        auto arrayOp = cast<ArrayOp>(loadOp.getMemRef().getDefiningOp());
+        auto arrayOp = loadOp.getMemRef().getDefiningOp();
         loadMap[arrayOp].push_back(loadOp);
       });
 
       LoadStoresMap storeMap;
       outermost.walk([&](mlir::AffineStoreOp storeOp) {
-        auto arrayOp = cast<ArrayOp>(storeOp.getMemRef().getDefiningOp());
+        auto arrayOp = storeOp.getMemRef().getDefiningOp();
         storeMap[arrayOp].push_back(storeOp);
       });
 

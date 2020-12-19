@@ -2,27 +2,22 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_ANALYSIS_QORESTIMATION_H
-#define SCALEHLS_ANALYSIS_QORESTIMATION_H
+#ifndef SCALEHLS_ANALYSIS_UTILS_H
+#define SCALEHLS_ANALYSIS_UTILS_H
 
-#include "Dialect/HLSCpp/Visitor.h"
-#include "INIReader.h"
-#include "mlir/Analysis/AffineAnalysis.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/Pass/Pass.h"
-#include "mlir/Transforms/LoopUtils.h"
-#include "llvm/ADT/TypeSwitch.h"
+#include "Dialect/HLSCpp/HLSCpp.h"
+#include "mlir/IR/Operation.h"
 
 namespace mlir {
 namespace scalehls {
 
 //===----------------------------------------------------------------------===//
-// HLSCppToolBase Class Declaration and Definition
+// HLSCppAnalysisBase Class
 //===----------------------------------------------------------------------===//
 
-class HLSCppToolBase {
+class HLSCppAnalysisBase {
 public:
-  explicit HLSCppToolBase(OpBuilder builder) : builder(builder) {}
+  explicit HLSCppAnalysisBase(OpBuilder builder) : builder(builder) {}
 
   OpBuilder builder;
 
@@ -56,14 +51,14 @@ public:
   }
 
   /// Get partition information methods.
-  StringRef getPartitionType(ArrayOp op, unsigned dim) {
+  StringRef getPartitionType(hlscpp::ArrayOp op, unsigned dim) {
     if (auto attr = op.partition_type()[dim].cast<StringAttr>())
       return attr.getValue();
     else
       return "";
   }
 
-  unsigned getPartitionFactor(ArrayOp op, unsigned dim) {
+  unsigned getPartitionFactor(hlscpp::ArrayOp op, unsigned dim) {
     if (auto attr = op.partition_factor()[dim].cast<IntegerAttr>())
       return attr.getUInt();
     else
@@ -95,7 +90,7 @@ public:
 };
 
 //===----------------------------------------------------------------------===//
-// HLSCppEstimator Class Declaration
+// Common Used Type Declarations
 //===----------------------------------------------------------------------===//
 
 // Profiled latency map.
@@ -128,65 +123,7 @@ using PortsMap = DenseMap<Operation *, Ports>;
 // For storing PortsMap indexed by the scheduling level.
 using PortsMapDict = DenseMap<unsigned, PortsMap>;
 
-class HLSCppEstimator
-    : public HLSCppVisitorBase<HLSCppEstimator, Optional<unsigned>, unsigned>,
-      public HLSCppToolBase {
-public:
-  explicit HLSCppEstimator(FuncOp &func, LatencyMap &latencyMap)
-      : HLSCppToolBase(OpBuilder(func)), func(func), latencyMap(latencyMap) {
-    getFuncMemRefDepends();
-  }
-
-  void getFuncMemRefDepends();
-  using HLSCppVisitorBase::visitOp;
-  Optional<unsigned> visitUnhandledOp(Operation *op, unsigned begin) {
-    // Default latency of any unhandled operation is 1.
-    setScheduleValue(op, begin, begin + 1);
-    return begin + 1;
-  }
-
-  int32_t getPartitionIndex(Operation *op);
-  unsigned getLoadStoreSchedule(Operation *op, unsigned begin);
-  Optional<unsigned> visitOp(AffineLoadOp op, unsigned begin) {
-    return getLoadStoreSchedule(op, begin);
-  }
-  Optional<unsigned> visitOp(AffineStoreOp op, unsigned begin) {
-    return getLoadStoreSchedule(op, begin);
-  }
-
-  unsigned getOpMinII(AffineForOp forOp);
-  unsigned getResMinII(LoadStoresMap &map);
-  unsigned getDepMinII(AffineForOp forOp, LoadStoresMap &map);
-  Optional<unsigned> visitOp(AffineForOp op, unsigned begin);
-
-  Optional<unsigned> visitOp(AffineIfOp op, unsigned begin);
-  Optional<unsigned> visitOp(ReturnOp op, unsigned begin);
-  Optional<unsigned> visitOp(ArrayOp op, unsigned begin);
-
-  /// Handle operations with profiled latency.
-#define HANDLE(OPTYPE, KEYNAME)                                                \
-  Optional<unsigned> visitOp(OPTYPE op, unsigned begin) {                      \
-    auto end = begin + latencyMap[KEYNAME] + 1;                                \
-    setScheduleValue(op, begin, end);                                          \
-    return end;                                                                \
-  }
-  HANDLE(AddFOp, "fadd");
-  HANDLE(MulFOp, "fmul");
-  HANDLE(DivFOp, "fdiv");
-  HANDLE(CmpFOp, "fcmp");
-  HANDLE(SelectOp, "fselect");
-#undef HANDLE
-
-  Optional<unsigned> estimateBlock(Block &block, unsigned begin);
-  void estimateFunc();
-
-  FuncOp &func;
-  DependsMap dependsMap;
-  PortsMapDict portsMapDict;
-  LatencyMap &latencyMap;
-};
-
 } // namespace scalehls
 } // namespace mlir
 
-#endif // SCALEHLS_ANALYSIS_QORESTIMATION_H
+#endif // SCALEHLS_ANALYSIS_UTILS_H

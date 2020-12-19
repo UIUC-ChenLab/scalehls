@@ -4,8 +4,6 @@
 
 #include "Transforms/Passes.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/Dialect/Affine/Passes.h"
-#include "mlir/IR/Builders.h"
 #include "mlir/Transforms/LoopUtils.h"
 
 using namespace std;

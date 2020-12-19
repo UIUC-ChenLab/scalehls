@@ -7,6 +7,7 @@
 
 #include "Dialect/HLSKernel/HLSKernel.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "llvm/ADT/TypeSwitch.h"
 
 namespace mlir {
 namespace scalehls {

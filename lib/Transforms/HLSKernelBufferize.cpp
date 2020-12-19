@@ -4,7 +4,6 @@
 
 #include "Dialect/HLSKernel/HLSKernel.h"
 #include "Transforms/Passes.h"
-#include "mlir/IR/Builders.h"
 
 using namespace std;
 using namespace mlir;

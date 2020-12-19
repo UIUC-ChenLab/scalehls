@@ -2,16 +2,16 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Analysis/QoREstimation.h"
 #include "Analysis/Passes.h"
-#include "Dialect/HLSCpp/HLSCpp.h"
+#include "Analysis/Utils.h"
+#include "Dialect/HLSCpp/Visitor.h"
+#include "INIReader.h"
+#include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Analysis/AffineStructures.h"
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Analysis/Utils.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
-#include "mlir/IR/Block.h"
-#include "mlir/IR/Operation.h"
-#include "mlir/IR/PatternMatch.h"
 
 using namespace std;
 using namespace mlir;
@@ -19,7 +19,72 @@ using namespace scalehls;
 using namespace hlscpp;
 
 //===----------------------------------------------------------------------===//
-// Helpers
+// HLSCppEstimator Class Delaration
+//===----------------------------------------------------------------------===//
+
+namespace {
+class HLSCppEstimator
+    : public HLSCppVisitorBase<HLSCppEstimator, Optional<unsigned>, unsigned>,
+      public HLSCppAnalysisBase {
+public:
+  explicit HLSCppEstimator(FuncOp &func, LatencyMap &latencyMap)
+      : HLSCppAnalysisBase(OpBuilder(func)), func(func),
+        latencyMap(latencyMap) {
+    getFuncMemRefDepends();
+  }
+
+  void getFuncMemRefDepends();
+  using HLSCppVisitorBase::visitOp;
+  Optional<unsigned> visitUnhandledOp(Operation *op, unsigned begin) {
+    // Default latency of any unhandled operation is 1.
+    setScheduleValue(op, begin, begin + 1);
+    return begin + 1;
+  }
+
+  int32_t getPartitionIndex(Operation *op);
+  unsigned getLoadStoreSchedule(Operation *op, unsigned begin);
+  Optional<unsigned> visitOp(AffineLoadOp op, unsigned begin) {
+    return getLoadStoreSchedule(op, begin);
+  }
+  Optional<unsigned> visitOp(AffineStoreOp op, unsigned begin) {
+    return getLoadStoreSchedule(op, begin);
+  }
+
+  unsigned getOpMinII(AffineForOp forOp);
+  unsigned getResMinII(LoadStoresMap &map);
+  unsigned getDepMinII(AffineForOp forOp, LoadStoresMap &map);
+  Optional<unsigned> visitOp(AffineForOp op, unsigned begin);
+
+  Optional<unsigned> visitOp(AffineIfOp op, unsigned begin);
+  Optional<unsigned> visitOp(ReturnOp op, unsigned begin);
+  Optional<unsigned> visitOp(ArrayOp op, unsigned begin);
+
+  /// Handle operations with profiled latency.
+#define HANDLE(OPTYPE, KEYNAME)                                                \
+  Optional<unsigned> visitOp(OPTYPE op, unsigned begin) {                      \
+    auto end = begin + latencyMap[KEYNAME] + 1;                                \
+    setScheduleValue(op, begin, end);                                          \
+    return end;                                                                \
+  }
+  HANDLE(AddFOp, "fadd");
+  HANDLE(MulFOp, "fmul");
+  HANDLE(DivFOp, "fdiv");
+  HANDLE(CmpFOp, "fcmp");
+  HANDLE(SelectOp, "fselect");
+#undef HANDLE
+
+  Optional<unsigned> estimateBlock(Block &block, unsigned begin);
+  void estimateFunc();
+
+  FuncOp &func;
+  DependsMap dependsMap;
+  PortsMapDict portsMapDict;
+  LatencyMap &latencyMap;
+};
+} // namespace
+
+//===----------------------------------------------------------------------===//
+// Helper methods
 //===----------------------------------------------------------------------===//
 
 // Check if the lhsOp and rhsOp is at the same scheduling level. In this check,
@@ -123,7 +188,7 @@ static void getLoadStoresMap(Block &block, LoadStoresMap &map) {
 }
 
 //===----------------------------------------------------------------------===//
-// MemRef Dependency Collection Methods
+// HLSCppEstimator Class Definition
 //===----------------------------------------------------------------------===//
 
 /// Collect all dependencies detected in the function.
