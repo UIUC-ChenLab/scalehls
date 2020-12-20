@@ -11,19 +11,6 @@ include "mlir/Pass/PassBase.td"
 // Pragma Optimization Passes
 //===----------------------------------------------------------------------===//
 
-def PragmaDSE : Pass<"pragma-dse", "ModuleOp"> {
-  let summary = "Optimize pragma configuration of each optimizable region";
-  let description = [{
-    This pragma-dse pass will automatically tune HLS pragma insertion and
-    configuration for performance and area optimization. By calling methods
-    provided by hlscpp-qor-estimation, this pass is able to rapidly obtain the
-    QoR estimation of the current design point, and feed it back to the design
-    space exploration engine for an efficient convergence.
-  }];
-
-  let constructor = "mlir::scalehls::createPragmaDSEPass()";
-}
-
 def ArrayPartition : Pass<"array-partition", "FuncOp"> {
   let summary = "Apply optimized array partition optimization";
   let description = [{
@@ -48,6 +35,19 @@ def LoopPipelining : Pass<"loop-pipelining", "FuncOp"> {
     Option<"pipelineLevel", "pipeline-level", "unsigned", /*default=*/"1", 
            "Positive number: loop level to be pipelined (from innermost)">
   ];
+}
+
+def PragmaDSE : Pass<"pragma-dse", "ModuleOp"> {
+  let summary = "Optimize pragma configuration of each optimizable region";
+  let description = [{
+    This pragma-dse pass will automatically tune HLS pragma insertion and
+    configuration for performance and area optimization. By calling methods
+    provided by hlscpp-qor-estimation, this pass is able to rapidly obtain the
+    QoR estimation of the current design point, and feed it back to the design
+    space exploration engine for an efficient convergence.
+  }];
+
+  let constructor = "mlir::scalehls::createPragmaDSEPass()";
 }
 
 //===----------------------------------------------------------------------===//
@@ -151,7 +151,7 @@ def StoreOpForward : Pass<"store-op-forward", "FuncOp"> {
 }
 
 def SimplifyMemRefAccess : Pass<"simplify-memref-access", "FuncOp"> {
-  let summary = "Forward store to load, including conditional stores";
+  let summary = "Remove redundant load and store operations";
   let description = [{
     This simplify-memref-access pass will eliminate the known redundant load and
     store operations for simplifying the memref access.

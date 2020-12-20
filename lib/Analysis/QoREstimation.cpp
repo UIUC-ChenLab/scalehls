@@ -86,6 +86,7 @@ public:
 
   Optional<unsigned> visitOp(AffineIfOp op, unsigned begin);
   Optional<unsigned> visitOp(ReturnOp op, unsigned begin);
+  Optional<unsigned> visitOp(AffineYieldOp op, unsigned begin);
   Optional<unsigned> visitOp(ArrayOp op, unsigned begin);
 
   /// Handle operations with profiled latency.
@@ -445,8 +446,8 @@ unsigned HLSCppEstimator::getDepMinII(AffineForOp forOp, LoadStoresMap &map) {
               flattenTripCounts.push_back(flattenTripCounts.back() * tripCount);
             }
 
-            unsigned delay = getUIntAttrValue(srcOp, "schedule_begin") -
-                             getUIntAttrValue(dstOp, "schedule_end");
+            unsigned delay = getUIntAttrValue(dstOp, "schedule_end") -
+                             getUIntAttrValue(srcOp, "schedule_begin");
 
             if (distance > 0) {
               unsigned minII = ceil((float)delay / distance);
@@ -584,6 +585,11 @@ Optional<unsigned> HLSCppEstimator::visitOp(ReturnOp op, unsigned begin) {
   return begin;
 }
 
+Optional<unsigned> HLSCppEstimator::visitOp(AffineYieldOp op, unsigned begin) {
+  setScheduleValue(op, begin, begin);
+  return begin;
+}
+
 Optional<unsigned> HLSCppEstimator::visitOp(ArrayOp op, unsigned begin) {
   for (auto user : op.getResult().getUsers()) {
     auto sameLevelDstOp = getSameLevelDstOp(op, user);
@@ -660,8 +666,9 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     // Read configuration file.
     INIReader spec(targetSpec);
     if (spec.ParseError())
-      llvm::outs() << "error: target spec file parse fail, please refer to "
-                      "--help option and pass in correct file path\n";
+      emitError(getOperation().getLoc(),
+                "error: target spec file parse fail, please refer to "
+                "--help option and pass in correct file path\n");
 
     // Collect profiling latency data.
     auto freq = spec.Get("specification", "frequency", "100MHz");
