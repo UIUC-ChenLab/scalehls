@@ -163,13 +163,40 @@ int32_t HLSCppEstimator::getPartitionIndex(Operation *op) {
   AffineValueMap accessMap;
   MemRefAccess(op).getAccessMap(&accessMap);
 
+  // Replace all dims in the memory access AffineMap with (step * dims). This
+  // will ensure the "cyclic" array partition can be correctly detected.
+  SmallVector<AffineExpr, 4> dimReplacements;
+  SmallVector<AffineExpr, 4> symReplacements;
+  unsigned operandIdx = 0;
+  for (auto operand : accessMap.getOperands()) {
+    if (operandIdx < accessMap.getNumDims()) {
+      int64_t step = 1;
+      if (isForInductionVar(operand))
+        step = getForInductionVarOwner(operand).getStep();
+
+      if (step == 1)
+        dimReplacements.push_back(builder.getAffineDimExpr(operandIdx));
+      else
+        dimReplacements.push_back(builder.getAffineConstantExpr(step) *
+                                  builder.getAffineDimExpr(operandIdx));
+    } else {
+      symReplacements.push_back(
+          builder.getAffineSymbolExpr(operandIdx - accessMap.getNumDims()));
+    }
+    operandIdx++;
+  }
+
+  auto newMap = accessMap.getAffineMap().replaceDimsAndSymbols(
+      dimReplacements, symReplacements, accessMap.getNumDims(),
+      accessMap.getNumSymbols());
+
   // Calculate the partition index of this load/store operation honoring the
   // partition strategy applied.
   int32_t partitionIdx = 0;
   unsigned accumFactor = 1;
   unsigned dim = 0;
 
-  for (auto expr : accessMap.getAffineMap().getResults()) {
+  for (auto expr : newMap.getResults()) {
     auto idxExpr = builder.getAffineConstantExpr(0);
     unsigned factor = 1;
 
