@@ -79,7 +79,7 @@ public:
     return getLoadStoreSchedule(op, begin);
   }
 
-  unsigned getOpMinII(AffineForOp forOp);
+  // unsigned getOpMinII(AffineForOp forOp);
   unsigned getResMinII(LoadStoresMap &map);
   unsigned getDepMinII(AffineForOp forOp, LoadStoresMap &map);
   Optional<unsigned> visitOp(AffineForOp op, unsigned begin);
@@ -337,20 +337,20 @@ unsigned HLSCppEstimator::getLoadStoreSchedule(Operation *op, unsigned begin) {
 // AffineForOp Related Methods
 //===----------------------------------------------------------------------===//
 
-unsigned HLSCppEstimator::getOpMinII(AffineForOp forOp) {
-  unsigned II = 1;
-  forOp.walk([&](Operation *op) {
-    unsigned minII = 0;
-    if (auto latency = getUIntAttrValue(op, "latency"))
-      minII = latency;
-    else
-      minII = getUIntAttrValue(op, "schedule_end") -
-              getUIntAttrValue(op, "schedule_begin");
+// unsigned HLSCppEstimator::getOpMinII(AffineForOp forOp) {
+//   unsigned II = 1;
+//   forOp.walk([&](Operation *op) {
+//     unsigned minII = 0;
+//     if (auto latency = getUIntAttrValue(op, "latency"))
+//       minII = latency;
+//     else
+//       minII = getUIntAttrValue(op, "schedule_end") -
+//               getUIntAttrValue(op, "schedule_begin");
 
-    II = max(II, minII);
-  });
-  return II;
-}
+//     II = max(II, minII);
+//   });
+//   return II;
+// }
 
 /// Calculate the minimum resource II.
 unsigned HLSCppEstimator::getResMinII(LoadStoresMap &map) {
@@ -527,7 +527,8 @@ Optional<unsigned> HLSCppEstimator::visitOp(AffineForOp op, unsigned begin) {
     setAttrValue(op, "iter_latency", iterLatency);
 
     // Calculate initial interval.
-    auto II = max({getOpMinII(op), getResMinII(map), getDepMinII(op, map)});
+    auto II = max(getResMinII(map), getDepMinII(op, map));
+    // auto II = max({getOpMinII(op), getResMinII(map), getDepMinII(op, map)});
     setAttrValue(op, "init_interval", II);
 
     auto tripCount = getUIntAttrValue(op, "trip_count");

@@ -35,20 +35,29 @@ After the installation and test successfully completed, you should be able to pl
 ```sh
 $ export PATH=$SCALEHLS_DIR/build/bin:$PATH
 $ cd $SCALEHLS_DIR
-$
-$ benchmark-gen -type "cnn" -config "$SCALEHLS_DIR/config/cnn-config.ini" -number 1
-$ scalehls-opt -hlskernel-to-affine test/Conversion/HLSKernelToAffine/test_*.mlir
-$
-$ scalehls-opt -convert-to-hlscpp test/Conversion/ConvertToHLSCpp/test_*.mlir
-$ scalehls-opt -convert-to-hlscpp test/EmitHLSCpp/test_*.mlir | scalehls-translate -emit-hlscpp
-$
-$ scalehls-opt -qor-estimation test/Analysis/QoREstimation/test_for.mlir
-```
 
-### 4. Ablation study
+$ # Benchmark generation, dataflow-level optimization, and bufferization.
+$ benchmark-gen -type "cnn" -config "config/cnn-config.ini" -number 1 \
+    | scalehls-opt -legalize-dataflow -split-function \
+    -hlskernel-bufferize -hlskernel-to-affine -func-bufferize -canonicalize
+$
+$ # HLSKernel lowering, loop-level and pragma-level optimizations, and performance estimation.
+$ scalehls-opt test/Conversion/HLSKernelToAffine/test_gemm.mlir -hlskernel-to-affine \
+    -affine-loop-perfection -remove-var-loop-bound -partial-affine-loop-tile="tile-level=1 tile-size=4" \
+    -convert-to-hlscpp="top-function=test_gemm" -loop-pipelining="pipeline-level=1" \
+    -store-op-forward -simplify-memref-access -array-partition -canonicalize \
+    -qor-estimation="target-spec=config/target-spec.ini"
+
+$ # HLS C++ code generation.
+$ scalehls-opt test/Conversion/HLSKernelToAffine/test_gemm.mlir -hlskernel-to-affine \
+    | scalehls-translate -emit-hlscpp
+```
+You can go through `benchmark-gen`, `scalehls-opt`, and `scalehls-translate` to try the whole flow. We also provide some computation kernel level test cases located at `test/Conversion/HLSKernelToAffine/` for experimenting the ScaleHLS passes and tools.
+
+## Ablation study
 If Vivado HLS (2019.1 tested) is installed on your machine, running the following script will report the HLS results for some benchmarks (around 8 hours on AMD Ryzen7 3800X for all 33 tests).
 
-For the `ablation_test_run.sh` script, `-n` determines the number of tests to be processed, the maximum supported value of which is 33; `-c` determines from which test to begin to rerun the C++ synthesis and report collection. The generated C++ source code will be written to `sample/cpp_src`; the Vivado HLS project will be established in `sample/hls_proj`; the collected report will be written to `sample/test_results`; the test summary will be generated to `sample`.
+For the `ablation_test_run.sh` script, `-n` determines the number of tests to be processed, the maximum supported value of which is 33; `-c` determines from which test to begin to rerun the C++ synthesis. The generated C++ source code will be written to `sample/cpp_src`; the Vivado HLS project will be established in `sample/hls_proj`; the collected report will be written to `sample/test_results`; the test summary will be generated to `sample`.
 ```sh
 $ cd $SCALEHLS_DIR/sample
 $ ./ablation_test_run.sh -n 33 -c 0
