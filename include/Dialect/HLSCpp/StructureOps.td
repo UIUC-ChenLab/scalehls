@@ -33,15 +33,15 @@ def ArrayOp : HLSCppOp<"array", [SameOperandsAndResultType]> {
     // Interface-related attributes.
     DefaultValuedAttr<BoolAttr, "false"> : $interface,
     DefaultValuedAttr<InterfaceModeAttr, "bram"> : $interface_mode,
-    DefaultValuedAttr<PositiveUI32Attr, "1024"> : $interface_depth,
+    DefaultValuedAttr<PositiveUI32Attr, "1"> : $interface_depth,
 
     // BindStorage-related attributes.
     DefaultValuedAttr<BoolAttr, "false"> : $storage,
-    DefaultValuedAttr<StorageTypeAttr, "ram_2p"> : $storage_type,
-    DefaultValuedAttr<StorageImplAttr, "bram"> : $storage_impl,
+    DefaultValuedAttr<StorageTypeAttr, "ram_1p_bram"> : $storage_type,
 
     // ArrayPartition-related attributes.
     DefaultValuedAttr<BoolAttr, "false"> : $partition,
+    DefaultValuedAttr<PositiveUI32Attr, "1"> : $partition_num,
     DefaultValuedAttr<PartitionTypeArrayAttr, "{}"> : $partition_type,
     DefaultValuedAttr<PositiveUI32ArrayAttr, "{}"> : $partition_factor
   );

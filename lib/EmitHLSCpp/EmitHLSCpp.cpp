@@ -210,6 +210,7 @@ private:
   void emitArrayDecl(Value array);
   unsigned emitNestedLoopHead(Value val);
   void emitNestedLoopTail(unsigned rank);
+  void emitInfoAndNewLine(Operation *op);
 
   /// MLIR component emitters.
   void emitOperation(Operation *op);
@@ -527,16 +528,16 @@ void ModuleEmitter::emitScfFor(scf::ForOp *op) {
   emitValue(iterVar);
   os << " += ";
   emitValue(op->step());
-  os << ") {\n";
+  os << ") {";
+  emitInfoAndNewLine(*op);
 
   addIndent();
 
   if (auto pipeline = op->getAttrOfType<BoolAttr>("pipeline")) {
-    indent();
-    if (pipeline.getValue())
+    if (pipeline.getValue()) {
+      indent();
       os << "#pragma HLS pipeline\n";
-    else
-      os << "#pragma HLS pipeline off\n";
+    }
   }
 
   // if (auto flatten = op->getAttrOfType<BoolAttr>("flatten")) {
@@ -578,7 +579,9 @@ void ModuleEmitter::emitScfIf(scf::IfOp *op) {
   indent();
   os << "if (";
   emitValue(op->condition());
-  os << ") {\n";
+  os << ") {";
+  emitInfoAndNewLine(*op);
+
   addIndent();
   emitBlock(op->thenRegion().front());
   reduceIndent();
@@ -609,7 +612,8 @@ void ModuleEmitter::emitScfYield(scf::YieldOp *op) {
       emitValue(result, rank);
       os << " = ";
       emitValue(op->getOperand(resultIdx++), rank);
-      os << ";\n";
+      os << ";";
+      emitInfoAndNewLine(*op);
       emitNestedLoopTail(rank);
     }
   }
@@ -663,16 +667,16 @@ void ModuleEmitter::emitAffineFor(AffineForOp *op) {
 
   // Emit increase step.
   emitValue(iterVar);
-  os << " += " << op->getStep() << ") {\n";
+  os << " += " << op->getStep() << ") {";
+  emitInfoAndNewLine(*op);
 
   addIndent();
 
   if (auto pipeline = op->getAttrOfType<BoolAttr>("pipeline")) {
-    indent();
-    if (pipeline.getValue())
+    if (pipeline.getValue()) {
+      indent();
       os << "#pragma HLS pipeline\n";
-    else
-      os << "#pragma HLS pipeline off\n";
+    }
   }
 
   // if (auto flatten = op->getAttrOfType<BoolAttr>("flatten")) {
@@ -729,7 +733,9 @@ void ModuleEmitter::emitAffineIf(AffineIfOp *op) {
     if (constrIdx++ != constrSet.getNumConstraints() - 1)
       os << " && ";
   }
-  os << ") {\n";
+  os << ") {";
+  emitInfoAndNewLine(*op);
+
   addIndent();
   emitBlock(*op->getThenBlock());
   reduceIndent();
@@ -799,8 +805,12 @@ void ModuleEmitter::emitAffineParallel(AffineParallelOp *op) {
     reduceIndent();
 
     indent();
-    os << "}\n";
+    if (i == e - 1)
+      os << "}";
+    else
+      os << "}\n";
   }
+  emitInfoAndNewLine(*op);
 }
 
 void ModuleEmitter::emitAffineApply(AffineApplyOp *op) {
@@ -810,7 +820,8 @@ void ModuleEmitter::emitAffineApply(AffineApplyOp *op) {
   auto affineMap = op->getAffineMap();
   AffineExprEmitter(state, affineMap.getNumDims(), op->getOperands())
       .emitAffineExpr(affineMap.getResult(0));
-  os << ";\n";
+  os << ";";
+  emitInfoAndNewLine(*op);
 }
 
 template <typename OpType>
@@ -829,7 +840,8 @@ void ModuleEmitter::emitAffineMaxMin(OpType *op, const char *syntax) {
     affineEmitter.emitAffineExpr(expr);
     os << ")";
   }
-  os << ";\n";
+  os << ";";
+  emitInfoAndNewLine(*op);
 }
 
 void ModuleEmitter::emitAffineLoad(AffineLoadOp *op) {
@@ -845,7 +857,8 @@ void ModuleEmitter::emitAffineLoad(AffineLoadOp *op) {
     affineEmitter.emitAffineExpr(index);
     os << "]";
   }
-  os << ";\n";
+  os << ";";
+  emitInfoAndNewLine(*op);
 }
 
 void ModuleEmitter::emitAffineStore(AffineStoreOp *op) {
@@ -861,7 +874,8 @@ void ModuleEmitter::emitAffineStore(AffineStoreOp *op) {
   }
   os << " = ";
   emitValue(op->getValueToStore());
-  os << ";\n";
+  os << ";";
+  emitInfoAndNewLine(*op);
 }
 
 void ModuleEmitter::emitAffineVectorLoad(AffineVectorLoadOp *op) {
@@ -890,7 +904,8 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
       emitValue(result, rank);
       os << " = ";
       emitValue(op->getOperand(resultIdx++), rank);
-      os << ";\n";
+      os << ";";
+      emitInfoAndNewLine(*op);
       emitNestedLoopTail(rank);
     }
   } else if (auto parentOp =
@@ -916,7 +931,8 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
       emitValue(result, rank);
       os << " = ";
       emitValue(op->getOperand(resultIdx++), rank);
-      os << ";\n";
+      os << ";";
+      emitInfoAndNewLine(*op);
       emitNestedLoopTail(rank);
     }
     reduceIndent();
@@ -970,7 +986,8 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
         emitValue(op->getOperand(resultIdx++), rank);
         break;
       }
-      os << ";\n";
+      os << ";";
+      emitInfoAndNewLine(*op);
       emitNestedLoopTail(rank);
     }
     reduceIndent();
@@ -993,7 +1010,8 @@ template <typename OpType> void ModuleEmitter::emitAlloc(OpType *op) {
 
   indent();
   emitArrayDecl(op->getResult());
-  os << ";\n";
+  os << ";";
+  emitInfoAndNewLine(*op);
 }
 
 void ModuleEmitter::emitLoad(LoadOp *op) {
@@ -1006,7 +1024,8 @@ void ModuleEmitter::emitLoad(LoadOp *op) {
     emitValue(index);
     os << "]";
   }
-  os << ";\n";
+  os << ";";
+  emitInfoAndNewLine(*op);
 }
 
 void ModuleEmitter::emitStore(StoreOp *op) {
@@ -1019,7 +1038,8 @@ void ModuleEmitter::emitStore(StoreOp *op) {
   }
   os << " = ";
   emitValue(op->getValueToStore());
-  os << ";\n";
+  os << ";";
+  emitInfoAndNewLine(*op);
 }
 
 /// Tensor-related statement emitters.
@@ -1029,7 +1049,8 @@ void ModuleEmitter::emitTensorLoad(TensorLoadOp *op) {
   emitValue(op->getResult(), rank);
   os << " = ";
   emitValue(op->getOperand(), rank);
-  os << ";\n";
+  os << ";";
+  emitInfoAndNewLine(*op);
   emitNestedLoopTail(rank);
 }
 
@@ -1039,7 +1060,8 @@ void ModuleEmitter::emitTensorStore(TensorStoreOp *op) {
   emitValue(op->getOperand(1), rank);
   os << " = ";
   emitValue(op->getOperand(0), rank);
-  os << ";\n";
+  os << ";";
+  emitInfoAndNewLine(*op);
   emitNestedLoopTail(rank);
 }
 
@@ -1065,7 +1087,8 @@ void ModuleEmitter::emitDim(DimOp *op) {
         indent();
         emitValue(op->getResult());
         os << " = ";
-        os << type.getShape()[constVal] << ";\n";
+        os << type.getShape()[constVal] << ";";
+        emitInfoAndNewLine(*op);
       } else
         emitError(*op, "index is out of range.");
     } else
@@ -1080,7 +1103,8 @@ void ModuleEmitter::emitRank(RankOp *op) {
     indent();
     emitValue(op->getResult());
     os << " = ";
-    os << type.getRank() << ";\n";
+    os << type.getRank() << ";";
+    emitInfoAndNewLine(*op);
   } else
     emitError(*op, "is unranked.");
 }
@@ -1094,7 +1118,8 @@ void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
   emitValue(op->getOperand(0), rank);
   os << " " << syntax << " ";
   emitValue(op->getOperand(1), rank);
-  os << ";\n";
+  os << ";";
+  emitInfoAndNewLine(op);
   emitNestedLoopTail(rank);
 }
 
@@ -1104,7 +1129,8 @@ void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
   emitValue(op->getResult(0), rank);
   os << " = " << syntax << "(";
   emitValue(op->getOperand(0), rank);
-  os << ");\n";
+  os << ");";
+  emitInfoAndNewLine(op);
   emitNestedLoopTail(rank);
 }
 
@@ -1123,7 +1149,8 @@ void ModuleEmitter::emitSelect(SelectOp *op) {
   emitValue(op->getTrueValue(), rank);
   os << " : ";
   emitValue(op->getFalseValue(), rank);
-  os << ";\n";
+  os << ";";
+  emitInfoAndNewLine(*op);
   emitNestedLoopTail(rank);
 }
 
@@ -1154,7 +1181,8 @@ void ModuleEmitter::emitConstant(ConstantOp *op) {
       if (elementIdx++ != denseAttr.getNumElements() - 1)
         os << ", ";
     }
-    os << "};\n";
+    os << "};";
+    emitInfoAndNewLine(*op);
   } else
     emitError(*op, "has unsupported constant type.");
 }
@@ -1164,7 +1192,8 @@ void ModuleEmitter::emitIndexCast(IndexCastOp *op) {
   emitValue(op->getResult());
   os << " = ";
   emitValue(op->getOperand());
-  os << ";\n";
+  os << ";";
+  emitInfoAndNewLine(*op);
 }
 
 void ModuleEmitter::emitCall(CallOp *op) {
@@ -1204,7 +1233,8 @@ void ModuleEmitter::emitCall(CallOp *op) {
     emitValue(result);
   }
 
-  os << ");\n";
+  os << ");";
+  emitInfoAndNewLine(*op);
 }
 
 /// Structure operation emitters.
@@ -1214,17 +1244,17 @@ void ModuleEmitter::emitAssign(AssignOp *op) {
   emitValue(op->getResult(), rank);
   os << " = ";
   emitValue(op->getOperand(), rank);
-  os << ";\n";
+  os << ";";
+  emitInfoAndNewLine(*op);
   emitNestedLoopTail(rank);
 }
 
 void ModuleEmitter::emitArray(ArrayOp *op) {
   bool emitPragmaFlag = false;
 
+  // Emit interface pragma.
   if (op->interface()) {
     emitPragmaFlag = true;
-
-    // Emit interface pragma.
     indent();
     os << "#pragma HLS interface";
     os << " " << op->interface_mode();
@@ -1233,21 +1263,21 @@ void ModuleEmitter::emitArray(ArrayOp *op) {
     if (op->interface_mode() == "m_axi") {
       os << " depth=" << op->interface_depth();
       os << " offset=slave";
-    } else if (op->storage())
-      os << " storage_type=" << op->storage_type();
-
+    }
     os << "\n";
   }
-  // This branch is prepared for 2020.1 or higher version.
-  // else {
-  //  Emit bind_storage pragma.
-  //  indent();
-  //  os << "#pragma HLS bind_storage";
-  //  os << " variable=";
-  //  emitValue(op->getOperand());
-  //  os << " type=" << op->storage_type();
-  //  os << " impl=" << op->storage_impl() << "\n";
-  //}
+
+  // Emit resource pragma.
+  if (op->storage()) {
+    emitPragmaFlag = true;
+    indent();
+    os << "#pragma HLS resource";
+    os << " variable=";
+    emitValue(op->getOperand());
+    os << " core=";
+    os << op->storage_type();
+    os << "\n";
+  }
 
   auto type = op->getOperand().getType().cast<ShapedType>();
   if (op->partition() && type.hasStaticShape()) {
@@ -1370,6 +1400,17 @@ void ModuleEmitter::emitNestedLoopTail(unsigned rank) {
   }
 }
 
+void ModuleEmitter::emitInfoAndNewLine(Operation *op) {
+  os << "\t//";
+  if (auto loc = op->getLoc().dyn_cast<FileLineColLoc>())
+    os << " #L" << loc.getLine();
+  if (auto begin = op->getAttrOfType<IntegerAttr>("schedule_begin"))
+    os << ", [" << begin.getUInt();
+  if (auto end = op->getAttrOfType<IntegerAttr>("schedule_end"))
+    os << ", " << end.getUInt() << ")";
+  os << "\n";
+}
+
 /// MLIR component emitters.
 void ModuleEmitter::emitOperation(Operation *op) {
   if (ExprVisitor(*this).dispatchVisitor(op))
@@ -1392,6 +1433,12 @@ void ModuleEmitter::emitBlock(Block &block) {
 void ModuleEmitter::emitFunction(FuncOp func) {
   if (func.getBlocks().size() != 1)
     emitError(func, "has zero or more than one basic blocks.");
+
+  if (auto top = func.getAttrOfType<BoolAttr>("top_function"))
+    os << "/// This is top function.\n";
+
+  if (auto latency = func.getAttrOfType<IntegerAttr>("latency"))
+    os << "/// Function latency is " << latency.getUInt() << ".\n";
 
   // Emit function signature.
   os << "void " << func.getName() << "(\n";
@@ -1434,7 +1481,8 @@ void ModuleEmitter::emitFunction(FuncOp func) {
     emitError(func, "doesn't have a return operation as terminator.");
 
   reduceIndent();
-  os << "\n) {\n";
+  os << "\n) {";
+  emitInfoAndNewLine(func);
 
   // Emit function body.
   addIndent();

@@ -86,7 +86,7 @@ void ConvertToHLSCpp::runOnOperation() {
           // an AssignOp, it will always not be annotated as interface. This
           // is acceptable because AssignOp is only used to handle some weird
           // corner cases that rarely happen.
-          if (!arrayOp.getAttr("interface") && func.getName() == topFunction) {
+          if (!arrayOp.interface() && func.getName() == topFunction) {
             // Only if when the array is an block arguments or a returned
             // value, it will be annotated as interface.
             bool interfaceFlag =
@@ -99,10 +99,13 @@ void ConvertToHLSCpp::runOnOperation() {
           } else
             arrayOp.setAttr("interface", builder.getBoolAttr(false));
 
-          if (!arrayOp.getAttr("storage"))
-            arrayOp.setAttr("storage", builder.getBoolAttr(false));
+          if (!arrayOp.storage()) {
+            arrayOp.setAttr("storage", builder.getBoolAttr(true));
+            arrayOp.setAttr("storage_type",
+                            builder.getStringAttr("ram_1p_bram"));
+          }
 
-          if (!arrayOp.getAttr("partition"))
+          if (!arrayOp.partition())
             arrayOp.setAttr("partition", builder.getBoolAttr(false));
         }
       }

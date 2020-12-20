@@ -40,12 +40,12 @@ $ # Benchmark generation, dataflow-level optimization, and bufferization.
 $ benchmark-gen -type "cnn" -config "config/cnn-config.ini" -number 1 \
     | scalehls-opt -legalize-dataflow -split-function \
     -hlskernel-bufferize -hlskernel-to-affine -func-bufferize -canonicalize
-$
+
 $ # HLSKernel lowering, loop-level and pragma-level optimizations, and performance estimation.
 $ scalehls-opt test/Conversion/HLSKernelToAffine/test_gemm.mlir -hlskernel-to-affine \
     -affine-loop-perfection -remove-var-loop-bound -partial-affine-loop-tile="tile-level=1 tile-size=4" \
     -convert-to-hlscpp="top-function=test_gemm" -loop-pipelining="pipeline-level=1" \
-    -store-op-forward -simplify-memref-access -array-partition -canonicalize \
+    -store-op-forward -simplify-memref-access -array-partition -cse -canonicalize \
     -qor-estimation="target-spec=config/target-spec.ini"
 
 $ # HLS C++ code generation.

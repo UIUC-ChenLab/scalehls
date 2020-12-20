@@ -33,22 +33,32 @@ def PartitionTypeArrayAttr : TypedArrayAttrBase<PartitionTypeAttr, ""> {}
 // Pragma bind_storage Attributes
 //===----------------------------------------------------------------------===//
 
-def StorageImplAttr : StrEnumAttr<"StorageImpl", "", [
-  StrEnumAttrCase<"bram", 0>,
-  StrEnumAttrCase<"lutram", 1>,
-  StrEnumAttrCase<"uram", 2>,
-  StrEnumAttrCase<"srl", 3>
-]> {
-  let cppNamespace = "::mlir::scalehls::hlscpp";
-}
+// def StorageImplAttr : StrEnumAttr<"StorageImpl", "", [
+//   StrEnumAttrCase<"bram", 0>,
+//   StrEnumAttrCase<"lutram", 1>,
+//   StrEnumAttrCase<"uram", 2>,
+//   StrEnumAttrCase<"srl", 3>
+// ]> {
+//   let cppNamespace = "::mlir::scalehls::hlscpp";
+// }
 
+// def StorageTypeAttr : StrEnumAttr<"StorageType", "", [
+//   StrEnumAttrCase<"fifo", 0>,
+//   StrEnumAttrCase<"ram_1p", 1>,
+//   StrEnumAttrCase<"ram_1wnr", 2>,
+//   StrEnumAttrCase<"ram_2p", 3>,
+//   StrEnumAttrCase<"ram_s2p", 4>,
+//   StrEnumAttrCase<"ram_t2p", 5>
+// ]> {
+//   let cppNamespace = "::mlir::scalehls::hlscpp";
+// }
+
+// Currently we only support bram/lut based memory instance.
 def StorageTypeAttr : StrEnumAttr<"StorageType", "", [
-  StrEnumAttrCase<"fifo", 0>,
-  StrEnumAttrCase<"ram_1p", 1>,
-  StrEnumAttrCase<"ram_1wnr", 2>,
-  StrEnumAttrCase<"ram_2p", 3>,
-  StrEnumAttrCase<"ram_s2p", 4>,
-  StrEnumAttrCase<"ram_t2p", 5>
+  StrEnumAttrCase<"ram_1p_bram", 0>,
+  StrEnumAttrCase<"ram_2p_bram", 1>,
+  StrEnumAttrCase<"ram_s2p_bram", 2>,
+  StrEnumAttrCase<"ram_t2p_bram", 3>
 ]> {
   let cppNamespace = "::mlir::scalehls::hlscpp";
 }

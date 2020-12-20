@@ -245,9 +245,8 @@ unsigned HLSCppEstimator::getLoadStoreSchedule(Operation *op, unsigned begin) {
   setAttrValue(op, "partition_index", partitionIdx);
 
   auto arrayOp = getArrayOp(op);
-  auto partitionNum =
-      max((unsigned)1, getUIntAttrValue(arrayOp, "partition_num"));
-  auto storageType = getStrAttrValue(arrayOp, "storage_type");
+  auto partitionNum = arrayOp.partition_num();
+  auto storageType = arrayOp.storage_type();
 
   // Try to avoid memory port violation until a legal schedule is found. Since
   // an infinite length schedule cannot be generated, this while loop can be
@@ -265,15 +264,16 @@ unsigned HLSCppEstimator::getLoadStoreSchedule(Operation *op, unsigned begin) {
         unsigned wrPort = 0;
         unsigned rdwrPort = 0;
 
-        if (storageType == "ram_s2p")
-          rdPort = 1, wrPort = 1;
-        else if (storageType == "ram_2p" || storageType == "ram_t2p")
-          rdwrPort = 2;
-        else if (storageType == "ram_1p")
+        if (storageType == "ram_1p_bram")
           rdwrPort = 1;
-        else {
+        else if (storageType == "ram_2p_bram")
+          rdPort = 1, rdwrPort = 1;
+        else if (storageType == "ram_s2p_bram")
+          rdPort = 1, wrPort = 1;
+        else if (storageType == "ram_t2p_bram")
           rdwrPort = 2;
-        }
+        else
+          rdwrPort = 2;
 
         memPort.push_back(PortInfo(rdPort, wrPort, rdwrPort));
       }
@@ -346,7 +346,6 @@ unsigned HLSCppEstimator::getLoadStoreSchedule(Operation *op, unsigned begin) {
 //     else
 //       minII = getUIntAttrValue(op, "schedule_end") -
 //               getUIntAttrValue(op, "schedule_begin");
-
 //     II = max(II, minII);
 //   });
 //   return II;
@@ -359,9 +358,8 @@ unsigned HLSCppEstimator::getResMinII(LoadStoresMap &map) {
   for (auto &pair : map) {
     auto arrayOp = getArrayOp(pair.first);
     // Partition number should at least be 1.
-    auto partitionNum =
-        max((unsigned)1, getUIntAttrValue(arrayOp, "partition_num"));
-    auto storageType = getStrAttrValue(arrayOp, "storage_type");
+    auto partitionNum = arrayOp.partition_num();
+    auto storageType = arrayOp.storage_type();
 
     SmallVector<unsigned, 16> readNum;
     SmallVector<unsigned, 16> writeNum;
@@ -376,12 +374,15 @@ unsigned HLSCppEstimator::getResMinII(LoadStoresMap &map) {
       auto partitionIdx = getIntAttrValue(op, "partition_index");
       if (partitionIdx == -1) {
         unsigned accessNum = 2;
-        if (storageType == "ram_s2p")
+        if (storageType == "ram_1p_bram")
           accessNum = 1;
-        else if (storageType == "ram_1p")
+        else if (storageType == "ram_2p_bram")
           accessNum = 1;
-        else if (storageType == "ram_2p" || storageType == "ram_t2p" ||
-                 storageType == "")
+        else if (storageType == "ram_s2p_bram")
+          accessNum = 1;
+        else if (storageType == "ram_t2p_bram")
+          accessNum = 1;
+        else
           accessNum = 2;
 
         // The rationale here is an undetermined partition access will introduce
@@ -401,15 +402,15 @@ unsigned HLSCppEstimator::getResMinII(LoadStoresMap &map) {
     }
 
     unsigned minII = 1;
-    if (storageType == "ram_s2p")
+    if (storageType == "ram_s2p_bram")
       minII = max({minII, *std::max_element(readNum.begin(), readNum.end()),
                    *std::max_element(writeNum.begin(), writeNum.end())});
 
-    else if (storageType == "ram_1p")
+    else if (storageType == "ram_1p_bram")
       for (unsigned i = 0, e = partitionNum; i < e; ++i)
         minII = max(minII, readNum[i] + writeNum[i]);
 
-    else if (storageType == "ram_2p" || storageType == "ram_t2p" ||
+    else if (storageType == "ram_2p_bram" || storageType == "ram_t2p_bram" ||
              storageType == "")
       for (unsigned i = 0, e = partitionNum; i < e; ++i)
         minII = max(minII, (readNum[i] + writeNum[i] + 1) / 2);
@@ -672,7 +673,7 @@ void HLSCppEstimator::estimateFunc() {
     //  setScheduleValue(op, latency - end, latency - begin);
     // });
   } else
-    setAttrValue(func, "latency", -1);
+    setAttrValue(func, "latency", std::string("unknown"));
 }
 
 //===----------------------------------------------------------------------===//
