@@ -321,14 +321,9 @@ unsigned HLSCppEstimator::getLoadStoreSchedule(Operation *op, unsigned begin) {
       begin++;
   }
 
-  // Memory load consumes 2 clock cyles, while other memory access including
-  // store consumes 1 clock cycle.
-  unsigned end = begin;
-  if (isa<AffineLoadOp>(op))
-    end += 2;
-  else
+  unsigned end = begin + 1;
+  if (isa<AffineReadOpInterface>(op))
     end++;
-
   setScheduleValue(op, begin, end);
   return end;
 }
@@ -374,14 +369,10 @@ unsigned HLSCppEstimator::getResMinII(LoadStoresMap &map) {
       auto partitionIdx = getIntAttrValue(op, "partition_index");
       if (partitionIdx == -1) {
         unsigned accessNum = 2;
-        if (storageType == "ram_1p_bram")
+        if (storageType == "ram_1p_bram" || storageType == "ram_s2p_bram")
           accessNum = 1;
-        else if (storageType == "ram_2p_bram")
-          accessNum = 1;
-        else if (storageType == "ram_s2p_bram")
-          accessNum = 1;
-        else if (storageType == "ram_t2p_bram")
-          accessNum = 1;
+        else if (storageType == "ram_2p_bram" || storageType == "ram_t2p_bram")
+          accessNum = 2;
         else
           accessNum = 2;
 
@@ -389,6 +380,7 @@ unsigned HLSCppEstimator::getResMinII(LoadStoresMap &map) {
         // a large mux which will avoid Vivado HLS to process any concurrent
         // data access among all partitions. This is equivalent to increase read
         // or write number for all partitions.
+        // TODO: need to be further refined.
         for (unsigned p = 0, e = partitionNum; p < e; ++p) {
           if (isa<AffineLoadOp>(op))
             readNum[p] += accessNum;
@@ -402,18 +394,18 @@ unsigned HLSCppEstimator::getResMinII(LoadStoresMap &map) {
     }
 
     unsigned minII = 1;
-    if (storageType == "ram_s2p_bram")
-      minII = max({minII, *std::max_element(readNum.begin(), readNum.end()),
-                   *std::max_element(writeNum.begin(), writeNum.end())});
-
-    else if (storageType == "ram_1p_bram")
+    if (storageType == "ram_1p_bram")
       for (unsigned i = 0, e = partitionNum; i < e; ++i)
         minII = max(minII, readNum[i] + writeNum[i]);
 
-    else if (storageType == "ram_2p_bram" || storageType == "ram_t2p_bram" ||
-             storageType == "")
+    else if (storageType == "ram_s2p_bram")
+      minII = max({minII, *std::max_element(readNum.begin(), readNum.end()),
+                   *std::max_element(writeNum.begin(), writeNum.end())});
+
+    // TODO: need to be further refined.
+    else if (storageType == "ram_2p_bram" || storageType == "ram_t2p_bram")
       for (unsigned i = 0, e = partitionNum; i < e; ++i)
-        minII = max(minII, (readNum[i] + writeNum[i] + 1) / 2);
+        minII = max(minII, (readNum[i] + writeNum[i] - 1) / 2 + 1);
 
     II = max(II, minII);
   }

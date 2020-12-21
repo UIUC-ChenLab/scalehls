@@ -1402,12 +1402,22 @@ void ModuleEmitter::emitNestedLoopTail(unsigned rank) {
 
 void ModuleEmitter::emitInfoAndNewLine(Operation *op) {
   os << "\t//";
+  // Print line number.
   if (auto loc = op->getLoc().dyn_cast<FileLineColLoc>())
     os << " #L" << loc.getLine();
+
+  // Print schedule information.
   if (auto begin = op->getAttrOfType<IntegerAttr>("schedule_begin"))
     os << ", [" << begin.getUInt();
   if (auto end = op->getAttrOfType<IntegerAttr>("schedule_end"))
     os << ", " << end.getUInt() << ")";
+
+  // Print loop information.
+  if (auto interval = op->getAttrOfType<IntegerAttr>("init_interval"))
+    os << ", interval=" << interval.getUInt();
+  if (auto iteration = op->getAttrOfType<IntegerAttr>("iter_latency"))
+    os << ", iteration=" << iteration.getUInt();
+
   os << "\n";
 }
 
