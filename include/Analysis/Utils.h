@@ -97,6 +97,10 @@ using LoadStoresMap = DenseMap<Value, LoadStores>;
 Optional<std::pair<Operation *, Operation *>> checkSameLevel(Operation *lhsOp,
                                                              Operation *rhsOp);
 
+// Get the innermost surrounding operation, either an AffineForOp or a FuncOp.
+// In this method, AffineIfOp is transparent as well.
+Operation *getSurroundingOp(Operation *op);
+
 // Get the pointer of the scrOp's parent loop, which should locate at the same
 // level with dstOp's any parent loop.
 Operation *getSameLevelDstOp(Operation *srcOp, Operation *dstOp);

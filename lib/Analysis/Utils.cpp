@@ -46,6 +46,22 @@ scalehls::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
   return Optional<std::pair<Operation *, Operation *>>();
 }
 
+// Get the innermost surrounding operation, either an AffineForOp or a FuncOp.
+// In this method, AffineIfOp is transparent as well.
+Operation *scalehls::getSurroundingOp(Operation *op) {
+  auto currentOp = op;
+  while (true) {
+    if (auto parentIfOp = currentOp->getParentOfType<AffineIfOp>())
+      currentOp = parentIfOp;
+    else if (auto parentForOp = currentOp->getParentOfType<AffineForOp>())
+      return parentForOp;
+    else if (auto parentFuncOp = currentOp->getParentOfType<FuncOp>())
+      return parentFuncOp;
+    else
+      return nullptr;
+  }
+}
+
 // Get the pointer of the scrOp's parent loop, which should locate at the same
 // level with dstOp's any parent loop.
 Operation *scalehls::getSameLevelDstOp(Operation *srcOp, Operation *dstOp) {

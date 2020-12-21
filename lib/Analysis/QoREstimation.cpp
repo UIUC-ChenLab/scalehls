@@ -104,6 +104,7 @@ public:
 #undef HANDLE
 
   Optional<unsigned> estimateBlock(Block &block, unsigned begin);
+  void reverseSchedule();
   void estimateFunc();
 
   FuncOp &func;
@@ -653,19 +654,46 @@ Optional<unsigned> HLSCppEstimator::estimateBlock(Block &block,
   return blockEnd;
 }
 
+void HLSCppEstimator::reverseSchedule() {
+  func.walk([&](Operation *op) {
+    // Get schedule level.
+    auto begin = getUIntAttrValue(op, "schedule_begin");
+    auto end = getUIntAttrValue(op, "schedule_end");
+
+    // Reverse schedule level.
+    if (auto surOp = getSurroundingOp(op)) {
+      if (isa<mlir::AffineForOp>(surOp)) {
+        if (getBoolAttrValue(surOp, "flatten")) {
+          // Handle flattened surrounding loops.
+          setScheduleValue(op, 0, end - begin);
+        } else {
+          // Handle normal cases.
+          auto iterLatency = getUIntAttrValue(surOp, "iter_latency");
+          setScheduleValue(op, iterLatency - end, iterLatency - begin);
+        }
+      } else if (isa<FuncOp>(surOp)) {
+        auto latency = getUIntAttrValue(surOp, "latency");
+        setScheduleValue(op, latency - end, latency - begin);
+      }
+    }
+  });
+}
+
 void HLSCppEstimator::estimateFunc() {
   // Recursively estimate blocks in the function.
   if (auto schedule = estimateBlock(func.front(), 0)) {
     auto latency = schedule.getValue();
     setAttrValue(func, "latency", latency);
 
-    // func.walk([&](Operation *op) {
-    //  auto begin = getUIntAttrValue(op, "schedule_begin");
-    //  auto end = getUIntAttrValue(op, "schedule_end");
-    //  setScheduleValue(op, latency - end, latency - begin);
-    // });
-  } else
+    // Scheduled levels of all operations are reversed in this method, because
+    // we have done the ALAP scheduling in a reverse order.
+    reverseSchedule();
+  } else {
+    // Scheduling failed due to early error.
+    // TODO: further refinement and try the best to avoid failing, e.g. support
+    // variable loop bound.
     setAttrValue(func, "latency", std::string("unknown"));
+  }
 }
 
 //===----------------------------------------------------------------------===//
