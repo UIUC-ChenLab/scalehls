@@ -1413,10 +1413,10 @@ void ModuleEmitter::emitInfoAndNewLine(Operation *op) {
     os << "," << end.getUInt() << ")";
 
   // Print loop information.
-  if (auto interval = op->getAttrOfType<IntegerAttr>("init_interval"))
-    os << ", interval=" << interval.getUInt();
-  if (auto iteration = op->getAttrOfType<IntegerAttr>("iter_latency"))
-    os << ", iteration=" << iteration.getUInt();
+  if (auto II = op->getAttrOfType<IntegerAttr>("init_interval"))
+    os << ", II=" << II.getUInt();
+  if (auto latency = op->getAttrOfType<IntegerAttr>("iter_latency"))
+    os << ", latency=" << latency.getUInt();
 
   os << "\n";
 }
@@ -1449,7 +1449,10 @@ void ModuleEmitter::emitFunction(FuncOp func) {
       os << "/// This is top function.\n";
 
   if (auto latency = func.getAttrOfType<IntegerAttr>("latency"))
-    os << "/// Function latency is " << latency.getUInt() << ".\n";
+    os << "/// Latency=" << latency.getUInt() << "\n";
+
+  if (auto dsp = func.getAttrOfType<IntegerAttr>("dsp"))
+    os << "/// DSP=" << dsp.getUInt() << "\n";
 
   // Emit function signature.
   os << "void " << func.getName() << "(\n";

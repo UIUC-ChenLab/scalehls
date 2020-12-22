@@ -24,7 +24,7 @@ public:
     if (auto attr = op.partition_type()[dim].cast<StringAttr>())
       return attr.getValue();
     else
-      return "";
+      return StringRef();
   }
 
   unsigned getPartitionFactor(hlscpp::ArrayOp op, unsigned dim) {
@@ -60,7 +60,7 @@ public:
     if (auto attr = op->getAttrOfType<StringAttr>(name))
       return attr.getValue();
     else
-      return "";
+      return StringRef();
   }
 
   /// Set attribute value methods.
