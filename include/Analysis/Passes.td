@@ -20,9 +20,7 @@ def QoREstimation : Pass<"qor-estimation", "ModuleOp"> {
   let options = [
     Option<"targetSpec", "target-spec", "std::string",
            /*default=*/"\"../config/target-spec.ini\"", 
-           "File path: target backend specifications and configurations">,
-    Option<"topFunction", "top-function", "std::string", /*default=*/"", 
-           "The top function for HLS synthesis">
+           "File path: target backend specifications and configurations">
   ];
 }
 

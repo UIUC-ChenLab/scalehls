@@ -1445,7 +1445,8 @@ void ModuleEmitter::emitFunction(FuncOp func) {
     emitError(func, "has zero or more than one basic blocks.");
 
   if (auto top = func.getAttrOfType<BoolAttr>("top_function"))
-    os << "/// This is top function.\n";
+    if (top.getValue())
+      os << "/// This is top function.\n";
 
   if (auto latency = func.getAttrOfType<IntegerAttr>("latency"))
     os << "/// Function latency is " << latency.getUInt() << ".\n";

@@ -24,8 +24,8 @@ void SimplifyMemRefAccess::runOnOperation() {
   auto func = getOperation();
 
   // Collect all load and store operations in the function block.
-  LoadStoresMap map;
-  getLoadStoresMap(func.front(), map);
+  MemAccessesMap map;
+  getMemAccessesMap(func.front(), map);
 
   for (auto pair : map) {
     auto loadStores = pair.second;

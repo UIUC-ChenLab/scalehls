@@ -87,10 +87,10 @@ public:
 // Helper methods
 //===----------------------------------------------------------------------===//
 
-// For storing all affine memory access operations (including AffineLoadOp and
-// AffineStoreOp) indexed by the corresponding memref.
-using LoadStores = SmallVector<Operation *, 16>;
-using LoadStoresMap = DenseMap<Value, LoadStores>;
+// For storing all affine memory access operations (including CallOp,
+// AffineLoadOp, and AffineStoreOp) indexed by the corresponding memref.
+using MemAccesses = SmallVector<Operation *, 16>;
+using MemAccessesMap = DenseMap<Value, MemAccesses>;
 
 // Check if the lhsOp and rhsOp is at the same scheduling level. In this check,
 // AffineIfOp is transparent.
@@ -110,8 +110,11 @@ hlscpp::ArrayOp getArrayOp(Value memref);
 
 hlscpp::ArrayOp getArrayOp(Operation *op);
 
-/// Collect all load and store operations in the block.
-void getLoadStoresMap(Block &block, LoadStoresMap &map);
+/// Collect all load and store operations in the block. The collected operations
+/// in the MemAccessesMap are ordered, which means an operation will never
+/// dominate another operation in front of it.
+void getMemAccessesMap(Block &block, MemAccessesMap &map,
+                       bool includeCalls = false);
 
 } // namespace scalehls
 } // namespace mlir

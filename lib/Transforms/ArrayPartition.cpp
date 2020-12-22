@@ -32,7 +32,7 @@ static mlir::AffineForOp getPipelineLoop(mlir::AffineForOp root) {
 }
 
 template <typename OpType>
-static void applyArrayPartition(LoadStoresMap &map, OpBuilder &builder) {
+static void applyArrayPartition(MemAccessesMap &map, OpBuilder &builder) {
   for (auto pair : map) {
     auto arrayOp = getArrayOp(pair.first);
     auto arrayShape = arrayOp.getShapedType().getShape();
@@ -118,12 +118,12 @@ void ArrayPartition::runOnOperation() {
     // TODO: support imperfect loop.
     if (auto outermost = getPipelineLoop(forOp)) {
       // Collect memory access information.
-      LoadStoresMap loadMap;
+      MemAccessesMap loadMap;
       outermost.walk([&](mlir::AffineLoadOp loadOp) {
         loadMap[loadOp.getMemRef()].push_back(loadOp);
       });
 
-      LoadStoresMap storeMap;
+      MemAccessesMap storeMap;
       outermost.walk([&](mlir::AffineStoreOp storeOp) {
         storeMap[storeOp.getMemRef()].push_back(storeOp);
       });
