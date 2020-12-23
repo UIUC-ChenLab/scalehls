@@ -48,7 +48,7 @@ static llvm::cl::opt<bool> verifyPasses(
 static llvm::cl::opt<bool> allowUnregisteredDialects(
     "allow-unregistered-dialect",
     llvm::cl::desc("Allow operation with no registered dialects"),
-    llvm::cl::init(false));
+    llvm::cl::init(true));
 
 static llvm::cl::opt<bool>
     showDialects("show-dialects",

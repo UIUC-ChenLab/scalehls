@@ -7,11 +7,15 @@
 
 include "mlir/Pass/PassBase.td"
 
+//===----------------------------------------------------------------------===//
+// HLSKernel and HLSCpp Conversion passes
+//===----------------------------------------------------------------------===//
+
 def ConvertToHLSCpp : Pass<"convert-to-hlscpp", "FuncOp"> {
   let summary = "Convert to emittable MLIR code";
   let description = [{
     This convert-to-hlscpp converts MLIR code in Affine/Standard/SCF level to
-    emittable MLIR code.
+    emittable and estimatable MLIR code.
   }];
 
   let constructor = "mlir::scalehls::createConvertToHLSCppPass()";
@@ -30,6 +34,20 @@ def HLSKernelToAffine : Pass<"hlskernel-to-affine", "FuncOp"> {
   }];
 
   let constructor = "mlir::scalehls::createHLSKernelToAffinePass()";
+}
+
+//===----------------------------------------------------------------------===//
+// Onnx Kernel Legalization Pass
+//===----------------------------------------------------------------------===//
+
+def LegalizeOnnx : Pass<"legalize-onnx", "ModuleOp"> {
+  let summary = "Legalize model lowered from onnx-mlir flow";
+  let description = [{
+    This legalize-onnx pass will legalize all operations lowered from onnx-mlir
+    flow, e.g. krnl.packed_const, krnl.global, and krnl.memcpy.
+  }];
+
+  let constructor = "mlir::scalehls::createLegalizeOnnxPass()";
 }
 
 #endif // SCALEHLS_CONVERSION_PASSES_TD
