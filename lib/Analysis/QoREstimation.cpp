@@ -789,6 +789,7 @@ void HLSCppEstimator::estimateFunc() {
 
   // Estimate the resource utilization of the function.
   setAttrValue(func, "dsp", estimateResource(func.front()));
+  // TODO: estimate BRAM and LUT utilization.
 }
 
 //===----------------------------------------------------------------------===//
