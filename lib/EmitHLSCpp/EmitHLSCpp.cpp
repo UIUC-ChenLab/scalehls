@@ -71,6 +71,7 @@ public:
   SmallString<8> addName(Value val, bool isPtr = false);
 
   SmallString<8> addAlias(Value val, Value alias) {
+    assert(!isDeclared(alias) && "has been declared before.");
     assert(isDeclared(val) && "hasn't been declared before.");
 
     auto name = getName(val);
@@ -169,8 +170,6 @@ public:
   void emitAffineMaxMin(OpType *op, const char *syntax);
   void emitAffineLoad(AffineLoadOp *op);
   void emitAffineStore(AffineStoreOp *op);
-  void emitAffineVectorLoad(AffineVectorLoadOp *op);
-  void emitAffineVectorStore(AffineVectorStoreOp *op);
   void emitAffineYield(AffineYieldOp *op);
 
   /// Memref-related statement emitters.
@@ -181,9 +180,7 @@ public:
   /// Tensor-related statement emitters.
   void emitTensorLoad(TensorLoadOp *op);
   void emitTensorStore(TensorStoreOp *op);
-  void emitSplat(SplatOp *op);
-  void emitExtractElement(ExtractElementOp *op);
-  void emitTensorFromElements(TensorFromElementsOp *op);
+  void emitTensorToMemref(TensorToMemrefOp *op);
   void emitDim(DimOp *op);
   void emitRank(RankOp *op);
 
@@ -341,12 +338,6 @@ public:
   }
   bool visitOp(AffineLoadOp op) { return emitter.emitAffineLoad(&op), true; }
   bool visitOp(AffineStoreOp op) { return emitter.emitAffineStore(&op), true; }
-  bool visitOp(AffineVectorLoadOp op) {
-    return emitter.emitAffineVectorLoad(&op), true;
-  }
-  bool visitOp(AffineVectorStoreOp op) {
-    return emitter.emitAffineVectorStore(&op), true;
-  }
   bool visitOp(AffineYieldOp op) { return emitter.emitAffineYield(&op), true; }
 
   /// Memref-related statements.
@@ -359,12 +350,8 @@ public:
   /// Tensor-related statements.
   bool visitOp(TensorLoadOp op) { return emitter.emitTensorLoad(&op), true; }
   bool visitOp(TensorStoreOp op) { return emitter.emitTensorStore(&op), true; }
-  bool visitOp(SplatOp op) { return emitter.emitSplat(&op), true; }
-  bool visitOp(ExtractElementOp op) {
-    return emitter.emitExtractElement(&op), true;
-  }
-  bool visitOp(TensorFromElementsOp op) {
-    return emitter.emitTensorFromElements(&op), true;
+  bool visitOp(TensorToMemrefOp op) {
+    return emitter.emitTensorToMemref(&op), true;
   }
   bool visitOp(DimOp op) { return emitter.emitDim(&op), true; }
   bool visitOp(RankOp op) { return emitter.emitRank(&op), true; }
@@ -878,14 +865,6 @@ void ModuleEmitter::emitAffineStore(AffineStoreOp *op) {
   emitInfoAndNewLine(*op);
 }
 
-void ModuleEmitter::emitAffineVectorLoad(AffineVectorLoadOp *op) {
-  // TODO
-}
-
-void ModuleEmitter::emitAffineVectorStore(AffineVectorStoreOp *op) {
-  // TODO
-}
-
 // TODO: For now, all values created in the AffineIf region will be declared
 // in the generated C++. However, values which will be returned by affine
 // yield operation should not be declared again. How to "bind" the pair of
@@ -1065,16 +1044,20 @@ void ModuleEmitter::emitTensorStore(TensorStoreOp *op) {
   emitNestedLoopTail(rank);
 }
 
-void ModuleEmitter::emitSplat(SplatOp *op) {
-  // TODO
-}
-
-void ModuleEmitter::emitExtractElement(ExtractElementOp *op) {
-  // TODO
-}
-
-void ModuleEmitter::emitTensorFromElements(TensorFromElementsOp *op) {
-  // TODO
+void ModuleEmitter::emitTensorToMemref(TensorToMemrefOp *op) {
+  // A declared result indicates that the memref is output of the function, and
+  // has been declared in the function signature.
+  if (isDeclared(op->getResult())) {
+    auto rank = emitNestedLoopHead(op->getResult());
+    indent();
+    emitValue(op->getResult(), rank);
+    os << " = ";
+    emitValue(op->getOperand(), rank);
+    os << ";";
+    emitInfoAndNewLine(*op);
+    emitNestedLoopTail(rank);
+  } else
+    addAlias(op->getOperand(), op->getResult());
 }
 
 void ModuleEmitter::emitDim(DimOp *op) {

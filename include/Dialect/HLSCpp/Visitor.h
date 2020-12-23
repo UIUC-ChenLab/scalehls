@@ -37,8 +37,8 @@ public:
             DmaWaitOp, AtomicRMWOp, GenericAtomicRMWOp, AtomicYieldOp,
             MemRefCastOp, ViewOp, SubViewOp,
             // Tensor-related statements.
-            TensorLoadOp, TensorStoreOp, ExtractElementOp, TensorFromElementsOp,
-            SplatOp, TensorCastOp, DimOp, RankOp,
+            TensorLoadOp, TensorStoreOp, TensorToMemrefOp, ExtractElementOp,
+            TensorFromElementsOp, SplatOp, TensorCastOp, DimOp, RankOp,
             // Unary expressions.
             AbsFOp, CeilFOp, NegFOp, CosOp, SinOp, TanhOp, SqrtOp, RsqrtOp,
             ExpOp, Exp2Op, LogOp, Log2Op, Log10Op,
@@ -120,6 +120,7 @@ public:
   // Tensor-related statements.
   HANDLE(TensorLoadOp);
   HANDLE(TensorStoreOp);
+  HANDLE(TensorToMemrefOp);
   HANDLE(ExtractElementOp);
   HANDLE(TensorFromElementsOp);
   HANDLE(SplatOp);

@@ -55,10 +55,10 @@ void ConvertToHLSCpp::runOnOperation() {
 
   // Recursively convert every for loop body blocks.
   func.walk([&](Operation *op) {
-    // ArrayOp will be inserted after each ShapedType value from declaration
+    // ArrayOp will be inserted after each MemRefType value from declaration
     // or function signature.
     for (auto operand : op->getOperands()) {
-      if (auto arrayType = operand.getType().dyn_cast<ShapedType>()) {
+      if (auto arrayType = operand.getType().dyn_cast<MemRefType>()) {
         bool insertArrayOp = false;
         if (operand.getKind() == Value::Kind::BlockArgument)
           insertArrayOp = true;
