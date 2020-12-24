@@ -92,6 +92,12 @@ public:
 using MemAccesses = SmallVector<Operation *, 16>;
 using MemAccessesMap = DenseMap<Value, MemAccesses>;
 
+/// Collect all load and store operations in the block. The collected operations
+/// in the MemAccessesMap are ordered, which means an operation will never
+/// dominate another operation in front of it.
+void getMemAccessesMap(Block &block, MemAccessesMap &map,
+                       bool includeCalls = false);
+
 // Check if the lhsOp and rhsOp is at the same scheduling level. In this check,
 // AffineIfOp is transparent.
 Optional<std::pair<Operation *, Operation *>> checkSameLevel(Operation *lhsOp,
@@ -110,11 +116,17 @@ hlscpp::ArrayOp getArrayOp(Value memref);
 
 hlscpp::ArrayOp getArrayOp(Operation *op);
 
-/// Collect all load and store operations in the block. The collected operations
-/// in the MemAccessesMap are ordered, which means an operation will never
-/// dominate another operation in front of it.
-void getMemAccessesMap(Block &block, MemAccessesMap &map,
-                       bool includeCalls = false);
+// For storing all accessed memrefs indexed by an operation (e.g. AffineForOp).
+using MemRefs = SmallVector<Value, 4>;
+using MemRefsMap = DenseMap<Operation *, MemRefs>;
+
+/// With the generated MemRefsMap, given a specific loop, we can easily find all
+/// memories which are consumed by the loop.
+void getLoopLoadMemsMap(Block &block, MemRefsMap &map);
+
+/// With the generated MemAccessesMap, given a specific memory, we can easily
+/// find the loops which produce data to the memory.
+void getLoopMemStoresMap(Block &block, MemAccessesMap &map);
 
 } // namespace scalehls
 } // namespace mlir

@@ -2,8 +2,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "Analysis/Utils.h"
 #include "Dialect/HLSKernel/HLSKernel.h"
 #include "Transforms/Passes.h"
+#include "mlir/Analysis/Liveness.h"
 
 using namespace std;
 using namespace mlir;
@@ -24,10 +26,12 @@ void SplitFunction::runOnOperation() {
     funcs.push_back(func);
 
   for (auto top : funcs) {
+    Liveness liveness(top);
+
     DenseMap<int64_t, SmallVector<Operation *, 2>> dataflowOps;
-    top.walk([&](hlskernel::HLSKernelOpInterface kernelOp) {
-      if (auto attr = kernelOp.getAttrOfType<IntegerAttr>("dataflow_level"))
-        dataflowOps[attr.getInt()].push_back(kernelOp.getOperation());
+    top.walk([&](Operation *op) {
+      if (auto attr = op->getAttrOfType<IntegerAttr>("dataflow_level"))
+        dataflowOps[attr.getInt()].push_back(op);
     });
 
     for (auto pair : dataflowOps) {
@@ -44,8 +48,15 @@ void SplitFunction::runOnOperation() {
 
       unsigned opIndex = 0;
       for (auto op : ops) {
+        SmallVector<Value, 8> candidateInputs(op->getOperands());
+        if (auto loop = dyn_cast<mlir::AffineForOp>(op)) {
+          auto liveIns = liveness.getLiveIn(&loop.getLoopBody().front());
+          for (auto liveIn : liveIns)
+            if (!isForInductionVar(liveIn))
+              candidateInputs.push_back(liveIn);
+        }
         // Add input types and values.
-        for (auto operand : op->getOperands()) {
+        for (auto operand : candidateInputs) {
           // Record the index of the operand.
           auto operandFound =
               std::find(inputValues.begin(), inputValues.end(), operand);
@@ -58,7 +69,6 @@ void SplitFunction::runOnOperation() {
             inputValues.push_back(operand);
           }
         }
-        opIndex += 1;
 
         // Add output types and values.
         for (auto result : op->getResults()) {
@@ -68,6 +78,7 @@ void SplitFunction::runOnOperation() {
             outputValues.push_back(result);
           }
         }
+        opIndex++;
       }
 
       // Create a new function for the current dataflow level.
@@ -93,8 +104,11 @@ void SplitFunction::runOnOperation() {
       for (auto op : ops) {
         op->moveBefore(returnOp);
         // Connect operands to the arguments of the new created function.
-        for (unsigned i = 0, e = op->getNumOperands(); i < e; ++i)
-          op->setOperand(i, entry->getArgument(inputMap[opIndex][i]));
+        for (unsigned i = 0, e = inputValues.size(); i < e; ++i)
+          inputValues[i].replaceUsesWithIf(
+              entry->getArgument(i), [&](mlir::OpOperand &use) {
+                return getSameLevelDstOp(returnOp, use.getOwner());
+              });
         opIndex += 1;
       }
     }

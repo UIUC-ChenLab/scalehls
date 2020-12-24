@@ -8,6 +8,28 @@
 using namespace mlir;
 using namespace scalehls;
 
+/// Collect all load and store operations in the block.
+void scalehls::getMemAccessesMap(Block &block, MemAccessesMap &map,
+                                 bool includeCalls) {
+  for (auto &op : block) {
+    if (isa<AffineReadOpInterface, AffineWriteOpInterface>(op))
+      map[MemRefAccess(&op).memref].push_back(&op);
+
+    else if (includeCalls && isa<CallOp>(op)) {
+      // All CallOps accessing the memory will be pushed back to the map.
+      for (auto operand : op.getOperands())
+        if (operand.getType().isa<MemRefType>())
+          map[operand].push_back(&op);
+
+    } else if (op.getNumRegions()) {
+      // Recursively collect memory access operations in each block.
+      for (auto &region : op.getRegions())
+        for (auto &block : region)
+          getMemAccessesMap(block, map);
+    }
+  }
+}
+
 // Check if the lhsOp and rhsOp is at the same scheduling level. In this check,
 // AffineIfOp is transparent.
 Optional<std::pair<Operation *, Operation *>>
@@ -118,26 +140,41 @@ hlscpp::ArrayOp scalehls::getArrayOp(Operation *op) {
   return getArrayOp(MemRefAccess(op).memref);
 }
 
-/// Collect all load and store operations in the block.
-void scalehls::getMemAccessesMap(Block &block, MemAccessesMap &map,
-                                 bool includeCalls) {
-  for (auto &op : block) {
-    if (isa<AffineReadOpInterface, AffineWriteOpInterface>(op))
-      map[MemRefAccess(&op).memref].push_back(&op);
+/// With the generated MemRefsMap, given a specific loop, we can easily find all
+/// memories which are consumed by the loop.
+void scalehls::getLoopLoadMemsMap(Block &block, MemRefsMap &map) {
+  for (auto loop : block.getOps<AffineForOp>()) {
+    loop.walk([&](Operation *op) {
+      if (auto affineLoad = dyn_cast<AffineLoadOp>(op)) {
+        auto &mems = map[loop];
+        if (std::find(mems.begin(), mems.end(), affineLoad.getMemRef()) ==
+            mems.end())
+          mems.push_back(affineLoad.getMemRef());
 
-    else if (includeCalls && isa<CallOp>(op)) {
-      // All CallOps accessing the memory will be pushed back to the map.
-      for (auto operand : op.getOperands())
-        if (operand.getType().isa<MemRefType>()) {
-          map[operand].push_back(&op);
-          break;
-        }
+      } else if (auto load = dyn_cast<LoadOp>(op)) {
+        auto &mems = map[loop];
+        if (std::find(mems.begin(), mems.end(), load.getMemRef()) == mems.end())
+          mems.push_back(load.getMemRef());
+      }
+    });
+  }
+}
 
-    } else if (op.getNumRegions()) {
-      // Recursively collect memory access operations in each block.
-      for (auto &region : op.getRegions())
-        for (auto &block : region)
-          getMemAccessesMap(block, map);
-    }
+/// With the generated MemAccessesMap, given a specific memory, we can easily
+/// find the loops which produce data to the memory.
+void scalehls::getLoopMemStoresMap(Block &block, MemAccessesMap &map) {
+  for (auto loop : block.getOps<AffineForOp>()) {
+    loop.walk([&](Operation *op) {
+      if (auto affineStore = dyn_cast<AffineStoreOp>(op)) {
+        auto &loops = map[affineStore.getMemRef()];
+        if (std::find(loops.begin(), loops.end(), loop) == loops.end())
+          loops.push_back(loop);
+
+      } else if (auto store = dyn_cast<StoreOp>(op)) {
+        auto &loops = map[store.getMemRef()];
+        if (std::find(loops.begin(), loops.end(), loop) == loops.end())
+          loops.push_back(loop);
+      }
+    });
   }
 }
