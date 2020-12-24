@@ -207,7 +207,7 @@ public:
   /// Special operation emitters.
   void emitSelect(SelectOp *op);
   void emitConstant(ConstantOp *op);
-  void emitIndexCast(IndexCastOp *op);
+  template <typename CastOpType> void emitCast(CastOpType *op);
   void emitCall(CallOp *op);
 
   /// Structure operations emitters.
@@ -423,7 +423,13 @@ public:
   /// Special operations.
   bool visitOp(SelectOp op) { return emitter.emitSelect(&op), true; }
   bool visitOp(ConstantOp op) { return emitter.emitConstant(&op), true; }
-  bool visitOp(IndexCastOp op) { return emitter.emitIndexCast(&op), true; }
+  bool visitOp(IndexCastOp op) {
+    return emitter.emitCast<IndexCastOp>(&op), true;
+  }
+  bool visitOp(UIToFPOp op) { return emitter.emitCast<UIToFPOp>(&op), true; }
+  bool visitOp(SIToFPOp op) { return emitter.emitCast<SIToFPOp>(&op), true; }
+  bool visitOp(FPToUIOp op) { return emitter.emitCast<FPToUIOp>(&op), true; }
+  bool visitOp(FPToSIOp op) { return emitter.emitCast<FPToSIOp>(&op), true; }
   bool visitOp(CallOp op) { return emitter.emitCall(&op), true; }
   bool visitOp(ReturnOp op) { return true; }
 
@@ -1194,7 +1200,7 @@ void ModuleEmitter::emitConstant(ConstantOp *op) {
     emitError(*op, "has unsupported constant type.");
 }
 
-void ModuleEmitter::emitIndexCast(IndexCastOp *op) {
+template <typename CastOpType> void ModuleEmitter::emitCast(CastOpType *op) {
   indent();
   emitValue(op->getResult());
   os << " = ";

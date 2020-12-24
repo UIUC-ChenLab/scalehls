@@ -52,7 +52,8 @@ public:
             AddCFOp, SubCFOp, ImOp, ReOp, CreateComplexOp,
             // Special operations.
             SelectOp, ConstantOp, CopySignOp, TruncateIOp, ZeroExtendIOp,
-            SignExtendIOp, IndexCastOp, CallOp, ReturnOp,
+            SignExtendIOp, IndexCastOp, CallOp, ReturnOp, UIToFPOp, SIToFPOp,
+            FPToSIOp, FPToUIOp,
             // Structure operations.
             AssignOp, ArrayOp, EndOp>([&](auto opNode) -> ResultType {
           return thisCast->visitOp(opNode, args...);
@@ -184,6 +185,10 @@ public:
   HANDLE(IndexCastOp);
   HANDLE(CallOp);
   HANDLE(ReturnOp);
+  HANDLE(UIToFPOp);
+  HANDLE(SIToFPOp);
+  HANDLE(FPToUIOp);
+  HANDLE(FPToSIOp);
 
   // Structure operations.
   HANDLE(AssignOp);

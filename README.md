@@ -4,7 +4,7 @@ This project aims to create a framework that ultimately converts an algorithm wr
 
 ## Quick Start
 ### 1. Install LLVM and MLIR
-**IMPORTANT** This step assumes that you have cloned LLVM from (https://github.com/circt/llvm) to `$LLVM_DIR`. To build LLVM and MLIR, run
+**IMPORTANT** This step assumes that you have cloned LLVM from (https://github.com/circt/llvm) to `$LLVM_DIR`. To build LLVM and MLIR, run:
 ```sh
 $ mkdir $LLVM_DIR/build
 $ cd $LLVM_DIR/build
@@ -18,7 +18,7 @@ $ ninja check-mlir
 ```
 
 ### 2. Install ScaleHLS
-This step assumes this repository is cloned to `$SCALEHLS_DIR`. To build and launch the tests, run
+This step assumes this repository is cloned to `$SCALEHLS_DIR`. To build and launch the tests, run:
 ```sh
 $ mkdir $SCALEHLS_DIR/build
 $ cd $SCALEHLS_DIR/build
@@ -31,7 +31,7 @@ $ ninja check-scalehls
 ```
 
 ### 3. Try ScaleHLS
-After the installation and test successfully completed, you should be able to play with
+After the installation and test successfully completed, you should be able to play with:
 ```sh
 $ export PATH=$SCALEHLS_DIR/build/bin:$PATH
 $ cd $SCALEHLS_DIR
@@ -61,7 +61,28 @@ $ benchmark-gen -type "cnn" -config "config/cnn-config.ini" -number 1 \
     | scalehls-translate -emit-hlscpp
 ```
 
-## Ablation study
+## Integration with ONNX-MLIR
+If you have installed ONNX-MLIR to `$ONNXMLIR_DIR` following the instruction from (https://github.com/onnx/onnx-mlir), you should be able to run the following integration test:
+```sh
+$ cd $SCALEHLS_DIR/test/onnx-mlir
+
+$ # Parse ONNX model to MLIR.
+$ $ONNXMLIR_DIR/build/bin/onnx-mlir -EmitONNXIR mnist.onnx
+
+$ # Lower from ONNX dialect to Affine dialect.
+$ $ONNXMLIR_DIR/build/bin/onnx-mlir-opt mnist.onnx.mlir -shape-inference \
+    -convert-onnx-to-krnl -pack-krnl-constants \
+    -convert-krnl-to-affine > mnist.mlir
+
+$ # Legalize the output of ONNX-MLIR, optimize and emit C++ code.
+$ scalehls-opt mnist.mlir -legalize-onnx \
+    -affine-loop-perfection -affine-loop-normalize \
+    -convert-to-hlscpp="top-function=main_graph" \
+    -store-op-forward -simplify-memref-access -cse -canonicalize \
+    | scalehls-translate -emit-hlscpp
+```
+
+## Ablation Study (Deprecated)
 If Vivado HLS (2019.1 tested) is installed on your machine, running the following script will report the HLS results for some benchmarks (around 8 hours on AMD Ryzen7 3800X for all 33 tests).
 
 For the `ablation_test_run.sh` script, `-n` determines the number of tests to be processed, the maximum supported value of which is 33; `-c` determines from which test to begin to rerun the C++ synthesis. The generated C++ source code will be written to `sample/cpp_src`; the Vivado HLS project will be established in `sample/hls_proj`; the collected report will be written to `sample/test_results`; the test summary will be generated to `sample`.
