@@ -81,6 +81,14 @@ public:
   bool visitOp(AffineStoreOp op, unsigned begin) {
     return estimateLoadStore(op, begin), true;
   }
+  bool visitOp(LoadOp op, unsigned begin) {
+    setScheduleValue(op, begin, begin + 2);
+    return true;
+  }
+  bool visitOp(StoreOp op, unsigned begin) {
+    setScheduleValue(op, begin, begin + 1);
+    return true;
+  }
 
   /// AffineForOp related methods.
   // unsigned getOpMinII(AffineForOp forOp);
@@ -518,8 +526,10 @@ bool HLSCppEstimator::visitOp(AffineForOp op, unsigned begin) {
   // have static loop bound.
   if (auto tripCount = getConstantTripCount(op))
     setAttrValue(op, "trip_count", (unsigned)tripCount.getValue());
-  else
-    return false;
+  else {
+    // TODO: how to handle unknown trip count.
+    setAttrValue(op, "trip_count", (unsigned)1);
+  }
 
   // If the current loop is annotated as flatten, it will be flattened into the
   // child pipelined loop. This will increase the flattened loop trip count

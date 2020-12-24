@@ -69,6 +69,63 @@ void LegalizeOnnx::runOnOperation() {
   }
 
   for (auto func : funcs) {
+    // Convert add operations to AffineApply.
+    func.walk([&](mlir::AddIOp addOp) {
+      builder.setInsertionPoint(addOp);
+      auto map = AffineMap::get(
+          2, 0, builder.getAffineDimExpr(0) + builder.getAffineDimExpr(1),
+          builder.getContext());
+      auto newAdd = builder.create<mlir::AffineApplyOp>(
+          addOp.getLoc(), addOp.getType(), map, addOp.getOperands());
+      addOp.getResult().replaceAllUsesWith(newAdd);
+    });
+
+    // Convert normal load operations to AffineLoad.
+    func.walk([&](mlir::LoadOp loadOp) {
+      SmallVector<AffineExpr, 4> exprs;
+      SmallVector<Value, 4> dims;
+      SmallVector<Value, 4> symbols;
+      bool isAffineFlag = true;
+
+      for (auto index : loadOp.getIndices()) {
+        // Handle constant defining operation.
+        if (auto defOp = index.getDefiningOp())
+          if (auto constOp = dyn_cast<mlir::ConstantOp>(defOp))
+            if (constOp.getType().isa<IndexType>())
+              if (auto constAttr = constOp.getValue().dyn_cast<IntegerAttr>()) {
+                exprs.push_back(
+                    builder.getAffineConstantExpr(constAttr.getUInt()));
+                continue;
+              }
+
+        // Check whether a valid affine index.
+        if (isValidDim(index)) {
+          exprs.push_back(builder.getAffineDimExpr(dims.size()));
+          dims.push_back(index);
+          continue;
+        }
+        if (isValidSymbol(index)) {
+          exprs.push_back(builder.getAffineSymbolExpr(symbols.size()));
+          symbols.push_back(index);
+          continue;
+        }
+
+        // If the index is not a constant or dim or symbol, break.
+        isAffineFlag = false;
+        break;
+      }
+
+      if (isAffineFlag) {
+        builder.setInsertionPoint(loadOp);
+        auto map = AffineMap::get(dims.size(), symbols.size(), exprs,
+                                  builder.getContext());
+        dims.append(symbols.begin(), symbols.end());
+        auto newLoad = builder.create<mlir::AffineLoadOp>(
+            loadOp.getLoc(), loadOp.getMemRef(), map, dims);
+        loadOp.getResult().replaceAllUsesWith(newLoad);
+      }
+    });
+
     SmallVector<Type, 16> weightTypes;
     SmallVector<int64_t, 16> weightOffsets;
     SmallVector<Value, 16> weightValues;
