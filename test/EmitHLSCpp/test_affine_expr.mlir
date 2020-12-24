@@ -21,7 +21,7 @@ func @test_affine_expr(%arg0: index, %arg1: index, %arg2: index) {
   // CHECK: int [[VAL_2:.*]] = (([[ARG_0:.*]] * [[ARG_1:.*]]) * 11);
   %2 = affine.apply #mul (%arg0)[%arg1]
 
-  // CHECK: int [[VAL_3:.*]] = (([[ARG_0:.*]] * (-[[ARG_1:.*]])) * (-11));
+  // CHECK: int [[VAL_3:.*]] = (([[ARG_0:.*]] * (-[[ARG_1:.*]])) * -11);
   %3 = affine.apply #negmul (%arg0)[%arg1]
 
   // CHECK: int [[VAL_4:.*]] = (([[ARG_0:.*]] + [[ARG_1:.*]] - 1) / [[ARG_1:.*]]) + 11 - 1) / 11);

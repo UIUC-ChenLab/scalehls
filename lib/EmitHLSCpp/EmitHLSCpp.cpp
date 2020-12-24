@@ -70,14 +70,7 @@ public:
   /// Value name management methods.
   SmallString<8> addName(Value val, bool isPtr = false);
 
-  SmallString<8> addAlias(Value val, Value alias) {
-    assert(!isDeclared(alias) && "has been declared before.");
-    assert(isDeclared(val) && "hasn't been declared before.");
-
-    auto name = getName(val);
-    state.nameTable[alias] = name;
-    return name;
-  }
+  SmallString<8> addAlias(Value val, Value alias);
 
   SmallString<8> getName(Value val);
 
@@ -96,7 +89,7 @@ private:
 
 // TODO: update naming rule.
 SmallString<8> HLSCppEmitterBase::addName(Value val, bool isPtr) {
-  // assert(!isDeclared(val) && "has been declared before.");
+  assert(!isDeclared(val) && "has been declared before.");
 
   SmallString<8> valName;
   if (isPtr)
@@ -120,6 +113,28 @@ SmallString<8> HLSCppEmitterBase::addName(Value val, bool isPtr) {
   return valName;
 }
 
+SmallString<8> HLSCppEmitterBase::addAlias(Value val, Value alias) {
+  assert(!isDeclared(alias) && "has been declared before.");
+  assert(isDeclared(val) && "hasn't been declared before.");
+
+  auto valName = getName(val);
+  state.nameTable[alias] = valName;
+
+  // If the definition operation is ArrayOp, then the ArrayOp operand should be
+  // an alias of the current value.
+  if (auto defOp = alias.getDefiningOp())
+    if (auto arrayOp = dyn_cast<ArrayOp>(defOp))
+      state.nameTable[arrayOp.getOperand()] = valName;
+
+  // If the first user is ArrayOp, then the ArrayOp result should be an alias of
+  // the current value.
+  if (!alias.getUsers().empty())
+    if (auto arrayOp = dyn_cast<ArrayOp>(*alias.getUsers().begin()))
+      return state.nameTable[arrayOp.getResult()] = valName;
+
+  return valName;
+}
+
 SmallString<8> HLSCppEmitterBase::getName(Value val) {
   // For constant scalar operations, the constant number will be returned rather
   // than the value name.
@@ -128,18 +143,19 @@ SmallString<8> HLSCppEmitterBase::getName(Value val) {
       auto constAttr = constOp.getValue();
       if (auto floatAttr = constAttr.dyn_cast<FloatAttr>()) {
         auto value = floatAttr.getValueAsDouble();
-        if (value < 0)
-          return StringRef("(" + to_string(value) + ")");
-        return StringRef(to_string(value));
+        if (isfinite(value))
+          return SmallString<8>(to_string(value));
+        else if (value > 0)
+          return SmallString<8>("INFINITY");
+        else
+          return SmallString<8>("-INFINITY");
 
       } else if (auto intAttr = constAttr.dyn_cast<IntegerAttr>()) {
         auto value = intAttr.getInt();
-        if (value < 0)
-          return StringRef("(" + to_string(value) + ")");
-        return StringRef(to_string(value));
+        return SmallString<8>(to_string(value));
 
       } else if (auto boolAttr = constAttr.dyn_cast<BoolAttr>())
-        return StringRef(to_string(boolAttr.getValue()));
+        return SmallString<8>(to_string(boolAttr.getValue()));
     }
   }
   return state.nameTable.lookup(val);
@@ -246,13 +262,7 @@ public:
     os << ")";
   }
 
-  void visitConstantExpr(AffineConstantExpr expr) {
-    auto exprValue = expr.getValue();
-    if (exprValue < 0)
-      os << "(" << exprValue << ")";
-    else
-      os << exprValue;
-  }
+  void visitConstantExpr(AffineConstantExpr expr) { os << expr.getValue(); }
 
   void visitDimExpr(AffineDimExpr expr) {
     os << getName(operands[expr.getPosition()]);
@@ -1150,11 +1160,25 @@ void ModuleEmitter::emitConstant(ConstantOp *op) {
 
     unsigned elementIdx = 0;
     for (auto element : denseAttr.getAttributeValues()) {
-      if (type.isF32())
-        os << element.cast<FloatAttr>().getValue().convertToFloat();
-      else if (type.isF64())
-        os << element.cast<FloatAttr>().getValue().convertToDouble();
-      else if (type.isInteger(1))
+      if (type.isF32()) {
+        auto value = element.cast<FloatAttr>().getValue().convertToFloat();
+        if (isfinite(value))
+          os << value;
+        else if (value > 0)
+          os << "INFINITY";
+        else
+          os << "-INFINITY";
+
+      } else if (type.isF64()) {
+        auto value = element.cast<FloatAttr>().getValue().convertToDouble();
+        if (isfinite(value))
+          os << value;
+        else if (value > 0)
+          os << "INFINITY";
+        else
+          os << "-INFINITY";
+
+      } else if (type.isInteger(1))
         os << element.cast<BoolAttr>().getValue();
       else if (type.isIntOrIndex())
         os << element.cast<IntegerAttr>().getValue();

@@ -280,6 +280,7 @@ bool HLSKernelVisitor::visitOp(MaxPoolOp op) {
   auto c = createLoop(0, OShape[1]);
 
   // Set largest value as zero.
+  // TODO: should be negative infinite.
   auto dataType = O.getType().cast<MemRefType>().getElementType();
   auto zeroConst = builder.create<mlir::ConstantOp>(
       op.getLoc(), builder.getZeroAttr(dataType));

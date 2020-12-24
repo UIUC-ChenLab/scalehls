@@ -3,6 +3,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Conversion/Passes.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/Builders.h"
 
@@ -15,6 +16,25 @@ struct LegalizeOnnx : public LegalizeOnnxBase<LegalizeOnnx> {
   void runOnOperation() override;
 };
 } // namespace
+
+static AffineMap getIndexMap(int64_t memSize, MemRefType memType,
+                             OpBuilder &builder) {
+  unsigned accSize = memSize;
+  SmallVector<AffineExpr, 4> exprs;
+
+  for (int64_t i = 0, e = memType.getRank(); i < e; ++i) {
+    auto dimSize = memType.getShape()[i];
+    accSize /= dimSize;
+
+    if (dimSize == 1)
+      exprs.push_back(builder.getAffineConstantExpr(0));
+    else if (accSize == memSize / dimSize)
+      exprs.push_back(builder.getAffineDimExpr(0).floorDiv(accSize));
+    else
+      exprs.push_back(builder.getAffineDimExpr(0).floorDiv(accSize) % dimSize);
+  }
+  return AffineMap::get(1, 0, exprs, builder.getContext());
+}
 
 void LegalizeOnnx::runOnOperation() {
   auto module = getOperation();
@@ -74,16 +94,30 @@ void LegalizeOnnx::runOnOperation() {
         opsToErase.push_back(&op);
 
       } else if (op.getName().getStringRef() == "krnl.memcpy") {
-        // Replace kernel memcpy with standard memref reshape operation.
-        auto result = op.getOperand(1);
-        builder.setInsertionPointAfterValue(result);
-        auto resultRank = result.getType().cast<MemRefType>().getRank();
-        auto shape = builder.create<mlir::AllocOp>(
-            op.getLoc(), MemRefType::get(resultRank, builder.getIndexType()));
-        auto newResult = builder.create<mlir::MemRefReshapeOp>(
-            op.getLoc(), result.getType(), op.getOperand(0), shape);
+        // Reshape the source memref.
+        builder.setInsertionPoint(&op);
+        auto src = op.getOperand(1);
+        auto dst = op.getOperand(0);
+        auto srcType = src.getType().cast<MemRefType>();
+        auto dstType = dst.getType().cast<MemRefType>();
 
-        result.replaceAllUsesWith(newResult);
+        // Calculate memory size.
+        int64_t memSize = 1;
+        for (int64_t i = 0, e = dstType.getRank(); i < e; ++i)
+          memSize *= dstType.getShape()[i];
+
+        // Create affine loops for memory copy.
+        auto loop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, memSize);
+        auto loopIdv = loop.getInductionVar();
+        builder.setInsertionPointToStart(&loop.getLoopBody().front());
+
+        // Create load and store operations.
+        auto val = builder.create<mlir::AffineLoadOp>(
+            op.getLoc(), src, getIndexMap(memSize, srcType, builder), loopIdv);
+        builder.create<mlir::AffineStoreOp>(
+            op.getLoc(), val, dst, getIndexMap(memSize, dstType, builder),
+            loopIdv);
+
         opsToErase.push_back(&op);
 
       } else if (isa<mlir::DeallocOp>(op))
