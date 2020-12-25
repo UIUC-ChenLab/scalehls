@@ -33,7 +33,6 @@ def ArrayOp : HLSCppOp<"array", [SameOperandsAndResultType]> {
     // Interface-related attributes.
     DefaultValuedAttr<BoolAttr, "false"> : $interface,
     DefaultValuedAttr<InterfaceModeAttr, "bram"> : $interface_mode,
-    DefaultValuedAttr<PositiveUI32Attr, "1"> : $interface_depth,
 
     // BindStorage-related attributes.
     DefaultValuedAttr<BoolAttr, "false"> : $storage,
@@ -41,9 +40,9 @@ def ArrayOp : HLSCppOp<"array", [SameOperandsAndResultType]> {
 
     // ArrayPartition-related attributes.
     DefaultValuedAttr<BoolAttr, "false"> : $partition,
-    DefaultValuedAttr<PositiveUI32Attr, "1"> : $partition_num,
+    DefaultValuedAttr<PositiveI64Attr, "1"> : $partition_num,
     DefaultValuedAttr<PartitionTypeArrayAttr, "{}"> : $partition_type,
-    DefaultValuedAttr<PositiveUI32ArrayAttr, "{}"> : $partition_factor
+    DefaultValuedAttr<PositiveI64ArrayAttr, "{}"> : $partition_factor
   );
 
   let results = (outs Type<IsShapedTypePred> : $output);

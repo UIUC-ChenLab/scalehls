@@ -98,14 +98,14 @@ static void applyArrayPartition(MemAccessesMap &map, OpBuilder &builder) {
         factor = accessNum;
       }
 
-      partitionFactor.push_back(builder.getUI32IntegerAttr(factor));
+      partitionFactor.push_back(builder.getI64IntegerAttr(factor));
       partitionNum *= factor;
     }
 
     arrayOp.setAttr("partition", builder.getBoolAttr(true));
     arrayOp.setAttr("partition_type", builder.getStrArrayAttr(partitionType));
     arrayOp.setAttr("partition_factor", builder.getArrayAttr(partitionFactor));
-    arrayOp.setAttr("partition_num", builder.getUI32IntegerAttr(partitionNum));
+    arrayOp.setAttr("partition_num", builder.getI64IntegerAttr(partitionNum));
   }
 }
 

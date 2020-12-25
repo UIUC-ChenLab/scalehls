@@ -18,7 +18,7 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hlscpp;
 
-using LatencyMap = llvm::StringMap<unsigned>;
+using LatencyMap = llvm::StringMap<int64_t>;
 
 //===----------------------------------------------------------------------===//
 // HLSCppEstimator Class
@@ -26,7 +26,7 @@ using LatencyMap = llvm::StringMap<unsigned>;
 
 namespace {
 class HLSCppEstimator
-    : public HLSCppVisitorBase<HLSCppEstimator, bool, unsigned>,
+    : public HLSCppVisitorBase<HLSCppEstimator, bool, int64_t>,
       public HLSCppAnalysisBase {
 public:
   explicit HLSCppEstimator(FuncOp &func, LatencyMap &latencyMap)
@@ -52,57 +52,57 @@ public:
   using Ports = SmallVector<PortInfo, 16>;
   using PortsMap = DenseMap<Operation *, Ports>;
   // For storing PortsMap indexed by the scheduling level.
-  using PortsMapDict = DenseMap<unsigned, PortsMap>;
+  using PortsMapDict = DenseMap<int64_t, PortsMap>;
 
   // For storing the DSP resource utilization indexed by the schedule level.
-  using ResourceMap = DenseMap<unsigned, unsigned>;
+  using ResourceMap = DenseMap<int64_t, int64_t>;
 
   /// Collect all dependencies detected in the function.
   void getFuncDependencies();
 
-  void setScheduleValue(Operation *op, unsigned begin, unsigned end) {
+  void setScheduleValue(Operation *op, int64_t begin, int64_t end) {
     setAttrValue(op, "schedule_begin", begin);
     setAttrValue(op, "schedule_end", end);
   }
 
   using HLSCppVisitorBase::visitOp;
-  bool visitUnhandledOp(Operation *op, unsigned begin) {
+  bool visitUnhandledOp(Operation *op, int64_t begin) {
     // Default latency of any unhandled operation is 0.
     setScheduleValue(op, begin, begin);
     return true;
   }
 
   /// LoadOp and StoreOp related methods.
-  int32_t getPartitionIndex(Operation *op);
-  void estimateLoadStore(Operation *op, unsigned begin);
-  bool visitOp(AffineLoadOp op, unsigned begin) {
+  int64_t getPartitionIndex(Operation *op);
+  void estimateLoadStore(Operation *op, int64_t begin);
+  bool visitOp(AffineLoadOp op, int64_t begin) {
     return estimateLoadStore(op, begin), true;
   }
-  bool visitOp(AffineStoreOp op, unsigned begin) {
+  bool visitOp(AffineStoreOp op, int64_t begin) {
     return estimateLoadStore(op, begin), true;
   }
-  bool visitOp(LoadOp op, unsigned begin) {
+  bool visitOp(LoadOp op, int64_t begin) {
     setScheduleValue(op, begin, begin + 2);
     return true;
   }
-  bool visitOp(StoreOp op, unsigned begin) {
+  bool visitOp(StoreOp op, int64_t begin) {
     setScheduleValue(op, begin, begin + 1);
     return true;
   }
 
   /// AffineForOp related methods.
   // unsigned getOpMinII(AffineForOp forOp);
-  unsigned getResMinII(MemAccessesMap &map);
-  unsigned getDepMinII(AffineForOp forOp, MemAccessesMap &map);
-  bool visitOp(AffineForOp op, unsigned begin);
+  int64_t getResMinII(MemAccessesMap &map);
+  int64_t getDepMinII(AffineForOp forOp, MemAccessesMap &map);
+  bool visitOp(AffineForOp op, int64_t begin);
 
   /// Other operation handlers.
-  bool visitOp(AffineIfOp op, unsigned begin);
-  bool visitOp(CallOp op, unsigned begin);
+  bool visitOp(AffineIfOp op, int64_t begin);
+  bool visitOp(CallOp op, int64_t begin);
 
   /// Handle operations with profiled latency.
 #define HANDLE(OPTYPE, KEYNAME)                                                \
-  bool visitOp(OPTYPE op, unsigned begin) {                                    \
+  bool visitOp(OPTYPE op, int64_t begin) {                                     \
     setScheduleValue(op, begin, begin + latencyMap[KEYNAME] + 1);              \
     return true;                                                               \
   }
@@ -113,11 +113,11 @@ public:
 #undef HANDLE
 
   /// Block scheduler and estimator.
-  unsigned getResourceMap(Block &block, ResourceMap &addFMap,
-                          ResourceMap &mulFMap);
-  unsigned estimateResource(Block &block);
-  Optional<std::pair<unsigned, unsigned>> estimateBlock(Block &block,
-                                                        unsigned begin);
+  int64_t getResourceMap(Block &block, ResourceMap &addFMap,
+                         ResourceMap &mulFMap);
+  int64_t estimateResource(Block &block);
+  Optional<std::pair<int64_t, int64_t>> estimateBlock(Block &block,
+                                                      int64_t begin);
   void reverseSchedule();
   void estimateFunc();
 
@@ -194,7 +194,7 @@ void HLSCppEstimator::getFuncDependencies() {
 //===----------------------------------------------------------------------===//
 
 /// Calculate the overall partition index.
-int32_t HLSCppEstimator::getPartitionIndex(Operation *op) {
+int64_t HLSCppEstimator::getPartitionIndex(Operation *op) {
   auto arrayOp = getArrayOp(op);
   AffineValueMap accessMap;
   MemRefAccess(op).getAccessMap(&accessMap);
@@ -203,6 +203,7 @@ int32_t HLSCppEstimator::getPartitionIndex(Operation *op) {
   // will ensure the "cyclic" array partition can be correctly detected.
   SmallVector<AffineExpr, 4> dimReplacements;
   SmallVector<AffineExpr, 4> symReplacements;
+
   unsigned operandIdx = 0;
   for (auto operand : accessMap.getOperands()) {
     if (operandIdx < accessMap.getNumDims()) {
@@ -228,21 +229,18 @@ int32_t HLSCppEstimator::getPartitionIndex(Operation *op) {
 
   // Calculate the partition index of this load/store operation honoring the
   // partition strategy applied.
-  int32_t partitionIdx = 0;
-  unsigned accumFactor = 1;
-  unsigned dim = 0;
+  int64_t partitionIdx = 0;
+  int64_t accumFactor = 1;
 
+  unsigned dim = 0;
   for (auto expr : newMap.getResults()) {
     auto idxExpr = builder.getAffineConstantExpr(0);
-    unsigned factor = 1;
+    int64_t factor = 1;
 
     if (arrayOp.partition()) {
       auto type = getPartitionType(arrayOp, dim);
       factor = getPartitionFactor(arrayOp, dim);
 
-      // TODO: detect the step size.
-      // %i = 0 to 16 step 4
-      // %i % 4 = 0
       if (type == "cyclic")
         idxExpr = expr % builder.getAffineConstantExpr(factor);
       else if (type == "block") {
@@ -269,7 +267,7 @@ int32_t HLSCppEstimator::getPartitionIndex(Operation *op) {
 }
 
 /// Schedule load/store operation honoring the memory ports number limitation.
-void HLSCppEstimator::estimateLoadStore(Operation *op, unsigned begin) {
+void HLSCppEstimator::estimateLoadStore(Operation *op, int64_t begin) {
   // Calculate partition index.
   auto partitionIdx = getPartitionIndex(op);
   setAttrValue(op, "partition_index", partitionIdx);
@@ -365,19 +363,19 @@ void HLSCppEstimator::estimateLoadStore(Operation *op, unsigned begin) {
 //   unsigned II = 1;
 //   forOp.walk([&](Operation *op) {
 //     unsigned minII = 0;
-//     if (auto latency = getUIntAttrValue(op, "latency"))
+//     if (auto latency = getIntAttrValue(op, "latency"))
 //       minII = latency;
 //     else
-//       minII = getUIntAttrValue(op, "schedule_end") -
-//               getUIntAttrValue(op, "schedule_begin");
+//       minII = getIntAttrValue(op, "schedule_end") -
+//               getIntAttrValue(op, "schedule_begin");
 //     II = max(II, minII);
 //   });
 //   return II;
 // }
 
 /// Calculate the minimum resource II.
-unsigned HLSCppEstimator::getResMinII(MemAccessesMap &map) {
-  unsigned II = 1;
+int64_t HLSCppEstimator::getResMinII(MemAccessesMap &map) {
+  int64_t II = 1;
 
   for (auto &pair : map) {
     auto arrayOp = getArrayOp(pair.first);
@@ -385,8 +383,8 @@ unsigned HLSCppEstimator::getResMinII(MemAccessesMap &map) {
     auto partitionNum = arrayOp.partition_num();
     auto storageType = arrayOp.storage_type();
 
-    SmallVector<unsigned, 16> readNum;
-    SmallVector<unsigned, 16> writeNum;
+    SmallVector<int64_t, 16> readNum;
+    SmallVector<int64_t, 16> writeNum;
     for (unsigned i = 0, e = partitionNum; i < e; ++i) {
       readNum.push_back(0);
       writeNum.push_back(0);
@@ -397,7 +395,7 @@ unsigned HLSCppEstimator::getResMinII(MemAccessesMap &map) {
     for (auto op : loadStores) {
       auto partitionIdx = getIntAttrValue(op, "partition_index");
       if (partitionIdx == -1) {
-        unsigned accessNum = 2;
+        int64_t accessNum = 2;
         if (storageType == "ram_1p_bram" || storageType == "ram_s2p_bram")
           accessNum = 1;
         else if (storageType == "ram_2p_bram" || storageType == "ram_t2p_bram")
@@ -422,7 +420,7 @@ unsigned HLSCppEstimator::getResMinII(MemAccessesMap &map) {
         writeNum[partitionIdx]++;
     }
 
-    unsigned minII = 1;
+    int64_t minII = 1;
     if (storageType == "ram_1p_bram")
       for (unsigned i = 0, e = partitionNum; i < e; ++i)
         minII = max(minII, readNum[i] + writeNum[i]);
@@ -442,12 +440,12 @@ unsigned HLSCppEstimator::getResMinII(MemAccessesMap &map) {
 }
 
 /// Calculate the minimum dependency II.
-unsigned HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
-  unsigned II = 1;
+int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
+  int64_t II = 1;
 
   // Collect start and end level of the pipeline.
-  unsigned endLevel = 1;
-  unsigned startLevel = 1;
+  int64_t endLevel = 1;
+  int64_t startLevel = 1;
   auto currentLoop = forOp;
   while (true) {
     if (auto outerLoop = dyn_cast<AffineForOp>(currentLoop.getParentOp())) {
@@ -466,7 +464,7 @@ unsigned HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
     // that are pipelined. Note that for inter-dependency, dstOp is always
     // before srcOp.
     for (unsigned loopDepth = startLevel; loopDepth <= endLevel; ++loopDepth) {
-      unsigned dstIndex = 1;
+      int64_t dstIndex = 1;
       for (auto dstOp : loadStores) {
         MemRefAccess dstAccess(dstOp);
 
@@ -480,14 +478,14 @@ unsigned HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
               srcAccess, dstAccess, loopDepth, &depConstrs, &depComps);
 
           if (hasDependence(result)) {
-            SmallVector<unsigned, 2> flattenTripCounts;
+            SmallVector<int64_t, 2> flattenTripCounts;
             flattenTripCounts.push_back(1);
             int64_t distance = 0;
 
             // Calculate the distance of this dependency.
             for (auto it = depComps.rbegin(); it < depComps.rend(); ++it) {
               auto dep = *it;
-              auto tripCount = getUIntAttrValue(dep.op, "trip_count");
+              auto tripCount = getIntAttrValue(dep.op, "trip_count");
 
               if (dep.lb)
                 distance += flattenTripCounts.back() * dep.lb.getValue();
@@ -495,11 +493,11 @@ unsigned HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
               flattenTripCounts.push_back(flattenTripCounts.back() * tripCount);
             }
 
-            unsigned delay = getUIntAttrValue(dstOp, "schedule_end") -
-                             getUIntAttrValue(srcOp, "schedule_begin");
+            float delay = getIntAttrValue(dstOp, "schedule_end") -
+                          getIntAttrValue(srcOp, "schedule_begin");
 
             if (distance > 0) {
-              unsigned minII = ceil((float)delay / distance);
+              int64_t minII = ceil(delay / distance);
               II = max(II, minII);
             }
           }
@@ -511,8 +509,8 @@ unsigned HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
   return II;
 }
 
-bool HLSCppEstimator::visitOp(AffineForOp op, unsigned begin) {
-  unsigned end = begin;
+bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
+  auto end = begin;
   auto &loopBlock = op.getLoopBody().front();
 
   // Estimate the loop block.
@@ -525,10 +523,10 @@ bool HLSCppEstimator::visitOp(AffineForOp op, unsigned begin) {
   // Set an attribute indicating the trip count. For now, we assume all loops
   // have static loop bound.
   if (auto tripCount = getConstantTripCount(op))
-    setAttrValue(op, "trip_count", (unsigned)tripCount.getValue());
+    setAttrValue(op, "trip_count", (int64_t)tripCount.getValue());
   else {
     // TODO: how to handle unknown trip count.
-    setAttrValue(op, "trip_count", (unsigned)1);
+    setAttrValue(op, "trip_count", (int64_t)1);
   }
 
   // If the current loop is annotated as flatten, it will be flattened into the
@@ -538,14 +536,14 @@ bool HLSCppEstimator::visitOp(AffineForOp op, unsigned begin) {
     auto child = dyn_cast<AffineForOp>(op.getLoopBody().front().front());
     assert(child && "the first containing operation is not a loop");
 
-    auto iterLatency = getUIntAttrValue(child, "iter_latency");
+    auto iterLatency = getIntAttrValue(child, "iter_latency");
     setAttrValue(op, "iter_latency", iterLatency);
 
-    auto II = getUIntAttrValue(child, "init_interval");
+    auto II = getIntAttrValue(child, "init_interval");
     setAttrValue(op, "init_interval", II);
 
-    auto flattenTripCount = getUIntAttrValue(child, "flatten_trip_count") *
-                            getUIntAttrValue(op, "trip_count");
+    auto flattenTripCount = getIntAttrValue(child, "flatten_trip_count") *
+                            getIntAttrValue(op, "trip_count");
     setAttrValue(op, "flatten_trip_count", flattenTripCount);
 
     auto latency = iterLatency + II * (flattenTripCount - 1);
@@ -555,7 +553,7 @@ bool HLSCppEstimator::visitOp(AffineForOp op, unsigned begin) {
     setScheduleValue(op, begin, begin + latency);
 
     // The resource utilization of flattened loop is equal to its child's.
-    setAttrValue(op, "dsp", getUIntAttrValue(child, "dsp"));
+    setAttrValue(op, "dsp", getIntAttrValue(child, "dsp"));
     return true;
   }
 
@@ -581,7 +579,7 @@ bool HLSCppEstimator::visitOp(AffineForOp op, unsigned begin) {
     // auto II = max({getOpMinII(op), getResMinII(map), getDepMinII(op, map)});
     setAttrValue(op, "init_interval", II);
 
-    auto tripCount = getUIntAttrValue(op, "trip_count");
+    auto tripCount = getIntAttrValue(op, "trip_count");
     setAttrValue(op, "flatten_trip_count", tripCount);
 
     auto latency = iterLatency + II * (tripCount - 1);
@@ -598,7 +596,7 @@ bool HLSCppEstimator::visitOp(AffineForOp op, unsigned begin) {
 
   // Default case (not flattend or pipelined), calculate latency and resource
   // utilization accordingly.
-  unsigned latency = iterLatency * getUIntAttrValue(op, "trip_count");
+  auto latency = iterLatency * getIntAttrValue(op, "trip_count");
   setAttrValue(op, "latency", latency);
 
   setScheduleValue(op, begin, begin + latency + 2);
@@ -610,8 +608,8 @@ bool HLSCppEstimator::visitOp(AffineForOp op, unsigned begin) {
 // Other Operation Handlers
 //===----------------------------------------------------------------------===//
 
-bool HLSCppEstimator::visitOp(AffineIfOp op, unsigned begin) {
-  unsigned end = begin;
+bool HLSCppEstimator::visitOp(AffineIfOp op, int64_t begin) {
+  auto end = begin;
   auto thenBlock = op.getThenBlock();
 
   // Estimate then block.
@@ -636,7 +634,7 @@ bool HLSCppEstimator::visitOp(AffineIfOp op, unsigned begin) {
   return true;
 }
 
-bool HLSCppEstimator::visitOp(mlir::CallOp op, unsigned begin) {
+bool HLSCppEstimator::visitOp(mlir::CallOp op, int64_t begin) {
   auto callee = SymbolTable::lookupSymbolIn(func.getParentOp(), op.getCallee());
   auto subFunc = dyn_cast<FuncOp>(callee);
   assert(subFunc && "callable is not a function operation");
@@ -645,7 +643,7 @@ bool HLSCppEstimator::visitOp(mlir::CallOp op, unsigned begin) {
   estimator.estimateFunc();
 
   // We assume enter and leave the subfunction require extra 2 clock cycles.
-  if (auto subLatency = getUIntAttrValue(subFunc, "latency")) {
+  if (auto subLatency = getIntAttrValue(subFunc, "latency")) {
     setScheduleValue(op, begin, begin + subLatency + 2);
     return true;
   } else
@@ -656,12 +654,12 @@ bool HLSCppEstimator::visitOp(mlir::CallOp op, unsigned begin) {
 // Block Scheduler and Estimator
 //===----------------------------------------------------------------------===//
 
-unsigned HLSCppEstimator::getResourceMap(Block &block, ResourceMap &addFMap,
-                                         ResourceMap &mulFMap) {
-  unsigned loopResource = 0;
+int64_t HLSCppEstimator::getResourceMap(Block &block, ResourceMap &addFMap,
+                                        ResourceMap &mulFMap) {
+  int64_t loopResource = 0;
   for (auto &op : block) {
-    auto begin = getUIntAttrValue(&op, "schedule_begin");
-    auto end = getUIntAttrValue(&op, "schedule_end");
+    auto begin = getIntAttrValue(&op, "schedule_begin");
+    auto end = getIntAttrValue(&op, "schedule_end");
 
     // Accumulate the resource utilization of each operation.
     if (isa<AddFOp>(op))
@@ -673,7 +671,7 @@ unsigned HLSCppEstimator::getResourceMap(Block &block, ResourceMap &addFMap,
         mulFMap[i]++;
 
     else if (isa<AffineForOp>(op))
-      loopResource += getUIntAttrValue(&op, "dsp");
+      loopResource += getIntAttrValue(&op, "dsp");
 
     else if (auto ifOp = dyn_cast<AffineIfOp>(op)) {
       // AffineIfOp is transparent during scheduling, thus here we recursively
@@ -686,17 +684,17 @@ unsigned HLSCppEstimator::getResourceMap(Block &block, ResourceMap &addFMap,
   return loopResource;
 }
 
-unsigned HLSCppEstimator::estimateResource(Block &block) {
+int64_t HLSCppEstimator::estimateResource(Block &block) {
   ResourceMap addFMap;
   ResourceMap mulFMap;
-  unsigned loopResource = getResourceMap(block, addFMap, mulFMap);
+  auto loopResource = getResourceMap(block, addFMap, mulFMap);
 
   // Find the max resource utilization across all schedule levels.
-  unsigned maxAddF = 0;
+  int64_t maxAddF = 0;
   for (auto level : addFMap)
     maxAddF = max(maxAddF, level.second);
 
-  unsigned maxMulF = 0;
+  int64_t maxMulF = 0;
   for (auto level : mulFMap)
     maxMulF = max(maxMulF, level.second);
 
@@ -710,35 +708,35 @@ unsigned HLSCppEstimator::estimateResource(Block &block) {
 /// Estimate the latency of a block with ALAP scheduling strategy, return the
 /// end level of schedule. Meanwhile, the input begin will also be updated if
 /// required (typically happens in AffineForOps).
-Optional<std::pair<unsigned, unsigned>>
-HLSCppEstimator::estimateBlock(Block &block, unsigned begin) {
-  unsigned blockBegin = begin;
-  unsigned blockEnd = begin;
+Optional<std::pair<int64_t, int64_t>>
+HLSCppEstimator::estimateBlock(Block &block, int64_t begin) {
+  auto blockBegin = begin;
+  auto blockEnd = begin;
 
   // Reversely walk through all operations in the block.
   for (auto it = block.rbegin(), e = block.rend(); it != e; ++it) {
     auto op = &*it;
-    unsigned opBegin = begin;
-    unsigned opEnd = begin;
+    auto opBegin = begin;
+    auto opEnd = begin;
 
     // Fine the latest arrived successor relying on the current operation.
     for (auto result : op->getResults())
       for (auto user : result.getUsers()) {
         auto sameLevelUser = getSameLevelDstOp(op, user);
-        opBegin = max(opBegin, getUIntAttrValue(sameLevelUser, "schedule_end"));
+        opBegin = max(opBegin, getIntAttrValue(sameLevelUser, "schedule_end"));
       }
 
     // Check dependencies of the operation and update schedule level.
     for (auto dstOp : dependsMap[op]) {
       auto sameLevelDstOp = getSameLevelDstOp(op, dstOp);
-      opBegin = max(opBegin, getUIntAttrValue(sameLevelDstOp, "schedule_end"));
+      opBegin = max(opBegin, getIntAttrValue(sameLevelDstOp, "schedule_end"));
     }
 
     // Estimate the current operation.
     if (dispatchVisitor(op, opBegin))
-      opEnd = max(opEnd, getUIntAttrValue(op, "schedule_end"));
+      opEnd = max(opEnd, getIntAttrValue(op, "schedule_end"));
     else
-      return Optional<std::pair<unsigned, unsigned>>();
+      return Optional<std::pair<int64_t, int64_t>>();
 
     // Update the block schedule end and begin.
     if (it == block.rbegin())
@@ -748,31 +746,31 @@ HLSCppEstimator::estimateBlock(Block &block, unsigned begin) {
 
     blockEnd = max(blockEnd, opEnd);
   }
-  return std::pair<unsigned, unsigned>(blockBegin, blockEnd);
+  return std::pair<int64_t, int64_t>(blockBegin, blockEnd);
 }
 
 void HLSCppEstimator::reverseSchedule() {
   func.walk([&](Operation *op) {
     // Get schedule level.
-    auto begin = getUIntAttrValue(op, "schedule_begin");
-    auto end = getUIntAttrValue(op, "schedule_end");
+    auto begin = getIntAttrValue(op, "schedule_begin");
+    auto end = getIntAttrValue(op, "schedule_end");
 
     // Reverse schedule level.
     if (auto surOp = getSurroundingOp(op)) {
       if (isa<mlir::AffineForOp>(surOp)) {
-        auto surOpBegin = getUIntAttrValue(surOp, "schedule_begin");
+        auto surOpBegin = getIntAttrValue(surOp, "schedule_begin");
 
         if (getBoolAttrValue(surOp, "flatten")) {
           // Handle flattened surrounding loops.
           setScheduleValue(op, surOpBegin, surOpBegin + end - begin);
         } else {
           // Handle normal cases.
-          auto iterLatency = getUIntAttrValue(surOp, "iter_latency");
+          auto iterLatency = getIntAttrValue(surOp, "iter_latency");
           setScheduleValue(op, surOpBegin + iterLatency - end,
                            surOpBegin + iterLatency - begin);
         }
       } else if (isa<FuncOp>(surOp)) {
-        auto latency = getUIntAttrValue(surOp, "latency");
+        auto latency = getIntAttrValue(surOp, "latency");
         setScheduleValue(op, latency - end, latency - begin);
       }
     }

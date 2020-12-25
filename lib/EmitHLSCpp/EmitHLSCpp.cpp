@@ -1273,10 +1273,8 @@ void ModuleEmitter::emitArray(ArrayOp *op) {
     os << " " << op->interface_mode();
     os << " port=";
     emitValue(op->getOperand());
-    if (op->interface_mode() == "m_axi") {
-      os << " depth=" << op->interface_depth();
+    if (op->interface_mode() == "m_axi")
       os << " offset=slave";
-    }
     os << "\n";
   }
 
@@ -1309,7 +1307,7 @@ void ModuleEmitter::emitArray(ArrayOp *op) {
         os << " " << partitionType;
         if (partitionType != "complete")
           os << " factor="
-             << op->partition_factor()[dim].cast<IntegerAttr>().getUInt();
+             << op->partition_factor()[dim].cast<IntegerAttr>().getInt();
         os << " dim=" << dim + 1 << "\n";
       }
     }
@@ -1425,15 +1423,15 @@ void ModuleEmitter::emitInfoAndNewLine(Operation *op) {
 
   // Print schedule information.
   if (auto begin = op->getAttrOfType<IntegerAttr>("schedule_begin"))
-    os << ", S[" << begin.getUInt();
+    os << ", S[" << begin.getInt();
   if (auto end = op->getAttrOfType<IntegerAttr>("schedule_end"))
-    os << "," << end.getUInt() << ")";
+    os << "," << end.getInt() << ")";
 
   // Print loop information.
   if (auto II = op->getAttrOfType<IntegerAttr>("init_interval"))
-    os << ", II=" << II.getUInt();
+    os << ", II=" << II.getInt();
   if (auto latency = op->getAttrOfType<IntegerAttr>("iter_latency"))
-    os << ", latency=" << latency.getUInt();
+    os << ", latency=" << latency.getInt();
 
   os << "\n";
 }
@@ -1466,10 +1464,10 @@ void ModuleEmitter::emitFunction(FuncOp func) {
       os << "/// This is top function.\n";
 
   if (auto latency = func.getAttrOfType<IntegerAttr>("latency"))
-    os << "/// Latency=" << latency.getUInt() << "\n";
+    os << "/// Latency=" << latency.getInt() << "\n";
 
   if (auto dsp = func.getAttrOfType<IntegerAttr>("dsp"))
-    os << "/// DSP=" << dsp.getUInt() << "\n";
+    os << "/// DSP=" << dsp.getInt() << "\n";
 
   // Emit function signature.
   os << "void " << func.getName() << "(\n";

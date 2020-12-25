@@ -27,26 +27,19 @@ public:
       return StringRef();
   }
 
-  unsigned getPartitionFactor(hlscpp::ArrayOp op, unsigned dim) {
+  int64_t getPartitionFactor(hlscpp::ArrayOp op, unsigned dim) {
     if (auto attr = op.partition_factor()[dim].cast<IntegerAttr>())
-      return attr.getUInt();
+      return attr.getInt();
     else
       return 0;
   }
 
   /// Get attribute value methods.
-  int32_t getIntAttrValue(Operation *op, StringRef name) {
+  int64_t getIntAttrValue(Operation *op, StringRef name) {
     if (auto attr = op->getAttrOfType<IntegerAttr>(name))
       return attr.getInt();
     else
       return -1;
-  }
-
-  unsigned getUIntAttrValue(Operation *op, StringRef name) {
-    if (auto attr = op->getAttrOfType<IntegerAttr>(name))
-      return attr.getUInt();
-    else
-      return 0;
   }
 
   bool getBoolAttrValue(Operation *op, StringRef name) {
@@ -64,12 +57,8 @@ public:
   }
 
   /// Set attribute value methods.
-  void setAttrValue(Operation *op, StringRef name, int32_t value) {
-    op->setAttr(name, builder.getI32IntegerAttr(value));
-  }
-
-  void setAttrValue(Operation *op, StringRef name, unsigned value) {
-    op->setAttr(name, builder.getUI32IntegerAttr(value));
+  void setAttrValue(Operation *op, StringRef name, int64_t value) {
+    op->setAttr(name, builder.getI64IntegerAttr(value));
   }
 
   void setAttrValue(Operation *op, StringRef name, bool value) {

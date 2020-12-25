@@ -9,10 +9,8 @@
 // Customized ui32 Attributes
 //===----------------------------------------------------------------------===//
 
-def PositiveUI32Attr : Confined<UI32Attr, [IntPositive]> {}
-
-def UI32ArrayAttr : TypedArrayAttrBase<UI32Attr, ""> {}
-def PositiveUI32ArrayAttr : TypedArrayAttrBase<PositiveUI32Attr, ""> {}
+def PositiveI64Attr : Confined<I64Attr, [IntPositive]> {}
+def PositiveI64ArrayAttr : TypedArrayAttrBase<PositiveI64Attr, ""> {}
 
 //===----------------------------------------------------------------------===//
 // Pragma array_partition Attributes
