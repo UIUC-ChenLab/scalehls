@@ -107,7 +107,7 @@ void SplitFunction::runOnOperation() {
         for (unsigned i = 0, e = inputValues.size(); i < e; ++i)
           inputValues[i].replaceUsesWithIf(
               entry->getArgument(i), [&](mlir::OpOperand &use) {
-                return getSameLevelDstOp(returnOp, use.getOwner());
+                return func.getOperation()->isProperAncestor(use.getOwner());
               });
         opIndex += 1;
       }

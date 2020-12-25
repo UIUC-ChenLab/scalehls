@@ -4,6 +4,7 @@
 
 #include "Analysis/Utils.h"
 #include "mlir/Analysis/AffineAnalysis.h"
+#include "llvm/ADT/SmallPtrSet.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -140,41 +141,34 @@ hlscpp::ArrayOp scalehls::getArrayOp(Operation *op) {
   return getArrayOp(MemRefAccess(op).memref);
 }
 
-/// With the generated MemRefsMap, given a specific loop, we can easily find all
-/// memories which are consumed by the loop.
-void scalehls::getLoopLoadMemsMap(Block &block, MemRefsMap &map) {
-  for (auto loop : block.getOps<AffineForOp>()) {
-    loop.walk([&](Operation *op) {
-      if (auto affineLoad = dyn_cast<AffineLoadOp>(op)) {
-        auto &mems = map[loop];
-        if (std::find(mems.begin(), mems.end(), affineLoad.getMemRef()) ==
-            mems.end())
-          mems.push_back(affineLoad.getMemRef());
+void scalehls::getSuccessorsMap(Block &block, SuccessorsMap &map) {
+  DenseMap<Operation *, SmallPtrSet<Value, 2>> memsMap;
+  DenseMap<Value, SmallPtrSet<Operation *, 2>> loopsMap;
 
-      } else if (auto load = dyn_cast<LoadOp>(op)) {
-        auto &mems = map[loop];
-        if (std::find(mems.begin(), mems.end(), load.getMemRef()) == mems.end())
-          mems.push_back(load.getMemRef());
-      }
-    });
-  }
-}
-
-/// With the generated MemAccessesMap, given a specific memory, we can easily
-/// find the loops which produce data to the memory.
-void scalehls::getLoopMemStoresMap(Block &block, MemAccessesMap &map) {
-  for (auto loop : block.getOps<AffineForOp>()) {
+  for (auto loop : block.getOps<AffineForOp>())
     loop.walk([&](Operation *op) {
       if (auto affineStore = dyn_cast<AffineStoreOp>(op)) {
-        auto &loops = map[affineStore.getMemRef()];
-        if (std::find(loops.begin(), loops.end(), loop) == loops.end())
-          loops.push_back(loop);
+        memsMap[loop].insert(affineStore.getMemRef());
 
       } else if (auto store = dyn_cast<StoreOp>(op)) {
-        auto &loops = map[store.getMemRef()];
-        if (std::find(loops.begin(), loops.end(), loop) == loops.end())
-          loops.push_back(loop);
+        memsMap[loop].insert(store.getMemRef());
+
+      } else if (auto affineLoad = dyn_cast<AffineLoadOp>(op)) {
+        loopsMap[affineLoad.getMemRef()].insert(loop);
+
+      } else if (auto load = dyn_cast<LoadOp>(op)) {
+        loopsMap[load.getMemRef()].insert(loop);
       }
     });
-  }
+
+  for (auto loop : block.getOps<AffineForOp>())
+    for (auto mem : memsMap[loop])
+      for (auto successor : loopsMap[mem]) {
+        // If the successor loop not only loads from the memory, but also store
+        // to the memory, it will not be considered as a legal successor.
+        if (successor == loop || memsMap[successor].count(mem))
+          continue;
+
+        map[loop].push_back(std::pair<Value, Operation *>(mem, successor));
+      }
 }

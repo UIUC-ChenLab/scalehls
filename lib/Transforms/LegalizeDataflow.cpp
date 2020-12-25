@@ -41,7 +41,7 @@ void LegalizeDataflow::runOnOperation() {
           dataflowLevel = max(dataflowLevel, attr.getInt());
         else
           op->emitError(
-              "HLSKernelOp has unexpected predecessor, legalization failed");
+              "HLSKernelOp has unexpected successor, legalization failed");
       }
     }
 
@@ -86,69 +86,59 @@ void LegalizeDataflow::runOnOperation() {
   // this point. Therefore, HLSKernel ops and loops will never have dependencies
   // with each other in this pass.
   // TODO: analyze live ins.
-  MemRefsMap loadMemsMap;
-  MemAccessesMap memStoresMap;
-  getLoopLoadMemsMap(func.front(), loadMemsMap);
-  getLoopMemStoresMap(func.front(), memStoresMap);
+  SuccessorsMap successorsMap;
+  getSuccessorsMap(func.front(), successorsMap);
 
-  for (auto loop : func.front().getOps<mlir::AffineForOp>()) {
-    int64_t dataflowLevel = 0;
-    for (auto mem : loadMemsMap[loop]) {
-      for (auto predLoop : memStoresMap[mem]) {
-        if (predLoop == loop)
-          continue;
+  for (auto it = func.front().rbegin(); it != func.front().rend(); ++it) {
+    if (auto loop = dyn_cast<mlir::AffineForOp>(*it)) {
+      int64_t dataflowLevel = 0;
 
-        // Establish an ASAP dataflow schedule.
-        if (auto attr = predLoop->getAttrOfType<IntegerAttr>("dataflow_level"))
+      // Walk through all successor loops.
+      for (auto pair : successorsMap[loop]) {
+        auto successor = pair.second;
+        if (auto attr = successor->getAttrOfType<IntegerAttr>("dataflow_level"))
           dataflowLevel = max(dataflowLevel, attr.getInt());
-        else
-          loop.emitError(
-              "loop has unexpected predecessor, legalization failed");
+        else {
+          loop.emitError("loop has unexpected successor, legalization failed");
+          return;
+        }
       }
-    }
 
-    // Set an attribute for indicating the scheduled dataflow level.
-    loop.setAttr("dataflow_level", builder.getIntegerAttr(builder.getI64Type(),
-                                                          dataflowLevel + 1));
+      // Set an attribute for indicating the scheduled dataflow level.
+      loop.setAttr(
+          "dataflow_level",
+          builder.getIntegerAttr(builder.getI64Type(), dataflowLevel + 1));
 
-    // Eliminate bypass paths.
-    for (auto mem : loadMemsMap[loop]) {
-      for (auto predLoop : memStoresMap[mem]) {
-        if (predLoop == loop)
-          continue;
+      // Eliminate bypass paths.
+      for (auto pair : successorsMap[loop]) {
+        auto mem = pair.first;
+        auto successor = pair.second;
+        auto successorDataflowLevel =
+            successor->getAttrOfType<IntegerAttr>("dataflow_level").getInt();
 
-        auto predDataflowLevel =
-            predLoop->getAttrOfType<IntegerAttr>("dataflow_level").getInt();
+        // Insert CopyOps if required.
+        SmallVector<Value, 4> mems;
+        mems.push_back(mem);
+        builder.setInsertionPoint(successor);
 
-        // Insert dummy CopyOps if required.
-        SmallVector<Operation *, 4> dummyOps;
-        dummyOps.push_back(loop);
-        for (auto i = dataflowLevel; i > predDataflowLevel; --i) {
+        for (auto i = dataflowLevel; i > successorDataflowLevel; --i) {
           // Create CopyOp.
-          builder.setInsertionPoint(dummyOps.back());
-          auto interMem = builder.create<mlir::AllocOp>(
+          auto newMem = builder.create<mlir::AllocOp>(
               loop.getLoc(), mem.getType().cast<MemRefType>());
-          auto dummyOp =
-              builder.create<linalg::CopyOp>(loop.getLoc(), mem, interMem);
-          dummyOp.setAttr("dataflow_level",
-                          builder.getIntegerAttr(builder.getI64Type(), i));
+          auto copyOp = builder.create<linalg::CopyOp>(loop.getLoc(),
+                                                       mems.back(), newMem);
+
+          // Set CopyOp dataflow level.
+          copyOp.setAttr("dataflow_level",
+                         builder.getIntegerAttr(builder.getI64Type(), i));
 
           // Chain created CopyOps.
-          if (i == dataflowLevel) {
-            loop.walk([&](Operation *op) {
-              if (auto affineLoad = dyn_cast<mlir::AffineLoadOp>(op)) {
-                if (affineLoad.getMemRef() == mem)
-                  affineLoad.setMemRef(interMem);
-
-              } else if (auto load = dyn_cast<mlir::LoadOp>(op)) {
-                if (load.getMemRef() == mem)
-                  load.setMemRef(interMem);
-              }
+          if (i == successorDataflowLevel + 1)
+            mem.replaceUsesWithIf(newMem, [&](mlir::OpOperand &use) {
+              return successor->isProperAncestor(use.getOwner());
             });
-          } else
-            dummyOps.back()->setOperand(0, interMem);
-
-          dummyOps.push_back(dummyOp);
+          else
+            mems.push_back(newMem);
         }
       }
     }

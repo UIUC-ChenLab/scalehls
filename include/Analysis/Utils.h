@@ -116,17 +116,12 @@ hlscpp::ArrayOp getArrayOp(Value memref);
 
 hlscpp::ArrayOp getArrayOp(Operation *op);
 
-// For storing all accessed memrefs indexed by an operation (e.g. AffineForOp).
-using MemRefs = SmallVector<Value, 4>;
-using MemRefsMap = DenseMap<Operation *, MemRefs>;
+// For storing the intermediate memory and successor loops indexed by the
+// predecessor loop.
+using Successors = SmallVector<std::pair<Value, Operation *>, 2>;
+using SuccessorsMap = DenseMap<Operation *, Successors>;
 
-/// With the generated MemRefsMap, given a specific loop, we can easily find all
-/// memories which are consumed by the loop.
-void getLoopLoadMemsMap(Block &block, MemRefsMap &map);
-
-/// With the generated MemAccessesMap, given a specific memory, we can easily
-/// find the loops which produce data to the memory.
-void getLoopMemStoresMap(Block &block, MemAccessesMap &map);
+void getSuccessorsMap(Block &block, SuccessorsMap &map);
 
 } // namespace scalehls
 } // namespace mlir

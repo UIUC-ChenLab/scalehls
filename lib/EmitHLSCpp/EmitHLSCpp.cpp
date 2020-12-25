@@ -1347,10 +1347,14 @@ void ModuleEmitter::emitValue(Value val, unsigned rank, bool isPtr) {
   else if (valType.isa<IndexType>())
     os << "int ";
   else if (auto intType = valType.dyn_cast<IntegerType>()) {
-    os << "ap_";
-    if (intType.getSignedness() == IntegerType::SignednessSemantics::Unsigned)
-      os << "u";
-    os << "int<" << intType.getWidth() << "> ";
+    if (intType.getWidth() == 1)
+      os << "bool ";
+    else {
+      os << "ap_";
+      if (intType.getSignedness() == IntegerType::SignednessSemantics::Unsigned)
+        os << "u";
+      os << "int<" << intType.getWidth() << "> ";
+    }
   } else
     emitError(val.getDefiningOp(), "has unsupported type.");
 

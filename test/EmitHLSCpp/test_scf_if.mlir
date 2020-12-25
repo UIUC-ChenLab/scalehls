@@ -5,7 +5,7 @@ func @test_scf_if(%arg0: index, %arg1: memref<16xindex>) {
   %c0 = constant 0 : index
 
   // CHECK: int val2 = val0 + 11;
-  // CHECK: ap_int<1> val3 = val2 > 0;
+  // CHECK: bool val3 = val2 > 0;
   // CHECK: int val4;
   // CHECK: int val5[16];
   // CHECK: if (val3) {
