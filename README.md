@@ -4,7 +4,7 @@ This project aims to create a framework that ultimately converts an algorithm wr
 
 ## Quick Start
 ### 1. Install LLVM and MLIR
-**IMPORTANT** This step assumes that you have cloned LLVM from (https://github.com/circt/llvm) to `$LLVM_DIR`. To build LLVM and MLIR, run:
+**IMPORTANT** This step assumes that you have cloned LLVM from (https://github.com/circt/llvm/tree/main) to `$LLVM_DIR` and checked out the `main` branch. To build LLVM and MLIR, run:
 ```sh
 $ mkdir $LLVM_DIR/build
 $ cd $LLVM_DIR/build
