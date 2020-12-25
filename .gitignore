@@ -1,12 +1,13 @@
 .vscode
-.ipynb_checkpoints
 
 build
-tmp
 samples/hls_proj
 samples/cpp_src
 samples/test_results
+tmp
 
-*.log
+*.onnx*
+*.tmp
 *.gv
 *.png
+*.log

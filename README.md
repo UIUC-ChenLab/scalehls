@@ -36,19 +36,19 @@ After the installation and test successfully completed, you should be able to pl
 $ export PATH=$SCALEHLS_DIR/build/bin:$PATH
 $ cd $SCALEHLS_DIR
 
-$ # Benchmark generation, dataflow-level optimization, HLSKernel lowering and bufferization.
-$ benchmark-gen -type "cnn" -config "config/cnn-config.ini" -number 1 \
-    | scalehls-opt -legalize-dataflow -split-function \
-    -hlskernel-bufferize -hlskernel-to-affine -func-bufferize -canonicalize
-
-$ # Loop and pragma-level optimizations, performance estimation, and HLS C++ code generation.
-$ scalehls-opt test/Conversion/HLSKernelToAffine/test_gemm.mlir -hlskernel-to-affine \
+$ # Loop and pragma-level optimizations, performance estimation, and C++ code generation.
+$ scalehls-opt samples/PolyBench/syr2k.mlir \
     -affine-loop-perfection -remove-var-loop-bound -affine-loop-normalize \
     -partial-affine-loop-tile="tile-level=1 tile-size=4" \
     -convert-to-hlscpp="top-function=test_gemm" -loop-pipelining="pipeline-level=1" \
     -store-op-forward -simplify-memref-access -array-partition -cse -canonicalize \
     -qor-estimation="target-spec=config/target-spec.ini" \
     | scalehls-translate -emit-hlscpp
+
+$ # Benchmark generation, dataflow-level optimization, HLSKernel lowering and bufferization.
+$ benchmark-gen -type "cnn" -config "config/cnn-config.ini" -number 1 \
+    | scalehls-opt -legalize-dataflow -split-function \
+    -hlskernel-bufferize -hlskernel-to-affine -func-bufferize -canonicalize
 
 $ # Put them together.
 $ benchmark-gen -type "cnn" -config "config/cnn-config.ini" -number 1 \
@@ -62,23 +62,32 @@ $ benchmark-gen -type "cnn" -config "config/cnn-config.ini" -number 1 \
 ```
 
 ## Integration with ONNX-MLIR
-If you have installed ONNX-MLIR to `$ONNXMLIR_DIR` following the instruction from (https://github.com/onnx/onnx-mlir), you should be able to run the following integration test:
+If you have installed ONNX-MLIR or established ONNX-MLIR docker to `$ONNXMLIR_DIR` following the instruction from (https://github.com/onnx/onnx-mlir), you should be able to run the following integration test:
 ```sh
-$ cd $SCALEHLS_DIR/test/onnx-mlir
+$ cd $SCALEHLS_DIR/sample/onnx-mlir/resnet18
+
+$ # Export PyTorch model to ONNX.
+$ python export_resnet18.py
 
 $ # Parse ONNX model to MLIR.
-$ $ONNXMLIR_DIR/build/bin/onnx-mlir -EmitONNXIR mnist.onnx
+$ $ONNXMLIR_DIR/build/bin/onnx-mlir -EmitONNXIR resnet18.onnx
 
 $ # Lower from ONNX dialect to Affine dialect.
-$ $ONNXMLIR_DIR/build/bin/onnx-mlir-opt mnist.onnx.mlir -shape-inference \
-    -convert-onnx-to-krnl -pack-krnl-constants \
-    -convert-krnl-to-affine > mnist.mlir
+$ $ONNXMLIR_DIR/build/bin/onnx-mlir-opt resnet18.onnx.mlir \
+    -shape-inference -convert-onnx-to-krnl -pack-krnl-constants \
+    -convert-krnl-to-affine > resnet18.mlir
+
+$ # (Optional) Print model graph.
+$ scalehls-opt resnet18.tmp -print-op-graph 2> resnet18.gv
+$ dot -Tpng resnet18.gv > resnet18.png
 
 $ # Legalize the output of ONNX-MLIR, optimize and emit C++ code.
-$ scalehls-opt mnist.mlir -legalize-onnx \
+$ scalehls-opt resnet18.mlir -legalize-onnx -affine-loop-normalize \
+    -legalize-dataflow -split-function -convert-linalg-to-affine-loops \
     -affine-loop-perfection -affine-loop-normalize \
     -convert-to-hlscpp="top-function=main_graph" \
     -store-op-forward -simplify-memref-access -cse -canonicalize \
+    -qor-estimation="target-spec=../../../config/target-spec.ini" \
     | scalehls-translate -emit-hlscpp
 ```
 
