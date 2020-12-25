@@ -184,8 +184,8 @@ void LegalizeOnnx::runOnOperation() {
     // Construct new function type.
     SmallVector<Type, 16> inputTypes(func.getArgumentTypes());
     inputTypes.append(weightTypes.begin(), weightTypes.end());
-    auto newType = FunctionType::get(inputTypes, func.getType().getResults(),
-                                     func.getContext());
+    auto newType = FunctionType::get(func.getContext(), inputTypes,
+                                     func.getType().getResults());
 
     // Record the argument number of the old function.
     auto oldArgNum = func.getNumArguments();
