@@ -16,11 +16,6 @@ struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
 };
 } // namespace
 
-static bool isDataflowOp(Operation *op) {
-  return !isa<AllocOp, AllocaOp, ConstantOp, TensorLoadOp, TensorToMemrefOp,
-              ReturnOp>(op);
-}
-
 // For storing the intermediate memory and successor loops indexed by the
 // predecessor loop.
 using Successors = SmallVector<std::pair<Value, Operation *>, 2>;
@@ -30,47 +25,53 @@ static void getSuccessorsMap(Block &block, SuccessorsMap &map) {
   DenseMap<Operation *, SmallPtrSet<Value, 2>> memsMap;
   DenseMap<Value, SmallPtrSet<Operation *, 2>> loopsMap;
 
+  // TODO: for now we only consider store/load operations.
   for (auto loop : block.getOps<AffineForOp>())
     loop.walk([&](Operation *op) {
-      if (auto affineStore = dyn_cast<AffineStoreOp>(op)) {
+      if (auto affineStore = dyn_cast<AffineStoreOp>(op))
         memsMap[loop].insert(affineStore.getMemRef());
 
-      } else if (auto store = dyn_cast<StoreOp>(op)) {
+      else if (auto store = dyn_cast<StoreOp>(op))
         memsMap[loop].insert(store.getMemRef());
 
-      } else if (auto affineLoad = dyn_cast<AffineLoadOp>(op)) {
+      else if (auto affineLoad = dyn_cast<AffineLoadOp>(op))
         loopsMap[affineLoad.getMemRef()].insert(loop);
 
-      } else if (auto load = dyn_cast<LoadOp>(op)) {
+      else if (auto load = dyn_cast<LoadOp>(op))
         loopsMap[load.getMemRef()].insert(loop);
-      }
     });
 
   // Find successors of all operations. Since this is a dataflow analysis, this
   // traverse will not enter any control flow operations.
   for (auto &op : block.getOperations()) {
-    // Loops need to be separately handled.
-    if (auto loop = dyn_cast<AffineForOp>(op)) {
-      for (auto mem : memsMap[loop]) {
-        for (auto successor : loopsMap[mem]) {
-          // If the successor loop not only loads from the memory, but also
-          // store to the memory, it is considered as a legal successor.
-          if (successor == loop || memsMap[successor].count(mem))
-            continue;
+    // TODO: Some operations are dataflow source, which will not be scheduled.
+    if (isa<AllocOp, AllocaOp, ConstantOp, TensorLoadOp, TensorToMemrefOp>(op))
+      continue;
 
-          map[loop].push_back(std::pair<Value, Operation *>(mem, successor));
-        }
+    // Collect all memref results if the current operation is a loop.
+    auto mems = memsMap.lookup(&op);
+    SmallVector<Value, 2> results(mems.begin(), mems.end());
+
+    // Collect all returned shaped type results.
+    for (auto result : op.getResults())
+      if (result.getType().isa<ShapedType>())
+        results.push_back(result);
+
+    // Traverse all produced results.
+    for (auto result : results) {
+      for (auto user : loopsMap.lookup(result)) {
+        // If the successor loop not only loads from the memory, but also store
+        // to the memory, it is not considered as a successor.
+        if (user == &op || memsMap.lookup(user).count(result))
+          continue;
+        map[&op].push_back(std::pair<Value, Operation *>(result, user));
       }
-    } else if (isDataflowOp(&op)) {
-      for (auto result : op.getResults()) {
-        for (auto successor : result.getUsers()) {
-          // If the intermediate result is not shaped type, or the successor is
-          // not a dataflow operation, it is considered as a legal successor.
-          if (!result.getType().isa<ShapedType>() || !isDataflowOp(successor))
-            continue;
 
-          map[&op].push_back(std::pair<Value, Operation *>(result, successor));
-        }
+      for (auto user : result.getUsers()) {
+        // User must be an operation in the block.
+        if (user != block.findAncestorOpInBlock(*user))
+          continue;
+        map[&op].push_back(std::pair<Value, Operation *>(result, user));
       }
     }
   }
@@ -89,12 +90,16 @@ void LegalizeDataflow::runOnOperation() {
   // ALAP scheduling.
   for (auto i = func.front().rbegin(); i != func.front().rend(); ++i) {
     auto op = &*i;
-    if (isDataflowOp(op)) {
+    // TODO: Here, we assume all dataflow operations should have successor.
+    if (successorsMap.count(op)) {
       int64_t dataflowLevel = 0;
 
       // Walk through all successor ops.
       for (auto pair : successorsMap[op]) {
         auto successor = pair.second;
+        if (isa<mlir::ReturnOp>(successor))
+          continue;
+
         if (auto attr = successor->getAttrOfType<IntegerAttr>("dataflow_level"))
           dataflowLevel = max(dataflowLevel, attr.getInt());
         else {
@@ -111,6 +116,9 @@ void LegalizeDataflow::runOnOperation() {
       for (auto pair : successorsMap[op]) {
         auto value = pair.first;
         auto successor = pair.second;
+        if (isa<mlir::ReturnOp>(successor))
+          continue;
+
         auto successorDataflowLevel =
             successor->getAttrOfType<IntegerAttr>("dataflow_level").getInt();
 
@@ -164,22 +172,10 @@ void LegalizeDataflow::runOnOperation() {
   }
 
   // Collect all operations in each dataflow level.
-  DenseMap<int64_t, SmallVector<Operation *, 2>> dataflowOps;
-  func.walk([&](Operation *dataflowOp) {
-    if (auto attr = dataflowOp->getAttrOfType<IntegerAttr>("dataflow_level"))
-      dataflowOps[attr.getInt()].push_back(dataflowOp);
-  });
-
-  // Reorder operations that are legalized.
-  for (auto pair : dataflowOps) {
-    auto ops = pair.second;
-    auto lastOp = ops.back();
-
-    for (auto it = ops.begin(); it < std::prev(ops.end()); ++it) {
-      auto op = *it;
-      op->moveBefore(lastOp);
-    }
-  }
+  DenseMap<int64_t, SmallVector<Operation *, 8>> dataflowOps;
+  for (auto &op : func.front().getOperations())
+    if (auto attr = op.getAttrOfType<IntegerAttr>("dataflow_level"))
+      dataflowOps[attr.getInt()].push_back(&op);
 
   // Merge dataflow levels according to the bypasses and minimum granularity.
   if (minGran != 1 || !insertCopy) {

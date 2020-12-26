@@ -131,7 +131,7 @@ void StoreOpForward::forwardStoreToLoad(AffineReadOpInterface loadOp) {
     // if (!domInfo->dominates(storeOp, loadOp))
     //  continue;
 
-    // Check whether storeOp and loadOp is ai the same level.
+    // Check whether storeOp and loadOp is at the same level.
     auto pair = checkSameLevel(storeOp, loadOp);
     if (!pair)
       continue;

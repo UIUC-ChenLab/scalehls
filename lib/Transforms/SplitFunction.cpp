@@ -6,6 +6,7 @@
 #include "Dialect/HLSKernel/HLSKernel.h"
 #include "Transforms/Passes.h"
 #include "mlir/Analysis/Liveness.h"
+#include "llvm/ADT/SmallPtrSet.h"
 
 using namespace std;
 using namespace mlir;
@@ -28,26 +29,25 @@ void SplitFunction::runOnOperation() {
   for (auto top : funcs) {
     Liveness liveness(top);
 
-    DenseMap<int64_t, SmallVector<Operation *, 2>> dataflowOps;
-    top.walk([&](Operation *op) {
-      if (auto attr = op->getAttrOfType<IntegerAttr>("dataflow_level"))
-        dataflowOps[attr.getInt()].push_back(op);
-    });
+    DenseMap<int64_t, SmallVector<Operation *, 8>> dataflowOps;
+    for (auto &op : top.front().getOperations())
+      if (auto attr = op.getAttrOfType<IntegerAttr>("dataflow_level"))
+        dataflowOps[attr.getInt()].push_back(&op);
 
     for (auto pair : dataflowOps) {
       auto name = "dataflow" + std::to_string(pair.first);
       auto ops = pair.second;
 
       // Collect input and output information.
-      DenseMap<int64_t, SmallVector<int64_t, 8>> inputMap;
-      SmallVector<Type, 4> inputTypes;
-      SmallVector<Value, 4> inputValues;
+      SmallVector<Type, 8> inputTypes;
+      SmallVector<Value, 8> inputValues;
 
-      SmallVector<Type, 4> outputTypes;
-      SmallVector<Value, 4> outputValues;
+      SmallVector<Type, 8> outputTypes;
+      SmallVector<Value, 8> outputValues;
 
       unsigned opIndex = 0;
       for (auto op : ops) {
+        // Push back all operands and live ins as candidates.
         SmallVector<Value, 8> candidateInputs(op->getOperands());
         if (auto loop = dyn_cast<mlir::AffineForOp>(op)) {
           auto liveIns = liveness.getLiveIn(&loop.getLoopBody().front());
@@ -55,29 +55,44 @@ void SplitFunction::runOnOperation() {
             if (!isForInductionVar(liveIn))
               candidateInputs.push_back(liveIn);
         }
-        // Add input types and values.
-        for (auto operand : candidateInputs) {
-          // Record the index of the operand.
-          auto operandFound =
-              std::find(inputValues.begin(), inputValues.end(), operand);
-          auto operandIndex = operandFound - inputValues.begin();
-          inputMap[opIndex].push_back(operandIndex);
 
-          // Only add unique values.
-          if (operandFound == inputValues.end()) {
-            inputTypes.push_back(operand.getType());
-            inputValues.push_back(operand);
-          }
+        // Collect input types and values.
+        for (auto input : candidateInputs) {
+          // If the current input candidate is defined by an operation in the
+          // same level, it does not need to be passed in as argument.
+          if (auto defOp = input.getDefiningOp())
+            if (std::find(ops.begin(), ops.end(), defOp) != ops.end())
+              continue;
+
+          // Only unique inputs will be added.
+          if (std::find(inputValues.begin(), inputValues.end(), input) !=
+              inputValues.end())
+            continue;
+
+          inputTypes.push_back(input.getType());
+          inputValues.push_back(input);
         }
 
-        // Add output types and values.
+        // Collect output types and values.
         for (auto result : op->getResults()) {
           // Only add values that are used.
-          if (!result.getUses().empty()) {
-            outputTypes.push_back(result.getType());
-            outputValues.push_back(result);
-          }
+          if (result.getUses().empty())
+            continue;
+
+          // If the result is only used by operations in the same level, it does
+          // not need to be returned.
+          bool isInternalResult = true;
+          for (auto user : result.getUsers())
+            if (std::find(ops.begin(), ops.end(), user) == ops.end())
+              isInternalResult = false;
+
+          if (isInternalResult)
+            continue;
+
+          outputTypes.push_back(result.getType());
+          outputValues.push_back(result);
         }
+
         opIndex++;
       }
 
@@ -99,17 +114,18 @@ void SplitFunction::runOnOperation() {
       auto returnOp =
           builder.create<mlir::ReturnOp>(func.getLoc(), outputValues);
 
-      // Move HLSKernel operation into the new created function.
+      // Move same level operations into the new created function.
       opIndex = 0;
       for (auto op : ops) {
         op->moveBefore(returnOp);
+        op->removeAttr("dataflow_level");
         // Connect operands to the arguments of the new created function.
         for (unsigned i = 0, e = inputValues.size(); i < e; ++i)
           inputValues[i].replaceUsesWithIf(
               entry->getArgument(i), [&](mlir::OpOperand &use) {
-                return func.getOperation()->isProperAncestor(use.getOwner());
+                return func.getOperation()->isAncestor(use.getOwner());
               });
-        opIndex += 1;
+        opIndex++;
       }
     }
   }
