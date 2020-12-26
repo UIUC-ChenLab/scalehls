@@ -483,8 +483,8 @@ int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
             int64_t distance = 0;
 
             // Calculate the distance of this dependency.
-            for (auto it = depComps.rbegin(); it < depComps.rend(); ++it) {
-              auto dep = *it;
+            for (auto i = depComps.rbegin(); i < depComps.rend(); ++i) {
+              auto dep = *i;
               auto tripCount = getIntAttrValue(dep.op, "trip_count");
 
               if (dep.lb)
@@ -714,8 +714,8 @@ HLSCppEstimator::estimateBlock(Block &block, int64_t begin) {
   auto blockEnd = begin;
 
   // Reversely walk through all operations in the block.
-  for (auto it = block.rbegin(), e = block.rend(); it != e; ++it) {
-    auto op = &*it;
+  for (auto i = block.rbegin(), e = block.rend(); i != e; ++i) {
+    auto op = &*i;
     auto opBegin = begin;
     auto opEnd = begin;
 
@@ -739,7 +739,7 @@ HLSCppEstimator::estimateBlock(Block &block, int64_t begin) {
       return Optional<std::pair<int64_t, int64_t>>();
 
     // Update the block schedule end and begin.
-    if (it == block.rbegin())
+    if (i == block.rbegin())
       blockBegin = opBegin;
     else
       blockBegin = min(blockBegin, opBegin);
@@ -747,6 +747,22 @@ HLSCppEstimator::estimateBlock(Block &block, int64_t begin) {
     blockEnd = max(blockEnd, opEnd);
   }
   return std::pair<int64_t, int64_t>(blockBegin, blockEnd);
+}
+
+// Get the innermost surrounding operation, either an AffineForOp or a FuncOp.
+// In this method, AffineIfOp is transparent as well.
+static Operation *getSurroundingOp(Operation *op) {
+  auto currentOp = op;
+  while (true) {
+    if (auto parentIfOp = currentOp->getParentOfType<AffineIfOp>())
+      currentOp = parentIfOp;
+    else if (auto parentForOp = currentOp->getParentOfType<AffineForOp>())
+      return parentForOp;
+    else if (auto parentFuncOp = currentOp->getParentOfType<FuncOp>())
+      return parentFuncOp;
+    else
+      return nullptr;
+  }
 }
 
 void HLSCppEstimator::reverseSchedule() {

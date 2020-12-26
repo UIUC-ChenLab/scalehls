@@ -2,7 +2,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Analysis/Utils.h"
 #include "Dialect/HLSKernel/HLSKernel.h"
 #include "Transforms/Passes.h"
 #include "mlir/Dialect/Linalg/IR/LinalgOps.h"
@@ -17,140 +16,161 @@ struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
 };
 } // namespace
 
-void LegalizeDataflow::runOnOperation() {
-  auto func = getOperation();
-  auto builder = OpBuilder(func);
+static bool isDataflowOp(Operation *op) {
+  return !isa<AllocOp, AllocaOp, ConstantOp, TensorLoadOp, TensorToMemrefOp,
+              ReturnOp>(op);
+}
 
-  //===--------------------------------------------------------------------===//
-  // HLSKernel Handler
-  //===--------------------------------------------------------------------===//
+// For storing the intermediate memory and successor loops indexed by the
+// predecessor loop.
+using Successors = SmallVector<std::pair<Value, Operation *>, 2>;
+using SuccessorsMap = DenseMap<Operation *, Successors>;
 
-  // Handle HLSKernel operations. Note that HLSKernel operations must have not
-  // been bufferized at this point.
-  for (auto kernelOp : func.front().getOps<hlskernel::HLSKernelOpInterface>()) {
-    auto op = kernelOp.getOperation();
+static void getSuccessorsMap(Block &block, SuccessorsMap &map) {
+  DenseMap<Operation *, SmallPtrSet<Value, 2>> memsMap;
+  DenseMap<Value, SmallPtrSet<Operation *, 2>> loopsMap;
 
-    // Walk through all operands to establish an ASAP dataflow schedule.
-    int64_t dataflowLevel = 0;
-    for (auto operand : op->getOperands()) {
-      if (operand.getKind() == Value::Kind::BlockArgument)
-        continue;
-      else {
-        auto predOp = operand.getDefiningOp();
-        if (auto attr = predOp->getAttrOfType<IntegerAttr>("dataflow_level"))
-          dataflowLevel = max(dataflowLevel, attr.getInt());
-        else
-          op->emitError(
-              "HLSKernelOp has unexpected successor, legalization failed");
+  for (auto loop : block.getOps<AffineForOp>())
+    loop.walk([&](Operation *op) {
+      if (auto affineStore = dyn_cast<AffineStoreOp>(op)) {
+        memsMap[loop].insert(affineStore.getMemRef());
+
+      } else if (auto store = dyn_cast<StoreOp>(op)) {
+        memsMap[loop].insert(store.getMemRef());
+
+      } else if (auto affineLoad = dyn_cast<AffineLoadOp>(op)) {
+        loopsMap[affineLoad.getMemRef()].insert(loop);
+
+      } else if (auto load = dyn_cast<LoadOp>(op)) {
+        loopsMap[load.getMemRef()].insert(loop);
       }
-    }
+    });
 
-    // Set an attribute for indicating the scheduled dataflow level.
-    op->setAttr("dataflow_level", builder.getIntegerAttr(builder.getI64Type(),
-                                                         dataflowLevel + 1));
-  }
+  // Find successors of all operations. Since this is a dataflow analysis, this
+  // traverse will not enter any control flow operations.
+  for (auto &op : block.getOperations()) {
+    // Loops need to be separately handled.
+    if (auto loop = dyn_cast<AffineForOp>(op)) {
+      for (auto mem : memsMap[loop]) {
+        for (auto successor : loopsMap[mem]) {
+          // If the successor loop not only loads from the memory, but also
+          // store to the memory, it is considered as a legal successor.
+          if (successor == loop || memsMap[successor].count(mem))
+            continue;
 
-  // Eliminate bypass paths between non-successive dataflow levels. Dummy
-  // nodes will be inserted into the bypass paths.
-  for (auto kernelOp : func.front().getOps<hlskernel::HLSKernelOpInterface>()) {
-    auto op = kernelOp.getOperation();
-    auto dataflowLevel =
-        op->getAttrOfType<IntegerAttr>("dataflow_level").getInt();
+          map[loop].push_back(std::pair<Value, Operation *>(mem, successor));
+        }
+      }
+    } else if (isDataflowOp(&op)) {
+      for (auto result : op.getResults()) {
+        for (auto successor : result.getUsers()) {
+          // If the intermediate result is not shaped type, or the successor is
+          // not a dataflow operation, it is considered as a legal successor.
+          if (!result.getType().isa<ShapedType>() || !isDataflowOp(successor))
+            continue;
 
-    auto result = op->getResult(0);
-    for (auto &use : result.getUses()) {
-      if (auto attr =
-              use.getOwner()->getAttrOfType<IntegerAttr>("dataflow_level")) {
-        if (attr.getInt() != dataflowLevel + 1) {
-          // Insert a dummy CopyOp if required.
-          builder.setInsertionPointAfter(op);
-          auto copyOp = builder.create<hlskernel::CopyOp>(
-              op->getLoc(), result.getType(), result);
-          copyOp.setAttr(
-              "dataflow_level",
-              builder.getIntegerAttr(builder.getI64Type(), dataflowLevel + 1));
-
-          // Replace the operand with the result of CopyOp.
-          use.getOwner()->setOperand(use.getOperandNumber(),
-                                     copyOp.getResult(0));
+          map[&op].push_back(std::pair<Value, Operation *>(result, successor));
         }
       }
     }
   }
+}
 
-  //===--------------------------------------------------------------------===//
-  // AffineForLoop Handler
-  //===--------------------------------------------------------------------===//
+void LegalizeDataflow::runOnOperation() {
+  auto func = getOperation();
+  auto builder = OpBuilder(func);
 
-  // Handle loops. Note that this assume all operations have been bufferized at
-  // this point. Therefore, HLSKernel ops and loops will never have dependencies
-  // with each other in this pass.
-  // TODO: analyze live ins.
   SuccessorsMap successorsMap;
   getSuccessorsMap(func.front(), successorsMap);
 
-  for (auto it = func.front().rbegin(); it != func.front().rend(); ++it) {
-    if (auto loop = dyn_cast<mlir::AffineForOp>(*it)) {
+  llvm::SmallDenseMap<int64_t, int64_t, 16> dataflowToMerge;
+
+  // Walk through all dataflow operations in a reversed order for establishing a
+  // ALAP scheduling.
+  for (auto i = func.front().rbegin(); i != func.front().rend(); ++i) {
+    auto op = &*i;
+    if (isDataflowOp(op)) {
       int64_t dataflowLevel = 0;
 
-      // Walk through all successor loops.
-      for (auto pair : successorsMap[loop]) {
+      // Walk through all successor ops.
+      for (auto pair : successorsMap[op]) {
         auto successor = pair.second;
         if (auto attr = successor->getAttrOfType<IntegerAttr>("dataflow_level"))
           dataflowLevel = max(dataflowLevel, attr.getInt());
         else {
-          loop.emitError("loop has unexpected successor, legalization failed");
+          op->emitError("has unexpected successor, legalization failed");
           return;
         }
       }
 
       // Set an attribute for indicating the scheduled dataflow level.
-      loop.setAttr(
-          "dataflow_level",
-          builder.getIntegerAttr(builder.getI64Type(), dataflowLevel + 1));
+      op->setAttr("dataflow_level", builder.getIntegerAttr(builder.getI64Type(),
+                                                           dataflowLevel + 1));
 
-      // Eliminate bypass paths.
-      for (auto pair : successorsMap[loop]) {
-        auto mem = pair.first;
+      // Eliminate bypass paths if detected.
+      for (auto pair : successorsMap[op]) {
+        auto value = pair.first;
         auto successor = pair.second;
         auto successorDataflowLevel =
             successor->getAttrOfType<IntegerAttr>("dataflow_level").getInt();
 
-        // Insert CopyOps if required.
-        SmallVector<Value, 4> mems;
-        mems.push_back(mem);
-        builder.setInsertionPoint(successor);
+        // Bypass path does not exist.
+        if (dataflowLevel == successorDataflowLevel)
+          continue;
 
-        for (auto i = dataflowLevel; i > successorDataflowLevel; --i) {
-          // Create CopyOp.
-          auto newMem = builder.create<mlir::AllocOp>(
-              loop.getLoc(), mem.getType().cast<MemRefType>());
-          auto copyOp = builder.create<linalg::CopyOp>(loop.getLoc(),
-                                                       mems.back(), newMem);
+        // If insert-copy is set, insert CopyOp to the bypass path. Otherwise,
+        // record all the bypass paths in dataflowToMerge.
+        if (insertCopy) {
+          // Insert CopyOps if required.
+          SmallVector<Value, 4> values;
+          values.push_back(value);
 
-          // Set CopyOp dataflow level.
-          copyOp.setAttr("dataflow_level",
-                         builder.getIntegerAttr(builder.getI64Type(), i));
+          builder.setInsertionPoint(successor);
+          for (auto i = dataflowLevel; i > successorDataflowLevel; --i) {
+            // Create CopyOp.
+            Value newValue;
+            Operation *copyOp;
+            if (auto valueType = value.getType().dyn_cast<MemRefType>()) {
+              newValue = builder.create<mlir::AllocOp>(op->getLoc(), valueType);
+              copyOp = builder.create<linalg::CopyOp>(op->getLoc(),
+                                                      values.back(), newValue);
+            } else {
+              copyOp = builder.create<hlskernel::CopyOp>(
+                  op->getLoc(), value.getType(), values.back());
+              newValue = copyOp->getResult(0);
+            }
 
-          // Chain created CopyOps.
-          if (i == successorDataflowLevel + 1)
-            mem.replaceUsesWithIf(newMem, [&](mlir::OpOperand &use) {
-              return successor->isProperAncestor(use.getOwner());
-            });
+            // Set CopyOp dataflow level.
+            copyOp->setAttr("dataflow_level",
+                            builder.getIntegerAttr(builder.getI64Type(), i));
+
+            // Chain created CopyOps.
+            if (i == successorDataflowLevel + 1)
+              value.replaceUsesWithIf(newValue, [&](mlir::OpOperand &use) {
+                return successor->isAncestor(use.getOwner());
+              });
+            else
+              values.push_back(newValue);
+          }
+        } else {
+          // Always retain the longest merge path.
+          if (auto dst = dataflowToMerge.lookup(successorDataflowLevel))
+            dataflowToMerge[successorDataflowLevel] = max(dst, dataflowLevel);
           else
-            mems.push_back(newMem);
+            dataflowToMerge[successorDataflowLevel] = dataflowLevel;
         }
       }
     }
   }
 
-  // Reorder operations that are legalized, including HLSKernel ops or loops.
+  // Collect all operations in each dataflow level.
   DenseMap<int64_t, SmallVector<Operation *, 2>> dataflowOps;
   func.walk([&](Operation *dataflowOp) {
     if (auto attr = dataflowOp->getAttrOfType<IntegerAttr>("dataflow_level"))
       dataflowOps[attr.getInt()].push_back(dataflowOp);
   });
 
+  // Reorder operations that are legalized.
   for (auto pair : dataflowOps) {
     auto ops = pair.second;
     auto lastOp = ops.back();
@@ -158,6 +178,31 @@ void LegalizeDataflow::runOnOperation() {
     for (auto it = ops.begin(); it < std::prev(ops.end()); ++it) {
       auto op = *it;
       op->moveBefore(lastOp);
+    }
+  }
+
+  // Merge dataflow levels according to the bypasses and minimum granularity.
+  if (minGran != 1 || !insertCopy) {
+    unsigned newLevel = 1;
+    unsigned toMerge = minGran;
+    for (unsigned i = 1, e = dataflowOps.size(); i <= e; ++i) {
+      // If the current level is the start point of a bypass, refresh toMerge.
+      // Otherwise, decrease toMerge by 1.
+      if (auto dst = dataflowToMerge.lookup(i))
+        toMerge = dst - i;
+      else
+        toMerge--;
+
+      // Annotate all ops in the current level to the new level.
+      for (auto op : dataflowOps[i])
+        op->setAttr("dataflow_level",
+                    builder.getIntegerAttr(builder.getI64Type(), newLevel));
+
+      // Update toMerge and newLevel if required.
+      if (toMerge == 0) {
+        toMerge = minGran;
+        newLevel++;
+      }
     }
   }
 

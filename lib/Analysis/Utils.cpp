@@ -69,23 +69,7 @@ scalehls::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
   return Optional<std::pair<Operation *, Operation *>>();
 }
 
-// Get the innermost surrounding operation, either an AffineForOp or a FuncOp.
-// In this method, AffineIfOp is transparent as well.
-Operation *scalehls::getSurroundingOp(Operation *op) {
-  auto currentOp = op;
-  while (true) {
-    if (auto parentIfOp = currentOp->getParentOfType<AffineIfOp>())
-      currentOp = parentIfOp;
-    else if (auto parentForOp = currentOp->getParentOfType<AffineForOp>())
-      return parentForOp;
-    else if (auto parentFuncOp = currentOp->getParentOfType<FuncOp>())
-      return parentFuncOp;
-    else
-      return nullptr;
-  }
-}
-
-// Get the pointer of the scrOp's parent loop, which should locate at the same
+// Get the pointer of the scrOp's parent loop, which should locat at the same
 // level with dstOp's any parent loop.
 Operation *scalehls::getSameLevelDstOp(Operation *srcOp, Operation *dstOp) {
   // If srcOp and dstOp are already at the same level, return the srcOp.
@@ -139,36 +123,4 @@ hlscpp::ArrayOp scalehls::getArrayOp(Value memref) {
 
 hlscpp::ArrayOp scalehls::getArrayOp(Operation *op) {
   return getArrayOp(MemRefAccess(op).memref);
-}
-
-void scalehls::getSuccessorsMap(Block &block, SuccessorsMap &map) {
-  DenseMap<Operation *, SmallPtrSet<Value, 2>> memsMap;
-  DenseMap<Value, SmallPtrSet<Operation *, 2>> loopsMap;
-
-  for (auto loop : block.getOps<AffineForOp>())
-    loop.walk([&](Operation *op) {
-      if (auto affineStore = dyn_cast<AffineStoreOp>(op)) {
-        memsMap[loop].insert(affineStore.getMemRef());
-
-      } else if (auto store = dyn_cast<StoreOp>(op)) {
-        memsMap[loop].insert(store.getMemRef());
-
-      } else if (auto affineLoad = dyn_cast<AffineLoadOp>(op)) {
-        loopsMap[affineLoad.getMemRef()].insert(loop);
-
-      } else if (auto load = dyn_cast<LoadOp>(op)) {
-        loopsMap[load.getMemRef()].insert(loop);
-      }
-    });
-
-  for (auto loop : block.getOps<AffineForOp>())
-    for (auto mem : memsMap[loop])
-      for (auto successor : loopsMap[mem]) {
-        // If the successor loop not only loads from the memory, but also store
-        // to the memory, it will not be considered as a legal successor.
-        if (successor == loop || memsMap[successor].count(mem))
-          continue;
-
-        map[loop].push_back(std::pair<Value, Operation *>(mem, successor));
-      }
 }

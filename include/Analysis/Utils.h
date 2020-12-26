@@ -92,10 +92,6 @@ void getMemAccessesMap(Block &block, MemAccessesMap &map,
 Optional<std::pair<Operation *, Operation *>> checkSameLevel(Operation *lhsOp,
                                                              Operation *rhsOp);
 
-// Get the innermost surrounding operation, either an AffineForOp or a FuncOp.
-// In this method, AffineIfOp is transparent as well.
-Operation *getSurroundingOp(Operation *op);
-
 // Get the pointer of the scrOp's parent loop, which should locate at the same
 // level with dstOp's any parent loop.
 Operation *getSameLevelDstOp(Operation *srcOp, Operation *dstOp);
@@ -104,13 +100,6 @@ Operation *getSameLevelDstOp(Operation *srcOp, Operation *dstOp);
 hlscpp::ArrayOp getArrayOp(Value memref);
 
 hlscpp::ArrayOp getArrayOp(Operation *op);
-
-// For storing the intermediate memory and successor loops indexed by the
-// predecessor loop.
-using Successors = SmallVector<std::pair<Value, Operation *>, 2>;
-using SuccessorsMap = DenseMap<Operation *, Successors>;
-
-void getSuccessorsMap(Block &block, SuccessorsMap &map);
 
 } // namespace scalehls
 } // namespace mlir

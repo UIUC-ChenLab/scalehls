@@ -79,7 +79,7 @@ def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "FuncOp"> {
 
   let options = [
     Option<"tileLevel", "tile-level", "unsigned", /*default=*/"1", 
-           "Positive number: the level of loops to be tiles">,
+           "Positive number: the level of loops to be tiled">,
     Option<"tileSize", "tile-size", "unsigned", /*default=*/"2", 
            "Positive number: the size of tiling">
   ];
@@ -121,6 +121,13 @@ def LegalizeDataflow : Pass<"legalize-dataflow", "FuncOp"> {
   }];
 
   let constructor = "mlir::scalehls::createLegalizeDataflowPass()";
+
+  let options = [
+    Option<"insertCopy", "insert-copy", "bool", /*default=*/"true", 
+           "Whether insert copy to break bypass paths">,
+    Option<"minGran", "min-gran", "unsigned", /*default=*/"1", 
+           "Positive number: the minimum granularity of dataflow">
+  ];
 }
 
 //===----------------------------------------------------------------------===//
