@@ -1,8 +1,12 @@
+'''ResNet in PyTorch.
+
+Modified based on (https://github.com/kuangliu/pytorch-cifar/blob/master/models/resnet.py)
+
+'''
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.models as models
-import numpy as np
 
 
 class BasicBlock(nn.Module):

@@ -82,12 +82,10 @@ $ scalehls-opt resnet18.tmp -print-op-graph 2> resnet18.gv
 $ dot -Tpng resnet18.gv > resnet18.png
 
 $ # Legalize the output of ONNX-MLIR, optimize and emit C++ code.
-$ scalehls-opt resnet18.mlir -legalize-onnx -affine-loop-normalize \
-    -legalize-dataflow -split-function -convert-linalg-to-affine-loops \
-    -affine-loop-perfection -affine-loop-normalize \
+$ scalehls-opt resnet18.mlir -legalize-onnx -affine-loop-normalize -canonicalize \
+    -legalize-dataflow="min-gran=2 insert-copy=false" -split-function \
+    -convert-linalg-to-affine-loops -affine-loop-fusion \
     -convert-to-hlscpp="top-function=main_graph" \
-    -store-op-forward -simplify-memref-access -cse -canonicalize \
-    -qor-estimation="target-spec=../../../config/target-spec.ini" \
     | scalehls-translate -emit-hlscpp
 ```
 
