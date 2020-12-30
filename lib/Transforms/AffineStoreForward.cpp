@@ -49,7 +49,7 @@ namespace {
 // currently only eliminates the stores only if no other loads/uses (other
 // than dealloc) remain.
 //
-struct StoreOpForward : public StoreOpForwardBase<StoreOpForward> {
+struct AffineStoreForward : public AffineStoreForwardBase<AffineStoreForward> {
   void runOnOperation() override;
 
   void forwardStoreToLoad(AffineReadOpInterface loadOp);
@@ -65,13 +65,13 @@ struct StoreOpForward : public StoreOpForwardBase<StoreOpForward> {
 
 /// Creates a pass to perform optimizations relying on memref dataflow such as
 /// store to load forwarding, elimination of dead stores, and dead allocs.
-std::unique_ptr<Pass> scalehls::createStoreOpForwardPass() {
-  return std::make_unique<StoreOpForward>();
+std::unique_ptr<Pass> scalehls::createAffineStoreForwardPass() {
+  return std::make_unique<AffineStoreForward>();
 }
 
 // This is a straightforward implementation not optimized for speed. Optimize
 // if needed.
-void StoreOpForward::forwardStoreToLoad(AffineReadOpInterface loadOp) {
+void AffineStoreForward::forwardStoreToLoad(AffineReadOpInterface loadOp) {
   // First pass over the use list to get the minimum number of surrounding
   // loops common between the load op and the store op, with min taken across
   // all store ops.
@@ -211,7 +211,7 @@ void StoreOpForward::forwardStoreToLoad(AffineReadOpInterface loadOp) {
   memrefsToErase.insert(loadOp.getMemRef());
 }
 
-void StoreOpForward::runOnOperation() {
+void AffineStoreForward::runOnOperation() {
   // Only supports single block functions at the moment.
   FuncOp f = getOperation();
   if (!llvm::hasSingleElement(f)) {

@@ -11,14 +11,14 @@ include "mlir/Pass/PassBase.td"
 // HLSKernel and HLSCpp Conversion passes
 //===----------------------------------------------------------------------===//
 
-def ConvertToHLSCpp : Pass<"convert-to-hlscpp", "FuncOp"> {
+def LegalizeToHLSCpp : Pass<"legalize-to-hlscpp", "FuncOp"> {
   let summary = "Convert to emittable MLIR code";
   let description = [{
-    This convert-to-hlscpp converts MLIR code in Affine/Standard/SCF level to
+    This legalize-to-hlscpp converts MLIR code in Affine/Standard/SCF level to
     emittable and estimatable MLIR code.
   }];
 
-  let constructor = "mlir::scalehls::createConvertToHLSCppPass()";
+  let constructor = "mlir::scalehls::createLegalizeToHLSCppPass()";
 
   let options = [
     Option<"topFunction", "top-function", "std::string", /*default=*/"\"main\"", 

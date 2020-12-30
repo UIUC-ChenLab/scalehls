@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -remove-var-loop-bound %s | FileCheck %s
+// RUN: scalehls-opt -remove-variable-bound %s | FileCheck %s
 
 // CHECK-LABEL: func @test_for
 func @test_for() {

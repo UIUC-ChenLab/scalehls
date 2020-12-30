@@ -13,14 +13,14 @@ using namespace mlir;
 using namespace scalehls;
 
 namespace {
-struct SimplifyMemRefAccess
-    : public SimplifyMemRefAccessBase<SimplifyMemRefAccess> {
+struct SimplifyMemrefAccess
+    : public SimplifyMemrefAccessBase<SimplifyMemrefAccess> {
   void runOnOperation() override;
 };
 
 } // end anonymous namespace
 
-void SimplifyMemRefAccess::runOnOperation() {
+void SimplifyMemrefAccess::runOnOperation() {
   auto func = getOperation();
 
   // Collect all load and store operations in the function block.
@@ -117,6 +117,6 @@ void SimplifyMemRefAccess::runOnOperation() {
   }
 }
 
-std::unique_ptr<Pass> scalehls::createSimplifyMemRefAccessPass() {
-  return std::make_unique<SimplifyMemRefAccess>();
+std::unique_ptr<Pass> scalehls::createSimplifyMemrefAccessPass() {
+  return std::make_unique<SimplifyMemrefAccess>();
 }

@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -convert-to-hlscpp %s | scalehls-translate -emit-hlscpp | FileCheck %s
+// RUN: scalehls-opt -legalize-to-hlscpp %s | scalehls-translate -emit-hlscpp | FileCheck %s
 
 // CHECK: void test_signature(
 // CHECK:   float [[VAL_0:.*]],

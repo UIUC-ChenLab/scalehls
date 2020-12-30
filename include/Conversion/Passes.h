@@ -16,7 +16,7 @@ namespace mlir {
 namespace scalehls {
 
 // HLSKernel and HLSCpp conversion passes.
-std::unique_ptr<Pass> createConvertToHLSCppPass();
+std::unique_ptr<Pass> createLegalizeToHLSCppPass();
 std::unique_ptr<Pass> createHLSKernelToAffinePass();
 
 /// Onnx kernel legalization pass.

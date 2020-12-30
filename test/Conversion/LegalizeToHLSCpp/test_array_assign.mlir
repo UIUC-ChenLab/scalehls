@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -convert-to-hlscpp="top-function=test_array_assign" %s | FileCheck %s
+// RUN: scalehls-opt -legalize-to-hlscpp="top-function=test_array_assign" %s | FileCheck %s
 
 // CHECK-LABEL: func @test_array_assign(
 // CHECK-SAME:  %arg0: f32, %arg1: memref<16xf32>) -> (f32, memref<16xf32>, i32, memref<2x2xi32>) attributes {dataflow = false, top_function = true} {

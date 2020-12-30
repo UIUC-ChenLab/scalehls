@@ -27,11 +27,11 @@ fi
 
 # Candidate passes.
 hta=-hlskernel-to-affine
-cth=-convert-to-hlscpp
+cth=-legalize-to-hlscpp
 can=-canonicalize
 
 alp=-affine-loop-perfection
-rvb=-remove-var-loop-bound
+rvb=-remove-variable-bound
 par=-array-partition
 
 p0=-loop-pipelining="pipeline-level=0"

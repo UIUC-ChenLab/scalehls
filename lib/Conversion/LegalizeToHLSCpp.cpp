@@ -11,13 +11,13 @@ using namespace scalehls;
 using namespace hlscpp;
 
 namespace {
-struct ConvertToHLSCpp : public ConvertToHLSCppBase<ConvertToHLSCpp> {
+struct LegalizeToHLSCpp : public LegalizeToHLSCppBase<LegalizeToHLSCpp> {
 public:
   void runOnOperation() override;
 };
 } // namespace
 
-void ConvertToHLSCpp::runOnOperation() {
+void LegalizeToHLSCpp::runOnOperation() {
   auto func = getOperation();
   auto builder = OpBuilder(func);
 
@@ -128,6 +128,6 @@ void ConvertToHLSCpp::runOnOperation() {
   });
 }
 
-std::unique_ptr<mlir::Pass> scalehls::createConvertToHLSCppPass() {
-  return std::make_unique<ConvertToHLSCpp>();
+std::unique_ptr<mlir::Pass> scalehls::createLegalizeToHLSCppPass() {
+  return std::make_unique<LegalizeToHLSCpp>();
 }

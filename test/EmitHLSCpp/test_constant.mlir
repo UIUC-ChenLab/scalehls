@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -convert-to-hlscpp %s | scalehls-translate -emit-hlscpp | FileCheck %s
+// RUN: scalehls-opt -legalize-to-hlscpp %s | scalehls-translate -emit-hlscpp | FileCheck %s
 
 func @test_constant(%arg0: i32) -> (i32, tensor<2x2xi32>, vector<2xi32>, i32) {
 

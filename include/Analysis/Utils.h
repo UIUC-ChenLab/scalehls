@@ -101,6 +101,9 @@ hlscpp::ArrayOp getArrayOp(Value memref);
 
 hlscpp::ArrayOp getArrayOp(Operation *op);
 
+Optional<std::pair<int64_t, int64_t>>
+getBoundOfAffineBound(AffineBound bound, MLIRContext *context);
+
 } // namespace scalehls
 } // namespace mlir
 

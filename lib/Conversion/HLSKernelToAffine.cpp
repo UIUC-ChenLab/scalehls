@@ -499,7 +499,9 @@ bool HLSKernelVisitor::visitOp(SyrkOp op) {
   // Set insertion point of builder. Create M (M == N) and N dimension loop.
   builder.setInsertionPoint(op);
   auto m = createLoop(0, AShape[0]);
-  auto n = createLoop(0, m);
+  auto lowerMap = AffineMap::get(0, 0, getConst(0));
+  auto upperMap = AffineMap::get(1, 0, getDim(0) + 1);
+  auto n = createLoop({}, lowerMap, {m}, upperMap);
 
   // Update C with beta * C.
   auto initC = createLoad(C, {m, n});
@@ -534,7 +536,9 @@ bool HLSKernelVisitor::visitOp(Syr2kOp op) {
   // Set insertion point of builder. Create M (M == N) and N dimension loop.
   builder.setInsertionPoint(op);
   auto m = createLoop(0, AShape[0]);
-  auto n = createLoop(0, m);
+  auto lowerMap = AffineMap::get(0, 0, getConst(0));
+  auto upperMap = AffineMap::get(1, 0, getDim(0) + 1);
+  auto n = createLoop({}, lowerMap, {m}, upperMap);
 
   // Update C with beta * C.
   auto initC = createLoad(C, {m, n});

@@ -23,7 +23,7 @@ std::unique_ptr<Pass> createPragmaDSEPass();
 /// Loop optimization passes.
 std::unique_ptr<Pass> createAffineLoopPerfectionPass();
 std::unique_ptr<Pass> createPartialAffineLoopTilePass();
-std::unique_ptr<Pass> createRemoveVarLoopBoundPass();
+std::unique_ptr<Pass> createRemoveVariableBoundPass();
 
 /// Dataflow optimization passes.
 std::unique_ptr<Pass> createSplitFunctionPass();
@@ -33,8 +33,8 @@ std::unique_ptr<Pass> createLegalizeDataflowPass();
 std::unique_ptr<Pass> createHLSKernelBufferizePass();
 
 /// MemRef Optimization Passes.
-std::unique_ptr<Pass> createStoreOpForwardPass();
-std::unique_ptr<Pass> createSimplifyMemRefAccessPass();
+std::unique_ptr<Pass> createAffineStoreForwardPass();
+std::unique_ptr<Pass> createSimplifyMemrefAccessPass();
 
 void registerTransformsPasses();
 

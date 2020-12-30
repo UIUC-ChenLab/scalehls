@@ -85,16 +85,16 @@ def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "FuncOp"> {
   ];
 }
 
-def RemoveVarLoopBound : Pass<"remove-var-loop-bound", "FuncOp"> {
+def RemoveVariableBound : Pass<"remove-variable-bound", "FuncOp"> {
   let summary = "Try to remove variable loop bounds";
   let description = [{
-    This remove-var-loop-bound pass will try to remove the variable loop bounds.
+    This remove-variable-bound pass will try to remove the variable loop bounds.
     Specifically, this is only possible when the variable loop bound is an
     affine expression of induction variables of other loops with constant lower
     or upper bound.
   }];
 
-  let constructor = "mlir::scalehls::createRemoveVarLoopBoundPass()";
+  let constructor = "mlir::scalehls::createRemoveVariableBoundPass()";
 }
 
 //===----------------------------------------------------------------------===//
@@ -147,24 +147,24 @@ def HLSKernelBufferize : Pass<"hlskernel-bufferize", "FuncOp"> {
 // MemRef Optimization Passes
 //===----------------------------------------------------------------------===//
 
-def StoreOpForward : Pass<"store-op-forward", "FuncOp"> {
+def AffineStoreForward : Pass<"affine-store-forward", "FuncOp"> {
   let summary = "Forward store to load, including conditional stores";
   let description = [{
-    This store-op-forward pass is similar to memref-dataflow-opt, but support to
+    This affine-store-forward pass is similar to memref-dataflow-opt, but support to
     forward stores in if statements.
   }];
 
-  let constructor = "mlir::scalehls::createStoreOpForwardPass()";
+  let constructor = "mlir::scalehls::createAffineStoreForwardPass()";
 }
 
-def SimplifyMemRefAccess : Pass<"simplify-memref-access", "FuncOp"> {
+def SimplifyMemrefAccess : Pass<"simplify-memref-access", "FuncOp"> {
   let summary = "Remove redundant load and store operations";
   let description = [{
     This simplify-memref-access pass will eliminate the known redundant load and
     store operations for simplifying the memref access.
   }];
 
-  let constructor = "mlir::scalehls::createSimplifyMemRefAccessPass()";
+  let constructor = "mlir::scalehls::createSimplifyMemrefAccessPass()";
 }
 
 #endif // SCALEHLS_TRANSFORMS_PASSES_TD
