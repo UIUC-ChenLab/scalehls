@@ -48,6 +48,14 @@ void AffineLoopPerfection::runOnOperation() {
         // All operations before the inner loop should be moved to the
         // innermost loop, they are collected in frontOps.
         if (!frontOps.empty()) {
+          // TODO: for now, we assume all users are inside of the current loop.
+          // This is important because if any user is located at inner loops, it
+          // is required to create a memref for holding the result.
+          for (auto op : frontOps)
+            for (auto user : op->getUsers())
+              if (user->getParentOp() != loop)
+                return;
+
           // Create AffineIf in the front of the innermost loop.
           SmallVector<AffineExpr, 4> ifExprs;
           SmallVector<bool, 4> ifEqFlags;

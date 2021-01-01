@@ -18,6 +18,8 @@ def AssignOp : HLSCppOp<"assign", [SameOperandsAndResultType]> {
   let results = (outs AnyType : $output);
 }
 
+// Outdated. This is a temporary approach, which will be substituted by a type
+// or attribute based approach.
 def ArrayOp : HLSCppOp<"array", [SameOperandsAndResultType]> {
   let summary = "A C++ array instance";
   let description = [{
