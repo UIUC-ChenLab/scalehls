@@ -176,3 +176,25 @@ hlscpp::ArrayOp scalehls::getArrayOp(Value memref) {
 hlscpp::ArrayOp scalehls::getArrayOp(Operation *op) {
   return getArrayOp(MemRefAccess(op).memref);
 }
+
+void scalehls::getPartitionFactors(ArrayRef<int64_t> shape, AffineMap layoutMap,
+                                   SmallVector<int64_t, 4> &factors) {
+  for (unsigned dim = 0, e = shape.size(); dim < e; ++dim) {
+    auto expr = layoutMap.getResult(dim);
+
+    if (auto binaryExpr = expr.dyn_cast<AffineBinaryOpExpr>()) {
+      if (auto factor = binaryExpr.getRHS().dyn_cast<AffineConstantExpr>()) {
+        if (expr.getKind() == AffineExprKind::Mod)
+          factors.push_back(factor.getValue());
+        else if (expr.getKind() == AffineExprKind::FloorDiv) {
+          auto blockFactor =
+              (shape[dim] + factor.getValue() - 1) / factor.getValue();
+          factors.push_back(blockFactor);
+        }
+      }
+    } else if (auto constExpr = expr.dyn_cast<AffineConstantExpr>()) {
+      if (constExpr.getValue() == 0)
+        factors.push_back(1);
+    }
+  }
+}

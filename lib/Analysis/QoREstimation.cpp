@@ -195,9 +195,11 @@ void HLSCppEstimator::getFuncDependencies() {
 
 /// Calculate the overall partition index.
 int64_t HLSCppEstimator::getPartitionIndex(Operation *op) {
-  auto arrayOp = getArrayOp(op);
+  auto access = MemRefAccess(op);
+  auto memrefType = access.memref.getType().cast<MemRefType>();
+
   AffineValueMap accessMap;
-  MemRefAccess(op).getAccessMap(&accessMap);
+  access.getAccessMap(&accessMap);
 
   // Replace all dims in the memory access AffineMap with (step * dims). This
   // will ensure the "cyclic" array partition can be correctly detected.
@@ -211,11 +213,8 @@ int64_t HLSCppEstimator::getPartitionIndex(Operation *op) {
       if (isForInductionVar(operand))
         step = getForInductionVarOwner(operand).getStep();
 
-      if (step == 1)
-        dimReplacements.push_back(builder.getAffineDimExpr(operandIdx));
-      else
-        dimReplacements.push_back(builder.getAffineConstantExpr(step) *
-                                  builder.getAffineDimExpr(operandIdx));
+      dimReplacements.push_back(builder.getAffineConstantExpr(step) *
+                                builder.getAffineDimExpr(operandIdx));
     } else {
       symReplacements.push_back(
           builder.getAffineSymbolExpr(operandIdx - accessMap.getNumDims()));
@@ -227,42 +226,37 @@ int64_t HLSCppEstimator::getPartitionIndex(Operation *op) {
       dimReplacements, symReplacements, accessMap.getNumDims(),
       accessMap.getNumSymbols());
 
+  // Check whether the memref is partitioned.
+  auto memrefMaps = memrefType.getAffineMaps();
+  if (memrefMaps.empty())
+    return 0;
+
+  // Compose the access map with the layout map.
+  auto layoutMap = memrefMaps.back();
+  auto composeMap = layoutMap.compose(newMap);
+
+  // Collect partition factors.
+  SmallVector<int64_t, 4> factors;
+  getPartitionFactors(memrefType.getShape(), layoutMap, factors);
+
   // Calculate the partition index of this load/store operation honoring the
   // partition strategy applied.
   int64_t partitionIdx = 0;
   int64_t accumFactor = 1;
 
-  unsigned dim = 0;
-  for (auto expr : newMap.getResults()) {
-    auto idxExpr = builder.getAffineConstantExpr(0);
-    int64_t factor = 1;
+  for (auto dim = 0; dim < memrefType.getRank(); ++dim) {
+    auto idxExpr = composeMap.getResult(dim);
 
-    if (arrayOp.partition()) {
-      auto type = getPartitionType(arrayOp, dim);
-      factor = getPartitionFactor(arrayOp, dim);
-
-      if (type == "cyclic")
-        idxExpr = expr % builder.getAffineConstantExpr(factor);
-      else if (type == "block") {
-        auto size = arrayOp.getShapedType().getShape()[dim];
-        idxExpr = expr.floorDiv(
-            builder.getAffineConstantExpr((size + factor - 1) / factor));
-      }
-    }
-
-    if (auto constExpr = idxExpr.dyn_cast<AffineConstantExpr>()) {
-      if (dim == 0)
-        partitionIdx = constExpr.getValue();
-      else
-        partitionIdx += constExpr.getValue() * accumFactor;
-    } else {
+    if (auto constExpr = idxExpr.dyn_cast<AffineConstantExpr>())
+      partitionIdx += constExpr.getValue() * accumFactor;
+    else {
       partitionIdx = -1;
       break;
     }
 
-    accumFactor *= factor;
-    dim++;
+    accumFactor *= factors[dim];
   }
+
   return partitionIdx;
 }
 

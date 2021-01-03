@@ -104,6 +104,9 @@ hlscpp::ArrayOp getArrayOp(Operation *op);
 Optional<std::pair<int64_t, int64_t>>
 getBoundOfAffineBound(AffineBound bound, MLIRContext *context);
 
+void getPartitionFactors(ArrayRef<int64_t> shape, AffineMap layoutMap,
+                         SmallVector<int64_t, 4> &factors);
+
 } // namespace scalehls
 } // namespace mlir
 

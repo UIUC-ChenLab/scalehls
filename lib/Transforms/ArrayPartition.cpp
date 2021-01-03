@@ -38,9 +38,16 @@ static void applyArrayPartition(MemAccessesMap &map, OpBuilder &builder) {
     auto arrayShape = arrayOp.getShapedType().getShape();
     auto arrayAccesses = pair.second;
 
+    auto memref = pair.first;
+    auto memrefType = memref.getType().cast<MemRefType>();
+
     // Walk through each dimension of the targeted array.
-    SmallVector<Attribute, 4> partitionFactor;
+    SmallVector<int64_t, 4> partitionFactor;
     SmallVector<StringRef, 4> partitionType;
+
+    SmallVector<AffineExpr, 4> partitionIndices;
+    SmallVector<AffineExpr, 4> addressIndices;
+
     unsigned partitionNum = 1;
 
     for (size_t dim = 0, e = arrayShape.size(); dim < e; ++dim) {
@@ -84,6 +91,9 @@ static void applyArrayPartition(MemAccessesMap &map, OpBuilder &builder) {
         // should not be partitioned.
         partitionType.push_back("none");
 
+        partitionIndices.push_back(builder.getAffineConstantExpr(0));
+        addressIndices.push_back(builder.getAffineDimExpr(dim));
+
       } else if (accessNum >= maxDistance) {
         // This means some elements are accessed more than once or exactly
         // once, and successive elements are accessed. In most cases,
@@ -91,20 +101,43 @@ static void applyArrayPartition(MemAccessesMap &map, OpBuilder &builder) {
         partitionType.push_back("cyclic");
         factor = maxDistance;
 
+        partitionIndices.push_back(builder.getAffineDimExpr(dim) % factor);
+        addressIndices.push_back(
+            builder.getAffineDimExpr(dim).floorDiv(factor));
+
       } else {
         // This means discrete elements are accessed. Typically, "block"
         // partition will be most benefit for this occasion.
         partitionType.push_back("block");
         factor = accessNum;
+
+        auto blockFactor = (memrefType.getShape()[dim] + factor - 1) / factor;
+        partitionIndices.push_back(
+            builder.getAffineDimExpr(dim).floorDiv(blockFactor));
+        addressIndices.push_back(builder.getAffineDimExpr(dim) % blockFactor);
       }
 
-      partitionFactor.push_back(builder.getI64IntegerAttr(factor));
+      partitionFactor.push_back(factor);
       partitionNum *= factor;
     }
 
+    // Construct new layout map.
+    partitionIndices.append(addressIndices.begin(), addressIndices.end());
+    auto layoutMap = AffineMap::get(memrefType.getRank(), 0, partitionIndices,
+                                    builder.getContext());
+
+    // Construct new memref type.
+    auto newType = MemRefType::get(memrefType.getShape(),
+                                   memrefType.getElementType(), layoutMap);
+
+    // Set new type.
+    memref.setType(newType);
+    // TODO: set function type.
+
     arrayOp.setAttr("partition", builder.getBoolAttr(true));
     arrayOp.setAttr("partition_type", builder.getStrArrayAttr(partitionType));
-    arrayOp.setAttr("partition_factor", builder.getArrayAttr(partitionFactor));
+    arrayOp.setAttr("partition_factor",
+                    builder.getI64ArrayAttr(partitionFactor));
     arrayOp.setAttr("partition_num", builder.getI64IntegerAttr(partitionNum));
   }
 }
