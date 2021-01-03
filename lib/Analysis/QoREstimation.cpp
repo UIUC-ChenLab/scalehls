@@ -41,16 +41,17 @@ public:
 
   // Indicate the unoccupied memory ports number.
   struct PortInfo {
-    PortInfo(unsigned rdPort = 0, unsigned wrPort = 0, unsigned rdwrPort = 0)
-        : rdPort(rdPort), wrPort(wrPort), rdwrPort(rdwrPort) {}
-
     unsigned rdPort;
     unsigned wrPort;
     unsigned rdwrPort;
+
+    PortInfo(unsigned rdPort = 0, unsigned wrPort = 0, unsigned rdwrPort = 0)
+        : rdPort(rdPort), wrPort(wrPort), rdwrPort(rdwrPort) {}
   };
-  // For storing ports number of all partitions indexed by the array (ArrayOp).
+
+  // For storing ports number of all partitions indexed by the memref.
   using Ports = SmallVector<PortInfo, 16>;
-  using PortsMap = DenseMap<Operation *, Ports>;
+  using PortsMap = DenseMap<Value, Ports>;
   // For storing PortsMap indexed by the scheduling level.
   using PortsMapDict = DenseMap<int64_t, PortsMap>;
 
@@ -130,11 +131,10 @@ public:
 
 /// Collect all dependencies detected in the function.
 void HLSCppEstimator::getFuncDependencies() {
-  // TODO: This can be simplified by traversing each ArrayOp in the function.
   MemAccessesMap map;
   getMemAccessesMap(func.front(), map, /*includeCallOp=*/true);
 
-  // Walk through all ArrayOp - LoadOp/StoreOp pairs, and find all memory
+  // Walk through all MemRef - LoadOp/StoreOp pairs, and find all memory
   // related dependencies.
   for (auto &pair : map) {
     auto memAccesses = pair.second;
@@ -226,18 +226,15 @@ int64_t HLSCppEstimator::getPartitionIndex(Operation *op) {
       dimReplacements, symReplacements, accessMap.getNumDims(),
       accessMap.getNumSymbols());
 
-  // Check whether the memref is partitioned.
-  auto memrefMaps = memrefType.getAffineMaps();
-  if (memrefMaps.empty())
-    return 0;
-
   // Compose the access map with the layout map.
-  auto layoutMap = memrefMaps.back();
+  auto layoutMap = getLayoutMap(memrefType);
+  if (layoutMap.isEmpty())
+    return 0;
   auto composeMap = layoutMap.compose(newMap);
 
   // Collect partition factors.
   SmallVector<int64_t, 4> factors;
-  getPartitionFactors(memrefType.getShape(), layoutMap, factors);
+  getPartitionFactors(memrefType, &factors);
 
   // Calculate the partition index of this load/store operation honoring the
   // partition strategy applied.
@@ -266,15 +263,18 @@ void HLSCppEstimator::estimateLoadStore(Operation *op, int64_t begin) {
   auto partitionIdx = getPartitionIndex(op);
   setAttrValue(op, "partition_index", partitionIdx);
 
-  auto arrayOp = getArrayOp(op);
-  auto partitionNum = arrayOp.partition_num();
-  auto storageType = arrayOp.storage_type();
+  auto access = MemRefAccess(op);
+  auto memref = access.memref;
+  auto memrefType = memref.getType().cast<MemRefType>();
+
+  auto partitionNum = getPartitionFactors(memrefType);
+  std::string storageType = "ram_1p_bram";
 
   // Try to avoid memory port violation until a legal schedule is found. Since
   // an infinite length schedule cannot be generated, this while loop can be
   // proofed to have an end.
   while (true) {
-    auto memPort = portsMapDict[begin][arrayOp];
+    auto memPort = portsMapDict[begin][memref];
     bool memPortEmpty = memPort.empty();
 
     // If the memory has not been occupied by the current schedule level, it
@@ -337,7 +337,7 @@ void HLSCppEstimator::estimateLoadStore(Operation *op, int64_t begin) {
     // If successed, break the while loop. Otherwise increase the schedule level
     // by 1 and continue to try.
     if (successFlag) {
-      portsMapDict[begin][arrayOp] = memPort;
+      portsMapDict[begin][memref] = memPort;
       break;
     } else
       begin++;
@@ -372,10 +372,9 @@ int64_t HLSCppEstimator::getResMinII(MemAccessesMap &map) {
   int64_t II = 1;
 
   for (auto &pair : map) {
-    auto arrayOp = getArrayOp(pair.first);
-    // Partition number should at least be 1.
-    auto partitionNum = arrayOp.partition_num();
-    auto storageType = arrayOp.storage_type();
+    auto memrefType = pair.first.getType().cast<MemRefType>();
+    auto partitionNum = getPartitionFactors(memrefType);
+    std::string storageType = "ram_1p_bram";
 
     SmallVector<int64_t, 16> readNum;
     SmallVector<int64_t, 16> writeNum;

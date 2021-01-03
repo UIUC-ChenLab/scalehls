@@ -34,26 +34,18 @@ static mlir::AffineForOp getPipelineLoop(mlir::AffineForOp root) {
 template <typename OpType>
 static void applyArrayPartition(MemAccessesMap &map, OpBuilder &builder) {
   for (auto pair : map) {
-    auto arrayOp = getArrayOp(pair.first);
-    auto arrayShape = arrayOp.getShapedType().getShape();
-    auto arrayAccesses = pair.second;
-
     auto memref = pair.first;
     auto memrefType = memref.getType().cast<MemRefType>();
+    auto loadStores = pair.second;
 
     // Walk through each dimension of the targeted array.
-    SmallVector<int64_t, 4> partitionFactor;
-    SmallVector<StringRef, 4> partitionType;
-
     SmallVector<AffineExpr, 4> partitionIndices;
     SmallVector<AffineExpr, 4> addressIndices;
 
-    unsigned partitionNum = 1;
-
-    for (size_t dim = 0, e = arrayShape.size(); dim < e; ++dim) {
+    for (unsigned dim = 0; dim < memrefType.getRank(); ++dim) {
       // Collect all array access indices of the current dimension.
       SmallVector<AffineExpr, 4> indices;
-      for (auto accessOp : arrayAccesses) {
+      for (auto accessOp : loadStores) {
         auto concreteOp = cast<OpType>(accessOp);
         auto index = concreteOp.getAffineMap().getResult(dim);
         // Only add unique index.
@@ -64,7 +56,6 @@ static void applyArrayPartition(MemAccessesMap &map, OpBuilder &builder) {
 
       // Find the max array access distance in the current block.
       unsigned maxDistance = 0;
-      bool failFlag = false;
 
       for (unsigned i = 0; i < accessNum; ++i) {
         for (unsigned j = i + 1; j < accessNum; ++j) {
@@ -74,23 +65,15 @@ static void applyArrayPartition(MemAccessesMap &map, OpBuilder &builder) {
           if (auto constDistance = expr.dyn_cast<AffineConstantExpr>()) {
             unsigned distance = abs(constDistance.getValue());
             maxDistance = max(maxDistance, distance);
-          } else {
-            // failFlag = true;
-            // break;
           }
         }
-        // if (failFlag)
-        //  break;
       }
 
       // Determine array partition strategy.
       maxDistance += 1;
-      unsigned factor = 1;
-      if (failFlag || maxDistance == 1) {
+      if (maxDistance == 1) {
         // This means all accesses have the same index, and this dimension
         // should not be partitioned.
-        partitionType.push_back("none");
-
         partitionIndices.push_back(builder.getAffineConstantExpr(0));
         addressIndices.push_back(builder.getAffineDimExpr(dim));
 
@@ -98,8 +81,7 @@ static void applyArrayPartition(MemAccessesMap &map, OpBuilder &builder) {
         // This means some elements are accessed more than once or exactly
         // once, and successive elements are accessed. In most cases,
         // apply "cyclic" partition should be the best solution.
-        partitionType.push_back("cyclic");
-        factor = maxDistance;
+        unsigned factor = maxDistance;
 
         partitionIndices.push_back(builder.getAffineDimExpr(dim) % factor);
         addressIndices.push_back(
@@ -108,17 +90,13 @@ static void applyArrayPartition(MemAccessesMap &map, OpBuilder &builder) {
       } else {
         // This means discrete elements are accessed. Typically, "block"
         // partition will be most benefit for this occasion.
-        partitionType.push_back("block");
-        factor = accessNum;
+        unsigned factor = accessNum;
 
         auto blockFactor = (memrefType.getShape()[dim] + factor - 1) / factor;
         partitionIndices.push_back(
             builder.getAffineDimExpr(dim).floorDiv(blockFactor));
         addressIndices.push_back(builder.getAffineDimExpr(dim) % blockFactor);
       }
-
-      partitionFactor.push_back(factor);
-      partitionNum *= factor;
     }
 
     // Construct new layout map.
@@ -127,18 +105,13 @@ static void applyArrayPartition(MemAccessesMap &map, OpBuilder &builder) {
                                     builder.getContext());
 
     // Construct new memref type.
-    auto newType = MemRefType::get(memrefType.getShape(),
-                                   memrefType.getElementType(), layoutMap);
+    auto newType =
+        MemRefType::get(memrefType.getShape(), memrefType.getElementType(),
+                        layoutMap, memrefType.getMemorySpace());
 
     // Set new type.
     memref.setType(newType);
     // TODO: set function type.
-
-    arrayOp.setAttr("partition", builder.getBoolAttr(true));
-    arrayOp.setAttr("partition_type", builder.getStrArrayAttr(partitionType));
-    arrayOp.setAttr("partition_factor",
-                    builder.getI64ArrayAttr(partitionFactor));
-    arrayOp.setAttr("partition_num", builder.getI64IntegerAttr(partitionNum));
   }
 }
 

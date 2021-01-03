@@ -160,41 +160,40 @@ Operation *scalehls::getSameLevelDstOp(Operation *srcOp, Operation *dstOp) {
   return nullptr;
 }
 
-/// Get the definition ArrayOp given any memref or memory access operation.
-hlscpp::ArrayOp scalehls::getArrayOp(Value memref) {
-  assert(memref.getType().isa<MemRefType>() && "isn't a MemRef type value");
+AffineMap scalehls::getLayoutMap(MemRefType memrefType) {
+  // Check whether the memref has layout map.
+  auto memrefMaps = memrefType.getAffineMaps();
+  if (memrefMaps.empty())
+    return AffineMap();
 
-  auto defOp = memref.getDefiningOp();
-  assert(defOp && "MemRef is block argument");
-
-  auto arrayOp = dyn_cast<hlscpp::ArrayOp>(defOp);
-  assert(arrayOp && "MemRef is not defined by ArrayOp");
-
-  return arrayOp;
+  return memrefMaps.back();
 }
 
-hlscpp::ArrayOp scalehls::getArrayOp(Operation *op) {
-  return getArrayOp(MemRefAccess(op).memref);
-}
+int64_t scalehls::getPartitionFactors(MemRefType memrefType,
+                                      SmallVector<int64_t, 4> *factors) {
+  auto shape = memrefType.getShape();
+  auto layoutMap = getLayoutMap(memrefType);
+  int64_t accumFactor = 1;
 
-void scalehls::getPartitionFactors(ArrayRef<int64_t> shape, AffineMap layoutMap,
-                                   SmallVector<int64_t, 4> &factors) {
-  for (unsigned dim = 0, e = shape.size(); dim < e; ++dim) {
-    auto expr = layoutMap.getResult(dim);
+  for (unsigned dim = 0; dim < memrefType.getRank(); ++dim) {
+    int64_t factor = 1;
 
-    if (auto binaryExpr = expr.dyn_cast<AffineBinaryOpExpr>()) {
-      if (auto factor = binaryExpr.getRHS().dyn_cast<AffineConstantExpr>()) {
-        if (expr.getKind() == AffineExprKind::Mod)
-          factors.push_back(factor.getValue());
-        else if (expr.getKind() == AffineExprKind::FloorDiv) {
-          auto blockFactor =
-              (shape[dim] + factor.getValue() - 1) / factor.getValue();
-          factors.push_back(blockFactor);
+    if (!layoutMap.isEmpty()) {
+      auto expr = layoutMap.getResult(dim);
+
+      if (auto binaryExpr = expr.dyn_cast<AffineBinaryOpExpr>())
+        if (auto rhsExpr = binaryExpr.getRHS().dyn_cast<AffineConstantExpr>()) {
+          if (expr.getKind() == AffineExprKind::Mod)
+            factor = rhsExpr.getValue();
+          else if (expr.getKind() == AffineExprKind::FloorDiv)
+            factor = (shape[dim] + rhsExpr.getValue() - 1) / rhsExpr.getValue();
         }
-      }
-    } else if (auto constExpr = expr.dyn_cast<AffineConstantExpr>()) {
-      if (constExpr.getValue() == 0)
-        factors.push_back(1);
     }
+
+    accumFactor *= factor;
+    if (factors != nullptr)
+      factors->push_back(factor);
   }
+
+  return accumFactor;
 }
