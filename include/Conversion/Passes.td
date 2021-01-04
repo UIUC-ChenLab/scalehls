@@ -14,8 +14,9 @@ include "mlir/Pass/PassBase.td"
 def LegalizeToHLSCpp : Pass<"legalize-to-hlscpp", "FuncOp"> {
   let summary = "Convert to emittable MLIR code";
   let description = [{
-    This legalize-to-hlscpp converts MLIR code in Affine/Standard/SCF level to
-    emittable and estimatable MLIR code.
+    This legalize-to-hlscpp pass will legalize the input IR to make it
+    emittable. Meanwhile, this pass will set some default pragmas for the
+    convenience of the subsequent transforms and analysis.
   }];
 
   let constructor = "mlir::scalehls::createLegalizeToHLSCppPass()";
@@ -29,8 +30,8 @@ def LegalizeToHLSCpp : Pass<"legalize-to-hlscpp", "FuncOp"> {
 def HLSKernelToAffine : Pass<"hlskernel-to-affine", "FuncOp"> {
   let summary = "Convert HLSKernel operation to Affine loops";
   let description = [{
-    This hlskernel-to-affine converts HLSKernel operations to their Affine level
-    representations.
+    This hlskernel-to-affine pass converts HLSKernel operations to their Affine
+    level representations.
   }];
 
   let constructor = "mlir::scalehls::createHLSKernelToAffinePass()";

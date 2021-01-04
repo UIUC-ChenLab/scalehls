@@ -11,11 +11,11 @@ def HLSCppDialect : Dialect {
   let name = "hlscpp";
   let summary = "An HLSCpp out-of-tree MLIR dialect";
   let description = [{
-    This dialect contains dedicated operations, interfaces, and passes designed
+    This dialect contains dedicated operations, attributes, and passes designed
     for representing HLS C++ specific structures and components in MLIR, while
     enabling comprehensive optimization for both performance and area. Passes
-    in this dialect can optimize and generate IRs, which can be translated to
-    synthesizable HLS C++ code by EmitHLSCpp tool.
+    in this dialect can optimize and generate IRs, which can then be translated
+    to synthesizable HLS C++ code by scalehls-translate tool.
   }];
   let cppNamespace = "::mlir::scalehls::hlscpp";
 }

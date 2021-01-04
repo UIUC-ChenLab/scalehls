@@ -12,11 +12,11 @@ include "mlir/Pass/PassBase.td"
 //===----------------------------------------------------------------------===//
 
 def ArrayPartition : Pass<"array-partition", "FuncOp"> {
-  let summary = "Apply optimized array partition optimization";
+  let summary = "Apply optimized array partition strategy";
   let description = [{
     This array-partition pass will automatically search for the best array
-    partition solution of each on-chip memory instance and insert array
-    partition pragmas.
+    partition solution for each on-chip memory instance and apply the solution
+    through changing the layout AffineMap of the corresponding MemRefType.
   }];
 
   let constructor = "mlir::scalehls::createArrayPartitionPass()";
@@ -25,8 +25,8 @@ def ArrayPartition : Pass<"array-partition", "FuncOp"> {
 def LoopPipelining : Pass<"loop-pipelining", "FuncOp"> {
   let summary = "Apply loop pipelining";
   let description = [{
-    This loop-pipelining pass will insert pipeline pragma to the innermost n-th
-    loop level, and automatically unroll all inner loops.
+    This loop-pipelining pass will insert pipeline pragma to the target loop
+    level, and automatically unroll all inner loops.
   }];
 
   let constructor = "mlir::scalehls::createLoopPipeliningPass()";
@@ -38,13 +38,13 @@ def LoopPipelining : Pass<"loop-pipelining", "FuncOp"> {
 }
 
 def PragmaDSE : Pass<"pragma-dse", "ModuleOp"> {
-  let summary = "Optimize pragma configuration of each optimizable region";
+  let summary = "Optimize pragma configurations";
   let description = [{
     This pragma-dse pass will automatically tune HLS pragma insertion and
     configuration for performance and area optimization. By calling methods
-    provided by hlscpp-qor-estimation, this pass is able to rapidly obtain the
-    QoR estimation of the current design point, and feed it back to the design
-    space exploration engine for an efficient convergence.
+    provided by qor-estimation, this pass is able to rapidly obtain the QoR
+    estimation of the current design point, and feed it back to the design space
+    exploration engine for an efficient convergence.
   }];
 
   let constructor = "mlir::scalehls::createPragmaDSEPass()";
@@ -59,8 +59,8 @@ def AffineLoopPerfection : Pass<"affine-loop-perfection", "FuncOp"> {
   let description = [{
     This affine-loop-perfection pass will try to perfect all affine loops.
     Specifically, this pass will move operations under non-innermost loops into
-    innermost loop and create affine if regions to ensure the correctness of the
-    movement.
+    innermost loop and create AffineIf regions to ensure the correctness of the
+    transformation.
   }];
 
   let constructor = "mlir::scalehls::createAffineLoopPerfectionPass()";
@@ -69,9 +69,9 @@ def AffineLoopPerfection : Pass<"affine-loop-perfection", "FuncOp"> {
 def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "FuncOp"> {
   let summary = "Partially tile affine nested loops";
   let description = [{
-    This partial-affine-loop-tile pass will try to tile the nested loops. The
-    difference with the official affine-loop-tile pass is this pass will only
-    tile the first "tileLevel" outermost loop levels rather than all loops
+    This partial-affine-loop-tile pass will try to tile all affine nested loops.
+    The difference with the official affine-loop-tile pass is this pass will
+    only tile the first "tileLevel" outermost loop levels rather than all loops
     levels.
   }];
 
@@ -89,9 +89,9 @@ def RemoveVariableBound : Pass<"remove-variable-bound", "FuncOp"> {
   let summary = "Try to remove variable loop bounds";
   let description = [{
     This remove-variable-bound pass will try to remove the variable loop bounds.
-    Specifically, this is only possible when the variable loop bound is an
-    affine expression of induction variables of other loops with constant lower
-    or upper bound.
+    Specifically, this is only feasible when the loop bound is an affine
+    expression of induction variables of other loops with constant lower and
+    upper bound.
   }];
 
   let constructor = "mlir::scalehls::createRemoveVariableBoundPass()";
@@ -101,33 +101,33 @@ def RemoveVariableBound : Pass<"remove-variable-bound", "FuncOp"> {
 // Dataflow Optimization Passes
 //===----------------------------------------------------------------------===//
 
-def SplitFunction : Pass<"split-function", "ModuleOp"> {
-  let summary = "Split function for enabling dataflow";
-  let description = [{
-    This split-function pass should be applied in HLSKernel level. This pass
-    will split each HLSKernel operation into a separate function for applying
-    dataflow pragma to the top function.
-  }];
-
-  let constructor = "mlir::scalehls::createSplitFunctionPass()";
-}
-
 def LegalizeDataflow : Pass<"legalize-dataflow", "FuncOp"> {
-  let summary = "Legalize code for the dataflow pragma";
+  let summary = "Legalize the dataflow scheduling";
   let description = [{
-    This legalize-dataflow pass will legalize the dataflow by inserting some
-    dummy nodes and grouping nodes in the same level to meet the requirements of
-    the dataflow pragma: 1) single-producer single-consumer 2) no bypass.
+    This legalize-dataflow pass will legalize the dataflow scheduling to meet
+    the requirements of the dataflow pragma: 1) single-producer single-consumer;
+    2) no bypass paths.
   }];
 
   let constructor = "mlir::scalehls::createLegalizeDataflowPass()";
 
   let options = [
     Option<"insertCopy", "insert-copy", "bool", /*default=*/"true", 
-           "Whether insert copy to break bypass paths">,
+           "Whether insert copy operations to break bypass paths">,
     Option<"minGran", "min-gran", "unsigned", /*default=*/"1", 
            "Positive number: the minimum granularity of dataflow">
   ];
+}
+
+def SplitFunction : Pass<"split-function", "ModuleOp"> {
+  let summary = "Split function for enabling the dataflow pragma";
+  let description = [{
+    This split-function pass will split operations/loops scheduled at the same
+    dataflow level into a separate sub-function for applying the dataflow pragma
+    to the top function.
+  }];
+
+  let constructor = "mlir::scalehls::createSplitFunctionPass()";
 }
 
 //===----------------------------------------------------------------------===//
@@ -150,8 +150,8 @@ def HLSKernelBufferize : Pass<"hlskernel-bufferize", "FuncOp"> {
 def AffineStoreForward : Pass<"affine-store-forward", "FuncOp"> {
   let summary = "Forward store to load, including conditional stores";
   let description = [{
-    This affine-store-forward pass is similar to memref-dataflow-opt, but support to
-    forward stores in if statements.
+    This affine-store-forward pass is similar to memref-dataflow-opt, but
+    supports to forward stores located in AffineIf regions.
   }];
 
   let constructor = "mlir::scalehls::createAffineStoreForwardPass()";
