@@ -160,21 +160,21 @@ Operation *scalehls::getSameLevelDstOp(Operation *srcOp, Operation *dstOp) {
   return nullptr;
 }
 
-AffineMap scalehls::getLayoutMap(MemRefType memrefType) {
+AffineMap scalehls::getLayoutMap(MemRefType memrefType, MLIRContext *context) {
   // Check whether the memref has layout map.
   auto memrefMaps = memrefType.getAffineMaps();
   if (memrefMaps.empty())
-    return AffineMap();
+    return AffineMap::get(context);
 
   return memrefMaps.back();
 }
 
-// Collect partition factors and overall partition number through analysis the
+// Collect partition factors and overall partition number through analyzing the
 // layout map of a MemRefType.
 int64_t scalehls::getPartitionFactors(MemRefType memrefType,
                                       SmallVector<int64_t, 4> *factors) {
   auto shape = memrefType.getShape();
-  auto layoutMap = getLayoutMap(memrefType);
+  auto layoutMap = getLayoutMap(memrefType, memrefType.getContext());
   int64_t accumFactor = 1;
 
   for (unsigned dim = 0; dim < memrefType.getRank(); ++dim) {

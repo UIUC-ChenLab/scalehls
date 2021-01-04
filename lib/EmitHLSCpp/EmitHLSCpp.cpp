@@ -1392,7 +1392,7 @@ void ModuleEmitter::emitArrayPragmas(Value memref) {
     os << "\n";
   }
 
-  if (auto layoutMap = getLayoutMap(type)) {
+  if (auto layoutMap = getLayoutMap(type, type.getContext())) {
     // Emit array_partition pragma(s).
     SmallVector<int64_t, 4> factors;
     getPartitionFactors(type, &factors);

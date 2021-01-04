@@ -227,7 +227,7 @@ int64_t HLSCppEstimator::getPartitionIndex(Operation *op) {
       accessMap.getNumSymbols());
 
   // Compose the access map with the layout map.
-  auto layoutMap = getLayoutMap(memrefType);
+  auto layoutMap = getLayoutMap(memrefType, memrefType.getContext());
   if (layoutMap.isEmpty())
     return 0;
   auto composeMap = layoutMap.compose(newMap);
