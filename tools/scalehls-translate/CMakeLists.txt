@@ -15,6 +15,7 @@ set(LIBS
   MLIRSupport
 
   MLIRScaleHLSEmitHLSCpp
+  MLIRScaleHLSAnalysis
   )
 
 add_llvm_executable(scalehls-translate scalehls-translate.cpp)

@@ -5,6 +5,7 @@
 #include "Conversion/Passes.h"
 #include "Dialect/HLSCpp/HLSCpp.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "llvm/ADT/SmallPtrSet.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -33,84 +34,16 @@ void LegalizeToHLSCpp::runOnOperation() {
   else
     func.setAttr("top_function", builder.getBoolAttr(false));
 
-  // Insert AssignOp when an arguments or result of ConstantOp are directly
-  // connected to ReturnOp.
-  if (auto returnOp = dyn_cast<ReturnOp>(func.front().getTerminator())) {
-    builder.setInsertionPoint(returnOp);
-    unsigned idx = 0;
-    for (auto operand : returnOp.getOperands()) {
-      if (operand.getKind() == Value::Kind::BlockArgument) {
-        auto value = builder.create<AssignOp>(returnOp.getLoc(),
-                                              operand.getType(), operand);
-        returnOp.setOperand(idx, value);
-      } else if (isa<ConstantOp>(operand.getDefiningOp())) {
-        auto value = builder.create<AssignOp>(returnOp.getLoc(),
-                                              operand.getType(), operand);
-        returnOp.setOperand(idx, value);
-      }
-      idx += 1;
-    }
-  } else
-    func.emitError("doesn't have a return as terminator.");
+  SmallPtrSet<Value, 16> memrefs;
 
-  // Recursively convert every for loop body blocks.
+  // Walk through all operations in the function.
   func.walk([&](Operation *op) {
-    // ArrayOp will be inserted after each MemRefType value from declaration
-    // or function signature.
-    for (auto operand : op->getOperands()) {
-      if (auto arrayType = operand.getType().dyn_cast<MemRefType>()) {
-        bool insertArrayOp = false;
-        if (operand.getKind() == Value::Kind::BlockArgument)
-          insertArrayOp = true;
-        else if (!isa<ArrayOp>(operand.getDefiningOp()) &&
-                 !isa<AssignOp>(operand.getDefiningOp())) {
-          insertArrayOp = true;
-          if (!arrayType.hasStaticShape())
-            operand.getDefiningOp()->emitError(
-                "is unranked or has dynamic shape which is illegal.");
-        }
+    // Collect all memrefs.
+    for (auto operand : op->getOperands())
+      if (operand.getType().isa<MemRefType>())
+        memrefs.insert(operand);
 
-        if (isa<ArrayOp>(op))
-          insertArrayOp = false;
-
-        if (insertArrayOp) {
-          // Insert array operation and set attributes.
-          builder.setInsertionPointAfterValue(operand);
-          auto arrayOp =
-              builder.create<ArrayOp>(op->getLoc(), operand.getType(), operand);
-          operand.replaceAllUsesExcept(arrayOp.getResult(),
-                                       SmallPtrSet<Operation *, 1>{arrayOp});
-
-          // Set array pragma attributes.
-          // TODO: A known bug is if ArrayOp is connected to ReturnOp through
-          // an AssignOp, it will always not be annotated as interface. This
-          // is acceptable because AssignOp is only used to handle some weird
-          // corner cases that rarely happen.
-          if (!arrayOp.interface() && func.getName() == topFunction) {
-            // Only if when the array is an block arguments or a returned
-            // value, it will be annotated as interface.
-            bool interfaceFlag =
-                operand.getKind() == Value::Kind::BlockArgument;
-            for (auto user : arrayOp.getResult().getUsers())
-              if (isa<mlir::ReturnOp>(user))
-                interfaceFlag = true;
-
-            arrayOp.setAttr("interface", builder.getBoolAttr(interfaceFlag));
-          } else
-            arrayOp.setAttr("interface", builder.getBoolAttr(false));
-
-          if (!arrayOp.storage()) {
-            arrayOp.setAttr("storage", builder.getBoolAttr(true));
-            arrayOp.setAttr("storage_type",
-                            builder.getStringAttr("ram_1p_bram"));
-          }
-
-          if (!arrayOp.partition())
-            arrayOp.setAttr("partition", builder.getBoolAttr(false));
-        }
-      }
-    }
-
+    // Set loop pragma attributes.
     if (auto forOp = dyn_cast<AffineForOp>(op)) {
       if (forOp.getLoopBody().getBlocks().size() != 1)
         forOp.emitError("has zero or more than one basic blocks");
@@ -119,13 +52,47 @@ void LegalizeToHLSCpp::runOnOperation() {
       if (!forOp.getAttr("pipeline"))
         forOp.setAttr("pipeline", builder.getBoolAttr(false));
 
-      // if (!forOp.getAttr("unroll"))
-      //  forOp.setAttr("unroll", builder.getBoolAttr(false));
-
       if (!forOp.getAttr("flatten"))
         forOp.setAttr("flatten", builder.getBoolAttr(false));
     }
   });
+
+  // Set array pragma attributes.
+  for (auto memref : memrefs) {
+    auto type = memref.getType().cast<MemRefType>();
+
+    if (type.getMemorySpace() == 0) {
+      // TODO: determine memory kind according to data type.
+      MemoryKind kind = MemoryKind::BRAM_S2P;
+
+      auto newType = MemRefType::get(type.getShape(), type.getElementType(),
+                                     type.getAffineMaps(), (unsigned)kind);
+      memref.setType(newType);
+    }
+  }
+
+  // Align function type with entry block argument types.
+  auto resultTypes = func.front().getTerminator()->getOperandTypes();
+  auto inputTypes = func.front().getArgumentTypes();
+  func.setType(builder.getFunctionType(inputTypes, resultTypes));
+
+  // Insert AssignOp when an arguments or result of ConstantOp are directly
+  // connected to ReturnOp.
+  auto returnOp = func.front().getTerminator();
+  builder.setInsertionPoint(returnOp);
+  unsigned idx = 0;
+  for (auto operand : returnOp->getOperands()) {
+    if (operand.getKind() == Value::Kind::BlockArgument) {
+      auto value = builder.create<AssignOp>(returnOp->getLoc(),
+                                            operand.getType(), operand);
+      returnOp->setOperand(idx, value);
+    } else if (isa<ConstantOp>(operand.getDefiningOp())) {
+      auto value = builder.create<AssignOp>(returnOp->getLoc(),
+                                            operand.getType(), operand);
+      returnOp->setOperand(idx, value);
+    }
+    idx++;
+  }
 }
 
 std::unique_ptr<mlir::Pass> scalehls::createLegalizeToHLSCppPass() {

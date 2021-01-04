@@ -16,6 +16,18 @@ namespace hlscpp {
 
 #include "Dialect/HLSCpp/HLSCppInterfaces.h.inc"
 
+enum class MemoryKind {
+  BRAM_1P = 0,
+  BRAM_S2P = 1,
+  BRAM_T2P = 2,
+
+  // URAM_1P = 3,
+  // URAM_S2P = 4,
+  // URAM_T2P = 5,
+
+  DRAM = 3,
+};
+
 } // namespace hlscpp
 } // namespace scalehls
 } // namespace mlir

@@ -3,6 +3,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "EmitHLSCpp.h"
+#include "Analysis/Utils.h"
 #include "Dialect/HLSCpp/Visitor.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
@@ -11,6 +12,7 @@
 #include "mlir/IR/AffineExprVisitor.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/Translation.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace std;
@@ -98,18 +100,6 @@ SmallString<8> HLSCppEmitterBase::addName(Value val, bool isPtr) {
   valName += StringRef("val" + to_string(state.nameTable.size()));
   state.nameTable[val] = valName;
 
-  // If the definition operation is ArrayOp, then the ArrayOp operand should be
-  // an alias of the current value.
-  if (auto defOp = val.getDefiningOp())
-    if (auto arrayOp = dyn_cast<ArrayOp>(defOp))
-      state.nameTable[arrayOp.getOperand()] = valName;
-
-  // If the first user is ArrayOp, then the ArrayOp result should be an alias of
-  // the current value.
-  if (!val.getUsers().empty())
-    if (auto arrayOp = dyn_cast<ArrayOp>(*val.getUsers().begin()))
-      return state.nameTable[arrayOp.getResult()] = valName;
-
   return valName;
 }
 
@@ -119,18 +109,6 @@ SmallString<8> HLSCppEmitterBase::addAlias(Value val, Value alias) {
 
   auto valName = getName(val);
   state.nameTable[alias] = valName;
-
-  // If the definition operation is ArrayOp, then the ArrayOp operand should be
-  // an alias of the current value.
-  if (auto defOp = alias.getDefiningOp())
-    if (auto arrayOp = dyn_cast<ArrayOp>(defOp))
-      state.nameTable[arrayOp.getOperand()] = valName;
-
-  // If the first user is ArrayOp, then the ArrayOp result should be an alias of
-  // the current value.
-  if (!alias.getUsers().empty())
-    if (auto arrayOp = dyn_cast<ArrayOp>(*alias.getUsers().begin()))
-      return state.nameTable[arrayOp.getResult()] = valName;
 
   return valName;
 }
@@ -212,7 +190,6 @@ public:
 
   /// Structure operations emitters.
   void emitAssign(AssignOp *op);
-  void emitArray(ArrayOp *op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
@@ -225,9 +202,11 @@ private:
   void emitNestedLoopTail(unsigned rank);
   void emitInfoAndNewLine(Operation *op);
 
-  /// MLIR component emitters.
+  /// MLIR component and HLS C++ pragma emitters.
   void emitOperation(Operation *op);
   void emitBlock(Block &block);
+  void emitArrayPragmas(Value memref);
+  void emitFunctionPragmas(FuncOp func, ArrayRef<Value> portList);
   void emitFunction(FuncOp func);
 };
 } // namespace
@@ -497,7 +476,6 @@ public:
 
   /// Structure operations.
   bool visitOp(AssignOp op) { return emitter.emitAssign(&op), true; }
-  bool visitOp(ArrayOp op) { return emitter.emitArray(&op), true; }
   bool visitOp(EndOp op) { return true; }
 
 private:
@@ -550,13 +528,6 @@ void ModuleEmitter::emitScfFor(scf::ForOp *op) {
   //  else
   //    os << "#pragma HLS loop_flatten off\n";
   //}
-
-  if (auto unroll = op->getAttrOfType<BoolAttr>("unroll")) {
-    if (unroll.getValue()) {
-      indent();
-      os << "#pragma HLS unroll\n";
-    }
-  }
 
   emitBlock(op->getLoopBody().front());
   reduceIndent();
@@ -689,13 +660,6 @@ void ModuleEmitter::emitAffineFor(AffineForOp *op) {
   //  else
   //    os << "#pragma HLS loop_flatten off\n";
   //}
-
-  if (auto unroll = op->getAttrOfType<BoolAttr>("unroll")) {
-    if (unroll.getValue()) {
-      indent();
-      os << "#pragma HLS unroll\n";
-    }
-  }
 
   emitBlock(op->getLoopBody().front());
   reduceIndent();
@@ -1007,6 +971,7 @@ template <typename OpType> void ModuleEmitter::emitAlloc(OpType *op) {
   emitArrayDecl(op->getResult());
   os << ";";
   emitInfoAndNewLine(*op);
+  emitArrayPragmas(op->getResult());
 }
 
 void ModuleEmitter::emitLoad(LoadOp *op) {
@@ -1072,8 +1037,10 @@ void ModuleEmitter::emitTensorToMemref(TensorToMemrefOp *op) {
     os << ";";
     emitInfoAndNewLine(*op);
     emitNestedLoopTail(rank);
-  } else
+  } else {
     addAlias(op->getOperand(), op->getResult());
+    emitArrayPragmas(op->getResult());
+  }
 }
 
 void ModuleEmitter::emitDim(DimOp *op) {
@@ -1262,62 +1229,6 @@ void ModuleEmitter::emitAssign(AssignOp *op) {
   emitNestedLoopTail(rank);
 }
 
-void ModuleEmitter::emitArray(ArrayOp *op) {
-  bool emitPragmaFlag = false;
-
-  // Emit interface pragma.
-  if (op->interface()) {
-    emitPragmaFlag = true;
-    indent();
-    os << "#pragma HLS interface";
-    os << " " << op->interface_mode();
-    os << " port=";
-    emitValue(op->getOperand());
-    if (op->interface_mode() == "m_axi")
-      os << " offset=slave";
-    os << "\n";
-  }
-
-  // Emit resource pragma.
-  if (op->storage()) {
-    emitPragmaFlag = true;
-    indent();
-    os << "#pragma HLS resource";
-    os << " variable=";
-    emitValue(op->getOperand());
-    os << " core=";
-    os << op->storage_type();
-    os << "\n";
-  }
-
-  auto type = op->getOperand().getType().cast<ShapedType>();
-  if (op->partition() && type.hasStaticShape()) {
-
-    // Emit array_partition pragma(s).
-    for (unsigned dim = 0; dim < type.getRank(); ++dim) {
-      auto partitionType =
-          op->partition_type()[dim].cast<StringAttr>().getValue();
-      if (partitionType != "none") {
-        emitPragmaFlag = true;
-
-        indent();
-        os << "#pragma HLS array_partition";
-        os << " variable=";
-        emitValue(op->getOperand());
-        os << " " << partitionType;
-        if (partitionType != "complete")
-          os << " factor="
-             << op->partition_factor()[dim].cast<IntegerAttr>().getInt();
-        os << " dim=" << dim + 1 << "\n";
-      }
-    }
-  }
-
-  // Emit an empty line.
-  if (emitPragmaFlag)
-    os << "\n";
-}
-
 /// C++ component emitters.
 void ModuleEmitter::emitValue(Value val, unsigned rank, bool isPtr) {
   assert(!(rank && isPtr) && "should be either an array or a pointer.");
@@ -1436,7 +1347,7 @@ void ModuleEmitter::emitInfoAndNewLine(Operation *op) {
   os << "\n";
 }
 
-/// MLIR component emitters.
+/// MLIR component and HLS C++ pragma emitters.
 void ModuleEmitter::emitOperation(Operation *op) {
   if (ExprVisitor(*this).dispatchVisitor(op))
     return;
@@ -1453,6 +1364,127 @@ void ModuleEmitter::emitOperation(Operation *op) {
 void ModuleEmitter::emitBlock(Block &block) {
   for (auto &op : block)
     emitOperation(&op);
+}
+
+void ModuleEmitter::emitArrayPragmas(Value memref) {
+  bool emitPragmaFlag = false;
+  auto type = memref.getType().cast<MemRefType>();
+
+  // Emit resource pragma.
+  auto kind = MemoryKind(type.getMemorySpace());
+  if (kind != MemoryKind::DRAM) {
+    emitPragmaFlag = true;
+
+    indent();
+    os << "#pragma HLS resource";
+    os << " variable=";
+    emitValue(memref);
+
+    os << " core=";
+    switch (kind) {
+    case MemoryKind::BRAM_1P:
+      os << "ram_1p_bram";
+      break;
+    case MemoryKind::BRAM_S2P:
+      os << "ram_s2p_bram";
+      break;
+    case MemoryKind::BRAM_T2P:
+      os << "ram_t2p_bram";
+      break;
+    default:
+      os << "ram_1p_bram";
+      break;
+    }
+    os << "\n";
+  }
+
+  if (auto layoutMap = getLayoutMap(type)) {
+    // Emit array_partition pragma(s).
+    SmallVector<int64_t, 4> factors;
+    getPartitionFactors(type, &factors);
+
+    for (unsigned dim = 0; dim < type.getRank(); ++dim) {
+      if (factors[dim] != 1) {
+        emitPragmaFlag = true;
+
+        indent();
+        os << "#pragma HLS array_partition";
+        os << " variable=";
+        emitValue(memref);
+
+        // Emit partition type.
+        if (layoutMap.getResult(dim).getKind() == AffineExprKind::FloorDiv)
+          os << " block";
+        else
+          os << " cyclic";
+
+        os << " factor=" << factors[dim];
+        os << " dim=" << dim + 1 << "\n";
+      }
+    }
+  }
+
+  // Emit an empty line.
+  if (emitPragmaFlag)
+    os << "\n";
+}
+
+void ModuleEmitter::emitFunctionPragmas(FuncOp func, ArrayRef<Value> portList) {
+  if (auto dataflow = func.getAttrOfType<BoolAttr>("dataflow")) {
+    if (dataflow.getValue()) {
+      indent();
+      os << "#pragma HLS dataflow\n";
+
+      // An empty line.
+      os << "\n";
+    }
+  }
+
+  // Only top function should emit interface pragmas.
+  if (auto topFunction = func.getAttrOfType<BoolAttr>("top_function")) {
+    if (topFunction.getValue()) {
+      indent();
+      os << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
+
+      for (auto &port : portList) {
+        // Array ports and scalar ports are handled separately. Here, we only
+        // handle MemRef types since we assume the IR has be fully bufferized.
+        if (auto memrefType = port.getType().dyn_cast<MemRefType>()) {
+          indent();
+          os << "#pragma HLS interface";
+          // For now, we set the offset of all m_axi interfaces as slave.
+          if (MemoryKind(memrefType.getMemorySpace()) == MemoryKind::DRAM)
+            os << " m_axi offset=slave";
+          else
+            os << " bram";
+
+          os << " port=";
+          emitValue(port);
+          os << "\n";
+
+        } else {
+          indent();
+          os << "#pragma HLS interface s_axilite";
+          os << " port=";
+
+          // TODO: This is a temporary solution.
+          auto name = getName(port);
+          if (name.front() == "*"[0])
+            name.erase(name.begin());
+          os << name;
+          os << " bundle=ctrl\n";
+        }
+      }
+
+      // An empty line.
+      os << "\n";
+    }
+
+    // Emit other pragmas for function ports.
+    for (auto &port : portList)
+      if (port.getType().isa<MemRefType>())
+        emitArrayPragmas(port);
+  }
 }
 
 void ModuleEmitter::emitFunction(FuncOp func) {
@@ -1473,25 +1505,24 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   os << "void " << func.getName() << "(\n";
   addIndent();
 
-  // This vector is to record all scalar ports.
+  // This vector is to record all ports of the function.
   SmallVector<Value, 8> portList;
 
-  // Handle input arguments.
+  // Emit input arguments.
   unsigned argIdx = 0;
   for (auto &arg : func.getArguments()) {
     indent();
     if (arg.getType().isa<ShapedType>())
       emitArrayDecl(arg);
-    else {
+    else
       emitValue(arg);
-      portList.push_back(arg);
-    }
 
+    portList.push_back(arg);
     if (argIdx++ != func.getNumArguments() - 1)
       os << ",\n";
   }
 
-  // Handle results.
+  // Emit results.
   if (auto funcReturn = dyn_cast<ReturnOp>(func.front().getTerminator())) {
     for (auto result : funcReturn.getOperands()) {
       os << ",\n";
@@ -1500,11 +1531,11 @@ void ModuleEmitter::emitFunction(FuncOp func) {
       // index, index. However, typically this should not happen.
       if (result.getType().isa<ShapedType>())
         emitArrayDecl(result);
-      else {
+      else
         // In Vivado HLS, pointer indicates the value is an output.
         emitValue(result, /*rank=*/0, /*isPtr=*/true);
-        portList.push_back(result);
-      }
+
+      portList.push_back(result);
     }
   } else
     emitError(func, "doesn't have a return operation as terminator.");
@@ -1516,40 +1547,7 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   // Emit function body.
   addIndent();
 
-  if (auto dataflow = func.getAttrOfType<BoolAttr>("dataflow")) {
-    if (dataflow.getValue()) {
-      indent();
-      os << "#pragma HLS dataflow\n";
-
-      // An empty line.
-      os << "\n";
-    }
-  }
-
-  // Only top function should emit these pragmas.
-  if (auto topFlag = func.getAttrOfType<BoolAttr>("top_function")) {
-    if (topFlag.getValue()) {
-      indent();
-      os << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
-
-      // Interface pragma for array ports will be seperately handled since
-      // they are much more complicated.
-      for (auto &port : portList) {
-        indent();
-        os << "#pragma HLS interface s_axilite";
-        os << " port=";
-
-        // TODO: This is a temporary solution.
-        auto name = getName(port);
-        if (name.front() == "*"[0])
-          name.erase(name.begin());
-        os << name;
-        os << " bundle=ctrl\n";
-      }
-      os << "\n";
-    }
-  }
-
+  emitFunctionPragmas(func, portList);
   emitBlock(func.front());
   reduceIndent();
   os << "}\n";

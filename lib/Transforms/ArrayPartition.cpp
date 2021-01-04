@@ -111,7 +111,6 @@ static void applyArrayPartition(MemAccessesMap &map, OpBuilder &builder) {
 
     // Set new type.
     memref.setType(newType);
-    // TODO: set function type.
   }
 }
 
@@ -135,10 +134,16 @@ void ArrayPartition::runOnOperation() {
       });
 
       // Apply array partition pragma.
+      // TODO: how to decide which to pick?
       applyArrayPartition<mlir::AffineLoadOp>(loadMap, builder);
       applyArrayPartition<mlir::AffineStoreOp>(storeMap, builder);
     }
   }
+
+  // Align function type with entry block argument types.
+  auto resultTypes = func.front().getTerminator()->getOperandTypes();
+  auto inputTypes = func.front().getArgumentTypes();
+  func.setType(builder.getFunctionType(inputTypes, resultTypes));
 }
 
 std::unique_ptr<mlir::Pass> scalehls::createArrayPartitionPass() {

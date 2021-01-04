@@ -55,7 +55,7 @@ public:
             SignExtendIOp, IndexCastOp, CallOp, ReturnOp, UIToFPOp, SIToFPOp,
             FPToSIOp, FPToUIOp,
             // Structure operations.
-            AssignOp, ArrayOp, EndOp>([&](auto opNode) -> ResultType {
+            AssignOp, EndOp>([&](auto opNode) -> ResultType {
           return thisCast->visitOp(opNode, args...);
         })
         .Default([&](auto opNode) -> ResultType {
@@ -190,7 +190,6 @@ public:
 
   // Structure operations.
   HANDLE(AssignOp);
-  HANDLE(ArrayOp);
   HANDLE(EndOp);
 #undef HANDLE
 };

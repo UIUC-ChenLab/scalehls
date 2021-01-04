@@ -18,22 +18,6 @@ namespace scalehls {
 class HLSCppAnalysisBase {
 public:
   explicit HLSCppAnalysisBase(OpBuilder builder) : builder(builder) {}
-
-  /// Get partition information methods.
-  StringRef getPartitionType(hlscpp::ArrayOp op, unsigned dim) {
-    if (auto attr = op.partition_type()[dim].cast<StringAttr>())
-      return attr.getValue();
-    else
-      return StringRef();
-  }
-
-  int64_t getPartitionFactor(hlscpp::ArrayOp op, unsigned dim) {
-    if (auto attr = op.partition_factor()[dim].cast<IntegerAttr>())
-      return attr.getInt();
-    else
-      return 0;
-  }
-
   /// Get attribute value methods.
   int64_t getIntAttrValue(Operation *op, StringRef name) {
     if (auto attr = op->getAttrOfType<IntegerAttr>(name))
@@ -101,6 +85,8 @@ Operation *getSameLevelDstOp(Operation *srcOp, Operation *dstOp);
 
 AffineMap getLayoutMap(MemRefType memrefType);
 
+// Collect partition factors and overall partition number through analysis the
+// layout map of a MemRefType.
 int64_t getPartitionFactors(MemRefType memrefType,
                             SmallVector<int64_t, 4> *factors = nullptr);
 
