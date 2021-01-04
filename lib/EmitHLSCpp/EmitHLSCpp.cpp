@@ -1381,20 +1381,14 @@ void ModuleEmitter::emitArrayPragmas(Value memref) {
     emitValue(memref);
 
     os << " core=";
-    switch (kind) {
-    case MemoryKind::BRAM_1P:
+    if (kind == MemoryKind::BRAM_1P)
       os << "ram_1p_bram";
-      break;
-    case MemoryKind::BRAM_S2P:
+    else if (kind == MemoryKind::BRAM_S2P)
       os << "ram_s2p_bram";
-      break;
-    case MemoryKind::BRAM_T2P:
+    else if (kind == MemoryKind::BRAM_T2P)
       os << "ram_t2p_bram";
-      break;
-    default:
-      os << "ram_1p_bram";
-      break;
-    }
+    else
+      os << "ram_s2p_bram";
     os << "\n";
   }
 

@@ -268,7 +268,7 @@ void HLSCppEstimator::estimateLoadStore(Operation *op, int64_t begin) {
   auto memrefType = memref.getType().cast<MemRefType>();
 
   auto partitionNum = getPartitionFactors(memrefType);
-  std::string storageType = "ram_1p_bram";
+  auto storageType = MemoryKind(memrefType.getMemorySpace());
 
   // Try to avoid memory port violation until a legal schedule is found. Since
   // an infinite length schedule cannot be generated, this while loop can be
@@ -286,16 +286,14 @@ void HLSCppEstimator::estimateLoadStore(Operation *op, int64_t begin) {
         unsigned wrPort = 0;
         unsigned rdwrPort = 0;
 
-        if (storageType == "ram_1p_bram")
+        if (storageType == MemoryKind::BRAM_1P)
           rdwrPort = 1;
-        else if (storageType == "ram_2p_bram")
-          rdPort = 1, rdwrPort = 1;
-        else if (storageType == "ram_s2p_bram")
+        else if (storageType == MemoryKind::BRAM_S2P)
           rdPort = 1, wrPort = 1;
-        else if (storageType == "ram_t2p_bram")
+        else if (storageType == MemoryKind::BRAM_T2P)
           rdwrPort = 2;
         else
-          rdwrPort = 2;
+          rdPort = 1, wrPort = 1;
 
         memPort.push_back(PortInfo(rdPort, wrPort, rdwrPort));
       }
@@ -374,7 +372,7 @@ int64_t HLSCppEstimator::getResMinII(MemAccessesMap &map) {
   for (auto &pair : map) {
     auto memrefType = pair.first.getType().cast<MemRefType>();
     auto partitionNum = getPartitionFactors(memrefType);
-    std::string storageType = "ram_1p_bram";
+    auto storageType = MemoryKind(memrefType.getMemorySpace());
 
     SmallVector<int64_t, 16> readNum;
     SmallVector<int64_t, 16> writeNum;
@@ -388,13 +386,14 @@ int64_t HLSCppEstimator::getResMinII(MemAccessesMap &map) {
     for (auto op : loadStores) {
       auto partitionIdx = getIntAttrValue(op, "partition_index");
       if (partitionIdx == -1) {
-        int64_t accessNum = 2;
-        if (storageType == "ram_1p_bram" || storageType == "ram_s2p_bram")
+        int64_t accessNum = 1;
+        if (storageType == MemoryKind::BRAM_1P ||
+            storageType == MemoryKind::BRAM_S2P)
           accessNum = 1;
-        else if (storageType == "ram_2p_bram" || storageType == "ram_t2p_bram")
+        else if (storageType == MemoryKind::BRAM_T2P)
           accessNum = 2;
         else
-          accessNum = 2;
+          accessNum = 1;
 
         // The rationale here is an undetermined partition access will introduce
         // a large mux which will avoid Vivado HLS to process any concurrent
@@ -414,16 +413,16 @@ int64_t HLSCppEstimator::getResMinII(MemAccessesMap &map) {
     }
 
     int64_t minII = 1;
-    if (storageType == "ram_1p_bram")
+    if (storageType == MemoryKind::BRAM_1P)
       for (unsigned i = 0, e = partitionNum; i < e; ++i)
         minII = max(minII, readNum[i] + writeNum[i]);
 
-    else if (storageType == "ram_s2p_bram")
+    else if (storageType == MemoryKind::BRAM_S2P)
       minII = max({minII, *std::max_element(readNum.begin(), readNum.end()),
                    *std::max_element(writeNum.begin(), writeNum.end())});
 
     // TODO: need to be further refined.
-    else if (storageType == "ram_2p_bram" || storageType == "ram_t2p_bram")
+    else if (storageType == MemoryKind::BRAM_T2P)
       for (unsigned i = 0, e = partitionNum; i < e; ++i)
         minII = max(minII, (readNum[i] + writeNum[i] - 1) / 2 + 1);
 
