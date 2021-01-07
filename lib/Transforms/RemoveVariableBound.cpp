@@ -4,7 +4,6 @@
 
 #include "Analysis/Utils.h"
 #include "Transforms/Passes.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/Transforms/LoopUtils.h"
 
@@ -13,58 +12,70 @@ using namespace mlir;
 using namespace scalehls;
 
 namespace {
-struct RemoveVariableBound : public RemoveVariableBoundBase<RemoveVariableBound> {
-  void runOnOperation() override;
+struct RemoveVariableBound
+    : public RemoveVariableBoundBase<RemoveVariableBound> {
+  void runOnOperation() override {
+    auto func = getOperation();
+    auto builder = OpBuilder(func);
+
+    // Walk through all functions and loops.
+    for (auto loop : func.getOps<AffineForOp>())
+      applyRemoveVariableBound(loop, builder);
+  }
 };
 } // namespace
 
-void RemoveVariableBound::runOnOperation() {
-  auto func = getOperation();
-  auto builder = OpBuilder(func);
+bool scalehls::applyRemoveVariableBound(AffineForOp loop, OpBuilder &builder) {
+  SmallVector<AffineForOp, 4> nestedLoops;
+  getPerfectlyNestedLoops(nestedLoops, loop);
 
-  // Walk through all functions and loops.
-  for (auto forOp : func.getOps<mlir::AffineForOp>()) {
-    SmallVector<mlir::AffineForOp, 4> nestedLoops;
-    // TODO: support imperfect loops.
-    getPerfectlyNestedLoops(nestedLoops, forOp);
+  // Recursively apply remove variable bound for all child loops of the
+  // innermost loop of nestedLoops.
+  for (auto childLoop : nestedLoops.back().getOps<AffineForOp>())
+    if (applyRemoveVariableBound(childLoop, builder))
+      continue;
+    else
+      return false;
 
-    for (auto loop : nestedLoops) {
-      // TODO: support remove variable lower bound.
-      if (!loop.hasConstantUpperBound()) {
-        // TODO: support variable upper bound with more than one result in the
-        // getBoundOfAffineBound() method.
-        if (auto bound = getBoundOfAffineBound(loop.getUpperBound(),
-                                               builder.getContext())) {
-          // Collect all components for creating AffineIf operation.
-          auto upperMap = loop.getUpperBoundMap();
-          auto ifExpr = upperMap.getResult(0) -
-                        builder.getAffineDimExpr(upperMap.getNumDims()) - 1;
-          auto ifCondition = IntegerSet::get(upperMap.getNumDims() + 1, 0,
-                                             ifExpr, /*eqFlags=*/false);
-          auto ifOperands = SmallVector<Value, 4>(loop.getUpperBoundOperands());
-          ifOperands.push_back(loop.getInductionVar());
+  // Remove all vairable loop bound if possible.
+  for (auto loop : nestedLoops) {
+    // TODO: support remove variable lower bound.
+    if (!loop.hasConstantUpperBound()) {
+      // TODO: support variable upper bound with more than one result in the
+      // getBoundOfAffineBound() method.
+      if (auto bound = getBoundOfAffineBound(loop.getUpperBound(),
+                                             builder.getContext())) {
+        // Collect all components for creating AffineIf operation.
+        auto upperMap = loop.getUpperBoundMap();
+        auto ifExpr = upperMap.getResult(0) -
+                      builder.getAffineDimExpr(upperMap.getNumDims()) - 1;
+        auto ifCondition = IntegerSet::get(upperMap.getNumDims() + 1, 0, ifExpr,
+                                           /*eqFlags=*/false);
+        auto ifOperands = SmallVector<Value, 4>(loop.getUpperBoundOperands());
+        ifOperands.push_back(loop.getInductionVar());
 
-          // Create if operation in the front of the innermost perfect loop.
-          builder.setInsertionPointToStart(nestedLoops.back().getBody());
-          auto ifOp = builder.create<mlir::AffineIfOp>(
-              func.getLoc(), ifCondition, ifOperands,
-              /*withElseRegion=*/false);
+        // Create if operation in the front of the innermost perfect loop.
+        builder.setInsertionPointToStart(nestedLoops.back().getBody());
+        auto ifOp =
+            builder.create<AffineIfOp>(loop.getLoc(), ifCondition, ifOperands,
+                                       /*withElseRegion=*/false);
 
-          // Move all operations in the innermost perfect loop into the
-          // new created AffineIf region.
-          auto &ifBlock = ifOp.getBody()->getOperations();
-          auto &loopBlock = nestedLoops.back().getBody()->getOperations();
-          ifBlock.splice(ifBlock.begin(), loopBlock,
-                         std::next(loopBlock.begin()),
-                         std::prev(loopBlock.end(), 1));
+        // Move all operations in the innermost perfect loop into the new
+        // created AffineIf region.
+        auto &ifBlock = ifOp.getBody()->getOperations();
+        auto &loopBlock = nestedLoops.back().getBody()->getOperations();
+        ifBlock.splice(ifBlock.begin(), loopBlock, std::next(loopBlock.begin()),
+                       std::prev(loopBlock.end(), 1));
 
-          // Set constant variable bound.
-          auto maximum = bound.getValue().second;
-          loop.setConstantUpperBound(maximum);
-        }
+        // Set constant variable bound.
+        auto maximum = bound.getValue().second;
+        loop.setConstantUpperBound(maximum);
       }
     }
   }
+
+  // For now, this method will always success.
+  return true;
 }
 
 std::unique_ptr<mlir::Pass> scalehls::createRemoveVariableBoundPass() {

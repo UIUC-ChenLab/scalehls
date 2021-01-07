@@ -5,6 +5,7 @@
 #ifndef SCALEHLS_TRANSFORMS_PASSES_H
 #define SCALEHLS_TRANSFORMS_PASSES_H
 
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Pass/Pass.h"
 #include <memory>
 
@@ -14,6 +15,9 @@ class Pass;
 
 namespace mlir {
 namespace scalehls {
+
+/// Optimization APIs.
+bool applyRemoveVariableBound(AffineForOp loop, OpBuilder &builder);
 
 /// Pragma optimization passes.
 std::unique_ptr<Pass> createLoopPipeliningPass();
