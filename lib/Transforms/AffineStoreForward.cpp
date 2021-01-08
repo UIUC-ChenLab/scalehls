@@ -20,6 +20,23 @@ using namespace scalehls;
 // pass support to forward the StoreOps that are conditionally executed.
 
 namespace {
+struct AffineStoreForward : public AffineStoreForwardBase<AffineStoreForward> {
+  void runOnOperation() override {
+    // Only supports single block functions at the moment.
+    FuncOp func = getOperation();
+    auto builder = OpBuilder(func);
+
+    if (!llvm::hasSingleElement(func)) {
+      markAllAnalysesPreserved();
+      return;
+    }
+
+    applyAffineStoreForward(func, builder);
+  }
+};
+} // namespace
+
+namespace {
 // The store to load forwarding relies on three conditions:
 //
 // 1) they need to have mathematically equivalent affine access functions
@@ -52,29 +69,30 @@ namespace {
 // currently only eliminates the stores only if no other loads/uses (other
 // than dealloc) remain.
 //
-struct AffineStoreForward : public AffineStoreForwardBase<AffineStoreForward> {
-  void runOnOperation() override;
+class AffineStoreForwardImpl {
+public:
+  explicit AffineStoreForwardImpl(SmallPtrSet<Value, 4> &memrefsToErase,
+                                  DominanceInfo *domInfo,
+                                  PostDominanceInfo *postDomInfo,
+                                  OpBuilder &builder)
+      : memrefsToErase(memrefsToErase), domInfo(domInfo),
+        postDomInfo(postDomInfo), builder(builder) {}
 
   void forwardStoreToLoad(AffineReadOpInterface loadOp);
 
   // A list of memref's that are potentially dead / could be eliminated.
-  SmallPtrSet<Value, 4> memrefsToErase;
+  SmallPtrSet<Value, 4> &memrefsToErase;
 
   DominanceInfo *domInfo = nullptr;
   PostDominanceInfo *postDomInfo = nullptr;
+
+  OpBuilder &builder;
 };
-
-} // end anonymous namespace
-
-/// Creates a pass to perform optimizations relying on memref dataflow such as
-/// store to load forwarding, elimination of dead stores, and dead allocs.
-std::unique_ptr<Pass> scalehls::createAffineStoreForwardPass() {
-  return std::make_unique<AffineStoreForward>();
-}
+} // namespace
 
 // This is a straightforward implementation not optimized for speed. Optimize
 // if needed.
-void AffineStoreForward::forwardStoreToLoad(AffineReadOpInterface loadOp) {
+void AffineStoreForwardImpl::forwardStoreToLoad(AffineReadOpInterface loadOp) {
   // First pass over the use list to get the minimum number of surrounding
   // loops common between the load op and the store op, with min taken across
   // all store ops.
@@ -188,7 +206,6 @@ void AffineStoreForward::forwardStoreToLoad(AffineReadOpInterface loadOp) {
       return;
 
     // Create a new if operation before the loadOp.
-    OpBuilder builder(loadOp);
     builder.setInsertionPointAfter(loadOp);
     auto newIfOp = builder.create<mlir::AffineIfOp>(
         loadOp.getLoc(), loadOp.getValue().getType(), ifOp.getIntegerSet(),
@@ -214,21 +231,21 @@ void AffineStoreForward::forwardStoreToLoad(AffineReadOpInterface loadOp) {
   memrefsToErase.insert(loadOp.getMemRef());
 }
 
-void AffineStoreForward::runOnOperation() {
-  // Only supports single block functions at the moment.
-  FuncOp f = getOperation();
-  if (!llvm::hasSingleElement(f)) {
-    markAllAnalysesPreserved();
-    return;
-  }
-
-  domInfo = &getAnalysis<DominanceInfo>();
-  postDomInfo = &getAnalysis<PostDominanceInfo>();
-
+bool scalehls::applyAffineStoreForward(FuncOp func, OpBuilder &builder) {
+  SmallPtrSet<Value, 4> memrefsToErase;
   memrefsToErase.clear();
 
+  auto domInfo = DominanceInfo(func);
+  auto postDomInfo = PostDominanceInfo(func);
+
+  // Instantiate the pass implementation.
+  auto implement =
+      AffineStoreForwardImpl(memrefsToErase, &domInfo, &postDomInfo, builder);
+
   // Walk all load's and perform store to load forwarding.
-  f.walk([&](AffineReadOpInterface loadOp) { forwardStoreToLoad(loadOp); });
+  func.walk([&](AffineReadOpInterface loadOp) {
+    implement.forwardStoreToLoad(loadOp);
+  });
 
   // Check if the store fwd'ed memrefs are now left with only stores and can
   // thus be completely deleted. Note: the canonicalize pass should be able
@@ -250,4 +267,12 @@ void AffineStoreForward::runOnOperation() {
       user->erase();
     defOp->erase();
   }
+
+  return true;
+}
+
+/// Creates a pass to perform optimizations relying on memref dataflow such as
+/// store to load forwarding, elimination of dead stores, and dead allocs.
+std::unique_ptr<Pass> scalehls::createAffineStoreForwardPass() {
+  return std::make_unique<AffineStoreForward>();
 }

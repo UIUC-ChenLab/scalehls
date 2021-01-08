@@ -33,6 +33,10 @@ bool applyLoopPipelining(AffineForOp loop, OpBuilder &builder);
 
 bool applyArrayPartition(FuncOp func, OpBuilder &builder);
 
+bool applyAffineStoreForward(FuncOp func, OpBuilder &builder);
+
+bool applySimplifyMemrefAccess(FuncOp func);
+
 //===----------------------------------------------------------------------===//
 // Optimization Pass Entries
 //===----------------------------------------------------------------------===//

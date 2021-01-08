@@ -15,14 +15,11 @@ using namespace scalehls;
 namespace {
 struct SimplifyMemrefAccess
     : public SimplifyMemrefAccessBase<SimplifyMemrefAccess> {
-  void runOnOperation() override;
+  void runOnOperation() override { applySimplifyMemrefAccess(getOperation()); }
 };
+} // namespace
 
-} // end anonymous namespace
-
-void SimplifyMemrefAccess::runOnOperation() {
-  auto func = getOperation();
-
+bool scalehls::applySimplifyMemrefAccess(FuncOp func) {
   // Collect all load and store operations in the function block.
   MemAccessesMap map;
   getMemAccessesMap(func.front(), map);
@@ -115,6 +112,8 @@ void SimplifyMemrefAccess::runOnOperation() {
       opIndex++;
     }
   }
+
+  return true;
 }
 
 std::unique_ptr<Pass> scalehls::createSimplifyMemrefAccessPass() {
