@@ -16,8 +16,20 @@ class Pass;
 namespace mlir {
 namespace scalehls {
 
-/// Optimization APIs.
+//===----------------------------------------------------------------------===//
+// Optimization APIs
+//===----------------------------------------------------------------------===//
+
+/// Apply loop perfection to all outer loops of the input loop until the outer
+/// operation is no longer a loop, or contains more than one child loop.
+bool applyAffineLoopPerfection(AffineForOp loop, OpBuilder &builder);
+
+/// Apply remove variable bound to all inner loops of the input loop.
 bool applyRemoveVariableBound(AffineForOp loop, OpBuilder &builder);
+
+//===----------------------------------------------------------------------===//
+// Optimization Pass Entries
+//===----------------------------------------------------------------------===//
 
 /// Pragma optimization passes.
 std::unique_ptr<Pass> createLoopPipeliningPass();

@@ -90,6 +90,10 @@ AffineMap getLayoutMap(MemRefType memrefType, MLIRContext *context);
 int64_t getPartitionFactors(MemRefType memrefType,
                             SmallVector<int64_t, 4> *factors = nullptr);
 
+/// This is method for finding the number of child loops which immediatedly
+/// contained by the input operation.
+unsigned getChildLoopNum(Operation *op);
+
 } // namespace scalehls
 } // namespace mlir
 
