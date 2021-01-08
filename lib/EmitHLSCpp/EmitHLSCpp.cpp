@@ -1397,7 +1397,7 @@ void ModuleEmitter::emitArrayPragmas(Value memref) {
     SmallVector<int64_t, 4> factors;
     getPartitionFactors(type, &factors);
 
-    for (unsigned dim = 0; dim < type.getRank(); ++dim) {
+    for (int64_t dim = 0; dim < type.getRank(); ++dim) {
       if (factors[dim] != 1) {
         emitPragmaFlag = true;
 

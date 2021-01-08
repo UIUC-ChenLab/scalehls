@@ -18,43 +18,6 @@ def AssignOp : HLSCppOp<"assign", [SameOperandsAndResultType]> {
   let results = (outs AnyType : $output);
 }
 
-// Deprecated. Will be removed in the future.
-def ArrayOp : HLSCppOp<"array", [SameOperandsAndResultType]> {
-  let summary = "A C++ array instance";
-  let description = [{
-    This hlscpp.array operation represent an array in C++. All shaped type value
-    (e.g., memref, tensor, and vector) should be passed through this operation
-    after declared by an allocation (e.g., Alloc, etc.) operation or in the
-    signature of a function. This will help the compiler to easily manage the
-    attributs and statistics of arrays.
-  }];
-
-  let arguments = (ins Type<IsShapedTypePred> : $input,
-
-    // Interface-related attributes.
-    DefaultValuedAttr<BoolAttr, "false"> : $interface,
-    DefaultValuedAttr<InterfaceModeAttr, "bram"> : $interface_mode,
-
-    // BindStorage-related attributes.
-    DefaultValuedAttr<BoolAttr, "false"> : $storage,
-    DefaultValuedAttr<StorageTypeAttr, "ram_1p_bram"> : $storage_type,
-
-    // ArrayPartition-related attributes.
-    DefaultValuedAttr<BoolAttr, "false"> : $partition,
-    DefaultValuedAttr<PositiveI64Attr, "1"> : $partition_num,
-    DefaultValuedAttr<PartitionTypeArrayAttr, "{}"> : $partition_type,
-    DefaultValuedAttr<PositiveI64ArrayAttr, "{}"> : $partition_factor
-  );
-
-  let results = (outs Type<IsShapedTypePred> : $output);
-
-  let extraClassDeclaration = [{
-    ShapedType getShapedType() {
-      return getType().cast<ShapedType>();
-    }
-  }];
-}
-
 def EndOp : HLSCppOp<"end", [Terminator]> {
   let summary = "Mark the end of a HLSCpp region";
   let description = [{

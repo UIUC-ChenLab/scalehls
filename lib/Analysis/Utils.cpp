@@ -177,7 +177,7 @@ int64_t scalehls::getPartitionFactors(MemRefType memrefType,
   auto layoutMap = getLayoutMap(memrefType, memrefType.getContext());
   int64_t accumFactor = 1;
 
-  for (unsigned dim = 0; dim < memrefType.getRank(); ++dim) {
+  for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
     int64_t factor = 1;
 
     if (!layoutMap.isEmpty()) {

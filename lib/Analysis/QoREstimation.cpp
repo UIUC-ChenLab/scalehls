@@ -241,7 +241,7 @@ int64_t HLSCppEstimator::getPartitionIndex(Operation *op) {
   int64_t partitionIdx = 0;
   int64_t accumFactor = 1;
 
-  for (auto dim = 0; dim < memrefType.getRank(); ++dim) {
+  for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
     auto idxExpr = composeMap.getResult(dim);
 
     if (auto constExpr = idxExpr.dyn_cast<AffineConstantExpr>())

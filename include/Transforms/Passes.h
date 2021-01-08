@@ -31,6 +31,8 @@ bool applyRemoveVariableBound(AffineForOp loop, OpBuilder &builder);
 /// fully unrolled.
 bool applyLoopPipelining(AffineForOp loop, OpBuilder &builder);
 
+bool applyArrayPartition(FuncOp func, OpBuilder &builder);
+
 //===----------------------------------------------------------------------===//
 // Optimization Pass Entries
 //===----------------------------------------------------------------------===//

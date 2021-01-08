@@ -6,28 +6,6 @@
 #define SCALEHLS_DIALECT_HLSCPP_ATTRIBUTES_TD
 
 //===----------------------------------------------------------------------===//
-// Customized ui32 Attributes
-//===----------------------------------------------------------------------===//
-
-def PositiveI64Attr : Confined<I64Attr, [IntPositive]> {}
-def PositiveI64ArrayAttr : TypedArrayAttrBase<PositiveI64Attr, ""> {}
-
-//===----------------------------------------------------------------------===//
-// Pragma array_partition Attributes
-//===----------------------------------------------------------------------===//
-
-def PartitionTypeAttr : StrEnumAttr<"PartitionType", "", [
-  StrEnumAttrCase<"cyclic", 0>,
-  StrEnumAttrCase<"block", 1>,
-  StrEnumAttrCase<"complete", 2>,
-  StrEnumAttrCase<"none", 3>
-]> {
-  let cppNamespace = "::mlir::scalehls::hlscpp";
-}
-
-def PartitionTypeArrayAttr : TypedArrayAttrBase<PartitionTypeAttr, ""> {}
-
-//===----------------------------------------------------------------------===//
 // Pragma Interface Attributes (for array ports)
 //===----------------------------------------------------------------------===//
 
