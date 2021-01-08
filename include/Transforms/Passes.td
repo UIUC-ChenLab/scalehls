@@ -37,17 +37,23 @@ def LoopPipelining : Pass<"loop-pipelining", "FuncOp"> {
   ];
 }
 
-def PragmaDSE : Pass<"pragma-dse", "ModuleOp"> {
-  let summary = "Optimize pragma configurations";
+def MultipleLevelDSE : Pass<"multiple-level-dse", "ModuleOp"> {
+  let summary = "Optimize HLS design at multiple abstraction level";
   let description = [{
-    This pragma-dse pass will automatically tune HLS pragma insertion and
-    configuration for performance and area optimization. By calling methods
+    This multiple-level-dse pass will automatically conduct the design space
+    exploration (DSE) across multiple abstraction levels. By calling methods
     provided by qor-estimation, this pass is able to rapidly obtain the QoR
-    estimation of the current design point, and feed it back to the design space
-    exploration engine for an efficient convergence.
+    estimation of the current design point, and feed it back to the DSE engine
+    for an efficient optimization convergence.
   }];
 
-  let constructor = "mlir::scalehls::createPragmaDSEPass()";
+  let constructor = "mlir::scalehls::createMultipleLevelDSEPass()";
+
+  let options = [
+    Option<"targetSpec", "target-spec", "std::string",
+           /*default=*/"\"../config/target-spec.ini\"", 
+           "File path: target backend specifications and configurations">
+  ];
 }
 
 //===----------------------------------------------------------------------===//

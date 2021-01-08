@@ -71,9 +71,6 @@ using MemAccessesMap = DenseMap<Value, MemAccesses>;
 void getMemAccessesMap(Block &block, MemAccessesMap &map,
                        bool includeCalls = false);
 
-Optional<std::pair<int64_t, int64_t>>
-getBoundOfAffineBound(AffineBound bound, MLIRContext *context);
-
 // Check if the lhsOp and rhsOp is at the same scheduling level. In this check,
 // AffineIfOp is transparent.
 Optional<std::pair<Operation *, Operation *>> checkSameLevel(Operation *lhsOp,

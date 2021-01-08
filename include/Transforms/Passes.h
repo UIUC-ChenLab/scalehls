@@ -44,16 +44,16 @@ bool applySimplifyMemrefAccess(FuncOp func);
 /// Pragma optimization passes.
 std::unique_ptr<Pass> createLoopPipeliningPass();
 std::unique_ptr<Pass> createArrayPartitionPass();
-std::unique_ptr<Pass> createPragmaDSEPass();
+std::unique_ptr<Pass> createMultipleLevelDSEPass();
 
 /// Loop optimization passes.
 std::unique_ptr<Pass> createAffineLoopPerfectionPass();
-std::unique_ptr<Pass> createPartialAffineLoopTilePass();
 std::unique_ptr<Pass> createRemoveVariableBoundPass();
+std::unique_ptr<Pass> createPartialAffineLoopTilePass();
 
 /// Dataflow optimization passes.
-std::unique_ptr<Pass> createSplitFunctionPass();
 std::unique_ptr<Pass> createLegalizeDataflowPass();
+std::unique_ptr<Pass> createSplitFunctionPass();
 
 /// Bufferization passes.
 std::unique_ptr<Pass> createHLSKernelBufferizePass();
