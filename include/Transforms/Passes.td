@@ -32,7 +32,7 @@ def LoopPipelining : Pass<"loop-pipelining", "FuncOp"> {
   let constructor = "mlir::scalehls::createLoopPipeliningPass()";
 
   let options = [
-    Option<"pipelineLevel", "pipeline-level", "unsigned", /*default=*/"1", 
+    Option<"pipelineLevel", "pipeline-level", "unsigned", /*default=*/"0", 
            "Positive number: loop level to be pipelined (from innermost)">
   ];
 }

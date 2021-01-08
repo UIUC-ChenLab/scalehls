@@ -137,6 +137,9 @@ void ArrayPartition::runOnOperation() {
       // TODO: how to decide which to pick?
       applyArrayPartition<mlir::AffineLoadOp>(loadMap, builder);
       applyArrayPartition<mlir::AffineStoreOp>(storeMap, builder);
+
+      // TODO: how to handle the case when different sub-functions have
+      // different array partition strategy selected?
     }
   }
 

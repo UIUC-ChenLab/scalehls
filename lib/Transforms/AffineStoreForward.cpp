@@ -16,6 +16,9 @@
 using namespace mlir;
 using namespace scalehls;
 
+// The difference between this pass and built-in memref-dataflow-opt is this
+// pass support to forward the StoreOps that are conditionally executed.
+
 namespace {
 // The store to load forwarding relies on three conditions:
 //
