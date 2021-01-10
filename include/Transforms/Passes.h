@@ -33,6 +33,10 @@ bool applyLoopPipelining(AffineForOp loop, OpBuilder &builder);
 
 bool applyArrayPartition(FuncOp func, OpBuilder &builder);
 
+/// Apply function pipelining to the input function, all contained loops are
+/// automatically fully unrolled.
+bool applyFuncPipelining(FuncOp func, OpBuilder &builder);
+
 bool applyAffineStoreForward(FuncOp func, OpBuilder &builder);
 
 bool applySimplifyMemrefAccess(FuncOp func);
@@ -41,10 +45,12 @@ bool applySimplifyMemrefAccess(FuncOp func);
 // Optimization Pass Entries
 //===----------------------------------------------------------------------===//
 
+std::unique_ptr<Pass> createMultipleLevelDSEPass();
+
 /// Pragma optimization passes.
 std::unique_ptr<Pass> createLoopPipeliningPass();
 std::unique_ptr<Pass> createArrayPartitionPass();
-std::unique_ptr<Pass> createMultipleLevelDSEPass();
+std::unique_ptr<Pass> createFuncPipeliningPass();
 
 /// Loop optimization passes.
 std::unique_ptr<Pass> createAffineLoopPerfectionPass();

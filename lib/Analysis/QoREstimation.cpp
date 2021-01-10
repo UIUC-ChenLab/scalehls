@@ -715,18 +715,20 @@ void scalehls::getLatencyMap(INIReader spec, LatencyMap &latencyMap) {
 namespace {
 struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
   void runOnOperation() override {
+    auto module = getOperation();
+
     // Read configuration file.
     INIReader spec(targetSpec);
     if (spec.ParseError())
-      emitError(getOperation().getLoc(), "error: target spec file parse fail, "
-                                         "please pass in correct file path\n");
+      module.emitError(
+          "target spec file parse fail, please pass in correct file path\n");
 
     // Collect profiling latency data.
     LatencyMap latencyMap;
     getLatencyMap(spec, latencyMap);
 
     // Estimate performance and resource utilization.
-    for (auto func : getOperation().getOps<FuncOp>())
+    for (auto func : module.getOps<FuncOp>())
       if (auto topFunction = func.getAttrOfType<BoolAttr>("top_function"))
         if (topFunction.getValue()) {
           // Estimate the top function. If any other functions are called by the

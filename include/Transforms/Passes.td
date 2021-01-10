@@ -7,6 +7,25 @@
 
 include "mlir/Pass/PassBase.td"
 
+def MultipleLevelDSE : Pass<"multiple-level-dse", "ModuleOp"> {
+  let summary = "Optimize HLS design at multiple abstraction level";
+  let description = [{
+    This multiple-level-dse pass will automatically conduct the design space
+    exploration (DSE) across multiple abstraction levels. By calling methods
+    provided by qor-estimation, this pass is able to rapidly obtain the QoR
+    estimation of the current design point, and feed it back to the DSE engine
+    for an efficient optimization convergence.
+  }];
+
+  let constructor = "mlir::scalehls::createMultipleLevelDSEPass()";
+
+  let options = [
+    Option<"targetSpec", "target-spec", "std::string",
+           /*default=*/"\"../config/target-spec.ini\"", 
+           "File path: target backend specifications and configurations">
+  ];
+}
+
 //===----------------------------------------------------------------------===//
 // Pragma Optimization Passes
 //===----------------------------------------------------------------------===//
@@ -37,22 +56,18 @@ def LoopPipelining : Pass<"loop-pipelining", "FuncOp"> {
   ];
 }
 
-def MultipleLevelDSE : Pass<"multiple-level-dse", "ModuleOp"> {
-  let summary = "Optimize HLS design at multiple abstraction level";
+def FuncPipelining : Pass<"func-pipelining", "FuncOp"> {
+  let summary = "Apply function pipelining";
   let description = [{
-    This multiple-level-dse pass will automatically conduct the design space
-    exploration (DSE) across multiple abstraction levels. By calling methods
-    provided by qor-estimation, this pass is able to rapidly obtain the QoR
-    estimation of the current design point, and feed it back to the DSE engine
-    for an efficient optimization convergence.
+    This func-pipelining pass will insert pipeline pragma to the specified
+    function, all contained loops will be automatically unrolled.
   }];
 
-  let constructor = "mlir::scalehls::createMultipleLevelDSEPass()";
+  let constructor = "mlir::scalehls::createFuncPipeliningPass()";
 
   let options = [
-    Option<"targetSpec", "target-spec", "std::string",
-           /*default=*/"\"../config/target-spec.ini\"", 
-           "File path: target backend specifications and configurations">
+    Option<"targetFunction", "target-function", "std::string",
+           /*default=*/"\"main\"", "The target function to be pipelined">
   ];
 }
 
