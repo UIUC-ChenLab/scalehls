@@ -100,6 +100,7 @@ public:
   /// Other operation handlers.
   bool visitOp(AffineIfOp op, int64_t begin);
   bool visitOp(CallOp op, int64_t begin);
+  bool visitOp(ArrayOp op, int64_t begin);
 
   /// Handle operations with profiled latency.
 #define HANDLE(OPTYPE, KEYNAME)                                                \
@@ -116,7 +117,6 @@ public:
   /// Block scheduler and estimator.
   int64_t getResourceMap(Block &block, ResourceMap &addFMap,
                          ResourceMap &mulFMap);
-  int64_t estimateResource(Block &block);
   Optional<std::pair<int64_t, int64_t>> estimateBlock(Block &block,
                                                       int64_t begin);
   void reverseSchedule();
@@ -126,6 +126,26 @@ public:
   DependsMap dependsMap;
   PortsMapDict portsMapDict;
   LatencyMap &latencyMap;
+
+  /// Resource estimator. 
+  struct Resource {
+    int64_t bram;
+    int64_t dsp;
+    int64_t ff;
+    int64_t lut;
+
+    Resource(int64_t bram = 0, int64_t dsp = 0, int64_t ff = 0, int64_t lut = 0)
+        : bram(bram), dsp(dsp), ff(ff), lut(lut) {}
+  };
+
+  void setResourceValue(Operation *op, Resource resource) {
+    setAttrValue(op, "bram", resource.bram);
+    setAttrValue(op, "dsp", resource.dsp);
+    setAttrValue(op, "ff", resource.ff);
+    setAttrValue(op, "lut", resource.lut);
+  }
+
+  Resource estimateResource(Block &block);
 };
 } // namespace
 
@@ -582,7 +602,7 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
 
     // TODO: For pipelined loop, we also need to consider the II when estimating
     // resource utilization.
-    setAttrValue(op, "dsp", resource);
+    setResourceValue(op, resource);
     return true;
   }
 
@@ -592,7 +612,7 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
   setAttrValue(op, "latency", latency);
 
   setScheduleValue(op, begin, begin + latency + 2);
-  setAttrValue(op, "dsp", resource);
+  setResourceValue(op, resource);
   return true;
 }
 
@@ -676,7 +696,7 @@ int64_t HLSCppEstimator::getResourceMap(Block &block, ResourceMap &addFMap,
   return loopResource;
 }
 
-int64_t HLSCppEstimator::estimateResource(Block &block) {
+HLSCppEstimator::Resource HLSCppEstimator::estimateResource(Block &block) {
   ResourceMap addFMap;
   ResourceMap mulFMap;
   auto loopResource = getResourceMap(block, addFMap, mulFMap);
@@ -694,7 +714,12 @@ int64_t HLSCppEstimator::estimateResource(Block &block) {
   // overall resource utilization is loops' plus other operstions'. According to
   // profiling, floating-point add and muliply will consume 2 and 3 DSP units,
   // respectively.
-  return loopResource + maxAddF * 2 + maxMulF * 3;
+
+  int64_t bram = 0;
+  int64_t dsp = loopResource + maxAddF * 2 + maxMulF * 3;
+  int64_t ff = 0;
+  int64_t lut = 0;
+  return Resource(bram, dsp, ff, lut);
 }
 
 /// Estimate the latency of a block with ALAP scheduling strategy, return the
@@ -804,7 +829,33 @@ void HLSCppEstimator::estimateFunc() {
   }
 
   // Estimate the resource utilization of the function.
-  setAttrValue(func, "dsp", estimateResource(func.front()));
+  MemAccessesMap map;
+  getMemAccessesMap(func.front(), map);
+  int64_t numBram = 0;
+  for (auto &pair : map) {
+    auto memrefType = pair.first.getType().cast<MemRefType>();
+
+    SmallVector<int64_t, 4> factors;
+    auto partitionNum = getPartitionFactors(memrefType, &factors);
+    auto shape = memrefType.getShape();
+
+    auto storageType = MemoryKind(memrefType.getMemorySpace());
+
+    if (storageType == MemoryKind::BRAM_1P || storageType == MemoryKind::BRAM_S2P || storageType == MemoryKind::BRAM_T2P) {
+      // Multiply bit width of type
+      int64_t size = memrefType.getElementTypeBitWidth();
+      for (unsigned i = 0; i < shape.size(); i++) {
+        size *= shape[i] / factors[i];
+      }
+      numBram += ((size + 18000 - 1) / 18000) * partitionNum;
+    }
+  }
+  
+  auto resource = estimateResource(func.front());
+
+  resource.bram += numBram;
+
+  setResourceValue(func, resource);
   // TODO: estimate BRAM and LUT utilization.
 }
 
