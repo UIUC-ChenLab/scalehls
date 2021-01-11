@@ -85,21 +85,31 @@ bool scalehls::applyArrayPartition(FuncOp func, OpBuilder &builder) {
 
         // Find the max array access distance in the current block.
         unsigned maxDistance = 0;
+        bool requireMux = false;
 
         for (unsigned i = 0; i < accessNum; ++i) {
           for (unsigned j = i + 1; j < accessNum; ++j) {
             // TODO: this expression can't be simplified in some cases.
-            auto expr = indices[j] - indices[i];
+            AffineExpr expr;
+            auto index = indices[i];
+
+            if (index.getKind() == AffineExprKind::Add) {
+              auto addExpr = index.dyn_cast<AffineBinaryOpExpr>();
+              expr = indices[j] - addExpr.getLHS() - addExpr.getRHS();
+            } else
+              expr = indices[j] - index;
 
             if (auto constDistance = expr.dyn_cast<AffineConstantExpr>()) {
               unsigned distance = abs(constDistance.getValue());
               maxDistance = max(maxDistance, distance);
-            }
+            } else
+              requireMux = true;
           }
         }
 
         // Determine array partition strategy.
         // TODO: take storage type into consideration.
+        // TODO: the partition strategy requires more case study.
         maxDistance += 1;
         if (maxDistance == 1) {
           // This means all accesses have the same index, and this dimension
@@ -111,15 +121,27 @@ bool scalehls::applyArrayPartition(FuncOp func, OpBuilder &builder) {
           // once, and successive elements are accessed. In most cases, apply
           // "cyclic" partition should be the best solution.
           unsigned factor = maxDistance;
-          if (factor > partitions[dim].second)
-            partitions[dim] = PartitionInfo(PartitionKind::CYCLIC, factor);
-
+          if (factor > partitions[dim].second) {
+            // The rationale here is if the accessing partition index cannot be
+            // determined and partition factor is more than 2, a multiplexer
+            // will be generated and the memory access operation will be wrapped
+            // into a function call, which will cause dependency problems and
+            // make the latency and II even worse.
+            if (requireMux)
+              partitions[dim] = PartitionInfo(PartitionKind::CYCLIC, 2);
+            else
+              partitions[dim] = PartitionInfo(PartitionKind::CYCLIC, factor);
+          }
         } else {
           // This means discrete elements are accessed. Typically, "block"
           // partition will be most benefit for this occasion.
           unsigned factor = accessNum;
-          if (factor > partitions[dim].second)
-            partitions[dim] = PartitionInfo(PartitionKind::BLOCK, factor);
+          if (factor > partitions[dim].second) {
+            if (requireMux)
+              partitions[dim] = PartitionInfo(PartitionKind::BLOCK, 2);
+            else
+              partitions[dim] = PartitionInfo(PartitionKind::BLOCK, factor);
+          }
         }
       }
     }

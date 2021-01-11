@@ -64,7 +64,7 @@ public:
   }
 
   /// LoadOp and StoreOp related methods.
-  int64_t getPartitionIndex(Operation *op);
+  void getPartitionIndex(Operation *op);
   void estimateLoadStore(Operation *op, int64_t begin);
   bool visitOp(AffineLoadOp op, int64_t begin) {
     return estimateLoadStore(op, begin), true;
@@ -82,7 +82,6 @@ public:
   }
 
   /// AffineForOp related methods.
-  // unsigned getOpMinII(AffineForOp forOp);
   int64_t getResMinII(MemAccessesMap &map);
   int64_t getDepMinII(FuncOp func, MemAccessesMap &map);
   int64_t getDepMinII(AffineForOp forOp, MemAccessesMap &map);

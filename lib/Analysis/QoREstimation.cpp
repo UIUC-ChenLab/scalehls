@@ -30,6 +30,10 @@ void HLSCppEstimator::getFuncDependencies() {
   for (auto &pair : map) {
     auto memAccesses = pair.second;
 
+    // Annotate partition index of all memory access operation for later use.
+    for (auto op : memAccesses)
+      getPartitionIndex(op);
+
     // Walk through each pair of source and destination. Note that for intra
     // iteration dependencies, srcOp is always before dstOp.
     unsigned srcIndex = 1;
@@ -40,10 +44,25 @@ void HLSCppEstimator::getFuncDependencies() {
           // the srcOp if either the dstOp or srcOp is a CallOp.
           dependsMap[srcOp].push_back(dstOp);
         } else {
+          auto srcMuxSize = getIntAttrValue(srcOp, "mux_size");
+          auto dstMuxSize = getIntAttrValue(dstOp, "mux_size");
+
+          // In Vivado HLS, a memory access with undetermined partition index
+          // will be implemented as a function call with a multiplexer. As
+          // function call has dependency with any load/store operation, RAR
+          // dependency is also considered here, but with a separate if
+          // statement to check whether the current dependency really exists in
+          // Vivado HLS.
+          if (isa<AffineReadOpInterface>(dstOp) &&
+              isa<AffineReadOpInterface>(srcOp)) {
+            // TODO: refine this condition with more case studies.
+            if (srcMuxSize <= 2 && dstMuxSize <= 2)
+              continue;
+          }
+
           MemRefAccess srcAccess(srcOp);
           MemRefAccess dstAccess(dstOp);
 
-          bool dependFlag = false;
           auto commonLoopDepth = getNumCommonSurroundingLoops(*srcOp, *dstOp);
           for (unsigned depth = 1; depth <= commonLoopDepth + 1; ++depth) {
             // Initialize constraints.
@@ -52,13 +71,14 @@ void HLSCppEstimator::getFuncDependencies() {
             // Check dependency.
             DependenceResult result = checkMemrefAccessDependence(
                 srcAccess, dstAccess, depth, &dependConstrs,
-                /*dependenceComponents=*/nullptr);
-            dependFlag = hasDependence(result);
-          }
+                /*dependenceComponents=*/nullptr, /*allowRAR=*/true);
 
-          // All dependencies are pushed into the dependsMap output.
-          if (dependFlag)
-            dependsMap[srcOp].push_back(dstOp);
+            // All solid dependencies are pushed into the dependsMap output.
+            if (hasDependence(result)) {
+              dependsMap[srcOp].push_back(dstOp);
+              break;
+            }
+          }
         }
       }
       srcIndex++;
@@ -85,7 +105,7 @@ void HLSCppEstimator::getFuncDependencies() {
 //===----------------------------------------------------------------------===//
 
 /// Calculate the overall partition index.
-int64_t HLSCppEstimator::getPartitionIndex(Operation *op) {
+void HLSCppEstimator::getPartitionIndex(Operation *op) {
   auto access = MemRefAccess(op);
   auto memrefType = access.memref.getType().cast<MemRefType>();
 
@@ -119,8 +139,10 @@ int64_t HLSCppEstimator::getPartitionIndex(Operation *op) {
 
   // Compose the access map with the layout map.
   auto layoutMap = getLayoutMap(memrefType, memrefType.getContext());
-  if (layoutMap.isEmpty())
-    return 0;
+  if (layoutMap.isEmpty()) {
+    setAttrValue(op, "partition_index", (int64_t)0);
+    return;
+  }
   auto composeMap = layoutMap.compose(newMap);
 
   // Collect partition factors.
@@ -131,6 +153,7 @@ int64_t HLSCppEstimator::getPartitionIndex(Operation *op) {
   // partition strategy applied.
   int64_t partitionIdx = 0;
   int64_t accumFactor = 1;
+  int64_t muxSize = 1;
 
   for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
     auto idxExpr = composeMap.getResult(dim);
@@ -139,25 +162,24 @@ int64_t HLSCppEstimator::getPartitionIndex(Operation *op) {
       partitionIdx += constExpr.getValue() * accumFactor;
     else {
       partitionIdx = -1;
-      break;
+      muxSize *= factors[dim];
     }
 
     accumFactor *= factors[dim];
   }
 
-  return partitionIdx;
+  setAttrValue(op, "partition_index", partitionIdx);
+  if (partitionIdx == -1)
+    setAttrValue(op, "mux_size", muxSize);
 }
 
 /// Schedule load/store operation honoring the memory ports number limitation.
 void HLSCppEstimator::estimateLoadStore(Operation *op, int64_t begin) {
-  // Calculate partition index.
-  auto partitionIdx = getPartitionIndex(op);
-  setAttrValue(op, "partition_index", partitionIdx);
-
   auto access = MemRefAccess(op);
   auto memref = access.memref;
   auto memrefType = memref.getType().cast<MemRefType>();
 
+  auto partitionIdx = getIntAttrValue(op, "partition_index");
   auto partitionNum = getPartitionFactors(memrefType);
   auto storageType = MemoryKind(memrefType.getMemorySpace());
 
@@ -242,20 +264,6 @@ void HLSCppEstimator::estimateLoadStore(Operation *op, int64_t begin) {
 // AffineForOp Related Methods
 //===----------------------------------------------------------------------===//
 
-// unsigned HLSCppEstimator::getOpMinII(AffineForOp forOp) {
-//   unsigned II = 1;
-//   forOp.walk([&](Operation *op) {
-//     unsigned minII = 0;
-//     if (auto latency = getIntAttrValue(op, "latency"))
-//       minII = latency;
-//     else
-//       minII = getIntAttrValue(op, "schedule_end") -
-//               getIntAttrValue(op, "schedule_begin");
-//     II = max(II, minII);
-//   });
-//   return II;
-// }
-
 /// Calculate the minimum resource II.
 int64_t HLSCppEstimator::getResMinII(MemAccessesMap &map) {
   int64_t II = 1;
@@ -290,7 +298,7 @@ int64_t HLSCppEstimator::getResMinII(MemAccessesMap &map) {
         // a large mux which will avoid Vivado HLS to process any concurrent
         // data access among all partitions. This is equivalent to increase read
         // or write number for all partitions.
-        // TODO: need to be further refined.
+        // TODO: need to be further refined with more case studies.
         for (unsigned p = 0, e = partitionNum; p < e; ++p) {
           if (isa<AffineLoadOp>(op))
             readNum[p] += accessNum;
@@ -334,10 +342,17 @@ int64_t HLSCppEstimator::getDepMinII(FuncOp func, MemAccessesMap &map) {
     int64_t dstIndex = 1;
     for (auto dstOp : loadStores) {
       for (auto srcOp : llvm::drop_begin(loadStores, dstIndex)) {
-        // We ignore RAR pairs.
+        auto srcMuxSize = getIntAttrValue(srcOp, "mux_size");
+        auto dstMuxSize = getIntAttrValue(dstOp, "mux_size");
+
+        // Similar to getFuncDependencies() method, we ignore RAR dependency
+        // pairs in some cases.
         if (isa<AffineReadOpInterface>(dstOp) &&
-            isa<AffineReadOpInterface>(srcOp))
-          continue;
+            isa<AffineReadOpInterface>(srcOp)) {
+          // TODO: refine this condition with more case studies.
+          if (srcMuxSize <= 2 && dstMuxSize <= 2)
+            continue;
+        }
 
         if (MemRefAccess(dstOp) == MemRefAccess(srcOp)) {
           float delay = getIntAttrValue(dstOp, "schedule_end") -
@@ -380,37 +395,58 @@ int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
     for (unsigned loopDepth = startLevel; loopDepth <= endLevel; ++loopDepth) {
       int64_t dstIndex = 1;
       for (auto dstOp : loadStores) {
-        MemRefAccess dstAccess(dstOp);
-
         for (auto srcOp : llvm::drop_begin(loadStores, dstIndex)) {
+          auto srcMuxSize = getIntAttrValue(srcOp, "mux_size");
+          auto dstMuxSize = getIntAttrValue(dstOp, "mux_size");
+
+          // Similar to getFuncDependencies() method, in some cases RAR is not
+          // considered as dependency in Vivado HLS.
+          if (isa<AffineReadOpInterface>(srcOp) &&
+              isa<AffineReadOpInterface>(dstOp)) {
+            // TODO: refine this condition with more case studies.
+            if (srcMuxSize <= 2 && dstMuxSize <= 2)
+              continue;
+          }
+
+          MemRefAccess dstAccess(dstOp);
           MemRefAccess srcAccess(srcOp);
 
           FlatAffineConstraints depConstrs;
           SmallVector<DependenceComponent, 2> depComps;
 
           DependenceResult result = checkMemrefAccessDependence(
-              srcAccess, dstAccess, loopDepth, &depConstrs, &depComps);
+              srcAccess, dstAccess, loopDepth, &depConstrs, &depComps,
+              /*allowRAR=*/true);
 
           if (hasDependence(result)) {
-            SmallVector<int64_t, 2> flattenTripCounts;
-            flattenTripCounts.push_back(1);
             int64_t distance = 0;
 
-            // Calculate the distance of this dependency.
-            for (auto i = depComps.rbegin(); i < depComps.rend(); ++i) {
-              auto dep = *i;
-              auto tripCount = getIntAttrValue(dep.op, "trip_count");
+            // Call function will always have dependency with any other
+            // load/store operations with a distance of 1.
+            // TODO: This condition may not be correct. Need more case studies.
+            if (srcMuxSize > 2 || dstMuxSize > 2)
+              distance = 1;
+            else {
+              SmallVector<int64_t, 2> accumTripCounts;
+              accumTripCounts.push_back(1);
 
-              if (dep.lb)
-                distance += flattenTripCounts.back() * dep.lb.getValue();
+              // Calculate the distance of this dependency.
+              for (auto i = depComps.rbegin(); i < depComps.rend(); ++i) {
+                auto dep = *i;
+                auto tripCount = getIntAttrValue(dep.op, "trip_count");
 
-              flattenTripCounts.push_back(flattenTripCounts.back() * tripCount);
+                if (dep.lb)
+                  distance += accumTripCounts.back() * dep.lb.getValue();
+
+                accumTripCounts.push_back(accumTripCounts.back() * tripCount);
+              }
             }
 
-            float delay = getIntAttrValue(dstOp, "schedule_end") -
-                          getIntAttrValue(srcOp, "schedule_begin");
-
+            // We will only consider intra-dependencies with positive distance.
             if (distance > 0) {
+              float delay = getIntAttrValue(dstOp, "schedule_end") -
+                            getIntAttrValue(srcOp, "schedule_begin");
+
               int64_t minII = ceil(delay / distance);
               II = max(II, minII);
             }
@@ -448,14 +484,13 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
   if (getBoolAttrValue(op, "pipeline")) {
     // Collect load and store operations in the loop block for solving possible
     // carried dependencies.
-    // TODO: include CallOps, how? Maybe we need to somehow analyze the memory
-    // access behavior of the CallOp.
+    // TODO: include CallOps, how? It seems dependencies always exist for all
+    // CallOps not matter its access pattern.
     MemAccessesMap map;
     getMemAccessesMap(loopBlock, map);
 
     // Calculate initial interval.
     auto II = max(getResMinII(map), getDepMinII(op, map));
-    // auto II = max({getOpMinII(op), getResMinII(map), getDepMinII(op, map)});
     setAttrValue(op, "init_interval", II);
 
     auto tripCount = getIntAttrValue(op, "trip_count");
