@@ -507,7 +507,7 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
     setScheduleValue(op, begin, begin + latency + 2);
 
     // Estimate the loop block resource utilization.
-    setAttrValue(op, "dsp", estimateResource(loopBlock, II));
+    setResourceValue(op, estimateResource(loopBlock, II));
     return true;
   }
 
@@ -548,7 +548,7 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
   setAttrValue(op, "latency", latency);
 
   setScheduleValue(op, begin, begin + latency + 2);
-  setAttrValue(op, "dsp", estimateResource(loopBlock));
+  setResourceValue(op, estimateResource(loopBlock));
   return true;
 }
 
@@ -602,6 +602,7 @@ bool HLSCppEstimator::visitOp(mlir::CallOp op, int64_t begin) {
 // Block Scheduler and Estimator
 //===----------------------------------------------------------------------===//
 
+// TODO: name to change.
 int64_t HLSCppEstimator::getResourceMap(Block &block, ResourceMap &addFMap,
                                         ResourceMap &mulFMap) {
   int64_t loopResource = 0;
@@ -632,7 +633,8 @@ int64_t HLSCppEstimator::getResourceMap(Block &block, ResourceMap &addFMap,
   return loopResource;
 }
 
-int64_t HLSCppEstimator::estimateResource(Block &block, int64_t interval) {
+HLSCppEstimator::Resource HLSCppEstimator::estimateResource(Block &block,
+                                                            int64_t interval) {
   ResourceMap addFMap;
   ResourceMap mulFMap;
   auto loopResource = getResourceMap(block, addFMap, mulFMap);
@@ -657,17 +659,24 @@ int64_t HLSCppEstimator::estimateResource(Block &block, int64_t interval) {
   totalAddF /= (latencyMap["fadd"] + 1);
   totalMulF /= (latencyMap["fmul"] + 1);
 
+  // We assume the loop resource utilization cannot be shared. Therefore, the
+  // overall resource utilization is loops' plus other operstions'. According to
+  // profiling, floating-point add and muliply will consume 2 and 3 DSP units,
+  // respectively.
+  auto dsp = loopResource + maxAddF * 2 + maxMulF * 3;
+
   // If the block is pipelined (interval is positive), the minimum resource
-  // utilization is determined by interval. We assume the loop resource
-  // utilization cannot be shared. Therefore, the overall resource utilization
-  // is loops' plus other operstions'. According to profiling, floating-point
-  // add and muliply will consume 2 and 3 DSP units, respectively.
+  // utilization is determined by interval.
   if (interval > 0) {
     auto minResource = (totalAddF * 2 + totalMulF * 3) / interval;
-    return loopResource + max(maxAddF * 2 + maxMulF * 3, minResource);
+    dsp = loopResource + max(maxAddF * 2 + maxMulF * 3, minResource);
   }
 
-  return loopResource + maxAddF * 2 + maxMulF * 3;
+  // TODO
+  int64_t bram = 0;
+  int64_t ff = 0;
+  int64_t lut = 0;
+  return Resource(bram, dsp, ff, lut);
 }
 
 /// Estimate the latency of a block with ALAP scheduling strategy, return the
@@ -759,20 +768,21 @@ void HLSCppEstimator::reverseSchedule() {
 }
 
 void HLSCppEstimator::estimateFunc() {
+  // Collect all memory access operations for later use.
+  MemAccessesMap map;
+  getMemAccessesMap(func.front(), map);
+
   // Recursively estimate blocks in the function.
   if (auto schedule = estimateBlock(func.front(), 0)) {
     auto latency = schedule.getValue().second;
     setAttrValue(func, "latency", latency);
 
-    // TODO: support dataflow interval estimation.
+    if (getBoolAttrValue(func, "dataflow")) {
+      // TODO: support dataflow interval estimation.
+    }
 
     // TODO: support CallOp inside of the function.
     if (getBoolAttrValue(func, "pipeline")) {
-      // Collect all memory access operations for calculating II.
-      MemAccessesMap map;
-      getMemAccessesMap(func.front(), map);
-
-      // Calculate initial interval.
       auto II = max(getResMinII(map), getDepMinII(func, map));
       setAttrValue(func, "interval", II);
     }
@@ -791,7 +801,28 @@ void HLSCppEstimator::estimateFunc() {
 
   // Estimate the resource utilization of the function.
   auto interval = getIntAttrValue(func, "interval");
-  setAttrValue(func, "dsp", estimateResource(func.front(), interval));
+  auto resource = estimateResource(func.front(), interval);
+
+  // Calculate the function memrefs BRAM utilization.
+  int64_t numBram = 0;
+  for (auto &pair : map) {
+    auto memrefType = pair.first.getType().cast<MemRefType>();
+    auto partitionNum = getPartitionFactors(memrefType);
+    auto storageType = MemoryKind(memrefType.getMemorySpace());
+
+    if (storageType == MemoryKind::BRAM_1P ||
+        storageType == MemoryKind::BRAM_S2P ||
+        storageType == MemoryKind::BRAM_T2P) {
+      // Multiply bit width of type.
+      // TODO: handle index types.
+      int64_t memrefSize =
+          memrefType.getElementTypeBitWidth() * memrefType.getNumElements();
+      numBram += ((memrefSize + 18000 - 1) / 18000) * partitionNum;
+    }
+  }
+  resource.bram += numBram;
+
+  setResourceValue(func, resource);
   // TODO: estimate BRAM and LUT utilization.
 }
 

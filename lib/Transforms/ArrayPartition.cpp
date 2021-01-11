@@ -65,6 +65,9 @@ bool scalehls::applyArrayPartition(FuncOp func, OpBuilder &builder) {
           partitions.push_back(PartitionInfo(PartitionKind::NONE, 1));
       }
 
+      // TODO: the issue is the same dimension of different memref accesses
+      // represent different value. Therefore, the two memref access map need to
+      // be somehow merged to keep things correct.
       // Find the best partition solution for each dimensions of the memref.
       for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
         // Collect all array access indices of the current dimension.
