@@ -38,6 +38,7 @@ bool scalehls::applyFuncPipelining(FuncOp func, OpBuilder &builder) {
   func.walk([&](AffineForOp loop) { loopUnrollFull(loop); });
 
   func.setAttr("pipeline", builder.getBoolAttr(true));
+  func.setAttr("dataflow", builder.getBoolAttr(false));
 
   // For now, this method will always success.
   return true;

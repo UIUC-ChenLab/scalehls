@@ -25,22 +25,32 @@ struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
 } // namespace
 
 bool scalehls::applyArrayPartition(FuncOp func, OpBuilder &builder) {
-  // Only memory accesses in pipelined loops will be executed in parallel.
-  SmallVector<AffineForOp, 4> pipelinedLoops;
-  func.walk([&](AffineForOp loop) {
-    if (auto attr = loop.getAttrOfType<BoolAttr>("pipeline"))
-      if (attr.getValue())
-        pipelinedLoops.push_back(loop);
-  });
+  // Check whether the input function is pipelined.
+  bool funcPipeline = false;
+  if (auto attr = func.getAttrOfType<BoolAttr>("pipeline"))
+    if (attr.getValue())
+      funcPipeline = true;
+
+  // Only memory accesses in pipelined loops or function will be executed in
+  // parallel and required to partition.
+  SmallVector<Block *, 4> pipelinedBlocks;
+  if (funcPipeline)
+    pipelinedBlocks.push_back(&func.front());
+  else
+    func.walk([&](AffineForOp loop) {
+      if (auto attr = loop.getAttrOfType<BoolAttr>("pipeline"))
+        if (attr.getValue())
+          pipelinedBlocks.push_back(&loop.getLoopBody().front());
+    });
 
   // Storing the partition information of each memref.
   using PartitionInfo = std::pair<PartitionKind, int64_t>;
   DenseMap<Value, SmallVector<PartitionInfo, 4>> partitionsMap;
 
   // Traverse all pipelined loops.
-  for (auto loop : pipelinedLoops) {
+  for (auto block : pipelinedBlocks) {
     MemAccessesMap accessesMap;
-    getMemAccessesMap(loop.getLoopBody().front(), accessesMap);
+    getMemAccessesMap(*block, accessesMap);
 
     for (auto pair : accessesMap) {
       auto memref = pair.first;

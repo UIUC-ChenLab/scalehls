@@ -57,7 +57,8 @@ void PartialAffineLoopTile::runOnOperation() {
       else
         permMap.push_back(i - realTileLevel);
     }
-    permuteLoops(nestedLoops, permMap);
+    if (isValidLoopInterchangePermutation(nestedLoops, permMap))
+      permuteLoops(nestedLoops, permMap);
   }
 }
 

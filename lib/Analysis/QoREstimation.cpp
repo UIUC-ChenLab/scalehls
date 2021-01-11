@@ -322,7 +322,39 @@ int64_t HLSCppEstimator::getResMinII(MemAccessesMap &map) {
   return II;
 }
 
-/// Calculate the minimum dependency II.
+/// Calculate the minimum dependency II of function.
+int64_t HLSCppEstimator::getDepMinII(FuncOp func, MemAccessesMap &map) {
+  int64_t II = 1;
+
+  for (auto &pair : map) {
+    auto loadStores = pair.second;
+
+    // Walk through each pair of source and destination. Note that here dstOp is
+    // always before srcOp.
+    int64_t dstIndex = 1;
+    for (auto dstOp : loadStores) {
+      for (auto srcOp : llvm::drop_begin(loadStores, dstIndex)) {
+        // We ignore RAR pairs.
+        if (isa<AffineReadOpInterface>(dstOp) &&
+            isa<AffineReadOpInterface>(srcOp))
+          continue;
+
+        if (MemRefAccess(dstOp) == MemRefAccess(srcOp)) {
+          float delay = getIntAttrValue(dstOp, "schedule_end") -
+                        getIntAttrValue(srcOp, "schedule_begin");
+
+          // Distance is always 1. Therefore, the minimum II is equal to delay.
+          int64_t minII = delay;
+          II = max(II, minII);
+        }
+      }
+      dstIndex++;
+    }
+  }
+  return II;
+}
+
+/// Calculate the minimum dependency II of loop.
 int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
   int64_t II = 1;
 
@@ -344,8 +376,7 @@ int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
     auto loadStores = pair.second;
 
     // Walk through each pair of source and destination, and each loop level
-    // that are pipelined. Note that for inter-dependency, dstOp is always
-    // before srcOp.
+    // that are pipelined. Note that here dstOp is always before srcOp.
     for (unsigned loopDepth = startLevel; loopDepth <= endLevel; ++loopDepth) {
       int64_t dstIndex = 1;
       for (auto dstOp : loadStores) {
@@ -545,7 +576,7 @@ int64_t HLSCppEstimator::getResourceMap(Block &block, ResourceMap &addFMap,
     auto end = getIntAttrValue(&op, "schedule_end");
 
     // Accumulate the resource utilization of each operation.
-    if (isa<AddFOp>(op))
+    if (isa<AddFOp, SubFOp>(op))
       for (unsigned i = begin; i < end; ++i)
         addFMap[i]++;
 
@@ -681,6 +712,21 @@ void HLSCppEstimator::estimateFunc() {
   if (auto schedule = estimateBlock(func.front(), 0)) {
     auto latency = schedule.getValue().second;
     setAttrValue(func, "latency", latency);
+
+    // TODO: support dataflow interval estimation.
+
+    // TODO: support CallOp inside of the function.
+    if (auto attr = func.getAttrOfType<BoolAttr>("pipeline")) {
+      if (attr.getValue()) {
+        // Collect all memory access operations for calculating II.
+        MemAccessesMap map;
+        getMemAccessesMap(func.front(), map);
+
+        // Calculate initial interval.
+        auto II = max(getResMinII(map), getDepMinII(func, map));
+        setAttrValue(func, "interval", II);
+      }
+    }
 
     // Scheduled levels of all operations are reversed in this method, because
     // we have done the ALAP scheduling in a reverse order. Note that after the

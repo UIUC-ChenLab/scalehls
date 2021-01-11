@@ -1434,6 +1434,16 @@ void ModuleEmitter::emitFunctionPragmas(FuncOp func, ArrayRef<Value> portList) {
     }
   }
 
+  if (auto pipeline = func.getAttrOfType<BoolAttr>("pipeline")) {
+    if (pipeline.getValue()) {
+      indent();
+      os << "#pragma HLS pipeline\n";
+
+      // An empty line.
+      os << "\n";
+    }
+  }
+
   // Only top function should emit interface pragmas.
   if (auto topFunction = func.getAttrOfType<BoolAttr>("top_function")) {
     if (topFunction.getValue()) {
@@ -1489,8 +1499,12 @@ void ModuleEmitter::emitFunction(FuncOp func) {
     if (top.getValue())
       os << "/// This is top function.\n";
 
-  if (auto latency = func.getAttrOfType<IntegerAttr>("latency"))
-    os << "/// Latency=" << latency.getInt() << "\n";
+  if (auto latency = func.getAttrOfType<IntegerAttr>("latency")) {
+    os << "/// Latency=" << latency.getInt();
+    if (auto interval = func.getAttrOfType<IntegerAttr>("interval"))
+      os << ", interval=" << interval.getInt();
+    os << "\n";
+  }
 
   if (auto dsp = func.getAttrOfType<IntegerAttr>("dsp"))
     os << "/// DSP=" << dsp.getInt() << "\n";

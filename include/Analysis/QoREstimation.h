@@ -84,6 +84,7 @@ public:
   /// AffineForOp related methods.
   // unsigned getOpMinII(AffineForOp forOp);
   int64_t getResMinII(MemAccessesMap &map);
+  int64_t getDepMinII(FuncOp func, MemAccessesMap &map);
   int64_t getDepMinII(AffineForOp forOp, MemAccessesMap &map);
   bool visitOp(AffineForOp op, int64_t begin);
 
@@ -98,6 +99,7 @@ public:
     return true;                                                               \
   }
   HANDLE(AddFOp, "fadd");
+  HANDLE(SubFOp, "fadd");
   HANDLE(MulFOp, "fmul");
   HANDLE(DivFOp, "fdiv");
   HANDLE(CmpFOp, "fcmp");
