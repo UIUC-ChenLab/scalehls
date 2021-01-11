@@ -108,7 +108,7 @@ public:
   /// Block scheduler and estimator.
   int64_t getResourceMap(Block &block, ResourceMap &addFMap,
                          ResourceMap &mulFMap);
-  int64_t estimateResource(Block &block);
+  int64_t estimateResource(Block &block, int64_t interval = -1);
   Optional<std::pair<int64_t, int64_t>> estimateBlock(Block &block,
                                                       int64_t begin);
   void reverseSchedule();

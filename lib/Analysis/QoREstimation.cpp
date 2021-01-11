@@ -443,6 +443,39 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
     setAttrValue(op, "trip_count", (int64_t)1);
   }
 
+  // If the current loop is annotated as pipelined loop, extra dependency and
+  // resource aware II analysis will be executed.
+  if (getBoolAttrValue(op, "pipeline")) {
+    // Collect load and store operations in the loop block for solving possible
+    // carried dependencies.
+    // TODO: include CallOps, how? Maybe we need to somehow analyze the memory
+    // access behavior of the CallOp.
+    MemAccessesMap map;
+    getMemAccessesMap(loopBlock, map);
+
+    // Calculate initial interval.
+    auto II = max(getResMinII(map), getDepMinII(op, map));
+    // auto II = max({getOpMinII(op), getResMinII(map), getDepMinII(op, map)});
+    setAttrValue(op, "init_interval", II);
+
+    auto tripCount = getIntAttrValue(op, "trip_count");
+    setAttrValue(op, "flatten_trip_count", tripCount);
+
+    // Calculate latency of each iteration.
+    auto iterLatency = end - begin;
+    setAttrValue(op, "iter_latency", iterLatency);
+
+    auto latency = iterLatency + II * (tripCount - 1);
+    setAttrValue(op, "latency", latency);
+
+    // Entering and leaving a loop will consume extra 2 clock cycles.
+    setScheduleValue(op, begin, begin + latency + 2);
+
+    // Estimate the loop block resource utilization.
+    setAttrValue(op, "dsp", estimateResource(loopBlock, II));
+    return true;
+  }
+
   // If the current loop is annotated as flatten, it will be flattened into the
   // child pipelined loop. This will increase the flattened loop trip count
   // without changing the iteration latency.
@@ -471,50 +504,16 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
     return true;
   }
 
-  // Estimate the loop block resource utilization.
-  auto resource = estimateResource(loopBlock);
-
-  // Calculate latency of each iteration.
+  // Default case (not flattend or pipelined), calculate latency and resource
+  // utilization accordingly.
   auto iterLatency = end - begin;
   setAttrValue(op, "iter_latency", iterLatency);
 
-  // If the current loop is annotated as pipelined loop, extra dependency and
-  // resource aware II analysis will be executed.
-  if (getBoolAttrValue(op, "pipeline")) {
-    // Collect load and store operations in the loop block for solving possible
-    // carried dependencies.
-    // TODO: include CallOps, how? Maybe we need to somehow analyze the memory
-    // access behavior of the CallOp.
-    MemAccessesMap map;
-    getMemAccessesMap(loopBlock, map);
-
-    // Calculate initial interval.
-    auto II = max(getResMinII(map), getDepMinII(op, map));
-    // auto II = max({getOpMinII(op), getResMinII(map), getDepMinII(op, map)});
-    setAttrValue(op, "init_interval", II);
-
-    auto tripCount = getIntAttrValue(op, "trip_count");
-    setAttrValue(op, "flatten_trip_count", tripCount);
-
-    auto latency = iterLatency + II * (tripCount - 1);
-    setAttrValue(op, "latency", latency);
-
-    // Entering and leaving a loop will consume extra 2 clock cycles.
-    setScheduleValue(op, begin, begin + latency + 2);
-
-    // TODO: For pipelined loop, we also need to consider the II when estimating
-    // resource utilization.
-    setAttrValue(op, "dsp", resource);
-    return true;
-  }
-
-  // Default case (not flattend or pipelined), calculate latency and resource
-  // utilization accordingly.
   auto latency = iterLatency * getIntAttrValue(op, "trip_count");
   setAttrValue(op, "latency", latency);
 
   setScheduleValue(op, begin, begin + latency + 2);
-  setAttrValue(op, "dsp", resource);
+  setAttrValue(op, "dsp", estimateResource(loopBlock));
   return true;
 }
 
@@ -598,24 +597,41 @@ int64_t HLSCppEstimator::getResourceMap(Block &block, ResourceMap &addFMap,
   return loopResource;
 }
 
-int64_t HLSCppEstimator::estimateResource(Block &block) {
+int64_t HLSCppEstimator::estimateResource(Block &block, int64_t interval) {
   ResourceMap addFMap;
   ResourceMap mulFMap;
   auto loopResource = getResourceMap(block, addFMap, mulFMap);
 
   // Find the max resource utilization across all schedule levels.
   int64_t maxAddF = 0;
-  for (auto level : addFMap)
+  int64_t totalAddF = 0;
+  for (auto level : addFMap) {
     maxAddF = max(maxAddF, level.second);
+    totalAddF += level.second;
+  }
 
   int64_t maxMulF = 0;
-  for (auto level : mulFMap)
+  int64_t totalMulF = 0;
+  for (auto level : mulFMap) {
     maxMulF = max(maxMulF, level.second);
+    totalMulF += level.second;
+  }
 
-  // We assume the loop resource utilization cannot be shared. Therefore, the
-  // overall resource utilization is loops' plus other operstions'. According to
-  // profiling, floating-point add and muliply will consume 2 and 3 DSP units,
-  // respectively.
+  // Calculate the total fadd and fmul number as each operation will cover
+  // {latency + 1} scheduling level.
+  totalAddF /= (latencyMap["fadd"] + 1);
+  totalMulF /= (latencyMap["fmul"] + 1);
+
+  // If the block is pipelined (interval is positive), the minimum resource
+  // utilization is determined by interval. We assume the loop resource
+  // utilization cannot be shared. Therefore, the overall resource utilization
+  // is loops' plus other operstions'. According to profiling, floating-point
+  // add and muliply will consume 2 and 3 DSP units, respectively.
+  if (interval > 0) {
+    auto minResource = (totalAddF * 2 + totalMulF * 3) / interval;
+    return loopResource + max(maxAddF * 2 + maxMulF * 3, minResource);
+  }
+
   return loopResource + maxAddF * 2 + maxMulF * 3;
 }
 
@@ -716,16 +732,14 @@ void HLSCppEstimator::estimateFunc() {
     // TODO: support dataflow interval estimation.
 
     // TODO: support CallOp inside of the function.
-    if (auto attr = func.getAttrOfType<BoolAttr>("pipeline")) {
-      if (attr.getValue()) {
-        // Collect all memory access operations for calculating II.
-        MemAccessesMap map;
-        getMemAccessesMap(func.front(), map);
+    if (getBoolAttrValue(func, "pipeline")) {
+      // Collect all memory access operations for calculating II.
+      MemAccessesMap map;
+      getMemAccessesMap(func.front(), map);
 
-        // Calculate initial interval.
-        auto II = max(getResMinII(map), getDepMinII(func, map));
-        setAttrValue(func, "interval", II);
-      }
+      // Calculate initial interval.
+      auto II = max(getResMinII(map), getDepMinII(func, map));
+      setAttrValue(func, "interval", II);
     }
 
     // Scheduled levels of all operations are reversed in this method, because
@@ -741,7 +755,8 @@ void HLSCppEstimator::estimateFunc() {
   }
 
   // Estimate the resource utilization of the function.
-  setAttrValue(func, "dsp", estimateResource(func.front()));
+  auto interval = getIntAttrValue(func, "interval");
+  setAttrValue(func, "dsp", estimateResource(func.front(), interval));
   // TODO: estimate BRAM and LUT utilization.
 }
 
