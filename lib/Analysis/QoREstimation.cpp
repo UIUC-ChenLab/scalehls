@@ -602,10 +602,9 @@ bool HLSCppEstimator::visitOp(mlir::CallOp op, int64_t begin) {
 // Block Scheduler and Estimator
 //===----------------------------------------------------------------------===//
 
-// TODO: name to change.
-int64_t HLSCppEstimator::getResourceMap(Block &block, ResourceMap &addFMap,
-                                        ResourceMap &mulFMap) {
-  int64_t loopResource = 0;
+int64_t HLSCppEstimator::getDSPMap(Block &block, ResourceMap &faddMap,
+                                   ResourceMap &fmulMap) {
+  int64_t loopDSPNum = 0;
   for (auto &op : block) {
     auto begin = getIntAttrValue(&op, "schedule_begin");
     auto end = getIntAttrValue(&op, "schedule_end");
@@ -613,66 +612,66 @@ int64_t HLSCppEstimator::getResourceMap(Block &block, ResourceMap &addFMap,
     // Accumulate the resource utilization of each operation.
     if (isa<AddFOp, SubFOp>(op))
       for (unsigned i = begin; i < end; ++i)
-        addFMap[i]++;
+        faddMap[i]++;
 
     else if (isa<MulFOp>(op))
       for (unsigned i = begin; i < end; ++i)
-        mulFMap[i]++;
+        fmulMap[i]++;
 
     else if (isa<AffineForOp>(op))
-      loopResource += getIntAttrValue(&op, "dsp");
+      loopDSPNum += getIntAttrValue(&op, "dsp");
 
     else if (auto ifOp = dyn_cast<AffineIfOp>(op)) {
       // AffineIfOp is transparent during scheduling, thus here we recursively
       // enter each if block.
-      loopResource += getResourceMap(*ifOp.getThenBlock(), addFMap, mulFMap);
+      loopDSPNum += getDSPMap(*ifOp.getThenBlock(), faddMap, fmulMap);
       if (ifOp.hasElse())
-        loopResource += getResourceMap(*ifOp.getElseBlock(), addFMap, mulFMap);
+        loopDSPNum += getDSPMap(*ifOp.getElseBlock(), faddMap, fmulMap);
     }
   }
-  return loopResource;
+  return loopDSPNum;
 }
 
 HLSCppEstimator::Resource HLSCppEstimator::estimateResource(Block &block,
                                                             int64_t interval) {
-  ResourceMap addFMap;
-  ResourceMap mulFMap;
-  auto loopResource = getResourceMap(block, addFMap, mulFMap);
+  ResourceMap faddMap;
+  ResourceMap fmulMap;
+  auto loopDSPNum = getDSPMap(block, faddMap, fmulMap);
 
   // Find the max resource utilization across all schedule levels.
-  int64_t maxAddF = 0;
-  int64_t totalAddF = 0;
-  for (auto level : addFMap) {
-    maxAddF = max(maxAddF, level.second);
-    totalAddF += level.second;
+  int64_t maxFadd = 0;
+  int64_t totalFadd = 0;
+  for (auto level : faddMap) {
+    maxFadd = max(maxFadd, level.second);
+    totalFadd += level.second;
   }
 
-  int64_t maxMulF = 0;
-  int64_t totalMulF = 0;
-  for (auto level : mulFMap) {
-    maxMulF = max(maxMulF, level.second);
-    totalMulF += level.second;
+  int64_t maxFmul = 0;
+  int64_t totalFmul = 0;
+  for (auto level : fmulMap) {
+    maxFmul = max(maxFmul, level.second);
+    totalFmul += level.second;
   }
 
   // Calculate the total fadd and fmul number as each operation will cover
   // {latency + 1} scheduling level.
-  totalAddF /= (latencyMap["fadd"] + 1);
-  totalMulF /= (latencyMap["fmul"] + 1);
+  totalFadd /= (latencyMap["fadd"] + 1);
+  totalFmul /= (latencyMap["fmul"] + 1);
 
   // We assume the loop resource utilization cannot be shared. Therefore, the
   // overall resource utilization is loops' plus other operstions'. According to
   // profiling, floating-point add and muliply will consume 2 and 3 DSP units,
   // respectively.
-  auto dsp = loopResource + maxAddF * 2 + maxMulF * 3;
+  auto dsp = loopDSPNum + maxFadd * 2 + maxFmul * 3;
 
   // If the block is pipelined (interval is positive), the minimum resource
   // utilization is determined by interval.
   if (interval > 0) {
-    auto minResource = (totalAddF * 2 + totalMulF * 3) / interval;
-    dsp = loopResource + max(maxAddF * 2 + maxMulF * 3, minResource);
+    auto minDSPNum = (totalFadd * 2 + totalFmul * 3) / interval;
+    dsp = loopDSPNum + max(maxFadd * 2 + maxFmul * 3, minDSPNum);
   }
 
-  // TODO
+  // TODO:
   int64_t bram = 0;
   int64_t ff = 0;
   int64_t lut = 0;
