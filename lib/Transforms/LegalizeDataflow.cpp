@@ -12,7 +12,12 @@ using namespace scalehls;
 
 namespace {
 struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
-  void runOnOperation() override;
+  void runOnOperation() override {
+    auto func = getOperation();
+    auto builder = OpBuilder(func);
+
+    applyLegalizeDataflow(func, builder, minGran, insertCopy);
+  }
 };
 } // namespace
 
@@ -77,10 +82,8 @@ static void getSuccessorsMap(Block &block, SuccessorsMap &map) {
   }
 }
 
-void LegalizeDataflow::runOnOperation() {
-  auto func = getOperation();
-  auto builder = OpBuilder(func);
-
+bool scalehls::applyLegalizeDataflow(FuncOp func, OpBuilder &builder,
+                                     int64_t minGran, bool insertCopy) {
   SuccessorsMap successorsMap;
   getSuccessorsMap(func.front(), successorsMap);
 
@@ -104,7 +107,7 @@ void LegalizeDataflow::runOnOperation() {
           dataflowLevel = max(dataflowLevel, attr.getInt());
         else {
           op->emitError("has unexpected successor, legalization failed");
-          return;
+          return false;
         }
       }
 
@@ -204,6 +207,7 @@ void LegalizeDataflow::runOnOperation() {
 
   // Set dataflow attribute.
   func.setAttr("dataflow", builder.getBoolAttr(true));
+  return true;
 }
 
 std::unique_ptr<mlir::Pass> scalehls::createLegalizeDataflowPass() {

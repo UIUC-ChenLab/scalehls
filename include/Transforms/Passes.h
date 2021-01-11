@@ -20,6 +20,11 @@ namespace scalehls {
 // Optimization APIs
 //===----------------------------------------------------------------------===//
 
+bool applyLegalizeDataflow(FuncOp func, OpBuilder &builder, int64_t minGran,
+                           bool insertCopy);
+
+bool applySplitFunction(FuncOp func, OpBuilder &builder);
+
 /// Apply loop perfection to all outer loops of the input loop until the outer
 /// operation is no longer a loop, or contains more than one child loop.
 bool applyAffineLoopPerfection(AffineForOp loop, OpBuilder &builder);
