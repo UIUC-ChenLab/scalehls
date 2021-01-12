@@ -378,7 +378,7 @@ int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
   int64_t startLevel = 1;
   auto currentLoop = forOp;
   while (true) {
-    if (auto outerLoop = dyn_cast<AffineForOp>(currentLoop.getParentOp())) {
+    if (auto outerLoop = dyn_cast<AffineForOp>(currentLoop->getParentOp())) {
       currentLoop = outerLoop;
       endLevel++;
       if (!getBoolAttrValue(outerLoop, "flatten"))
@@ -583,7 +583,8 @@ bool HLSCppEstimator::visitOp(AffineIfOp op, int64_t begin) {
 }
 
 bool HLSCppEstimator::visitOp(mlir::CallOp op, int64_t begin) {
-  auto callee = SymbolTable::lookupSymbolIn(func.getParentOp(), op.getCallee());
+  auto callee =
+      SymbolTable::lookupSymbolIn(func->getParentOp(), op.getCallee());
   auto subFunc = dyn_cast<FuncOp>(callee);
   assert(subFunc && "callable is not a function operation");
 
@@ -846,7 +847,7 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     // Read configuration file.
     INIReader spec(targetSpec);
     if (spec.ParseError())
-      module.emitError(
+      module->emitError(
           "target spec file parse fail, please pass in correct file path\n");
 
     // Collect profiling latency data.
@@ -855,7 +856,7 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
 
     // Estimate performance and resource utilization.
     for (auto func : module.getOps<FuncOp>())
-      if (auto topFunction = func.getAttrOfType<BoolAttr>("top_function"))
+      if (auto topFunction = func->getAttrOfType<BoolAttr>("top_function"))
         if (topFunction.getValue()) {
           // Estimate the top function. If any other functions are called by the
           // top function, it will be estimated in the procedure of estimating

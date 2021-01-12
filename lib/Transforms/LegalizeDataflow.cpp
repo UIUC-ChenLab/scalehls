@@ -206,7 +206,7 @@ bool scalehls::applyLegalizeDataflow(FuncOp func, OpBuilder &builder,
   }
 
   // Set dataflow attribute.
-  func.setAttr("dataflow", builder.getBoolAttr(true));
+  func->setAttr("dataflow", builder.getBoolAttr(true));
   return true;
 }
 

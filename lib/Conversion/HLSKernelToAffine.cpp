@@ -183,7 +183,7 @@ bool HLSKernelVisitor::visitOp(DenseOp op) {
 /// Strides has not been suppored.
 bool HLSKernelVisitor::visitOp(ConvOp op) {
   SmallVector<int64_t, 4> padding;
-  for (auto pad : op.getAttrOfType<ArrayAttr>("padding"))
+  for (auto pad : op->getAttrOfType<ArrayAttr>("padding"))
     padding.push_back(pad.cast<IntegerAttr>().getInt());
 
   auto I = op.getOperand(0);
@@ -263,7 +263,7 @@ bool HLSKernelVisitor::visitOp(ConvOp op) {
 /// equal to stride size.
 bool HLSKernelVisitor::visitOp(MaxPoolOp op) {
   SmallVector<int64_t, 2> kernelShape;
-  for (auto shape : op.getAttrOfType<ArrayAttr>("kernel_shape"))
+  for (auto shape : op->getAttrOfType<ArrayAttr>("kernel_shape"))
     kernelShape.push_back(shape.cast<IntegerAttr>().getInt());
 
   auto I = op.getOperand(0);

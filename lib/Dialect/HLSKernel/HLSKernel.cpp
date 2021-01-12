@@ -91,12 +91,12 @@ static LogicalResult verify(ConvOp op) {
     OShape = op.getOperand(3).getType().cast<ShapedType>().getShape();
 
   SmallVector<int64_t, 2> padding;
-  for (auto shape : op.getAttrOfType<ArrayAttr>("padding"))
+  for (auto shape : op->getAttrOfType<ArrayAttr>("padding"))
     padding.push_back(shape.cast<IntegerAttr>().getInt());
 
   // TODO
   SmallVector<int64_t, 2> strides;
-  for (auto shape : op.getAttrOfType<ArrayAttr>("strides")) {
+  for (auto shape : op->getAttrOfType<ArrayAttr>("strides")) {
     strides.push_back(shape.cast<IntegerAttr>().getInt());
     if (strides.back() != 1)
       return op.emitError("only stride 1 supported");
@@ -140,19 +140,19 @@ static LogicalResult verify(MaxPoolOp op) {
     OShape = op.getOperand(1).getType().cast<ShapedType>().getShape();
 
   SmallVector<int64_t, 2> kernelShape;
-  for (auto shape : op.getAttrOfType<ArrayAttr>("kernel_shape"))
+  for (auto shape : op->getAttrOfType<ArrayAttr>("kernel_shape"))
     kernelShape.push_back(shape.cast<IntegerAttr>().getInt());
 
   // TODO
   SmallVector<int64_t, 2> padding;
-  for (auto shape : op.getAttrOfType<ArrayAttr>("padding")) {
+  for (auto shape : op->getAttrOfType<ArrayAttr>("padding")) {
     padding.push_back(shape.cast<IntegerAttr>().getInt());
     if (padding.back() != 0)
       return op.emitError("only zero padding supported");
   }
 
   SmallVector<int64_t, 2> strides;
-  for (auto shape : op.getAttrOfType<ArrayAttr>("strides"))
+  for (auto shape : op->getAttrOfType<ArrayAttr>("strides"))
     strides.push_back(shape.cast<IntegerAttr>().getInt());
 
   // TODO

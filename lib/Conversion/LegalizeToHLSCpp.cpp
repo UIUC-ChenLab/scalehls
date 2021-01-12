@@ -26,13 +26,13 @@ void LegalizeToHLSCpp::runOnOperation() {
     func.emitError("has zero or more than one basic blocks.");
 
   // Set function pragma attributes.
-  if (!func.getAttr("dataflow"))
-    func.setAttr("dataflow", builder.getBoolAttr(false));
+  if (!func->getAttr("dataflow"))
+    func->setAttr("dataflow", builder.getBoolAttr(false));
 
   if (func.getName() == topFunction)
-    func.setAttr("top_function", builder.getBoolAttr(true));
+    func->setAttr("top_function", builder.getBoolAttr(true));
   else
-    func.setAttr("top_function", builder.getBoolAttr(false));
+    func->setAttr("top_function", builder.getBoolAttr(false));
 
   SmallPtrSet<Value, 16> memrefs;
 
@@ -49,11 +49,11 @@ void LegalizeToHLSCpp::runOnOperation() {
         forOp.emitError("has zero or more than one basic blocks");
 
       // Set loop pragma attributes.
-      if (!forOp.getAttr("pipeline"))
-        forOp.setAttr("pipeline", builder.getBoolAttr(false));
+      if (!forOp->getAttr("pipeline"))
+        forOp->setAttr("pipeline", builder.getBoolAttr(false));
 
-      if (!forOp.getAttr("flatten"))
-        forOp.setAttr("flatten", builder.getBoolAttr(false));
+      if (!forOp->getAttr("flatten"))
+        forOp->setAttr("flatten", builder.getBoolAttr(false));
     }
   });
 

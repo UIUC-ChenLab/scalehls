@@ -151,45 +151,45 @@ public:
       : HLSCppEmitterBase(state) {}
 
   /// SCF statement emitters.
-  void emitScfFor(scf::ForOp *op);
-  void emitScfIf(scf::IfOp *op);
-  void emitScfYield(scf::YieldOp *op);
+  void emitScfFor(scf::ForOp op);
+  void emitScfIf(scf::IfOp op);
+  void emitScfYield(scf::YieldOp op);
 
   /// Affine statement emitters.
-  void emitAffineFor(AffineForOp *op);
-  void emitAffineIf(AffineIfOp *op);
-  void emitAffineParallel(AffineParallelOp *op);
-  void emitAffineApply(AffineApplyOp *op);
+  void emitAffineFor(AffineForOp op);
+  void emitAffineIf(AffineIfOp op);
+  void emitAffineParallel(AffineParallelOp op);
+  void emitAffineApply(AffineApplyOp op);
   template <typename OpType>
-  void emitAffineMaxMin(OpType *op, const char *syntax);
-  void emitAffineLoad(AffineLoadOp *op);
-  void emitAffineStore(AffineStoreOp *op);
-  void emitAffineYield(AffineYieldOp *op);
+  void emitAffineMaxMin(OpType op, const char *syntax);
+  void emitAffineLoad(AffineLoadOp op);
+  void emitAffineStore(AffineStoreOp op);
+  void emitAffineYield(AffineYieldOp op);
 
   /// Memref-related statement emitters.
-  template <typename OpType> void emitAlloc(OpType *op);
-  void emitLoad(LoadOp *op);
-  void emitStore(StoreOp *op);
+  template <typename OpType> void emitAlloc(OpType op);
+  void emitLoad(LoadOp op);
+  void emitStore(StoreOp op);
 
   /// Tensor-related statement emitters.
-  void emitTensorLoad(TensorLoadOp *op);
-  void emitTensorStore(TensorStoreOp *op);
-  void emitTensorToMemref(TensorToMemrefOp *op);
-  void emitDim(DimOp *op);
-  void emitRank(RankOp *op);
+  void emitTensorLoad(TensorLoadOp op);
+  void emitTensorStore(TensorStoreOp op);
+  void emitTensorToMemref(TensorToMemrefOp op);
+  void emitDim(DimOp op);
+  void emitRank(RankOp op);
 
   /// Standard expression emitters.
   void emitBinary(Operation *op, const char *syntax);
   void emitUnary(Operation *op, const char *syntax);
 
   /// Special operation emitters.
-  void emitSelect(SelectOp *op);
-  void emitConstant(ConstantOp *op);
-  template <typename CastOpType> void emitCast(CastOpType *op);
-  void emitCall(CallOp *op);
+  void emitSelect(SelectOp op);
+  void emitConstant(ConstantOp op);
+  template <typename CastOpType> void emitCast(CastOpType op);
+  void emitCall(CallOp op);
 
   /// Structure operations emitters.
-  void emitAssign(AssignOp *op);
+  void emitAssign(AssignOp op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
@@ -203,7 +203,6 @@ private:
   void emitInfoAndNewLine(Operation *op);
 
   /// MLIR component and HLS C++ pragma emitters.
-  void emitOperation(Operation *op);
   void emitBlock(Block &block);
   void emitArrayPragmas(Value memref);
   void emitFunctionPragmas(FuncOp func, ArrayRef<Value> portList);
@@ -305,45 +304,49 @@ public:
 
   using HLSCppVisitorBase::visitOp;
   /// SCF statements.
-  bool visitOp(scf::ForOp op) { return emitter.emitScfFor(&op), true; };
-  bool visitOp(scf::IfOp op) { return emitter.emitScfIf(&op), true; };
+  bool visitOp(scf::ForOp op) { return emitter.emitScfFor(op), true; };
+  bool visitOp(scf::IfOp op) { return emitter.emitScfIf(op), true; };
   bool visitOp(scf::ParallelOp op) { return true; };
   bool visitOp(scf::ReduceOp op) { return true; };
   bool visitOp(scf::ReduceReturnOp op) { return true; };
-  bool visitOp(scf::YieldOp op) { return emitter.emitScfYield(&op), true; };
+  bool visitOp(scf::YieldOp op) { return emitter.emitScfYield(op), true; };
 
   /// Affine statements.
-  bool visitOp(AffineForOp op) { return emitter.emitAffineFor(&op), true; }
-  bool visitOp(AffineIfOp op) { return emitter.emitAffineIf(&op), true; }
+  bool visitOp(AffineForOp op) { return emitter.emitAffineFor(op), true; }
+  bool visitOp(AffineIfOp op) { return emitter.emitAffineIf(op), true; }
   bool visitOp(AffineParallelOp op) {
-    return emitter.emitAffineParallel(&op), true;
+    return emitter.emitAffineParallel(op), true;
   }
-  bool visitOp(AffineApplyOp op) { return emitter.emitAffineApply(&op), true; }
+  bool visitOp(AffineApplyOp op) { return emitter.emitAffineApply(op), true; }
   bool visitOp(AffineMaxOp op) {
-    return emitter.emitAffineMaxMin<AffineMaxOp>(&op, "max"), true;
+    return emitter.emitAffineMaxMin<AffineMaxOp>(op, "max"), true;
   }
   bool visitOp(AffineMinOp op) {
-    return emitter.emitAffineMaxMin<AffineMinOp>(&op, "min"), true;
+    return emitter.emitAffineMaxMin<AffineMinOp>(op, "min"), true;
   }
-  bool visitOp(AffineLoadOp op) { return emitter.emitAffineLoad(&op), true; }
-  bool visitOp(AffineStoreOp op) { return emitter.emitAffineStore(&op), true; }
-  bool visitOp(AffineYieldOp op) { return emitter.emitAffineYield(&op), true; }
+  bool visitOp(AffineLoadOp op) { return emitter.emitAffineLoad(op), true; }
+  bool visitOp(AffineStoreOp op) { return emitter.emitAffineStore(op), true; }
+  bool visitOp(AffineYieldOp op) { return emitter.emitAffineYield(op), true; }
 
   /// Memref-related statements.
-  bool visitOp(AllocOp op) { return emitter.emitAlloc<AllocOp>(&op), true; }
-  bool visitOp(AllocaOp op) { return emitter.emitAlloc<AllocaOp>(&op), true; }
-  bool visitOp(LoadOp op) { return emitter.emitLoad(&op), true; }
-  bool visitOp(StoreOp op) { return emitter.emitStore(&op), true; }
+  bool visitOp(AllocOp op) { return emitter.emitAlloc<AllocOp>(op), true; }
+  bool visitOp(AllocaOp op) { return emitter.emitAlloc<AllocaOp>(op), true; }
+  bool visitOp(LoadOp op) { return emitter.emitLoad(op), true; }
+  bool visitOp(StoreOp op) { return emitter.emitStore(op), true; }
   bool visitOp(DeallocOp op) { return true; }
 
   /// Tensor-related statements.
-  bool visitOp(TensorLoadOp op) { return emitter.emitTensorLoad(&op), true; }
-  bool visitOp(TensorStoreOp op) { return emitter.emitTensorStore(&op), true; }
+  bool visitOp(TensorLoadOp op) { return emitter.emitTensorLoad(op), true; }
+  bool visitOp(TensorStoreOp op) { return emitter.emitTensorStore(op), true; }
   bool visitOp(TensorToMemrefOp op) {
-    return emitter.emitTensorToMemref(&op), true;
+    return emitter.emitTensorToMemref(op), true;
   }
-  bool visitOp(DimOp op) { return emitter.emitDim(&op), true; }
-  bool visitOp(RankOp op) { return emitter.emitRank(&op), true; }
+  bool visitOp(DimOp op) { return emitter.emitDim(op), true; }
+  bool visitOp(RankOp op) { return emitter.emitRank(op), true; }
+
+  /// Structure operations.
+  bool visitOp(AssignOp op) { return emitter.emitAssign(op), true; }
+  bool visitOp(EndOp op) { return true; }
 
 private:
   ModuleEmitter &emitter;
@@ -400,16 +403,16 @@ public:
   bool visitOp(Log10Op op) { return emitter.emitUnary(op, "log10"), true; }
 
   /// Special operations.
-  bool visitOp(SelectOp op) { return emitter.emitSelect(&op), true; }
-  bool visitOp(ConstantOp op) { return emitter.emitConstant(&op), true; }
+  bool visitOp(SelectOp op) { return emitter.emitSelect(op), true; }
+  bool visitOp(ConstantOp op) { return emitter.emitConstant(op), true; }
   bool visitOp(IndexCastOp op) {
-    return emitter.emitCast<IndexCastOp>(&op), true;
+    return emitter.emitCast<IndexCastOp>(op), true;
   }
-  bool visitOp(UIToFPOp op) { return emitter.emitCast<UIToFPOp>(&op), true; }
-  bool visitOp(SIToFPOp op) { return emitter.emitCast<SIToFPOp>(&op), true; }
-  bool visitOp(FPToUIOp op) { return emitter.emitCast<FPToUIOp>(&op), true; }
-  bool visitOp(FPToSIOp op) { return emitter.emitCast<FPToSIOp>(&op), true; }
-  bool visitOp(CallOp op) { return emitter.emitCall(&op), true; }
+  bool visitOp(UIToFPOp op) { return emitter.emitCast<UIToFPOp>(op), true; }
+  bool visitOp(SIToFPOp op) { return emitter.emitCast<SIToFPOp>(op), true; }
+  bool visitOp(FPToUIOp op) { return emitter.emitCast<FPToUIOp>(op), true; }
+  bool visitOp(FPToSIOp op) { return emitter.emitCast<FPToSIOp>(op), true; }
+  bool visitOp(CallOp op) { return emitter.emitCall(op), true; }
   bool visitOp(ReturnOp op) { return true; }
 
 private:
@@ -467,50 +470,34 @@ bool ExprVisitor::visitOp(CmpIOp op) {
   }
 }
 
-namespace {
-class PragmaVisitor : public HLSCppVisitorBase<PragmaVisitor, bool> {
-public:
-  PragmaVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
-
-  using HLSCppVisitorBase::visitOp;
-
-  /// Structure operations.
-  bool visitOp(AssignOp op) { return emitter.emitAssign(&op), true; }
-  bool visitOp(EndOp op) { return true; }
-
-private:
-  ModuleEmitter &emitter;
-};
-} // namespace
-
 //===----------------------------------------------------------------------===//
 // ModuleEmitter Class Definition
 //===----------------------------------------------------------------------===//
 
 /// SCF statement emitters.
-void ModuleEmitter::emitScfFor(scf::ForOp *op) {
+void ModuleEmitter::emitScfFor(scf::ForOp op) {
   indent();
   os << "for (";
-  auto iterVar = op->getInductionVar();
+  auto iterVar = op.getInductionVar();
 
   // Emit lower bound.
   emitValue(iterVar);
   os << " = ";
-  emitValue(op->lowerBound());
+  emitValue(op.lowerBound());
   os << "; ";
 
   // Emit upper bound.
   emitValue(iterVar);
   os << " < ";
-  emitValue(op->upperBound());
+  emitValue(op.upperBound());
   os << "; ";
 
   // Emit increase step.
   emitValue(iterVar);
   os << " += ";
-  emitValue(op->step());
+  emitValue(op.step());
   os << ") {";
-  emitInfoAndNewLine(*op);
+  emitInfoAndNewLine(op);
 
   addIndent();
 
@@ -529,17 +516,17 @@ void ModuleEmitter::emitScfFor(scf::ForOp *op) {
   //    os << "#pragma HLS loop_flatten off\n";
   //}
 
-  emitBlock(op->getLoopBody().front());
+  emitBlock(op.getLoopBody().front());
   reduceIndent();
 
   indent();
   os << "}\n";
 }
 
-void ModuleEmitter::emitScfIf(scf::IfOp *op) {
+void ModuleEmitter::emitScfIf(scf::IfOp op) {
   // Declare all values returned by scf::YieldOp. They will be further handled
   // by the scf::YieldOp emitter.
-  for (auto result : op->getResults()) {
+  for (auto result : op.getResults()) {
     if (!isDeclared(result)) {
       indent();
       if (result.getType().isa<ShapedType>())
@@ -552,19 +539,19 @@ void ModuleEmitter::emitScfIf(scf::IfOp *op) {
 
   indent();
   os << "if (";
-  emitValue(op->condition());
+  emitValue(op.condition());
   os << ") {";
-  emitInfoAndNewLine(*op);
+  emitInfoAndNewLine(op);
 
   addIndent();
-  emitBlock(op->thenRegion().front());
+  emitBlock(op.thenRegion().front());
   reduceIndent();
 
-  if (!op->elseRegion().empty()) {
+  if (!op.elseRegion().empty()) {
     indent();
     os << "} else {\n";
     addIndent();
-    emitBlock(op->elseRegion().front());
+    emitBlock(op.elseRegion().front());
     reduceIndent();
   }
 
@@ -572,8 +559,8 @@ void ModuleEmitter::emitScfIf(scf::IfOp *op) {
   os << "}\n";
 }
 
-void ModuleEmitter::emitScfYield(scf::YieldOp *op) {
-  if (op->getNumOperands() == 0)
+void ModuleEmitter::emitScfYield(scf::YieldOp op) {
+  if (op.getNumOperands() == 0)
     return;
 
   // For now, only and scf::If operations will use scf::Yield to return
@@ -585,26 +572,26 @@ void ModuleEmitter::emitScfYield(scf::YieldOp *op) {
       indent();
       emitValue(result, rank);
       os << " = ";
-      emitValue(op->getOperand(resultIdx++), rank);
+      emitValue(op.getOperand(resultIdx++), rank);
       os << ";";
-      emitInfoAndNewLine(*op);
+      emitInfoAndNewLine(op);
       emitNestedLoopTail(rank);
     }
   }
 }
 
 /// Affine statement emitters.
-void ModuleEmitter::emitAffineFor(AffineForOp *op) {
+void ModuleEmitter::emitAffineFor(AffineForOp op) {
   indent();
   os << "for (";
-  auto iterVar = op->getInductionVar();
+  auto iterVar = op.getInductionVar();
 
   // Emit lower bound.
   emitValue(iterVar);
   os << " = ";
-  auto lowerMap = op->getLowerBoundMap();
+  auto lowerMap = op.getLowerBoundMap();
   AffineExprEmitter lowerEmitter(state, lowerMap.getNumDims(),
-                                 op->getLowerBoundOperands());
+                                 op.getLowerBoundOperands());
   if (lowerMap.getNumResults() == 1)
     lowerEmitter.emitAffineExpr(lowerMap.getResult(0));
   else {
@@ -622,9 +609,9 @@ void ModuleEmitter::emitAffineFor(AffineForOp *op) {
   // Emit upper bound.
   emitValue(iterVar);
   os << " < ";
-  auto upperMap = op->getUpperBoundMap();
+  auto upperMap = op.getUpperBoundMap();
   AffineExprEmitter upperEmitter(state, upperMap.getNumDims(),
-                                 op->getUpperBoundOperands());
+                                 op.getUpperBoundOperands());
   if (upperMap.getNumResults() == 1)
     upperEmitter.emitAffineExpr(upperMap.getResult(0));
   else {
@@ -641,8 +628,8 @@ void ModuleEmitter::emitAffineFor(AffineForOp *op) {
 
   // Emit increase step.
   emitValue(iterVar);
-  os << " += " << op->getStep() << ") {";
-  emitInfoAndNewLine(*op);
+  os << " += " << op.getStep() << ") {";
+  emitInfoAndNewLine(op);
 
   addIndent();
 
@@ -661,17 +648,17 @@ void ModuleEmitter::emitAffineFor(AffineForOp *op) {
   //    os << "#pragma HLS loop_flatten off\n";
   //}
 
-  emitBlock(op->getLoopBody().front());
+  emitBlock(op.getLoopBody().front());
   reduceIndent();
 
   indent();
   os << "}\n";
 }
 
-void ModuleEmitter::emitAffineIf(AffineIfOp *op) {
+void ModuleEmitter::emitAffineIf(AffineIfOp op) {
   // Declare all values returned by AffineYieldOp. They will be further
   // handled by the AffineYieldOp emitter.
-  for (auto result : op->getResults()) {
+  for (auto result : op.getResults()) {
     if (!isDeclared(result)) {
       indent();
       if (result.getType().isa<ShapedType>())
@@ -684,9 +671,9 @@ void ModuleEmitter::emitAffineIf(AffineIfOp *op) {
 
   indent();
   os << "if (";
-  auto constrSet = op->getIntegerSet();
+  auto constrSet = op.getIntegerSet();
   AffineExprEmitter constrEmitter(state, constrSet.getNumDims(),
-                                  op->getOperands());
+                                  op.getOperands());
 
   // Emit all constraints.
   unsigned constrIdx = 0;
@@ -701,17 +688,17 @@ void ModuleEmitter::emitAffineIf(AffineIfOp *op) {
       os << " && ";
   }
   os << ") {";
-  emitInfoAndNewLine(*op);
+  emitInfoAndNewLine(op);
 
   addIndent();
-  emitBlock(*op->getThenBlock());
+  emitBlock(*op.getThenBlock());
   reduceIndent();
 
-  if (op->hasElse()) {
+  if (op.hasElse()) {
     indent();
     os << "} else {\n";
     addIndent();
-    emitBlock(*op->getElseBlock());
+    emitBlock(*op.getElseBlock());
     reduceIndent();
   }
 
@@ -719,10 +706,10 @@ void ModuleEmitter::emitAffineIf(AffineIfOp *op) {
   os << "}\n";
 }
 
-void ModuleEmitter::emitAffineParallel(AffineParallelOp *op) {
+void ModuleEmitter::emitAffineParallel(AffineParallelOp op) {
   // Declare all values returned by AffineParallelOp. They will be further
   // handled by the AffineYieldOp emitter.
-  for (auto result : op->getResults()) {
+  for (auto result : op.getResults()) {
     if (!isDeclared(result)) {
       indent();
       if (result.getType().isa<ShapedType>())
@@ -733,32 +720,32 @@ void ModuleEmitter::emitAffineParallel(AffineParallelOp *op) {
     }
   }
 
-  for (unsigned i = 0, e = op->getNumDims(); i < e; ++i) {
+  for (unsigned i = 0, e = op.getNumDims(); i < e; ++i) {
     indent();
     os << "for (";
-    auto iterVar = op->getBody()->getArgument(i);
+    auto iterVar = op.getBody()->getArgument(i);
 
     // Emit lower bound.
     emitValue(iterVar);
     os << " = ";
-    auto lowerMap = op->getLowerBoundsValueMap().getAffineMap();
+    auto lowerMap = op.getLowerBoundsValueMap().getAffineMap();
     AffineExprEmitter lowerEmitter(state, lowerMap.getNumDims(),
-                                   op->getLowerBoundsOperands());
+                                   op.getLowerBoundsOperands());
     lowerEmitter.emitAffineExpr(lowerMap.getResult(i));
     os << "; ";
 
     // Emit upper bound.
     emitValue(iterVar);
     os << " < ";
-    auto upperMap = op->getUpperBoundsValueMap().getAffineMap();
+    auto upperMap = op.getUpperBoundsValueMap().getAffineMap();
     AffineExprEmitter upperEmitter(state, upperMap.getNumDims(),
-                                   op->getUpperBoundsOperands());
+                                   op.getUpperBoundsOperands());
     upperEmitter.emitAffineExpr(upperMap.getResult(i));
     os << "; ";
 
     // Emit increase step.
     emitValue(iterVar);
-    auto step = op->getAttrOfType<ArrayAttr>(op->getStepsAttrName())[i]
+    auto step = op->getAttrOfType<ArrayAttr>(op.getStepsAttrName())[i]
                     .cast<IntegerAttr>()
                     .getInt();
     os << " += " << step << ") {\n";
@@ -766,9 +753,9 @@ void ModuleEmitter::emitAffineParallel(AffineParallelOp *op) {
     addIndent();
   }
 
-  emitBlock(op->getLoopBody().front());
+  emitBlock(op.getLoopBody().front());
 
-  for (unsigned i = 0, e = op->getNumDims(); i < e; ++i) {
+  for (unsigned i = 0, e = op.getNumDims(); i < e; ++i) {
     reduceIndent();
 
     indent();
@@ -777,28 +764,28 @@ void ModuleEmitter::emitAffineParallel(AffineParallelOp *op) {
     else
       os << "}\n";
   }
-  emitInfoAndNewLine(*op);
+  emitInfoAndNewLine(op);
 }
 
-void ModuleEmitter::emitAffineApply(AffineApplyOp *op) {
+void ModuleEmitter::emitAffineApply(AffineApplyOp op) {
   indent();
-  emitValue(op->getResult());
+  emitValue(op.getResult());
   os << " = ";
-  auto affineMap = op->getAffineMap();
-  AffineExprEmitter(state, affineMap.getNumDims(), op->getOperands())
+  auto affineMap = op.getAffineMap();
+  AffineExprEmitter(state, affineMap.getNumDims(), op.getOperands())
       .emitAffineExpr(affineMap.getResult(0));
   os << ";";
-  emitInfoAndNewLine(*op);
+  emitInfoAndNewLine(op);
 }
 
 template <typename OpType>
-void ModuleEmitter::emitAffineMaxMin(OpType *op, const char *syntax) {
+void ModuleEmitter::emitAffineMaxMin(OpType op, const char *syntax) {
   indent();
-  emitValue(op->getResult());
+  emitValue(op.getResult());
   os << " = ";
-  auto affineMap = op->getAffineMap();
+  auto affineMap = op.getAffineMap();
   AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
-                                  op->getOperands());
+                                  op.getOperands());
   for (unsigned i = 0, e = affineMap.getNumResults() - 1; i < e; ++i)
     os << syntax << "(";
   affineEmitter.emitAffineExpr(affineMap.getResult(0));
@@ -808,49 +795,49 @@ void ModuleEmitter::emitAffineMaxMin(OpType *op, const char *syntax) {
     os << ")";
   }
   os << ";";
-  emitInfoAndNewLine(*op);
+  emitInfoAndNewLine(op);
 }
 
-void ModuleEmitter::emitAffineLoad(AffineLoadOp *op) {
+void ModuleEmitter::emitAffineLoad(AffineLoadOp op) {
   indent();
-  emitValue(op->getResult());
+  emitValue(op.getResult());
   os << " = ";
-  emitValue(op->getMemRef());
-  auto affineMap = op->getAffineMap();
+  emitValue(op.getMemRef());
+  auto affineMap = op.getAffineMap();
   AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
-                                  op->getMapOperands());
+                                  op.getMapOperands());
   for (auto index : affineMap.getResults()) {
     os << "[";
     affineEmitter.emitAffineExpr(index);
     os << "]";
   }
   os << ";";
-  emitInfoAndNewLine(*op);
+  emitInfoAndNewLine(op);
 }
 
-void ModuleEmitter::emitAffineStore(AffineStoreOp *op) {
+void ModuleEmitter::emitAffineStore(AffineStoreOp op) {
   indent();
-  emitValue(op->getMemRef());
-  auto affineMap = op->getAffineMap();
+  emitValue(op.getMemRef());
+  auto affineMap = op.getAffineMap();
   AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
-                                  op->getMapOperands());
+                                  op.getMapOperands());
   for (auto index : affineMap.getResults()) {
     os << "[";
     affineEmitter.emitAffineExpr(index);
     os << "]";
   }
   os << " = ";
-  emitValue(op->getValueToStore());
+  emitValue(op.getValueToStore());
   os << ";";
-  emitInfoAndNewLine(*op);
+  emitInfoAndNewLine(op);
 }
 
 // TODO: For now, all values created in the AffineIf region will be declared
 // in the generated C++. However, values which will be returned by affine
 // yield operation should not be declared again. How to "bind" the pair of
 // values inside/outside of AffineIf region needs to be considered.
-void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
-  if (op->getNumOperands() == 0)
+void ModuleEmitter::emitAffineYield(AffineYieldOp op) {
+  if (op.getNumOperands() == 0)
     return;
 
   // For now, only AffineParallel and AffineIf operations will use
@@ -862,9 +849,9 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
       indent();
       emitValue(result, rank);
       os << " = ";
-      emitValue(op->getOperand(resultIdx++), rank);
+      emitValue(op.getOperand(resultIdx++), rank);
       os << ";";
-      emitInfoAndNewLine(*op);
+      emitInfoAndNewLine(op);
       emitNestedLoopTail(rank);
     }
   } else if (auto parentOp =
@@ -889,9 +876,9 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
       indent();
       emitValue(result, rank);
       os << " = ";
-      emitValue(op->getOperand(resultIdx++), rank);
+      emitValue(op.getOperand(resultIdx++), rank);
       os << ";";
-      emitInfoAndNewLine(*op);
+      emitInfoAndNewLine(op);
       emitNestedLoopTail(rank);
     }
     reduceIndent();
@@ -907,19 +894,17 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
       unsigned rank = emitNestedLoopHead(result);
       indent();
       emitValue(result, rank);
-      switch ((AtomicRMWKind)parentOp
-                  .getAttrOfType<ArrayAttr>(
-                      parentOp.getReductionsAttrName())[resultIdx]
-                  .cast<IntegerAttr>()
-                  .getInt()) {
+      auto RMWAttr = parentOp->getAttrOfType<ArrayAttr>(
+          parentOp.getReductionsAttrName())[resultIdx];
+      switch ((AtomicRMWKind)RMWAttr.cast<IntegerAttr>().getInt()) {
       case (AtomicRMWKind::addf):
       case (AtomicRMWKind::addi):
         os << " += ";
-        emitValue(op->getOperand(resultIdx++), rank);
+        emitValue(op.getOperand(resultIdx++), rank);
         break;
       case (AtomicRMWKind::assign):
         os << " = ";
-        emitValue(op->getOperand(resultIdx++), rank);
+        emitValue(op.getOperand(resultIdx++), rank);
         break;
       case (AtomicRMWKind::maxf):
       case (AtomicRMWKind::maxs):
@@ -927,7 +912,7 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
         os << " = max(";
         emitValue(result, rank);
         os << ", ";
-        emitValue(op->getOperand(resultIdx++), rank);
+        emitValue(op.getOperand(resultIdx++), rank);
         os << ")";
         break;
       case (AtomicRMWKind::minf):
@@ -936,17 +921,17 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
         os << " = min(";
         emitValue(result, rank);
         os << ", ";
-        emitValue(op->getOperand(resultIdx++), rank);
+        emitValue(op.getOperand(resultIdx++), rank);
         os << ")";
         break;
       case (AtomicRMWKind::mulf):
       case (AtomicRMWKind::muli):
         os << " *= ";
-        emitValue(op->getOperand(resultIdx++), rank);
+        emitValue(op.getOperand(resultIdx++), rank);
         break;
       }
       os << ";";
-      emitInfoAndNewLine(*op);
+      emitInfoAndNewLine(op);
       emitNestedLoopTail(rank);
     }
     reduceIndent();
@@ -957,122 +942,122 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp *op) {
 }
 
 /// Memref-related statement emitters.
-template <typename OpType> void ModuleEmitter::emitAlloc(OpType *op) {
+template <typename OpType> void ModuleEmitter::emitAlloc(OpType op) {
   // A declared result indicates that the memref is output of the function, and
   // has been declared in the function signature.
-  if (isDeclared(op->getResult()))
+  if (isDeclared(op.getResult()))
     return;
 
   // Vivado HLS only supports static shape on-chip memory.
-  if (!op->getType().hasStaticShape())
-    emitError(*op, "is unranked or has dynamic shape.");
+  if (!op.getType().hasStaticShape())
+    emitError(op, "is unranked or has dynamic shape.");
 
   indent();
-  emitArrayDecl(op->getResult());
+  emitArrayDecl(op.getResult());
   os << ";";
-  emitInfoAndNewLine(*op);
-  emitArrayPragmas(op->getResult());
+  emitInfoAndNewLine(op);
+  emitArrayPragmas(op.getResult());
 }
 
-void ModuleEmitter::emitLoad(LoadOp *op) {
+void ModuleEmitter::emitLoad(LoadOp op) {
   indent();
-  emitValue(op->getResult());
+  emitValue(op.getResult());
   os << " = ";
-  emitValue(op->getMemRef());
-  for (auto index : op->getIndices()) {
+  emitValue(op.getMemRef());
+  for (auto index : op.getIndices()) {
     os << "[";
     emitValue(index);
     os << "]";
   }
   os << ";";
-  emitInfoAndNewLine(*op);
+  emitInfoAndNewLine(op);
 }
 
-void ModuleEmitter::emitStore(StoreOp *op) {
+void ModuleEmitter::emitStore(StoreOp op) {
   indent();
-  emitValue(op->getMemRef());
-  for (auto index : op->getIndices()) {
+  emitValue(op.getMemRef());
+  for (auto index : op.getIndices()) {
     os << "[";
     emitValue(index);
     os << "]";
   }
   os << " = ";
-  emitValue(op->getValueToStore());
+  emitValue(op.getValueToStore());
   os << ";";
-  emitInfoAndNewLine(*op);
+  emitInfoAndNewLine(op);
 }
 
 /// Tensor-related statement emitters.
-void ModuleEmitter::emitTensorLoad(TensorLoadOp *op) {
-  auto rank = emitNestedLoopHead(op->getResult());
+void ModuleEmitter::emitTensorLoad(TensorLoadOp op) {
+  auto rank = emitNestedLoopHead(op.getResult());
   indent();
-  emitValue(op->getResult(), rank);
+  emitValue(op.getResult(), rank);
   os << " = ";
-  emitValue(op->getOperand(), rank);
+  emitValue(op.getOperand(), rank);
   os << ";";
-  emitInfoAndNewLine(*op);
+  emitInfoAndNewLine(op);
   emitNestedLoopTail(rank);
 }
 
-void ModuleEmitter::emitTensorStore(TensorStoreOp *op) {
-  auto rank = emitNestedLoopHead(op->getOperand(0));
+void ModuleEmitter::emitTensorStore(TensorStoreOp op) {
+  auto rank = emitNestedLoopHead(op.getOperand(0));
   indent();
-  emitValue(op->getOperand(1), rank);
+  emitValue(op.getOperand(1), rank);
   os << " = ";
-  emitValue(op->getOperand(0), rank);
+  emitValue(op.getOperand(0), rank);
   os << ";";
-  emitInfoAndNewLine(*op);
+  emitInfoAndNewLine(op);
   emitNestedLoopTail(rank);
 }
 
-void ModuleEmitter::emitTensorToMemref(TensorToMemrefOp *op) {
+void ModuleEmitter::emitTensorToMemref(TensorToMemrefOp op) {
   // A declared result indicates that the memref is output of the function, and
   // has been declared in the function signature.
-  if (isDeclared(op->getResult())) {
-    auto rank = emitNestedLoopHead(op->getResult());
+  if (isDeclared(op.getResult())) {
+    auto rank = emitNestedLoopHead(op.getResult());
     indent();
-    emitValue(op->getResult(), rank);
+    emitValue(op.getResult(), rank);
     os << " = ";
-    emitValue(op->getOperand(), rank);
+    emitValue(op.getOperand(), rank);
     os << ";";
-    emitInfoAndNewLine(*op);
+    emitInfoAndNewLine(op);
     emitNestedLoopTail(rank);
   } else {
-    addAlias(op->getOperand(), op->getResult());
-    emitArrayPragmas(op->getResult());
+    addAlias(op.getOperand(), op.getResult());
+    emitArrayPragmas(op.getResult());
   }
 }
 
-void ModuleEmitter::emitDim(DimOp *op) {
-  if (auto constOp = dyn_cast<ConstantOp>(op->getOperand(1).getDefiningOp())) {
+void ModuleEmitter::emitDim(DimOp op) {
+  if (auto constOp = dyn_cast<ConstantOp>(op.getOperand(1).getDefiningOp())) {
     auto constVal = constOp.getValue().cast<IntegerAttr>().getInt();
-    auto type = op->getOperand(0).getType().cast<ShapedType>();
+    auto type = op.getOperand(0).getType().cast<ShapedType>();
 
     if (type.hasStaticShape()) {
       if (constVal >= 0 && constVal < (int64_t)type.getShape().size()) {
         indent();
-        emitValue(op->getResult());
+        emitValue(op.getResult());
         os << " = ";
         os << type.getShape()[constVal] << ";";
-        emitInfoAndNewLine(*op);
+        emitInfoAndNewLine(op);
       } else
-        emitError(*op, "index is out of range.");
+        emitError(op, "index is out of range.");
     } else
-      emitError(*op, "is unranked or has dynamic shape.");
+      emitError(op, "is unranked or has dynamic shape.");
   } else
-    emitError(*op, "index is not a constant.");
+    emitError(op, "index is not a constant.");
 }
 
-void ModuleEmitter::emitRank(RankOp *op) {
-  auto type = op->getOperand().getType().cast<ShapedType>();
+void ModuleEmitter::emitRank(RankOp op) {
+  auto type = op.getOperand().getType().cast<ShapedType>();
   if (type.hasRank()) {
     indent();
-    emitValue(op->getResult());
+    emitValue(op.getResult());
     os << " = ";
     os << type.getRank() << ";";
-    emitInfoAndNewLine(*op);
+    emitInfoAndNewLine(op);
   } else
-    emitError(*op, "is unranked.");
+    emitError(op, "is unranked.");
 }
 
 /// Standard expression emitters.
@@ -1101,35 +1086,35 @@ void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
 }
 
 /// Special operation emitters.
-void ModuleEmitter::emitSelect(SelectOp *op) {
-  unsigned rank = emitNestedLoopHead(op->getResult());
+void ModuleEmitter::emitSelect(SelectOp op) {
+  unsigned rank = emitNestedLoopHead(op.getResult());
   unsigned conditionRank = rank;
-  if (!op->getCondition().getType().isa<ShapedType>())
+  if (!op.getCondition().getType().isa<ShapedType>())
     conditionRank = 0;
 
   indent();
-  emitValue(op->getResult(), rank);
+  emitValue(op.getResult(), rank);
   os << " = ";
-  emitValue(op->getCondition(), conditionRank);
+  emitValue(op.getCondition(), conditionRank);
   os << " ? ";
-  emitValue(op->getTrueValue(), rank);
+  emitValue(op.getTrueValue(), rank);
   os << " : ";
-  emitValue(op->getFalseValue(), rank);
+  emitValue(op.getFalseValue(), rank);
   os << ";";
-  emitInfoAndNewLine(*op);
+  emitInfoAndNewLine(op);
   emitNestedLoopTail(rank);
 }
 
-void ModuleEmitter::emitConstant(ConstantOp *op) {
+void ModuleEmitter::emitConstant(ConstantOp op) {
   // This indicates the constant type is scalar (float, integer, or bool).
-  if (isDeclared(op->getResult()))
+  if (isDeclared(op.getResult()))
     return;
 
-  if (auto denseAttr = op->getValue().dyn_cast<DenseElementsAttr>()) {
+  if (auto denseAttr = op.getValue().dyn_cast<DenseElementsAttr>()) {
     indent();
-    emitArrayDecl(op->getResult());
+    emitArrayDecl(op.getResult());
     os << " = {";
-    auto type = op->getResult().getType().cast<ShapedType>().getElementType();
+    auto type = op.getResult().getType().cast<ShapedType>().getElementType();
 
     unsigned elementIdx = 0;
     for (auto element : denseAttr.getAttributeValues()) {
@@ -1156,29 +1141,29 @@ void ModuleEmitter::emitConstant(ConstantOp *op) {
       else if (type.isIntOrIndex())
         os << element.cast<IntegerAttr>().getValue();
       else
-        emitError(*op, "array has unsupported element type.");
+        emitError(op, "array has unsupported element type.");
 
       if (elementIdx++ != denseAttr.getNumElements() - 1)
         os << ", ";
     }
     os << "};";
-    emitInfoAndNewLine(*op);
+    emitInfoAndNewLine(op);
   } else
-    emitError(*op, "has unsupported constant type.");
+    emitError(op, "has unsupported constant type.");
 }
 
-template <typename CastOpType> void ModuleEmitter::emitCast(CastOpType *op) {
+template <typename CastOpType> void ModuleEmitter::emitCast(CastOpType op) {
   indent();
-  emitValue(op->getResult());
+  emitValue(op.getResult());
   os << " = ";
-  emitValue(op->getOperand());
+  emitValue(op.getOperand());
   os << ";";
-  emitInfoAndNewLine(*op);
+  emitInfoAndNewLine(op);
 }
 
-void ModuleEmitter::emitCall(CallOp *op) {
+void ModuleEmitter::emitCall(CallOp op) {
   // Handle returned value by the callee.
-  for (auto result : op->getResults()) {
+  for (auto result : op.getResults()) {
     if (!isDeclared(result)) {
       indent();
       if (result.getType().isa<ShapedType>())
@@ -1191,19 +1176,19 @@ void ModuleEmitter::emitCall(CallOp *op) {
 
   // Emit the function call.
   indent();
-  os << op->getCallee() << "(";
+  os << op.getCallee() << "(";
 
   // Handle input arguments.
   unsigned argIdx = 0;
-  for (auto arg : op->getOperands()) {
+  for (auto arg : op.getOperands()) {
     emitValue(arg);
 
-    if (argIdx++ != op->getNumOperands() - 1)
+    if (argIdx++ != op.getNumOperands() - 1)
       os << ", ";
   }
 
   // Handle output arguments.
-  for (auto result : op->getResults()) {
+  for (auto result : op.getResults()) {
     // The address should be passed in for scalar result arguments.
     if (result.getType().isa<ShapedType>())
       os << ", ";
@@ -1214,18 +1199,18 @@ void ModuleEmitter::emitCall(CallOp *op) {
   }
 
   os << ");";
-  emitInfoAndNewLine(*op);
+  emitInfoAndNewLine(op);
 }
 
 /// Structure operation emitters.
-void ModuleEmitter::emitAssign(AssignOp *op) {
-  unsigned rank = emitNestedLoopHead(op->getResult());
+void ModuleEmitter::emitAssign(AssignOp op) {
+  unsigned rank = emitNestedLoopHead(op.getResult());
   indent();
-  emitValue(op->getResult(), rank);
+  emitValue(op.getResult(), rank);
   os << " = ";
-  emitValue(op->getOperand(), rank);
+  emitValue(op.getOperand(), rank);
   os << ";";
-  emitInfoAndNewLine(*op);
+  emitInfoAndNewLine(op);
   emitNestedLoopTail(rank);
 }
 
@@ -1348,22 +1333,16 @@ void ModuleEmitter::emitInfoAndNewLine(Operation *op) {
 }
 
 /// MLIR component and HLS C++ pragma emitters.
-void ModuleEmitter::emitOperation(Operation *op) {
-  if (ExprVisitor(*this).dispatchVisitor(op))
-    return;
-
-  if (StmtVisitor(*this).dispatchVisitor(op))
-    return;
-
-  if (PragmaVisitor(*this).dispatchVisitor(op))
-    return;
-
-  emitError(op, "can't be correctly emitted.");
-}
-
 void ModuleEmitter::emitBlock(Block &block) {
-  for (auto &op : block)
-    emitOperation(&op);
+  for (auto &op : block) {
+    if (ExprVisitor(*this).dispatchVisitor(&op))
+      continue;
+
+    if (StmtVisitor(*this).dispatchVisitor(&op))
+      continue;
+
+    emitError(&op, "can't be correctly emitted.");
+  }
 }
 
 void ModuleEmitter::emitArrayPragmas(Value memref) {
@@ -1424,7 +1403,7 @@ void ModuleEmitter::emitArrayPragmas(Value memref) {
 }
 
 void ModuleEmitter::emitFunctionPragmas(FuncOp func, ArrayRef<Value> portList) {
-  if (auto dataflow = func.getAttrOfType<BoolAttr>("dataflow")) {
+  if (auto dataflow = func->getAttrOfType<BoolAttr>("dataflow")) {
     if (dataflow.getValue()) {
       indent();
       os << "#pragma HLS dataflow\n";
@@ -1434,7 +1413,7 @@ void ModuleEmitter::emitFunctionPragmas(FuncOp func, ArrayRef<Value> portList) {
     }
   }
 
-  if (auto pipeline = func.getAttrOfType<BoolAttr>("pipeline")) {
+  if (auto pipeline = func->getAttrOfType<BoolAttr>("pipeline")) {
     if (pipeline.getValue()) {
       indent();
       os << "#pragma HLS pipeline\n";
@@ -1445,7 +1424,7 @@ void ModuleEmitter::emitFunctionPragmas(FuncOp func, ArrayRef<Value> portList) {
   }
 
   // Only top function should emit interface pragmas.
-  if (auto topFunction = func.getAttrOfType<BoolAttr>("top_function")) {
+  if (auto topFunction = func->getAttrOfType<BoolAttr>("top_function")) {
     if (topFunction.getValue()) {
       indent();
       os << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
@@ -1495,18 +1474,18 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   if (func.getBlocks().size() != 1)
     emitError(func, "has zero or more than one basic blocks.");
 
-  if (auto top = func.getAttrOfType<BoolAttr>("top_function"))
+  if (auto top = func->getAttrOfType<BoolAttr>("top_function"))
     if (top.getValue())
       os << "/// This is top function.\n";
 
-  if (auto latency = func.getAttrOfType<IntegerAttr>("latency")) {
+  if (auto latency = func->getAttrOfType<IntegerAttr>("latency")) {
     os << "/// Latency=" << latency.getInt();
-    if (auto interval = func.getAttrOfType<IntegerAttr>("interval"))
+    if (auto interval = func->getAttrOfType<IntegerAttr>("interval"))
       os << ", interval=" << interval.getInt();
     os << "\n";
   }
 
-  if (auto dsp = func.getAttrOfType<IntegerAttr>("dsp"))
+  if (auto dsp = func->getAttrOfType<IntegerAttr>("dsp"))
     os << "/// DSP=" << dsp.getInt() << "\n";
 
   // Emit function signature.

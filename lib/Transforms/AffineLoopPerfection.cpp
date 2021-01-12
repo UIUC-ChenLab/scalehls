@@ -46,7 +46,7 @@ bool scalehls::applyAffineLoopPerfection(AffineForOp innermostLoop,
   while (true) {
     // Get the parent loop of the child loop.
     auto childLoop = loops.back();
-    auto loop = childLoop.getParentOfType<AffineForOp>();
+    auto loop = childLoop->getParentOfType<AffineForOp>();
 
     // Break the procedure if the parent operation is no longer a loop.
     if (!loop)

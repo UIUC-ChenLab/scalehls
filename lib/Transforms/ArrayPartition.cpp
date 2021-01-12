@@ -27,7 +27,7 @@ struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
 bool scalehls::applyArrayPartition(FuncOp func, OpBuilder &builder) {
   // Check whether the input function is pipelined.
   bool funcPipeline = false;
-  if (auto attr = func.getAttrOfType<BoolAttr>("pipeline"))
+  if (auto attr = func->getAttrOfType<BoolAttr>("pipeline"))
     if (attr.getValue())
       funcPipeline = true;
 
@@ -38,7 +38,7 @@ bool scalehls::applyArrayPartition(FuncOp func, OpBuilder &builder) {
     pipelinedBlocks.push_back(&func.front());
   else
     func.walk([&](AffineForOp loop) {
-      if (auto attr = loop.getAttrOfType<BoolAttr>("pipeline"))
+      if (auto attr = loop->getAttrOfType<BoolAttr>("pipeline"))
         if (attr.getValue())
           pipelinedBlocks.push_back(&loop.getLoopBody().front());
     });

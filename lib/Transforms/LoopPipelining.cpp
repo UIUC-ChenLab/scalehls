@@ -32,7 +32,7 @@ struct LoopPipelining : public LoopPipeliningBase<LoopPipelining> {
         auto currentLoop = loop;
         unsigned loopLevel = 0;
         while (true) {
-          auto parentLoop = currentLoop.getParentOfType<AffineForOp>();
+          auto parentLoop = currentLoop->getParentOfType<AffineForOp>();
 
           // If meet the outermost loop, pipeline the current loop.
           if (!parentLoop || pipelineLevel == loopLevel) {
@@ -60,7 +60,7 @@ struct LoopPipelining : public LoopPipeliningBase<LoopPipelining> {
 /// Apply loop pipelining to the input loop, all inner loops are automatically
 /// fully unrolled.
 bool scalehls::applyLoopPipelining(AffineForOp targetLoop, OpBuilder &builder) {
-  targetLoop.setAttr("pipeline", builder.getBoolAttr(true));
+  targetLoop->setAttr("pipeline", builder.getBoolAttr(true));
 
   // All inner loops of the pipelined loop are automatically unrolled.
   targetLoop.walk([&](AffineForOp loop) {
@@ -73,13 +73,13 @@ bool scalehls::applyLoopPipelining(AffineForOp targetLoop, OpBuilder &builder) {
   flattenedLoops.push_back(targetLoop);
   while (true) {
     auto currentLoop = flattenedLoops.back();
-    if (auto outerLoop = currentLoop.getParentOfType<AffineForOp>()) {
+    if (auto outerLoop = currentLoop->getParentOfType<AffineForOp>()) {
       // Only if the current loop is the only child loop of the outer loop, the
       // outer loop can be flattened into the current loop.
       auto &body = outerLoop.getLoopBody().front();
       if (&body.front() == currentLoop && body.getOperations().size() == 2) {
         flattenedLoops.push_back(outerLoop);
-        outerLoop.setAttr("flatten", builder.getBoolAttr(true));
+        outerLoop->setAttr("flatten", builder.getBoolAttr(true));
       } else
         break;
     } else
