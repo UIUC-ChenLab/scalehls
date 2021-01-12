@@ -80,7 +80,7 @@ Optional<std::pair<Operation *, Operation *>> checkSameLevel(Operation *lhsOp,
 // level with dstOp's any parent loop.
 Operation *getSameLevelDstOp(Operation *srcOp, Operation *dstOp);
 
-AffineMap getLayoutMap(MemRefType memrefType, MLIRContext *context);
+AffineMap getLayoutMap(MemRefType memrefType);
 
 // Collect partition factors and overall partition number through analyzing the
 // layout map of a MemRefType.

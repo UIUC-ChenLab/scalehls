@@ -138,8 +138,8 @@ void HLSCppEstimator::getPartitionIndex(Operation *op) {
       accessMap.getNumSymbols());
 
   // Compose the access map with the layout map.
-  auto layoutMap = getLayoutMap(memrefType, memrefType.getContext());
-  if (layoutMap.isEmpty()) {
+  auto layoutMap = getLayoutMap(memrefType);
+  if (!layoutMap) {
     setAttrValue(op, "partition_index", (int64_t)0);
     return;
   }

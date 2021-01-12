@@ -108,11 +108,11 @@ Operation *scalehls::getSameLevelDstOp(Operation *srcOp, Operation *dstOp) {
   return nullptr;
 }
 
-AffineMap scalehls::getLayoutMap(MemRefType memrefType, MLIRContext *context) {
+AffineMap scalehls::getLayoutMap(MemRefType memrefType) {
   // Check whether the memref has layout map.
   auto memrefMaps = memrefType.getAffineMaps();
   if (memrefMaps.empty())
-    return AffineMap::get(context);
+    return (AffineMap) nullptr;
 
   return memrefMaps.back();
 }
@@ -122,13 +122,13 @@ AffineMap scalehls::getLayoutMap(MemRefType memrefType, MLIRContext *context) {
 int64_t scalehls::getPartitionFactors(MemRefType memrefType,
                                       SmallVector<int64_t, 4> *factors) {
   auto shape = memrefType.getShape();
-  auto layoutMap = getLayoutMap(memrefType, memrefType.getContext());
+  auto layoutMap = getLayoutMap(memrefType);
   int64_t accumFactor = 1;
 
   for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
     int64_t factor = 1;
 
-    if (!layoutMap.isEmpty()) {
+    if (layoutMap) {
       auto expr = layoutMap.getResult(dim);
 
       if (auto binaryExpr = expr.dyn_cast<AffineBinaryOpExpr>())
