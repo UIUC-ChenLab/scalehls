@@ -1,10 +1,10 @@
 .vscode
 
 build
-samples/hls_proj
-samples/cpp_src
-samples/test_results
 tmp
+**/hls_proj
+**/cpp_src
+**/test_results
 
 *.onnx*
 *.tmp

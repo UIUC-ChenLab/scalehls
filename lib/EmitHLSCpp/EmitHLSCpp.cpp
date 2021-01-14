@@ -464,9 +464,6 @@ bool ExprVisitor::visitOp(CmpIOp op) {
   case CmpIPredicate::sge:
   case CmpIPredicate::uge:
     return emitter.emitBinary(op, ">="), true;
-  default:
-    op.emitError("has unsupported compare type.");
-    return false;
   }
 }
 

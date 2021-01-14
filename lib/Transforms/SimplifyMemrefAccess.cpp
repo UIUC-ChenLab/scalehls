@@ -96,7 +96,7 @@ bool scalehls::applySimplifyMemrefAccess(FuncOp func) {
               int64_t distance = 0;
               for (auto dep : dependenceComponents)
                 if (dep.lb)
-                  distance += abs(dep.lb.getValue());
+                  distance += std::abs(dep.lb.getValue());
 
               if (distance == 0) {
                 dependencyFlag = true;

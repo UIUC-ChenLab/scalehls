@@ -5,6 +5,7 @@
 #include "Analysis/QoREstimation.h"
 #include "Dialect/HLSCpp/HLSCpp.h"
 #include "Transforms/Passes.h"
+#include "mlir/Analysis/LoopAnalysis.h"
 
 using namespace std;
 using namespace mlir;
@@ -17,14 +18,62 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
 };
 } // namespace
 
+static void getSeqLoopBand(AffineForOp forOp,
+                           SmallVector<AffineForOp, 4> &loopBand) {
+  auto currentLoop = forOp;
+  while (true) {
+    auto childLoopNum = getChildLoopNum(currentLoop);
+
+    // Only if the current loop has zero or one child, it will be pushed back to
+    // the loop band.
+    if (childLoopNum == 1)
+      loopBand.push_back(currentLoop);
+    else {
+      loopBand.push_back(currentLoop);
+      break;
+    }
+
+    // Update the current loop.
+    currentLoop = *currentLoop.getOps<AffineForOp>().begin();
+  }
+}
+
+static int64_t getChildLoopsTripCount(AffineForOp forOp) {
+  int64_t count = 0;
+  for (auto loop : forOp.getOps<AffineForOp>()) {
+    auto innerCount = getChildLoopsTripCount(loop);
+    if (auto trip = getConstantTripCount(loop))
+      count += trip.getValue() * innerCount;
+    else
+      count += innerCount;
+  }
+
+  // If the current loop is innermost loop, count should be one.
+  return max(count, (int64_t)1);
+}
+
 /// This is a temporary approach.
 static void applyMultipleLevelDSE(FuncOp func, OpBuilder &builder,
                                   LatencyMap &latencyMap, int64_t numDSP) {
-  HLSCppEstimator estimator(func, latencyMap);
-  estimator.estimateFunc();
+  //===--------------------------------------------------------------------===//
+  // Try function pipelining
+  //===--------------------------------------------------------------------===//
 
-  builder.setInsertionPoint(func);
-  (void)numDSP;
+  // HLSCppEstimator estimator(func, latencyMap);
+  // estimator.estimateFunc();
+
+  // builder.setInsertionPoint(func);
+
+  //===--------------------------------------------------------------------===//
+  //
+  //===--------------------------------------------------------------------===//
+
+  for (auto loop : func.getOps<AffineForOp>()) {
+    SmallVector<AffineForOp, 4> loopBand;
+    getSeqLoopBand(loop, loopBand);
+
+    llvm::outs() << getChildLoopsTripCount(loopBand.back()) << "\n";
+  }
 }
 
 void MultipleLevelDSE::runOnOperation() {
