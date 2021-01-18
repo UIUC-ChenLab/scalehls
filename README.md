@@ -40,7 +40,7 @@ $ # Loop and pragma-level optimizations, performance estimation, and C++ code ge
 $ scalehls-opt samples/polybench/syrk.mlir \
     -affine-loop-perfection -remove-variable-bound -affine-loop-normalize \
     -partial-affine-loop-tile="tile-level=1 tile-size=4" \
-    -legalize-to-hlscpp="top-function=test_syrk" -loop-pipelining="pipeline-level=1" \
+    -legalize-to-hlscpp="top-func=test_syrk" -loop-pipelining="pipeline-level=1" \
     -affine-store-forward -simplify-memref-access -array-partition -cse -canonicalize \
     -qor-estimation="target-spec=config/target-spec.ini" \
     | scalehls-translate -emit-hlscpp
@@ -55,7 +55,7 @@ $ benchmark-gen -type "cnn" -config "config/cnn-config.ini" -number 1 \
     | scalehls-opt -legalize-dataflow -split-function \
     -hlskernel-bufferize -hlskernel-to-affine -func-bufferize \
     -affine-loop-perfection -affine-loop-normalize \
-    -legalize-to-hlscpp="top-function=auto_gen_cnn" \
+    -legalize-to-hlscpp="top-func=auto_gen_cnn" \
     -affine-store-forward -simplify-memref-access -cse -canonicalize \
     -qor-estimation="target-spec=config/target-spec.ini" \
     | scalehls-translate -emit-hlscpp
@@ -85,7 +85,7 @@ $ # Legalize the output of ONNX-MLIR, optimize and emit C++ code.
 $ scalehls-opt resnet18.mlir -legalize-onnx -affine-loop-normalize -canonicalize \
     -legalize-dataflow="min-gran=2 insert-copy=false" -split-function \
     -convert-linalg-to-affine-loops -affine-loop-fusion \
-    -legalize-to-hlscpp="top-function=main_graph" \
+    -legalize-to-hlscpp="top-func=main_graph" \
     | scalehls-translate -emit-hlscpp
 ```
 

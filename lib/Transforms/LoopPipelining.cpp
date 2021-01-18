@@ -63,10 +63,15 @@ bool scalehls::applyLoopPipelining(AffineForOp targetLoop, OpBuilder &builder) {
   targetLoop->setAttr("pipeline", builder.getBoolAttr(true));
 
   // All inner loops of the pipelined loop are automatically unrolled.
-  targetLoop.walk([&](AffineForOp loop) {
-    if (loop != targetLoop)
-      loopUnrollFull(loop);
-  });
+  bool hasFullyUnrolled = false;
+  while (hasFullyUnrolled == false) {
+    hasFullyUnrolled = true;
+    targetLoop.walk([&](AffineForOp loop) {
+      if (loop != targetLoop)
+        if (failed(loopUnrollFull(loop)))
+          hasFullyUnrolled = false;
+    });
+  }
 
   // All outer loops that perfect nest the pipelined loop can be flattened.
   SmallVector<AffineForOp, 4> flattenedLoops;

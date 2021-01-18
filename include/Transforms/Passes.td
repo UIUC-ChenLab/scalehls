@@ -66,7 +66,7 @@ def FuncPipelining : Pass<"func-pipelining", "FuncOp"> {
   let constructor = "mlir::scalehls::createFuncPipeliningPass()";
 
   let options = [
-    Option<"targetFunction", "target-function", "std::string",
+    Option<"targetFunc", "target-func", "std::string",
            /*default=*/"\"main\"", "The target function to be pipelined">
   ];
 }

@@ -29,7 +29,7 @@ void LegalizeToHLSCpp::runOnOperation() {
   if (!func->getAttr("dataflow"))
     func->setAttr("dataflow", builder.getBoolAttr(false));
 
-  if (func.getName() == topFunction)
+  if (func.getName() == topFunc)
     func->setAttr("top_function", builder.getBoolAttr(true));
   else
     func->setAttr("top_function", builder.getBoolAttr(false));

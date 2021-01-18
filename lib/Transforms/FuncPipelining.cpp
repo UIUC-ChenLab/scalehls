@@ -18,7 +18,7 @@ struct FuncPipelining : public FuncPipeliningBase<FuncPipelining> {
     auto func = getOperation();
     auto builder = OpBuilder(func);
 
-    if (func.getName() == targetFunction) {
+    if (func.getName() == targetFunc) {
       applyFuncPipelining(func, builder);
 
       // Canonicalize the IR after function pipelining.
@@ -35,7 +35,14 @@ struct FuncPipelining : public FuncPipeliningBase<FuncPipelining> {
 /// Apply function pipelining to the input function, all contained loops are
 /// automatically fully unrolled.
 bool scalehls::applyFuncPipelining(FuncOp func, OpBuilder &builder) {
-  func.walk([&](AffineForOp loop) { loopUnrollFull(loop); });
+  bool hasFullyUnrolled = false;
+  while (hasFullyUnrolled == false) {
+    hasFullyUnrolled = true;
+    func.walk([&](AffineForOp loop) {
+      if (failed(loopUnrollFull(loop)))
+        hasFullyUnrolled = false;
+    });
+  }
 
   func->setAttr("pipeline", builder.getBoolAttr(true));
   func->setAttr("dataflow", builder.getBoolAttr(false));

@@ -22,7 +22,7 @@ def LegalizeToHLSCpp : Pass<"legalize-to-hlscpp", "FuncOp"> {
   let constructor = "mlir::scalehls::createLegalizeToHLSCppPass()";
 
   let options = [
-    Option<"topFunction", "top-function", "std::string", /*default=*/"\"main\"", 
+    Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"", 
            "The top function for HLS synthesis">,
   ];
 }
