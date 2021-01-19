@@ -1,8 +1,11 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
-#include "Dialect/HLSKernel/HLSKernel.h"
+#include "scalehls/Dialect/HLSKernel/HLSKernel.h"
+#include "mlir/IR/Builders.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -12,11 +15,11 @@ void HLSKernelDialect::initialize() {
 
   addOperations<
 #define GET_OP_LIST
-#include "Dialect/HLSKernel/HLSKernel.cpp.inc"
+#include "scalehls/Dialect/HLSKernel/HLSKernel.cpp.inc"
       >();
 }
 
-#include "Dialect/HLSCpp/HLSCppInterfaces.cpp.inc"
+#include "scalehls/Dialect/HLSCpp/HLSCppInterfaces.cpp.inc"
 
 //===----------------------------------------------------------------------===//
 // Utilities
@@ -251,4 +254,4 @@ static LogicalResult verify(CopyOp op) {
 //===----------------------------------------------------------------------===//
 
 #define GET_OP_CLASSES
-#include "Dialect/HLSKernel/HLSKernel.cpp.inc"
+#include "scalehls/Dialect/HLSKernel/HLSKernel.cpp.inc"

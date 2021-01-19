@@ -1,24 +1,21 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
-#include "EmitHLSCpp.h"
-#include "Analysis/Utils.h"
-#include "Dialect/HLSCpp/Visitor.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "scalehls/Translation/EmitHLSCpp.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
-#include "mlir/Dialect/SCF/SCF.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/AffineExprVisitor.h"
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/Translation.h"
-#include "llvm/ADT/SmallPtrSet.h"
+#include "scalehls/Analysis/Utils.h"
+#include "scalehls/Dialect/HLSCpp/Visitor.h"
 #include "llvm/Support/raw_ostream.h"
 
-using namespace std;
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
 
 //===----------------------------------------------------------------------===//
 // Some Base Classes
@@ -97,7 +94,7 @@ SmallString<8> HLSCppEmitterBase::addName(Value val, bool isPtr) {
   if (isPtr)
     valName += "*";
 
-  valName += StringRef("val" + to_string(state.nameTable.size()));
+  valName += StringRef("val" + std::to_string(state.nameTable.size()));
   state.nameTable[val] = valName;
 
   return valName;
@@ -121,8 +118,8 @@ SmallString<8> HLSCppEmitterBase::getName(Value val) {
       auto constAttr = constOp.getValue();
       if (auto floatAttr = constAttr.dyn_cast<FloatAttr>()) {
         auto value = floatAttr.getValueAsDouble();
-        if (isfinite(value))
-          return SmallString<8>(to_string(value));
+        if (std::isfinite(value))
+          return SmallString<8>(std::to_string(value));
         else if (value > 0)
           return SmallString<8>("INFINITY");
         else
@@ -130,10 +127,10 @@ SmallString<8> HLSCppEmitterBase::getName(Value val) {
 
       } else if (auto intAttr = constAttr.dyn_cast<IntegerAttr>()) {
         auto value = intAttr.getInt();
-        return SmallString<8>(to_string(value));
+        return SmallString<8>(std::to_string(value));
 
       } else if (auto boolAttr = constAttr.dyn_cast<BoolAttr>())
-        return SmallString<8>(to_string(boolAttr.getValue()));
+        return SmallString<8>(std::to_string(boolAttr.getValue()));
     }
   }
   return state.nameTable.lookup(val);
@@ -1116,7 +1113,7 @@ void ModuleEmitter::emitConstant(ConstantOp op) {
     for (auto element : denseAttr.getAttributeValues()) {
       if (type.isF32()) {
         auto value = element.cast<FloatAttr>().getValue().convertToFloat();
-        if (isfinite(value))
+        if (std::isfinite(value))
           os << value;
         else if (value > 0)
           os << "INFINITY";
@@ -1125,7 +1122,7 @@ void ModuleEmitter::emitConstant(ConstantOp op) {
 
       } else if (type.isF64()) {
         auto value = element.cast<FloatAttr>().getValue().convertToDouble();
-        if (isfinite(value))
+        if (std::isfinite(value))
           os << value;
         else if (value > 0)
           os << "INFINITY";

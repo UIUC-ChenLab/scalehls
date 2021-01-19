@@ -1,14 +1,14 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
-#include "Analysis/Utils.h"
-#include "Transforms/Passes.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/LoopUtils.h"
+#include "scalehls/Analysis/Utils.h"
+#include "scalehls/Transforms/Passes.h"
 
-using namespace std;
 using namespace mlir;
 using namespace scalehls;
 

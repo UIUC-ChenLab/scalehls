@@ -1,15 +1,14 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
-#include "Analysis/Utils.h"
-#include "Dialect/HLSKernel/HLSKernel.h"
-#include "Transforms/Passes.h"
 #include "mlir/Analysis/Liveness.h"
 #include "mlir/Dialect/Linalg/IR/LinalgOps.h"
-#include "llvm/ADT/SmallPtrSet.h"
+#include "scalehls/Dialect/HLSKernel/HLSKernel.h"
+#include "scalehls/Transforms/Passes.h"
 
-using namespace std;
 using namespace mlir;
 using namespace scalehls;
 

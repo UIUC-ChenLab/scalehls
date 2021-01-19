@@ -1,20 +1,19 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
-#include "Analysis/QoREstimation.h"
-#include "Analysis/Passes.h"
+#include "scalehls/Analysis/QoREstimation.h"
 #include "mlir/Analysis/AffineAnalysis.h"
-#include "mlir/Analysis/AffineStructures.h"
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Analysis/Utils.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
+#include "scalehls/Analysis/Passes.h"
 
 using namespace std;
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
 
 //===----------------------------------------------------------------------===//
 // Initialization Methods

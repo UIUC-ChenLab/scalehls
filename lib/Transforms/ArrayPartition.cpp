@@ -1,14 +1,15 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
-#include "Analysis/Utils.h"
-#include "Transforms/Passes.h"
 #include "mlir/Analysis/AffineAnalysis.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
+#include "scalehls/Analysis/Utils.h"
+#include "scalehls/Dialect/HLSCpp/HLSCpp.h"
+#include "scalehls/Transforms/Passes.h"
 
-using namespace std;
 using namespace mlir;
 using namespace scalehls;
 using namespace hlscpp;
@@ -103,8 +104,8 @@ bool scalehls::applyArrayPartition(FuncOp func, OpBuilder &builder) {
               expr = indices[j] - index;
 
             if (auto constDistance = expr.dyn_cast<AffineConstantExpr>()) {
-              unsigned distance = abs(constDistance.getValue());
-              maxDistance = max(maxDistance, distance);
+              unsigned distance = std::abs(constDistance.getValue());
+              maxDistance = std::max(maxDistance, distance);
             } else
               requireMux = true;
           }

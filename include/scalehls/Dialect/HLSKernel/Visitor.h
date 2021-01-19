@@ -1,12 +1,13 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
 #ifndef SCALEHLS_DIALECT_HLSKERNEL_VISITOR_H
 #define SCALEHLS_DIALECT_HLSKERNEL_VISITOR_H
 
-#include "Dialect/HLSKernel/HLSKernel.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "scalehls/Dialect/HLSKernel/HLSKernel.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 namespace mlir {

@@ -1,11 +1,13 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
 #ifndef SCALEHLS_ANALYSIS_UTILS_H
 #define SCALEHLS_ANALYSIS_UTILS_H
 
-#include "Dialect/HLSCpp/HLSCpp.h"
+#include "mlir/IR/Builders.h"
 #include "mlir/IR/Operation.h"
 
 namespace mlir {

@@ -1,18 +1,18 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
-#include "Analysis/Passes.h"
-#include "Dialect/HLSKernel/HLSKernel.h"
-#include "INIReader.h"
-#include "mlir/IR/Dialect.h"
-#include "mlir/IR/MLIRContext.h"
+#include "external/INIReader.h"
+#include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/Support/FileUtilities.h"
+#include "scalehls/Dialect/HLSKernel/HLSKernel.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ToolOutputFile.h"
 #include <numeric>
 
-using namespace llvm;
 using namespace mlir;
 using namespace scalehls;
 using namespace hlskernel;

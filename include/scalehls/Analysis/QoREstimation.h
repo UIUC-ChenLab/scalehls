@@ -1,13 +1,16 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
 #ifndef SCALEHLS_ANALYSIS_QORESTIMATION_H
 #define SCALEHLS_ANALYSIS_QORESTIMATION_H
 
-#include "Analysis/Utils.h"
-#include "Dialect/HLSCpp/Visitor.h"
-#include "INIReader.h"
+#include "external/INIReader.h"
+#include "mlir/IR/BuiltinOps.h"
+#include "scalehls/Analysis/Utils.h"
+#include "scalehls/Dialect/HLSCpp/Visitor.h"
 
 namespace mlir {
 namespace scalehls {

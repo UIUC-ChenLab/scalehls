@@ -1,12 +1,13 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
-#include "Dialect/HLSKernel/HLSKernel.h"
-#include "Transforms/Passes.h"
 #include "mlir/Dialect/Linalg/IR/LinalgOps.h"
+#include "scalehls/Dialect/HLSKernel/HLSKernel.h"
+#include "scalehls/Transforms/Passes.h"
 
-using namespace std;
 using namespace mlir;
 using namespace scalehls;
 
@@ -104,7 +105,7 @@ bool scalehls::applyLegalizeDataflow(FuncOp func, OpBuilder &builder,
           continue;
 
         if (auto attr = successor->getAttrOfType<IntegerAttr>("dataflow_level"))
-          dataflowLevel = max(dataflowLevel, attr.getInt());
+          dataflowLevel = std::max(dataflowLevel, attr.getInt());
         else {
           op->emitError("has unexpected successor, legalization failed");
           return false;
@@ -166,7 +167,8 @@ bool scalehls::applyLegalizeDataflow(FuncOp func, OpBuilder &builder,
         } else {
           // Always retain the longest merge path.
           if (auto dst = dataflowToMerge.lookup(successorDataflowLevel))
-            dataflowToMerge[successorDataflowLevel] = max(dst, dataflowLevel);
+            dataflowToMerge[successorDataflowLevel] =
+                std::max(dst, dataflowLevel);
           else
             dataflowToMerge[successorDataflowLevel] = dataflowLevel;
         }

@@ -1,23 +1,21 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
-#include "Analysis/Passes.h"
-#include "Conversion/Passes.h"
-#include "Dialect/HLSCpp/HLSCpp.h"
-#include "Dialect/HLSKernel/HLSKernel.h"
-#include "Transforms/Passes.h"
-#include "mlir/IR/Dialect.h"
-#include "mlir/IR/MLIRContext.h"
 #include "mlir/InitAllDialects.h"
 #include "mlir/InitAllPasses.h"
-#include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/FileUtilities.h"
 #include "mlir/Support/MlirOptMain.h"
+#include "scalehls/Analysis/Passes.h"
+#include "scalehls/Conversion/Passes.h"
+#include "scalehls/Dialect/HLSCpp/HLSCpp.h"
+#include "scalehls/Dialect/HLSKernel/HLSKernel.h"
+#include "scalehls/Transforms/Passes.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/InitLLVM.h"
-#include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/ToolOutputFile.h"
 
 static llvm::cl::opt<std::string> inputFilename(llvm::cl::Positional,

@@ -1,4 +1,6 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
@@ -25,7 +27,7 @@ std::unique_ptr<Pass> createLegalizeOnnxPass();
 void registerConversionPasses();
 
 #define GEN_PASS_CLASSES
-#include "Conversion/Passes.h.inc"
+#include "scalehls/Conversion/Passes.h.inc"
 
 } // namespace scalehls
 } // namespace mlir

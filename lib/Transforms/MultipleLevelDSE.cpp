@@ -1,13 +1,13 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
-#include "Analysis/QoREstimation.h"
-#include "Dialect/HLSCpp/HLSCpp.h"
-#include "Transforms/Passes.h"
 #include "mlir/Analysis/LoopAnalysis.h"
+#include "scalehls/Analysis/QoREstimation.h"
+#include "scalehls/Transforms/Passes.h"
 
-using namespace std;
 using namespace mlir;
 using namespace scalehls;
 

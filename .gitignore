@@ -1,7 +1,6 @@
 .vscode
-
 build
-tmp
+**/tmp
 **/hls_proj
 **/cpp_src
 **/test_results

@@ -1,15 +1,17 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
-#include "Transforms/Passes.h"
+#include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
 using namespace scalehls;
 
 namespace {
 #define GEN_PASS_REGISTRATION
-#include "Transforms/Passes.h.inc"
+#include "scalehls/Transforms/Passes.h.inc"
 } // namespace
 
 void scalehls::registerTransformsPasses() { registerPasses(); }

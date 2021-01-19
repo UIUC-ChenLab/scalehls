@@ -1,11 +1,12 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
-#include "Conversion/Passes.h"
-#include "Dialect/HLSCpp/HLSCpp.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
-#include "llvm/ADT/SmallPtrSet.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "scalehls/Conversion/Passes.h"
+#include "scalehls/Dialect/HLSCpp/HLSCpp.h"
 
 using namespace mlir;
 using namespace scalehls;

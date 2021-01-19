@@ -1,18 +1,18 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
-#include "Dialect/HLSCpp/HLSCpp.h"
-#include "EmitHLSCpp.h"
 #include "mlir/IR/AsmState.h"
 #include "mlir/IR/Diagnostics.h"
-#include "mlir/IR/MLIRContext.h"
 #include "mlir/InitAllDialects.h"
 #include "mlir/InitAllTranslations.h"
 #include "mlir/Support/FileUtilities.h"
-#include "mlir/Support/LogicalResult.h"
 #include "mlir/Support/ToolUtilities.h"
 #include "mlir/Translation.h"
+#include "scalehls/Dialect/HLSCpp/HLSCpp.h"
+#include "scalehls/Translation/EmitHLSCpp.h"
 #include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SourceMgr.h"

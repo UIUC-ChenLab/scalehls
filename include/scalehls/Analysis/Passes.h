@@ -1,4 +1,6 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
@@ -20,7 +22,7 @@ std::unique_ptr<Pass> createQoREstimationPass();
 void registerAnalysisPasses();
 
 #define GEN_PASS_CLASSES
-#include "Analysis/Passes.h.inc"
+#include "scalehls/Analysis/Passes.h.inc"
 
 } // namespace scalehls
 } // namespace mlir

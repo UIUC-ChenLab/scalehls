@@ -1,14 +1,15 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
 #ifndef SCALEHLS_DIALECT_HLSCPP_VISITOR_H
 #define SCALEHLS_DIALECT_HLSCPP_VISITOR_H
 
-#include "Dialect/HLSCpp/HLSCpp.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/SCF/SCF.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "scalehls/Dialect/HLSCpp/HLSCpp.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 namespace mlir {

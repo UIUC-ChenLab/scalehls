@@ -1,20 +1,20 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
 #ifndef SCALEHLS_DIALECT_HLSCPP_HLSCPP_H
 #define SCALEHLS_DIALECT_HLSCPP_HLSCPP_H
 
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/IR/Builders.h"
-#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dialect.h"
+#include "mlir/IR/OpDefinition.h"
 
 namespace mlir {
 namespace scalehls {
 namespace hlscpp {
 
-#include "Dialect/HLSCpp/HLSCppInterfaces.h.inc"
+#include "scalehls/Dialect/HLSCpp/HLSCppInterfaces.h.inc"
 
 enum class MemoryKind {
   BRAM_1P = 0,
@@ -34,11 +34,11 @@ enum class PartitionKind { CYCLIC = 0, BLOCK = 1, NONE = 2 };
 } // namespace scalehls
 } // namespace mlir
 
-#include "Dialect/HLSCpp/HLSCppEnums.h.inc"
+#include "scalehls/Dialect/HLSCpp/HLSCppEnums.h.inc"
 
-#include "Dialect/HLSCpp/HLSCppDialect.h.inc"
+#include "scalehls/Dialect/HLSCpp/HLSCppDialect.h.inc"
 
 #define GET_OP_CLASSES
-#include "Dialect/HLSCpp/HLSCpp.h.inc"
+#include "scalehls/Dialect/HLSCpp/HLSCpp.h.inc"
 
 #endif // SCALEHLS_DIALECT_HLSCPP_HLSCPP_H

@@ -1,10 +1,12 @@
-//===------------------------------------------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The ScaleHLS Authors.
 //
 //===----------------------------------------------------------------------===//
 
-#include "Analysis/Utils.h"
+#include "scalehls/Analysis/Utils.h"
 #include "mlir/Analysis/AffineAnalysis.h"
-#include "llvm/ADT/SmallPtrSet.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
 
 using namespace mlir;
 using namespace scalehls;
