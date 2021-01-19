@@ -9,6 +9,10 @@
 
 include "mlir/Pass/PassBase.td"
 
+//===----------------------------------------------------------------------===//
+// Design Space Exploration Pass
+//===----------------------------------------------------------------------===//
+
 def MultipleLevelDSE : Pass<"multiple-level-dse", "ModuleOp"> {
   let summary = "Optimize HLS design at multiple abstraction level";
   let description = [{
@@ -29,7 +33,7 @@ def MultipleLevelDSE : Pass<"multiple-level-dse", "ModuleOp"> {
 }
 
 //===----------------------------------------------------------------------===//
-// Pragma Optimization Passes
+// Directive Optimization Passes
 //===----------------------------------------------------------------------===//
 
 def ArrayPartition : Pass<"array-partition", "FuncOp"> {
@@ -120,6 +124,16 @@ def RemoveVariableBound : Pass<"remove-variable-bound", "FuncOp"> {
   let constructor = "mlir::scalehls::createRemoveVariableBoundPass()";
 }
 
+def AffineLoopOrderOpt : Pass<"affine-loop-order-opt", "FuncOp"> {
+  let summary = "Optimize the order of affine loop nests";
+  let description = [{
+    This affine-loop-order-opt pass will optimize the order of perfect affine
+    loop nests through polyhedral-based dependency analysis.
+  }];
+
+  let constructor = "mlir::scalehls::createAffineLoopOrderOptPass()";
+}
+
 //===----------------------------------------------------------------------===//
 // Dataflow Optimization Passes
 //===----------------------------------------------------------------------===//
@@ -154,20 +168,7 @@ def SplitFunction : Pass<"split-function", "ModuleOp"> {
 }
 
 //===----------------------------------------------------------------------===//
-// Bufferization Passes
-//===----------------------------------------------------------------------===//
-
-def HLSKernelBufferize : Pass<"hlskernel-bufferize", "FuncOp"> {
-  let summary = "Bufferize HLSKernel operations";
-  let description = [{
-    This hlskernel-bufferize pass will bufferize HLSKernel operations.
-  }];
-
-  let constructor = "mlir::scalehls::createHLSKernelBufferizePass()";
-}
-
-//===----------------------------------------------------------------------===//
-// MemRef Optimization Passes
+// Standard Operation Optimization Passes
 //===----------------------------------------------------------------------===//
 
 def AffineStoreForward : Pass<"affine-store-forward", "FuncOp"> {
@@ -188,6 +189,19 @@ def SimplifyMemrefAccess : Pass<"simplify-memref-access", "FuncOp"> {
   }];
 
   let constructor = "mlir::scalehls::createSimplifyMemrefAccessPass()";
+}
+
+//===----------------------------------------------------------------------===//
+// Bufferization Pass
+//===----------------------------------------------------------------------===//
+
+def HLSKernelBufferize : Pass<"hlskernel-bufferize", "FuncOp"> {
+  let summary = "Bufferize HLSKernel operations";
+  let description = [{
+    This hlskernel-bufferize pass will bufferize HLSKernel operations.
+  }];
+
+  let constructor = "mlir::scalehls::createHLSKernelBufferizePass()";
 }
 
 #endif // SCALEHLS_TRANSFORMS_PASSES_TD

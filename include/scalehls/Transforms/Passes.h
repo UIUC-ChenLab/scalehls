@@ -34,6 +34,8 @@ bool applyAffineLoopPerfection(AffineForOp loop, OpBuilder &builder);
 /// Apply remove variable bound to all inner loops of the input loop.
 bool applyRemoveVariableBound(AffineForOp loop, OpBuilder &builder);
 
+bool applyAffineLoopOrderOpt(AffineForOp loop, OpBuilder &builder);
+
 /// Apply loop pipelining to the input loop, all inner loops are automatically
 /// fully unrolled.
 bool applyLoopPipelining(AffineForOp loop, OpBuilder &builder);
@@ -52,9 +54,10 @@ bool applySimplifyMemrefAccess(FuncOp func);
 // Optimization Pass Entries
 //===----------------------------------------------------------------------===//
 
+/// Design space exploration pass.
 std::unique_ptr<Pass> createMultipleLevelDSEPass();
 
-/// Pragma optimization passes.
+/// Directive optimization passes.
 std::unique_ptr<Pass> createLoopPipeliningPass();
 std::unique_ptr<Pass> createArrayPartitionPass();
 std::unique_ptr<Pass> createFuncPipeliningPass();
@@ -63,17 +66,18 @@ std::unique_ptr<Pass> createFuncPipeliningPass();
 std::unique_ptr<Pass> createAffineLoopPerfectionPass();
 std::unique_ptr<Pass> createRemoveVariableBoundPass();
 std::unique_ptr<Pass> createPartialAffineLoopTilePass();
+std::unique_ptr<Pass> createAffineLoopOrderOptPass();
 
 /// Dataflow optimization passes.
 std::unique_ptr<Pass> createLegalizeDataflowPass();
 std::unique_ptr<Pass> createSplitFunctionPass();
 
-/// Bufferization passes.
-std::unique_ptr<Pass> createHLSKernelBufferizePass();
-
-/// MemRef Optimization Passes.
+/// Standard operation optimization passes.
 std::unique_ptr<Pass> createAffineStoreForwardPass();
 std::unique_ptr<Pass> createSimplifyMemrefAccessPass();
+
+/// Bufferization pass.
+std::unique_ptr<Pass> createHLSKernelBufferizePass();
 
 void registerTransformsPasses();
 
