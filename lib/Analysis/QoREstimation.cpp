@@ -847,8 +847,7 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     // Read configuration file.
     INIReader spec(targetSpec);
     if (spec.ParseError())
-      module->emitError(
-          "target spec file parse fail, please pass in correct file path\n");
+      emitError(module.getLoc(), "target spec file parse fail\n");
 
     // Collect profiling latency data.
     LatencyMap latencyMap;
