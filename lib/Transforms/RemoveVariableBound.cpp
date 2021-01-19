@@ -130,6 +130,6 @@ bool scalehls::applyRemoveVariableBound(AffineForOp loop, OpBuilder &builder) {
   return true;
 }
 
-std::unique_ptr<mlir::Pass> scalehls::createRemoveVariableBoundPass() {
+std::unique_ptr<Pass> scalehls::createRemoveVariableBoundPass() {
   return std::make_unique<RemoveVariableBound>();
 }

@@ -95,6 +95,6 @@ bool scalehls::applyLoopPipelining(AffineForOp targetLoop, OpBuilder &builder) {
   return true;
 }
 
-std::unique_ptr<mlir::Pass> scalehls::createLoopPipeliningPass() {
+std::unique_ptr<Pass> scalehls::createLoopPipeliningPass() {
   return std::make_unique<LoopPipelining>();
 }

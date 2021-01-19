@@ -22,7 +22,7 @@ void PartialAffineLoopTile::runOnOperation() {
   auto func = getOperation();
 
   // Bands of loops to tile.
-  std::vector<SmallVector<mlir::AffineForOp, 6>> bands;
+  std::vector<SmallVector<AffineForOp, 6>> bands;
   getTileableBands(func, &bands);
 
   // Tile each band.
@@ -39,13 +39,13 @@ void PartialAffineLoopTile::runOnOperation() {
     SmallVector<unsigned, 6> tileSizes;
     tileSizes.assign(band.size(), tileSize);
 
-    SmallVector<mlir::AffineForOp, 6> tiledNest;
+    SmallVector<AffineForOp, 6> tiledNest;
     if (failed(tilePerfectlyNested(band, tileSizes, &tiledNest)))
       return signalPassFailure();
 
     // Permute loop order to move the tiled loop to the innermost of the
     // perfect nested loop.
-    SmallVector<mlir::AffineForOp, 4> nestedLoops;
+    SmallVector<AffineForOp, 4> nestedLoops;
     getPerfectlyNestedLoops(nestedLoops, tiledNest.front());
 
     SmallVector<unsigned, 4> permMap;
@@ -62,6 +62,6 @@ void PartialAffineLoopTile::runOnOperation() {
   }
 }
 
-std::unique_ptr<mlir::Pass> scalehls::createPartialAffineLoopTilePass() {
+std::unique_ptr<Pass> scalehls::createPartialAffineLoopTilePass() {
   return std::make_unique<PartialAffineLoopTile>();
 }

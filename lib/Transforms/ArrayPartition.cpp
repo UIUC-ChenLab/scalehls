@@ -206,6 +206,6 @@ bool scalehls::applyArrayPartition(FuncOp func, OpBuilder &builder) {
   return true;
 }
 
-std::unique_ptr<mlir::Pass> scalehls::createArrayPartitionPass() {
+std::unique_ptr<Pass> scalehls::createArrayPartitionPass() {
   return std::make_unique<ArrayPartition>();
 }

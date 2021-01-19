@@ -201,6 +201,6 @@ bool scalehls::applyAffineLoopPerfection(AffineForOp innermostLoop,
   return true;
 }
 
-std::unique_ptr<mlir::Pass> scalehls::createAffineLoopPerfectionPass() {
+std::unique_ptr<Pass> scalehls::createAffineLoopPerfectionPass() {
   return std::make_unique<AffineLoopPerfection>();
 }

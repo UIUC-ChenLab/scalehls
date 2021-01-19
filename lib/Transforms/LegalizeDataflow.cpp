@@ -100,7 +100,7 @@ bool scalehls::applyLegalizeDataflow(FuncOp func, OpBuilder &builder,
       // Walk through all successor ops.
       for (auto pair : successorsMap[op]) {
         auto successor = pair.second;
-        if (isa<mlir::ReturnOp>(successor))
+        if (isa<ReturnOp>(successor))
           continue;
 
         if (auto attr = successor->getAttrOfType<IntegerAttr>("dataflow_level"))
@@ -119,7 +119,7 @@ bool scalehls::applyLegalizeDataflow(FuncOp func, OpBuilder &builder,
       for (auto pair : successorsMap[op]) {
         auto value = pair.first;
         auto successor = pair.second;
-        if (isa<mlir::ReturnOp>(successor))
+        if (isa<ReturnOp>(successor))
           continue;
 
         auto successorDataflowLevel =
@@ -142,7 +142,7 @@ bool scalehls::applyLegalizeDataflow(FuncOp func, OpBuilder &builder,
             Value newValue;
             Operation *copyOp;
             if (auto valueType = value.getType().dyn_cast<MemRefType>()) {
-              newValue = builder.create<mlir::AllocOp>(op->getLoc(), valueType);
+              newValue = builder.create<AllocOp>(op->getLoc(), valueType);
               copyOp = builder.create<linalg::CopyOp>(op->getLoc(),
                                                       values.back(), newValue);
             } else {
@@ -157,7 +157,7 @@ bool scalehls::applyLegalizeDataflow(FuncOp func, OpBuilder &builder,
 
             // Chain created CopyOps.
             if (i == successorDataflowLevel + 1)
-              value.replaceUsesWithIf(newValue, [&](mlir::OpOperand &use) {
+              value.replaceUsesWithIf(newValue, [&](OpOperand &use) {
                 return successor->isAncestor(use.getOwner());
               });
             else
@@ -210,6 +210,6 @@ bool scalehls::applyLegalizeDataflow(FuncOp func, OpBuilder &builder,
   return true;
 }
 
-std::unique_ptr<mlir::Pass> scalehls::createLegalizeDataflowPass() {
+std::unique_ptr<Pass> scalehls::createLegalizeDataflowPass() {
   return std::make_unique<LegalizeDataflow>();
 }

@@ -95,6 +95,6 @@ void LegalizeToHLSCpp::runOnOperation() {
   }
 }
 
-std::unique_ptr<mlir::Pass> scalehls::createLegalizeToHLSCppPass() {
+std::unique_ptr<Pass> scalehls::createLegalizeToHLSCppPass() {
   return std::make_unique<LegalizeToHLSCpp>();
 }

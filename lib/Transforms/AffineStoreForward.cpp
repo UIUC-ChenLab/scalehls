@@ -200,27 +200,27 @@ void AffineStoreForwardImpl::forwardStoreToLoad(AffineReadOpInterface loadOp) {
     loadOp.getValue().replaceAllUsesWith(storeVal);
     loadOp.erase();
   } else {
-    auto ifOp = cast<mlir::AffineIfOp>(storeSameLevelOp);
+    auto ifOp = cast<AffineIfOp>(storeSameLevelOp);
     // TODO: support AffineIfOp nests and AffineIfOp with else block.
     if (ifOp.hasElse() || ifOp.getThenBlock() != lastWriteStoreOp->getBlock())
       return;
 
     // Create a new if operation before the loadOp.
     builder.setInsertionPointAfter(loadOp);
-    auto newIfOp = builder.create<mlir::AffineIfOp>(
+    auto newIfOp = builder.create<AffineIfOp>(
         loadOp.getLoc(), loadOp.getValue().getType(), ifOp.getIntegerSet(),
         ifOp.getOperands(), /*withElseRegion=*/true);
     loadOp.getValue().replaceAllUsesWith(newIfOp.getResult(0));
 
     // The lastWriteStoreOp can be forwarded to the then block loadOp.
     builder.setInsertionPointToEnd(newIfOp.getThenBlock());
-    builder.create<mlir::AffineYieldOp>(newIfOp.getLoc(), storeVal);
+    builder.create<AffineYieldOp>(newIfOp.getLoc(), storeVal);
     lastWriteStoreOp->moveBefore(newIfOp.getThenBlock()->getTerminator());
 
     // Since lastWriteStoreOp is conditionally executed, it cannot be forwarded
     // to the else block loadOp.
     builder.setInsertionPointToEnd(newIfOp.getElseBlock());
-    builder.create<mlir::AffineYieldOp>(newIfOp.getLoc(), loadOp.getValue());
+    builder.create<AffineYieldOp>(newIfOp.getLoc(), loadOp.getValue());
 
     // Eliminate emptry ifOp.
     if (ifOp.getThenBlock()->getTerminator() == &ifOp.getThenBlock()->front())

@@ -39,7 +39,7 @@ void HLSCppEstimator::getFuncDependencies() {
     unsigned srcIndex = 1;
     for (auto srcOp : memAccesses) {
       for (auto dstOp : llvm::drop_begin(memAccesses, srcIndex)) {
-        if (isa<mlir::CallOp>(srcOp) || isa<mlir::CallOp>(dstOp)) {
+        if (isa<CallOp>(srcOp) || isa<CallOp>(dstOp)) {
           // TODO: for now, all dstOps are considered to have dependencies to
           // the srcOp if either the dstOp or srcOp is a CallOp.
           dependsMap[srcOp].push_back(dstOp);
@@ -582,7 +582,7 @@ bool HLSCppEstimator::visitOp(AffineIfOp op, int64_t begin) {
   return true;
 }
 
-bool HLSCppEstimator::visitOp(mlir::CallOp op, int64_t begin) {
+bool HLSCppEstimator::visitOp(CallOp op, int64_t begin) {
   auto callee =
       SymbolTable::lookupSymbolIn(func->getParentOp(), op.getCallee());
   auto subFunc = dyn_cast<FuncOp>(callee);
@@ -747,7 +747,7 @@ void HLSCppEstimator::reverseSchedule() {
 
     // Reverse schedule level.
     if (auto surOp = getSurroundingOp(op)) {
-      if (isa<mlir::AffineForOp>(surOp)) {
+      if (isa<AffineForOp>(surOp)) {
         auto surOpBegin = getIntAttrValue(surOp, "schedule_begin");
 
         if (getBoolAttrValue(surOp, "flatten")) {
@@ -869,6 +869,6 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
 };
 } // namespace
 
-std::unique_ptr<mlir::Pass> scalehls::createQoREstimationPass() {
+std::unique_ptr<Pass> scalehls::createQoREstimationPass() {
   return std::make_unique<QoREstimation>();
 }

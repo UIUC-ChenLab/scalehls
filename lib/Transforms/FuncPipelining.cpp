@@ -51,6 +51,6 @@ bool scalehls::applyFuncPipelining(FuncOp func, OpBuilder &builder) {
   return true;
 }
 
-std::unique_ptr<mlir::Pass> scalehls::createFuncPipeliningPass() {
+std::unique_ptr<Pass> scalehls::createFuncPipeliningPass() {
   return std::make_unique<FuncPipelining>();
 }

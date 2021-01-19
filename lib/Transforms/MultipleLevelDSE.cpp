@@ -18,24 +18,40 @@ using namespace scalehls;
 using AffineLoopBand = SmallVector<AffineForOp, 4>;
 using AffineLoopBands = SmallVector<AffineLoopBand, 4>;
 
-static AffineForOp getSeqLoopBand(AffineForOp forOp, AffineLoopBand &loopBand) {
+static AffineForOp getLoopBandFromRoot(AffineForOp forOp,
+                                       AffineLoopBand &band) {
   auto currentLoop = forOp;
   while (true) {
-    auto childLoopNum = getChildLoopNum(currentLoop);
+    band.push_back(currentLoop);
 
-    // Only if the current loop has zero or one child, it will be pushed back
-    // to the loop band.
-    if (childLoopNum == 1)
-      loopBand.push_back(currentLoop);
-    else {
-      loopBand.push_back(currentLoop);
+    if (getChildLoopNum(currentLoop) == 1)
+      currentLoop = *currentLoop.getOps<AffineForOp>().begin();
+    else
       break;
-    }
-
-    // Update the current loop.
-    currentLoop = *currentLoop.getOps<AffineForOp>().begin();
   }
-  return loopBand.back();
+  return band.back();
+}
+
+static AffineForOp getLoopBandFromLeaf(AffineForOp forOp,
+                                       AffineLoopBand &band) {
+  AffineLoopBand reverseBand;
+
+  auto currentLoop = forOp;
+  while (true) {
+    reverseBand.push_back(currentLoop);
+
+    auto parentLoop = currentLoop->getParentOfType<AffineForOp>();
+    if (!parentLoop)
+      break;
+
+    if (getChildLoopNum(parentLoop) == 1)
+      currentLoop = parentLoop;
+    else
+      break;
+  }
+
+  band.append(reverseBand.rbegin(), reverseBand.rend());
+  return band.front();
 }
 
 static int64_t getInnerParallelism(AffineForOp forOp) {
@@ -73,17 +89,17 @@ public:
 /// This is a temporary approach that does not scale.
 void HLSCppOptimizer::applyMultipleLevelDSE() {
   // Try function pipelining.
-  auto tmpFunc = func.clone();
-  applyFuncPipelining(func, builder);
+  // auto pipelineFunc = func.clone();
+  // applyFuncPipelining(pipelineFunc, builder);
 
-  // Estimate the pipelined function.
-  HLSCppEstimator estimator(func, latencyMap);
-  estimator.estimateFunc();
+  // // Estimate the pipelined function.
+  // HLSCppEstimator estimator(pipelineFunc, latencyMap);
+  // estimator.estimateFunc();
 
-  if (getIntAttrValue(tmpFunc, "dsp") <= numDSP) {
-    applyFuncPipelining(func, builder);
-    return;
-  }
+  // if (getIntAttrValue(pipelineFunc, "dsp") <= numDSP) {
+  //   applyFuncPipelining(func, builder);
+  //   return;
+  // }
 
   // Simplify loop nests by pipelining. If we take the following loops as
   // example, where each nodes represents one sequential loop nests (LN). In the
@@ -129,7 +145,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
     // more than one inner loops will be considered as a candidate.
     for (auto target : targetLoops) {
       AffineLoopBand loopBand;
-      auto innermostLoop = getSeqLoopBand(target, loopBand);
+      auto innermostLoop = getLoopBandFromRoot(target, loopBand);
 
       // Calculate the overall introduced parallelism if the innermost loop of
       // the current loop band is pipelined.
@@ -195,6 +211,20 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
   // applied to each leaf LNs, and the best one which meets the resource
   // constrains will be picked as the final solution.
   // TODO: apply different optimizations to different leaf LNs.
+
+  AffineLoopBands targetBands;
+  func.walk([&](AffineForOp loop) {
+    if (getChildLoopNum(loop) == 0) {
+      AffineLoopBand band;
+      getLoopBandFromLeaf(loop, band);
+      targetBands.push_back(band);
+
+      // Loop perfection and remove variable bound are always applied for the
+      // convenience of polyhedral optimizations.
+      applyAffineLoopPerfection(band.back(), builder);
+      applyRemoveVariableBound(band.front(), builder);
+    }
+  });
 }
 
 namespace {
@@ -223,6 +253,6 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
 };
 } // namespace
 
-std::unique_ptr<mlir::Pass> scalehls::createMultipleLevelDSEPass() {
+std::unique_ptr<Pass> scalehls::createMultipleLevelDSEPass() {
   return std::make_unique<MultipleLevelDSE>();
 }

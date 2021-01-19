@@ -31,7 +31,7 @@ void HLSKernelBufferize::runOnOperation() {
       if (auto operandType = operand.getType().dyn_cast<RankedTensorType>()) {
         auto memRefType = MemRefType::get(operandType.getShape(),
                                           operandType.getElementType());
-        auto operandMemRef = builder.create<mlir::TensorToMemrefOp>(
+        auto operandMemRef = builder.create<TensorToMemrefOp>(
             func.getLoc(), memRefType, operand);
         op->setOperand(operandIndex, operandMemRef);
       }
@@ -41,7 +41,7 @@ void HLSKernelBufferize::runOnOperation() {
     if (op->getNumResults()) {
       auto resultType = op->getResult(0).getType().cast<RankedTensorType>();
 
-      auto resultMemRef = builder.create<mlir::AllocOp>(
+      auto resultMemRef = builder.create<AllocOp>(
           op->getLoc(),
           MemRefType::get(resultType.getShape(), resultType.getElementType()));
       SmallVector<Value, 4> newOperands = op->getOperands();
@@ -51,12 +51,12 @@ void HLSKernelBufferize::runOnOperation() {
       // Create a TensorLoad operaion to replace the original returned tensor.
       builder.setInsertionPointAfter(op);
       auto resultTensor =
-          builder.create<mlir::TensorLoadOp>(func.getLoc(), resultMemRef);
+          builder.create<TensorLoadOp>(func.getLoc(), resultMemRef);
       op->getResult(0).replaceAllUsesWith(resultTensor);
     }
   });
 }
 
-std::unique_ptr<mlir::Pass> scalehls::createHLSKernelBufferizePass() {
+std::unique_ptr<Pass> scalehls::createHLSKernelBufferizePass() {
   return std::make_unique<HLSKernelBufferize>();
 }

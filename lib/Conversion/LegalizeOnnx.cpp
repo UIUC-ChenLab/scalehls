@@ -70,18 +70,18 @@ void LegalizeOnnx::runOnOperation() {
 
   for (auto func : funcs) {
     // Convert add operations to AffineApply.
-    func.walk([&](mlir::AddIOp addOp) {
+    func.walk([&](AddIOp addOp) {
       builder.setInsertionPoint(addOp);
       auto map = AffineMap::get(
           2, 0, builder.getAffineDimExpr(0) + builder.getAffineDimExpr(1),
           builder.getContext());
-      auto newAdd = builder.create<mlir::AffineApplyOp>(
+      auto newAdd = builder.create<AffineApplyOp>(
           addOp.getLoc(), addOp.getType(), map, addOp.getOperands());
       addOp.getResult().replaceAllUsesWith(newAdd);
     });
 
     // Convert normal load operations to AffineLoad.
-    func.walk([&](mlir::LoadOp loadOp) {
+    func.walk([&](LoadOp loadOp) {
       SmallVector<AffineExpr, 4> exprs;
       SmallVector<Value, 4> dims;
       SmallVector<Value, 4> symbols;
@@ -90,7 +90,7 @@ void LegalizeOnnx::runOnOperation() {
       for (auto index : loadOp.getIndices()) {
         // Handle constant defining operation.
         if (auto defOp = index.getDefiningOp())
-          if (auto constOp = dyn_cast<mlir::ConstantOp>(defOp))
+          if (auto constOp = dyn_cast<ConstantOp>(defOp))
             if (constOp.getType().isa<IndexType>())
               if (auto constAttr = constOp.getValue().dyn_cast<IntegerAttr>()) {
                 exprs.push_back(
@@ -120,7 +120,7 @@ void LegalizeOnnx::runOnOperation() {
         auto map = AffineMap::get(dims.size(), symbols.size(), exprs,
                                   builder.getContext());
         dims.append(symbols.begin(), symbols.end());
-        auto newLoad = builder.create<mlir::AffineLoadOp>(
+        auto newLoad = builder.create<AffineLoadOp>(
             loadOp.getLoc(), loadOp.getMemRef(), map, dims);
         loadOp.getResult().replaceAllUsesWith(newLoad);
       }
@@ -135,8 +135,8 @@ void LegalizeOnnx::runOnOperation() {
           // If the kernel global operation gets a value, create a standard
           // constant operation to substitute it.
           builder.setInsertionPoint(&op);
-          auto tensor = builder.create<mlir::ConstantOp>(op.getLoc(), value);
-          auto memref = builder.create<mlir::TensorToMemrefOp>(
+          auto tensor = builder.create<ConstantOp>(op.getLoc(), value);
+          auto memref = builder.create<TensorToMemrefOp>(
               op.getLoc(), op.getResult(0).getType(), tensor);
           op.getResult(0).replaceAllUsesWith(memref);
 
@@ -164,20 +164,20 @@ void LegalizeOnnx::runOnOperation() {
           memSize *= dstType.getShape()[i];
 
         // Create affine loops for memory copy.
-        auto loop = builder.create<mlir::AffineForOp>(op.getLoc(), 0, memSize);
+        auto loop = builder.create<AffineForOp>(op.getLoc(), 0, memSize);
         auto loopIdv = loop.getInductionVar();
         builder.setInsertionPointToStart(&loop.getLoopBody().front());
 
         // Create load and store operations.
-        auto val = builder.create<mlir::AffineLoadOp>(
+        auto val = builder.create<AffineLoadOp>(
             op.getLoc(), src, getIndexMap(memSize, srcType, builder), loopIdv);
-        builder.create<mlir::AffineStoreOp>(
-            op.getLoc(), val, dst, getIndexMap(memSize, dstType, builder),
-            loopIdv);
+        builder.create<AffineStoreOp>(op.getLoc(), val, dst,
+                                      getIndexMap(memSize, dstType, builder),
+                                      loopIdv);
 
         opsToErase.push_back(&op);
 
-      } else if (isa<mlir::DeallocOp>(op))
+      } else if (isa<DeallocOp>(op))
         opsToErase.push_back(&op);
     }
 
@@ -225,6 +225,6 @@ void LegalizeOnnx::runOnOperation() {
     op->erase();
 }
 
-std::unique_ptr<mlir::Pass> scalehls::createLegalizeOnnxPass() {
+std::unique_ptr<Pass> scalehls::createLegalizeOnnxPass() {
   return std::make_unique<LegalizeOnnx>();
 }

@@ -80,7 +80,7 @@ bool scalehls::applySplitFunction(FuncOp func, OpBuilder &builder) {
     for (auto op : ops) {
       // Push back all operands and live ins as candidates.
       SmallVector<Value, 8> inputCandidates(op->getOperands());
-      if (auto loop = dyn_cast<mlir::AffineForOp>(op)) {
+      if (auto loop = dyn_cast<AffineForOp>(op)) {
         auto liveIns = liveness.getLiveIn(&loop.getLoopBody().front());
         for (auto liveIn : liveIns)
           if (!isForInductionVar(liveIn))
@@ -137,8 +137,7 @@ bool scalehls::applySplitFunction(FuncOp func, OpBuilder &builder) {
 
     // Create a function call and reconnect all inputs and outputs.
     builder.setInsertionPointAfter(ops.back());
-    auto call =
-        builder.create<mlir::CallOp>(func.getLoc(), subFunc, inputValues);
+    auto call = builder.create<CallOp>(func.getLoc(), subFunc, inputValues);
     unsigned outputIdx = 0;
     for (auto result : call.getResults())
       outputValues[outputIdx++].replaceAllUsesWith(result);
@@ -146,8 +145,7 @@ bool scalehls::applySplitFunction(FuncOp func, OpBuilder &builder) {
     // Create new return operation in the new created function.
     auto entry = subFunc.addEntryBlock();
     builder.setInsertionPointToEnd(entry);
-    auto returnOp =
-        builder.create<mlir::ReturnOp>(subFunc.getLoc(), outputValues);
+    auto returnOp = builder.create<ReturnOp>(subFunc.getLoc(), outputValues);
 
     // Move same level operations into the new created function.
     for (auto op : ops) {
@@ -156,7 +154,7 @@ bool scalehls::applySplitFunction(FuncOp func, OpBuilder &builder) {
       // Connect operands to the arguments of the new created function.
       for (unsigned i = 0, e = inputValues.size(); i < e; ++i)
         inputValues[i].replaceUsesWithIf(
-            entry->getArgument(i), [&](mlir::OpOperand &use) {
+            entry->getArgument(i), [&](OpOperand &use) {
               return subFunc.getOperation()->isAncestor(use.getOwner());
             });
     }
@@ -182,6 +180,6 @@ bool scalehls::applySplitFunction(FuncOp func, OpBuilder &builder) {
   return true;
 }
 
-std::unique_ptr<mlir::Pass> scalehls::createSplitFunctionPass() {
+std::unique_ptr<Pass> scalehls::createSplitFunctionPass() {
   return std::make_unique<SplitFunction>();
 }

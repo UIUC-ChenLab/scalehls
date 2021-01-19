@@ -117,7 +117,7 @@ SmallString<8> HLSCppEmitterBase::getName(Value val) {
   // For constant scalar operations, the constant number will be returned rather
   // than the value name.
   if (auto defOp = val.getDefiningOp()) {
-    if (auto constOp = dyn_cast<mlir::ConstantOp>(defOp)) {
+    if (auto constOp = dyn_cast<ConstantOp>(defOp)) {
       auto constAttr = constOp.getValue();
       if (auto floatAttr = constAttr.dyn_cast<FloatAttr>()) {
         auto value = floatAttr.getValueAsDouble();
@@ -851,8 +851,7 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp op) {
       emitInfoAndNewLine(op);
       emitNestedLoopTail(rank);
     }
-  } else if (auto parentOp =
-                 dyn_cast<mlir::AffineParallelOp>(op->getParentOp())) {
+  } else if (auto parentOp = dyn_cast<AffineParallelOp>(op->getParentOp())) {
     indent();
     os << "if (";
     unsigned ivIdx = 0;
