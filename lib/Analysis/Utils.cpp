@@ -6,7 +6,6 @@
 
 #include "scalehls/Analysis/Utils.h"
 #include "mlir/Analysis/AffineAnalysis.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
 
 using namespace mlir;
 using namespace scalehls;

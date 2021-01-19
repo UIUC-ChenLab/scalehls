@@ -40,11 +40,13 @@ bool scalehls::applySimplifyMemrefAccess(FuncOp func) {
         auto secondAccess = MemRefAccess(secondOp);
         auto secondIsRead = isa<AffineReadOpInterface>(secondOp);
 
-        auto sameLevelOps = checkSameLevel(firstOp, secondOp);
-
-        // Check whether the two operations statically have the same access
-        // element while at the same level.
-        if ((firstAccess == secondAccess) && sameLevelOps) {
+        // Check whether the two operations statically have the same access.
+        if (firstAccess == secondAccess) {
+          // If the two operations are at different loop levels, break.
+          // TODO: memory access operation hoisting?
+          auto sameLevelOps = checkSameLevel(firstOp, secondOp);
+          if (!sameLevelOps)
+            break;
 
           // If the second operation's access direction is different with the
           // first operation, the first operation is known not redundant.
@@ -80,9 +82,10 @@ bool scalehls::applySimplifyMemrefAccess(FuncOp func) {
             }
           }
         } else {
-          // Find possible dependencies.
+          // Find possible dependencies. If dependency appears, the first is no
+          // longer be able to be simplified.
           unsigned nsLoops = getNumCommonSurroundingLoops(*firstOp, *secondOp);
-          bool dependencyFlag = false;
+          bool foundDependence = false;
 
           for (unsigned depth = 1; depth <= nsLoops + 1; ++depth) {
             FlatAffineConstraints dependenceConstraints;
@@ -94,19 +97,23 @@ bool scalehls::applySimplifyMemrefAccess(FuncOp func) {
 
             // Only zero distance dependencies are considered here.
             if (hasDependence(result)) {
-              int64_t distance = 0;
-              for (auto dep : dependenceComponents)
-                if (dep.lb)
-                  distance += std::abs(dep.lb.getValue());
+              bool hasZeroDistance = true;
 
-              if (distance == 0) {
-                dependencyFlag = true;
+              for (auto dep : dependenceComponents)
+                if (dep.lb.getValue() > 0 || dep.ub.getValue() < 0) {
+                  hasZeroDistance = false;
+                  break;
+                }
+
+              if (hasZeroDistance) {
+                foundDependence = true;
                 break;
               }
             }
           }
 
-          if (dependencyFlag)
+          // If any dependence is found, break.
+          if (foundDependence)
             break;
         }
       }

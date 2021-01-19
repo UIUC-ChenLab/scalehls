@@ -426,18 +426,26 @@ int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
             if (srcMuxSize > 2 || dstMuxSize > 2)
               distance = 1;
             else {
-              SmallVector<int64_t, 2> accumTripCounts;
-              accumTripCounts.push_back(1);
+              SmallVector<int64_t, 8> accumTrips;
+              accumTrips.push_back(1);
 
               // Calculate the distance of this dependency.
               for (auto i = depComps.rbegin(); i < depComps.rend(); ++i) {
                 auto dep = *i;
                 auto tripCount = getIntAttrValue(dep.op, "trip_count");
+                auto ub = dep.ub.getValue();
+                auto lb = dep.lb.getValue();
 
-                if (dep.lb)
-                  distance += accumTripCounts.back() * dep.lb.getValue();
+                // Ff ub is more than zero, calculate the minimum positive
+                // disatance. Otherwise, set distance to negative and break.
+                if (ub >= 0)
+                  distance += accumTrips.back() * max(lb, (int64_t)0);
+                else {
+                  distance = -1;
+                  break;
+                }
 
-                accumTripCounts.push_back(accumTripCounts.back() * tripCount);
+                accumTrips.push_back(accumTrips.back() * tripCount);
               }
             }
 
@@ -481,8 +489,8 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
   // If the current loop is annotated as pipelined loop, extra dependency and
   // resource aware II analysis will be executed.
   if (getBoolAttrValue(op, "pipeline")) {
-    // Collect load and store operations in the loop block for solving possible
-    // carried dependencies.
+    // Collect load and store operations in the loop block for solving
+    // possible carried dependencies.
     // TODO: include CallOps, how? It seems dependencies always exist for all
     // CallOps not matter its access pattern.
     MemAccessesMap map;
@@ -510,9 +518,9 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
     return true;
   }
 
-  // If the current loop is annotated as flatten, it will be flattened into the
-  // child pipelined loop. This will increase the flattened loop trip count
-  // without changing the iteration latency.
+  // If the current loop is annotated as flatten, it will be flattened into
+  // the child pipelined loop. This will increase the flattened loop trip
+  // count without changing the iteration latency.
   if (getBoolAttrValue(op, "flatten")) {
     auto child = dyn_cast<AffineForOp>(op.getLoopBody().front().front());
     assert(child && "the first containing operation is not a loop");
@@ -575,8 +583,8 @@ bool HLSCppEstimator::visitOp(AffineIfOp op, int64_t begin) {
       return false;
   }
 
-  // In our assumption, AffineIfOp is completely transparent. Therefore, we set
-  // a dummy schedule begin here.
+  // In our assumption, AffineIfOp is completely transparent. Therefore, we
+  // set a dummy schedule begin here.
   setScheduleValue(op, end, end);
   return true;
 }
@@ -659,9 +667,9 @@ HLSCppEstimator::Resource HLSCppEstimator::estimateResource(Block &block,
   totalFmul /= (latencyMap["fmul"] + 1);
 
   // We assume the loop resource utilization cannot be shared. Therefore, the
-  // overall resource utilization is loops' plus other operstions'. According to
-  // profiling, floating-point add and muliply will consume 2 and 3 DSP units,
-  // respectively.
+  // overall resource utilization is loops' plus other operstions'. According
+  // to profiling, floating-point add and muliply will consume 2 and 3 DSP
+  // units, respectively.
   auto dsp = loopDSPNum + maxFadd * 2 + maxFmul * 3;
 
   // If the block is pipelined (interval is positive), the minimum resource
@@ -787,14 +795,14 @@ void HLSCppEstimator::estimateFunc() {
     }
 
     // Scheduled levels of all operations are reversed in this method, because
-    // we have done the ALAP scheduling in a reverse order. Note that after the
-    // reverse, the annotated scheduling level of each operation is a relative
-    // level of the nearest surrounding AffineForOp or FuncOp.
+    // we have done the ALAP scheduling in a reverse order. Note that after
+    // the reverse, the annotated scheduling level of each operation is a
+    // relative level of the nearest surrounding AffineForOp or FuncOp.
     reverseSchedule();
   } else {
     // Scheduling failed due to early error.
-    // TODO: further refinement and try the best to avoid failing, e.g. support
-    // variable loop bound.
+    // TODO: further refinement and try the best to avoid failing, e.g.
+    // support variable loop bound.
     setAttrValue(func, "latency", std::string("unknown"));
   }
 
@@ -856,9 +864,9 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     for (auto func : module.getOps<FuncOp>())
       if (auto topFunction = func->getAttrOfType<BoolAttr>("top_function"))
         if (topFunction.getValue()) {
-          // Estimate the top function. If any other functions are called by the
-          // top function, it will be estimated in the procedure of estimating
-          // the top function.
+          // Estimate the top function. If any other functions are called by
+          // the top function, it will be estimated in the procedure of
+          // estimating the top function.
           HLSCppEstimator estimator(func, latencyMap);
           estimator.estimateFunc();
         }

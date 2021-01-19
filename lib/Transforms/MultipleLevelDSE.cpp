@@ -15,9 +15,6 @@ using namespace scalehls;
 // Helper methods
 //===----------------------------------------------------------------------===//
 
-using AffineLoopBand = SmallVector<AffineForOp, 4>;
-using AffineLoopBands = SmallVector<AffineLoopBand, 4>;
-
 static AffineForOp getLoopBandFromRoot(AffineForOp forOp,
                                        AffineLoopBand &band) {
   auto currentLoop = forOp;
@@ -218,13 +215,16 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
       AffineLoopBand band;
       getLoopBandFromLeaf(loop, band);
       targetBands.push_back(band);
-
-      // Loop perfection and remove variable bound are always applied for the
-      // convenience of polyhedral optimizations.
-      applyAffineLoopPerfection(band.back(), builder);
-      applyRemoveVariableBound(band.front(), builder);
     }
   });
+
+  // Loop perfection, remove variable bound, and loop order optimization are
+  // always applied for the convenience of polyhedral optimizations.
+  for (auto band : targetBands) {
+    applyAffineLoopPerfection(band.back(), builder);
+    applyRemoveVariableBound(band.front(), builder);
+    applyAffineLoopOrderOpt(band, builder);
+  }
 }
 
 namespace {

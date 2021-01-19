@@ -7,8 +7,7 @@
 #ifndef SCALEHLS_ANALYSIS_UTILS_H
 #define SCALEHLS_ANALYSIS_UTILS_H
 
-#include "mlir/IR/Builders.h"
-#include "mlir/IR/Operation.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
 
 namespace mlir {
 namespace scalehls {
@@ -61,6 +60,9 @@ public:
 //===----------------------------------------------------------------------===//
 // Helper methods
 //===----------------------------------------------------------------------===//
+
+using AffineLoopBand = SmallVector<AffineForOp, 4>;
+using AffineLoopBands = SmallVector<AffineLoopBand, 4>;
 
 // For storing all affine memory access operations (including CallOp,
 // AffineLoadOp, and AffineStoreOp) indexed by the corresponding memref.
