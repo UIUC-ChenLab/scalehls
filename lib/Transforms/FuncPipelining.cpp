@@ -34,19 +34,25 @@ struct FuncPipelining : public FuncPipeliningBase<FuncPipelining> {
 /// Apply function pipelining to the input function, all contained loops are
 /// automatically fully unrolled.
 bool scalehls::applyFuncPipelining(FuncOp func, OpBuilder &builder) {
-  bool hasFullyUnrolled = false;
-  while (hasFullyUnrolled == false) {
-    hasFullyUnrolled = true;
+  // TODO: the teminate condition need to be updated. This will try at most 8
+  // iterations.
+  for (auto i = 0; i < 8; ++i) {
+    bool hasFullyUnrolled = true;
     func.walk([&](AffineForOp loop) {
       if (failed(loopUnrollFull(loop)))
         hasFullyUnrolled = false;
     });
+
+    if (hasFullyUnrolled)
+      break;
+
+    if (i == 7)
+      return false;
   }
 
   func->setAttr("pipeline", builder.getBoolAttr(true));
   func->setAttr("dataflow", builder.getBoolAttr(false));
 
-  // For now, this method will always success.
   return true;
 }
 

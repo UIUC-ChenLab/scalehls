@@ -59,15 +59,21 @@ struct LoopPipelining : public LoopPipeliningBase<LoopPipelining> {
 bool scalehls::applyLoopPipelining(AffineForOp targetLoop, OpBuilder &builder) {
   targetLoop->setAttr("pipeline", builder.getBoolAttr(true));
 
-  // All inner loops of the pipelined loop are automatically unrolled.
-  bool hasFullyUnrolled = false;
-  while (hasFullyUnrolled == false) {
-    hasFullyUnrolled = true;
+  // All inner loops of the pipelined loop are automatically unrolled. This will
+  // try at most 8 iterations.
+  for (auto i = 0; i < 8; ++i) {
+    bool hasFullyUnrolled = true;
     targetLoop.walk([&](AffineForOp loop) {
       if (loop != targetLoop)
         if (failed(loopUnrollFull(loop)))
           hasFullyUnrolled = false;
     });
+
+    if (hasFullyUnrolled)
+      break;
+
+    if (i == 7)
+      return false;
   }
 
   // All outer loops that perfect nest the pipelined loop can be flattened.
@@ -88,7 +94,6 @@ bool scalehls::applyLoopPipelining(AffineForOp targetLoop, OpBuilder &builder) {
       break;
   }
 
-  // For now, this method will always success.
   return true;
 }
 

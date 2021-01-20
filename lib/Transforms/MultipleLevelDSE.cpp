@@ -175,20 +175,14 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
   // TODO: apply different optimizations to different leaf LNs.
 
   AffineLoopBands targetBands;
-  func.walk([&](AffineForOp loop) {
-    if (getChildLoopNum(loop) == 0) {
-      AffineLoopBand band;
-      getLoopBandFromLeaf(loop, band);
-      targetBands.push_back(band);
-    }
-  });
+  getLoopBands(func.front(), targetBands);
 
   // Loop perfection, remove variable bound, and loop order optimization are
   // always applied for the convenience of polyhedral optimizations.
   for (auto band : targetBands) {
     applyAffineLoopPerfection(band.back(), builder);
     applyRemoveVariableBound(band.front(), builder);
-    applyAffineLoopOrderOpt(band, builder);
+    applyAffineLoopOrderOpt(band);
   }
 
   // TODO: automatic tiling and pipelining.

@@ -61,8 +61,8 @@ public:
 // Helper methods
 //===----------------------------------------------------------------------===//
 
-using AffineLoopBand = SmallVector<AffineForOp, 4>;
-using AffineLoopBands = SmallVector<AffineLoopBand, 4>;
+using AffineLoopBand = SmallVector<AffineForOp, 6>;
+using AffineLoopBands = SmallVector<AffineLoopBand, 6>;
 
 // For storing all affine memory access operations (including CallOp,
 // AffineLoadOp, and AffineStoreOp) indexed by the corresponding memref.
@@ -97,6 +97,11 @@ unsigned getChildLoopNum(Operation *op);
 
 AffineForOp getLoopBandFromRoot(AffineForOp forOp, AffineLoopBand &band);
 AffineForOp getLoopBandFromLeaf(AffineForOp forOp, AffineLoopBand &band);
+
+/// Collect all loop bands in the function. If allowHavingChilds is false,
+/// only innermost loop bands will be collected.
+void getLoopBands(Block &block, AffineLoopBands &bands,
+                  bool allowHavingChilds = false);
 
 } // namespace scalehls
 } // namespace mlir

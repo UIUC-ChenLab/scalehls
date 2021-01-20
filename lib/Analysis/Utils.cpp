@@ -197,3 +197,18 @@ AffineForOp scalehls::getLoopBandFromLeaf(AffineForOp forOp,
   band.append(reverseBand.rbegin(), reverseBand.rend());
   return band.front();
 }
+
+/// Collect all loop bands in the function. If allowHavingChilds is false,
+/// only innermost loop bands will be collected.
+void scalehls::getLoopBands(Block &block, AffineLoopBands &bands,
+                            bool allowHavingChilds) {
+  block.walk([&](AffineForOp loop) {
+    auto childNum = getChildLoopNum(loop);
+
+    if (childNum == 0 || (childNum > 1 && allowHavingChilds)) {
+      AffineLoopBand band;
+      getLoopBandFromLeaf(loop, band);
+      bands.push_back(band);
+    }
+  });
+}

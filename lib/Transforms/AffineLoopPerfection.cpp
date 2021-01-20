@@ -35,6 +35,8 @@ struct AffineLoopPerfection
 
 /// Apply loop perfection to all outer loops of the input loop until the outer
 /// operation is no longer a loop, or contains more than one child loop.
+/// TODO: passing in AffineLoopBand rather than AffineForOp to simplify the
+/// internal implementation.
 bool scalehls::applyAffineLoopPerfection(AffineForOp innermostLoop,
                                          OpBuilder &builder) {
   SmallVector<AffineForOp, 4> loops;
@@ -72,7 +74,7 @@ bool scalehls::applyAffineLoopPerfection(AffineForOp innermostLoop,
       for (auto op : frontOps)
         for (auto user : op->getUsers())
           if (user->getParentOp() != loop)
-            return true;
+            return false;
 
       // Create AffineIf in the front of the innermost loop.
       SmallVector<AffineExpr, 4> ifExprs;
@@ -193,8 +195,6 @@ bool scalehls::applyAffineLoopPerfection(AffineForOp innermostLoop,
     // Push back the current loop as the new child loop.
     loops.push_back(loop);
   }
-
-  // For now, this method will always success.
   return true;
 }
 

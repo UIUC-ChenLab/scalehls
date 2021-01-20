@@ -123,11 +123,10 @@ bool scalehls::applyRemoveVariableBound(AffineForOp loop, OpBuilder &builder) {
         // Set constant variable bound.
         auto maximum = bound.getValue().second;
         loop.setConstantUpperBound(maximum);
-      }
+      } else
+        return false;
     }
   }
-
-  // For now, this method will always success.
   return true;
 }
 

@@ -105,8 +105,6 @@ def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "FuncOp"> {
   let constructor = "mlir::scalehls::createPartialAffineLoopTilePass()";
 
   let options = [
-    Option<"tileLevel", "tile-level", "unsigned", /*default=*/"1", 
-           "Positive number: the level of loops to be tiled">,
     Option<"tileSize", "tile-size", "unsigned", /*default=*/"2", 
            "Positive number: the size of tiling">
   ];

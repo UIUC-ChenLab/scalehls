@@ -4,6 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Transforms/LoopUtils.h"
 #include "scalehls/Transforms/Passes.h"
 
@@ -13,53 +14,56 @@ using namespace scalehls;
 namespace {
 struct PartialAffineLoopTile
     : public PartialAffineLoopTileBase<PartialAffineLoopTile> {
-  void runOnOperation() override;
+  void runOnOperation() override {
+    auto func = getOperation();
+    auto builder = OpBuilder(func);
+
+    std::vector<SmallVector<AffineForOp, 6>> bands;
+    getTileableBands(func, &bands);
+
+    for (auto band : bands)
+      applyPartialAffineLoopTiling(band, builder, tileSize);
+  }
 };
 } // namespace
 
-void PartialAffineLoopTile::runOnOperation() {
-  // Walk through all functions and loops.
-  auto func = getOperation();
+bool scalehls::applyPartialAffineLoopTiling(AffineLoopBand band,
+                                            OpBuilder &builder,
+                                            unsigned tileSize,
+                                            bool applyPipelining) {
+  if (!isPerfectlyNested(band))
+    return false;
 
-  // Bands of loops to tile.
-  std::vector<SmallVector<AffineForOp, 6>> bands;
-  getTileableBands(func, &bands);
+  // Calculate the tiling size of each loop in the band.
+  SmallVector<unsigned, 8> sizes;
+  auto remainTileSize = tileSize;
 
-  // Tile each band.
-  for (auto &band : bands) {
-    // Truncate band and only keep first tileLevel loops.
-    size_t realTileLevel = band.size();
-    if (realTileLevel > tileLevel) {
-      band.resize(tileLevel);
-      realTileLevel = tileLevel;
-    }
+  for (auto loop : band) {
+    if (auto tripCount = getConstantTripCount(loop)) {
+      auto constTripCount = tripCount.getValue();
 
-    // Set up tile sizes; fill missing tile sizes at the end with default tile
-    // size or tileSize if one was provided.
-    SmallVector<unsigned, 6> tileSizes;
-    tileSizes.assign(band.size(), tileSize);
-
-    SmallVector<AffineForOp, 6> tiledNest;
-    if (failed(tilePerfectlyNested(band, tileSizes, &tiledNest)))
-      return signalPassFailure();
-
-    // Permute loop order to move the tiled loop to the innermost of the
-    // perfect nested loop.
-    SmallVector<AffineForOp, 4> nestedLoops;
-    getPerfectlyNestedLoops(nestedLoops, tiledNest.front());
-
-    SmallVector<unsigned, 4> permMap;
-    for (size_t i = 0, e = nestedLoops.size(); i < e; ++i) {
-      if (i < realTileLevel)
-        permMap.push_back(i);
-      else if (i < 2 * realTileLevel)
-        permMap.push_back(e + i - 2 * realTileLevel);
-      else
-        permMap.push_back(i - realTileLevel);
-    }
-    if (isValidLoopInterchangePermutation(nestedLoops, permMap))
-      permuteLoops(nestedLoops, permMap);
+      if (remainTileSize > constTripCount) {
+        sizes.push_back(constTripCount);
+        remainTileSize = (remainTileSize + constTripCount - 1) / constTripCount;
+      } else {
+        sizes.push_back(remainTileSize);
+        remainTileSize = 1;
+      }
+    } else
+      return false;
   }
+
+  AffineLoopBand tiledBand;
+  if (failed(tilePerfectlyNested(band, sizes, &tiledBand)))
+    return false;
+
+  // Pipelining the tiled loop band if required.
+  if (applyPipelining) {
+    auto targetLoop = tiledBand[band.size() - 1];
+    return applyLoopPipelining(targetLoop, builder);
+  }
+
+  return true;
 }
 
 std::unique_ptr<Pass> scalehls::createPartialAffineLoopTilePass() {

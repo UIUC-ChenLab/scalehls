@@ -17,27 +17,19 @@ namespace {
 struct AffineLoopOrderOpt : public AffineLoopOrderOptBase<AffineLoopOrderOpt> {
   void runOnOperation() override {
     auto func = getOperation();
-    auto builder = OpBuilder(func);
 
     // Collect all target loop bands.
     AffineLoopBands targetBands;
-    func.walk([&](AffineForOp loop) {
-      if (getChildLoopNum(loop) == 0) {
-        AffineLoopBand band;
-        getLoopBandFromLeaf(loop, band);
-        targetBands.push_back(band);
-      }
-    });
+    getLoopBands(func.front(), targetBands);
 
     // Apply loop order optimization to each loop band.
     for (auto band : targetBands)
-      applyAffineLoopOrderOpt(band, builder);
+      applyAffineLoopOrderOpt(band);
   }
 };
 } // namespace
 
-bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand band,
-                                       OpBuilder &builder) {
+bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand band) {
   auto &loopBlock = band.back().getLoopBody().front();
   auto bandDepth = band.size();
 
