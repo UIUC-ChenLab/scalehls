@@ -15,42 +15,6 @@ using namespace scalehls;
 // Helper methods
 //===----------------------------------------------------------------------===//
 
-static AffineForOp getLoopBandFromRoot(AffineForOp forOp,
-                                       AffineLoopBand &band) {
-  auto currentLoop = forOp;
-  while (true) {
-    band.push_back(currentLoop);
-
-    if (getChildLoopNum(currentLoop) == 1)
-      currentLoop = *currentLoop.getOps<AffineForOp>().begin();
-    else
-      break;
-  }
-  return band.back();
-}
-
-static AffineForOp getLoopBandFromLeaf(AffineForOp forOp,
-                                       AffineLoopBand &band) {
-  AffineLoopBand reverseBand;
-
-  auto currentLoop = forOp;
-  while (true) {
-    reverseBand.push_back(currentLoop);
-
-    auto parentLoop = currentLoop->getParentOfType<AffineForOp>();
-    if (!parentLoop)
-      break;
-
-    if (getChildLoopNum(parentLoop) == 1)
-      currentLoop = parentLoop;
-    else
-      break;
-  }
-
-  band.append(reverseBand.rbegin(), reverseBand.rend());
-  return band.front();
-}
-
 static int64_t getInnerParallelism(AffineForOp forOp) {
   int64_t count = 0;
   for (auto loop : forOp.getOps<AffineForOp>()) {
@@ -137,6 +101,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
 
   while (!targetLoops.empty()) {
     SmallVector<AffineForOp, 8> candidateLoops;
+    llvm::SmallDenseMap<Operation *, int64_t, 8> parallelismMap;
 
     // Collect all candidate loops. Here, only loops whose innermost loop has
     // more than one inner loops will be considered as a candidate.
@@ -147,7 +112,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
       // Calculate the overall introduced parallelism if the innermost loop of
       // the current loop band is pipelined.
       auto parallelism = getInnerParallelism(innermostLoop);
-      setAttrValue(innermostLoop, "inner_parallelism", parallelism);
+      parallelismMap[innermostLoop] = parallelism;
 
       // Collect all candidate loops into an ordered vector. The loop indicating
       // the largest parallelism will show in the front.
@@ -156,7 +121,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
           candidateLoops.push_back(innermostLoop);
         else
           for (auto &candidate : candidateLoops) {
-            if (parallelism > getIntAttrValue(candidate, "inner_parallelism")) {
+            if (parallelism > parallelismMap[candidate]) {
               candidateLoops.insert(&candidate, innermostLoop);
               break;
             }

@@ -161,3 +161,39 @@ unsigned scalehls::getChildLoopNum(Operation *op) {
 
   return childNum;
 }
+
+AffineForOp scalehls::getLoopBandFromRoot(AffineForOp forOp,
+                                          AffineLoopBand &band) {
+  auto currentLoop = forOp;
+  while (true) {
+    band.push_back(currentLoop);
+
+    if (getChildLoopNum(currentLoop) == 1)
+      currentLoop = *currentLoop.getOps<AffineForOp>().begin();
+    else
+      break;
+  }
+  return band.back();
+}
+
+AffineForOp scalehls::getLoopBandFromLeaf(AffineForOp forOp,
+                                          AffineLoopBand &band) {
+  AffineLoopBand reverseBand;
+
+  auto currentLoop = forOp;
+  while (true) {
+    reverseBand.push_back(currentLoop);
+
+    auto parentLoop = currentLoop->getParentOfType<AffineForOp>();
+    if (!parentLoop)
+      break;
+
+    if (getChildLoopNum(parentLoop) == 1)
+      currentLoop = parentLoop;
+    else
+      break;
+  }
+
+  band.append(reverseBand.rbegin(), reverseBand.rend());
+  return band.front();
+}

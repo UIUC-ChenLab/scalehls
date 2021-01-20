@@ -18,20 +18,17 @@ struct AffineLoopPerfection
     auto func = getOperation();
     auto builder = OpBuilder(func);
 
-    // Walk through all loops.
-    for (auto forOp : func.getOps<AffineForOp>()) {
-      // Collect all loops that: (1) is the innermost loop (contains zero child
-      // loop nest); or (2) contains more than one child loop nest.
-      SmallVector<AffineForOp, 4> targetLoops;
-      forOp.walk([&](AffineForOp loop) {
-        if (getChildLoopNum(loop) != 1)
-          targetLoops.push_back(loop);
-      });
+    // Collect all loops that: (1) is the innermost loop (contains zero child
+    // loop nest); or (2) contains more than one child loop nest.
+    SmallVector<AffineForOp, 4> targetLoops;
+    func.walk([&](AffineForOp loop) {
+      if (getChildLoopNum(loop) != 1)
+        targetLoops.push_back(loop);
+    });
 
-      // Apply loop perfection to each target loop.
-      for (auto loop : targetLoops)
-        applyAffineLoopPerfection(loop, builder);
-    }
+    // Apply loop perfection to each target loop.
+    for (auto loop : targetLoops)
+      applyAffineLoopPerfection(loop, builder);
   }
 };
 } // namespace

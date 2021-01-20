@@ -18,32 +18,29 @@ struct LoopPipelining : public LoopPipeliningBase<LoopPipelining> {
     auto func = getOperation();
     auto builder = OpBuilder(func);
 
-    // Walk through all loops.
-    for (auto forOp : func.getOps<AffineForOp>()) {
-      // Collect all innermost loops.
-      SmallVector<AffineForOp, 4> innermostLoops;
-      forOp.walk([&](AffineForOp loop) {
-        if (getChildLoopNum(loop) == 0)
-          innermostLoops.push_back(loop);
-      });
+    // Collect all innermost loops.
+    SmallVector<AffineForOp, 4> innermostLoops;
+    func.walk([&](AffineForOp loop) {
+      if (getChildLoopNum(loop) == 0)
+        innermostLoops.push_back(loop);
+    });
 
-      // Apply loop pipelining to coresponding level of each innermost loop.
-      for (auto loop : innermostLoops) {
-        auto currentLoop = loop;
-        unsigned loopLevel = 0;
-        while (true) {
-          auto parentLoop = currentLoop->getParentOfType<AffineForOp>();
+    // Apply loop pipelining to coresponding level of each innermost loop.
+    for (auto loop : innermostLoops) {
+      auto currentLoop = loop;
+      unsigned loopLevel = 0;
+      while (true) {
+        auto parentLoop = currentLoop->getParentOfType<AffineForOp>();
 
-          // If meet the outermost loop, pipeline the current loop.
-          if (!parentLoop || pipelineLevel == loopLevel) {
-            applyLoopPipelining(currentLoop, builder);
-            break;
-          }
-
-          // Move to the next loop level.
-          currentLoop = parentLoop;
-          ++loopLevel;
+        // If meet the outermost loop, pipeline the current loop.
+        if (!parentLoop || pipelineLevel == loopLevel) {
+          applyLoopPipelining(currentLoop, builder);
+          break;
         }
+
+        // Move to the next loop level.
+        currentLoop = parentLoop;
+        ++loopLevel;
       }
     }
 

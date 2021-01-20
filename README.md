@@ -39,7 +39,7 @@ $ cd $SCALEHLS_DIR
 $ # Loop and pragma-level optimizations, performance estimation, and C++ code generation.
 $ scalehls-opt samples/polybench/syrk.mlir \
     -affine-loop-perfection -remove-variable-bound -affine-loop-normalize \
-    -partial-affine-loop-tile="tile-level=1 tile-size=4" \
+    -affine-loop-order-opt -partial-affine-loop-tile="tile-level=1 tile-size=2" \
     -legalize-to-hlscpp="top-func=test_syrk" -loop-pipelining="pipeline-level=1" \
     -affine-store-forward -simplify-memref-access -array-partition -cse -canonicalize \
     -qor-estimation="target-spec=config/target-spec.ini" \
@@ -47,18 +47,8 @@ $ scalehls-opt samples/polybench/syrk.mlir \
 
 $ # Benchmark generation, dataflow-level optimization, HLSKernel lowering and bufferization.
 $ benchmark-gen -type "cnn" -config "config/cnn-config.ini" -number 1 \
-    | scalehls-opt -legalize-dataflow -split-function \
+    | scalehls-opt -legalize-dataflow="min-gran=2 insert-copy=true" -split-function \
     -hlskernel-bufferize -hlskernel-to-affine -func-bufferize -canonicalize
-
-$ # Put them together.
-$ benchmark-gen -type "cnn" -config "config/cnn-config.ini" -number 1 \
-    | scalehls-opt -legalize-dataflow -split-function \
-    -hlskernel-bufferize -hlskernel-to-affine -func-bufferize \
-    -affine-loop-perfection -affine-loop-normalize \
-    -legalize-to-hlscpp="top-func=auto_gen_cnn" \
-    -affine-store-forward -simplify-memref-access -cse -canonicalize \
-    -qor-estimation="target-spec=config/target-spec.ini" \
-    | scalehls-translate -emit-hlscpp
 ```
 
 ## Integration with ONNX-MLIR
@@ -83,9 +73,9 @@ $ dot -Tpng resnet18.gv > resnet18.png
 
 $ # Legalize the output of ONNX-MLIR, optimize and emit C++ code.
 $ scalehls-opt resnet18.mlir -legalize-onnx -affine-loop-normalize -canonicalize \
-    -legalize-dataflow="min-gran=2 insert-copy=false" -split-function \
+    -legalize-dataflow="min-gran=3 insert-copy=true" -split-function \
     -convert-linalg-to-affine-loops -affine-loop-fusion \
-    -legalize-to-hlscpp="top-func=main_graph" \
+    -legalize-to-hlscpp="top-func=main_graph" -loop-pipelining -canonicalize \
     | scalehls-translate -emit-hlscpp
 ```
 

@@ -95,6 +95,9 @@ int64_t getPartitionFactors(MemRefType memrefType,
 /// contained by the input operation.
 unsigned getChildLoopNum(Operation *op);
 
+AffineForOp getLoopBandFromRoot(AffineForOp forOp, AffineLoopBand &band);
+AffineForOp getLoopBandFromLeaf(AffineForOp forOp, AffineLoopBand &band);
+
 } // namespace scalehls
 } // namespace mlir
 
