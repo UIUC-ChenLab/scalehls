@@ -190,6 +190,14 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
     applyRemoveVariableBound(band.front(), builder);
     applyAffineLoopOrderOpt(band, builder);
   }
+
+  // TODO: automatic tiling and pipelining.
+
+  // Finally, apply store forwarding, operation simplifications, and automatic
+  // array partitioning, which are all function level optimization passes.
+  applyAffineStoreForward(func, builder);
+  applySimplifyMemrefAccess(func);
+  applyArrayPartition(func, builder);
 }
 
 namespace {

@@ -45,6 +45,12 @@ $ scalehls-opt samples/polybench/syrk.mlir \
     -qor-estimation="target-spec=config/target-spec.ini" \
     | scalehls-translate -emit-hlscpp
 
+$ # Automatic kernel-level design space exploration.
+$ scalehls-opt samples/polybench/syrk.mlir \
+    -legalize-to-hlscpp="top-func=test_syrk" -multiple-level-dse -loop-pipelining \
+    -qor-estimation="target-spec=config/target-spec.ini" \
+    | scalehls-translate -emit-hlscpp
+
 $ # Benchmark generation, dataflow-level optimization, HLSKernel lowering and bufferization.
 $ benchmark-gen -type "cnn" -config "config/cnn-config.ini" -number 1 \
     | scalehls-opt -legalize-dataflow="min-gran=2 insert-copy=true" -split-function \
