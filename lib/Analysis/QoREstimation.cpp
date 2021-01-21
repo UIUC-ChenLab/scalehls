@@ -785,7 +785,13 @@ void HLSCppEstimator::estimateFunc() {
     setAttrValue(func, "latency", latency);
 
     if (getBoolAttrValue(func, "dataflow")) {
-      // TODO: support dataflow interval estimation.
+      int64_t maxInterval = 0;
+      for (auto callOp : func.getOps<CallOp>()) {
+        auto latency = getIntAttrValue(callOp, "schedule_end") -
+                       getIntAttrValue(callOp, "schedule_begin");
+        maxInterval = max(maxInterval, latency);
+      }
+      setAttrValue(func, "interval", maxInterval);
     }
 
     // TODO: support CallOp inside of the function.
