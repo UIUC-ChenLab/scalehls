@@ -8,6 +8,9 @@
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Analysis/QoREstimation.h"
 #include "scalehls/Transforms/Passes.h"
+#include "llvm/Support/Debug.h"
+
+#define DEBUG_TYPE "scalehls"
 
 using namespace mlir;
 using namespace scalehls;
@@ -30,11 +33,51 @@ static int64_t getInnerParallelism(AffineForOp forOp) {
   return std::max(count, (int64_t)1);
 }
 
-static void applyLoopTilingAndPipelining(FuncOp &func, OpBuilder &builder,
-                                         unsigned tileSize,
-                                         OwningRewritePatternList &patterns) {
+/// Clean up all attributes annotated for scheduling in the function for the
+/// convenience of other transforms.
+// static void cleanScheduleAttributes(FuncOp func) {
+//   func.walk([&](Operation *op) {
+//     op->removeAttr("schedule_begin");
+//     op->removeAttr("schedule_end");
+//     op->removeAttr("partition_index");
+//   });
+// }
+
+//===----------------------------------------------------------------------===//
+// Optimizer Class Declaration
+//===----------------------------------------------------------------------===//
+
+class HLSCppOptimizer : public HLSCppAnalysisBase {
+public:
+  explicit HLSCppOptimizer(FuncOp &func, LatencyMap &latencyMap, int64_t numDSP)
+      : HLSCppAnalysisBase(OpBuilder(func)), func(func), latencyMap(latencyMap),
+        numDSP(numDSP) {
+    // TODO: only insert affine-related patterns.
+    OwningRewritePatternList owningPatterns;
+    for (auto *op : func.getContext()->getRegisteredOperations())
+      op->getCanonicalizationPatterns(owningPatterns, func.getContext());
+    patterns = std::move(owningPatterns);
+  }
+
+  void applyLoopTilingAndPipelining(FuncOp &targetFunc, unsigned tileSize);
+
+  /// This is a temporary approach that does not scale.
+  void applyMultipleLevelDSE();
+
+  FuncOp &func;
+  LatencyMap &latencyMap;
+  int64_t numDSP;
+  FrozenRewritePatternList patterns;
+};
+
+//===----------------------------------------------------------------------===//
+// Optimizer Class Definition
+//===----------------------------------------------------------------------===//
+
+void HLSCppOptimizer::applyLoopTilingAndPipelining(FuncOp &targetFunc,
+                                                   unsigned tileSize) {
   AffineLoopBands targetBands;
-  getLoopBands(func.front(), targetBands);
+  getLoopBands(targetFunc.front(), targetBands);
 
   // Apply loop tiling.
   AffineLoopBands tiledTargetBands;
@@ -43,41 +86,27 @@ static void applyLoopTilingAndPipelining(FuncOp &func, OpBuilder &builder,
     applyPartialAffineLoopTiling(band, tiledBand, builder, tileSize);
     tiledTargetBands.push_back(tiledBand);
   }
-  applyPatternsAndFoldGreedily(func, std::move(patterns));
+  applyPatternsAndFoldGreedily(targetFunc, patterns);
 
   // Apply loop pipelining.
   for (auto tiledBand : tiledTargetBands) {
     auto pipelineLoop = tiledBand[tiledBand.size() / 2 - 1];
     applyLoopPipelining(pipelineLoop, builder);
   }
-  applyPatternsAndFoldGreedily(func, std::move(patterns));
+  applyPatternsAndFoldGreedily(targetFunc, patterns);
 }
-
-//===----------------------------------------------------------------------===//
-// Optimizer Class Declaration and Definition
-//===----------------------------------------------------------------------===//
-
-class HLSCppOptimizer : public HLSCppAnalysisBase {
-public:
-  explicit HLSCppOptimizer(FuncOp &func, LatencyMap &latencyMap, int64_t numDSP)
-      : HLSCppAnalysisBase(OpBuilder(func)), func(func), latencyMap(latencyMap),
-        numDSP(numDSP) {}
-
-  /// This is a temporary approach that does not scale.
-  void applyMultipleLevelDSE();
-
-  FuncOp &func;
-  LatencyMap &latencyMap;
-  int64_t numDSP;
-};
 
 /// This is a temporary approach that does not scale.
 void HLSCppOptimizer::applyMultipleLevelDSE() {
-  // Prepare canonicalize pattern for later use.
-  // TODO: only insert affine-related patterns.
-  OwningRewritePatternList patterns;
-  for (auto *op : func.getContext()->getRegisteredOperations())
-    op->getCanonicalizationPatterns(patterns, func.getContext());
+  HLSCppEstimator(func, latencyMap).estimateFunc();
+  if (getIntAttrValue(func, "dsp") > numDSP)
+    return;
+
+  LLVM_DEBUG(llvm::dbgs() << "Start multiple level design space exploration.\n";
+             llvm::dbgs() << "Initial latency is "
+                          << Twine(getIntAttrValue(func, "latency"))
+                          << ", DSP utilization is "
+                          << Twine(getIntAttrValue(func, "dsp")) << ".\n\n";);
 
   // Try function pipelining.
   // auto pipelineFunc = func.clone();
@@ -195,10 +224,18 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
     }
   }
 
+  LLVM_DEBUG(HLSCppEstimator(func, latencyMap).estimateFunc();
+             llvm::dbgs() << "Apply loop nests simplification.\n";
+             llvm::dbgs() << "Current latency is "
+                          << Twine(getIntAttrValue(func, "latency"))
+                          << ", DSP utilization is "
+                          << Twine(getIntAttrValue(func, "dsp")) << ".\n\n";);
+
   // Optimize leaf loop nests. Different optimization conbinations will be
   // applied to each leaf LNs, and the best one which meets the resource
   // constrains will be picked as the final solution.
   // TODO: apply different optimizations to different leaf LNs.
+  // TODO: better handle variable bound kernels.
 
   AffineLoopBands targetBands;
   getLoopBands(func.front(), targetBands);
@@ -214,34 +251,48 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
 
   // Estimate the current latency.
   HLSCppEstimator(func, latencyMap).estimateFunc();
+  if (getIntAttrValue(func, "dsp") > numDSP)
+    return;
 
-  // Automatically search for the best tiling strategy.
-  // TODO: more fined grained and comprehensive dse.
+  LLVM_DEBUG(
+      llvm::dbgs() << "Apply loop perfection and loop order optimization.\n";
+      llvm::dbgs() << "Current latency is "
+                   << Twine(getIntAttrValue(func, "latency"))
+                   << ", DSP utilization is "
+                   << Twine(getIntAttrValue(func, "dsp")) << ".\n\n";);
+
   unsigned minLatency = getIntAttrValue(func, "latency");
   unsigned bestTileSize = 1;
   unsigned tolerantCount = 0;
 
+  // Automatically search for the best tiling strategy.
+  // TODO: more fined grained and comprehensive dse.
   unsigned currentTileSize = 1;
   while (true) {
     // Clone the current function and apply optimization.
     auto tmpFunc = func.clone();
-    applyLoopTilingAndPipelining(tmpFunc, builder, currentTileSize, patterns);
+    applyLoopTilingAndPipelining(tmpFunc, currentTileSize);
 
     // applyMergeAffineIf(tmpFunc);
     applyAffineStoreForward(tmpFunc, builder);
     applySimplifyMemrefAccess(tmpFunc);
     applyArrayPartition(tmpFunc, builder);
-    applyPatternsAndFoldGreedily(tmpFunc, std::move(patterns));
-
-    // if (currentTileSize == 32)
-    //   llvm::outs() << tmpFunc << "\n";
+    applyPatternsAndFoldGreedily(tmpFunc, patterns);
 
     // Estimate performance and resource utilization.
     HLSCppEstimator(tmpFunc, latencyMap).estimateFunc();
-    auto latency = getIntAttrValue(tmpFunc, "latency");
+
+    LLVM_DEBUG(llvm::dbgs() << "Try tile size " << Twine(currentTileSize)
+                            << ", loop pipelining, and array partition.\n";
+               llvm::dbgs()
+               << "Current latency is "
+               << Twine(getIntAttrValue(tmpFunc, "latency"))
+               << ", DSP utilization is "
+               << Twine(getIntAttrValue(tmpFunc, "dsp")) << ".\n\n";);
 
     // If the resource constaints are not met or the latency is not increased,
     // increase the tolerant counter by 1.
+    auto latency = getIntAttrValue(tmpFunc, "latency");
     if (getIntAttrValue(tmpFunc, "dsp") <= numDSP) {
       if (latency < minLatency) {
         minLatency = latency;
@@ -252,7 +303,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
 
       // If the tolerant counter is larger than a threshold, we'll stop to
       // increase the tiling size.
-      if (tolerantCount > 3)
+      if (tolerantCount > 1)
         break;
       else
         currentTileSize *= 2;
@@ -261,7 +312,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
   }
 
   // Apply the tiling strategy found by dse.
-  applyLoopTilingAndPipelining(func, builder, bestTileSize, patterns);
+  applyLoopTilingAndPipelining(func, bestTileSize);
 
   // Finally, apply store forwarding, operation simplifications, and automatic
   // array partitioning, which are all function level optimization passes.
@@ -269,11 +320,18 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
   applyAffineStoreForward(func, builder);
   applySimplifyMemrefAccess(func);
   applyArrayPartition(func, builder);
-  applyPatternsAndFoldGreedily(func, std::move(patterns));
+  applyPatternsAndFoldGreedily(func, patterns);
 
   // Finally, we estimate the function again for generating the final estimation
   // results.
   HLSCppEstimator(func, latencyMap).estimateFunc();
+
+  LLVM_DEBUG(llvm::dbgs() << "Apply tile size " << Twine(bestTileSize)
+                          << ", loop pipelining, and array partition.\n";
+             llvm::dbgs() << "Final latency is "
+                          << Twine(getIntAttrValue(func, "latency"))
+                          << ", DSP utilization is "
+                          << Twine(getIntAttrValue(func, "dsp")) << ".\n\n";);
 }
 
 namespace {

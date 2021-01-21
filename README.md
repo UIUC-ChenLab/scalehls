@@ -38,17 +38,17 @@ $ cd $SCALEHLS_DIR
 
 $ # Loop and pragma-level optimizations, performance estimation, and C++ code generation.
 $ scalehls-opt samples/polybench/syrk.mlir \
-    -affine-loop-perfection -remove-variable-bound -affine-loop-normalize \
-    -affine-loop-order-opt -partial-affine-loop-tile="tile-level=1 tile-size=2" \
-    -legalize-to-hlscpp="top-func=test_syrk" -loop-pipelining="pipeline-level=1" \
-    -affine-store-forward -simplify-memref-access -array-partition -cse -canonicalize \
+    -affine-loop-perfection -affine-loop-order-opt -remove-variable-bound \
+    -partial-affine-loop-tile="tile-size=2" -legalize-to-hlscpp="top-func=test_syrk" \
+    -loop-pipelining="pipeline-level=3" -merge-affine-if -affine-store-forward \
+    -simplify-memref-access -array-partition -cse -canonicalize \
     -qor-estimation="target-spec=config/target-spec.ini" \
     | scalehls-translate -emit-hlscpp
 
 $ # Automatic kernel-level design space exploration.
-$ scalehls-opt samples/polybench/syrk.mlir \
-    -legalize-to-hlscpp="top-func=test_syrk" -multiple-level-dse -loop-pipelining \
-    -qor-estimation="target-spec=config/target-spec.ini" \
+$ scalehls-opt samples/polybench/gemm.mlir \
+    -legalize-to-hlscpp="top-func=test_gemm" \
+    -multiple-level-dse="target-spec=config/target-spec.ini" \
     | scalehls-translate -emit-hlscpp
 
 $ # Benchmark generation, dataflow-level optimization, HLSKernel lowering and bufferization.

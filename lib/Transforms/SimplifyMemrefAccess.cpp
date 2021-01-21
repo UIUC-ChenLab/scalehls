@@ -66,6 +66,8 @@ bool scalehls::applySimplifyMemrefAccess(FuncOp func) {
                 firstOp->getResult(i).replaceAllUsesWith(
                     secondOp->getResult(i));
               }
+              // TODO: this is actually incorrect, if some AffineApplyOp is not
+              // folded, this will cause domination violation.
               secondOp->moveAfter(firstOp);
               firstOp->erase();
               break;
