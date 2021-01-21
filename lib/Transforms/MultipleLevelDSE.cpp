@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Analysis/LoopAnalysis.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Analysis/QoREstimation.h"
 #include "scalehls/Transforms/Passes.h"
 
@@ -29,6 +30,29 @@ static int64_t getInnerParallelism(AffineForOp forOp) {
   return std::max(count, (int64_t)1);
 }
 
+static void applyLoopTilingAndPipelining(FuncOp &func, OpBuilder &builder,
+                                         unsigned tileSize,
+                                         OwningRewritePatternList &patterns) {
+  AffineLoopBands targetBands;
+  getLoopBands(func.front(), targetBands);
+
+  // Apply loop tiling.
+  AffineLoopBands tiledTargetBands;
+  for (auto band : targetBands) {
+    AffineLoopBand tiledBand;
+    applyPartialAffineLoopTiling(band, tiledBand, builder, tileSize);
+    tiledTargetBands.push_back(tiledBand);
+  }
+  applyPatternsAndFoldGreedily(func, std::move(patterns));
+
+  // Apply loop pipelining.
+  for (auto tiledBand : tiledTargetBands) {
+    auto pipelineLoop = tiledBand[tiledBand.size() / 2 - 1];
+    applyLoopPipelining(pipelineLoop, builder);
+  }
+  applyPatternsAndFoldGreedily(func, std::move(patterns));
+}
+
 //===----------------------------------------------------------------------===//
 // Optimizer Class Declaration and Definition
 //===----------------------------------------------------------------------===//
@@ -49,6 +73,12 @@ public:
 
 /// This is a temporary approach that does not scale.
 void HLSCppOptimizer::applyMultipleLevelDSE() {
+  // Prepare canonicalize pattern for later use.
+  // TODO: only insert affine-related patterns.
+  OwningRewritePatternList patterns;
+  for (auto *op : func.getContext()->getRegisteredOperations())
+    op->getCanonicalizationPatterns(patterns, func.getContext());
+
   // Try function pipelining.
   // auto pipelineFunc = func.clone();
   // applyFuncPipelining(pipelineFunc, builder);
@@ -177,8 +207,8 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
   // always applied for the convenience of polyhedral optimizations.
   for (auto band : targetBands) {
     applyAffineLoopPerfection(band.back(), builder);
-    applyRemoveVariableBound(band.front(), builder);
     applyAffineLoopOrderOpt(band);
+    // applyRemoveVariableBound(band.front(), builder);
   }
   targetBands.clear();
 
@@ -193,56 +223,53 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
 
   unsigned currentTileSize = 1;
   while (true) {
-    // Clone the current function and find target loop bands.
+    // Clone the current function and apply optimization.
     auto tmpFunc = func.clone();
-    AffineLoopBands tmpTargetBands;
-    getLoopBands(tmpFunc.front(), tmpTargetBands);
+    applyLoopTilingAndPipelining(tmpFunc, builder, currentTileSize, patterns);
 
-    // Apply loop tiling and corresponding pipelining.
-    for (auto band : tmpTargetBands)
-      applyPartialAffineLoopTiling(band, builder, currentTileSize,
-                                   /*applyPipelining=*/true);
-
-    applyMergeAffineIf(func);
+    // applyMergeAffineIf(tmpFunc);
     applyAffineStoreForward(tmpFunc, builder);
     applySimplifyMemrefAccess(tmpFunc);
     applyArrayPartition(tmpFunc, builder);
+    applyPatternsAndFoldGreedily(tmpFunc, std::move(patterns));
+
+    // if (currentTileSize == 32)
+    //   llvm::outs() << tmpFunc << "\n";
 
     // Estimate performance and resource utilization.
     HLSCppEstimator(tmpFunc, latencyMap).estimateFunc();
     auto latency = getIntAttrValue(tmpFunc, "latency");
 
-    llvm::outs() << latency << "\n";
-
     // If the resource constaints are not met or the latency is not increased,
     // increase the tolerant counter by 1.
     if (getIntAttrValue(tmpFunc, "dsp") <= numDSP) {
-      minLatency = latency;
-      bestTileSize = currentTileSize;
-      tolerantCount = 0;
-    } else
-      tolerantCount++;
+      if (latency < minLatency) {
+        minLatency = latency;
+        bestTileSize = currentTileSize;
+        tolerantCount = 0;
+      } else
+        tolerantCount++;
 
-    // If the tolerant counter is larger than a threshold, we'll stop to
-    // increase the tiling size.
-    if (tolerantCount > 1)
+      // If the tolerant counter is larger than a threshold, we'll stop to
+      // increase the tiling size.
+      if (tolerantCount > 3)
+        break;
+      else
+        currentTileSize *= 2;
+    } else
       break;
-    else
-      currentTileSize *= 2;
   }
 
   // Apply the tiling strategy found by dse.
-  getLoopBands(func.front(), targetBands);
-  for (auto band : targetBands)
-    applyPartialAffineLoopTiling(band, builder, bestTileSize,
-                                 /*applyPipelining=*/true);
+  applyLoopTilingAndPipelining(func, builder, bestTileSize, patterns);
 
   // Finally, apply store forwarding, operation simplifications, and automatic
   // array partitioning, which are all function level optimization passes.
-  applyMergeAffineIf(func);
+  // applyMergeAffineIf(func);
   applyAffineStoreForward(func, builder);
   applySimplifyMemrefAccess(func);
   applyArrayPartition(func, builder);
+  applyPatternsAndFoldGreedily(func, std::move(patterns));
 
   // Finally, we estimate the function again for generating the final estimation
   // results.

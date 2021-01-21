@@ -46,10 +46,10 @@ struct LoopPipelining : public LoopPipeliningBase<LoopPipelining> {
 
     // Canonicalize the IR after loop pipelining.
     OwningRewritePatternList patterns;
-    for (auto *op : builder.getContext()->getRegisteredOperations())
-      op->getCanonicalizationPatterns(patterns, builder.getContext());
+    for (auto *op : func.getContext()->getRegisteredOperations())
+      op->getCanonicalizationPatterns(patterns, func.getContext());
 
-    applyPatternsAndFoldGreedily(func.getRegion(), std::move(patterns));
+    applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
 } // namespace

@@ -29,7 +29,7 @@ struct AffineLoopOrderOpt : public AffineLoopOrderOptBase<AffineLoopOrderOpt> {
 };
 } // namespace
 
-bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand band) {
+bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand band, bool reverse) {
   auto &loopBlock = band.back().getLoopBody().front();
   auto bandDepth = band.size();
 
@@ -112,28 +112,52 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand band) {
     unsigned targetLoopLoc =
         std::find(band.begin(), band.end(), targetLoop) - band.begin();
 
-    // Permute the target loop to an as outer as possible position.
-    for (unsigned dstLoc = 0; dstLoc < targetLoopLoc; ++dstLoc) {
-      SmallVector<unsigned, 4> permMap;
+    if (!reverse)
+      // Permute the target loop to an as outer as possible location.
+      for (unsigned dstLoc = 0; dstLoc < targetLoopLoc; ++dstLoc) {
+        SmallVector<unsigned, 4> permMap;
 
-      // Construct permutation map.
-      for (unsigned loc = 0; loc < bandDepth; ++loc) {
-        if (loc < dstLoc)
-          permMap.push_back(loc);
-        else if (loc < targetLoopLoc)
-          permMap.push_back(loc + 1);
-        else if (loc == targetLoopLoc)
-          permMap.push_back(dstLoc);
-        else
-          permMap.push_back(loc);
-      }
+        // Construct permutation map.
+        for (unsigned loc = 0; loc < bandDepth; ++loc) {
+          if (loc < dstLoc)
+            permMap.push_back(loc);
+          else if (loc < targetLoopLoc)
+            permMap.push_back(loc + 1);
+          else if (loc == targetLoopLoc)
+            permMap.push_back(dstLoc);
+          else
+            permMap.push_back(loc);
+        }
 
-      // Check the validation of the current permutation.
-      if (isValidLoopInterchangePermutation(band, permMap)) {
-        permuteLoops(band, permMap);
-        break;
+        // Check the validation of the current permutation.
+        if (isValidLoopInterchangePermutation(band, permMap)) {
+          permuteLoops(band, permMap);
+          break;
+        }
       }
-    }
+    else
+      // Permute the target loop to an as inner as possible location.
+      for (unsigned dstLoc = targetLoopLoc + 1; dstLoc < bandDepth; ++dstLoc) {
+        SmallVector<unsigned, 4> permMap;
+
+        // Construct permutation map.
+        for (unsigned loc = 0; loc < bandDepth; ++loc) {
+          if (loc < targetLoopLoc)
+            permMap.push_back(loc);
+          else if (loc == targetLoopLoc)
+            permMap.push_back(dstLoc);
+          else if (loc <= dstLoc)
+            permMap.push_back(loc - 1);
+          else
+            permMap.push_back(loc);
+        }
+
+        // Check the validation of the current permutation.
+        if (isValidLoopInterchangePermutation(band, permMap)) {
+          permuteLoops(band, permMap);
+          break;
+        }
+      }
   }
   return true;
 }

@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Analysis/LoopAnalysis.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/LoopUtils.h"
 #include "scalehls/Transforms/Passes.h"
 
@@ -21,23 +22,34 @@ struct PartialAffineLoopTile
     std::vector<SmallVector<AffineForOp, 6>> bands;
     getTileableBands(func, &bands);
 
-    for (auto band : bands)
-      applyPartialAffineLoopTiling(band, builder, tileSize);
+    for (auto band : bands) {
+      AffineLoopBand tiledBand;
+      applyPartialAffineLoopTiling(band, tiledBand, builder, tileSize);
+    }
+
+    // Canonicalize the IR after loop tiling.
+    OwningRewritePatternList patterns;
+    for (auto *op : func.getContext()->getRegisteredOperations())
+      op->getCanonicalizationPatterns(patterns, func.getContext());
+
+    applyPatternsAndFoldGreedily(func.getRegion(), std::move(patterns));
   }
 };
 } // namespace
 
 bool scalehls::applyPartialAffineLoopTiling(AffineLoopBand band,
+                                            AffineLoopBand &tiledBand,
                                             OpBuilder &builder,
-                                            unsigned tileSize,
-                                            bool applyPipelining) {
+                                            unsigned tileSize) {
   if (!isPerfectlyNested(band))
     return false;
 
   // Calculate the tiling size of each loop in the band.
+  SmallVector<unsigned, 8> fullyTiledLoops;
   SmallVector<unsigned, 8> sizes;
   auto remainTileSize = tileSize;
 
+  unsigned loc = 0;
   for (auto loop : band) {
     if (auto tripCount = getConstantTripCount(loop)) {
       auto constTripCount = tripCount.getValue();
@@ -45,6 +57,8 @@ bool scalehls::applyPartialAffineLoopTiling(AffineLoopBand band,
       if (remainTileSize >= constTripCount) {
         sizes.push_back(constTripCount);
         remainTileSize = (remainTileSize + constTripCount - 1) / constTripCount;
+        fullyTiledLoops.push_back(loc);
+
       } else if (remainTileSize > 1) {
         unsigned realTileSize = 1;
         while (realTileSize < remainTileSize ||
@@ -53,20 +67,38 @@ bool scalehls::applyPartialAffineLoopTiling(AffineLoopBand band,
         }
         sizes.push_back(realTileSize);
         remainTileSize = 1;
+
       } else
         sizes.push_back(1);
     } else
       return false;
+
+    loc++;
   }
 
-  AffineLoopBand tiledBand;
   if (failed(tilePerfectlyNested(band, sizes, &tiledBand)))
     return false;
 
-  // Pipelining the tiled loop band if required.
-  if (applyPipelining) {
-    auto targetLoop = tiledBand[band.size() - 1];
-    return applyLoopPipelining(targetLoop, builder);
+  // Remove fully tiled loops.
+  for (auto loc : fullyTiledLoops) {
+    // Will always keep one loop, even if it is already fully tiled.
+    if (loc == band.size() - 1)
+      break;
+
+    auto loop = tiledBand[loc];
+
+    // Create an affine apply operation generating a constant zero.
+    builder.setInsertionPoint(loop);
+    auto constZero = builder.create<AffineApplyOp>(
+        loop.getLoc(), builder.getConstantAffineMap(0), ValueRange({}));
+    loop.getInductionVar().replaceAllUsesWith(constZero);
+
+    // Move all operation except the terminator to the outside.
+    auto &parentBlock = loop.getOperation()->getBlock()->getOperations();
+    auto &loopBlock = loop.getLoopBody().front().getOperations();
+    parentBlock.splice(loop.getOperation()->getIterator(), loopBlock,
+                       loopBlock.begin(), std::prev(loopBlock.end()));
+    loop.erase();
   }
 
   return true;
