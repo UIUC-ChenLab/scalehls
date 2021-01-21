@@ -222,8 +222,13 @@ void AffineStoreForwardImpl::forwardStoreToLoad(AffineReadOpInterface loadOp) {
     builder.create<AffineYieldOp>(newIfOp.getLoc(), loadOp.getValue());
 
     // Eliminate emptry ifOp.
-    if (ifOp.getThenBlock()->getTerminator() == &ifOp.getThenBlock()->front())
+    if (ifOp.getThenBlock()->getTerminator() == &ifOp.getThenBlock()->front() &&
+        ifOp.getNumResults() == 0)
       ifOp.erase();
+
+    // The load operation is no longer dominated by the store operation, thus
+    // other store operations can be forwarded to this load operation again.
+    forwardStoreToLoad(loadOp);
   }
 
   // Record the memref for a later sweep to optimize away.

@@ -860,16 +860,13 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     LatencyMap latencyMap;
     getLatencyMap(spec, latencyMap);
 
-    // Estimate performance and resource utilization.
+    // Estimate performance and resource utilization. If any other functions are
+    // called by the top function, it will be estimated in the procedure of
+    // estimating the top function.
     for (auto func : module.getOps<FuncOp>())
       if (auto topFunction = func->getAttrOfType<BoolAttr>("top_function"))
-        if (topFunction.getValue()) {
-          // Estimate the top function. If any other functions are called by
-          // the top function, it will be estimated in the procedure of
-          // estimating the top function.
-          HLSCppEstimator estimator(func, latencyMap);
-          estimator.estimateFunc();
-        }
+        if (topFunction.getValue())
+          HLSCppEstimator(func, latencyMap).estimateFunc();
 
     // TODO: Somehow print the estimation report?
   }

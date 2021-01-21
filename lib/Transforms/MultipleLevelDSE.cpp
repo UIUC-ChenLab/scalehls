@@ -52,10 +52,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
   // Try function pipelining.
   // auto pipelineFunc = func.clone();
   // applyFuncPipelining(pipelineFunc, builder);
-
-  // // Estimate the pipelined function.
-  // HLSCppEstimator estimator(pipelineFunc, latencyMap);
-  // estimator.estimateFunc();
+  // HLSCppEstimator(pipelineFunc, latencyMap).estimateFunc();
 
   // if (getIntAttrValue(pipelineFunc, "dsp") <= numDSP) {
   //   applyFuncPipelining(func, builder);
@@ -154,8 +151,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
       });
 
       // Estimate the temporary function.
-      auto estimator = HLSCppEstimator(tmpFunc, latencyMap);
-      estimator.estimateFunc();
+      HLSCppEstimator(tmpFunc, latencyMap).estimateFunc();
 
       // Pipeline the candidate loop or delve into child loops.
       if (getIntAttrValue(tmpFunc, "dsp") <= numDSP)
@@ -165,7 +161,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
         targetLoops.append(childForOps.begin(), childForOps.end());
       }
 
-      candidate.removeAttr("opt_flat");
+      candidate.removeAttr("opt_flag");
     }
   }
 
@@ -184,14 +180,71 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
     applyRemoveVariableBound(band.front(), builder);
     applyAffineLoopOrderOpt(band);
   }
+  targetBands.clear();
 
-  // TODO: automatic tiling and pipelining.
+  // Estimate the current latency.
+  HLSCppEstimator(func, latencyMap).estimateFunc();
+
+  // Automatically search for the best tiling strategy.
+  // TODO: more fined grained and comprehensive dse.
+  unsigned minLatency = getIntAttrValue(func, "latency");
+  unsigned bestTileSize = 1;
+  unsigned tolerantCount = 0;
+
+  unsigned currentTileSize = 1;
+  while (true) {
+    // Clone the current function and find target loop bands.
+    auto tmpFunc = func.clone();
+    AffineLoopBands tmpTargetBands;
+    getLoopBands(tmpFunc.front(), tmpTargetBands);
+
+    // Apply loop tiling and corresponding pipelining.
+    for (auto band : tmpTargetBands)
+      applyPartialAffineLoopTiling(band, builder, currentTileSize,
+                                   /*applyPipelining=*/true);
+
+    applyAffineStoreForward(tmpFunc, builder);
+    applySimplifyMemrefAccess(tmpFunc);
+    applyArrayPartition(tmpFunc, builder);
+
+    // Estimate performance and resource utilization.
+    HLSCppEstimator(tmpFunc, latencyMap).estimateFunc();
+    auto latency = getIntAttrValue(tmpFunc, "latency");
+
+    llvm::outs() << latency << "\n";
+
+    // If the resource constaints are not met or the latency is not increased,
+    // increase the tolerant counter by 1.
+    if (getIntAttrValue(tmpFunc, "dsp") <= numDSP) {
+      minLatency = latency;
+      bestTileSize = currentTileSize;
+      tolerantCount = 0;
+    } else
+      tolerantCount++;
+
+    // If the tolerant counter is larger than a threshold, we'll stop to
+    // increase the tiling size.
+    if (tolerantCount > 1)
+      break;
+    else
+      currentTileSize *= 2;
+  }
+
+  // Apply the tiling strategy found by dse.
+  getLoopBands(func.front(), targetBands);
+  for (auto band : targetBands)
+    applyPartialAffineLoopTiling(band, builder, bestTileSize,
+                                 /*applyPipelining=*/true);
 
   // Finally, apply store forwarding, operation simplifications, and automatic
   // array partitioning, which are all function level optimization passes.
   applyAffineStoreForward(func, builder);
   applySimplifyMemrefAccess(func);
   applyArrayPartition(func, builder);
+
+  // Finally, we estimate the function again for generating the final estimation
+  // results.
+  HLSCppEstimator(func, latencyMap).estimateFunc();
 }
 
 namespace {
@@ -212,10 +265,8 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
     // Optimize the top function.
     for (auto func : module.getOps<FuncOp>())
       if (auto topFunction = func->getAttrOfType<BoolAttr>("top_function"))
-        if (topFunction.getValue()) {
-          auto optimizer = HLSCppOptimizer(func, latencyMap, numDSP);
-          optimizer.applyMultipleLevelDSE();
-        }
+        if (topFunction.getValue())
+          HLSCppOptimizer(func, latencyMap, numDSP).applyMultipleLevelDSE();
   }
 };
 } // namespace

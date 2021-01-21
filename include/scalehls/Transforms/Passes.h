@@ -38,7 +38,7 @@ bool applyAffineLoopOrderOpt(AffineLoopBand band);
 
 bool applyPartialAffineLoopTiling(AffineLoopBand band, OpBuilder &builder,
                                   unsigned tileSize,
-                                  bool applyPipelining = true);
+                                  bool applyPipelining = false);
 
 /// Apply loop pipelining to the input loop, all inner loops are automatically
 /// fully unrolled.
