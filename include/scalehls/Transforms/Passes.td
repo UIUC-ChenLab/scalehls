@@ -33,106 +33,6 @@ def MultipleLevelDSE : Pass<"multiple-level-dse", "ModuleOp"> {
 }
 
 //===----------------------------------------------------------------------===//
-// Directive Optimization Passes
-//===----------------------------------------------------------------------===//
-
-def ArrayPartition : Pass<"array-partition", "FuncOp"> {
-  let summary = "Apply optimized array partition strategy";
-  let description = [{
-    This array-partition pass will automatically search for the best array
-    partition solution for each on-chip memory instance and apply the solution
-    through changing the layout AffineMap of the corresponding MemRefType.
-  }];
-
-  let constructor = "mlir::scalehls::createArrayPartitionPass()";
-}
-
-def LoopPipelining : Pass<"loop-pipelining", "FuncOp"> {
-  let summary = "Apply loop pipelining";
-  let description = [{
-    This loop-pipelining pass will insert pipeline pragma to the target loop
-    level, and automatically unroll all inner loops.
-  }];
-
-  let constructor = "mlir::scalehls::createLoopPipeliningPass()";
-
-  let options = [
-    Option<"pipelineLevel", "pipeline-level", "unsigned", /*default=*/"0", 
-           "Positive number: loop level to be pipelined (from innermost)">
-  ];
-}
-
-def FuncPipelining : Pass<"func-pipelining", "FuncOp"> {
-  let summary = "Apply function pipelining";
-  let description = [{
-    This func-pipelining pass will insert pipeline pragma to the specified
-    function, all contained loops will be automatically unrolled.
-  }];
-
-  let constructor = "mlir::scalehls::createFuncPipeliningPass()";
-
-  let options = [
-    Option<"targetFunc", "target-func", "std::string",
-           /*default=*/"\"main\"", "The target function to be pipelined">
-  ];
-}
-
-//===----------------------------------------------------------------------===//
-// Loop Optimization Passes
-//===----------------------------------------------------------------------===//
-
-def AffineLoopPerfection : Pass<"affine-loop-perfection", "FuncOp"> {
-  let summary = "Try to perfect a nested loop";
-  let description = [{
-    This affine-loop-perfection pass will try to perfect all affine loops.
-    Specifically, this pass will move operations under non-innermost loops into
-    innermost loop and create AffineIf regions to ensure the correctness of the
-    transformation.
-  }];
-
-  let constructor = "mlir::scalehls::createAffineLoopPerfectionPass()";
-}
-
-def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "FuncOp"> {
-  let summary = "Partially tile affine nested loops";
-  let description = [{
-    This partial-affine-loop-tile pass will try to tile all affine nested loops.
-    The difference with the official affine-loop-tile pass is this pass will
-    only tile the first "tileLevel" outermost loop levels rather than all loops
-    levels.
-  }];
-
-  let constructor = "mlir::scalehls::createPartialAffineLoopTilePass()";
-
-  let options = [
-    Option<"tileSize", "tile-size", "unsigned", /*default=*/"2", 
-           "Positive number: the size of tiling">
-  ];
-}
-
-def RemoveVariableBound : Pass<"remove-variable-bound", "FuncOp"> {
-  let summary = "Try to remove variable loop bounds";
-  let description = [{
-    This remove-variable-bound pass will try to remove the variable loop bounds.
-    Specifically, this is only feasible when the loop bound is an affine
-    expression of induction variables of other loops with constant lower and
-    upper bound.
-  }];
-
-  let constructor = "mlir::scalehls::createRemoveVariableBoundPass()";
-}
-
-def AffineLoopOrderOpt : Pass<"affine-loop-order-opt", "FuncOp"> {
-  let summary = "Optimize the order of affine loop nests";
-  let description = [{
-    This affine-loop-order-opt pass will optimize the order of perfect affine
-    loop nests through polyhedral-based dependency analysis.
-  }];
-
-  let constructor = "mlir::scalehls::createAffineLoopOrderOptPass()";
-}
-
-//===----------------------------------------------------------------------===//
 // Dataflow Optimization Passes
 //===----------------------------------------------------------------------===//
 
@@ -166,14 +66,124 @@ def SplitFunction : Pass<"split-function", "ModuleOp"> {
 }
 
 //===----------------------------------------------------------------------===//
+// Loop Optimization Passes
+//===----------------------------------------------------------------------===//
+
+def AffineLoopPerfection : Pass<"affine-loop-perfection", "FuncOp"> {
+  let summary = "Try to perfect a nested loop";
+  let description = [{
+    This affine-loop-perfection pass will try to perfect all affine loops.
+    Specifically, this pass will move operations under non-innermost loops into
+    innermost loop and create AffineIf regions to ensure the correctness of the
+    transformation.
+  }];
+
+  let constructor = "mlir::scalehls::createAffineLoopPerfectionPass()";
+}
+
+def RemoveVariableBound : Pass<"remove-variable-bound", "FuncOp"> {
+  let summary = "Try to remove variable loop bounds";
+  let description = [{
+    This remove-variable-bound pass will try to remove the variable loop bounds.
+    Specifically, this is only feasible when the loop bound is an affine
+    expression of induction variables of other loops with constant lower and
+    upper bound.
+  }];
+
+  let constructor = "mlir::scalehls::createRemoveVariableBoundPass()";
+}
+
+def AffineLoopOrderOpt : Pass<"affine-loop-order-opt", "FuncOp"> {
+  let summary = "Optimize the order of affine loop nests";
+  let description = [{
+    This affine-loop-order-opt pass will optimize the order of perfect affine
+    loop nests through polyhedral-based dependency analysis.
+  }];
+
+  let constructor = "mlir::scalehls::createAffineLoopOrderOptPass()";
+}
+
+def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "FuncOp"> {
+  let summary = "Partially tile affine nested loops";
+  let description = [{
+    This partial-affine-loop-tile pass will try to tile all affine nested loops.
+    The difference with the official affine-loop-tile pass is this pass will
+    only tile the first "tileLevel" outermost loop levels rather than all loops
+    levels.
+  }];
+
+  let constructor = "mlir::scalehls::createPartialAffineLoopTilePass()";
+
+  let options = [
+    Option<"tileSize", "tile-size", "unsigned", /*default=*/"2", 
+           "Positive number: the size of tiling">
+  ];
+}
+
+//===----------------------------------------------------------------------===//
+// Directive Optimization Passes
+//===----------------------------------------------------------------------===//
+
+def FuncPipelining : Pass<"func-pipelining", "FuncOp"> {
+  let summary = "Apply function pipelining";
+  let description = [{
+    This func-pipelining pass will insert pipeline pragma to the specified
+    function, all contained loops will be automatically unrolled.
+  }];
+
+  let constructor = "mlir::scalehls::createFuncPipeliningPass()";
+
+  let options = [
+    Option<"targetFunc", "target-func", "std::string",
+           /*default=*/"\"main\"", "The target function to be pipelined">
+  ];
+}
+
+def LoopPipelining : Pass<"loop-pipelining", "FuncOp"> {
+  let summary = "Apply loop pipelining";
+  let description = [{
+    This loop-pipelining pass will insert pipeline pragma to the target loop
+    level, and automatically unroll all inner loops.
+  }];
+
+  let constructor = "mlir::scalehls::createLoopPipeliningPass()";
+
+  let options = [
+    Option<"pipelineLevel", "pipeline-level", "unsigned", /*default=*/"0", 
+           "Positive number: loop level to be pipelined (from innermost)">
+  ];
+}
+
+def ArrayPartition : Pass<"array-partition", "FuncOp"> {
+  let summary = "Apply optimized array partition strategy";
+  let description = [{
+    This array-partition pass will automatically search for the best array
+    partition solution for each on-chip memory instance and apply the solution
+    through changing the layout AffineMap of the corresponding MemRefType.
+  }];
+
+  let constructor = "mlir::scalehls::createArrayPartitionPass()";
+}
+
+//===----------------------------------------------------------------------===//
 // Standard Operation Optimization Passes
 //===----------------------------------------------------------------------===//
+
+def MergeAffineIf : Pass<"merge-affine-if", "FuncOp"> {
+  let summary = "Merge if statements with same condition";
+  let description = [{
+    This merge-affine-if pass will try to merge all affine if statements that
+    having the same condition.
+  }];
+
+  let constructor = "mlir::scalehls::createMergeAffineIfPass()";
+}
 
 def AffineStoreForward : Pass<"affine-store-forward", "FuncOp"> {
   let summary = "Forward store to load, including conditional stores";
   let description = [{
     This affine-store-forward pass is similar to memref-dataflow-opt, but
-    supports to forward stores located in AffineIf regions.
+    supports to forward stores located in AffineIfOp regions.
   }];
 
   let constructor = "mlir::scalehls::createAffineStoreForwardPass()";

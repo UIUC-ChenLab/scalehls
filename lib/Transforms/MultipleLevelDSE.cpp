@@ -203,6 +203,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
       applyPartialAffineLoopTiling(band, builder, currentTileSize,
                                    /*applyPipelining=*/true);
 
+    applyMergeAffineIf(func);
     applyAffineStoreForward(tmpFunc, builder);
     applySimplifyMemrefAccess(tmpFunc);
     applyArrayPartition(tmpFunc, builder);
@@ -238,6 +239,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
 
   // Finally, apply store forwarding, operation simplifications, and automatic
   // array partitioning, which are all function level optimization passes.
+  applyMergeAffineIf(func);
   applyAffineStoreForward(func, builder);
   applySimplifyMemrefAccess(func);
   applyArrayPartition(func, builder);

@@ -40,15 +40,17 @@ bool applyPartialAffineLoopTiling(AffineLoopBand band, OpBuilder &builder,
                                   unsigned tileSize,
                                   bool applyPipelining = false);
 
+/// Apply function pipelining to the input function, all contained loops are
+/// automatically fully unrolled.
+bool applyFuncPipelining(FuncOp func, OpBuilder &builder);
+
 /// Apply loop pipelining to the input loop, all inner loops are automatically
 /// fully unrolled.
 bool applyLoopPipelining(AffineForOp loop, OpBuilder &builder);
 
 bool applyArrayPartition(FuncOp func, OpBuilder &builder);
 
-/// Apply function pipelining to the input function, all contained loops are
-/// automatically fully unrolled.
-bool applyFuncPipelining(FuncOp func, OpBuilder &builder);
+bool applyMergeAffineIf(FuncOp func);
 
 bool applyAffineStoreForward(FuncOp func, OpBuilder &builder);
 
@@ -61,22 +63,23 @@ bool applySimplifyMemrefAccess(FuncOp func);
 /// Design space exploration pass.
 std::unique_ptr<Pass> createMultipleLevelDSEPass();
 
-/// Directive optimization passes.
-std::unique_ptr<Pass> createLoopPipeliningPass();
-std::unique_ptr<Pass> createArrayPartitionPass();
-std::unique_ptr<Pass> createFuncPipeliningPass();
-
-/// Loop optimization passes.
-std::unique_ptr<Pass> createAffineLoopPerfectionPass();
-std::unique_ptr<Pass> createRemoveVariableBoundPass();
-std::unique_ptr<Pass> createPartialAffineLoopTilePass();
-std::unique_ptr<Pass> createAffineLoopOrderOptPass();
-
 /// Dataflow optimization passes.
 std::unique_ptr<Pass> createLegalizeDataflowPass();
 std::unique_ptr<Pass> createSplitFunctionPass();
 
+/// Loop optimization passes.
+std::unique_ptr<Pass> createAffineLoopPerfectionPass();
+std::unique_ptr<Pass> createRemoveVariableBoundPass();
+std::unique_ptr<Pass> createAffineLoopOrderOptPass();
+std::unique_ptr<Pass> createPartialAffineLoopTilePass();
+
+/// Directive optimization passes.
+std::unique_ptr<Pass> createFuncPipeliningPass();
+std::unique_ptr<Pass> createLoopPipeliningPass();
+std::unique_ptr<Pass> createArrayPartitionPass();
+
 /// Standard operation optimization passes.
+std::unique_ptr<Pass> createMergeAffineIfPass();
 std::unique_ptr<Pass> createAffineStoreForwardPass();
 std::unique_ptr<Pass> createSimplifyMemrefAccessPass();
 
