@@ -85,15 +85,6 @@ $ scalehls-opt resnet18.mlir -legalize-onnx -affine-loop-normalize -canonicalize
     | scalehls-translate -emit-hlscpp
 ```
 
-## Ablation Study (Deprecated)
-If Vivado HLS (2019.1 tested) is installed on your machine, running the following script will report the HLS results for some benchmarks (around 8 hours on AMD Ryzen7 3800X for all 33 tests).
-
-For the `ablation_test_run.sh` script, `-n` determines the number of tests to be processed, the maximum supported value of which is 33; `-c` determines from which test to begin to rerun the C++ synthesis. The generated C++ source code will be written to `sample/cpp_src`; the Vivado HLS project will be established in `sample/hls_proj`; the collected report will be written to `sample/test_results`; the test summary will be generated to `sample`.
-```sh
-$ cd $SCALEHLS_DIR/sample
-$ ./ablation_test_run.sh -n 33 -c 0
-```
-
 ## References
 1. [MLIR documents](https://mlir.llvm.org)
 2. [mlir-npcomp github](https://github.com/llvm/mlir-npcomp)

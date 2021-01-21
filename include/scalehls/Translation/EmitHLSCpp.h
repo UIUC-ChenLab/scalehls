@@ -10,7 +10,7 @@
 namespace mlir {
 namespace scalehls {
 
-void registerHLSCppEmitterTranslation();
+void registerEmitHLSCppTranslation();
 
 } // namespace scalehls
 } // namespace mlir

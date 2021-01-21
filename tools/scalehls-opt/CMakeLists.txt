@@ -6,8 +6,8 @@ set(LIBS
   ${conversion_libs}
   MLIROptLib
 
-  MLIRHLSKernel
   MLIRHLSCpp
+  MLIRHLSKernel
   MLIRScaleHLSConversion
   MLIRScaleHLSTransforms
   MLIRScaleHLSAnalysis

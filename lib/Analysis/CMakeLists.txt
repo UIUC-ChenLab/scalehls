@@ -8,4 +8,5 @@ add_mlir_library(MLIRScaleHLSAnalysis
 
   LINK_LIBS PUBLIC
   MLIRHLSCpp
+  MLIRHLSKernel
   )

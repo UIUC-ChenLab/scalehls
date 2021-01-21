@@ -12,6 +12,7 @@
 #include "mlir/Translation.h"
 #include "scalehls/Analysis/Utils.h"
 #include "scalehls/Dialect/HLSCpp/Visitor.h"
+#include "scalehls/InitAllDialects.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace mlir;
@@ -1576,6 +1577,9 @@ static LogicalResult emitHLSCpp(ModuleOp module, llvm::raw_ostream &os) {
   return failure(state.encounteredError);
 }
 
-void scalehls::registerHLSCppEmitterTranslation() {
-  static TranslateFromMLIRRegistration toHLSCpp("emit-hlscpp", emitHLSCpp);
+void scalehls::registerEmitHLSCppTranslation() {
+  static TranslateFromMLIRRegistration toHLSCpp(
+      "emit-hlscpp", emitHLSCpp, [&](DialectRegistry &registry) {
+        scalehls::registerAllDialects(registry);
+      });
 }

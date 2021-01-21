@@ -8,11 +8,6 @@ get_property(translation_libs GLOBAL PROPERTY MLIR_TRANSLATION_LIBS)
 set(LIBS
   ${dialect_libs}
   ${translation_libs}
-  MLIRIR
-  MLIRParser
-  MLIRPass
-  MLIRTranslation
-  MLIRSupport
 
   MLIRScaleHLSEmitHLSCpp
   MLIRScaleHLSAnalysis
