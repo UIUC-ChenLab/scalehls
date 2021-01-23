@@ -34,11 +34,10 @@ bool applyAffineLoopPerfection(AffineForOp loop, OpBuilder &builder);
 /// Apply remove variable bound to all inner loops of the input loop.
 bool applyRemoveVariableBound(AffineForOp loop, OpBuilder &builder);
 
-bool applyAffineLoopOrderOpt(AffineLoopBand band, bool reverse = false);
+bool applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse = false);
 
-bool applyPartialAffineLoopTiling(AffineLoopBand band,
-                                  AffineLoopBand &tiledBand, OpBuilder &builder,
-                                  unsigned tileSize);
+bool applyPartialAffineLoopTiling(AffineLoopBand &band, OpBuilder &builder,
+                                  ArrayRef<unsigned> tileSizes);
 
 /// Apply function pipelining to the input function, all contained loops are
 /// automatically fully unrolled.

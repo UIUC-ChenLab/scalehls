@@ -79,7 +79,7 @@ public:
 //===----------------------------------------------------------------------===//
 
 using AffineLoopBand = SmallVector<AffineForOp, 6>;
-using AffineLoopBands = SmallVector<AffineLoopBand, 6>;
+using AffineLoopBands = std::vector<AffineLoopBand>;
 
 // For storing all affine memory access operations (including CallOp,
 // AffineLoadOp, and AffineStoreOp) indexed by the corresponding memref.

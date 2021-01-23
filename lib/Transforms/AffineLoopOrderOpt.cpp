@@ -29,7 +29,7 @@ struct AffineLoopOrderOpt : public AffineLoopOrderOptBase<AffineLoopOrderOpt> {
 };
 } // namespace
 
-bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand band, bool reverse) {
+bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
   if (!isPerfectlyNested(band))
     return false;
 

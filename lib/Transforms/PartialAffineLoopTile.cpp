@@ -19,12 +19,36 @@ struct PartialAffineLoopTile
     auto func = getOperation();
     auto builder = OpBuilder(func);
 
-    std::vector<SmallVector<AffineForOp, 6>> bands;
-    getTileableBands(func, &bands);
+    AffineLoopBands targetBands;
+    getTileableBands(func, &targetBands);
 
-    for (auto band : bands) {
-      AffineLoopBand tiledBand;
-      applyPartialAffineLoopTiling(band, tiledBand, builder, tileSize);
+    for (auto band : targetBands) {
+      SmallVector<unsigned, 8> sizes;
+      unsigned remainTileSize = tileSize;
+
+      // Calculate the tiling size of each loop level.
+      for (auto loop : band) {
+        if (auto optionalTripCount = getConstantTripCount(loop)) {
+          auto tripCount = optionalTripCount.getValue();
+          auto size = tripCount;
+
+          if (remainTileSize >= tripCount)
+            remainTileSize = (remainTileSize + tripCount - 1) / tripCount;
+          else if (remainTileSize > 1) {
+            size = 1;
+            while (size < remainTileSize || tripCount % size != 0) {
+              size++;
+            }
+            remainTileSize = 1;
+          } else
+            size = 1;
+
+          sizes.push_back(size);
+        } else
+          sizes.push_back(1);
+      }
+
+      applyPartialAffineLoopTiling(band, builder, sizes);
     }
 
     // Canonicalize the IR after loop tiling.
@@ -37,54 +61,37 @@ struct PartialAffineLoopTile
 };
 } // namespace
 
-bool scalehls::applyPartialAffineLoopTiling(AffineLoopBand band,
-                                            AffineLoopBand &tiledBand,
+bool scalehls::applyPartialAffineLoopTiling(AffineLoopBand &band,
                                             OpBuilder &builder,
-                                            unsigned tileSize) {
+                                            ArrayRef<unsigned> tileSizes) {
   if (!isPerfectlyNested(band))
     return false;
 
-  // Calculate the tiling size of each loop in the band.
+  // Collect each loop location that is fully tiled and can be eliminated.
   SmallVector<unsigned, 8> fullyTiledLoops;
-  SmallVector<unsigned, 8> sizes;
-  auto remainTileSize = tileSize;
-
   unsigned loc = 0;
   for (auto loop : band) {
-    if (auto optionalTripCount = getConstantTripCount(loop)) {
-      auto tripCount = optionalTripCount.getValue();
-      auto tileSize = tripCount;
-
-      if (remainTileSize >= tripCount)
-        remainTileSize = (remainTileSize + tripCount - 1) / tripCount;
-      else if (remainTileSize > 1) {
-        tileSize = 1;
-        while (tileSize < remainTileSize || tripCount % tileSize != 0) {
-          tileSize++;
-        }
-        remainTileSize = 1;
-      } else
-        tileSize = 1;
-
-      sizes.push_back(tileSize);
-      if (tileSize == tripCount)
+    if (auto tripCount = getConstantTripCount(loop)) {
+      if (tripCount.getValue() == tileSizes[loc])
         fullyTiledLoops.push_back(loc);
     } else
       return false;
-
     loc++;
   }
 
-  if (failed(tilePerfectlyNested(band, sizes, &tiledBand)))
+  // If all loops are fully tiled, keep the last loop untouched.
+  if (fullyTiledLoops.size() == band.size())
+    fullyTiledLoops.pop_back();
+
+  // Loop tiling.
+  AffineLoopBand tiledBand;
+  if (failed(tilePerfectlyNested(band, tileSizes, &tiledBand)))
     return false;
+  band = tiledBand;
 
   // Remove fully tiled loops.
   for (auto loc : fullyTiledLoops) {
-    // Will always keep one loop, even if it is already fully tiled.
-    if (loc == band.size() - 1)
-      break;
-
-    auto loop = tiledBand[loc];
+    auto loop = band[loc];
 
     // Create an affine apply operation generating a constant zero.
     builder.setInsertionPoint(loop);
