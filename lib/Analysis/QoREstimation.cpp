@@ -43,9 +43,6 @@ void HLSCppEstimator::getFuncDependencies() {
           // the srcOp if either the dstOp or srcOp is a CallOp.
           dependsMap[srcOp].push_back(dstOp);
         } else {
-          auto srcMuxSize = getIntAttrValue(srcOp, "mux_size");
-          auto dstMuxSize = getIntAttrValue(dstOp, "mux_size");
-
           // In Vivado HLS, a memory access with undetermined partition index
           // will be implemented as a function call with a multiplexer. As
           // function call has dependency with any load/store operation, RAR
@@ -54,7 +51,9 @@ void HLSCppEstimator::getFuncDependencies() {
           // Vivado HLS.
           if (isa<AffineReadOpInterface>(dstOp) &&
               isa<AffineReadOpInterface>(srcOp)) {
-            // TODO: refine this condition with more case studies.
+            auto srcMuxSize = getIntAttrValue(srcOp, "max_mux_size");
+            auto dstMuxSize = getIntAttrValue(dstOp, "max_mux_size");
+
             if (srcMuxSize <= 3 && dstMuxSize <= 3)
               continue;
           }
@@ -145,31 +144,40 @@ void HLSCppEstimator::getPartitionIndex(Operation *op) {
   auto composeMap = layoutMap.compose(newMap);
 
   // Collect partition factors.
-  SmallVector<int64_t, 4> factors;
+  SmallVector<int64_t, 8> factors;
   getPartitionFactors(memrefType, &factors);
 
   // Calculate the partition index of this load/store operation honoring the
   // partition strategy applied.
   int64_t partitionIdx = 0;
+  SmallVector<int64_t, 8> partitionIndices;
+
+  int64_t maxMuxSize = 1;
+  bool hasUncertainIdx = false;
   int64_t accumFactor = 1;
-  int64_t muxSize = 1;
 
   for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
     auto idxExpr = composeMap.getResult(dim);
 
-    if (auto constExpr = idxExpr.dyn_cast<AffineConstantExpr>())
+    if (auto constExpr = idxExpr.dyn_cast<AffineConstantExpr>()) {
+      partitionIndices.push_back(constExpr.getValue());
       partitionIdx += constExpr.getValue() * accumFactor;
-    else {
-      partitionIdx = -1;
-      muxSize *= factors[dim];
+    } else {
+      partitionIndices.push_back(-1);
+      hasUncertainIdx = true;
+      maxMuxSize = max(maxMuxSize, factors[dim]);
     }
 
     accumFactor *= factors[dim];
   }
 
-  setAttrValue(op, "partition_index", partitionIdx);
-  if (partitionIdx == -1)
-    setAttrValue(op, "mux_size", muxSize);
+  // Annotate partition indices.
+  if (hasUncertainIdx) {
+    setAttrValue(op, "partition_index", (int64_t)-1);
+    setAttrValue(op, "partition_indices", partitionIndices);
+    setAttrValue(op, "max_mux_size", maxMuxSize);
+  } else
+    setAttrValue(op, "partition_index", partitionIdx);
 }
 
 /// Schedule load/store operation honoring the memory ports number limitation.
@@ -179,7 +187,8 @@ void HLSCppEstimator::estimateLoadStore(Operation *op, int64_t begin) {
   auto memrefType = memref.getType().cast<MemRefType>();
 
   auto partitionIdx = getIntAttrValue(op, "partition_index");
-  auto partitionNum = getPartitionFactors(memrefType);
+  SmallVector<int64_t, 8> factors;
+  auto partitionNum = getPartitionFactors(memrefType, &factors);
   auto storageType = MemoryKind(memrefType.getMemorySpace());
 
   // Try to avoid memory port violation until a legal schedule is found. Since
@@ -216,6 +225,8 @@ void HLSCppEstimator::estimateLoadStore(Operation *op, int64_t begin) {
     if (partitionIdx == -1) {
       // When partition index can't be determined, this operation must occupy
       // all ports in the scheduled level.
+      // TODO: only occupy all ports on the dimension whose partition index is
+      // uncertain.
       if (memPortEmpty) {
         for (unsigned p = 0; p < partitionNum; ++p) {
           memPort[p].rdPort = 0;
@@ -267,7 +278,8 @@ int64_t HLSCppEstimator::getResMinII(MemAccessesMap &map) {
 
   for (auto &pair : map) {
     auto memrefType = pair.first.getType().cast<MemRefType>();
-    auto partitionNum = getPartitionFactors(memrefType);
+    SmallVector<int64_t, 8> factors;
+    auto partitionNum = getPartitionFactors(memrefType, &factors);
     auto storageType = MemoryKind(memrefType.getMemorySpace());
 
     SmallVector<int64_t, 16> readNum;
@@ -289,16 +301,33 @@ int64_t HLSCppEstimator::getResMinII(MemAccessesMap &map) {
         else if (storageType == MemoryKind::BRAM_T2P)
           accessNum = 2;
 
+        // Fetch all partition indices.
+        auto indices = getIntArrayAttrValue(op, "partition_indices");
+
         // The rationale here is an undetermined partition access will introduce
         // a large mux which will avoid Vivado HLS to process any concurrent
         // data access among all partitions. This is equivalent to increase read
         // or write number for all partitions.
         // TODO: need to be further refined with more case studies.
         for (unsigned p = 0, e = partitionNum; p < e; ++p) {
-          if (isa<AffineLoadOp>(op))
-            readNum[p] += accessNum;
-          else if (isa<AffineStoreOp>(op))
-            writeNum[p] += accessNum;
+          bool isOccupied = true;
+          int64_t accumFactor = 1;
+          for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
+            if (indices[dim] != -1 &&
+                p / accumFactor % factors[dim] != indices[dim]) {
+              isOccupied = false;
+              break;
+            }
+
+            accumFactor *= factors[dim];
+          }
+
+          if (isOccupied) {
+            if (isa<AffineLoadOp>(op))
+              readNum[p] += accessNum;
+            else if (isa<AffineStoreOp>(op))
+              writeNum[p] += accessNum;
+          }
         }
       } else if (isa<AffineLoadOp>(op))
         readNum[partitionIdx]++;
@@ -337,14 +366,13 @@ int64_t HLSCppEstimator::getDepMinII(FuncOp func, MemAccessesMap &map) {
     int64_t dstIndex = 1;
     for (auto dstOp : loadStores) {
       for (auto srcOp : llvm::drop_begin(loadStores, dstIndex)) {
-        auto srcMuxSize = getIntAttrValue(srcOp, "mux_size");
-        auto dstMuxSize = getIntAttrValue(dstOp, "mux_size");
-
         // Similar to getFuncDependencies() method, we ignore RAR dependency
         // pairs in some cases.
         if (isa<AffineReadOpInterface>(dstOp) &&
             isa<AffineReadOpInterface>(srcOp)) {
-          // TODO: refine this condition with more case studies.
+          auto srcMuxSize = getIntAttrValue(srcOp, "max_mux_size");
+          auto dstMuxSize = getIntAttrValue(dstOp, "max_mux_size");
+
           if (srcMuxSize <= 3 && dstMuxSize <= 3)
             continue;
         }
@@ -391,17 +419,15 @@ int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
       int64_t dstIndex = 1;
       for (auto dstOp : loadStores) {
         for (auto srcOp : llvm::drop_begin(loadStores, dstIndex)) {
-          auto srcMuxSize = getIntAttrValue(srcOp, "mux_size");
-          auto dstMuxSize = getIntAttrValue(dstOp, "mux_size");
+          auto srcMuxSize = getIntAttrValue(srcOp, "max_mux_size");
+          auto dstMuxSize = getIntAttrValue(dstOp, "max_mux_size");
 
           // Similar to getFuncDependencies() method, in some cases RAR is not
           // considered as dependency in Vivado HLS.
           if (isa<AffineReadOpInterface>(srcOp) &&
-              isa<AffineReadOpInterface>(dstOp)) {
-            // TODO: refine this condition with more case studies.
+              isa<AffineReadOpInterface>(dstOp))
             if (srcMuxSize <= 3 && dstMuxSize <= 3)
               continue;
-          }
 
           MemRefAccess dstAccess(dstOp);
           MemRefAccess srcAccess(srcOp);
@@ -418,7 +444,6 @@ int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
 
             // Call function will always have dependency with any other
             // load/store operations with a distance of 1.
-            // TODO: This condition may not be correct. Need more case studies.
             if (srcMuxSize > 3 || dstMuxSize > 3)
               distance = 1;
             else {

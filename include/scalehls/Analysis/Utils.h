@@ -41,6 +41,19 @@ public:
       return StringRef();
   }
 
+  SmallVector<int64_t, 8> getIntArrayAttrValue(Operation *op, StringRef name) {
+    SmallVector<int64_t, 8> array;
+    if (auto arrayAttr = op->getAttrOfType<ArrayAttr>(name)) {
+      for (auto attr : arrayAttr)
+        if (auto intAttr = attr.dyn_cast<IntegerAttr>())
+          array.push_back(intAttr.getInt());
+        else
+          return SmallVector<int64_t, 8>();
+      return array;
+    } else
+      return SmallVector<int64_t, 8>();
+  }
+
   /// Set attribute value methods.
   void setAttrValue(Operation *op, StringRef name, int64_t value) {
     op->setAttr(name, builder.getI64IntegerAttr(value));
@@ -52,6 +65,10 @@ public:
 
   void setAttrValue(Operation *op, StringRef name, StringRef value) {
     op->setAttr(name, builder.getStringAttr(value));
+  }
+
+  void setAttrValue(Operation *op, StringRef name, ArrayRef<int64_t> value) {
+    op->setAttr(name, builder.getI64ArrayAttr(value));
   }
 
   OpBuilder builder;
@@ -89,7 +106,7 @@ AffineMap getLayoutMap(MemRefType memrefType);
 // Collect partition factors and overall partition number through analyzing the
 // layout map of a MemRefType.
 int64_t getPartitionFactors(MemRefType memrefType,
-                            SmallVector<int64_t, 4> *factors = nullptr);
+                            SmallVector<int64_t, 8> *factors = nullptr);
 
 /// This is method for finding the number of child loops which immediatedly
 /// contained by the input operation.

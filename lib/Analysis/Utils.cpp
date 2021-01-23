@@ -121,7 +121,7 @@ AffineMap scalehls::getLayoutMap(MemRefType memrefType) {
 // Collect partition factors and overall partition number through analyzing the
 // layout map of a MemRefType.
 int64_t scalehls::getPartitionFactors(MemRefType memrefType,
-                                      SmallVector<int64_t, 4> *factors) {
+                                      SmallVector<int64_t, 8> *factors) {
   auto shape = memrefType.getShape();
   auto layoutMap = getLayoutMap(memrefType);
   int64_t accumFactor = 1;
