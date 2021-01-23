@@ -55,7 +55,7 @@ void HLSCppEstimator::getFuncDependencies() {
           if (isa<AffineReadOpInterface>(dstOp) &&
               isa<AffineReadOpInterface>(srcOp)) {
             // TODO: refine this condition with more case studies.
-            if (srcMuxSize <= 2 && dstMuxSize <= 2)
+            if (srcMuxSize <= 3 && dstMuxSize <= 3)
               continue;
           }
 
@@ -194,8 +194,8 @@ void HLSCppEstimator::estimateLoadStore(Operation *op, int64_t begin) {
     // partition should have one PortInfo structure.
     if (memPortEmpty) {
       for (unsigned p = 0; p < partitionNum; ++p) {
-        unsigned rdPort = 0;
-        unsigned wrPort = 0;
+        unsigned rdPort = 1;
+        unsigned wrPort = 1;
         unsigned rdwrPort = 0;
 
         if (storageType == MemoryKind::BRAM_1P)
@@ -204,8 +204,6 @@ void HLSCppEstimator::estimateLoadStore(Operation *op, int64_t begin) {
           rdPort = 1, wrPort = 1;
         else if (storageType == MemoryKind::BRAM_T2P)
           rdwrPort = 2;
-        else
-          rdPort = 1, wrPort = 1;
 
         memPort.push_back(PortInfo(rdPort, wrPort, rdwrPort));
       }
@@ -290,8 +288,6 @@ int64_t HLSCppEstimator::getResMinII(MemAccessesMap &map) {
           accessNum = 1;
         else if (storageType == MemoryKind::BRAM_T2P)
           accessNum = 2;
-        else
-          accessNum = 1;
 
         // The rationale here is an undetermined partition access will introduce
         // a large mux which will avoid Vivado HLS to process any concurrent
@@ -349,7 +345,7 @@ int64_t HLSCppEstimator::getDepMinII(FuncOp func, MemAccessesMap &map) {
         if (isa<AffineReadOpInterface>(dstOp) &&
             isa<AffineReadOpInterface>(srcOp)) {
           // TODO: refine this condition with more case studies.
-          if (srcMuxSize <= 2 && dstMuxSize <= 2)
+          if (srcMuxSize <= 3 && dstMuxSize <= 3)
             continue;
         }
 
@@ -403,7 +399,7 @@ int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
           if (isa<AffineReadOpInterface>(srcOp) &&
               isa<AffineReadOpInterface>(dstOp)) {
             // TODO: refine this condition with more case studies.
-            if (srcMuxSize <= 2 && dstMuxSize <= 2)
+            if (srcMuxSize <= 3 && dstMuxSize <= 3)
               continue;
           }
 
@@ -423,7 +419,7 @@ int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
             // Call function will always have dependency with any other
             // load/store operations with a distance of 1.
             // TODO: This condition may not be correct. Need more case studies.
-            if (srcMuxSize > 2 || dstMuxSize > 2)
+            if (srcMuxSize > 3 || dstMuxSize > 3)
               distance = 1;
             else {
               SmallVector<int64_t, 8> accumTrips;
@@ -467,6 +463,15 @@ int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
 }
 
 bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
+  // Set an attribute indicating the trip count. For now, we assume all loops
+  // have static loop bound.
+  // TODO: how to handle variable trip count?
+  int64_t tripCount = 1;
+  if (auto optionalTripCount = getConstantTripCount(op)) {
+    tripCount = optionalTripCount.getValue();
+    setAttrValue(op, "trip_count", tripCount);
+  }
+
   auto end = begin;
   auto &loopBlock = op.getLoopBody().front();
 
@@ -476,15 +481,6 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
     begin = max(begin, schedule.getValue().first);
   } else
     return false;
-
-  // Set an attribute indicating the trip count. For now, we assume all loops
-  // have static loop bound.
-  if (auto tripCount = getConstantTripCount(op))
-    setAttrValue(op, "trip_count", (int64_t)tripCount.getValue());
-  else {
-    // TODO: how to handle unknown trip count.
-    setAttrValue(op, "trip_count", (int64_t)1);
-  }
 
   // If the current loop is annotated as pipelined loop, extra dependency and
   // resource aware II analysis will be executed.
@@ -497,10 +493,11 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
     getMemAccessesMap(loopBlock, map);
 
     // Calculate initial interval.
+    // llvm::outs() << "dependence ii = " << getDepMinII(op, map)
+    //              << ", resource ii = " << getResMinII(map) << "\n";
     auto II = max(getResMinII(map), getDepMinII(op, map));
     setAttrValue(op, "init_interval", II);
 
-    auto tripCount = getIntAttrValue(op, "trip_count");
     setAttrValue(op, "flatten_trip_count", tripCount);
 
     // Calculate latency of each iteration.
@@ -531,8 +528,8 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
     auto II = getIntAttrValue(child, "init_interval");
     setAttrValue(op, "init_interval", II);
 
-    auto flattenTripCount = getIntAttrValue(child, "flatten_trip_count") *
-                            getIntAttrValue(op, "trip_count");
+    auto flattenTripCount =
+        getIntAttrValue(child, "flatten_trip_count") * tripCount;
     setAttrValue(op, "flatten_trip_count", flattenTripCount);
 
     auto latency = iterLatency + II * (flattenTripCount - 1);
@@ -551,7 +548,7 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
   auto iterLatency = end - begin;
   setAttrValue(op, "iter_latency", iterLatency);
 
-  auto latency = iterLatency * getIntAttrValue(op, "trip_count");
+  auto latency = iterLatency * tripCount;
   setAttrValue(op, "latency", latency);
 
   setScheduleValue(op, begin, begin + latency + 2);

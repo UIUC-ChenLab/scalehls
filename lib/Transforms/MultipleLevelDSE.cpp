@@ -168,23 +168,19 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
       // Calculate the overall introduced parallelism if the innermost loop of
       // the current loop band is pipelined.
       auto parallelism = getInnerParallelism(innermostLoop);
-      parallelismMap[innermostLoop] = parallelism;
 
       // Collect all candidate loops into an ordered vector. The loop indicating
       // the largest parallelism will show in the front.
       if (parallelism > 1) {
-        if (candidateLoops.empty())
-          candidateLoops.push_back(innermostLoop);
-        else
-          for (auto &candidate : candidateLoops) {
-            if (parallelism > parallelismMap[candidate]) {
-              candidateLoops.insert(&candidate, innermostLoop);
-              break;
-            }
+        parallelismMap[innermostLoop] = parallelism;
 
-            // Push back if having the smallest parallelism.
-            if (&candidate == candidateLoops.end())
-              candidateLoops.push_back(innermostLoop);
+        for (auto it = candidateLoops.begin(); it <= candidateLoops.end(); ++it)
+          if (it == candidateLoops.end()) {
+            candidateLoops.push_back(innermostLoop);
+            break;
+          } else if (parallelism < parallelismMap[*it]) {
+            candidateLoops.insert(it, innermostLoop);
+            break;
           }
       }
     }
@@ -282,8 +278,9 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
     // Estimate performance and resource utilization.
     HLSCppEstimator(tmpFunc, latencyMap).estimateFunc();
 
-    LLVM_DEBUG(llvm::dbgs() << "Try tile size " << Twine(currentTileSize)
-                            << ", loop pipelining, and array partition.\n";
+    LLVM_DEBUG(llvm::dbgs()
+                   << "Try tile size " << Twine(currentTileSize)
+                   << ", loop pipelining, general opts, and array partition.\n";
                llvm::dbgs()
                << "Current latency is "
                << Twine(getIntAttrValue(tmpFunc, "latency"))
@@ -326,12 +323,13 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
   // results.
   HLSCppEstimator(func, latencyMap).estimateFunc();
 
-  LLVM_DEBUG(llvm::dbgs() << "Apply tile size " << Twine(bestTileSize)
-                          << ", loop pipelining, and array partition.\n";
-             llvm::dbgs() << "Final latency is "
-                          << Twine(getIntAttrValue(func, "latency"))
-                          << ", DSP utilization is "
-                          << Twine(getIntAttrValue(func, "dsp")) << ".\n\n";);
+  LLVM_DEBUG(
+      llvm::dbgs() << "Apply tile size " << Twine(bestTileSize)
+                   << ", loop pipelining, general opts, and array partition.\n";
+      llvm::dbgs() << "Final latency is "
+                   << Twine(getIntAttrValue(func, "latency"))
+                   << ", DSP utilization is "
+                   << Twine(getIntAttrValue(func, "dsp")) << ".\n\n";);
 }
 
 namespace {

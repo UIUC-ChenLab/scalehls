@@ -30,6 +30,9 @@ struct AffineLoopOrderOpt : public AffineLoopOrderOptBase<AffineLoopOrderOpt> {
 } // namespace
 
 bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand band, bool reverse) {
+  if (!isPerfectlyNested(band))
+    return false;
+
   auto &loopBlock = band.back().getLoopBody().front();
   auto bandDepth = band.size();
 
@@ -41,76 +44,78 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand band, bool reverse) {
       *loopBlock.begin(), *std::next(loopBlock.begin()));
 
   // A map of dependency distances indexed by the loop in the band.
-  llvm::SmallDenseMap<Operation *, unsigned, 4> distanceMap;
+  SmallVector<AffineForOp, 8> targetLoops;
+  llvm::SmallDenseMap<Operation *, unsigned, 8> distanceMap;
 
-  // Traverse all memories in the loop block.
-  for (auto pair : loadStoresMap) {
-    auto loadStores = pair.second;
+  //  Only the loops in the loop band will be checked.
+  unsigned startDepth = commonLoopDepth - bandDepth + 1;
+  for (unsigned depth = startDepth; depth < commonLoopDepth + 1; ++depth) {
+    auto loop = band[depth - startDepth];
+    unsigned minDistance = UINT_MAX;
 
-    // Find all dependencies associated to the current memory.
-    int64_t dstIndex = 1;
-    for (auto dstOp : loadStores) {
-      for (auto srcOp : llvm::drop_begin(loadStores, dstIndex)) {
-        MemRefAccess dstAccess(dstOp);
-        MemRefAccess srcAccess(srcOp);
+    // Traverse all memories in the loop block and find all dependencies
+    // associated to each memory.
+    for (auto pair : loadStoresMap) {
+      auto loadStores = pair.second;
 
-        FlatAffineConstraints depConstrs;
-        SmallVector<DependenceComponent, 2> depComps;
+      int64_t dstIndex = 1;
+      for (auto dstOp : loadStores) {
+        for (auto srcOp : llvm::drop_begin(loadStores, dstIndex)) {
+          MemRefAccess dstAccess(dstOp);
+          MemRefAccess srcAccess(srcOp);
 
-        // Only the loops in the loop band will be checked.
-        for (unsigned depth = commonLoopDepth - bandDepth + 1;
-             depth <= commonLoopDepth + 1; ++depth) {
+          FlatAffineConstraints depConstrs;
+          SmallVector<DependenceComponent, 2> depComps;
 
           DependenceResult result = checkMemrefAccessDependence(
-              srcAccess, dstAccess, depth, &depConstrs, &depComps,
-              /*allowRAR=*/false);
+              srcAccess, dstAccess, depth, &depConstrs, &depComps);
 
           if (hasDependence(result)) {
+            // llvm::outs() << "\n----------\n";
+            // llvm::outs() << *srcOp << " -> " << *dstOp << "\n";
+            // llvm::outs() << "depth: " << loopDepth << ", distance: ";
+            // for (auto dep : depComps)
+            //   llvm::outs() << "(" << dep.lb.getValue() << ","
+            //                << dep.ub.getValue() << "), ";
+            // llvm::outs() << "\n";
+
             auto depComp = depComps[depth - 1];
+            assert(loop == depComp.op && "unexpected dependency");
 
-            auto targetLoop = depComp.op;
-            unsigned minPosDistance =
-                std::max(depComp.lb.getValue(), (int64_t)1);
-
-            // Only positive distance will be considered, keep the minimum
-            // distance in the distance map.
+            // Only positive distance will be recorded.
             if (depComp.ub.getValue() > 0) {
-              if (distanceMap.count(targetLoop)) {
-                auto currentDistance = distanceMap[targetLoop];
-                distanceMap[targetLoop] =
-                    std::min(currentDistance, minPosDistance);
-              } else
-                distanceMap[targetLoop] = minPosDistance;
+              unsigned distance = std::max(depComp.lb.getValue(), (int64_t)1);
+              minDistance = std::min(minDistance, distance);
             }
           }
         }
+        dstIndex++;
       }
-      dstIndex++;
+    }
+
+    // Collect all candidate loops into an ordered vector. Loop with the
+    // smallest distance will appear in the front.
+    if (minDistance < UINT_MAX) {
+      distanceMap[loop] = minDistance;
+
+      for (auto it = targetLoops.begin(); it <= targetLoops.end(); ++it)
+        if (it == targetLoops.end()) {
+          targetLoops.push_back(loop);
+          break;
+        } else if (minDistance < distanceMap[*it]) {
+          targetLoops.insert(it, loop);
+          break;
+        }
     }
   }
 
+  distanceMap.clear();
+
   // Permute the target loops one by one.
-  for (unsigned i = 0, e = distanceMap.size(); i < e; ++i) {
-    // Find the loop with the smallest dependency distance. The rationale is
-    // small dependency distance tends to increase the achievable II when
-    // applying loop pipelining.
-    Operation *targetLoop = nullptr;
-    unsigned count = 0;
-    for (auto pair : distanceMap) {
-      if (count == 0)
-        targetLoop = pair.first;
-      else if (pair.second < distanceMap[targetLoop])
-        targetLoop = pair.first;
-      count++;
-    }
-
-    // Remove the target loop from the distance map as it will be handled in
-    // this iteration.
-    distanceMap.erase(targetLoop);
-
-    // Find the current location of the target loop in the loop band.
+  // TODO: a more comprehensive permution strategy search.
+  for (auto loop : targetLoops) {
     unsigned targetLoopLoc =
-        std::find(band.begin(), band.end(), targetLoop) - band.begin();
+        std::find(band.begin(), band.end(), loop) - band.begin();
 
     if (!reverse)
       // Permute the target loop to an as outer as possible location.
@@ -131,7 +136,9 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand band, bool reverse) {
 
         // Check the validation of the current permutation.
         if (isValidLoopInterchangePermutation(band, permMap)) {
-          permuteLoops(band, permMap);
+          auto newRoot = band[permuteLoops(band, permMap)];
+          band.clear();
+          getLoopBandFromRoot(newRoot, band);
           break;
         }
       }
@@ -154,7 +161,9 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand band, bool reverse) {
 
         // Check the validation of the current permutation.
         if (isValidLoopInterchangePermutation(band, permMap)) {
-          permuteLoops(band, permMap);
+          auto newRoot = band[permuteLoops(band, permMap)];
+          band.clear();
+          getLoopBandFromRoot(newRoot, band);
           break;
         }
       }

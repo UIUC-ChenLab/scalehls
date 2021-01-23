@@ -51,25 +51,24 @@ bool scalehls::applyPartialAffineLoopTiling(AffineLoopBand band,
 
   unsigned loc = 0;
   for (auto loop : band) {
-    if (auto tripCount = getConstantTripCount(loop)) {
-      auto constTripCount = tripCount.getValue();
+    if (auto optionalTripCount = getConstantTripCount(loop)) {
+      auto tripCount = optionalTripCount.getValue();
+      auto tileSize = tripCount;
 
-      if (remainTileSize >= constTripCount) {
-        sizes.push_back(constTripCount);
-        remainTileSize = (remainTileSize + constTripCount - 1) / constTripCount;
-        fullyTiledLoops.push_back(loc);
-
-      } else if (remainTileSize > 1) {
-        unsigned realTileSize = 1;
-        while (realTileSize < remainTileSize ||
-               constTripCount % realTileSize != 0) {
-          realTileSize++;
+      if (remainTileSize >= tripCount)
+        remainTileSize = (remainTileSize + tripCount - 1) / tripCount;
+      else if (remainTileSize > 1) {
+        tileSize = 1;
+        while (tileSize < remainTileSize || tripCount % tileSize != 0) {
+          tileSize++;
         }
-        sizes.push_back(realTileSize);
         remainTileSize = 1;
-
       } else
-        sizes.push_back(1);
+        tileSize = 1;
+
+      sizes.push_back(tileSize);
+      if (tileSize == tripCount)
+        fullyTiledLoops.push_back(loc);
     } else
       return false;
 
