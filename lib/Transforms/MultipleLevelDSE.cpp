@@ -324,7 +324,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
   }
 
   LLVM_DEBUG(llvm::dbgs() << "3. Search for the best tiling strategy.\n";);
-  applyLoopTilingStrategy(func, tileSizesList);
+  // applyLoopTilingStrategy(func, tileSizesList);
 
   // TODO: more fined grained and comprehensive dse.
   unsigned minLatency = getIntAttrValue(func, "latency");

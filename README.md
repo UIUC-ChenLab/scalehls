@@ -48,7 +48,7 @@ $ scalehls-opt samples/polybench/syrk.mlir \
 $ # Automatic kernel-level design space exploration.
 $ scalehls-opt samples/polybench/gemm.mlir \
     -legalize-to-hlscpp="top-func=test_gemm" \
-    -multiple-level-dse="target-spec=config/target-spec.ini" \
+    -multiple-level-dse="target-spec=config/target-spec.ini" -debug-only=scalehls \
     | scalehls-translate -emit-hlscpp
 
 $ # Benchmark generation, dataflow-level optimization, HLSKernel lowering and bufferization.
