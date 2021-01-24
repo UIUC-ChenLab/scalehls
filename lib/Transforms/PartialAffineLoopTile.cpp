@@ -56,7 +56,7 @@ struct PartialAffineLoopTile
     for (auto *op : func.getContext()->getRegisteredOperations())
       op->getCanonicalizationPatterns(patterns, func.getContext());
 
-    applyPatternsAndFoldGreedily(func.getRegion(), std::move(patterns));
+    applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
 } // namespace

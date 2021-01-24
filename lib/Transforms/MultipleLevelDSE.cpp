@@ -33,23 +33,13 @@ static int64_t getInnerParallelism(AffineForOp forOp) {
   return std::max(count, (int64_t)1);
 }
 
-/// Clean up all attributes annotated for scheduling in the function for the
-/// convenience of other transforms.
-// static void cleanScheduleAttributes(FuncOp func) {
-//   func.walk([&](Operation *op) {
-//     op->removeAttr("schedule_begin");
-//     op->removeAttr("schedule_end");
-//     op->removeAttr("partition_index");
-//   });
-// }
-
 //===----------------------------------------------------------------------===//
 // Optimizer Class Declaration
 //===----------------------------------------------------------------------===//
 
 class HLSCppOptimizer : public HLSCppAnalysisBase {
 public:
-  explicit HLSCppOptimizer(FuncOp &func, LatencyMap &latencyMap, int64_t numDSP)
+  explicit HLSCppOptimizer(FuncOp func, LatencyMap &latencyMap, int64_t numDSP)
       : HLSCppAnalysisBase(OpBuilder(func)), func(func), latencyMap(latencyMap),
         numDSP(numDSP) {
     // TODO: only insert affine-related patterns.
@@ -61,14 +51,16 @@ public:
 
   using TileSizes = SmallVector<unsigned, 8>;
 
-  void emitDebugInfo(FuncOp &targetFunc, StringRef message);
-  void applyLoopTilingStrategy(FuncOp &targetFunc,
+  void emitDebugInfo(FuncOp targetFunc, StringRef message);
+  void applyLoopTilingStrategy(FuncOp targetFunc,
                                ArrayRef<TileSizes> tileSizesList);
+  void updateTileSizesAtHead(TileSizes &tileSizes, const TileSizes &tripCounts,
+                             unsigned &head);
 
   /// This is a temporary approach that does not scale.
   void applyMultipleLevelDSE();
 
-  FuncOp &func;
+  FuncOp func;
   LatencyMap &latencyMap;
   int64_t numDSP;
   FrozenRewritePatternList patterns;
@@ -78,7 +70,7 @@ public:
 // Optimizer Class Definition
 //===----------------------------------------------------------------------===//
 
-void HLSCppOptimizer::emitDebugInfo(FuncOp &targetFunc, StringRef message) {
+void HLSCppOptimizer::emitDebugInfo(FuncOp targetFunc, StringRef message) {
   LLVM_DEBUG(auto latency = getIntAttrValue(targetFunc, "latency");
              auto dsp = getIntAttrValue(targetFunc, "dsp");
 
@@ -88,7 +80,7 @@ void HLSCppOptimizer::emitDebugInfo(FuncOp &targetFunc, StringRef message) {
 }
 
 void HLSCppOptimizer::applyLoopTilingStrategy(
-    FuncOp &targetFunc, ArrayRef<TileSizes> tileSizesList) {
+    FuncOp targetFunc, ArrayRef<TileSizes> tileSizesList) {
   AffineLoopBands targetBands;
   getLoopBands(targetFunc.front(), targetBands);
 
@@ -99,10 +91,8 @@ void HLSCppOptimizer::applyLoopTilingStrategy(
   applyPatternsAndFoldGreedily(targetFunc, patterns);
 
   // Apply loop pipelining.
-  for (auto band : targetBands) {
-    auto pipelineLoop = band[band.size() / 2 - 1];
-    applyLoopPipelining(pipelineLoop, builder);
-  }
+  for (auto &band : targetBands)
+    applyLoopPipelining(band[band.size() / 2 - 1], builder);
   applyPatternsAndFoldGreedily(targetFunc, patterns);
 
   // Apply general optimizations and array partition.
@@ -113,9 +103,43 @@ void HLSCppOptimizer::applyLoopTilingStrategy(
   applyPatternsAndFoldGreedily(targetFunc, patterns);
 
   // Estimate performance and resource utilization.
+  LLVM_DEBUG(llvm::dbgs() << "Current tiling strategy:\n"; idx = 0;
+             for (auto tileSizes
+                  : tileSizesList) {
+               llvm::dbgs() << "Loop band " << Twine(idx++) << ":";
+               for (auto size : tileSizes) {
+                 llvm::dbgs() << " " << Twine(size);
+               }
+               llvm::dbgs() << "\n";
+             });
   HLSCppEstimator(targetFunc, latencyMap).estimateFunc();
   emitDebugInfo(targetFunc, "Apply loop tiling and pipelining, general "
                             "optimizations, and array partition.");
+}
+
+/// Update tile sizes by a factor of 2 at the head location.
+void HLSCppOptimizer::updateTileSizesAtHead(TileSizes &tileSizes,
+                                            const TileSizes &tripCounts,
+                                            unsigned &head) {
+  assert(tileSizes.size() == tripCounts.size() &&
+         "unexpected input tile sizes");
+
+  for (unsigned e = tileSizes.size(); head < e; ++head) {
+    auto size = tileSizes[head];
+    auto tripCount = tripCounts[head];
+
+    // At this stage, size must be 1 or a number which is divisible
+    // by tripCount. We need to find the update factor now.
+    if (size < tripCount) {
+      unsigned factor = 2;
+      while (tripCount % (size * factor) != 0)
+        factor++;
+
+      size *= factor;
+      tileSizes[head] = size;
+      break;
+    }
+  }
 }
 
 /// This is a temporary approach that does not scale.
@@ -280,60 +304,103 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
   //===--------------------------------------------------------------------===//
 
   // Holding trip counts of all loops in each loop band.
-  std::vector<TileSizes> targetTileSizesList;
+  std::vector<TileSizes> tripCountsList;
   // Holding the current tiling sizes of each loop band.
-  std::vector<TileSizes> currentTileSizesList;
+  std::vector<TileSizes> tileSizesList;
   // Holding the current loop tiling location in each loop band.
-  SmallVector<unsigned, 8> headLocationList;
+  SmallVector<unsigned, 8> headLocList;
 
   // Initialize all design vectors.
   for (auto band : targetBands) {
-    TileSizes targetSizes;
-    TileSizes baseSizes;
+    TileSizes tripCounts;
+    TileSizes sizes;
     for (auto loop : band) {
-      targetSizes.push_back(getIntAttrValue(loop, "trip_count"));
-      baseSizes.push_back(1);
+      tripCounts.push_back(getIntAttrValue(loop, "trip_count"));
+      sizes.push_back(1);
     }
-    targetTileSizesList.push_back(targetSizes);
-    currentTileSizesList.push_back(baseSizes);
-    headLocationList.push_back(0);
+    tripCountsList.push_back(tripCounts);
+    tileSizesList.push_back(sizes);
+    headLocList.push_back(0);
   }
 
-  // For recording the minimum latency and best tiling strategy.
-  unsigned minLatency = getIntAttrValue(func, "latency");
-  std::vector<TileSizes> bestTileSizesList;
+  LLVM_DEBUG(llvm::dbgs() << "3. Search for the best tiling strategy.\n";);
+  applyLoopTilingStrategy(func, tileSizesList);
 
   // TODO: more fined grained and comprehensive dse.
-  unsigned tolerantCount = 0;
+  unsigned minLatency = getIntAttrValue(func, "latency");
+  unsigned targetNum = targetBands.size();
   while (true) {
-    // Clone the current function and apply the current tiling strategy.
-    auto tmpFunc = func.clone();
-    applyLoopTilingStrategy(tmpFunc, currentTileSizesList);
+    // If there're more than one loop bands in the function, we'll first try to
+    // update the tiling size of ALL target loop bands with a factor of 2. This
+    // is for reducing the DSE complexity.
+    if (targetNum > 1) {
+      std::vector<TileSizes> newTileSizesList = tileSizesList;
+      SmallVector<unsigned, 8> newHeadLocList = headLocList;
 
-    // If the resource constaints are not met or the latency is not increased,
-    // increase the tolerant counter by 1.
-    auto latency = getIntAttrValue(tmpFunc, "latency");
-    if (getIntAttrValue(tmpFunc, "dsp") <= numDSP) {
-      if (latency < minLatency) {
+      for (unsigned i = 0; i < targetNum; ++i)
+        updateTileSizesAtHead(newTileSizesList[i], tripCountsList[i],
+                              newHeadLocList[i]);
+
+      auto tmpFunc = func.clone();
+      applyLoopTilingStrategy(tmpFunc, newTileSizesList);
+
+      // If the resource constaints are not met or the latency is not increased,
+      // we try more fine grained strategy. Otherwise, we accept the new tile
+      // strategy and head location, and enter the next iteration. We set a
+      // threshold 0.95 here to avoid glitches.
+      // TODO: fine tune the exit condition.
+      auto latency = getIntAttrValue(tmpFunc, "latency");
+      auto dsp = getIntAttrValue(tmpFunc, "dsp");
+
+      if (dsp <= numDSP && latency < minLatency * 0.95) {
+        tileSizesList = newTileSizesList;
+        headLocList = newHeadLocList;
         minLatency = latency;
-        bestTileSizesList = currentTileSizesList;
-        tolerantCount = 0;
-      } else
-        tolerantCount++;
+        continue;
+      }
+    }
 
-      // If the tolerant counter is larger than a threshold, we'll stop to
-      // increase the tiling size.
-      if (tolerantCount > 1)
-        break;
-      // else
-      //   currentTileSize *= 2;
-    } else
+    // Walk through all loop bands in the function and update tiling strategy
+    // one by one.
+    bool hasUpdated = false;
+    for (unsigned i = 0; i < targetNum; ++i) {
+      // TODO: This is not efficient. As our estimation can be conducted in a
+      // more structural way, we should only focus on the current loop rather
+      // than the whole function. But for now this makes sense because we are
+      // only focusing on computation kernel level algorithms that typcially
+      // only have handy loop bands.
+      for (unsigned head = headLocList[i], e = tileSizesList[i].size();
+           head < e; ++head) {
+        // Only update the tiling strategy and head location of the current
+        // loop band.
+        std::vector<TileSizes> newTileSizesList = tileSizesList;
+        updateTileSizesAtHead(newTileSizesList[i], tripCountsList[i], head);
+
+        auto tmpFunc = func.clone();
+        applyLoopTilingStrategy(tmpFunc, newTileSizesList);
+
+        auto latency = getIntAttrValue(tmpFunc, "latency");
+        auto dsp = getIntAttrValue(tmpFunc, "dsp");
+
+        if (dsp <= numDSP && latency < minLatency * 0.95) {
+          tileSizesList = newTileSizesList;
+          headLocList[i] = head;
+          minLatency = latency;
+
+          hasUpdated = true;
+          break;
+        }
+      }
+    }
+
+    // If no loop band is updated, break the searching.
+    if (!hasUpdated)
       break;
   }
 
-  // Finally, apply the best tiling strategy.
-  LLVM_DEBUG(llvm::dbgs() << "Found the best tiling strategy.\n";);
-  applyLoopTilingStrategy(func, bestTileSizesList);
+  // Finally, we found the best tiling strategy.
+  LLVM_DEBUG(llvm::dbgs() << "4. Apply the best tiling strategy.\n";);
+  applyLoopTilingStrategy(func, tileSizesList);
 }
 
 namespace {

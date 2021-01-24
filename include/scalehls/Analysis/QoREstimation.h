@@ -22,7 +22,7 @@ class HLSCppEstimator
     : public HLSCppVisitorBase<HLSCppEstimator, bool, int64_t>,
       public HLSCppAnalysisBase {
 public:
-  explicit HLSCppEstimator(FuncOp &func, LatencyMap &latencyMap)
+  explicit HLSCppEstimator(FuncOp func, LatencyMap &latencyMap)
       : HLSCppAnalysisBase(OpBuilder(func)), func(func),
         latencyMap(latencyMap) {
     getFuncDependencies();
@@ -133,7 +133,7 @@ public:
   void reverseSchedule();
   void estimateFunc();
 
-  FuncOp &func;
+  FuncOp func;
   DependsMap dependsMap;
   PortsMapDict portsMapDict;
   LatencyMap &latencyMap;
