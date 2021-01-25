@@ -96,7 +96,7 @@ void HLSCppOptimizer::applyLoopTilingStrategy(
   applyPatternsAndFoldGreedily(targetFunc, patterns);
 
   // Apply general optimizations and array partition.
-  // applyMergeAffineIf(targetFunc);
+  applyMergeAffineIf(targetFunc);
   applyAffineStoreForward(targetFunc, builder);
   applySimplifyMemrefAccess(targetFunc);
   applyArrayPartition(targetFunc, builder);
@@ -290,7 +290,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
   for (auto &band : targetBands) {
     applyAffineLoopPerfection(band.back(), builder);
     applyAffineLoopOrderOpt(band);
-    // applyRemoveVariableBound(band.front(), builder);
+    applyRemoveVariableBound(band.front(), builder);
   }
 
   // Estimate the current latency.

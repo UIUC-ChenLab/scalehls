@@ -109,6 +109,65 @@ Operation *scalehls::getSameLevelDstOp(Operation *srcOp, Operation *dstOp) {
   return nullptr;
 }
 
+Optional<std::pair<int64_t, int64_t>>
+scalehls::getBoundOfAffineBound(AffineBound bound) {
+  auto boundMap = bound.getMap();
+  if (boundMap.isSingleConstant()) {
+    auto constBound = boundMap.getSingleConstantResult();
+    return std::pair<int64_t, int64_t>(constBound, constBound);
+  }
+
+  // For now, we can only handle one result affine bound.
+  if (boundMap.getNumResults() != 1)
+    return Optional<std::pair<int64_t, int64_t>>();
+
+  auto context = boundMap.getContext();
+  SmallVector<int64_t, 4> lbs;
+  SmallVector<int64_t, 4> ubs;
+  for (auto operand : bound.getOperands()) {
+    // Only if the affine bound operands are induction variable, the calculation
+    // is possible.
+    if (!isForInductionVar(operand))
+      return Optional<std::pair<int64_t, int64_t>>();
+
+    // Only if the owner for op of the induction variable has constant bound,
+    // the calculation is possible.
+    auto ifOp = getForInductionVarOwner(operand);
+    if (!ifOp.hasConstantBounds())
+      return Optional<std::pair<int64_t, int64_t>>();
+
+    auto lb = ifOp.getConstantLowerBound();
+    auto ub = ifOp.getConstantUpperBound();
+    auto step = ifOp.getStep();
+
+    lbs.push_back(lb);
+    ubs.push_back(ub - 1 - (ub - 1 - lb) % step);
+  }
+
+  // TODO: maybe a more efficient algorithm.
+  auto operandNum = bound.getNumOperands();
+  SmallVector<int64_t, 16> results;
+  for (unsigned i = 0, e = pow(2, operandNum); i < e; ++i) {
+    SmallVector<AffineExpr, 4> replacements;
+    for (unsigned pos = 0; pos < operandNum; ++pos) {
+      if (i >> pos % 2 == 0)
+        replacements.push_back(getAffineConstantExpr(lbs[pos], context));
+      else
+        replacements.push_back(getAffineConstantExpr(ubs[pos], context));
+    }
+    auto newExpr =
+        bound.getMap().getResult(0).replaceDimsAndSymbols(replacements, {});
+
+    if (auto constExpr = newExpr.dyn_cast<AffineConstantExpr>())
+      results.push_back(constExpr.getValue());
+    else
+      return Optional<std::pair<int64_t, int64_t>>();
+  }
+
+  auto minmax = std::minmax_element(results.begin(), results.end());
+  return std::pair<int64_t, int64_t>(*minmax.first, *minmax.second);
+}
+
 AffineMap scalehls::getLayoutMap(MemRefType memrefType) {
   // Check whether the memref has layout map.
   auto memrefMaps = memrefType.getAffineMaps();

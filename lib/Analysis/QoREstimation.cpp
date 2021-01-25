@@ -490,12 +490,25 @@ int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
 bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
   // Set an attribute indicating the trip count. For now, we assume all loops
   // have static loop bound.
-  // TODO: how to handle variable trip count?
   int64_t tripCount = 1;
-  if (auto optionalTripCount = getConstantTripCount(op)) {
+  if (auto optionalTripCount = getConstantTripCount(op))
     tripCount = optionalTripCount.getValue();
-    setAttrValue(op, "trip_count", tripCount);
+  else {
+    // TODO: A temporary approach to estimate the trip count. For now, we take
+    // the average of the upper bound and lower bound of trip count as the
+    // estimated trip count.
+    auto lowerBound = getBoundOfAffineBound(op.getLowerBound());
+    auto upperBound = getBoundOfAffineBound(op.getUpperBound());
+
+    if (lowerBound && upperBound) {
+      auto lowerTripCount =
+          upperBound.getValue().second - lowerBound.getValue().first;
+      auto upperTripCount =
+          upperBound.getValue().first - lowerBound.getValue().second;
+      tripCount = (lowerTripCount + upperTripCount + 1) / 2;
+    }
   }
+  setAttrValue(op, "trip_count", tripCount);
 
   auto end = begin;
   auto &loopBlock = op.getLoopBody().front();

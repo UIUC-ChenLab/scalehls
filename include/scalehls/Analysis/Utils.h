@@ -101,6 +101,8 @@ Optional<std::pair<Operation *, Operation *>> checkSameLevel(Operation *lhsOp,
 // level with dstOp's any parent loop.
 Operation *getSameLevelDstOp(Operation *srcOp, Operation *dstOp);
 
+Optional<std::pair<int64_t, int64_t>> getBoundOfAffineBound(AffineBound bound);
+
 AffineMap getLayoutMap(MemRefType memrefType);
 
 // Collect partition factors and overall partition number through analyzing the
