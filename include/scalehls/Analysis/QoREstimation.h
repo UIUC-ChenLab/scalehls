@@ -8,6 +8,7 @@
 #define SCALEHLS_ANALYSIS_QORESTIMATION_H
 
 #include "external/INIReader.h"
+#include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "scalehls/Analysis/Utils.h"
 #include "scalehls/Dialect/HLSCpp/Visitor.h"
@@ -32,21 +33,19 @@ public:
   using Depends = SmallVector<Operation *, 16>;
   using DependsMap = DenseMap<Operation *, Depends>;
 
-  // Indicate the unoccupied memory ports number.
-  struct PortInfo {
-    unsigned rdPort;
-    unsigned wrPort;
-    unsigned rdwrPort;
+  // Hold the memory ports information.
+  struct MemPortInfo {
+    unsigned rdPort = 0;
+    unsigned wrPort = 0;
+    unsigned rdwrPort = 0;
 
-    PortInfo(unsigned rdPort = 0, unsigned wrPort = 0, unsigned rdwrPort = 0)
-        : rdPort(rdPort), wrPort(wrPort), rdwrPort(rdwrPort) {}
+    SmallVector<MemRefAccess, 2> rdAccesses;
   };
 
-  // For storing ports number of all partitions indexed by the memref.
-  using Ports = SmallVector<PortInfo, 16>;
-  using PortsMap = DenseMap<Value, Ports>;
-  // For storing PortsMap indexed by the scheduling level.
-  using PortsMapDict = DenseMap<int64_t, PortsMap>;
+  // For storing memory port information of all partitions indexed by the
+  // {schedule_level, memref}.
+  using MemPortInfos = std::vector<MemPortInfo>;
+  using MemPortInfosMap = DenseMap<int64_t, DenseMap<Value, MemPortInfos>>;
 
   // For storing the DSP resource utilization indexed by the schedule level.
   using ResourceMap = DenseMap<int64_t, int64_t>;
@@ -80,12 +79,11 @@ public:
   using HLSCppVisitorBase::visitOp;
   bool visitUnhandledOp(Operation *op, int64_t begin) {
     // Default latency of any unhandled operation is 0.
-    setScheduleValue(op, begin, begin);
-    return true;
+    return setScheduleValue(op, begin, begin), true;
   }
 
   /// LoadOp and StoreOp related methods.
-  void getPartitionIndex(Operation *op);
+  void getPartitionIndices(Operation *op);
   void estimateLoadStore(Operation *op, int64_t begin);
   bool visitOp(AffineLoadOp op, int64_t begin) {
     return estimateLoadStore(op, begin), true;
@@ -94,16 +92,13 @@ public:
     return estimateLoadStore(op, begin), true;
   }
   bool visitOp(LoadOp op, int64_t begin) {
-    setScheduleValue(op, begin, begin + 2);
-    return true;
+    return setScheduleValue(op, begin, begin + 2), true;
   }
   bool visitOp(StoreOp op, int64_t begin) {
-    setScheduleValue(op, begin, begin + 1);
-    return true;
+    return setScheduleValue(op, begin, begin + 1), true;
   }
 
   /// AffineForOp related methods.
-  int64_t getResMinII(MemAccessesMap &map);
   int64_t getDepMinII(FuncOp func, MemAccessesMap &map);
   int64_t getDepMinII(AffineForOp forOp, MemAccessesMap &map);
   bool visitOp(AffineForOp op, int64_t begin);
@@ -135,8 +130,9 @@ public:
 
   FuncOp func;
   DependsMap dependsMap;
-  PortsMapDict portsMapDict;
+  MemPortInfosMap memPortInfosMap;
   LatencyMap &latencyMap;
+  int64_t pipelineResMinII;
 };
 
 } // namespace scalehls

@@ -5,11 +5,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Analysis/QoREstimation.h"
-#include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "scalehls/Analysis/Passes.h"
+#include "llvm/ADT/SmallPtrSet.h"
 
 using namespace std;
 using namespace mlir;
@@ -31,7 +31,7 @@ void HLSCppEstimator::getFuncDependencies() {
 
     // Annotate partition index of all memory access operation for later use.
     for (auto op : memAccesses)
-      getPartitionIndex(op);
+      getPartitionIndices(op);
 
     // Walk through each pair of source and destination. Note that for intra
     // iteration dependencies, srcOp is always before dstOp.
@@ -103,9 +103,17 @@ void HLSCppEstimator::getFuncDependencies() {
 //===----------------------------------------------------------------------===//
 
 /// Calculate the overall partition index.
-void HLSCppEstimator::getPartitionIndex(Operation *op) {
+void HLSCppEstimator::getPartitionIndices(Operation *op) {
   auto access = MemRefAccess(op);
   auto memrefType = access.memref.getType().cast<MemRefType>();
+
+  // If the layout map does not exist, it means the memory is not partitioned.
+  auto layoutMap = getLayoutMap(memrefType);
+  if (!layoutMap) {
+    auto partitionIndices = SmallVector<int64_t, 8>(memrefType.getRank(), 0);
+    setAttrValue(op, "partition_indices", partitionIndices);
+    return;
+  }
 
   AffineValueMap accessMap;
   access.getAccessMap(&accessMap);
@@ -122,8 +130,7 @@ void HLSCppEstimator::getPartitionIndex(Operation *op) {
       if (isForInductionVar(operand))
         step = getForInductionVarOwner(operand).getStep();
 
-      dimReplacements.push_back(builder.getAffineConstantExpr(step) *
-                                builder.getAffineDimExpr(operandIdx));
+      dimReplacements.push_back(step * builder.getAffineDimExpr(operandIdx));
     } else {
       symReplacements.push_back(
           builder.getAffineSymbolExpr(operandIdx - accessMap.getNumDims()));
@@ -136,11 +143,6 @@ void HLSCppEstimator::getPartitionIndex(Operation *op) {
       accessMap.getNumSymbols());
 
   // Compose the access map with the layout map.
-  auto layoutMap = getLayoutMap(memrefType);
-  if (!layoutMap) {
-    setAttrValue(op, "partition_index", (int64_t)0);
-    return;
-  }
   auto composeMap = layoutMap.compose(newMap);
 
   // Collect partition factors.
@@ -149,35 +151,25 @@ void HLSCppEstimator::getPartitionIndex(Operation *op) {
 
   // Calculate the partition index of this load/store operation honoring the
   // partition strategy applied.
-  int64_t partitionIdx = 0;
   SmallVector<int64_t, 8> partitionIndices;
-
   int64_t maxMuxSize = 1;
   bool hasUncertainIdx = false;
-  int64_t accumFactor = 1;
 
   for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
     auto idxExpr = composeMap.getResult(dim);
 
-    if (auto constExpr = idxExpr.dyn_cast<AffineConstantExpr>()) {
+    if (auto constExpr = idxExpr.dyn_cast<AffineConstantExpr>())
       partitionIndices.push_back(constExpr.getValue());
-      partitionIdx += constExpr.getValue() * accumFactor;
-    } else {
+    else {
       partitionIndices.push_back(-1);
-      hasUncertainIdx = true;
       maxMuxSize = max(maxMuxSize, factors[dim]);
+      hasUncertainIdx = true;
     }
-
-    accumFactor *= factors[dim];
   }
 
-  // Annotate partition indices.
-  if (hasUncertainIdx) {
-    setAttrValue(op, "partition_index", (int64_t)-1);
-    setAttrValue(op, "partition_indices", partitionIndices);
+  setAttrValue(op, "partition_indices", partitionIndices);
+  if (hasUncertainIdx)
     setAttrValue(op, "max_mux_size", maxMuxSize);
-  } else
-    setAttrValue(op, "partition_index", partitionIdx);
 }
 
 /// Schedule load/store operation honoring the memory ports number limitation.
@@ -186,81 +178,101 @@ void HLSCppEstimator::estimateLoadStore(Operation *op, int64_t begin) {
   auto memref = access.memref;
   auto memrefType = memref.getType().cast<MemRefType>();
 
-  auto partitionIdx = getIntAttrValue(op, "partition_index");
   SmallVector<int64_t, 8> factors;
   auto partitionNum = getPartitionFactors(memrefType, &factors);
   auto storageType = MemoryKind(memrefType.getMemorySpace());
+  auto partitionIndices = getIntArrayAttrValue(op, "partition_indices");
 
   // Try to avoid memory port violation until a legal schedule is found. Since
   // an infinite length schedule cannot be generated, this while loop can be
   // proofed to have an end.
-  while (true) {
-    auto memPort = portsMapDict[begin][memref];
-    bool memPortEmpty = memPort.empty();
+  int64_t resMinII = 1;
+  for (;; ++begin) {
+    auto &memPortInfos = memPortInfosMap[begin][memref];
 
     // If the memory has not been occupied by the current schedule level, it
     // should be initialized according to its storage type. Note that each
-    // partition should have one PortInfo structure.
-    if (memPortEmpty) {
+    // partition should have one PortInfo structure, where the default case is
+    // BRAM_S2P.
+    if (memPortInfos.empty())
       for (unsigned p = 0; p < partitionNum; ++p) {
-        unsigned rdPort = 1;
-        unsigned wrPort = 1;
-        unsigned rdwrPort = 0;
+        MemPortInfo info;
 
         if (storageType == MemoryKind::BRAM_1P)
-          rdwrPort = 1;
-        else if (storageType == MemoryKind::BRAM_S2P)
-          rdPort = 1, wrPort = 1;
+          info.rdwrPort = 1;
         else if (storageType == MemoryKind::BRAM_T2P)
-          rdwrPort = 2;
+          info.rdwrPort = 2;
+        else
+          info.rdPort = 1, info.wrPort = 1;
 
-        memPort.push_back(PortInfo(rdPort, wrPort, rdwrPort));
+        memPortInfos.push_back(info);
       }
-    }
 
-    // Indicate whether the operation is successfully scheduled in the current
-    // schedule level.
-    bool successFlag = false;
+    // Indicate whether the memory access operation is successfully scheduled in
+    // the current schedule level.
+    bool successFlag = true;
 
-    if (partitionIdx == -1) {
-      // When partition index can't be determined, this operation must occupy
-      // all ports in the scheduled level.
-      // TODO: only occupy all ports on the dimension whose partition index is
-      // uncertain.
-      if (memPortEmpty) {
-        for (unsigned p = 0; p < partitionNum; ++p) {
-          memPort[p].rdPort = 0;
-          memPort[p].wrPort = 0;
-          memPort[p].rdwrPort = 0;
+    // Walk through all partitions to check whether the current partition is
+    // occupied and whether available memory ports are enough to schedule the
+    // current memory access operation.
+    for (int64_t idx = 0; idx < partitionNum; ++idx) {
+      bool isOccupied = true;
+      int64_t accumFactor = 1;
+
+      for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
+        // If the index is -1, all ports in the current partition will be
+        // occupied and a multiplexer will be generated in HLS.
+        if (partitionIndices[dim] != -1 &&
+            idx / accumFactor % factors[dim] != partitionIndices[dim]) {
+          isOccupied = false;
+          break;
         }
-        successFlag = true;
+        accumFactor *= factors[dim];
       }
-    } else {
-      // When partition index can be determined, figure out whether the current
-      // schedule meets memory port limitation.
-      PortInfo portInfo = memPort[partitionIdx];
-      if (isa<AffineLoadOp>(op) && portInfo.rdPort > 0) {
-        memPort[partitionIdx].rdPort -= 1;
-        successFlag = true;
 
-      } else if (isa<AffineStoreOp>(op) && portInfo.wrPort > 0) {
-        memPort[partitionIdx].wrPort -= 1;
-        successFlag = true;
+      if (isOccupied) {
+        auto &info = memPortInfos[idx];
+        if (isa<AffineReadOpInterface>(op)) {
+          bool hasIdenticalAccess = false;
+          // The rationale is as long as the current read operation has
+          // identical memory access information with any scheduled read
+          // operation, the schedule will success.
+          for (auto rdAccess : info.rdAccesses)
+            if (access == rdAccess)
+              hasIdenticalAccess = true;
 
-      } else if (portInfo.rdwrPort > 0) {
-        memPort[partitionIdx].rdwrPort -= 1;
-        successFlag = true;
+          if (hasIdenticalAccess)
+            continue;
+
+          if (info.rdPort > 0) {
+            info.rdPort--;
+            info.rdAccesses.push_back(access);
+          } else if (info.rdwrPort > 0) {
+            info.rdwrPort--;
+            info.rdAccesses.push_back(access);
+          } else {
+            successFlag = false;
+            break;
+          }
+        } else if (isa<AffineWriteOpInterface>(op)) {
+          if (info.wrPort > 0)
+            info.wrPort--;
+          else if (info.rdwrPort > 0)
+            info.rdwrPort--;
+          else {
+            successFlag = false;
+            break;
+          }
+        }
       }
     }
 
-    // If successed, break the while loop. Otherwise increase the schedule level
-    // by 1 and continue to try.
-    if (successFlag) {
-      portsMapDict[begin][memref] = memPort;
+    if (successFlag)
       break;
-    } else
-      begin++;
+    resMinII++;
   }
+
+  pipelineResMinII = max(pipelineResMinII, resMinII);
 
   if (isa<AffineReadOpInterface>(op))
     setScheduleValue(op, begin, begin + 2);
@@ -271,88 +283,6 @@ void HLSCppEstimator::estimateLoadStore(Operation *op, int64_t begin) {
 //===----------------------------------------------------------------------===//
 // AffineForOp Related Methods
 //===----------------------------------------------------------------------===//
-
-/// Calculate the minimum resource II.
-int64_t HLSCppEstimator::getResMinII(MemAccessesMap &map) {
-  int64_t II = 1;
-
-  for (auto &pair : map) {
-    auto memrefType = pair.first.getType().cast<MemRefType>();
-    SmallVector<int64_t, 8> factors;
-    auto partitionNum = getPartitionFactors(memrefType, &factors);
-    auto storageType = MemoryKind(memrefType.getMemorySpace());
-
-    SmallVector<int64_t, 16> readNum;
-    SmallVector<int64_t, 16> writeNum;
-    for (unsigned i = 0, e = partitionNum; i < e; ++i) {
-      readNum.push_back(0);
-      writeNum.push_back(0);
-    }
-
-    auto loadStores = pair.second;
-
-    for (auto op : loadStores) {
-      auto partitionIdx = getIntAttrValue(op, "partition_index");
-      if (partitionIdx == -1) {
-        int64_t accessNum = 1;
-        if (storageType == MemoryKind::BRAM_1P ||
-            storageType == MemoryKind::BRAM_S2P)
-          accessNum = 1;
-        else if (storageType == MemoryKind::BRAM_T2P)
-          accessNum = 2;
-
-        // Fetch all partition indices.
-        auto indices = getIntArrayAttrValue(op, "partition_indices");
-
-        // The rationale here is an undetermined partition access will introduce
-        // a large mux which will avoid Vivado HLS to process any concurrent
-        // data access among all partitions. This is equivalent to increase read
-        // or write number for all partitions.
-        // TODO: need to be further refined with more case studies.
-        for (unsigned p = 0, e = partitionNum; p < e; ++p) {
-          bool isOccupied = true;
-          int64_t accumFactor = 1;
-          for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
-            if (indices[dim] != -1 &&
-                p / accumFactor % factors[dim] != indices[dim]) {
-              isOccupied = false;
-              break;
-            }
-
-            accumFactor *= factors[dim];
-          }
-
-          if (isOccupied) {
-            if (isa<AffineLoadOp>(op))
-              readNum[p] += accessNum;
-            else if (isa<AffineStoreOp>(op))
-              writeNum[p] += accessNum;
-          }
-        }
-      } else if (isa<AffineLoadOp>(op))
-        readNum[partitionIdx]++;
-      else if (isa<AffineStoreOp>(op))
-        writeNum[partitionIdx]++;
-    }
-
-    int64_t minII = 1;
-    if (storageType == MemoryKind::BRAM_1P)
-      for (unsigned i = 0, e = partitionNum; i < e; ++i)
-        minII = max(minII, readNum[i] + writeNum[i]);
-
-    else if (storageType == MemoryKind::BRAM_S2P)
-      minII = max({minII, *std::max_element(readNum.begin(), readNum.end()),
-                   *std::max_element(writeNum.begin(), writeNum.end())});
-
-    // TODO: need to be further refined.
-    else if (storageType == MemoryKind::BRAM_T2P)
-      for (unsigned i = 0, e = partitionNum; i < e; ++i)
-        minII = max(minII, (readNum[i] + writeNum[i] - 1) / 2 + 1);
-
-    II = max(II, minII);
-  }
-  return II;
-}
 
 /// Calculate the minimum dependency II of function.
 int64_t HLSCppEstimator::getDepMinII(FuncOp func, MemAccessesMap &map) {
@@ -514,6 +444,7 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
   auto &loopBlock = op.getLoopBody().front();
 
   // Estimate the loop block.
+  pipelineResMinII = 1;
   if (auto schedule = estimateBlock(loopBlock, begin)) {
     end = max(end, schedule.getValue().second);
     begin = max(begin, schedule.getValue().first);
@@ -531,9 +462,7 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
     getMemAccessesMap(loopBlock, map);
 
     // Calculate initial interval.
-    // llvm::outs() << "dependence ii = " << getDepMinII(op, map)
-    //              << ", resource ii = " << getResMinII(map) << "\n";
-    auto II = max(getResMinII(map), getDepMinII(op, map));
+    auto II = max(pipelineResMinII, getDepMinII(op, map));
     setAttrValue(op, "init_interval", II);
 
     setAttrValue(op, "flatten_trip_count", tripCount);
@@ -815,6 +744,7 @@ void HLSCppEstimator::estimateFunc() {
   getMemAccessesMap(func.front(), map);
 
   // Recursively estimate blocks in the function.
+  pipelineResMinII = 1;
   if (auto schedule = estimateBlock(func.front(), 0)) {
     auto latency = schedule.getValue().second;
     setAttrValue(func, "latency", latency);
@@ -831,7 +761,7 @@ void HLSCppEstimator::estimateFunc() {
 
     // TODO: support CallOp inside of the function.
     if (getBoolAttrValue(func, "pipeline")) {
-      auto II = max(getResMinII(map), getDepMinII(func, map));
+      auto II = max(pipelineResMinII, getDepMinII(func, map));
       setAttrValue(func, "interval", II);
     }
 
@@ -871,7 +801,6 @@ void HLSCppEstimator::estimateFunc() {
   resource.bram += numBram;
 
   setResourceValue(func, resource);
-  // TODO: estimate BRAM and LUT utilization.
 }
 
 //===----------------------------------------------------------------------===//
