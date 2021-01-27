@@ -41,83 +41,50 @@ bool scalehls::applySimplifyMemrefAccess(FuncOp func) {
         auto secondIsRead = isa<AffineReadOpInterface>(secondOp);
 
         // Check whether the two operations statically have the same access.
-        if (firstAccess == secondAccess) {
-          // If the two operations are at different loop levels, break.
-          // TODO: memory access operation hoisting?
-          auto sameLevelOps = checkSameLevel(firstOp, secondOp);
-          if (!sameLevelOps)
-            break;
+        // This is conservative, because dependency analysis should be conducted
+        // for checking whether the in between operations should break the
+        // simplification.
+        if (firstAccess != secondAccess)
+          break;
 
-          // If the second operation's access direction is different with the
-          // first operation, the first operation is known not redundant.
-          if ((firstIsRead && !secondIsRead) || (!firstIsRead && secondIsRead))
-            break;
+        // If the second operation's access direction is different with the
+        // first operation, the first operation is known not redundant.
+        if ((firstIsRead && !secondIsRead) || (!firstIsRead && secondIsRead))
+          break;
 
-          // If both of the two operations are memory loads, only if both of
-          // them is not conditionally executed, elinimation could happen.
-          if (firstIsRead && secondIsRead) {
-            if (sameLevelOps.getValue().first == firstOp &&
-                sameLevelOps.getValue().second == secondOp) {
-              // Now we have known that the first and second operation are at
-              // the same level, and have identical memory accesses. Therefore,
-              // we can safely eliminate the first operation after replacing
-              // all its uses.
-              for (unsigned i = 0, e = firstOp->getNumResults(); i < e; ++i) {
-                firstOp->getResult(i).replaceAllUsesWith(
-                    secondOp->getResult(i));
-              }
-              // TODO: this is actually incorrect, if some AffineApplyOp is not
-              // folded, this will cause domination violation.
-              secondOp->moveAfter(firstOp);
-              firstOp->erase();
-              break;
+        // If the two operations are at different loop levels, break.
+        // TODO: memory access operation hoisting?
+        auto sameLevelOps = checkSameLevel(firstOp, secondOp);
+        if (!sameLevelOps)
+          break;
+
+        // If both of the two operations are memory loads, only if both of
+        // them is not conditionally executed, elinimation could happen.
+        if (firstIsRead && secondIsRead)
+          if (sameLevelOps.getValue().first == firstOp &&
+              sameLevelOps.getValue().second == secondOp) {
+            // Now we have known that the first and second operation are at
+            // the same level, and have identical memory accesses. Therefore,
+            // we can safely eliminate the first operation after replacing
+            // all its uses.
+            for (unsigned i = 0, e = firstOp->getNumResults(); i < e; ++i) {
+              firstOp->getResult(i).replaceAllUsesWith(secondOp->getResult(i));
             }
+            // TODO: this is actually incorrect, if some AffineApplyOp is not
+            // folded, this will cause domination violation.
+            secondOp->moveAfter(firstOp);
+            firstOp->erase();
+            break;
           }
 
-          // If both of the two operations are memory stores, only if the second
-          // operation is not conditionally executed, the first operation can be
-          // safely eliminated.
-          if (!firstIsRead && !secondIsRead) {
-            if (sameLevelOps.getValue().second == secondOp) {
-              firstOp->erase();
-              break;
-            }
-          }
-        } else {
-          // Find possible dependencies. If dependency appears, the first is no
-          // longer be able to be simplified.
-          unsigned nsLoops = getNumCommonSurroundingLoops(*firstOp, *secondOp);
-          bool foundDependence = false;
-
-          for (unsigned depth = 1; depth <= nsLoops + 1; ++depth) {
-            FlatAffineConstraints dependenceConstraints;
-            SmallVector<DependenceComponent, 2> dependenceComponents;
-
-            DependenceResult result = checkMemrefAccessDependence(
-                firstAccess, secondAccess, depth, &dependenceConstraints,
-                &dependenceComponents);
-
-            // Only zero distance dependencies are considered here.
-            if (hasDependence(result)) {
-              bool hasZeroDistance = true;
-
-              for (auto dep : dependenceComponents)
-                if (dep.lb.getValue() > 0 || dep.ub.getValue() < 0) {
-                  hasZeroDistance = false;
-                  break;
-                }
-
-              if (hasZeroDistance) {
-                foundDependence = true;
-                break;
-              }
-            }
-          }
-
-          // If any dependence is found, break.
-          if (foundDependence)
+        // If both of the two operations are memory stores, only if the second
+        // operation is not conditionally executed, the first operation can be
+        // safely eliminated.
+        if (!firstIsRead && !secondIsRead)
+          if (sameLevelOps.getValue().second == secondOp) {
+            firstOp->erase();
             break;
-        }
+          }
       }
       opIndex++;
     }
