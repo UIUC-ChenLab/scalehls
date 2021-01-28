@@ -38,8 +38,8 @@ public:
             DmaWaitOp, AtomicRMWOp, GenericAtomicRMWOp, AtomicYieldOp,
             MemRefCastOp, ViewOp, SubViewOp,
             // Tensor-related statements.
-            TensorLoadOp, TensorStoreOp, TensorToMemrefOp, TensorFromElementsOp,
-            SplatOp, DimOp, RankOp,
+            TensorLoadOp, TensorStoreOp, TensorToMemrefOp, SplatOp, DimOp,
+            RankOp,
             // Unary expressions.
             AbsFOp, CeilFOp, NegFOp, CosOp, SinOp, TanhOp, SqrtOp, RsqrtOp,
             ExpOp, Exp2Op, LogOp, Log2Op, Log10Op,
@@ -49,8 +49,6 @@ public:
             CmpIOp, AddIOp, SubIOp, MulIOp, SignedDivIOp, SignedRemIOp,
             UnsignedDivIOp, UnsignedRemIOp, XOrOp, AndOp, OrOp, ShiftLeftOp,
             SignedShiftRightOp, UnsignedShiftRightOp,
-            // Complex expressions.
-            AddCFOp, SubCFOp, ImOp, ReOp, CreateComplexOp,
             // Special operations.
             SelectOp, ConstantOp, CopySignOp, TruncateIOp, ZeroExtendIOp,
             SignExtendIOp, IndexCastOp, CallOp, ReturnOp, UIToFPOp, SIToFPOp,
@@ -123,7 +121,6 @@ public:
   HANDLE(TensorLoadOp);
   HANDLE(TensorStoreOp);
   HANDLE(TensorToMemrefOp);
-  HANDLE(TensorFromElementsOp);
   HANDLE(SplatOp);
   HANDLE(DimOp);
   HANDLE(RankOp);
@@ -166,13 +163,6 @@ public:
   HANDLE(ShiftLeftOp);
   HANDLE(SignedShiftRightOp);
   HANDLE(UnsignedShiftRightOp);
-
-  // Complex expressions.
-  HANDLE(AddCFOp);
-  HANDLE(SubCFOp);
-  HANDLE(ImOp);
-  HANDLE(ReOp);
-  HANDLE(CreateComplexOp);
 
   // Special operations.
   HANDLE(SelectOp);
