@@ -114,7 +114,7 @@ bool scalehls::applyArrayPartition(FuncOp func, OpBuilder &builder) {
         // Determine array partition strategy.
         // TODO: take storage type into consideration.
         // TODO: the partition strategy requires more case study.
-        maxDistance += 1;
+        maxDistance++;
         if (maxDistance == 1) {
           // This means all accesses have the same index, and this dimension
           // should not be partitioned.
@@ -127,12 +127,17 @@ bool scalehls::applyArrayPartition(FuncOp func, OpBuilder &builder) {
           unsigned factor = maxDistance;
           if (factor > partitions[dim].second) {
             // The rationale here is if the accessing partition index cannot be
-            // determined and partition factor is more than 2, a multiplexer
+            // determined and partition factor is more than 3, a multiplexer
             // will be generated and the memory access operation will be wrapped
             // into a function call, which will cause dependency problems and
             // make the latency and II even worse.
             if (requireMux)
-              partitions[dim] = PartitionInfo(PartitionKind::CYCLIC, 2);
+              for (auto i = 3; i > 0; --i) {
+                if (factor % i == 0) {
+                  partitions[dim] = PartitionInfo(PartitionKind::CYCLIC, i);
+                  break;
+                }
+              }
             else
               partitions[dim] = PartitionInfo(PartitionKind::CYCLIC, factor);
           }
@@ -142,7 +147,12 @@ bool scalehls::applyArrayPartition(FuncOp func, OpBuilder &builder) {
           unsigned factor = accessNum;
           if (factor > partitions[dim].second) {
             if (requireMux)
-              partitions[dim] = PartitionInfo(PartitionKind::BLOCK, 2);
+              for (auto i = 3; i > 0; --i) {
+                if (factor % i == 0) {
+                  partitions[dim] = PartitionInfo(PartitionKind::BLOCK, i);
+                  break;
+                }
+              }
             else
               partitions[dim] = PartitionInfo(PartitionKind::BLOCK, factor);
           }

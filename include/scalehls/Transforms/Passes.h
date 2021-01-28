@@ -36,8 +36,10 @@ bool applyRemoveVariableBound(AffineForOp loop, OpBuilder &builder);
 
 bool applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse = false);
 
-bool applyPartialAffineLoopTiling(AffineLoopBand &band, OpBuilder &builder,
-                                  ArrayRef<unsigned> tileSizes);
+/// Apply loop tiling and return the new loop that should be pipelined.
+AffineForOp applyPartialAffineLoopTiling(AffineLoopBand &band,
+                                         OpBuilder &builder,
+                                         ArrayRef<unsigned> tileSizes);
 
 /// Apply function pipelining to the input function, all contained loops are
 /// automatically fully unrolled.

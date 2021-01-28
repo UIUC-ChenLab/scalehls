@@ -61,32 +61,38 @@ struct PartialAffineLoopTile
 };
 } // namespace
 
-bool scalehls::applyPartialAffineLoopTiling(AffineLoopBand &band,
-                                            OpBuilder &builder,
-                                            ArrayRef<unsigned> tileSizes) {
+/// Apply loop tiling and return the new loop that should be pipelined.
+AffineForOp
+scalehls::applyPartialAffineLoopTiling(AffineLoopBand &band, OpBuilder &builder,
+                                       ArrayRef<unsigned> tileSizes) {
   if (!isPerfectlyNested(band))
-    return false;
+    return nullptr;
 
   // Collect each loop location that is fully tiled and can be eliminated.
   SmallVector<unsigned, 8> fullyTiledLoops;
+  unsigned pipelineLoc = 0;
   unsigned loc = 0;
   for (auto loop : band) {
     if (auto tripCount = getConstantTripCount(loop)) {
       if (tripCount.getValue() == tileSizes[loc])
         fullyTiledLoops.push_back(loc);
+      else
+        pipelineLoc = loc;
     } else
-      return false;
+      return nullptr;
     loc++;
   }
 
   // If all loops are fully tiled, keep the last loop untouched.
-  if (fullyTiledLoops.size() == band.size())
+  if (fullyTiledLoops.size() == band.size()) {
     fullyTiledLoops.pop_back();
+    pipelineLoc = band.size() - 1;
+  }
 
   // Loop tiling.
   AffineLoopBand tiledBand;
   if (failed(tilePerfectlyNested(band, tileSizes, &tiledBand)))
-    return false;
+    return nullptr;
   band = tiledBand;
 
   // Remove fully tiled loops.
@@ -107,7 +113,7 @@ bool scalehls::applyPartialAffineLoopTiling(AffineLoopBand &band,
     loop.erase();
   }
 
-  return true;
+  return band[pipelineLoc];
 }
 
 std::unique_ptr<Pass> scalehls::createPartialAffineLoopTilePass() {

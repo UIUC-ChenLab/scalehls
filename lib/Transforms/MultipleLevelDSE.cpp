@@ -85,14 +85,16 @@ void HLSCppOptimizer::applyLoopTilingStrategy(
   getLoopBands(targetFunc.front(), targetBands);
 
   // Apply loop tiling.
+  SmallVector<AffineForOp, 4> pipelineLoops;
   unsigned idx = 0;
   for (auto &band : targetBands)
-    applyPartialAffineLoopTiling(band, builder, tileSizesList[idx++]);
+    pipelineLoops.push_back(
+        applyPartialAffineLoopTiling(band, builder, tileSizesList[idx++]));
   applyPatternsAndFoldGreedily(targetFunc, patterns);
 
   // Apply loop pipelining.
-  for (auto &band : targetBands)
-    applyLoopPipelining(band[band.size() / 2 - 1], builder);
+  for (auto loop : pipelineLoops)
+    applyLoopPipelining(loop, builder);
   applyPatternsAndFoldGreedily(targetFunc, patterns);
 
   // Apply general optimizations and array partition.
