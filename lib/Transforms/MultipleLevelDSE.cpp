@@ -113,8 +113,8 @@ void HLSCppOptimizer::applyLoopTilingStrategy(
                llvm::dbgs() << "\n";
              });
   HLSCppEstimator(targetFunc, latencyMap).estimateFunc();
-  emitDebugInfo(targetFunc, "Apply loop tiling and pipelining, general "
-                            "optimizations, and array partition.");
+  emitDebugInfo(targetFunc, "Apply loop tiling and pipelining, generic IR "
+                            "opts, and array partition.");
 }
 
 /// Update tile sizes by a factor of 2 at the head location.
@@ -153,10 +153,11 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
   // STAGE 0: Function Pipelining
   //===--------------------------------------------------------------------===//
 
-  // Try function pipelining.
+  // TODO: Try function pipelining.
   // auto pipelineFunc = func.clone();
   // applyFuncPipelining(pipelineFunc, builder);
   // HLSCppEstimator(pipelineFunc, latencyMap).estimateFunc();
+  // pipelineFunc.erase();
 
   // if (getIntAttrValue(pipelineFunc, "dsp") <= numDSP) {
   //   applyFuncPipelining(func, builder);
@@ -297,20 +298,25 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
   HLSCppEstimator(func, latencyMap).estimateFunc();
   if (getIntAttrValue(func, "dsp") > numDSP)
     return;
-  emitDebugInfo(func, "2. Apply loop perfection and loop order optimization.");
+  emitDebugInfo(func, "2. Apply loop perfection, remove variable bound, and "
+                      "loop order opt.");
 
   //===--------------------------------------------------------------------===//
   // STAGE 3: Loop Bands Tiling and Finalization
   //===--------------------------------------------------------------------===//
 
-  // Holding trip counts of all loops in each loop band.
+  // Hold trip counts of all loops in each loop band, this can also be
+  // considered as maxTileSizesList.
   std::vector<TileSizes> tripCountsList;
-  // Holding the current tiling sizes of each loop band.
+  // Hold the loop number in each loop band.
+  SmallVector<unsigned, 8> loopNumList;
+
+  // Hold the current tiling sizes of each loop band.
   std::vector<TileSizes> tileSizesList;
-  // Holding the current loop tiling location in each loop band.
+  // Hold the current loop tiling location in each loop band.
   SmallVector<unsigned, 8> headLocList;
 
-  // Initialize all design vectors.
+  // Initialize all lists.
   for (auto band : targetBands) {
     TileSizes tripCounts;
     TileSizes sizes;
@@ -318,34 +324,43 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
       tripCounts.push_back(getIntAttrValue(loop, "trip_count"));
       sizes.push_back(1);
     }
+
     tripCountsList.push_back(tripCounts);
+    loopNumList.push_back(tripCounts.size());
+
     tileSizesList.push_back(sizes);
     headLocList.push_back(0);
   }
 
-  LLVM_DEBUG(llvm::dbgs() << "3. Search for the best tiling strategy.\n";);
-  // applyLoopTilingStrategy(func, tileSizesList);
+  // Try and record the none tiling performance.
+  auto nonTileFunc = func.clone();
+  applyLoopTilingStrategy(nonTileFunc, tileSizesList);
+  unsigned minLatency = getIntAttrValue(nonTileFunc, "latency");
+  nonTileFunc.erase();
 
-  // TODO: more fined grained and comprehensive dse.
-  unsigned minLatency = getIntAttrValue(func, "latency");
+  LLVM_DEBUG(llvm::dbgs() << "3. Search for the best tiling strategy.\n";);
   unsigned targetNum = targetBands.size();
+
+  // Search for the best tiling strategy.
+  // TODO: more fined grained and comprehensive dse.
   while (true) {
     // If there're more than one loop bands in the function, we'll first try to
     // update the tiling size of ALL target loop bands with a factor of 2. This
     // is for reducing the DSE complexity.
     if (targetNum > 1) {
-      std::vector<TileSizes> newTileSizesList = tileSizesList;
-      SmallVector<unsigned, 8> newHeadLocList = headLocList;
+      auto tmpTileSizesList = tileSizesList;
+      auto tmpHeadLocList = headLocList;
 
       for (unsigned i = 0; i < targetNum; ++i)
-        updateTileSizesAtHead(newTileSizesList[i], tripCountsList[i],
-                              newHeadLocList[i]);
+        updateTileSizesAtHead(tmpTileSizesList[i], tripCountsList[i],
+                              tmpHeadLocList[i]);
 
+      // TODO: loop-based dse, hierarchical estimation.
       auto tmpFunc = func.clone();
-      applyLoopTilingStrategy(tmpFunc, newTileSizesList);
+      applyLoopTilingStrategy(tmpFunc, tmpTileSizesList);
 
       // If the resource constaints are not met or the latency is not increased,
-      // we try more fine grained strategy. Otherwise, we accept the new tile
+      // we try more fine grained strategy. Otherwise, we accept the tmp tile
       // strategy and head location, and enter the next iteration. We set a
       // threshold 0.95 here to avoid glitches.
       // TODO: fine tune the exit condition.
@@ -353,8 +368,8 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
       auto dsp = getIntAttrValue(tmpFunc, "dsp");
 
       if (dsp <= numDSP && latency < minLatency * 0.95) {
-        tileSizesList = newTileSizesList;
-        headLocList = newHeadLocList;
+        tileSizesList = tmpTileSizesList;
+        headLocList = tmpHeadLocList;
         minLatency = latency;
         continue;
       }
@@ -369,21 +384,20 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
       // than the whole function. But for now this makes sense because we are
       // only focusing on computation kernel level algorithms that typcially
       // only have handy loop bands.
-      for (unsigned head = headLocList[i], e = tileSizesList[i].size();
-           head < e; ++head) {
+      for (unsigned head = headLocList[i]; head < loopNumList[i]; ++head) {
         // Only update the tiling strategy and head location of the current
         // loop band.
-        std::vector<TileSizes> newTileSizesList = tileSizesList;
-        updateTileSizesAtHead(newTileSizesList[i], tripCountsList[i], head);
+        auto tmpTileSizesList = tileSizesList;
+        updateTileSizesAtHead(tmpTileSizesList[i], tripCountsList[i], head);
 
         auto tmpFunc = func.clone();
-        applyLoopTilingStrategy(tmpFunc, newTileSizesList);
+        applyLoopTilingStrategy(tmpFunc, tmpTileSizesList);
 
         auto latency = getIntAttrValue(tmpFunc, "latency");
         auto dsp = getIntAttrValue(tmpFunc, "dsp");
 
         if (dsp <= numDSP && latency < minLatency * 0.95) {
-          tileSizesList = newTileSizesList;
+          tileSizesList = tmpTileSizesList;
           headLocList[i] = head;
           minLatency = latency;
 

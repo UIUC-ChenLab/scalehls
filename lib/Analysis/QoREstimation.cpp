@@ -20,6 +20,7 @@ using namespace scalehls;
 //===----------------------------------------------------------------------===//
 
 /// Collect all dependencies detected in the function.
+/// TODO: work in a block basis.
 void HLSCppEstimator::getFuncDependencies() {
   MemAccessesMap map;
   getMemAccessesMap(func.front(), map, /*includeCallOp=*/true);
@@ -419,14 +420,17 @@ int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
               // Calculate the distance of this dependency.
               for (auto i = depComps.rbegin(); i < depComps.rend(); ++i) {
                 auto dep = *i;
-                auto tripCount = getIntAttrValue(dep.op, "trip_count");
+                auto ifOp = cast<AffineForOp>(dep.op);
+
+                auto tripCount = getIntAttrValue(ifOp, "trip_count");
                 auto ub = dep.ub.getValue();
                 auto lb = dep.lb.getValue();
 
                 // Ff ub is more than zero, calculate the minimum positive
                 // disatance. Otherwise, set distance to negative and break.
                 if (ub >= 0)
-                  distance += accumTrips.back() * max(lb, (int64_t)0);
+                  distance +=
+                      accumTrips.back() * max(lb, (int64_t)0) / ifOp.getStep();
                 else {
                   distance = -1;
                   break;
@@ -434,6 +438,16 @@ int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
 
                 accumTrips.push_back(accumTrips.back() * tripCount);
               }
+
+              // llvm::outs() << "\n----------\n";
+              // llvm::outs() << *srcOp << " -> " << *dstOp << "\n";
+              // llvm::outs() << "depth=" << loopDepth << " distance=" <<
+              // distance
+              //              << "\n";
+              // for (auto dep : depComps)
+              //   llvm::outs() << "(" << dep.lb.getValue() << ","
+              //                << dep.ub.getValue() << "), ";
+              // llvm::outs() << "\n";
             }
 
             // We will only consider intra-dependencies with positive distance.
@@ -497,6 +511,8 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
     getMemAccessesMap(loopBlock, map);
 
     // Calculate initial interval.
+    // llvm::outs() << "ResII=" << getResMinII(begin, end, map)
+    //              << ", DepII=" << getDepMinII(op, map) << "\n";
     auto II = max(getResMinII(begin, end, map), getDepMinII(op, map));
     setAttrValue(op, "init_interval", II);
 

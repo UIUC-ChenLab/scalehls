@@ -71,14 +71,6 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
               srcAccess, dstAccess, depth, &depConstrs, &depComps);
 
           if (hasDependence(result)) {
-            // llvm::outs() << "\n----------\n";
-            // llvm::outs() << *srcOp << " -> " << *dstOp << "\n";
-            // llvm::outs() << "depth: " << loopDepth << ", distance: ";
-            // for (auto dep : depComps)
-            //   llvm::outs() << "(" << dep.lb.getValue() << ","
-            //                << dep.ub.getValue() << "), ";
-            // llvm::outs() << "\n";
-
             auto depComp = depComps[depth - 1];
             assert(loop == depComp.op && "unexpected dependency");
 
