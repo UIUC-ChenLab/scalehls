@@ -272,8 +272,6 @@ void HLSCppEstimator::estimateLoadStore(Operation *op, int64_t begin) {
     resMinII++;
   }
 
-  pipelineResMinII = max(pipelineResMinII, resMinII);
-
   if (isa<AffineReadOpInterface>(op))
     setScheduleValue(op, begin, begin + 2);
   else
@@ -283,6 +281,44 @@ void HLSCppEstimator::estimateLoadStore(Operation *op, int64_t begin) {
 //===----------------------------------------------------------------------===//
 // AffineForOp Related Methods
 //===----------------------------------------------------------------------===//
+
+int64_t HLSCppEstimator::getResMinII(int64_t begin, int64_t end,
+                                     MemAccessesMap &map) {
+  int64_t II = 1;
+  for (auto &pair : map) {
+    auto memref = pair.first;
+    auto memrefType = memref.getType().cast<MemRefType>();
+    auto partitionNum = getPartitionFactors(memrefType);
+    auto storageType = MemoryKind(memrefType.getMemorySpace());
+
+    auto accessNum = SmallVector<int64_t, 16>(partitionNum, 0);
+    // Prepare for BRAM_S1P memory kind.
+    auto writeNum = SmallVector<int64_t, 16>(partitionNum, 0);
+
+    // TODO: fine-tune for BRAM_T2P.
+    for (int64_t level = begin; level < end; ++level)
+      if (memPortInfosMap.count(level))
+        if (memPortInfosMap[level].count(memref)) {
+          auto &memPortInfos = memPortInfosMap[level][memref];
+
+          for (int64_t idx = 0; idx < partitionNum; ++idx) {
+            auto &info = memPortInfos[idx];
+            if (storageType == MemoryKind::BRAM_1P && info.rdwrPort < 1)
+              accessNum[idx]++;
+            else if (storageType == MemoryKind::BRAM_T2P && info.rdwrPort < 2)
+              accessNum[idx]++;
+            else if (info.rdPort < 1)
+              accessNum[idx]++;
+            else if (info.wrPort < 1)
+              writeNum[idx]++;
+          }
+        }
+
+    II = max({II, *std::max_element(writeNum.begin(), writeNum.end()),
+              *std::max_element(accessNum.begin(), accessNum.end())});
+  }
+  return II;
+}
 
 /// Calculate the minimum dependency II of function.
 int64_t HLSCppEstimator::getDepMinII(FuncOp func, MemAccessesMap &map) {
@@ -444,7 +480,6 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
   auto &loopBlock = op.getLoopBody().front();
 
   // Estimate the loop block.
-  pipelineResMinII = 1;
   if (auto schedule = estimateBlock(loopBlock, begin)) {
     end = max(end, schedule.getValue().second);
     begin = max(begin, schedule.getValue().first);
@@ -462,7 +497,7 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
     getMemAccessesMap(loopBlock, map);
 
     // Calculate initial interval.
-    auto II = max(pipelineResMinII, getDepMinII(op, map));
+    auto II = max(getResMinII(begin, end, map), getDepMinII(op, map));
     setAttrValue(op, "init_interval", II);
 
     setAttrValue(op, "flatten_trip_count", tripCount);
@@ -744,7 +779,6 @@ void HLSCppEstimator::estimateFunc() {
   getMemAccessesMap(func.front(), map);
 
   // Recursively estimate blocks in the function.
-  pipelineResMinII = 1;
   if (auto schedule = estimateBlock(func.front(), 0)) {
     auto latency = schedule.getValue().second;
     setAttrValue(func, "latency", latency);
@@ -761,7 +795,7 @@ void HLSCppEstimator::estimateFunc() {
 
     // TODO: support CallOp inside of the function.
     if (getBoolAttrValue(func, "pipeline")) {
-      auto II = max(pipelineResMinII, getDepMinII(func, map));
+      auto II = max(getResMinII(0, latency, map), getDepMinII(func, map));
       setAttrValue(func, "interval", II);
     }
 
