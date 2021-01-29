@@ -55,7 +55,7 @@ bool applyMergeAffineIf(FuncOp func);
 
 bool applyAffineStoreForward(FuncOp func, OpBuilder &builder);
 
-bool applySimplifyMemrefAccess(FuncOp func);
+bool applyRedundantOpRemoval(FuncOp func);
 
 //===----------------------------------------------------------------------===//
 // Optimization Pass Entries
@@ -82,7 +82,7 @@ std::unique_ptr<Pass> createArrayPartitionPass();
 /// Standard operation optimization passes.
 std::unique_ptr<Pass> createMergeAffineIfPass();
 std::unique_ptr<Pass> createAffineStoreForwardPass();
-std::unique_ptr<Pass> createSimplifyMemrefAccessPass();
+std::unique_ptr<Pass> createRedundantOpRemovalPass();
 
 /// Bufferization pass.
 std::unique_ptr<Pass> createHLSKernelBufferizePass();

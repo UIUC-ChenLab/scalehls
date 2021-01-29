@@ -51,11 +51,41 @@ public:
 
   using TileSizes = SmallVector<unsigned, 8>;
 
+  enum LoopState { HOT = 0, COLD = 1, FROZEN = 2 };
+  using BandState = SmallVector<LoopState, 8>;
+
+  bool loopBandIsFrozen(BandState bandState) {
+    for (auto loopState : bandState)
+      if (loopState != LoopState::FROZEN)
+        return false;
+    return true;
+  }
+
+  bool loopBandIsColdOrFrozen(BandState bandState) {
+    for (auto loopState : bandState)
+      if (loopState == LoopState::HOT)
+        return false;
+    return true;
+  }
+
+  bool loopBandIsOneHot(BandState bandState) {
+    unsigned hotNum = 0;
+    for (auto loopState : bandState)
+      if (loopState == LoopState::HOT)
+        hotNum++;
+
+    if (hotNum == 1)
+      return true;
+    else
+      return false;
+  }
+
   void emitDebugInfo(FuncOp targetFunc, StringRef message);
-  void applyLoopTilingStrategy(FuncOp targetFunc,
+  bool applyLoopTilingStrategy(FuncOp targetFunc,
                                ArrayRef<TileSizes> tileSizesList);
-  void updateTileSizesAtHead(TileSizes &tileSizes, const TileSizes &tripCounts,
-                             unsigned &head);
+
+  bool incrTileSizeAtLoc(TileSizes &tileSizes, const TileSizes &tripCounts,
+                         unsigned &loc);
 
   /// This is a temporary approach that does not scale.
   void applyMultipleLevelDSE();
@@ -79,7 +109,7 @@ void HLSCppOptimizer::emitDebugInfo(FuncOp targetFunc, StringRef message) {
                           << ", DSP utilization is " << Twine(dsp) << ".\n\n";);
 }
 
-void HLSCppOptimizer::applyLoopTilingStrategy(
+bool HLSCppOptimizer::applyLoopTilingStrategy(
     FuncOp targetFunc, ArrayRef<TileSizes> tileSizesList) {
   AffineLoopBands targetBands;
   getLoopBands(targetFunc.front(), targetBands);
@@ -88,8 +118,11 @@ void HLSCppOptimizer::applyLoopTilingStrategy(
   SmallVector<AffineForOp, 4> pipelineLoops;
   unsigned idx = 0;
   for (auto &band : targetBands)
-    pipelineLoops.push_back(
-        applyPartialAffineLoopTiling(band, builder, tileSizesList[idx++]));
+    if (auto loop =
+            applyPartialAffineLoopTiling(band, builder, tileSizesList[idx++]))
+      pipelineLoops.push_back(loop);
+    else
+      return false;
   applyPatternsAndFoldGreedily(targetFunc, patterns);
 
   // Apply loop pipelining.
@@ -100,7 +133,7 @@ void HLSCppOptimizer::applyLoopTilingStrategy(
   // Apply general optimizations and array partition.
   applyMergeAffineIf(targetFunc);
   applyAffineStoreForward(targetFunc, builder);
-  applySimplifyMemrefAccess(targetFunc);
+  applyRedundantOpRemoval(targetFunc);
   applyArrayPartition(targetFunc, builder);
   applyPatternsAndFoldGreedily(targetFunc, patterns);
 
@@ -117,31 +150,27 @@ void HLSCppOptimizer::applyLoopTilingStrategy(
   HLSCppEstimator(targetFunc, latencyMap).estimateFunc();
   emitDebugInfo(targetFunc, "Apply loop tiling and pipelining, generic IR "
                             "opts, and array partition.");
+  return true;
 }
 
-/// Update tile sizes by a factor of 2 at the head location.
-void HLSCppOptimizer::updateTileSizesAtHead(TileSizes &tileSizes,
-                                            const TileSizes &tripCounts,
-                                            unsigned &head) {
-  assert(tileSizes.size() == tripCounts.size() &&
-         "unexpected input tile sizes");
+bool HLSCppOptimizer::incrTileSizeAtLoc(TileSizes &tileSizes,
+                                        const TileSizes &tripCounts,
+                                        unsigned &loc) {
+  auto size = tileSizes[loc];
+  auto tripCount = tripCounts[loc];
 
-  for (unsigned e = tileSizes.size(); head < e; ++head) {
-    auto size = tileSizes[head];
-    auto tripCount = tripCounts[head];
+  if (size >= tripCount || tripCount % size != 0)
+    return false;
 
-    // At this stage, size must be 1 or a number which is divisible
-    // by tripCount. We need to find the update factor now.
-    if (size < tripCount) {
-      unsigned factor = 2;
-      while (tripCount % (size * factor) != 0)
-        factor++;
+  // Fine the minimum factor that can be applied.
+  unsigned factor = 2;
+  while (tripCount % (size * factor) != 0)
+    factor++;
 
-      size *= factor;
-      tileSizes[head] = size;
-      break;
-    }
-  }
+  // Increase and update tile size.
+  size *= factor;
+  tileSizes[loc] = size;
+  return true;
 }
 
 /// This is a temporary approach that does not scale.
@@ -155,16 +184,18 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
   // STAGE 0: Function Pipelining
   //===--------------------------------------------------------------------===//
 
-  // TODO: Try function pipelining.
-  // auto pipelineFunc = func.clone();
-  // applyFuncPipelining(pipelineFunc, builder);
-  // HLSCppEstimator(pipelineFunc, latencyMap).estimateFunc();
-  // pipelineFunc.erase();
+  /*
+    // TODO: Try function pipelining.
+    auto pipelineFunc = func.clone();
+    applyFuncPipelining(pipelineFunc, builder);
+    HLSCppEstimator(pipelineFunc, latencyMap).estimateFunc();
+    pipelineFunc.erase();
 
-  // if (getIntAttrValue(pipelineFunc, "dsp") <= numDSP) {
-  //   applyFuncPipelining(func, builder);
-  //   return;
-  // }
+    if (getIntAttrValue(pipelineFunc, "dsp") <= numDSP) {
+      applyFuncPipelining(func, builder);
+      return;
+    }
+  */
 
   //===--------------------------------------------------------------------===//
   // STAGE 1: Simplify Loop Nests Structure
@@ -283,7 +314,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
 
   // Optimize leaf loop nests. Different optimization conbinations will be
   // applied to each leaf LNs, and the best one which meets the resource
-  // constrains will be picked as the final solution.
+  // constraints will be picked as the final solution.
   // TODO: better handle variable bound kernels.
   AffineLoopBands targetBands;
   getLoopBands(func.front(), targetBands);
@@ -313,24 +344,29 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
   // Hold the loop number in each loop band.
   SmallVector<unsigned, 8> loopNumList;
 
-  // Hold the current tiling sizes of each loop band.
+  // Hold the current tiling sizes of each loop band. This is the main design
+  // vector which will evolve in the procedure of DSE.
   std::vector<TileSizes> tileSizesList;
+  // Hold the DSE status of all loops in each loop band.
+  std::vector<BandState> BandStateList;
+
   // Hold the current loop tiling location in each loop band.
   SmallVector<unsigned, 8> headLocList;
 
   // Initialize all lists.
   for (auto band : targetBands) {
     TileSizes tripCounts;
-    TileSizes sizes;
-    for (auto loop : band) {
+    for (auto loop : band)
       tripCounts.push_back(getIntAttrValue(loop, "trip_count"));
-      sizes.push_back(1);
-    }
 
+    // These two lists will not be modified in the DSE.
     tripCountsList.push_back(tripCounts);
-    loopNumList.push_back(tripCounts.size());
+    loopNumList.push_back(band.size());
 
-    tileSizesList.push_back(sizes);
+    // These two lists will evolve in the DSE.
+    tileSizesList.push_back(TileSizes(band.size(), 1));
+    BandStateList.push_back(BandState(band.size(), LoopState::COLD));
+
     headLocList.push_back(0);
   }
 
@@ -338,80 +374,148 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
   auto nonTileFunc = func.clone();
   applyLoopTilingStrategy(nonTileFunc, tileSizesList);
   unsigned minLatency = getIntAttrValue(nonTileFunc, "latency");
+
+  if (getIntAttrValue(nonTileFunc, "dsp") > numDSP)
+    return;
   nonTileFunc.erase();
-
   LLVM_DEBUG(llvm::dbgs() << "3. Search for the best tiling strategy.\n";);
+
   unsigned targetNum = targetBands.size();
-
-  // Search for the best tiling strategy.
-  // TODO: more fined grained and comprehensive dse.
+  unsigned iteration = 0;
+  // Main loop for design space exploration.
   while (true) {
-    // If there're more than one loop bands in the function, we'll first try to
-    // update the tiling size of ALL target loop bands with a factor of 2. This
-    // is for reducing the DSE complexity.
-    if (targetNum > 1) {
-      auto tmpTileSizesList = tileSizesList;
-      auto tmpHeadLocList = headLocList;
+    LLVM_DEBUG(llvm::dbgs() << "Iteration " << iteration++ << ":\n\n";);
+    bool isAllFrozen = true;
+    // Walk through each target loop band.
+    for (unsigned i = 0; i < targetNum; ++i) {
+      auto &bandState = BandStateList[i];
 
-      for (unsigned i = 0; i < targetNum; ++i)
-        updateTileSizesAtHead(tmpTileSizesList[i], tripCountsList[i],
-                              tmpHeadLocList[i]);
+      // Update state of the current loop band.
+      for (unsigned loc = 0; loc < loopNumList[i]; ++loc)
+        if (tileSizesList[i][loc] >= tripCountsList[i][loc])
+          bandState[loc] = LoopState::FROZEN;
 
-      // TODO: loop-based dse, hierarchical estimation.
-      auto tmpFunc = func.clone();
-      applyLoopTilingStrategy(tmpFunc, tmpTileSizesList);
+      // If all loop in the current loop band are frozen, continue and visit
+      // next loop band.
+      if (loopBandIsFrozen(bandState))
+        continue;
+      isAllFrozen = false;
 
-      // If the resource constaints are not met or the latency is not increased,
-      // we try more fine grained strategy. Otherwise, we accept the tmp tile
-      // strategy and head location, and enter the next iteration. We set a
-      // threshold 0.95 here to avoid glitches.
-      // TODO: fine tune the exit condition.
-      auto latency = getIntAttrValue(tmpFunc, "latency");
-      auto dsp = getIntAttrValue(tmpFunc, "dsp");
+      // If all loop in the current loop band are cold or frozen, walk through
+      // all loop levels and heat the best one to hot state.
+      if (loopBandIsColdOrFrozen(bandState)) {
+        unsigned bestLoc = 0;
+        unsigned bestLatency = UINT_MAX;
 
-      if (dsp <= numDSP && latency < minLatency * 0.95) {
-        tileSizesList = tmpTileSizesList;
-        headLocList = tmpHeadLocList;
-        minLatency = latency;
+        for (unsigned loc = 0; loc < loopNumList[i]; ++loc) {
+          if (bandState[loc] == LoopState::FROZEN)
+            continue;
+
+          // Increase the tile size of current location.
+          auto tmpTileSizesList = tileSizesList;
+          if (incrTileSizeAtLoc(tmpTileSizesList[i], tripCountsList[i], loc)) {
+            // Try to apply the new tile size.
+            auto tmpFunc = func.clone();
+            if (applyLoopTilingStrategy(tmpFunc, tmpTileSizesList)) {
+              auto latency = getIntAttrValue(tmpFunc, "latency");
+              auto dsp = getIntAttrValue(tmpFunc, "dsp");
+
+              if (dsp < numDSP && latency < bestLatency * 0.95) {
+                bestLoc = loc;
+                bestLatency = latency;
+              }
+              // Move to the next location.
+              continue;
+            }
+          }
+
+          // If the current loop cannot be further tiled, set it as frozen.
+          bandState[loc] = LoopState::FROZEN;
+        }
+
+        if (bestLatency != UINT_MAX) {
+          // Heat the best loop location. If the best latency is already better
+          // than the minimum found latency, apply it. Otherwise, only heat the
+          // location.
+          bandState[bestLoc] = LoopState::HOT;
+          if (bestLatency < minLatency * 0.95) {
+            incrTileSizeAtLoc(tileSizesList[i], tripCountsList[i], bestLoc);
+            minLatency = bestLatency;
+          }
+        } else {
+          // If cannot find a proper tiling strategy for the current loop band,
+          // frozen all loops.
+          for (unsigned loc = 0; loc < loopNumList[i]; ++loc)
+            bandState[loc] = LoopState::FROZEN;
+        }
+        // Move to the next DSE iteration.
         continue;
       }
-    }
 
-    // Walk through all loop bands in the function and update tiling strategy
-    // one by one.
-    bool hasUpdated = false;
-    for (unsigned i = 0; i < targetNum; ++i) {
-      // TODO: This is not efficient. As our estimation can be conducted in a
-      // more structural way, we should only focus on the current loop rather
-      // than the whole function. But for now this makes sense because we are
-      // only focusing on computation kernel level algorithms that typcially
-      // only have handy loop bands.
-      for (unsigned head = headLocList[i]; head < loopNumList[i]; ++head) {
-        // Only update the tiling strategy and head location of the current
-        // loop band.
+      // For now, there should only one loop locations are in HOT state.
+      if (loopBandIsOneHot(bandState)) {
+        unsigned hotLoc = 0;
+        for (unsigned loc = 0; loc < loopNumList[i]; ++loc)
+          if (bandState[loc] == LoopState::HOT)
+            hotLoc = loc;
+
+        unsigned lastLatency = minLatency;
+        unsigned tolerantCounter = 0;
+
+        // Increase the tile size of current location until the latency is
+        // improved or tile size cannot be further increased.
         auto tmpTileSizesList = tileSizesList;
-        updateTileSizesAtHead(tmpTileSizesList[i], tripCountsList[i], head);
+        while (true) {
+          // If the latency has not been improved for more than a certain
+          // number of iterations, stop to increase tile size.
+          if (tolerantCounter > 1) {
+            bandState[hotLoc] = LoopState::FROZEN;
+            break;
+          }
 
-        auto tmpFunc = func.clone();
-        applyLoopTilingStrategy(tmpFunc, tmpTileSizesList);
+          // Try to increase the tile size.
+          if (incrTileSizeAtLoc(tmpTileSizesList[i], tripCountsList[i],
+                                hotLoc)) {
+            // Try to apply the new tile size.
+            auto tmpFunc = func.clone();
+            if (applyLoopTilingStrategy(tmpFunc, tmpTileSizesList)) {
+              auto latency = getIntAttrValue(tmpFunc, "latency");
+              auto dsp = getIntAttrValue(tmpFunc, "dsp");
 
-        auto latency = getIntAttrValue(tmpFunc, "latency");
-        auto dsp = getIntAttrValue(tmpFunc, "dsp");
+              if (dsp < numDSP && latency < minLatency * 0.95) {
+                // If find a new minimum latency, apply it.
+                tileSizesList = tmpTileSizesList;
+                minLatency = latency;
+                break;
+              } else if (dsp < numDSP && latency < lastLatency * 0.95) {
+                // If the latency is better than the last iteration, even if it
+                // is not the minimum latency, continue to try on the hot loop
+                // location.
+                lastLatency = latency;
+                tolerantCounter = 0;
+                continue;
+              } else {
+                // If the latency is worse than the last iteration, increase the
+                // tolerant counter by 1 and continue to
+                lastLatency = latency;
+                tolerantCounter++;
+                continue;
+              }
+            }
+          }
 
-        if (dsp <= numDSP && latency < minLatency * 0.95) {
-          tileSizesList = tmpTileSizesList;
-          headLocList[i] = head;
-          minLatency = latency;
-
-          hasUpdated = true;
+          // If the hot location cannot contribute to the improvement of
+          // latency, set it as frozen.
+          bandState[hotLoc] = LoopState::FROZEN;
           break;
         }
       }
     }
-
-    // If no loop band is updated, break the searching.
-    if (!hasUpdated)
+    if (isAllFrozen)
       break;
+
+    // if (iteration == 1)
+    //   break;
   }
 
   // Finally, we found the best tiling strategy.
@@ -429,10 +533,11 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
     if (spec.ParseError())
       emitError(module.getLoc(), "target spec file parse fail\n");
 
-    // Collect profiling data, where default values are based on PYNQ-Z1 board.
+    // Collect profiling data, where default values are based on PYNQ-Z1
+    // board.
     LatencyMap latencyMap;
     getLatencyMap(spec, latencyMap);
-    auto numDSP = spec.GetInteger("specification", "dsp", 220);
+    int64_t numDSP = ceil(spec.GetInteger("specification", "dsp", 220) * 1.1);
 
     // Optimize the top function.
     for (auto func : module.getOps<FuncOp>())

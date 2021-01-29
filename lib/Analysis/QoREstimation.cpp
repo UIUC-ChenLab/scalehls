@@ -663,23 +663,12 @@ HLSCppEstimator::Resource HLSCppEstimator::estimateResource(Block &block,
 
   // Find the max resource utilization across all schedule levels.
   int64_t maxFadd = 0;
-  int64_t totalFadd = 0;
-  for (auto level : faddMap) {
+  for (auto level : faddMap)
     maxFadd = max(maxFadd, level.second);
-    totalFadd += level.second;
-  }
 
   int64_t maxFmul = 0;
-  int64_t totalFmul = 0;
-  for (auto level : fmulMap) {
+  for (auto level : fmulMap)
     maxFmul = max(maxFmul, level.second);
-    totalFmul += level.second;
-  }
-
-  // Calculate the total fadd and fmul number as each operation will cover
-  // {latency + 1} scheduling level.
-  totalFadd /= (latencyMap["fadd"] + 1);
-  totalFmul /= (latencyMap["fmul"] + 1);
 
   // We assume the loop resource utilization cannot be shared. Therefore, the
   // overall resource utilization is loops' plus other operstions'. According
@@ -690,6 +679,15 @@ HLSCppEstimator::Resource HLSCppEstimator::estimateResource(Block &block,
   // If the block is pipelined (interval is positive), the minimum resource
   // utilization is determined by interval.
   if (interval > 0) {
+    int64_t totalFadd = 0;
+    int64_t totalFmul = 0;
+    block.walk([&](Operation *op) {
+      if (isa<AddFOp, SubFOp>(op))
+        totalFadd++;
+      else if (isa<MulFOp>(op))
+        totalFmul++;
+    });
+
     auto minDSPNum = (totalFadd * 2 + totalFmul * 3) / interval;
     dsp = loopDSPNum + max(maxFadd * 2 + maxFmul * 3, minDSPNum);
   }

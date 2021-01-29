@@ -189,14 +189,14 @@ def AffineStoreForward : Pass<"affine-store-forward", "FuncOp"> {
   let constructor = "mlir::scalehls::createAffineStoreForwardPass()";
 }
 
-def SimplifyMemrefAccess : Pass<"simplify-memref-access", "FuncOp"> {
-  let summary = "Remove redundant load and store operations";
+def RedundantOpRemoval : Pass<"redundant-op-removal", "FuncOp"> {
+  let summary = "Remove redundant operations";
   let description = [{
-    This simplify-memref-access pass will eliminate the known redundant load and
-    store operations for simplifying the memref access.
+    This redundant-op-removal pass will eliminate the known redundant
+    operations, including load/store operations and if statements.
   }];
 
-  let constructor = "mlir::scalehls::createSimplifyMemrefAccessPass()";
+  let constructor = "mlir::scalehls::createRedundantOpRemovalPass()";
 }
 
 //===----------------------------------------------------------------------===//

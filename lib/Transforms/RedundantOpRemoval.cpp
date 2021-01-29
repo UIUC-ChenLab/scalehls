@@ -14,13 +14,12 @@ using namespace mlir;
 using namespace scalehls;
 
 namespace {
-struct SimplifyMemrefAccess
-    : public SimplifyMemrefAccessBase<SimplifyMemrefAccess> {
-  void runOnOperation() override { applySimplifyMemrefAccess(getOperation()); }
+struct RedundantOpRemoval : public RedundantOpRemovalBase<RedundantOpRemoval> {
+  void runOnOperation() override { applyRedundantOpRemoval(getOperation()); }
 };
 } // namespace
 
-bool scalehls::applySimplifyMemrefAccess(FuncOp func) {
+bool scalehls::applyRedundantOpRemoval(FuncOp func) {
   // Collect all load and store operations in the function block.
   MemAccessesMap map;
   getMemAccessesMap(func.front(), map);
@@ -41,11 +40,11 @@ bool scalehls::applySimplifyMemrefAccess(FuncOp func) {
         auto secondIsRead = isa<AffineReadOpInterface>(secondOp);
 
         // Check whether the two operations statically have the same access.
-        // This is conservative, because dependency analysis should be conducted
-        // for checking whether the in between operations should break the
-        // simplification.
+        // TODO: This is very progressive, because dependency analysis should be
+        // conducted for checking whether the in between operations should break
+        // the simplification.
         if (firstAccess != secondAccess)
-          break;
+          continue;
 
         // If the second operation's access direction is different with the
         // first operation, the first operation is known not redundant.
@@ -90,9 +89,12 @@ bool scalehls::applySimplifyMemrefAccess(FuncOp func) {
     }
   }
 
+  // Remove redundant affine if statements.
+  func.walk([&](AffineIfOp ifOp) {});
+
   return true;
 }
 
-std::unique_ptr<Pass> scalehls::createSimplifyMemrefAccessPass() {
-  return std::make_unique<SimplifyMemrefAccess>();
+std::unique_ptr<Pass> scalehls::createRedundantOpRemovalPass() {
+  return std::make_unique<RedundantOpRemoval>();
 }
