@@ -12,23 +12,6 @@
 using namespace mlir;
 using namespace scalehls;
 
-namespace {
-struct SplitFunction : public SplitFunctionBase<SplitFunction> {
-  void runOnOperation() override {
-    auto module = getOperation();
-    auto builder = OpBuilder(module);
-
-    SmallVector<FuncOp, 4> funcs;
-    for (auto func : module.getOps<FuncOp>())
-      funcs.push_back(func);
-
-    for (auto func : funcs) {
-      applySplitFunction(func, builder);
-    }
-  }
-};
-} // namespace
-
 bool scalehls::applySplitFunction(FuncOp func, OpBuilder &builder) {
   Liveness liveness(func);
 
@@ -178,6 +161,23 @@ bool scalehls::applySplitFunction(FuncOp func, OpBuilder &builder) {
   }
   return true;
 }
+
+namespace {
+struct SplitFunction : public SplitFunctionBase<SplitFunction> {
+  void runOnOperation() override {
+    auto module = getOperation();
+    auto builder = OpBuilder(module);
+
+    SmallVector<FuncOp, 4> funcs;
+    for (auto func : module.getOps<FuncOp>())
+      funcs.push_back(func);
+
+    for (auto func : funcs) {
+      applySplitFunction(func, builder);
+    }
+  }
+};
+} // namespace
 
 std::unique_ptr<Pass> scalehls::createSplitFunctionPass() {
   return std::make_unique<SplitFunction>();

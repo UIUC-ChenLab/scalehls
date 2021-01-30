@@ -10,12 +10,6 @@
 using namespace mlir;
 using namespace scalehls;
 
-namespace {
-struct MergeAffineIf : public MergeAffineIfBase<MergeAffineIf> {
-  void runOnOperation() override { applyMergeAffineIf(getOperation()); }
-};
-} // namespace
-
 static bool checkSameIfStatement(AffineIfOp lhsOp, AffineIfOp rhsOp) {
   if (lhsOp == nullptr || rhsOp == nullptr)
     return false;
@@ -56,7 +50,7 @@ static bool checkSameIfStatement(AffineIfOp lhsOp, AffineIfOp rhsOp) {
   return true;
 }
 
-bool scalehls::applyMergeAffineIf(FuncOp func) {
+static bool applyMergeAffineIf(FuncOp func) {
   SmallVector<AffineIfOp, 32> ifOpsToErase;
 
   func.walk([&](Operation *op) {
@@ -103,6 +97,12 @@ bool scalehls::applyMergeAffineIf(FuncOp func) {
 
   return true;
 }
+
+namespace {
+struct MergeAffineIf : public MergeAffineIfBase<MergeAffineIf> {
+  void runOnOperation() override { applyMergeAffineIf(getOperation()); }
+};
+} // namespace
 
 std::unique_ptr<Pass> scalehls::createMergeAffineIfPass() {
   return std::make_unique<MergeAffineIf>();

@@ -13,13 +13,7 @@
 using namespace mlir;
 using namespace scalehls;
 
-namespace {
-struct RedundantOpRemoval : public RedundantOpRemovalBase<RedundantOpRemoval> {
-  void runOnOperation() override { applyRedundantOpRemoval(getOperation()); }
-};
-} // namespace
-
-bool scalehls::applyRedundantOpRemoval(FuncOp func) {
+static bool applyRedundantOpRemoval(FuncOp func) {
   // Collect all load and store operations in the function block.
   MemAccessesMap map;
   getMemAccessesMap(func.front(), map);
@@ -94,6 +88,12 @@ bool scalehls::applyRedundantOpRemoval(FuncOp func) {
 
   return true;
 }
+
+namespace {
+struct RedundantOpRemoval : public RedundantOpRemovalBase<RedundantOpRemoval> {
+  void runOnOperation() override { applyRedundantOpRemoval(getOperation()); }
+};
+} // namespace
 
 std::unique_ptr<Pass> scalehls::createRedundantOpRemovalPass() {
   return std::make_unique<RedundantOpRemoval>();

@@ -12,20 +12,6 @@
 using namespace mlir;
 using namespace scalehls;
 
-namespace {
-struct RemoveVariableBound
-    : public RemoveVariableBoundBase<RemoveVariableBound> {
-  void runOnOperation() override {
-    auto func = getOperation();
-    auto builder = OpBuilder(func);
-
-    // Walk through all loops.
-    for (auto loop : func.getOps<AffineForOp>())
-      applyRemoveVariableBound(loop, builder);
-  }
-};
-} // namespace
-
 /// Apply remove variable bound to all inner loops of the input loop.
 bool scalehls::applyRemoveVariableBound(AffineForOp loop, OpBuilder &builder) {
   SmallVector<AffineForOp, 4> nestedLoops;
@@ -77,6 +63,20 @@ bool scalehls::applyRemoveVariableBound(AffineForOp loop, OpBuilder &builder) {
   }
   return true;
 }
+
+namespace {
+struct RemoveVariableBound
+    : public RemoveVariableBoundBase<RemoveVariableBound> {
+  void runOnOperation() override {
+    auto func = getOperation();
+    auto builder = OpBuilder(func);
+
+    // Walk through all loops.
+    for (auto loop : func.getOps<AffineForOp>())
+      applyRemoveVariableBound(loop, builder);
+  }
+};
+} // namespace
 
 std::unique_ptr<Pass> scalehls::createRemoveVariableBoundPass() {
   return std::make_unique<RemoveVariableBound>();

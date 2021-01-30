@@ -14,18 +14,7 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hlscpp;
 
-namespace {
-struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
-  void runOnOperation() override {
-    auto func = getOperation();
-    auto builder = OpBuilder(func);
-
-    applyArrayPartition(func, builder);
-  }
-};
-} // namespace
-
-bool scalehls::applyArrayPartition(FuncOp func, OpBuilder &builder) {
+static bool applyArrayPartition(FuncOp func, OpBuilder &builder) {
   // Check whether the input function is pipelined.
   bool funcPipeline = false;
   if (auto attr = func->getAttrOfType<BoolAttr>("pipeline"))
@@ -216,6 +205,17 @@ bool scalehls::applyArrayPartition(FuncOp func, OpBuilder &builder) {
   // array partition strategy selected?
   return true;
 }
+
+namespace {
+struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
+  void runOnOperation() override {
+    auto func = getOperation();
+    auto builder = OpBuilder(func);
+
+    applyArrayPartition(func, builder);
+  }
+};
+} // namespace
 
 std::unique_ptr<Pass> scalehls::createArrayPartitionPass() {
   return std::make_unique<ArrayPartition>();

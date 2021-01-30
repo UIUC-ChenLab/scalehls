@@ -11,29 +11,9 @@
 using namespace mlir;
 using namespace scalehls;
 
-namespace {
-struct FuncPipelining : public FuncPipeliningBase<FuncPipelining> {
-  void runOnOperation() override {
-    auto func = getOperation();
-    auto builder = OpBuilder(func);
-
-    if (func.getName() == targetFunc) {
-      applyFuncPipelining(func, builder);
-
-      // Canonicalize the IR after function pipelining.
-      OwningRewritePatternList patterns;
-      for (auto *op : builder.getContext()->getRegisteredOperations())
-        op->getCanonicalizationPatterns(patterns, builder.getContext());
-
-      applyPatternsAndFoldGreedily(func.getRegion(), std::move(patterns));
-    }
-  }
-};
-} // namespace
-
 /// Apply function pipelining to the input function, all contained loops are
 /// automatically fully unrolled.
-bool scalehls::applyFuncPipelining(FuncOp func, OpBuilder &builder) {
+static bool applyFuncPipelining(FuncOp func, OpBuilder &builder) {
   // TODO: the teminate condition need to be updated. This will try at most 8
   // iterations.
   for (auto i = 0; i < 8; ++i) {
@@ -55,6 +35,26 @@ bool scalehls::applyFuncPipelining(FuncOp func, OpBuilder &builder) {
 
   return true;
 }
+
+namespace {
+struct FuncPipelining : public FuncPipeliningBase<FuncPipelining> {
+  void runOnOperation() override {
+    auto func = getOperation();
+    auto builder = OpBuilder(func);
+
+    if (func.getName() == targetFunc) {
+      applyFuncPipelining(func, builder);
+
+      // Canonicalize the IR after function pipelining.
+      OwningRewritePatternList patterns;
+      for (auto *op : builder.getContext()->getRegisteredOperations())
+        op->getCanonicalizationPatterns(patterns, builder.getContext());
+
+      applyPatternsAndFoldGreedily(func.getRegion(), std::move(patterns));
+    }
+  }
+};
+} // namespace
 
 std::unique_ptr<Pass> scalehls::createFuncPipeliningPass() {
   return std::make_unique<FuncPipelining>();

@@ -41,21 +41,9 @@ AffineForOp applyPartialAffineLoopTiling(AffineLoopBand &band,
                                          OpBuilder &builder,
                                          ArrayRef<unsigned> tileSizes);
 
-/// Apply function pipelining to the input function, all contained loops are
-/// automatically fully unrolled.
-bool applyFuncPipelining(FuncOp func, OpBuilder &builder);
-
 /// Apply loop pipelining to the input loop, all inner loops are automatically
 /// fully unrolled.
 bool applyLoopPipelining(AffineForOp loop, OpBuilder &builder);
-
-bool applyArrayPartition(FuncOp func, OpBuilder &builder);
-
-bool applyMergeAffineIf(FuncOp func);
-
-bool applyAffineStoreForward(FuncOp func, OpBuilder &builder);
-
-bool applyRedundantOpRemoval(FuncOp func);
 
 //===----------------------------------------------------------------------===//
 // Optimization Pass Entries

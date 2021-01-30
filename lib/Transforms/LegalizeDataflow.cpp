@@ -11,17 +11,6 @@
 using namespace mlir;
 using namespace scalehls;
 
-namespace {
-struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
-  void runOnOperation() override {
-    auto func = getOperation();
-    auto builder = OpBuilder(func);
-
-    applyLegalizeDataflow(func, builder, minGran, insertCopy);
-  }
-};
-} // namespace
-
 // For storing the intermediate memory and successor loops indexed by the
 // predecessor loop.
 using Successors = SmallVector<std::pair<Value, Operation *>, 2>;
@@ -211,6 +200,17 @@ bool scalehls::applyLegalizeDataflow(FuncOp func, OpBuilder &builder,
   func->setAttr("dataflow", builder.getBoolAttr(true));
   return true;
 }
+
+namespace {
+struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
+  void runOnOperation() override {
+    auto func = getOperation();
+    auto builder = OpBuilder(func);
+
+    applyLegalizeDataflow(func, builder, minGran, insertCopy);
+  }
+};
+} // namespace
 
 std::unique_ptr<Pass> scalehls::createLegalizeDataflowPass() {
   return std::make_unique<LegalizeDataflow>();

@@ -12,55 +12,6 @@
 using namespace mlir;
 using namespace scalehls;
 
-namespace {
-struct PartialAffineLoopTile
-    : public PartialAffineLoopTileBase<PartialAffineLoopTile> {
-  void runOnOperation() override {
-    auto func = getOperation();
-    auto builder = OpBuilder(func);
-
-    AffineLoopBands targetBands;
-    getTileableBands(func, &targetBands);
-
-    for (auto band : targetBands) {
-      SmallVector<unsigned, 8> sizes;
-      unsigned remainTileSize = tileSize;
-
-      // Calculate the tiling size of each loop level.
-      for (auto loop : band) {
-        if (auto optionalTripCount = getConstantTripCount(loop)) {
-          auto tripCount = optionalTripCount.getValue();
-          auto size = tripCount;
-
-          if (remainTileSize >= tripCount)
-            remainTileSize = (remainTileSize + tripCount - 1) / tripCount;
-          else if (remainTileSize > 1) {
-            size = 1;
-            while (size < remainTileSize || tripCount % size != 0) {
-              size++;
-            }
-            remainTileSize = 1;
-          } else
-            size = 1;
-
-          sizes.push_back(size);
-        } else
-          sizes.push_back(1);
-      }
-
-      applyPartialAffineLoopTiling(band, builder, sizes);
-    }
-
-    // Canonicalize the IR after loop tiling.
-    OwningRewritePatternList patterns;
-    for (auto *op : func.getContext()->getRegisteredOperations())
-      op->getCanonicalizationPatterns(patterns, func.getContext());
-
-    applyPatternsAndFoldGreedily(func, std::move(patterns));
-  }
-};
-} // namespace
-
 /// Apply loop tiling and return the new loop that should be pipelined.
 AffineForOp
 scalehls::applyPartialAffineLoopTiling(AffineLoopBand &band, OpBuilder &builder,
@@ -115,6 +66,55 @@ scalehls::applyPartialAffineLoopTiling(AffineLoopBand &band, OpBuilder &builder,
 
   return band[pipelineLoc];
 }
+
+namespace {
+struct PartialAffineLoopTile
+    : public PartialAffineLoopTileBase<PartialAffineLoopTile> {
+  void runOnOperation() override {
+    auto func = getOperation();
+    auto builder = OpBuilder(func);
+
+    AffineLoopBands targetBands;
+    getTileableBands(func, &targetBands);
+
+    for (auto band : targetBands) {
+      SmallVector<unsigned, 8> sizes;
+      unsigned remainTileSize = tileSize;
+
+      // Calculate the tiling size of each loop level.
+      for (auto loop : band) {
+        if (auto optionalTripCount = getConstantTripCount(loop)) {
+          auto tripCount = optionalTripCount.getValue();
+          auto size = tripCount;
+
+          if (remainTileSize >= tripCount)
+            remainTileSize = (remainTileSize + tripCount - 1) / tripCount;
+          else if (remainTileSize > 1) {
+            size = 1;
+            while (size < remainTileSize || tripCount % size != 0) {
+              size++;
+            }
+            remainTileSize = 1;
+          } else
+            size = 1;
+
+          sizes.push_back(size);
+        } else
+          sizes.push_back(1);
+      }
+
+      applyPartialAffineLoopTiling(band, builder, sizes);
+    }
+
+    // Canonicalize the IR after loop tiling.
+    OwningRewritePatternList patterns;
+    for (auto *op : func.getContext()->getRegisteredOperations())
+      op->getCanonicalizationPatterns(patterns, func.getContext());
+
+    applyPatternsAndFoldGreedily(func, std::move(patterns));
+  }
+};
+} // namespace
 
 std::unique_ptr<Pass> scalehls::createPartialAffineLoopTilePass() {
   return std::make_unique<PartialAffineLoopTile>();

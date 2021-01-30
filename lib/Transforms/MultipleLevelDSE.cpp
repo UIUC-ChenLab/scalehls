@@ -5,7 +5,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Analysis/LoopAnalysis.h"
+#include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "mlir/Transforms/Passes.h"
 #include "scalehls/Analysis/QoREstimation.h"
 #include "scalehls/Transforms/Passes.h"
 #include "llvm/Support/Debug.h"
@@ -131,10 +133,15 @@ bool HLSCppOptimizer::applyLoopTilingStrategy(
   applyPatternsAndFoldGreedily(targetFunc, patterns);
 
   // Apply general optimizations and array partition.
-  applyMergeAffineIf(targetFunc);
-  applyAffineStoreForward(targetFunc, builder);
-  applyRedundantOpRemoval(targetFunc);
-  applyArrayPartition(targetFunc, builder);
+  PassManager passManager(targetFunc.getContext(), "func");
+  passManager.addPass(createMergeAffineIfPass());
+  passManager.addPass(createAffineStoreForwardPass());
+  passManager.addPass(createRedundantOpRemovalPass());
+  passManager.addPass(createCSEPass());
+  passManager.addPass(createArrayPartitionPass());
+
+  if (failed(passManager.run(targetFunc)))
+    return false;
   applyPatternsAndFoldGreedily(targetFunc, patterns);
 
   // Estimate performance and resource utilization.
@@ -175,27 +182,11 @@ bool HLSCppOptimizer::incrTileSizeAtLoc(TileSizes &tileSizes,
 
 /// This is a temporary approach that does not scale.
 void HLSCppOptimizer::applyMultipleLevelDSE() {
+  applyPatternsAndFoldGreedily(func, patterns);
   HLSCppEstimator(func, latencyMap).estimateFunc();
   if (getIntAttrValue(func, "dsp") > numDSP)
     return;
   emitDebugInfo(func, "Start multiple level design space exploration.");
-
-  //===--------------------------------------------------------------------===//
-  // STAGE 0: Function Pipelining
-  //===--------------------------------------------------------------------===//
-
-  /*
-    // TODO: Try function pipelining.
-    auto pipelineFunc = func.clone();
-    applyFuncPipelining(pipelineFunc, builder);
-    HLSCppEstimator(pipelineFunc, latencyMap).estimateFunc();
-    pipelineFunc.erase();
-
-    if (getIntAttrValue(pipelineFunc, "dsp") <= numDSP) {
-      applyFuncPipelining(func, builder);
-      return;
-    }
-  */
 
   //===--------------------------------------------------------------------===//
   // STAGE 1: Simplify Loop Nests Structure

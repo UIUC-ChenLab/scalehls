@@ -19,23 +19,6 @@ using namespace scalehls;
 // pass support to forward the StoreOps that are conditionally executed.
 
 namespace {
-struct AffineStoreForward : public AffineStoreForwardBase<AffineStoreForward> {
-  void runOnOperation() override {
-    // Only supports single block functions at the moment.
-    FuncOp func = getOperation();
-    auto builder = OpBuilder(func);
-
-    if (!llvm::hasSingleElement(func)) {
-      markAllAnalysesPreserved();
-      return;
-    }
-
-    applyAffineStoreForward(func, builder);
-  }
-};
-} // namespace
-
-namespace {
 // The store to load forwarding relies on three conditions:
 //
 // 1) they need to have mathematically equivalent affine access functions
@@ -235,7 +218,7 @@ void AffineStoreForwardImpl::forwardStoreToLoad(AffineReadOpInterface loadOp) {
   memrefsToErase.insert(loadOp.getMemRef());
 }
 
-bool scalehls::applyAffineStoreForward(FuncOp func, OpBuilder &builder) {
+static bool applyAffineStoreForward(FuncOp func, OpBuilder &builder) {
   SmallPtrSet<Value, 4> memrefsToErase;
   memrefsToErase.clear();
 
@@ -274,6 +257,23 @@ bool scalehls::applyAffineStoreForward(FuncOp func, OpBuilder &builder) {
 
   return true;
 }
+
+namespace {
+struct AffineStoreForward : public AffineStoreForwardBase<AffineStoreForward> {
+  void runOnOperation() override {
+    // Only supports single block functions at the moment.
+    FuncOp func = getOperation();
+    auto builder = OpBuilder(func);
+
+    if (!llvm::hasSingleElement(func)) {
+      markAllAnalysesPreserved();
+      return;
+    }
+
+    applyAffineStoreForward(func, builder);
+  }
+};
+} // namespace
 
 /// Creates a pass to perform optimizations relying on memref dataflow such as
 /// store to load forwarding, elimination of dead stores, and dead allocs.

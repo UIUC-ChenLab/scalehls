@@ -11,28 +11,6 @@
 using namespace mlir;
 using namespace scalehls;
 
-namespace {
-struct AffineLoopPerfection
-    : public AffineLoopPerfectionBase<AffineLoopPerfection> {
-  void runOnOperation() override {
-    auto func = getOperation();
-    auto builder = OpBuilder(func);
-
-    // Collect all loops that: (1) is the innermost loop (contains zero child
-    // loop nest); or (2) contains more than one child loop nest.
-    SmallVector<AffineForOp, 4> targetLoops;
-    func.walk([&](AffineForOp loop) {
-      if (getChildLoopNum(loop) != 1)
-        targetLoops.push_back(loop);
-    });
-
-    // Apply loop perfection to each target loop.
-    for (auto loop : targetLoops)
-      applyAffineLoopPerfection(loop, builder);
-  }
-};
-} // namespace
-
 /// Apply loop perfection to all outer loops of the input loop until the outer
 /// operation is no longer a loop, or contains more than one child loop.
 /// TODO: passing in AffineLoopBand rather than AffineForOp to simplify the
@@ -197,6 +175,28 @@ bool scalehls::applyAffineLoopPerfection(AffineForOp innermostLoop,
   }
   return true;
 }
+
+namespace {
+struct AffineLoopPerfection
+    : public AffineLoopPerfectionBase<AffineLoopPerfection> {
+  void runOnOperation() override {
+    auto func = getOperation();
+    auto builder = OpBuilder(func);
+
+    // Collect all loops that: (1) is the innermost loop (contains zero child
+    // loop nest); or (2) contains more than one child loop nest.
+    SmallVector<AffineForOp, 4> targetLoops;
+    func.walk([&](AffineForOp loop) {
+      if (getChildLoopNum(loop) != 1)
+        targetLoops.push_back(loop);
+    });
+
+    // Apply loop perfection to each target loop.
+    for (auto loop : targetLoops)
+      applyAffineLoopPerfection(loop, builder);
+  }
+};
+} // namespace
 
 std::unique_ptr<Pass> scalehls::createAffineLoopPerfectionPass() {
   return std::make_unique<AffineLoopPerfection>();

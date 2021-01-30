@@ -13,22 +13,6 @@
 using namespace mlir;
 using namespace scalehls;
 
-namespace {
-struct AffineLoopOrderOpt : public AffineLoopOrderOptBase<AffineLoopOrderOpt> {
-  void runOnOperation() override {
-    auto func = getOperation();
-
-    // Collect all target loop bands.
-    AffineLoopBands targetBands;
-    getLoopBands(func.front(), targetBands);
-
-    // Apply loop order optimization to each loop band.
-    for (auto band : targetBands)
-      applyAffineLoopOrderOpt(band);
-  }
-};
-} // namespace
-
 bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
   if (!isPerfectlyNested(band))
     return false;
@@ -162,6 +146,22 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
   }
   return true;
 }
+
+namespace {
+struct AffineLoopOrderOpt : public AffineLoopOrderOptBase<AffineLoopOrderOpt> {
+  void runOnOperation() override {
+    auto func = getOperation();
+
+    // Collect all target loop bands.
+    AffineLoopBands targetBands;
+    getLoopBands(func.front(), targetBands);
+
+    // Apply loop order optimization to each loop band.
+    for (auto band : targetBands)
+      applyAffineLoopOrderOpt(band);
+  }
+};
+} // namespace
 
 std::unique_ptr<Pass> scalehls::createAffineLoopOrderOptPass() {
   return std::make_unique<AffineLoopOrderOpt>();
