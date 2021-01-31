@@ -49,7 +49,7 @@ bool scalehls::applyRemoveVariableBound(AffineForOp loop, OpBuilder &builder) {
 
         // Move all operations in the innermost perfect loop into the new
         // created AffineIf region.
-        auto &ifBlock = ifOp.getBody()->getOperations();
+        auto &ifBlock = ifOp.getThenBlock()->getOperations();
         auto &loopBlock = nestedLoops.back().getBody()->getOperations();
         ifBlock.splice(ifBlock.begin(), loopBlock, std::next(loopBlock.begin()),
                        std::prev(loopBlock.end(), 1));

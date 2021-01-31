@@ -12,7 +12,7 @@
 using namespace mlir;
 using namespace scalehls;
 
-bool scalehls::applySplitFunction(FuncOp func, OpBuilder &builder) {
+static bool applySplitFunction(FuncOp func, OpBuilder &builder) {
   Liveness liveness(func);
 
   DenseMap<int64_t, SmallVector<Operation *, 8>> dataflowOps;
@@ -137,7 +137,7 @@ bool scalehls::applySplitFunction(FuncOp func, OpBuilder &builder) {
       for (unsigned i = 0, e = inputValues.size(); i < e; ++i)
         inputValues[i].replaceUsesWithIf(
             entry->getArgument(i), [&](OpOperand &use) {
-              return subFunc.getOperation()->isAncestor(use.getOwner());
+              return subFunc->isAncestor(use.getOwner());
             });
     }
 

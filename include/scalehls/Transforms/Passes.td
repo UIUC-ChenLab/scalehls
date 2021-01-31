@@ -169,14 +169,15 @@ def ArrayPartition : Pass<"array-partition", "FuncOp"> {
 // Standard Operation Optimization Passes
 //===----------------------------------------------------------------------===//
 
-def MergeAffineIf : Pass<"merge-affine-if", "FuncOp"> {
-  let summary = "Merge if statements with same condition";
+def SimplifyAffineIf : Pass<"simplify-affine-if", "FuncOp"> {
+  let summary = "Simplify affine if operations";
   let description = [{
-    This merge-affine-if pass will try to merge all affine if statements that
-    having the same condition.
+    This simplify-affine-if pass will eliminate all redundant affine if
+    operations which will always take then or else branch, and merge all affine
+    if operations that having the same statement.
   }];
 
-  let constructor = "mlir::scalehls::createMergeAffineIfPass()";
+  let constructor = "mlir::scalehls::createSimplifyAffineIfPass()";
 }
 
 def AffineStoreForward : Pass<"affine-store-forward", "FuncOp"> {
@@ -189,14 +190,14 @@ def AffineStoreForward : Pass<"affine-store-forward", "FuncOp"> {
   let constructor = "mlir::scalehls::createAffineStoreForwardPass()";
 }
 
-def RedundantOpRemoval : Pass<"redundant-op-removal", "FuncOp"> {
-  let summary = "Remove redundant operations";
+def SimplifyMemrefAccess : Pass<"simplify-memref-access", "FuncOp"> {
+  let summary = "Remove redundant load and store operations";
   let description = [{
-    This redundant-op-removal pass will eliminate the known redundant
-    operations, including load/store operations and if statements.
+    This simplify-memref-access pass will eliminate the known redundant load and
+    store operations for simplifying the memref access.
   }];
 
-  let constructor = "mlir::scalehls::createRedundantOpRemovalPass()";
+  let constructor = "mlir::scalehls::createSimplifyMemrefAccessPass()";
 }
 
 //===----------------------------------------------------------------------===//

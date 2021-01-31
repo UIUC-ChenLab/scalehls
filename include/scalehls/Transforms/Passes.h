@@ -22,11 +22,6 @@ namespace scalehls {
 // Optimization APIs
 //===----------------------------------------------------------------------===//
 
-bool applyLegalizeDataflow(FuncOp func, OpBuilder &builder, int64_t minGran,
-                           bool insertCopy = true);
-
-bool applySplitFunction(FuncOp func, OpBuilder &builder);
-
 /// Apply loop perfection to all outer loops of the input loop until the outer
 /// operation is no longer a loop, or contains more than one child loop.
 bool applyAffineLoopPerfection(AffineForOp loop, OpBuilder &builder);
@@ -68,9 +63,9 @@ std::unique_ptr<Pass> createLoopPipeliningPass();
 std::unique_ptr<Pass> createArrayPartitionPass();
 
 /// Standard operation optimization passes.
-std::unique_ptr<Pass> createMergeAffineIfPass();
+std::unique_ptr<Pass> createSimplifyAffineIfPass();
 std::unique_ptr<Pass> createAffineStoreForwardPass();
-std::unique_ptr<Pass> createRedundantOpRemovalPass();
+std::unique_ptr<Pass> createSimplifyMemrefAccessPass();
 
 /// Bufferization pass.
 std::unique_ptr<Pass> createHLSKernelBufferizePass();

@@ -109,7 +109,7 @@ bool scalehls::applyAffineLoopPerfection(AffineForOp innermostLoop,
     for (auto opIt = opList.rbegin(); opIt != opList.rend(); ++opIt) {
       auto &op = *opIt;
       if (!isa<AffineYieldOp>(op)) {
-        if (&op != childLoop.getOperation())
+        if (&op != childLoop)
           backOps.push_back(&op);
         else
           break;

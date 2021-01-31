@@ -72,8 +72,8 @@ static void getSuccessorsMap(Block &block, SuccessorsMap &map) {
   }
 }
 
-bool scalehls::applyLegalizeDataflow(FuncOp func, OpBuilder &builder,
-                                     int64_t minGran, bool insertCopy) {
+static bool applyLegalizeDataflow(FuncOp func, OpBuilder &builder,
+                                  int64_t minGran, bool insertCopy) {
   SuccessorsMap successorsMap;
   getSuccessorsMap(func.front(), successorsMap);
 

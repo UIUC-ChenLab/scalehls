@@ -40,7 +40,7 @@ $ # Loop and pragma-level optimizations, performance estimation, and C++ code ge
 $ scalehls-opt samples/polybench/syrk.mlir \
     -affine-loop-perfection -affine-loop-order-opt -remove-variable-bound \
     -partial-affine-loop-tile="tile-size=2" -legalize-to-hlscpp="top-func=test_syrk" \
-    -loop-pipelining="pipeline-level=3" -merge-affine-if -affine-store-forward \
+    -loop-pipelining="pipeline-level=3" -simplify-affine-if -affine-store-forward \
     -simplify-memref-access -array-partition -cse -canonicalize \
     -qor-estimation="target-spec=config/target-spec.ini" \
     | scalehls-translate -emit-hlscpp

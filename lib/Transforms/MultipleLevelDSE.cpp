@@ -134,9 +134,9 @@ bool HLSCppOptimizer::applyLoopTilingStrategy(
 
   // Apply general optimizations and array partition.
   PassManager passManager(targetFunc.getContext(), "func");
-  passManager.addPass(createMergeAffineIfPass());
+  passManager.addPass(createSimplifyAffineIfPass());
   passManager.addPass(createAffineStoreForwardPass());
-  passManager.addPass(createRedundantOpRemovalPass());
+  passManager.addPass(createSimplifyMemrefAccessPass());
   passManager.addPass(createCSEPass());
   passManager.addPass(createArrayPartitionPass());
 

@@ -13,7 +13,8 @@
 using namespace mlir;
 using namespace scalehls;
 
-static bool applyRedundantOpRemoval(FuncOp func) {
+static bool applySimplifyMemrefAccess(FuncOp func) {
+  // Remove redundant affine load/store operations.
   // Collect all load and store operations in the function block.
   MemAccessesMap map;
   getMemAccessesMap(func.front(), map);
@@ -83,18 +84,16 @@ static bool applyRedundantOpRemoval(FuncOp func) {
     }
   }
 
-  // Remove redundant affine if statements.
-  func.walk([&](AffineIfOp ifOp) {});
-
   return true;
 }
 
 namespace {
-struct RedundantOpRemoval : public RedundantOpRemovalBase<RedundantOpRemoval> {
-  void runOnOperation() override { applyRedundantOpRemoval(getOperation()); }
+struct SimplifyMemrefAccess
+    : public SimplifyMemrefAccessBase<SimplifyMemrefAccess> {
+  void runOnOperation() override { applySimplifyMemrefAccess(getOperation()); }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createRedundantOpRemovalPass() {
-  return std::make_unique<RedundantOpRemoval>();
+std::unique_ptr<Pass> scalehls::createSimplifyMemrefAccessPass() {
+  return std::make_unique<SimplifyMemrefAccess>();
 }
