@@ -189,9 +189,40 @@ static bool applySimplifyAffineIf(FuncOp func) {
       if (isForInductionVar(operand))
         constrs.addAffineForOpDomain(getForInductionVarOwner(operand));
 
-    // If there is no solution for the constraints, the if statement will always
-    // take the else branch, therefore the then block can be eliminated.
-    if (constrs.isEmpty()) {
+    bool alwaysTrue = false;
+    bool alwaysFalse = false;
+
+    if (set.getNumInputs() == 0) {
+      // If the integer set is pure constant set, determine whether the
+      // condition is always true or always false.
+      unsigned idx = 0;
+      for (auto expr : set.getConstraints()) {
+        bool eqFlag = set.isEq(idx++);
+        auto constValue = expr.cast<AffineConstantExpr>().getValue();
+        if (eqFlag) {
+          if (constValue == 0)
+            alwaysTrue = true;
+          else
+            alwaysFalse = true;
+        } else {
+          if (constValue >= 0)
+            alwaysTrue = true;
+          else
+            alwaysFalse = true;
+        }
+      }
+    } else if (constrs.isEmpty()) {
+      // If there is no solution for the constraints, the condition will always
+      // be false.
+      alwaysFalse = true;
+    }
+
+    // Assert only one of the two flags are true.
+    assert((!alwaysTrue || !alwaysFalse) && "unexpected if condition");
+
+    if (alwaysFalse) {
+      ifOpsToErase.push_back(ifOp);
+
       if (ifOp.hasElse()) {
         // Replace all uses of the if operation.
         auto yieldOp = ifOp.getElseBlock()->getTerminator();
@@ -209,7 +240,26 @@ static bool applySimplifyAffineIf(FuncOp func) {
                              std::prev(elseBlock.end(), 1));
         }
       }
+    }
+
+    if (alwaysTrue) {
       ifOpsToErase.push_back(ifOp);
+
+      // Replace all uses of the if operation.
+      auto yieldOp = ifOp.getThenBlock()->getTerminator();
+      unsigned idx = 0;
+      for (auto result : ifOp.getResults())
+        result.replaceAllUsesWith(yieldOp->getOperand(idx++));
+
+      // Move all operations except the terminator of the else block into the
+      // parent block.
+      if (&ifOp.getThenBlock()->front() != yieldOp) {
+        auto &elseBlock = ifOp.getThenBlock()->getOperations();
+        auto &parentBlock = ifOp->getBlock()->getOperations();
+        parentBlock.splice(ifOp->getIterator(), elseBlock,
+                           std::next(elseBlock.begin()),
+                           std::prev(elseBlock.end(), 1));
+      }
     }
   });
 

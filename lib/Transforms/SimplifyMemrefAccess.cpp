@@ -36,8 +36,8 @@ static bool applySimplifyMemrefAccess(FuncOp func) {
 
         // Check whether the two operations statically have the same access.
         // TODO: This is very progressive, because dependency analysis should be
-        // conducted for checking whether the in between operations should break
-        // the simplification.
+        // conducted here for checking whether the in between operations should
+        // break the simplification.
         if (firstAccess != secondAccess)
           continue;
 
