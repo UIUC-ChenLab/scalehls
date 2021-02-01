@@ -12,19 +12,14 @@
 using namespace mlir;
 using namespace scalehls;
 
-/// Apply loop pipelining to the input loop, all inner loops are automatically
-/// fully unrolled.
-bool scalehls::applyLoopPipelining(AffineForOp targetLoop, OpBuilder &builder) {
-  targetLoop->setAttr("pipeline", builder.getBoolAttr(true));
-
-  // All inner loops of the pipelined loop are automatically unrolled. This will
-  // try at most 8 iterations.
+/// Fully unroll all loops insides of a block.
+bool scalehls::applyFullyLoopUnrolling(Block &block) {
+  // Try 8 iterations before exiting.
   for (auto i = 0; i < 8; ++i) {
     bool hasFullyUnrolled = true;
-    targetLoop.walk([&](AffineForOp loop) {
-      if (loop != targetLoop)
-        if (failed(loopUnrollFull(loop)))
-          hasFullyUnrolled = false;
+    block.walk([&](AffineForOp loop) {
+      if (failed(loopUnrollFull(loop)))
+        hasFullyUnrolled = false;
     });
 
     if (hasFullyUnrolled)
@@ -33,6 +28,17 @@ bool scalehls::applyLoopPipelining(AffineForOp targetLoop, OpBuilder &builder) {
     if (i == 7)
       return false;
   }
+  return true;
+}
+
+/// Apply loop pipelining to the input loop, all inner loops are automatically
+/// fully unrolled.
+bool scalehls::applyLoopPipelining(AffineForOp targetLoop, OpBuilder &builder) {
+  targetLoop->setAttr("pipeline", builder.getBoolAttr(true));
+
+  // All inner loops of the pipelined loop are automatically unrolled.
+  if (!applyFullyLoopUnrolling(*targetLoop.getBody()))
+    return false;
 
   // All outer loops that perfect nest the pipelined loop can be flattened.
   SmallVector<AffineForOp, 4> flattenedLoops;
@@ -42,7 +48,7 @@ bool scalehls::applyLoopPipelining(AffineForOp targetLoop, OpBuilder &builder) {
     if (auto outerLoop = currentLoop->getParentOfType<AffineForOp>()) {
       // Only if the current loop is the only child loop of the outer loop, the
       // outer loop can be flattened into the current loop.
-      auto &body = outerLoop.getLoopBody().front();
+      auto &body = *outerLoop.getBody();
       if (&body.front() == currentLoop && body.getOperations().size() == 2) {
         flattenedLoops.push_back(outerLoop);
         outerLoop->setAttr("flatten", builder.getBoolAttr(true));

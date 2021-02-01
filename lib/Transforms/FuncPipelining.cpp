@@ -14,21 +14,8 @@ using namespace scalehls;
 /// Apply function pipelining to the input function, all contained loops are
 /// automatically fully unrolled.
 static bool applyFuncPipelining(FuncOp func, OpBuilder &builder) {
-  // TODO: the teminate condition need to be updated. This will try at most 8
-  // iterations.
-  for (auto i = 0; i < 8; ++i) {
-    bool hasFullyUnrolled = true;
-    func.walk([&](AffineForOp loop) {
-      if (failed(loopUnrollFull(loop)))
-        hasFullyUnrolled = false;
-    });
-
-    if (hasFullyUnrolled)
-      break;
-
-    if (i == 7)
-      return false;
-  }
+  if (!applyFullyLoopUnrolling(func.front()))
+    return false;
 
   func->setAttr("pipeline", builder.getBoolAttr(true));
   func->setAttr("dataflow", builder.getBoolAttr(false));

@@ -145,16 +145,24 @@ bool HLSCppOptimizer::applyLoopTilingStrategy(
   applyPatternsAndFoldGreedily(targetFunc, patterns);
 
   // Estimate performance and resource utilization.
-  LLVM_DEBUG(llvm::dbgs() << "Current tiling strategy:\n"; idx = 0;
-             for (auto tileSizes
-                  : tileSizesList) {
-               llvm::dbgs() << "Loop band " << Twine(idx++) << ":";
-               for (auto size : tileSizes) {
+  HLSCppEstimator(targetFunc, latencyMap).estimateFunc();
+  LLVM_DEBUG(llvm::dbgs() << "Current tiling strategy:\n";
+             for (unsigned idx = 0; idx < targetBands.size(); ++idx) {
+               auto tileSizes = tileSizesList[idx];
+               auto loop = pipelineLoops[idx];
+               llvm::dbgs() << "Loop band " << Twine(idx) << ":";
+
+               llvm::dbgs()
+                   << " ResII=" << getIntAttrValue(loop, "resource_ii")
+                   << " DepII=" << getIntAttrValue(loop, "dependence_ii")
+                   << " IterLatency=" << getIntAttrValue(loop, "iter_latency")
+                   << " DSP=" << getIntAttrValue(loop, "dsp") << " TileVector=";
+
+               for (auto size : tileSizes)
                  llvm::dbgs() << " " << Twine(size);
-               }
                llvm::dbgs() << "\n";
              });
-  HLSCppEstimator(targetFunc, latencyMap).estimateFunc();
+
   emitDebugInfo(targetFunc, "Apply loop tiling and pipelining, generic IR "
                             "opts, and array partition.");
   return true;
@@ -374,6 +382,35 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
   unsigned targetNum = targetBands.size();
   unsigned iteration = 0;
   // Main loop for design space exploration.
+  // for (unsigned i = 0; i < targetNum; ++i) {
+  //   while (true) {
+  //     auto &tileSizes = tileSizesList[i];
+  //     for (unsigned loc = 0; loc < loopNumList[i]; ++loc) {
+  //       auto &tileSize = tileSizes[loc];
+  //       if (loc == 0)
+  //         tileSize *= 2;
+  //       else if (tileSizes[loc - 1] == tripCountsList[i][loc - 1])
+  //         tileSize *= 2;
+  //     }
+
+  //     auto lastLoc = loopNumList[i] - 1;
+  //     if (tileSizes[lastLoc] == tripCountsList[i][lastLoc]) {
+  //       for (unsigned loc = 0; loc < loopNumList[i]; ++loc)
+  //         tileSizes[loc] = 1;
+  //       break;
+  //     }
+
+  //     for (unsigned loc = 0; loc < loopNumList[i]; ++loc) {
+  //       auto &tileSize = tileSizes[loc];
+  //       if (tileSize == tripCountsList[i][loc])
+  //         tileSize = 1;
+  //     }
+
+  //     auto tmpFunc = func.clone();
+  //     applyLoopTilingStrategy(tmpFunc, tileSizesList);
+  //   }
+  // }
+
   while (true) {
     LLVM_DEBUG(llvm::dbgs() << "Iteration " << iteration++ << ":\n\n";);
     bool isAllFrozen = true;
@@ -504,9 +541,6 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
     }
     if (isAllFrozen)
       break;
-
-    // if (iteration == 1)
-    //   break;
   }
 
   // Finally, we found the best tiling strategy.

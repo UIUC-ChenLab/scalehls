@@ -58,7 +58,7 @@ scalehls::applyPartialAffineLoopTiling(AffineLoopBand &band, OpBuilder &builder,
 
     // Move all operation except the terminator to the outside.
     auto &parentBlock = loop->getBlock()->getOperations();
-    auto &loopBlock = loop.getLoopBody().front().getOperations();
+    auto &loopBlock = loop.getBody()->getOperations();
     parentBlock.splice(loop->getIterator(), loopBlock, loopBlock.begin(),
                        std::prev(loopBlock.end()));
     loop.erase();

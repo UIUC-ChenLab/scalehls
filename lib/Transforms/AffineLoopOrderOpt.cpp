@@ -17,7 +17,7 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
   if (!isPerfectlyNested(band))
     return false;
 
-  auto &loopBlock = band.back().getLoopBody().front();
+  auto &loopBlock = *band.back().getBody();
   auto bandDepth = band.size();
 
   // Collect all load and store operations for each memory in the loop block,

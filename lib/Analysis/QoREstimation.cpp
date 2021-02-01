@@ -44,26 +44,23 @@ void HLSCppEstimator::getFuncDependencies() {
           // the srcOp if either the dstOp or srcOp is a CallOp.
           dependsMap[srcOp].push_back(dstOp);
         } else {
+          auto srcMuxSize = getIntAttrValue(srcOp, "max_mux_size");
+          auto dstMuxSize = getIntAttrValue(dstOp, "max_mux_size");
+
           // In Vivado HLS, a memory access with undetermined partition index
           // will be implemented as a function call with a multiplexer. As
           // function call has dependency with any load/store operation, RAR
-          // dependency is also considered here, but with a separate if
-          // statement to check whether the current dependency really exists in
-          // Vivado HLS.
-          if (isa<AffineReadOpInterface>(dstOp) &&
-              isa<AffineReadOpInterface>(srcOp)) {
-            auto srcMuxSize = getIntAttrValue(srcOp, "max_mux_size");
-            auto dstMuxSize = getIntAttrValue(dstOp, "max_mux_size");
-
-            if (srcMuxSize <= 3 && dstMuxSize <= 3)
-              continue;
-          }
+          // dependency is also considered here, but with a separate check
+          // whether multiplexer will be generated in Vivado HLS.
+          if (isa<AffineReadOpInterface>(dstOp) && dstMuxSize <= 3 &&
+              isa<AffineReadOpInterface>(srcOp) && srcMuxSize <= 3)
+            continue;
 
           MemRefAccess srcAccess(srcOp);
           MemRefAccess dstAccess(dstOp);
 
-          auto commonLoopDepth = getNumCommonSurroundingLoops(*srcOp, *dstOp);
-          for (unsigned depth = 1; depth <= commonLoopDepth + 1; ++depth) {
+          auto loopDepth = getNumCommonSurroundingLoops(*srcOp, *dstOp);
+          for (unsigned depth = 1; depth <= loopDepth + 1; ++depth) {
             // Initialize constraints.
             FlatAffineConstraints dependConstrs;
 
@@ -333,22 +330,24 @@ int64_t HLSCppEstimator::getDepMinII(FuncOp func, MemAccessesMap &map) {
     int64_t dstIndex = 1;
     for (auto dstOp : loadStores) {
       for (auto srcOp : llvm::drop_begin(loadStores, dstIndex)) {
+        auto srcMuxSize = getIntAttrValue(srcOp, "max_mux_size");
+        auto dstMuxSize = getIntAttrValue(dstOp, "max_mux_size");
+
         // Similar to getFuncDependencies() method, we ignore RAR dependency
         // pairs in some cases.
-        if (isa<AffineReadOpInterface>(dstOp) &&
-            isa<AffineReadOpInterface>(srcOp)) {
-          auto srcMuxSize = getIntAttrValue(srcOp, "max_mux_size");
-          auto dstMuxSize = getIntAttrValue(dstOp, "max_mux_size");
+        if (isa<AffineReadOpInterface>(dstOp) && dstMuxSize <= 3 &&
+            isa<AffineReadOpInterface>(srcOp) && srcMuxSize <= 3)
+          continue;
 
-          if (srcMuxSize <= 3 && dstMuxSize <= 3)
-            continue;
-        }
+        MemRefAccess srcAccess(srcOp);
+        MemRefAccess dstAccess(dstOp);
 
-        if (MemRefAccess(dstOp) == MemRefAccess(srcOp)) {
+        // TODO: more case study.
+        if (srcAccess == dstAccess) {
           float delay = getIntAttrValue(dstOp, "schedule_end") -
                         getIntAttrValue(srcOp, "schedule_begin");
 
-          // Distance is always 1. Therefore, the minimum II is equal to delay.
+          // Distance is always 1 thus the minimum II is equal to delay.
           int64_t minII = delay;
           II = max(II, minII);
         }
@@ -382,38 +381,37 @@ int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
 
     // Walk through each pair of source and destination, and each loop level
     // that are pipelined. Note that here dstOp is always before srcOp.
-    for (unsigned loopDepth = startLevel; loopDepth <= endLevel; ++loopDepth) {
-      int64_t dstIndex = 1;
-      for (auto dstOp : loadStores) {
-        for (auto srcOp : llvm::drop_begin(loadStores, dstIndex)) {
-          auto srcMuxSize = getIntAttrValue(srcOp, "max_mux_size");
-          auto dstMuxSize = getIntAttrValue(dstOp, "max_mux_size");
+    int64_t dstIndex = 1;
+    for (auto dstOp : loadStores) {
+      for (auto srcOp : llvm::drop_begin(loadStores, dstIndex)) {
+        auto srcMuxSize = getIntAttrValue(srcOp, "max_mux_size");
+        auto dstMuxSize = getIntAttrValue(dstOp, "max_mux_size");
 
-          // Similar to getFuncDependencies() method, in some cases RAR is not
-          // considered as dependency in Vivado HLS.
-          if (isa<AffineReadOpInterface>(srcOp) &&
-              isa<AffineReadOpInterface>(dstOp))
-            if (srcMuxSize <= 3 && dstMuxSize <= 3)
-              continue;
+        // Similar to getFuncDependencies() method, in some cases RAR is not
+        // considered as dependency in Vivado HLS.
+        if (isa<AffineReadOpInterface>(srcOp) && srcMuxSize <= 3 &&
+            isa<AffineReadOpInterface>(dstOp) && dstMuxSize <= 3)
+          continue;
 
-          MemRefAccess dstAccess(dstOp);
-          MemRefAccess srcAccess(srcOp);
+        MemRefAccess dstAccess(dstOp);
+        MemRefAccess srcAccess(srcOp);
 
+        for (unsigned depth = startLevel; depth <= endLevel; ++depth) {
           FlatAffineConstraints depConstrs;
           SmallVector<DependenceComponent, 2> depComps;
 
           DependenceResult result = checkMemrefAccessDependence(
-              srcAccess, dstAccess, loopDepth, &depConstrs, &depComps,
+              srcAccess, dstAccess, depth, &depConstrs, &depComps,
               /*allowRAR=*/true);
 
           if (hasDependence(result)) {
             int64_t distance = 0;
 
-            // Call function will always have dependency with any other
-            // load/store operations with a distance of 1.
-            if (srcMuxSize > 3 || dstMuxSize > 3)
+            if (dstMuxSize > 3 || srcMuxSize > 3) {
+              // If the two memory accesses are identical or one of them is
+              // implemented as separate function call, the dependency exists.
               distance = 1;
-            else {
+            } else {
               SmallVector<int64_t, 8> accumTrips;
               accumTrips.push_back(1);
 
@@ -426,7 +424,7 @@ int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
                 auto ub = dep.ub.getValue();
                 auto lb = dep.lb.getValue();
 
-                // Ff ub is more than zero, calculate the minimum positive
+                // If ub is more than zero, calculate the minimum positive
                 // disatance. Otherwise, set distance to negative and break.
                 if (ub >= 0)
                   distance +=
@@ -435,19 +433,17 @@ int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
                   distance = -1;
                   break;
                 }
-
                 accumTrips.push_back(accumTrips.back() * tripCount);
-              }
 
-              // llvm::outs() << "\n----------\n";
-              // llvm::outs() << *srcOp << " -> " << *dstOp << "\n";
-              // llvm::outs() << "depth=" << loopDepth << " distance=" <<
-              // distance
-              //              << "\n";
-              // for (auto dep : depComps)
-              //   llvm::outs() << "(" << dep.lb.getValue() << ","
-              //                << dep.ub.getValue() << "), ";
-              // llvm::outs() << "\n";
+                // llvm::outs() << "\n----------\n";
+                // llvm::outs() << *srcOp << " -> " << *dstOp << "\n";
+                // llvm::outs() << "depth=" << depth << " distance=" << distance
+                //              << "\n";
+                // for (auto dep : depComps)
+                //   llvm::outs() << "(" << dep.lb.getValue() << ","
+                //                << dep.ub.getValue() << "), ";
+                // llvm::outs() << "\n";
+              }
             }
 
             // We will only consider intra-dependencies with positive distance.
@@ -460,8 +456,8 @@ int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
             }
           }
         }
-        dstIndex++;
       }
+      dstIndex++;
     }
   }
   return II;
@@ -491,7 +487,7 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
   setAttrValue(op, "trip_count", tripCount);
 
   auto end = begin;
-  auto &loopBlock = op.getLoopBody().front();
+  auto &loopBlock = *op.getBody();
 
   // Estimate the loop block.
   if (auto schedule = estimateBlock(loopBlock, begin)) {
@@ -511,9 +507,12 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
     getMemAccessesMap(loopBlock, map);
 
     // Calculate initial interval.
-    // llvm::outs() << "ResII=" << getResMinII(begin, end, map)
-    //              << ", DepII=" << getDepMinII(op, map) << "\n";
-    auto II = max(getResMinII(begin, end, map), getDepMinII(op, map));
+    auto resII = getResMinII(begin, end, map);
+    auto depII = getDepMinII(op, map);
+    setAttrValue(op, "resource_ii", resII);
+    setAttrValue(op, "dependence_ii", depII);
+
+    auto II = max(resII, depII);
     setAttrValue(op, "init_interval", II);
 
     setAttrValue(op, "flatten_trip_count", tripCount);
@@ -537,7 +536,7 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
   // the child pipelined loop. This will increase the flattened loop trip
   // count without changing the iteration latency.
   if (getBoolAttrValue(op, "flatten")) {
-    auto child = dyn_cast<AffineForOp>(op.getLoopBody().front().front());
+    auto child = dyn_cast<AffineForOp>(op.getBody()->front());
     assert(child && "the first containing operation is not a loop");
 
     auto iterLatency = getIntAttrValue(child, "iter_latency");

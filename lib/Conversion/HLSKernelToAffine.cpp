@@ -48,7 +48,7 @@ private:
   /// Constant upper and lower bound.
   Value createLoop(int64_t lower, int64_t upper, int64_t step = 1) {
     auto loop = builder.create<AffineForOp>(loc, lower, upper, step);
-    builder.setInsertionPointToStart(&loop.getLoopBody().front());
+    builder.setInsertionPointToStart(loop.getBody());
     return loop.getInductionVar();
   }
 
@@ -58,7 +58,7 @@ private:
                    int64_t step = 1) {
     auto loop = builder.create<AffineForOp>(loc, lower, lowerMap, upper,
                                             upperMap, step);
-    builder.setInsertionPointToStart(&loop.getLoopBody().front());
+    builder.setInsertionPointToStart(loop.getBody());
     return loop.getInductionVar();
   }
 

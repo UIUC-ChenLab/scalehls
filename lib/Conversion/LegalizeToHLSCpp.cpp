@@ -46,9 +46,6 @@ void LegalizeToHLSCpp::runOnOperation() {
 
     // Set loop pragma attributes.
     if (auto forOp = dyn_cast<AffineForOp>(op)) {
-      if (forOp.getLoopBody().getBlocks().size() != 1)
-        forOp.emitError("has zero or more than one basic blocks");
-
       // Set loop pragma attributes.
       if (!forOp->getAttr("pipeline"))
         forOp->setAttr("pipeline", builder.getBoolAttr(false));

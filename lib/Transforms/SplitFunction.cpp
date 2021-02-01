@@ -63,7 +63,7 @@ static bool applySplitFunction(FuncOp func, OpBuilder &builder) {
       // Push back all operands and live ins as candidates.
       SmallVector<Value, 8> inputCandidates(op->getOperands());
       if (auto loop = dyn_cast<AffineForOp>(op)) {
-        auto liveIns = liveness.getLiveIn(&loop.getLoopBody().front());
+        auto liveIns = liveness.getLiveIn(loop.getBody());
         for (auto liveIn : liveIns)
           if (!isForInductionVar(liveIn))
             inputCandidates.push_back(liveIn);

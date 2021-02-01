@@ -30,7 +30,7 @@ static bool applyArrayPartition(FuncOp func, OpBuilder &builder) {
     func.walk([&](AffineForOp loop) {
       if (auto attr = loop->getAttrOfType<BoolAttr>("pipeline"))
         if (attr.getValue())
-          pipelinedBlocks.push_back(&loop.getLoopBody().front());
+          pipelinedBlocks.push_back(loop.getBody());
     });
 
   // Storing the partition information of each memref.

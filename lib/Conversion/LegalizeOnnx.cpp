@@ -165,7 +165,7 @@ void LegalizeOnnx::runOnOperation() {
         // Create affine loops for memory copy.
         auto loop = builder.create<AffineForOp>(op.getLoc(), 0, memSize);
         auto loopIdv = loop.getInductionVar();
-        builder.setInsertionPointToStart(&loop.getLoopBody().front());
+        builder.setInsertionPointToStart(loop.getBody());
 
         // Create load and store operations.
         auto val = builder.create<AffineLoadOp>(

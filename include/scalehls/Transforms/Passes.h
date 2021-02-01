@@ -36,6 +36,9 @@ AffineForOp applyPartialAffineLoopTiling(AffineLoopBand &band,
                                          OpBuilder &builder,
                                          ArrayRef<unsigned> tileSizes);
 
+/// Fully unroll all loops insides of a block.
+bool applyFullyLoopUnrolling(Block &block);
+
 /// Apply loop pipelining to the input loop, all inner loops are automatically
 /// fully unrolled.
 bool applyLoopPipelining(AffineForOp loop, OpBuilder &builder);

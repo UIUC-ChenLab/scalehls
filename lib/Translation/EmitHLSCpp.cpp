@@ -511,7 +511,7 @@ void ModuleEmitter::emitScfFor(scf::ForOp op) {
   //    os << "#pragma HLS loop_flatten off\n";
   //}
 
-  emitBlock(op.getLoopBody().front());
+  emitBlock(*op.getBody());
   reduceIndent();
 
   indent();
@@ -643,7 +643,7 @@ void ModuleEmitter::emitAffineFor(AffineForOp op) {
   //    os << "#pragma HLS loop_flatten off\n";
   //}
 
-  emitBlock(op.getLoopBody().front());
+  emitBlock(*op.getBody());
   reduceIndent();
 
   indent();
@@ -748,7 +748,7 @@ void ModuleEmitter::emitAffineParallel(AffineParallelOp op) {
     addIndent();
   }
 
-  emitBlock(op.getLoopBody().front());
+  emitBlock(*op.getBody());
 
   for (unsigned i = 0, e = op.getNumDims(); i < e; ++i) {
     reduceIndent();
