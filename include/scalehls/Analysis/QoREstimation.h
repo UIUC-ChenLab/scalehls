@@ -16,6 +16,18 @@
 namespace mlir {
 namespace scalehls {
 
+/// For storing all resource types.
+struct Resource {
+  int64_t bram = 0;
+  int64_t dsp = 0;
+  int64_t ff = 0;
+  int64_t lut = 0;
+
+  Resource(int64_t bram, int64_t dsp, int64_t ff, int64_t lut)
+      : bram(bram), dsp(dsp), ff(ff), lut(lut) {}
+  Resource() {}
+};
+
 using LatencyMap = llvm::StringMap<int64_t>;
 void getLatencyMap(INIReader spec, LatencyMap &latencyMap);
 
@@ -23,11 +35,8 @@ class HLSCppEstimator
     : public HLSCppVisitorBase<HLSCppEstimator, bool, int64_t>,
       public HLSCppAnalysisBase {
 public:
-  explicit HLSCppEstimator(FuncOp func, LatencyMap &latencyMap)
-      : HLSCppAnalysisBase(OpBuilder(func)), func(func),
-        latencyMap(latencyMap) {
-    getFuncDependencies();
-  }
+  explicit HLSCppEstimator(OpBuilder &builder, LatencyMap &latencyMap)
+      : HLSCppAnalysisBase(builder), latencyMap(latencyMap) {}
 
   // For storing all dependencies indexed by the dependency source operation.
   using Depends = SmallVector<Operation *, 16>;
@@ -49,17 +58,6 @@ public:
 
   // For storing the DSP resource utilization indexed by the schedule level.
   using ResourceMap = DenseMap<int64_t, int64_t>;
-
-  /// For storing all resource types.
-  struct Resource {
-    int64_t bram;
-    int64_t dsp;
-    int64_t ff;
-    int64_t lut;
-
-    Resource(int64_t bram = 0, int64_t dsp = 0, int64_t ff = 0, int64_t lut = 0)
-        : bram(bram), dsp(dsp), ff(ff), lut(lut) {}
-  };
 
   /// Collect all dependencies detected in the function.
   void getFuncDependencies();
@@ -126,10 +124,12 @@ public:
   Resource estimateResource(Block &block, int64_t interval = -1);
   Optional<std::pair<int64_t, int64_t>> estimateBlock(Block &block,
                                                       int64_t begin);
-  void reverseSchedule();
-  void estimateFunc();
+  void reverseSchedule(Block &block);
 
-  FuncOp func;
+  /// Estimator entries.
+  void estimateFunc(FuncOp &func);
+  void estimateLoop(AffineForOp &loop);
+
   DependsMap dependsMap;
   MemPortInfosMap memPortInfosMap;
   LatencyMap &latencyMap;

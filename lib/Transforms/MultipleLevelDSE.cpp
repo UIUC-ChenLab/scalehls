@@ -41,13 +41,13 @@ static int64_t getInnerParallelism(AffineForOp forOp) {
 
 class HLSCppOptimizer : public HLSCppAnalysisBase {
 public:
-  explicit HLSCppOptimizer(FuncOp func, LatencyMap &latencyMap, int64_t numDSP)
-      : HLSCppAnalysisBase(OpBuilder(func)), func(func), latencyMap(latencyMap),
-        numDSP(numDSP) {
+  explicit HLSCppOptimizer(OpBuilder &builder, HLSCppEstimator &estimator,
+                           int64_t numDSP)
+      : HLSCppAnalysisBase(builder), estimator(estimator), numDSP(numDSP) {
     // TODO: only insert affine-related patterns.
     OwningRewritePatternList owningPatterns;
-    for (auto *op : func.getContext()->getRegisteredOperations())
-      op->getCanonicalizationPatterns(owningPatterns, func.getContext());
+    for (auto *op : builder.getContext()->getRegisteredOperations())
+      op->getCanonicalizationPatterns(owningPatterns, builder.getContext());
     patterns = std::move(owningPatterns);
   }
 
@@ -90,10 +90,9 @@ public:
                          unsigned &loc);
 
   /// This is a temporary approach that does not scale.
-  void applyMultipleLevelDSE();
+  void applyMultipleLevelDSE(FuncOp &func);
 
-  FuncOp func;
-  LatencyMap &latencyMap;
+  HLSCppEstimator &estimator;
   int64_t numDSP;
   FrozenRewritePatternList patterns;
 };
@@ -145,7 +144,7 @@ bool HLSCppOptimizer::applyLoopTilingStrategy(
   applyPatternsAndFoldGreedily(targetFunc, patterns);
 
   // Estimate performance and resource utilization.
-  HLSCppEstimator(targetFunc, latencyMap).estimateFunc();
+  estimator.estimateFunc(targetFunc);
   LLVM_DEBUG(llvm::dbgs() << "Current tiling strategy:\n";
              for (unsigned idx = 0; idx < targetBands.size(); ++idx) {
                auto tileSizes = tileSizesList[idx];
@@ -189,9 +188,10 @@ bool HLSCppOptimizer::incrTileSizeAtLoc(TileSizes &tileSizes,
 }
 
 /// This is a temporary approach that does not scale.
-void HLSCppOptimizer::applyMultipleLevelDSE() {
+void HLSCppOptimizer::applyMultipleLevelDSE(FuncOp &func) {
+  // Canonicalize the function and start the dse.
   applyPatternsAndFoldGreedily(func, patterns);
-  HLSCppEstimator(func, latencyMap).estimateFunc();
+  estimator.estimateFunc(func);
   if (getIntAttrValue(func, "dsp") > numDSP)
     return;
   emitDebugInfo(func, "Start multiple level design space exploration.");
@@ -288,7 +288,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
       });
 
       // Estimate the temporary function.
-      HLSCppEstimator(tmpFunc, latencyMap).estimateFunc();
+      estimator.estimateFunc(tmpFunc);
 
       // Pipeline the candidate loop or delve into child loops.
       if (getIntAttrValue(tmpFunc, "dsp") <= numDSP)
@@ -302,7 +302,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
     }
   }
 
-  HLSCppEstimator(func, latencyMap).estimateFunc();
+  estimator.estimateFunc(func);
   if (getIntAttrValue(func, "dsp") > numDSP)
     return;
   emitDebugInfo(func, "1. Simplify loop nests structure.");
@@ -327,7 +327,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE() {
   }
 
   // Estimate the current latency.
-  HLSCppEstimator(func, latencyMap).estimateFunc();
+  estimator.estimateFunc(func);
   if (getIntAttrValue(func, "dsp") > numDSP)
     return;
   emitDebugInfo(func, "2. Apply loop perfection, remove variable bound, and "
@@ -552,23 +552,27 @@ namespace {
 struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
   void runOnOperation() override {
     auto module = getOperation();
+    auto builder = OpBuilder(module);
 
     // Read configuration file.
     INIReader spec(targetSpec);
     if (spec.ParseError())
       emitError(module.getLoc(), "target spec file parse fail\n");
 
-    // Collect profiling data, where default values are based on PYNQ-Z1
-    // board.
+    // Collect profiling data, where default values are based on PYNQ-Z1 board.
     LatencyMap latencyMap;
     getLatencyMap(spec, latencyMap);
     int64_t numDSP = ceil(spec.GetInteger("specification", "dsp", 220) * 1.1);
+
+    // Initialize an performance and resource estimator.
+    auto estimator = HLSCppEstimator(builder, latencyMap);
 
     // Optimize the top function.
     for (auto func : module.getOps<FuncOp>())
       if (auto topFunction = func->getAttrOfType<BoolAttr>("top_function"))
         if (topFunction.getValue())
-          HLSCppOptimizer(func, latencyMap, numDSP).applyMultipleLevelDSE();
+          HLSCppOptimizer(builder, estimator, numDSP)
+              .applyMultipleLevelDSE(func);
   }
 };
 } // namespace

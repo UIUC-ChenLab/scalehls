@@ -11,19 +11,12 @@ using namespace mlir;
 using namespace scalehls;
 
 /// Collect all load and store operations in the block.
-void scalehls::getMemAccessesMap(Block &block, MemAccessesMap &map,
-                                 bool includeCalls) {
+void scalehls::getMemAccessesMap(Block &block, MemAccessesMap &map) {
   for (auto &op : block) {
     if (isa<AffineReadOpInterface, AffineWriteOpInterface>(op))
       map[MemRefAccess(&op).memref].push_back(&op);
 
-    else if (includeCalls && isa<CallOp>(op)) {
-      // All CallOps accessing the memory will be pushed back to the map.
-      for (auto operand : op.getOperands())
-        if (operand.getType().isa<MemRefType>())
-          map[operand].push_back(&op);
-
-    } else if (op.getNumRegions()) {
+    else if (op.getNumRegions()) {
       // Recursively collect memory access operations in each block.
       for (auto &region : op.getRegions())
         for (auto &block : region)

@@ -18,7 +18,7 @@ namespace scalehls {
 
 class HLSCppAnalysisBase {
 public:
-  explicit HLSCppAnalysisBase(OpBuilder builder) : builder(builder) {}
+  explicit HLSCppAnalysisBase(OpBuilder &builder) : builder(builder) {}
   /// Get attribute value methods.
   int64_t getIntAttrValue(Operation *op, StringRef name) {
     if (auto attr = op->getAttrOfType<IntegerAttr>(name))
@@ -71,7 +71,7 @@ public:
     op->setAttr(name, builder.getI64ArrayAttr(value));
   }
 
-  OpBuilder builder;
+  OpBuilder &builder;
 };
 
 //===----------------------------------------------------------------------===//
@@ -89,8 +89,7 @@ using MemAccessesMap = DenseMap<Value, MemAccesses>;
 /// Collect all load and store operations in the block. The collected operations
 /// in the MemAccessesMap are ordered, which means an operation will never
 /// dominate another operation in front of it.
-void getMemAccessesMap(Block &block, MemAccessesMap &map,
-                       bool includeCalls = false);
+void getMemAccessesMap(Block &block, MemAccessesMap &map);
 
 // Check if the lhsOp and rhsOp is at the same scheduling level. In this check,
 // AffineIfOp is transparent.

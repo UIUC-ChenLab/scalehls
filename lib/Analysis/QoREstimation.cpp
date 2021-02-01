@@ -16,87 +16,6 @@ using namespace mlir;
 using namespace scalehls;
 
 //===----------------------------------------------------------------------===//
-// Initialization Methods
-//===----------------------------------------------------------------------===//
-
-/// Collect all dependencies detected in the function.
-/// TODO: work in a block basis.
-void HLSCppEstimator::getFuncDependencies() {
-  MemAccessesMap map;
-  getMemAccessesMap(func.front(), map, /*includeCallOp=*/true);
-
-  // Walk through all MemRef - LoadOp/StoreOp pairs, and find all memory
-  // related dependencies.
-  for (auto &pair : map) {
-    auto memAccesses = pair.second;
-
-    // Annotate partition index of all memory access operation for later use.
-    for (auto op : memAccesses)
-      getPartitionIndices(op);
-
-    // Walk through each pair of source and destination. Note that for intra
-    // iteration dependencies, srcOp is always before dstOp.
-    unsigned srcIndex = 1;
-    for (auto srcOp : memAccesses) {
-      for (auto dstOp : llvm::drop_begin(memAccesses, srcIndex)) {
-        if (isa<CallOp>(srcOp) || isa<CallOp>(dstOp)) {
-          // TODO: for now, all dstOps are considered to have dependencies to
-          // the srcOp if either the dstOp or srcOp is a CallOp.
-          dependsMap[srcOp].push_back(dstOp);
-        } else {
-          auto srcMuxSize = getIntAttrValue(srcOp, "max_mux_size");
-          auto dstMuxSize = getIntAttrValue(dstOp, "max_mux_size");
-
-          // In Vivado HLS, a memory access with undetermined partition index
-          // will be implemented as a function call with a multiplexer. As
-          // function call has dependency with any load/store operation, RAR
-          // dependency is also considered here, but with a separate check
-          // whether multiplexer will be generated in Vivado HLS.
-          if (isa<AffineReadOpInterface>(dstOp) && dstMuxSize <= 3 &&
-              isa<AffineReadOpInterface>(srcOp) && srcMuxSize <= 3)
-            continue;
-
-          MemRefAccess srcAccess(srcOp);
-          MemRefAccess dstAccess(dstOp);
-
-          auto loopDepth = getNumCommonSurroundingLoops(*srcOp, *dstOp);
-          for (unsigned depth = 1; depth <= loopDepth + 1; ++depth) {
-            // Initialize constraints.
-            FlatAffineConstraints dependConstrs;
-
-            // Check dependency.
-            DependenceResult result = checkMemrefAccessDependence(
-                srcAccess, dstAccess, depth, &dependConstrs,
-                /*dependenceComponents=*/nullptr, /*allowRAR=*/true);
-
-            // All solid dependencies are pushed into the dependsMap output.
-            if (hasDependence(result)) {
-              dependsMap[srcOp].push_back(dstOp);
-              break;
-            }
-          }
-        }
-      }
-      srcIndex++;
-    }
-  }
-
-  // Walk through all loops in the function and establish dependencies. The
-  // rationale here is in Vivado HLS, a loop will always be dominated by another
-  // loop before it, even if no actual dependencies exist between them.
-  SmallVector<Operation *, 16> loops;
-  func.walk([&](AffineForOp loop) { loops.push_back(loop); });
-
-  unsigned loopIndex = 1;
-  for (auto srcLoop : loops) {
-    for (auto dstLoop : llvm::drop_begin(loops, loopIndex))
-      if (checkSameLevel(srcLoop, dstLoop))
-        dependsMap[srcLoop].push_back(dstLoop);
-    loopIndex++;
-  }
-}
-
-//===----------------------------------------------------------------------===//
 // LoadOp and StoreOp Related Methods
 //===----------------------------------------------------------------------===//
 
@@ -604,13 +523,13 @@ bool HLSCppEstimator::visitOp(AffineIfOp op, int64_t begin) {
 }
 
 bool HLSCppEstimator::visitOp(CallOp op, int64_t begin) {
-  auto callee =
-      SymbolTable::lookupSymbolIn(func->getParentOp(), op.getCallee());
+  auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCallee());
   auto subFunc = dyn_cast<FuncOp>(callee);
   assert(subFunc && "callable is not a function operation");
 
-  HLSCppEstimator estimator(subFunc, latencyMap);
-  estimator.estimateFunc();
+  auto builder = OpBuilder(subFunc);
+  HLSCppEstimator estimator(builder, latencyMap);
+  estimator.estimateFunc(subFunc);
 
   // We assume enter and leave the subfunction require extra 2 clock cycles.
   if (auto subLatency = getIntAttrValue(subFunc, "latency")) {
@@ -654,8 +573,7 @@ int64_t HLSCppEstimator::getDSPMap(Block &block, ResourceMap &faddMap,
   return loopDSPNum;
 }
 
-HLSCppEstimator::Resource HLSCppEstimator::estimateResource(Block &block,
-                                                            int64_t interval) {
+Resource HLSCppEstimator::estimateResource(Block &block, int64_t interval) {
   ResourceMap faddMap;
   ResourceMap fmulMap;
   auto loopDSPNum = getDSPMap(block, faddMap, fmulMap);
@@ -712,18 +630,72 @@ HLSCppEstimator::estimateBlock(Block &block, int64_t begin) {
     auto opBegin = begin;
     auto opEnd = begin;
 
-    // Fine the latest arrived successor relying on the current operation.
-    for (auto result : op->getResults())
-      for (auto user : result.getUsers()) {
-        auto sameLevelUser = getSameLevelDstOp(op, user);
-        opBegin = max(opBegin, getIntAttrValue(sameLevelUser, "schedule_end"));
-      }
+    // Calculate the partition indices of memory load and store operations.
+    if (isa<AffineLoadOp, AffineStoreOp>(op))
+      getPartitionIndices(op);
 
-    // Check dependencies of the operation and update schedule level.
+    // Find the latest arrived successor depending on the current operation.
+    for (auto user : op->getUsers()) {
+      auto sameLevelUser = getSameLevelDstOp(op, user);
+      opBegin = max(opBegin, getIntAttrValue(sameLevelUser, "schedule_end"));
+    }
+
+    // Check other dependencies and update schedule level.
     for (auto dstOp : dependsMap[op]) {
       auto sameLevelDstOp = getSameLevelDstOp(op, dstOp);
       opBegin = max(opBegin, getIntAttrValue(sameLevelDstOp, "schedule_end"));
     }
+
+    // Check memory dependencies of the operation and update schedule level.
+    for (auto operand : op->getOperands())
+      if (operand.getType().isa<MemRefType>())
+        // All users of the same memref value has the possibility to share
+        // dependency with the current operation.
+        for (auto depOp : operand.getUsers()) {
+          auto depOpEnd = getIntAttrValue(depOp, "schedule_end");
+
+          // If the depOp has not been scheduled or its schedule level will not
+          // impact the current operation's scheduling, stop and continue.
+          if (depOpEnd == -1 || depOpEnd <= opBegin)
+            continue;
+
+          // If either the depOp or the current operation is a function call,
+          // depOpendency exists and the schedule level should be updated.
+          if (isa<CallOp>(op) || isa<CallOp>(depOp)) {
+            opBegin = max(opBegin, depOpEnd);
+            continue;
+          }
+
+          // Now both of the depOp and the current operation must be memory
+          // load/store operation.
+          auto opMuxSize = getIntAttrValue(op, "max_mux_size");
+          auto depOpMuxSize = getIntAttrValue(depOp, "max_mux_size");
+
+          // In Vivado HLS, a memory access with undetermined partition index
+          // will be implemented as a function call with a multiplexer if the
+          // partition factor is larger than 3. Function call has dependency
+          // with any load/store operation including RAR.
+          if (isa<AffineReadOpInterface>(op) && opMuxSize <= 3 &&
+              isa<AffineReadOpInterface>(depOp) && depOpMuxSize <= 3)
+            continue;
+
+          // Now we must check whether any dependency exists between the two
+          // operations. If so, update the scheduling level.
+          auto loopDepth = getNumCommonSurroundingLoops(*op, *depOp);
+          auto opAccess = MemRefAccess(op);
+          auto depOpAccess = MemRefAccess(depOp);
+          FlatAffineConstraints dependConstrs;
+          for (unsigned depth = 1; depth <= loopDepth + 1; ++depth) {
+            DependenceResult result = checkMemrefAccessDependence(
+                opAccess, depOpAccess, depth, &dependConstrs,
+                /*dependenceComponents=*/nullptr, /*allowRAR=*/true);
+
+            if (hasDependence(result)) {
+              opBegin = max(opBegin, depOpEnd);
+              break;
+            }
+          }
+        }
 
     // Estimate the current operation.
     if (dispatchVisitor(op, opBegin))
@@ -742,8 +714,8 @@ HLSCppEstimator::estimateBlock(Block &block, int64_t begin) {
   return std::pair<int64_t, int64_t>(blockBegin, blockEnd);
 }
 
-// Get the innermost surrounding operation, either an AffineForOp or a FuncOp.
-// In this method, AffineIfOp is transparent as well.
+/// Get the innermost surrounding operation, either an AffineForOp or a FuncOp.
+/// In this method, AffineIfOp is transparent as well.
 static Operation *getSurroundingOp(Operation *op) {
   auto currentOp = op;
   while (true) {
@@ -758,8 +730,8 @@ static Operation *getSurroundingOp(Operation *op) {
   }
 }
 
-void HLSCppEstimator::reverseSchedule() {
-  func.walk([&](Operation *op) {
+void HLSCppEstimator::reverseSchedule(Block &block) {
+  block.walk([&](Operation *op) {
     // Get schedule level.
     auto begin = getIntAttrValue(op, "schedule_begin");
     auto end = getIntAttrValue(op, "schedule_end");
@@ -786,7 +758,29 @@ void HLSCppEstimator::reverseSchedule() {
   });
 }
 
-void HLSCppEstimator::estimateFunc() {
+void HLSCppEstimator::estimateFunc(FuncOp &func) {
+  // Clear global maps and scheduling information.
+  dependsMap.clear();
+  memPortInfosMap.clear();
+  func.walk([&](Operation *op) {
+    op->removeAttr("schedule_begin");
+    op->removeAttr("schedule_end");
+  });
+
+  // Walk through all loops in the function and establish dependencies. The
+  // rationale here is in Vivado HLS, a loop will always be dominated by other
+  // loops before it, even if no actual dependencies exist between them.
+  SmallVector<Operation *, 16> loops;
+  func.walk([&](AffineForOp loop) { loops.push_back(loop); });
+
+  unsigned idx = 1;
+  for (auto srcLoop : loops) {
+    for (auto dstLoop : llvm::drop_begin(loops, idx))
+      if (checkSameLevel(srcLoop, dstLoop))
+        dependsMap[srcLoop].push_back(dstLoop);
+    idx++;
+  }
+
   // Collect all memory access operations for later use.
   MemAccessesMap map;
   getMemAccessesMap(func.front(), map);
@@ -816,11 +810,9 @@ void HLSCppEstimator::estimateFunc() {
     // we have done the ALAP scheduling in a reverse order. Note that after
     // the reverse, the annotated scheduling level of each operation is a
     // relative level of the nearest surrounding AffineForOp or FuncOp.
-    reverseSchedule();
+    reverseSchedule(func.front());
   } else {
-    // Scheduling failed due to early error.
-    // TODO: further refinement and try the best to avoid failing, e.g.
-    // support variable loop bound.
+    // Scheduling failed due to earlier error.
     setAttrValue(func, "latency", std::string("unknown"));
   }
 
@@ -850,6 +842,8 @@ void HLSCppEstimator::estimateFunc() {
   setResourceValue(func, resource);
 }
 
+void HLSCppEstimator::estimateLoop(AffineForOp &loop) { return; }
+
 //===----------------------------------------------------------------------===//
 // Entry of scalehls-opt
 //===----------------------------------------------------------------------===//
@@ -867,6 +861,7 @@ namespace {
 struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
   void runOnOperation() override {
     auto module = getOperation();
+    auto builder = OpBuilder(module);
 
     // Read configuration file.
     INIReader spec(targetSpec);
@@ -883,9 +878,7 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     for (auto func : module.getOps<FuncOp>())
       if (auto topFunction = func->getAttrOfType<BoolAttr>("top_function"))
         if (topFunction.getValue())
-          HLSCppEstimator(func, latencyMap).estimateFunc();
-
-    // TODO: Somehow print the estimation report?
+          HLSCppEstimator(builder, latencyMap).estimateFunc(func);
   }
 };
 } // namespace
