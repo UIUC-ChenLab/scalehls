@@ -98,8 +98,8 @@ public:
 
   /// AffineForOp related methods.
   int64_t getResMinII(int64_t begin, int64_t end, MemAccessesMap &map);
-  int64_t getDepMinII(FuncOp func, MemAccessesMap &map);
-  int64_t getDepMinII(AffineForOp forOp, MemAccessesMap &map);
+  int64_t getDepMinII(int64_t II, FuncOp func, MemAccessesMap &map);
+  int64_t getDepMinII(int64_t II, AffineForOp forOp, MemAccessesMap &map);
   bool visitOp(AffineForOp op, int64_t begin);
 
   /// Other operation handlers.

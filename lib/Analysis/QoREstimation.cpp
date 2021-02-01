@@ -238,49 +238,44 @@ int64_t HLSCppEstimator::getResMinII(int64_t begin, int64_t end,
 }
 
 /// Calculate the minimum dependency II of function.
-int64_t HLSCppEstimator::getDepMinII(FuncOp func, MemAccessesMap &map) {
-  int64_t II = 1;
-
+int64_t HLSCppEstimator::getDepMinII(int64_t II, FuncOp func,
+                                     MemAccessesMap &map) {
   for (auto &pair : map) {
     auto loadStores = pair.second;
 
-    // Walk through each pair of source and destination. Note that here dstOp is
-    // always before srcOp.
-    int64_t dstIndex = 1;
-    for (auto dstOp : loadStores) {
-      for (auto srcOp : llvm::drop_begin(loadStores, dstIndex)) {
-        auto srcMuxSize = getIntAttrValue(srcOp, "max_mux_size");
-        auto dstMuxSize = getIntAttrValue(dstOp, "max_mux_size");
-
-        // Similar to getFuncDependencies() method, we ignore RAR dependency
-        // pairs in some cases.
-        if (isa<AffineReadOpInterface>(dstOp) && dstMuxSize <= 3 &&
-            isa<AffineReadOpInterface>(srcOp) && srcMuxSize <= 3)
+    // Walk through each pair of dependency source and destination.
+    for (auto dstOp : loadStores)
+      for (auto srcOp : loadStores) {
+        if (dstOp == srcOp)
           continue;
 
-        MemRefAccess srcAccess(srcOp);
-        MemRefAccess dstAccess(dstOp);
+        // If delay is smaller than the current II, stop and continue because
+        // the minimum distance is one.
+        auto delay = getIntAttrValue(dstOp, "schedule_end") -
+                     getIntAttrValue(srcOp, "schedule_begin");
+        if (delay <= II)
+          continue;
 
-        // TODO: more case study.
-        if (srcAccess == dstAccess) {
-          float delay = getIntAttrValue(dstOp, "schedule_end") -
-                        getIntAttrValue(srcOp, "schedule_begin");
+        // Similar to getFuncDependencies() method, in some cases RAR is not
+        // considered as dependency in Vivado HLS.
+        auto srcMuxSize = getIntAttrValue(srcOp, "max_mux_size");
+        auto dstMuxSize = getIntAttrValue(dstOp, "max_mux_size");
+        if (isa<AffineReadOpInterface>(srcOp) && srcMuxSize <= 3 &&
+            isa<AffineReadOpInterface>(dstOp) && dstMuxSize <= 3)
+          continue;
 
-          // Distance is always 1 thus the minimum II is equal to delay.
-          int64_t minII = delay;
-          II = max(II, minII);
-        }
+        // Distance is always 1 thus the minimum II is equal to delay.
+        // TODO: need more case study.
+        if (MemRefAccess(srcOp) == MemRefAccess(dstOp))
+          II = max(II, delay);
       }
-      dstIndex++;
-    }
   }
   return II;
 }
 
 /// Calculate the minimum dependency II of loop.
-int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
-  int64_t II = 1;
-
+int64_t HLSCppEstimator::getDepMinII(int64_t II, AffineForOp forOp,
+                                     MemAccessesMap &map) {
   // Collect start and end level of the pipeline.
   int64_t endLevel = 1;
   int64_t startLevel = 1;
@@ -298,20 +293,29 @@ int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
   for (auto &pair : map) {
     auto loadStores = pair.second;
 
-    // Walk through each pair of source and destination, and each loop level
-    // that are pipelined. Note that here dstOp is always before srcOp.
-    int64_t dstIndex = 1;
-    for (auto dstOp : loadStores) {
-      for (auto srcOp : llvm::drop_begin(loadStores, dstIndex)) {
-        auto srcMuxSize = getIntAttrValue(srcOp, "max_mux_size");
-        auto dstMuxSize = getIntAttrValue(dstOp, "max_mux_size");
+    // Walk through each pair of source and destination.
+    for (auto dstOp : loadStores)
+      for (auto srcOp : loadStores) {
+        if (dstOp == srcOp)
+          continue;
+
+        // If delay is smaller than the current II, stop and continue because
+        // the minimum distance is one.
+        auto delay = getIntAttrValue(dstOp, "schedule_end") -
+                     getIntAttrValue(srcOp, "schedule_begin");
+        if (delay <= II)
+          continue;
 
         // Similar to getFuncDependencies() method, in some cases RAR is not
         // considered as dependency in Vivado HLS.
+        auto srcMuxSize = getIntAttrValue(srcOp, "max_mux_size");
+        auto dstMuxSize = getIntAttrValue(dstOp, "max_mux_size");
         if (isa<AffineReadOpInterface>(srcOp) && srcMuxSize <= 3 &&
             isa<AffineReadOpInterface>(dstOp) && dstMuxSize <= 3)
           continue;
 
+        // Now we must check whether carried dependency exists and calculate the
+        // dependency distance if required.
         MemRefAccess dstAccess(dstOp);
         MemRefAccess srcAccess(srcOp);
 
@@ -353,31 +357,17 @@ int64_t HLSCppEstimator::getDepMinII(AffineForOp forOp, MemAccessesMap &map) {
                   break;
                 }
                 accumTrips.push_back(accumTrips.back() * tripCount);
-
-                // llvm::outs() << "\n----------\n";
-                // llvm::outs() << *srcOp << " -> " << *dstOp << "\n";
-                // llvm::outs() << "depth=" << depth << " distance=" << distance
-                //              << "\n";
-                // for (auto dep : depComps)
-                //   llvm::outs() << "(" << dep.lb.getValue() << ","
-                //                << dep.ub.getValue() << "), ";
-                // llvm::outs() << "\n";
               }
             }
 
             // We will only consider intra-dependencies with positive distance.
             if (distance > 0) {
-              float delay = getIntAttrValue(dstOp, "schedule_end") -
-                            getIntAttrValue(srcOp, "schedule_begin");
-
-              int64_t minII = ceil(delay / distance);
+              int64_t minII = ceil((float)delay / distance);
               II = max(II, minII);
             }
           }
         }
       }
-      dstIndex++;
-    }
   }
   return II;
 }
@@ -427,10 +417,7 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
 
     // Calculate initial interval.
     auto resII = getResMinII(begin, end, map);
-    auto depII = getDepMinII(op, map);
-    setAttrValue(op, "resource_ii", resII);
-    setAttrValue(op, "dependence_ii", depII);
-
+    auto depII = getDepMinII(resII, op, map);
     auto II = max(resII, depII);
     setAttrValue(op, "init_interval", II);
 
@@ -681,11 +668,13 @@ HLSCppEstimator::estimateBlock(Block &block, int64_t begin) {
 
           // Now we must check whether any dependency exists between the two
           // operations. If so, update the scheduling level.
-          auto loopDepth = getNumCommonSurroundingLoops(*op, *depOp);
           auto opAccess = MemRefAccess(op);
           auto depOpAccess = MemRefAccess(depOp);
-          FlatAffineConstraints dependConstrs;
+
+          auto loopDepth = getNumCommonSurroundingLoops(*op, *depOp);
           for (unsigned depth = 1; depth <= loopDepth + 1; ++depth) {
+            FlatAffineConstraints dependConstrs;
+
             DependenceResult result = checkMemrefAccessDependence(
                 opAccess, depOpAccess, depth, &dependConstrs,
                 /*dependenceComponents=*/nullptr, /*allowRAR=*/true);
@@ -802,7 +791,9 @@ void HLSCppEstimator::estimateFunc(FuncOp &func) {
 
     // TODO: support CallOp inside of the function.
     if (getBoolAttrValue(func, "pipeline")) {
-      auto II = max(getResMinII(0, latency, map), getDepMinII(func, map));
+      auto resII = getResMinII(0, latency, map);
+      auto depII = getDepMinII(resII, func, map);
+      auto II = max(resII, depII);
       setAttrValue(func, "interval", II);
     }
 

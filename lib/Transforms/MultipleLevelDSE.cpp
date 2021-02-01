@@ -152,8 +152,7 @@ bool HLSCppOptimizer::applyLoopTilingStrategy(
                llvm::dbgs() << "Loop band " << Twine(idx) << ":";
 
                llvm::dbgs()
-                   << " ResII=" << getIntAttrValue(loop, "resource_ii")
-                   << " DepII=" << getIntAttrValue(loop, "dependence_ii")
+                   << " II=" << getIntAttrValue(loop, "init_interval")
                    << " IterLatency=" << getIntAttrValue(loop, "iter_latency")
                    << " DSP=" << getIntAttrValue(loop, "dsp") << " TileVector=";
 
