@@ -416,10 +416,14 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
     getMemAccessesMap(loopBlock, map);
 
     // Calculate initial interval.
+    auto targetII = getIntAttrValue(op, "target_ii");
     auto resII = getResMinII(begin, end, map);
-    auto depII = getDepMinII(resII, op, map);
-    auto II = max(resII, depII);
-    setAttrValue(op, "init_interval", II);
+    auto depII = getDepMinII(max(targetII, resII), op, map);
+    auto II = max({targetII, resII, depII});
+
+    setAttrValue(op, "res_ii", resII);
+    setAttrValue(op, "dep_ii", depII);
+    setAttrValue(op, "ii", II);
 
     setAttrValue(op, "flatten_trip_count", tripCount);
 
@@ -448,8 +452,8 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
     auto iterLatency = getIntAttrValue(child, "iter_latency");
     setAttrValue(op, "iter_latency", iterLatency);
 
-    auto II = getIntAttrValue(child, "init_interval");
-    setAttrValue(op, "init_interval", II);
+    auto II = getIntAttrValue(child, "ii");
+    setAttrValue(op, "ii", II);
 
     auto flattenTripCount =
         getIntAttrValue(child, "flatten_trip_count") * tripCount;
@@ -786,15 +790,19 @@ void HLSCppEstimator::estimateFunc(FuncOp &func) {
                        getIntAttrValue(callOp, "schedule_begin");
         maxInterval = max(maxInterval, latency);
       }
-      setAttrValue(func, "interval", maxInterval);
+      setAttrValue(func, "ii", maxInterval);
     }
 
     // TODO: support CallOp inside of the function.
     if (getBoolAttrValue(func, "pipeline")) {
+      auto targetII = getIntAttrValue(func, "target_ii");
       auto resII = getResMinII(0, latency, map);
-      auto depII = getDepMinII(resII, func, map);
-      auto II = max(resII, depII);
-      setAttrValue(func, "interval", II);
+      auto depII = getDepMinII(max(targetII, resII), func, map);
+      auto II = max({targetII, resII, depII});
+
+      setAttrValue(func, "res_ii", resII);
+      setAttrValue(func, "dep_ii", depII);
+      setAttrValue(func, "ii", II);
     }
 
     // Scheduled levels of all operations are reversed in this method, because
@@ -808,7 +816,7 @@ void HLSCppEstimator::estimateFunc(FuncOp &func) {
   }
 
   // Estimate the resource utilization of the function.
-  auto interval = getIntAttrValue(func, "interval");
+  auto interval = getIntAttrValue(func, "ii");
   auto resource = estimateResource(func.front(), interval);
 
   // Calculate the function memrefs BRAM utilization.

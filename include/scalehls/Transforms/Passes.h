@@ -41,7 +41,8 @@ bool applyFullyLoopUnrolling(Block &block);
 
 /// Apply loop pipelining to the input loop, all inner loops are automatically
 /// fully unrolled.
-bool applyLoopPipelining(AffineForOp loop, OpBuilder &builder);
+bool applyLoopPipelining(AffineForOp loop, int64_t targetII,
+                         OpBuilder &builder);
 
 //===----------------------------------------------------------------------===//
 // Optimization Pass Entries

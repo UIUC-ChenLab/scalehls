@@ -142,11 +142,11 @@ SmallString<8> HLSCppEmitterBase::getName(Value val) {
 //===----------------------------------------------------------------------===//
 
 namespace {
-class ModuleEmitter : public HLSCppEmitterBase {
+class ModuleEmitter : public HLSCppEmitterBase, HLSCppAnalysisBase {
 public:
   using operand_range = Operation::operand_range;
-  explicit ModuleEmitter(HLSCppEmitterState &state)
-      : HLSCppEmitterBase(state) {}
+  explicit ModuleEmitter(HLSCppEmitterState &state, OpBuilder &builder)
+      : HLSCppEmitterBase(state), HLSCppAnalysisBase(builder) {}
 
   /// SCF statement emitters.
   void emitScfFor(scf::ForOp op);
@@ -496,11 +496,10 @@ void ModuleEmitter::emitScfFor(scf::ForOp op) {
 
   addIndent();
 
-  if (auto pipeline = op->getAttrOfType<BoolAttr>("pipeline")) {
-    if (pipeline.getValue()) {
-      indent();
-      os << "#pragma HLS pipeline\n";
-    }
+  if (getIntAttrValue(op, "pipeline")) {
+    indent();
+    auto targetII = getIntAttrValue(op, "target_ii");
+    os << "#pragma HLS pipeline II=" << targetII << "\n";
   }
 
   // if (auto flatten = op->getAttrOfType<BoolAttr>("flatten")) {
@@ -628,11 +627,10 @@ void ModuleEmitter::emitAffineFor(AffineForOp op) {
 
   addIndent();
 
-  if (auto pipeline = op->getAttrOfType<BoolAttr>("pipeline")) {
-    if (pipeline.getValue()) {
-      indent();
-      os << "#pragma HLS pipeline\n";
-    }
+  if (getIntAttrValue(op, "pipeline")) {
+    indent();
+    auto targetII = getIntAttrValue(op, "target_ii");
+    os << "#pragma HLS pipeline II=" << targetII << "\n";
   }
 
   // if (auto flatten = op->getAttrOfType<BoolAttr>("flatten")) {
@@ -1318,10 +1316,10 @@ void ModuleEmitter::emitInfoAndNewLine(Operation *op) {
     os << "," << end.getInt() << ")";
 
   // Print loop information.
-  if (auto II = op->getAttrOfType<IntegerAttr>("init_interval"))
-    os << ", II=" << II.getInt();
   if (auto latency = op->getAttrOfType<IntegerAttr>("iter_latency"))
     os << ", latency=" << latency.getInt();
+  if (auto II = op->getAttrOfType<IntegerAttr>("ii"))
+    os << ", II=" << II.getInt();
 
   os << "\n";
 }
@@ -1397,65 +1395,60 @@ void ModuleEmitter::emitArrayPragmas(Value memref) {
 }
 
 void ModuleEmitter::emitFunctionPragmas(FuncOp func, ArrayRef<Value> portList) {
-  if (auto dataflow = func->getAttrOfType<BoolAttr>("dataflow")) {
-    if (dataflow.getValue()) {
-      indent();
-      os << "#pragma HLS dataflow\n";
+  if (getBoolAttrValue(func, "dataflow")) {
+    indent();
+    os << "#pragma HLS dataflow\n";
 
-      // An empty line.
-      os << "\n";
-    }
+    // An empty line.
+    os << "\n";
   }
 
-  if (auto pipeline = func->getAttrOfType<BoolAttr>("pipeline")) {
-    if (pipeline.getValue()) {
-      indent();
-      os << "#pragma HLS pipeline\n";
+  if (getBoolAttrValue(func, "pipeline")) {
+    indent();
+    auto targetII = getIntAttrValue(func, "target_ii");
+    os << "#pragma HLS pipeline II=" << targetII << "\n";
 
-      // An empty line.
-      os << "\n";
-    }
+    // An empty line.
+    os << "\n";
   }
 
   // Only top function should emit interface pragmas.
-  if (auto topFunction = func->getAttrOfType<BoolAttr>("top_function")) {
-    if (topFunction.getValue()) {
-      indent();
-      os << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
+  if (getBoolAttrValue(func, "top_function")) {
+    indent();
+    os << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
 
-      for (auto &port : portList) {
-        // Array ports and scalar ports are handled separately. Here, we only
-        // handle MemRef types since we assume the IR has be fully bufferized.
-        if (auto memrefType = port.getType().dyn_cast<MemRefType>()) {
-          indent();
-          os << "#pragma HLS interface";
-          // For now, we set the offset of all m_axi interfaces as slave.
-          if (MemoryKind(memrefType.getMemorySpace()) == MemoryKind::DRAM)
-            os << " m_axi offset=slave";
-          else
-            os << " bram";
+    for (auto &port : portList) {
+      // Array ports and scalar ports are handled separately. Here, we only
+      // handle MemRef types since we assume the IR has be fully bufferized.
+      if (auto memrefType = port.getType().dyn_cast<MemRefType>()) {
+        indent();
+        os << "#pragma HLS interface";
+        // For now, we set the offset of all m_axi interfaces as slave.
+        if (MemoryKind(memrefType.getMemorySpace()) == MemoryKind::DRAM)
+          os << " m_axi offset=slave";
+        else
+          os << " bram";
 
-          os << " port=";
-          emitValue(port);
-          os << "\n";
+        os << " port=";
+        emitValue(port);
+        os << "\n";
 
-        } else {
-          indent();
-          os << "#pragma HLS interface s_axilite";
-          os << " port=";
+      } else {
+        indent();
+        os << "#pragma HLS interface s_axilite";
+        os << " port=";
 
-          // TODO: This is a temporary solution.
-          auto name = getName(port);
-          if (name.front() == "*"[0])
-            name.erase(name.begin());
-          os << name;
-          os << " bundle=ctrl\n";
-        }
+        // TODO: This is a temporary solution.
+        auto name = getName(port);
+        if (name.front() == "*"[0])
+          name.erase(name.begin());
+        os << name;
+        os << " bundle=ctrl\n";
       }
-
-      // An empty line.
-      os << "\n";
     }
+
+    // An empty line.
+    os << "\n";
 
     // Emit other pragmas for function ports.
     for (auto &port : portList)
@@ -1474,8 +1467,8 @@ void ModuleEmitter::emitFunction(FuncOp func) {
 
   if (auto latency = func->getAttrOfType<IntegerAttr>("latency")) {
     os << "/// Latency=" << latency.getInt();
-    if (auto interval = func->getAttrOfType<IntegerAttr>("interval"))
-      os << ", interval=" << interval.getInt();
+    if (auto interval = func->getAttrOfType<IntegerAttr>("ii"))
+      os << ", II=" << interval.getInt();
     os << "\n";
   }
 
@@ -1572,8 +1565,9 @@ using namespace std;
 //===----------------------------------------------------------------------===//
 
 static LogicalResult emitHLSCpp(ModuleOp module, llvm::raw_ostream &os) {
+  auto builder = OpBuilder(module);
   HLSCppEmitterState state(os);
-  ModuleEmitter(state).emitModule(module);
+  ModuleEmitter(state, builder).emitModule(module);
   return failure(state.encounteredError);
 }
 

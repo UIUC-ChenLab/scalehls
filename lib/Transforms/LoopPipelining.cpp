@@ -33,12 +33,14 @@ bool scalehls::applyFullyLoopUnrolling(Block &block) {
 
 /// Apply loop pipelining to the input loop, all inner loops are automatically
 /// fully unrolled.
-bool scalehls::applyLoopPipelining(AffineForOp targetLoop, OpBuilder &builder) {
-  targetLoop->setAttr("pipeline", builder.getBoolAttr(true));
-
+bool scalehls::applyLoopPipelining(AffineForOp targetLoop, int64_t targetII,
+                                   OpBuilder &builder) {
   // All inner loops of the pipelined loop are automatically unrolled.
   if (!applyFullyLoopUnrolling(*targetLoop.getBody()))
     return false;
+
+  targetLoop->setAttr("pipeline", builder.getBoolAttr(true));
+  targetLoop->setAttr("target_ii", builder.getI64IntegerAttr(targetII));
 
   // All outer loops that perfect nest the pipelined loop can be flattened.
   SmallVector<AffineForOp, 4> flattenedLoops;
@@ -83,7 +85,7 @@ struct LoopPipelining : public LoopPipeliningBase<LoopPipelining> {
 
         // If meet the outermost loop, pipeline the current loop.
         if (!parentLoop || pipelineLevel == loopLevel) {
-          applyLoopPipelining(currentLoop, builder);
+          applyLoopPipelining(currentLoop, targetII, builder);
           break;
         }
 

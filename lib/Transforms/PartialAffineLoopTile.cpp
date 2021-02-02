@@ -12,7 +12,8 @@
 using namespace mlir;
 using namespace scalehls;
 
-/// Apply loop tiling and return the new loop that should be pipelined.
+/// Apply loop tiling and return the new loop that should be pipelined or fully
+/// unrolled.
 AffineForOp
 scalehls::applyPartialAffineLoopTiling(AffineLoopBand &band, OpBuilder &builder,
                                        ArrayRef<unsigned> tileSizes) {

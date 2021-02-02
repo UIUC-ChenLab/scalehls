@@ -135,7 +135,9 @@ def FuncPipelining : Pass<"func-pipelining", "FuncOp"> {
 
   let options = [
     Option<"targetFunc", "target-func", "std::string",
-           /*default=*/"\"main\"", "The target function to be pipelined">
+           /*default=*/"\"main\"", "The target function to be pipelined">,
+    Option<"targetII", "target-ii", "unsigned", /*default=*/"1", 
+           "Positive number: the targeted II to achieve">
   ];
 }
 
@@ -150,7 +152,9 @@ def LoopPipelining : Pass<"loop-pipelining", "FuncOp"> {
 
   let options = [
     Option<"pipelineLevel", "pipeline-level", "unsigned", /*default=*/"0", 
-           "Positive number: loop level to be pipelined (from innermost)">
+           "Positive number: loop level to be pipelined (from innermost)">,
+    Option<"targetII", "target-ii", "unsigned", /*default=*/"1", 
+           "Positive number: the targeted II to achieve">
   ];
 }
 
