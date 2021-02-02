@@ -400,8 +400,8 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
 
   // Estimate the loop block.
   if (auto schedule = estimateBlock(loopBlock, begin)) {
-    end = max(end, schedule.getValue().second);
-    begin = max(begin, schedule.getValue().first);
+    end = max(end, schedule.getValue().end);
+    begin = max(begin, schedule.getValue().begin);
   } else
     return false;
 
@@ -493,7 +493,7 @@ bool HLSCppEstimator::visitOp(AffineIfOp op, int64_t begin) {
 
   // Estimate then block.
   if (auto schedule = estimateBlock(*thenBlock, begin))
-    end = max(end, schedule.getValue().second);
+    end = max(end, schedule.getValue().end);
   else
     return false;
 
@@ -502,7 +502,7 @@ bool HLSCppEstimator::visitOp(AffineIfOp op, int64_t begin) {
     auto elseBlock = op.getElseBlock();
 
     if (auto schedule = estimateBlock(*elseBlock, begin))
-      end = max(end, schedule.getValue().second);
+      end = max(end, schedule.getValue().end);
     else
       return false;
   }
@@ -534,9 +534,9 @@ bool HLSCppEstimator::visitOp(CallOp op, int64_t begin) {
 // Block Scheduler and Estimator
 //===----------------------------------------------------------------------===//
 
-int64_t HLSCppEstimator::getDSPMap(Block &block, ResourceMap &faddMap,
-                                   ResourceMap &fmulMap) {
-  int64_t loopDSPNum = 0;
+int64_t HLSCppEstimator::getDspAllocMap(Block &block, ResourceAllocMap &faddMap,
+                                        ResourceAllocMap &fmulMap) {
+  int64_t loopDspNum = 0;
   for (auto &op : block) {
     auto begin = getIntAttrValue(&op, "schedule_begin");
     auto end = getIntAttrValue(&op, "schedule_end");
@@ -551,23 +551,23 @@ int64_t HLSCppEstimator::getDSPMap(Block &block, ResourceMap &faddMap,
         fmulMap[i]++;
 
     else if (isa<AffineForOp>(op))
-      loopDSPNum += getIntAttrValue(&op, "dsp");
+      loopDspNum += getIntAttrValue(&op, "dsp");
 
     else if (auto ifOp = dyn_cast<AffineIfOp>(op)) {
       // AffineIfOp is transparent during scheduling, thus here we recursively
       // enter each if block.
-      loopDSPNum += getDSPMap(*ifOp.getThenBlock(), faddMap, fmulMap);
+      loopDspNum += getDspAllocMap(*ifOp.getThenBlock(), faddMap, fmulMap);
       if (ifOp.hasElse())
-        loopDSPNum += getDSPMap(*ifOp.getElseBlock(), faddMap, fmulMap);
+        loopDspNum += getDspAllocMap(*ifOp.getElseBlock(), faddMap, fmulMap);
     }
   }
-  return loopDSPNum;
+  return loopDspNum;
 }
 
 Resource HLSCppEstimator::estimateResource(Block &block, int64_t interval) {
-  ResourceMap faddMap;
-  ResourceMap fmulMap;
-  auto loopDSPNum = getDSPMap(block, faddMap, fmulMap);
+  ResourceAllocMap faddMap;
+  ResourceAllocMap fmulMap;
+  auto loopDspNum = getDspAllocMap(block, faddMap, fmulMap);
 
   // Find the max resource utilization across all schedule levels.
   int64_t maxFadd = 0;
@@ -582,7 +582,8 @@ Resource HLSCppEstimator::estimateResource(Block &block, int64_t interval) {
   // overall resource utilization is loops' plus other operstions'. According
   // to profiling, floating-point add and muliply will consume 2 and 3 DSP
   // units, respectively.
-  auto dsp = loopDSPNum + maxFadd * 2 + maxFmul * 3;
+  auto shareDspNum = maxFadd * 2 + maxFmul * 3;
+  auto dsp = loopDspNum + shareDspNum;
 
   // If the block is pipelined (interval is positive), the minimum resource
   // utilization is determined by interval.
@@ -596,11 +597,16 @@ Resource HLSCppEstimator::estimateResource(Block &block, int64_t interval) {
         totalFmul++;
     });
 
-    auto minDSPNum = (totalFadd * 2 + totalFmul * 3) / interval;
-    dsp = loopDSPNum + max(maxFadd * 2 + maxFmul * 3, minDSPNum);
+    auto noShareDspNum = totalFadd * 2 + totalFmul * 3;
+    dsp = loopDspNum + max(shareDspNum, noShareDspNum / interval);
+
+    // Annotate dsp utilization with & without resource sharing.
+    auto parentOp = block.getParentOp();
+    setAttrValue(parentOp, "share_dsp", shareDspNum);
+    setAttrValue(parentOp, "noshare_dsp", noShareDspNum);
   }
 
-  // TODO:
+  // TODO: Estimate bram, ff, lut.
   int64_t bram = 0;
   int64_t ff = 0;
   int64_t lut = 0;
@@ -610,8 +616,7 @@ Resource HLSCppEstimator::estimateResource(Block &block, int64_t interval) {
 /// Estimate the latency of a block with ALAP scheduling strategy, return the
 /// end level of schedule. Meanwhile, the input begin will also be updated if
 /// required (typically happens in AffineForOps).
-Optional<std::pair<int64_t, int64_t>>
-HLSCppEstimator::estimateBlock(Block &block, int64_t begin) {
+Optional<Schedule> HLSCppEstimator::estimateBlock(Block &block, int64_t begin) {
   auto blockBegin = begin;
   auto blockEnd = begin;
 
@@ -694,7 +699,7 @@ HLSCppEstimator::estimateBlock(Block &block, int64_t begin) {
     if (dispatchVisitor(op, opBegin))
       opEnd = max(opEnd, getIntAttrValue(op, "schedule_end"));
     else
-      return Optional<std::pair<int64_t, int64_t>>();
+      return Optional<Schedule>();
 
     // Update the block schedule end and begin.
     if (i == block.rbegin())
@@ -704,7 +709,7 @@ HLSCppEstimator::estimateBlock(Block &block, int64_t begin) {
 
     blockEnd = max(blockEnd, opEnd);
   }
-  return std::pair<int64_t, int64_t>(blockBegin, blockEnd);
+  return Schedule(blockBegin, blockEnd);
 }
 
 /// Get the innermost surrounding operation, either an AffineForOp or a FuncOp.
@@ -751,20 +756,22 @@ void HLSCppEstimator::reverseSchedule(Block &block) {
   });
 }
 
-void HLSCppEstimator::estimateFunc(FuncOp &func) {
-  // Clear global maps and scheduling information.
+void HLSCppEstimator::initEstimator(Block &block) {
+  // Clear global maps and scheduling information. Walk through all loops and
+  // establish dependencies. The rationale here is in Vivado HLS, a loop will
+  // always be blocked by other loops before it, even if no actual dependency
+  // exists between them.
   dependsMap.clear();
   memPortInfosMap.clear();
-  func.walk([&](Operation *op) {
+
+  SmallVector<Operation *, 16> loops;
+  block.walk([&](Operation *op) {
     op->removeAttr("schedule_begin");
     op->removeAttr("schedule_end");
-  });
 
-  // Walk through all loops in the function and establish dependencies. The
-  // rationale here is in Vivado HLS, a loop will always be dominated by other
-  // loops before it, even if no actual dependencies exist between them.
-  SmallVector<Operation *, 16> loops;
-  func.walk([&](AffineForOp loop) { loops.push_back(loop); });
+    if (isa<AffineForOp>(op))
+      loops.push_back(op);
+  });
 
   unsigned idx = 1;
   for (auto srcLoop : loops) {
@@ -773,6 +780,10 @@ void HLSCppEstimator::estimateFunc(FuncOp &func) {
         dependsMap[srcLoop].push_back(dstLoop);
     idx++;
   }
+};
+
+void HLSCppEstimator::estimateFunc(FuncOp func) {
+  initEstimator(func.front());
 
   // Collect all memory access operations for later use.
   MemAccessesMap map;
@@ -780,7 +791,7 @@ void HLSCppEstimator::estimateFunc(FuncOp &func) {
 
   // Recursively estimate blocks in the function.
   if (auto schedule = estimateBlock(func.front(), 0)) {
-    auto latency = schedule.getValue().second;
+    auto latency = schedule.getValue().end;
     setAttrValue(func, "latency", latency);
 
     if (getBoolAttrValue(func, "dataflow")) {
@@ -812,7 +823,7 @@ void HLSCppEstimator::estimateFunc(FuncOp &func) {
     reverseSchedule(func.front());
   } else {
     // Scheduling failed due to earlier error.
-    setAttrValue(func, "latency", std::string("unknown"));
+    setAttrValue(func, "latency", (int64_t)-1);
   }
 
   // Estimate the resource utilization of the function.
@@ -841,7 +852,11 @@ void HLSCppEstimator::estimateFunc(FuncOp &func) {
   setResourceValue(func, resource);
 }
 
-void HLSCppEstimator::estimateLoop(AffineForOp &loop) { return; }
+void HLSCppEstimator::estimateLoop(AffineForOp loop) {
+  initEstimator(*loop.getBody());
+  dispatchVisitor(loop, 0);
+  reverseSchedule(*loop.getBody());
+}
 
 //===----------------------------------------------------------------------===//
 // Entry of scalehls-opt

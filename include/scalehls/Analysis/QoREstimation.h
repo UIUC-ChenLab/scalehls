@@ -28,6 +28,14 @@ struct Resource {
   Resource() {}
 };
 
+struct Schedule {
+  int64_t begin = 0;
+  int64_t end = 0;
+
+  Schedule(int64_t begin, int64_t end) : begin(begin), end(end) {}
+  Schedule() {}
+};
+
 using LatencyMap = llvm::StringMap<int64_t>;
 void getLatencyMap(INIReader spec, LatencyMap &latencyMap);
 
@@ -56,8 +64,8 @@ public:
   using MemPortInfos = std::vector<MemPortInfo>;
   using MemPortInfosMap = DenseMap<int64_t, DenseMap<Value, MemPortInfos>>;
 
-  // For storing the DSP resource utilization indexed by the schedule level.
-  using ResourceMap = DenseMap<int64_t, int64_t>;
+  // For storing the resource utilization indexed by the schedule level.
+  using ResourceAllocMap = DenseMap<int64_t, int64_t>;
 
   /// Collect all dependencies detected in the function.
   void getFuncDependencies();
@@ -120,15 +128,16 @@ public:
 #undef HANDLE
 
   /// Block scheduler and estimator.
-  int64_t getDSPMap(Block &block, ResourceMap &faddMap, ResourceMap &fmulMap);
+  int64_t getDspAllocMap(Block &block, ResourceAllocMap &faddMap,
+                         ResourceAllocMap &fmulMap);
   Resource estimateResource(Block &block, int64_t interval = -1);
-  Optional<std::pair<int64_t, int64_t>> estimateBlock(Block &block,
-                                                      int64_t begin);
+  Optional<Schedule> estimateBlock(Block &block, int64_t begin);
   void reverseSchedule(Block &block);
+  void initEstimator(Block &block);
 
   /// Estimator entries.
-  void estimateFunc(FuncOp &func);
-  void estimateLoop(AffineForOp &loop);
+  void estimateFunc(FuncOp func);
+  void estimateLoop(AffineForOp loop);
 
   DependsMap dependsMap;
   MemPortInfosMap memPortInfosMap;
