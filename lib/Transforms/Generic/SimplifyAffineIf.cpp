@@ -235,8 +235,7 @@ static bool applySimplifyAffineIf(FuncOp func) {
         if (&ifOp.getElseBlock()->front() != yieldOp) {
           auto &elseBlock = ifOp.getElseBlock()->getOperations();
           auto &parentBlock = ifOp->getBlock()->getOperations();
-          parentBlock.splice(ifOp->getIterator(), elseBlock,
-                             std::next(elseBlock.begin()),
+          parentBlock.splice(ifOp->getIterator(), elseBlock, elseBlock.begin(),
                              std::prev(elseBlock.end(), 1));
         }
       }
@@ -254,11 +253,10 @@ static bool applySimplifyAffineIf(FuncOp func) {
       // Move all operations except the terminator of the else block into the
       // parent block.
       if (&ifOp.getThenBlock()->front() != yieldOp) {
-        auto &elseBlock = ifOp.getThenBlock()->getOperations();
+        auto &thenBlock = ifOp.getThenBlock()->getOperations();
         auto &parentBlock = ifOp->getBlock()->getOperations();
-        parentBlock.splice(ifOp->getIterator(), elseBlock,
-                           std::next(elseBlock.begin()),
-                           std::prev(elseBlock.end(), 1));
+        parentBlock.splice(ifOp->getIterator(), thenBlock, thenBlock.begin(),
+                           std::prev(thenBlock.end(), 1));
       }
     }
   });
