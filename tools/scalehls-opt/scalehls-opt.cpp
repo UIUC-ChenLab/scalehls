@@ -13,7 +13,6 @@ int main(int argc, char **argv) {
   mlir::scalehls::registerAllDialects(registry);
   mlir::scalehls::registerAllPasses();
 
-  return mlir::failed(mlir::MlirOptMain(argc, argv,
-                                        "ScaleHLS Optimization Tool", registry,
-                                        /*prelaodDialectsInContext=*/true));
+  return mlir::failed(
+      mlir::MlirOptMain(argc, argv, "ScaleHLS Optimization Tool", registry));
 }

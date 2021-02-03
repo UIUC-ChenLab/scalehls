@@ -525,6 +525,7 @@ bool HLSCppEstimator::visitOp(CallOp op, int64_t begin) {
   // We assume enter and leave the subfunction require extra 2 clock cycles.
   if (auto subLatency = getIntAttrValue(subFunc, "latency")) {
     setScheduleValue(op, begin, begin + subLatency + 2);
+    setAttrValue(op, "dsp", getIntAttrValue(subFunc, "dsp"));
     return true;
   } else
     return false;
@@ -536,7 +537,7 @@ bool HLSCppEstimator::visitOp(CallOp op, int64_t begin) {
 
 int64_t HLSCppEstimator::getDspAllocMap(Block &block, ResourceAllocMap &faddMap,
                                         ResourceAllocMap &fmulMap) {
-  int64_t loopDspNum = 0;
+  int64_t staticDspNum = 0;
   for (auto &op : block) {
     auto begin = getIntAttrValue(&op, "schedule_begin");
     auto end = getIntAttrValue(&op, "schedule_end");
@@ -550,24 +551,24 @@ int64_t HLSCppEstimator::getDspAllocMap(Block &block, ResourceAllocMap &faddMap,
       for (unsigned i = begin; i < end; ++i)
         fmulMap[i]++;
 
-    else if (isa<AffineForOp>(op))
-      loopDspNum += getIntAttrValue(&op, "dsp");
+    else if (isa<AffineForOp, CallOp>(op))
+      staticDspNum += getIntAttrValue(&op, "dsp");
 
     else if (auto ifOp = dyn_cast<AffineIfOp>(op)) {
       // AffineIfOp is transparent during scheduling, thus here we recursively
       // enter each if block.
-      loopDspNum += getDspAllocMap(*ifOp.getThenBlock(), faddMap, fmulMap);
+      staticDspNum += getDspAllocMap(*ifOp.getThenBlock(), faddMap, fmulMap);
       if (ifOp.hasElse())
-        loopDspNum += getDspAllocMap(*ifOp.getElseBlock(), faddMap, fmulMap);
+        staticDspNum += getDspAllocMap(*ifOp.getElseBlock(), faddMap, fmulMap);
     }
   }
-  return loopDspNum;
+  return staticDspNum;
 }
 
 Resource HLSCppEstimator::estimateResource(Block &block, int64_t interval) {
   ResourceAllocMap faddMap;
   ResourceAllocMap fmulMap;
-  auto loopDspNum = getDspAllocMap(block, faddMap, fmulMap);
+  auto staticDspNum = getDspAllocMap(block, faddMap, fmulMap);
 
   // Find the max resource utilization across all schedule levels.
   int64_t maxFadd = 0;
@@ -583,7 +584,7 @@ Resource HLSCppEstimator::estimateResource(Block &block, int64_t interval) {
   // to profiling, floating-point add and muliply will consume 2 and 3 DSP
   // units, respectively.
   auto shareDspNum = maxFadd * 2 + maxFmul * 3;
-  auto dsp = loopDspNum + shareDspNum;
+  auto dsp = staticDspNum + shareDspNum;
 
   // If the block is pipelined (interval is positive), the minimum resource
   // utilization is determined by interval.
@@ -598,7 +599,7 @@ Resource HLSCppEstimator::estimateResource(Block &block, int64_t interval) {
     });
 
     auto noShareDspNum = totalFadd * 2 + totalFmul * 3;
-    dsp = loopDspNum + max(shareDspNum, noShareDspNum / interval);
+    dsp = staticDspNum + max(shareDspNum, noShareDspNum / interval);
 
     // Annotate dsp utilization with & without resource sharing.
     auto parentOp = block.getParentOp();

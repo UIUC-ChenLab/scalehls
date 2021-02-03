@@ -89,7 +89,7 @@ public:
                                ArrayRef<TileSizes> tileSizesList,
                                bool applyPipeline = true);
 
-  bool incrTileSizeAtLoc(TileSizes &tileSizes, const TileSizes &tripCounts,
+  bool incrTileSizeAtLoc(TileSizes &tileSizes, TileSizes &tripCounts,
                          unsigned &loc);
 
   /// Currently only support single-loop profiling.
@@ -165,7 +165,7 @@ bool HLSCppOptimizer::applyLoopTilingStrategy(FuncOp targetFunc,
                llvm::dbgs() << "Loop band " << Twine(idx) << ":";
 
                llvm::dbgs()
-                   << " II=" << getIntAttrValue(loop, "init_interval")
+                   << " II=" << getIntAttrValue(loop, "ii")
                    << " IterLatency=" << getIntAttrValue(loop, "iter_latency")
                    << " DSP=" << getIntAttrValue(loop, "dsp") << " TileVector=";
 
@@ -180,8 +180,7 @@ bool HLSCppOptimizer::applyLoopTilingStrategy(FuncOp targetFunc,
 }
 
 bool HLSCppOptimizer::incrTileSizeAtLoc(TileSizes &tileSizes,
-                                        const TileSizes &tripCounts,
-                                        unsigned &loc) {
+                                        TileSizes &tripCounts, unsigned &loc) {
   auto size = tileSizes[loc];
   auto tripCount = tripCounts[loc];
 
