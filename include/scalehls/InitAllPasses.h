@@ -10,6 +10,7 @@
 #include "mlir/InitAllPasses.h"
 #include "scalehls/Analysis/Passes.h"
 #include "scalehls/Conversion/Passes.h"
+#include "scalehls/Dialect/HLSKernel/Passes.h"
 #include "scalehls/Transforms/Passes.h"
 
 namespace mlir {
@@ -20,6 +21,7 @@ inline void registerAllPasses() {
   scalehls::registerAnalysisPasses();
   scalehls::registerConversionPasses();
   scalehls::registerTransformsPasses();
+  scalehls::registerHLSKernelTransformsPasses();
 
   // TODO: only register required passes.
   mlir::registerAllPasses();

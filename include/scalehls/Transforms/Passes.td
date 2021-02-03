@@ -209,17 +209,4 @@ def SimplifyMemrefAccess : Pass<"simplify-memref-access", "FuncOp"> {
   let constructor = "mlir::scalehls::createSimplifyMemrefAccessPass()";
 }
 
-//===----------------------------------------------------------------------===//
-// Bufferization Pass
-//===----------------------------------------------------------------------===//
-
-def HLSKernelBufferize : Pass<"hlskernel-bufferize", "FuncOp"> {
-  let summary = "Bufferize HLSKernel operations";
-  let description = [{
-    This hlskernel-bufferize pass will bufferize HLSKernel operations.
-  }];
-
-  let constructor = "mlir::scalehls::createHLSKernelBufferizePass()";
-}
-
 #endif // SCALEHLS_TRANSFORMS_PASSES_TD

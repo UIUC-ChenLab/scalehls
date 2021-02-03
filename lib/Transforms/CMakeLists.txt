@@ -1,4 +1,4 @@
-file(GLOB globbed *.cpp)
+file(GLOB globbed *.cpp */*.cpp)
 
 add_mlir_library(MLIRScaleHLSTransforms
   ${globbed}

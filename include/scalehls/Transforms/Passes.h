@@ -71,9 +71,6 @@ std::unique_ptr<Pass> createSimplifyAffineIfPass();
 std::unique_ptr<Pass> createAffineStoreForwardPass();
 std::unique_ptr<Pass> createSimplifyMemrefAccessPass();
 
-/// Bufferization pass.
-std::unique_ptr<Pass> createHLSKernelBufferizePass();
-
 void registerTransformsPasses();
 
 #define GEN_PASS_CLASSES

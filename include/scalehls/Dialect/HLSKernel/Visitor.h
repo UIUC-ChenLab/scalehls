@@ -24,8 +24,6 @@ public:
         .template Case<
             // CNN operations.
             DenseOp, ConvOp, MaxPoolOp, ReluOp, MergeOp, CopyOp,
-            // ISP operations.
-            CpOp, SobelOp, HarrisOp, DeblurOp, UpsampleOp, DownsampleOp,
             // BLAS operations.
             GemmOp, SymmOp, SyrkOp, Syr2kOp, TrmmOp>(
             [&](auto opNode) -> ResultType {
@@ -60,14 +58,6 @@ public:
   HANDLE(ReluOp);
   HANDLE(MergeOp);
   HANDLE(CopyOp);
-
-  // ISP operations.
-  HANDLE(CpOp);
-  HANDLE(SobelOp);
-  HANDLE(HarrisOp);
-  HANDLE(DeblurOp);
-  HANDLE(UpsampleOp);
-  HANDLE(DownsampleOp);
 
   // BLAS operations.
   HANDLE(GemmOp);

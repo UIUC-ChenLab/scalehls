@@ -4,8 +4,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/IR/Builders.h"
 #include "scalehls/Dialect/HLSKernel/HLSKernel.h"
-#include "scalehls/Transforms/Passes.h"
+#include "scalehls/Dialect/HLSKernel/Passes.h"
 
 using namespace mlir;
 using namespace scalehls;
