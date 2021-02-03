@@ -27,8 +27,13 @@ def MultipleLevelDSE : Pass<"multiple-level-dse", "ModuleOp"> {
 
   let options = [
     Option<"targetSpec", "target-spec", "std::string",
-           /*default=*/"\"../config/target-spec.ini\"", 
-           "File path: target backend specifications and configurations">
+           /*default=*/"\"../config/target-spec.ini\"",
+           "File path: target backend specifications and configurations">,
+
+    Option<"profiling", "profiling", "bool", /*default=*/"false",
+           "Work in profiling mode to collect the performance and utilization">,
+    Option<"profilingFile", "profiling-file", "std::string",
+           /*default=*/"\"-\"", "File path: the output file path of profiling">
   ];
 }
 
@@ -47,9 +52,9 @@ def LegalizeDataflow : Pass<"legalize-dataflow", "FuncOp"> {
   let constructor = "mlir::scalehls::createLegalizeDataflowPass()";
 
   let options = [
-    Option<"insertCopy", "insert-copy", "bool", /*default=*/"true", 
+    Option<"insertCopy", "insert-copy", "bool", /*default=*/"true",
            "Whether insert copy operations to break bypass paths">,
-    Option<"minGran", "min-gran", "unsigned", /*default=*/"1", 
+    Option<"minGran", "min-gran", "unsigned", /*default=*/"1",
            "Positive number: the minimum granularity of dataflow">
   ];
 }
@@ -115,7 +120,7 @@ def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "FuncOp"> {
   let constructor = "mlir::scalehls::createPartialAffineLoopTilePass()";
 
   let options = [
-    Option<"tileSize", "tile-size", "unsigned", /*default=*/"2", 
+    Option<"tileSize", "tile-size", "unsigned", /*default=*/"2",
            "Positive number: the size of tiling">
   ];
 }
@@ -136,7 +141,7 @@ def FuncPipelining : Pass<"func-pipelining", "FuncOp"> {
   let options = [
     Option<"targetFunc", "target-func", "std::string",
            /*default=*/"\"main\"", "The target function to be pipelined">,
-    Option<"targetII", "target-ii", "unsigned", /*default=*/"1", 
+    Option<"targetII", "target-ii", "unsigned", /*default=*/"1",
            "Positive number: the targeted II to achieve">
   ];
 }
@@ -151,9 +156,9 @@ def LoopPipelining : Pass<"loop-pipelining", "FuncOp"> {
   let constructor = "mlir::scalehls::createLoopPipeliningPass()";
 
   let options = [
-    Option<"pipelineLevel", "pipeline-level", "unsigned", /*default=*/"0", 
+    Option<"pipelineLevel", "pipeline-level", "unsigned", /*default=*/"0",
            "Positive number: loop level to be pipelined (from innermost)">,
-    Option<"targetII", "target-ii", "unsigned", /*default=*/"1", 
+    Option<"targetII", "target-ii", "unsigned", /*default=*/"1",
            "Positive number: the targeted II to achieve">
   ];
 }
