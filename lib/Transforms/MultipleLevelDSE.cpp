@@ -87,12 +87,12 @@ public:
   void emitDebugInfo(FuncOp targetFunc, StringRef message);
   bool applyLoopTilingStrategy(FuncOp targetFunc,
                                ArrayRef<TileSizes> tileSizesList,
-                               bool applyPipeline = true);
+                               int64_t targetII = 1, bool applyPipeline = true);
 
   bool incrTileSizeAtLoc(TileSizes &tileSizes, TileSizes &tripCounts,
                          unsigned &loc);
 
-  /// Currently only support single-loop profiling.
+  /// Currently only support single loop band profiling.
   void applyProfiling(FuncOp func, raw_ostream &os);
 
   /// This is a temporary approach that does not scale.
@@ -118,6 +118,7 @@ void HLSCppOptimizer::emitDebugInfo(FuncOp targetFunc, StringRef message) {
 
 bool HLSCppOptimizer::applyLoopTilingStrategy(FuncOp targetFunc,
                                               ArrayRef<TileSizes> tileSizesList,
+                                              int64_t targetII,
                                               bool applyPipeline) {
   AffineLoopBands targetBands;
   getLoopBands(targetFunc.front(), targetBands);
@@ -198,8 +199,145 @@ bool HLSCppOptimizer::incrTileSizeAtLoc(TileSizes &tileSizes,
   return true;
 }
 
+/// Currently only support single loop band profiling.
 void HLSCppOptimizer::applyProfiling(FuncOp func, raw_ostream &os) {
-  os << "test\n";
+  if (!dyn_cast<AffineForOp>(func.front().front())) {
+    func.emitError("first operation is not loop");
+    return;
+  }
+
+  // Helper function for fetching the target loop band.
+  auto getTargetBand = [&](FuncOp targetFunc) {
+    // Get the first loop band as target.
+    auto target = dyn_cast<AffineForOp>(targetFunc.front().front());
+    AffineLoopBand band;
+    getLoopBandFromRoot(target, band);
+    return band;
+  };
+
+  // Perfect and optimize loop order of the target loop band.
+  auto band = getTargetBand(func);
+  auto loopNum = band.size();
+  applyAffineLoopPerfection(band.back(), builder);
+  applyAffineLoopOrderOpt(band);
+  applyRemoveVariableBound(band.front(), builder);
+
+  // Initialize tile size and trip count vector.
+  auto tileSizes = TileSizes(loopNum, 1);
+  auto tripCounts = TileSizes();
+  unsigned iterations = 1;
+  for (unsigned loc = 0; loc < loopNum; ++loc) {
+    auto tripCount = getConstantTripCount(band[loc]).getValue();
+    tripCounts.push_back(tripCount);
+    iterations *= (log2(tripCount) + 1);
+    os << "l" << loc << ",\t";
+  }
+  os << "ii,\tcycle,\tdsp,\tpareto\n";
+
+  // Storing all design points.
+  using DesignPoint = SmallVector<int64_t, 8>;
+  std::vector<DesignPoint> designPoints;
+
+  // Traverse each tile size configuration.
+  for (unsigned i = 0; i < iterations - 1; ++i) {
+    for (unsigned loc = 0; loc < loopNum; ++loc) {
+      auto &tileSize = tileSizes[loc];
+      if (loc == 0)
+        tileSize *= 2;
+      else if (tileSizes[loc - 1] > tripCounts[loc - 1])
+        tileSize *= 2;
+    }
+
+    unsigned iterNum = 1;
+    for (unsigned loc = 0; loc < loopNum; ++loc) {
+      auto &tileSize = tileSizes[loc];
+      if (tileSize > tripCounts[loc])
+        tileSize = 1;
+      iterNum *= tripCounts[loc] / tileSize;
+    }
+
+    // Apply tiling strategy.
+    auto tmpFunc = func.clone();
+    applyLoopTilingStrategy(tmpFunc, tileSizes, 1);
+    auto tmpLoop = getTargetBand(tmpFunc).back();
+
+    // Fetch latency and resource utilization.
+    auto II = getIntAttrValue(tmpLoop, "ii");
+    auto iterLatency = getIntAttrValue(tmpLoop, "iter_latency");
+    auto shareDspNum = getIntAttrValue(tmpLoop, "share_dsp");
+    auto noShareDspNum = getIntAttrValue(tmpLoop, "noshare_dsp");
+
+    // Improve target II until II is equal to iteration latency.
+    for (auto tmpII = II; tmpII <= iterLatency; ++tmpII) {
+      auto tmpDspNum = std::max(shareDspNum, noShareDspNum / tmpII);
+      auto tmpLatency = iterLatency + tmpII * (iterNum - 1);
+
+      auto point = SmallVector<int64_t, 8>(tileSizes.begin(), tileSizes.end());
+      point.append({tmpII, tmpLatency, tmpDspNum});
+      designPoints.push_back(point);
+
+      if (iterNum == 1)
+        break;
+    }
+  }
+
+  // Sort all design points by latency.
+  auto compareLatency = [&](const DesignPoint &a, const DesignPoint &b) {
+    return a[loopNum + 1] < b[loopNum + 1];
+  };
+  std::sort(designPoints.begin(), designPoints.end(), compareLatency);
+
+  // Sort all design points with the same latency by dsp number.
+  auto compareDspNum = [&](const DesignPoint &a, const DesignPoint &b) {
+    return a[loopNum + 2] < b[loopNum + 2];
+  };
+  for (auto i = designPoints.begin(); i < designPoints.end();) {
+    auto j = i;
+    for (; j < designPoints.end(); ++j)
+      if ((*i)[loopNum + 1] != (*j)[loopNum + 1])
+        break;
+    std::sort(i, j, compareDspNum);
+    i = j;
+  }
+
+  // Find pareto frontiers. After the sorting, the first design point must be a
+  // pareto point.
+  auto paretoPoint = designPoints[0];
+  auto paretoLatency = paretoPoint[loopNum + 1];
+  auto paretoDspNum = paretoPoint[loopNum + 2];
+  std::vector<DesignPoint> paretoPoints;
+
+  for (auto point : designPoints) {
+    auto tmpLatency = point[loopNum + 1];
+    auto tmpDspNum = point[loopNum + 2];
+
+    if (tmpDspNum < paretoDspNum) {
+      paretoPoints.push_back(point);
+      paretoPoint = point;
+      paretoLatency = tmpLatency;
+      paretoDspNum = tmpDspNum;
+    } else if (tmpDspNum == paretoDspNum && tmpLatency == paretoLatency)
+      paretoPoints.push_back(point);
+  }
+
+  // Print all pareto design points.
+  for (auto point : paretoPoints) {
+    unsigned idx = 0;
+    for (auto element : point) {
+      os << element << ",\t";
+      if (idx == loopNum + 1)
+        os << ",\t";
+      idx++;
+    }
+    os << "\n";
+  }
+
+  // Print all design points.
+  for (auto point : designPoints) {
+    for (auto element : point)
+      os << element << ",\t";
+    os << "\n";
+  }
 }
 
 /// This is a temporary approach that does not scale.
