@@ -18,6 +18,7 @@ namespace mlir {
 namespace scalehls {
 
 std::unique_ptr<Pass> createQoREstimationPass();
+std::unique_ptr<Pass> createProfileDesignSpacePass();
 
 void registerAnalysisPasses();
 

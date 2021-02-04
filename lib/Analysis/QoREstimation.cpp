@@ -883,7 +883,8 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     if (spec.ParseError())
       emitError(module.getLoc(), "target spec file parse fail\n");
 
-    // Collect profiling latency data.
+    // Collect profiling latency data, where default values are based on Xilinx
+    // PYNQ-Z1 board.
     LatencyMap latencyMap;
     getLatencyMap(spec, latencyMap);
 

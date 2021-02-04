@@ -4,15 +4,12 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "scalehls/Transforms/MultipleLevelDSE.h"
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Pass/PassManager.h"
-#include "mlir/Support/FileUtilities.h"
-#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/Passes.h"
-#include "scalehls/Analysis/QoREstimation.h"
 #include "scalehls/Transforms/Passes.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Support/ToolOutputFile.h"
 
 #define DEBUG_TYPE "scalehls"
 
@@ -36,72 +33,6 @@ static int64_t getInnerParallelism(AffineForOp forOp) {
   // If the current loop is innermost loop, count should be one.
   return std::max(count, (int64_t)1);
 }
-
-//===----------------------------------------------------------------------===//
-// Optimizer Class Declaration
-//===----------------------------------------------------------------------===//
-
-class HLSCppOptimizer : public HLSCppAnalysisBase {
-public:
-  explicit HLSCppOptimizer(OpBuilder &builder, HLSCppEstimator &estimator,
-                           int64_t numDSP)
-      : HLSCppAnalysisBase(builder), estimator(estimator), numDSP(numDSP) {
-    // TODO: only insert affine-related patterns.
-    OwningRewritePatternList owningPatterns;
-    for (auto *op : builder.getContext()->getRegisteredOperations())
-      op->getCanonicalizationPatterns(owningPatterns, builder.getContext());
-    patterns = std::move(owningPatterns);
-  }
-
-  using TileSizes = SmallVector<unsigned, 8>;
-
-  enum LoopState { HOT = 0, COLD = 1, FROZEN = 2 };
-  using BandState = SmallVector<LoopState, 8>;
-
-  bool loopBandIsFrozen(BandState bandState) {
-    for (auto loopState : bandState)
-      if (loopState != LoopState::FROZEN)
-        return false;
-    return true;
-  }
-
-  bool loopBandIsColdOrFrozen(BandState bandState) {
-    for (auto loopState : bandState)
-      if (loopState == LoopState::HOT)
-        return false;
-    return true;
-  }
-
-  bool loopBandIsOneHot(BandState bandState) {
-    unsigned hotNum = 0;
-    for (auto loopState : bandState)
-      if (loopState == LoopState::HOT)
-        hotNum++;
-
-    if (hotNum == 1)
-      return true;
-    else
-      return false;
-  }
-
-  void emitDebugInfo(FuncOp targetFunc, StringRef message);
-  bool applyLoopTilingStrategy(FuncOp targetFunc,
-                               ArrayRef<TileSizes> tileSizesList,
-                               int64_t targetII = 1, bool applyPipeline = true);
-
-  bool incrTileSizeAtLoc(TileSizes &tileSizes, TileSizes &tripCounts,
-                         unsigned &loc);
-
-  /// Currently only support single loop band profiling.
-  void applyProfiling(FuncOp func, raw_ostream &os);
-
-  /// This is a temporary approach that does not scale.
-  void applyMultipleLevelDSE(FuncOp func);
-
-  HLSCppEstimator &estimator;
-  int64_t numDSP;
-  FrozenRewritePatternList patterns;
-};
 
 //===----------------------------------------------------------------------===//
 // Optimizer Class Definition
@@ -197,147 +128,6 @@ bool HLSCppOptimizer::incrTileSizeAtLoc(TileSizes &tileSizes,
   size *= factor;
   tileSizes[loc] = size;
   return true;
-}
-
-/// Currently only support single loop band profiling.
-void HLSCppOptimizer::applyProfiling(FuncOp func, raw_ostream &os) {
-  if (!dyn_cast<AffineForOp>(func.front().front())) {
-    func.emitError("first operation is not loop");
-    return;
-  }
-
-  // Helper function for fetching the target loop band.
-  auto getTargetBand = [&](FuncOp targetFunc) {
-    // Get the first loop band as target.
-    auto target = dyn_cast<AffineForOp>(targetFunc.front().front());
-    AffineLoopBand band;
-    getLoopBandFromRoot(target, band);
-    return band;
-  };
-
-  // Perfect and optimize loop order of the target loop band.
-  auto band = getTargetBand(func);
-  auto loopNum = band.size();
-  applyAffineLoopPerfection(band.back(), builder);
-  applyAffineLoopOrderOpt(band);
-  applyRemoveVariableBound(band.front(), builder);
-
-  // Initialize tile size and trip count vector.
-  auto tileSizes = TileSizes(loopNum, 1);
-  auto tripCounts = TileSizes();
-  unsigned iterations = 1;
-  for (unsigned loc = 0; loc < loopNum; ++loc) {
-    auto tripCount = getConstantTripCount(band[loc]).getValue();
-    tripCounts.push_back(tripCount);
-    iterations *= (log2(tripCount) + 1);
-    os << "l" << loc << ",\t";
-  }
-  os << "ii,\tcycle,\tdsp,\tpareto\n";
-
-  // Storing all design points.
-  using DesignPoint = SmallVector<int64_t, 8>;
-  std::vector<DesignPoint> designPoints;
-
-  // Traverse each tile size configuration.
-  for (unsigned i = 0; i < iterations - 1; ++i) {
-    for (unsigned loc = 0; loc < loopNum; ++loc) {
-      auto &tileSize = tileSizes[loc];
-      if (loc == 0)
-        tileSize *= 2;
-      else if (tileSizes[loc - 1] > tripCounts[loc - 1])
-        tileSize *= 2;
-    }
-
-    unsigned iterNum = 1;
-    for (unsigned loc = 0; loc < loopNum; ++loc) {
-      auto &tileSize = tileSizes[loc];
-      if (tileSize > tripCounts[loc])
-        tileSize = 1;
-      iterNum *= tripCounts[loc] / tileSize;
-    }
-
-    // Apply tiling strategy.
-    auto tmpFunc = func.clone();
-    applyLoopTilingStrategy(tmpFunc, tileSizes, 1);
-    auto tmpLoop = getTargetBand(tmpFunc).back();
-
-    // Fetch latency and resource utilization.
-    auto II = getIntAttrValue(tmpLoop, "ii");
-    auto iterLatency = getIntAttrValue(tmpLoop, "iter_latency");
-    auto shareDspNum = getIntAttrValue(tmpLoop, "share_dsp");
-    auto noShareDspNum = getIntAttrValue(tmpLoop, "noshare_dsp");
-
-    // Improve target II until II is equal to iteration latency.
-    for (auto tmpII = II; tmpII <= iterLatency; ++tmpII) {
-      auto tmpDspNum = std::max(shareDspNum, noShareDspNum / tmpII);
-      auto tmpLatency = iterLatency + tmpII * (iterNum - 1);
-
-      auto point = SmallVector<int64_t, 8>(tileSizes.begin(), tileSizes.end());
-      point.append({tmpII, tmpLatency, tmpDspNum});
-      designPoints.push_back(point);
-
-      if (iterNum == 1)
-        break;
-    }
-  }
-
-  // Sort all design points by latency.
-  auto compareLatency = [&](const DesignPoint &a, const DesignPoint &b) {
-    return a[loopNum + 1] < b[loopNum + 1];
-  };
-  std::sort(designPoints.begin(), designPoints.end(), compareLatency);
-
-  // Sort all design points with the same latency by dsp number.
-  auto compareDspNum = [&](const DesignPoint &a, const DesignPoint &b) {
-    return a[loopNum + 2] < b[loopNum + 2];
-  };
-  for (auto i = designPoints.begin(); i < designPoints.end();) {
-    auto j = i;
-    for (; j < designPoints.end(); ++j)
-      if ((*i)[loopNum + 1] != (*j)[loopNum + 1])
-        break;
-    std::sort(i, j, compareDspNum);
-    i = j;
-  }
-
-  // Find pareto frontiers. After the sorting, the first design point must be a
-  // pareto point.
-  auto paretoPoint = designPoints[0];
-  auto paretoLatency = paretoPoint[loopNum + 1];
-  auto paretoDspNum = paretoPoint[loopNum + 2];
-  std::vector<DesignPoint> paretoPoints;
-
-  for (auto point : designPoints) {
-    auto tmpLatency = point[loopNum + 1];
-    auto tmpDspNum = point[loopNum + 2];
-
-    if (tmpDspNum < paretoDspNum) {
-      paretoPoints.push_back(point);
-      paretoPoint = point;
-      paretoLatency = tmpLatency;
-      paretoDspNum = tmpDspNum;
-    } else if (tmpDspNum == paretoDspNum && tmpLatency == paretoLatency)
-      paretoPoints.push_back(point);
-  }
-
-  // Print all pareto design points.
-  for (auto point : paretoPoints) {
-    unsigned idx = 0;
-    for (auto element : point) {
-      os << element << ",\t";
-      if (idx == loopNum + 1)
-        os << ",\t";
-      idx++;
-    }
-    os << "\n";
-  }
-
-  // Print all design points.
-  for (auto point : designPoints) {
-    for (auto element : point)
-      os << element << ",\t";
-    os << "\n";
-  }
 }
 
 /// This is a temporary approach that does not scale.
@@ -683,7 +473,8 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
     if (spec.ParseError())
       emitError(module.getLoc(), "target spec file parse fail\n");
 
-    // Collect profiling data, where default values are based on PYNQ-Z1 board.
+    // Collect profiling latency data, where default values are based on Xilinx
+    // PYNQ-Z1 board.
     LatencyMap latencyMap;
     getLatencyMap(spec, latencyMap);
     int64_t numDSP = ceil(spec.GetInteger("specification", "dsp", 220) * 1.1);
@@ -695,19 +486,8 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
     // Optimize the top function.
     for (auto func : module.getOps<FuncOp>())
       if (auto topFunction = func->getAttrOfType<BoolAttr>("top_function"))
-        if (topFunction.getValue()) {
-          // This pass can work in profiling mode or optimization mode.
-          if (profiling) {
-            std::string errorMessage;
-            auto output = mlir::openOutputFile(profilingFile, &errorMessage);
-            if (!output)
-              emitError(module.getLoc(), errorMessage);
-
-            optimizer.applyProfiling(func, output->os());
-            output->keep();
-          } else
-            optimizer.applyMultipleLevelDSE(func);
-        }
+        if (topFunction.getValue())
+          optimizer.applyMultipleLevelDSE(func);
   }
 };
 } // namespace
