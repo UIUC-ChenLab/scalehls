@@ -8,15 +8,16 @@
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/LoopUtils.h"
 #include "scalehls/Transforms/Passes.h"
+#include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
 
 /// Apply loop tiling and return the new loop that should be pipelined or fully
 /// unrolled.
-AffineForOp
-scalehls::applyPartialAffineLoopTiling(AffineLoopBand &band, OpBuilder &builder,
-                                       ArrayRef<unsigned> tileSizes) {
+AffineForOp scalehls::applyPartialAffineLoopTiling(AffineLoopBand &band,
+                                                   ArrayRef<unsigned> tileSizes,
+                                                   OpBuilder &builder) {
   if (!isPerfectlyNested(band))
     return nullptr;
 
@@ -104,7 +105,7 @@ struct PartialAffineLoopTile
           sizes.push_back(1);
       }
 
-      applyPartialAffineLoopTiling(band, builder, sizes);
+      applyPartialAffineLoopTiling(band, sizes, builder);
     }
 
     // Canonicalize the IR after loop tiling.

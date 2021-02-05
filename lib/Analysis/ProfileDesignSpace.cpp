@@ -7,8 +7,8 @@
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Support/FileUtilities.h"
 #include "scalehls/Analysis/Passes.h"
-#include "scalehls/Transforms/MultipleLevelDSE.h"
-#include "scalehls/Transforms/Passes.h"
+#include "scalehls/Analysis/QoREstimation.h"
+#include "scalehls/Transforms/Utils.h"
 #include "llvm/Support/ToolOutputFile.h"
 
 using namespace mlir;
@@ -16,13 +16,19 @@ using namespace scalehls;
 
 /// Currently only support single loop band profiling.
 static void applyProfiling(FuncOp func, raw_ostream &os,
-                           HLSCppOptimizer &optimizer) {
+                           HLSCppEstimator &estimator) {
   if (!dyn_cast<AffineForOp>(func.front().front())) {
     func.emitError("first operation is not loop");
     return;
   }
 
   auto builder = OpBuilder(func);
+
+  // TODO: only insert affine-related patterns.
+  OwningRewritePatternList owningPatterns;
+  for (auto *op : builder.getContext()->getRegisteredOperations())
+    op->getCanonicalizationPatterns(owningPatterns, builder.getContext());
+  FrozenRewritePatternList patterns = std::move(owningPatterns);
 
   // Helper function for fetching the target loop band.
   auto getTargetBand = [&](FuncOp targetFunc) {
@@ -76,14 +82,15 @@ static void applyProfiling(FuncOp func, raw_ostream &os,
 
     // Apply tiling strategy.
     auto tmpFunc = func.clone();
-    optimizer.applyLoopTilingStrategy(tmpFunc, tileSizes, 1);
+    applyLoopTilingStrategy(tmpFunc, tileSizes, 1, patterns, builder);
+    estimator.estimateFunc(tmpFunc);
     auto tmpLoop = getTargetBand(tmpFunc).back();
 
     // Fetch latency and resource utilization.
-    auto II = optimizer.getIntAttrValue(tmpLoop, "ii");
-    auto iterLatency = optimizer.getIntAttrValue(tmpLoop, "iter_latency");
-    auto shareDspNum = optimizer.getIntAttrValue(tmpLoop, "share_dsp");
-    auto noShareDspNum = optimizer.getIntAttrValue(tmpLoop, "noshare_dsp");
+    auto II = estimator.getIntAttrValue(tmpLoop, "ii");
+    auto iterLatency = estimator.getIntAttrValue(tmpLoop, "iter_latency");
+    auto shareDspNum = estimator.getIntAttrValue(tmpLoop, "share_dsp");
+    auto noShareDspNum = estimator.getIntAttrValue(tmpLoop, "noshare_dsp");
 
     // Improve target II until II is equal to iteration latency.
     for (auto tmpII = II; tmpII <= iterLatency; ++tmpII) {
@@ -171,18 +178,17 @@ struct ProfileDesignSpace : public ProfileDesignSpaceBase<ProfileDesignSpace> {
 
     // Initialize an performance and resource estimator.
     auto estimator = HLSCppEstimator(builder, latencyMap);
-    auto optimizer = HLSCppOptimizer(builder, estimator, 0);
 
     // Optimize the top function.
     for (auto func : module.getOps<FuncOp>())
       if (auto topFunction = func->getAttrOfType<BoolAttr>("top_function"))
         if (topFunction.getValue()) {
           std::string errorMessage;
-          auto output = mlir::openOutputFile(profilingFile, &errorMessage);
+          auto output = mlir::openOutputFile(profileFile, &errorMessage);
           if (!output)
             emitError(module.getLoc(), errorMessage);
 
-          applyProfiling(func, output->os(), optimizer);
+          applyProfiling(func, output->os(), estimator);
           output->keep();
         }
   }

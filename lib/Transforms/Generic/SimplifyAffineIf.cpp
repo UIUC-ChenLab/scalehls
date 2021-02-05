@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Analysis/AffineStructures.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/IR/IntegerSet.h"
 #include "scalehls/Transforms/Passes.h"
 

@@ -614,6 +614,45 @@ Resource HLSCppEstimator::estimateResource(Block &block, int64_t interval) {
   return Resource(bram, dsp, ff, lut);
 }
 
+// Get the pointer of the scrOp's parent loop, which should locat at the same
+// level with dstOp's any parent loop.
+static Operation *getSameLevelDstOp(Operation *srcOp, Operation *dstOp) {
+  // If srcOp and dstOp are already at the same level, return the srcOp.
+  if (checkSameLevel(srcOp, dstOp))
+    return dstOp;
+
+  // Helper to get all surrouding AffineForOps. AffineIfOps are skipped.
+  auto getSurroundFors =
+      ([&](Operation *op, SmallVector<Operation *, 4> &nests) {
+        nests.push_back(op);
+        auto currentOp = op;
+        while (true) {
+          if (auto parentOp = currentOp->getParentOfType<AffineForOp>()) {
+            nests.push_back(parentOp);
+            currentOp = parentOp;
+          } else if (auto parentOp = currentOp->getParentOfType<AffineIfOp>())
+            currentOp = parentOp;
+          else
+            break;
+        }
+      });
+
+  SmallVector<Operation *, 4> srcNests;
+  SmallVector<Operation *, 4> dstNests;
+
+  getSurroundFors(srcOp, srcNests);
+  getSurroundFors(dstOp, dstNests);
+
+  // If any parent of srcOp (or itself) and any parent of dstOp (or itself) are
+  // at the same level, return the pointer.
+  for (auto src : srcNests)
+    for (auto dst : dstNests)
+      if (checkSameLevel(src, dst))
+        return dst;
+
+  return nullptr;
+}
+
 /// Estimate the latency of a block with ALAP scheduling strategy, return the
 /// end level of schedule. Meanwhile, the input begin will also be updated if
 /// required (typically happens in AffineForOps).

@@ -96,10 +96,6 @@ void getMemAccessesMap(Block &block, MemAccessesMap &map);
 Optional<std::pair<Operation *, Operation *>> checkSameLevel(Operation *lhsOp,
                                                              Operation *rhsOp);
 
-// Get the pointer of the scrOp's parent loop, which should locate at the same
-// level with dstOp's any parent loop.
-Operation *getSameLevelDstOp(Operation *srcOp, Operation *dstOp);
-
 Optional<std::pair<int64_t, int64_t>> getBoundOfAffineBound(AffineBound bound);
 
 AffineMap getLayoutMap(MemRefType memrefType);

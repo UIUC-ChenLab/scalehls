@@ -6,9 +6,8 @@
 
 #include "scalehls/Transforms/MultipleLevelDSE.h"
 #include "mlir/Analysis/LoopAnalysis.h"
-#include "mlir/Pass/PassManager.h"
-#include "mlir/Transforms/Passes.h"
 #include "scalehls/Transforms/Passes.h"
+#include "scalehls/Transforms/Utils.h"
 #include "llvm/Support/Debug.h"
 
 #define DEBUG_TYPE "scalehls"
@@ -47,59 +46,14 @@ void HLSCppOptimizer::emitDebugInfo(FuncOp targetFunc, StringRef message) {
                           << ", DSP utilization is " << Twine(dsp) << ".\n\n";);
 }
 
-bool HLSCppOptimizer::applyLoopTilingStrategy(FuncOp targetFunc,
-                                              ArrayRef<TileSizes> tileSizesList,
-                                              int64_t targetII,
-                                              bool applyPipeline) {
-  AffineLoopBands targetBands;
-  getLoopBands(targetFunc.front(), targetBands);
-
-  // Apply loop tiling.
-  SmallVector<AffineForOp, 4> targetLoops;
-  unsigned idx = 0;
-  for (auto &band : targetBands)
-    if (auto loop =
-            applyPartialAffineLoopTiling(band, builder, tileSizesList[idx++]))
-      targetLoops.push_back(loop);
-    else
-      return false;
-  applyPatternsAndFoldGreedily(targetFunc, patterns);
-
-  // Apply loop pipelining.
-  for (auto loop : targetLoops)
-    if (applyPipeline) {
-      if (!applyLoopPipelining(loop, 1, builder))
-        return false;
-    } else {
-      if (!applyFullyLoopUnrolling(*loop.getBody()))
-        return false;
-    }
-  applyPatternsAndFoldGreedily(targetFunc, patterns);
-
-  // Apply general optimizations and array partition.
-  PassManager passManager(targetFunc.getContext(), "func");
-  passManager.addPass(createSimplifyAffineIfPass());
-  passManager.addPass(createAffineStoreForwardPass());
-  passManager.addPass(createSimplifyMemrefAccessPass());
-  passManager.addPass(createCSEPass());
-  passManager.addPass(createArrayPartitionPass());
-
-  if (failed(passManager.run(targetFunc)))
-    return false;
-  applyPatternsAndFoldGreedily(targetFunc, patterns);
-
+void HLSCppOptimizer::emitTilingInfo(FuncOp targetFunc,
+                                     ArrayRef<TileSizes> tileSizesList) {
   // Estimate performance and resource utilization.
   estimator.estimateFunc(targetFunc);
   LLVM_DEBUG(llvm::dbgs() << "Current tiling strategy:\n";
-             for (unsigned idx = 0; idx < targetBands.size(); ++idx) {
+             for (unsigned idx = 0; idx < tileSizesList.size(); ++idx) {
                auto tileSizes = tileSizesList[idx];
-               auto loop = targetLoops[idx];
                llvm::dbgs() << "Loop band " << Twine(idx) << ":";
-
-               llvm::dbgs()
-                   << " II=" << getIntAttrValue(loop, "ii")
-                   << " IterLatency=" << getIntAttrValue(loop, "iter_latency")
-                   << " DSP=" << getIntAttrValue(loop, "dsp") << " TileVector=";
 
                for (auto size : tileSizes)
                  llvm::dbgs() << " " << Twine(size);
@@ -108,7 +62,6 @@ bool HLSCppOptimizer::applyLoopTilingStrategy(FuncOp targetFunc,
 
   emitDebugInfo(targetFunc, "Apply loop tiling and pipelining, generic IR "
                             "opts, and array partition.");
-  return true;
 }
 
 bool HLSCppOptimizer::incrTileSizeAtLoc(TileSizes &tileSizes,
@@ -290,11 +243,9 @@ void HLSCppOptimizer::applyMultipleLevelDSE(FuncOp func) {
   // Hold the current tiling sizes of each loop band. This is the main design
   // vector which will evolve in the procedure of DSE.
   std::vector<TileSizes> tileSizesList;
+  std::vector<int64_t> targetIIList;
   // Hold the DSE status of all loops in each loop band.
   std::vector<BandState> BandStateList;
-
-  // Hold the current loop tiling location in each loop band.
-  SmallVector<unsigned, 8> headLocList;
 
   // Initialize all lists.
   for (auto band : targetBands) {
@@ -308,14 +259,15 @@ void HLSCppOptimizer::applyMultipleLevelDSE(FuncOp func) {
 
     // These two lists will evolve in the DSE.
     tileSizesList.push_back(TileSizes(band.size(), 1));
+    targetIIList.push_back(1);
     BandStateList.push_back(BandState(band.size(), LoopState::COLD));
-
-    headLocList.push_back(0);
   }
 
   // Try and record the none tiling performance.
   auto nonTileFunc = func.clone();
-  applyLoopTilingStrategy(nonTileFunc, tileSizesList);
+  applyLoopTilingStrategy(nonTileFunc, tileSizesList, targetIIList, patterns,
+                          builder);
+  emitTilingInfo(func, tileSizesList);
   unsigned minLatency = getIntAttrValue(nonTileFunc, "latency");
 
   if (getIntAttrValue(nonTileFunc, "dsp") > numDSP)
@@ -358,7 +310,9 @@ void HLSCppOptimizer::applyMultipleLevelDSE(FuncOp func) {
           if (incrTileSizeAtLoc(tmpTileSizesList[i], tripCountsList[i], loc)) {
             // Try to apply the new tile size.
             auto tmpFunc = func.clone();
-            if (applyLoopTilingStrategy(tmpFunc, tmpTileSizesList)) {
+            if (applyLoopTilingStrategy(tmpFunc, tmpTileSizesList, targetIIList,
+                                        patterns, builder)) {
+              emitTilingInfo(tmpFunc, tmpTileSizesList);
               auto latency = getIntAttrValue(tmpFunc, "latency");
               auto dsp = getIntAttrValue(tmpFunc, "dsp");
 
@@ -420,7 +374,9 @@ void HLSCppOptimizer::applyMultipleLevelDSE(FuncOp func) {
                                 hotLoc)) {
             // Try to apply the new tile size.
             auto tmpFunc = func.clone();
-            if (applyLoopTilingStrategy(tmpFunc, tmpTileSizesList)) {
+            if (applyLoopTilingStrategy(tmpFunc, tmpTileSizesList, targetIIList,
+                                        patterns, builder)) {
+              emitTilingInfo(tmpFunc, tmpTileSizesList);
               auto latency = getIntAttrValue(tmpFunc, "latency");
               auto dsp = getIntAttrValue(tmpFunc, "dsp");
 
@@ -459,7 +415,8 @@ void HLSCppOptimizer::applyMultipleLevelDSE(FuncOp func) {
 
   // Finally, we found the best tiling strategy.
   LLVM_DEBUG(llvm::dbgs() << "4. Apply the best tiling strategy.\n";);
-  applyLoopTilingStrategy(func, tileSizesList);
+  applyLoopTilingStrategy(func, tileSizesList, targetIIList, patterns, builder);
+  emitTilingInfo(func, tileSizesList);
 }
 
 namespace {

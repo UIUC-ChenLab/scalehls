@@ -40,7 +40,7 @@ def ProfileDesignSpace : Pass<"profile-design-space", "ModuleOp"> {
     Option<"targetSpec", "target-spec", "std::string",
            /*default=*/"\"../config/target-spec.ini\"",
            "File path: target backend specifications and configurations">,
-    Option<"profilingFile", "profiling-file", "std::string",
+    Option<"profileFile", "profile-file", "std::string",
            /*default=*/"\"-\"", "File path: the output file path of profiling">,
     Option<"maxParallel", "max-parallel", "unsigned", /*default=*/"1",
            "Positive number: the maximum tiling parallelism of the profiling">

@@ -6,8 +6,8 @@
 
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/LoopUtils.h"
-#include "scalehls/Analysis/Utils.h"
 #include "scalehls/Transforms/Passes.h"
+#include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;

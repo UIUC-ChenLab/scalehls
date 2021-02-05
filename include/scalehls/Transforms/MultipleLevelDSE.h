@@ -9,11 +9,10 @@
 
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Analysis/QoREstimation.h"
+#include "scalehls/Transforms/Utils.h"
 
 namespace mlir {
 namespace scalehls {
-
-using TileSizes = SmallVector<unsigned, 8>;
 
 class HLSCppOptimizer : public HLSCppAnalysisBase {
 public:
@@ -57,9 +56,7 @@ public:
   }
 
   void emitDebugInfo(FuncOp targetFunc, StringRef message);
-  bool applyLoopTilingStrategy(FuncOp targetFunc,
-                               ArrayRef<TileSizes> tileSizesList,
-                               int64_t targetII = 1, bool applyPipeline = true);
+  void emitTilingInfo(FuncOp targetFunc, ArrayRef<TileSizes> tileSizesList);
 
   bool incrTileSizeAtLoc(TileSizes &tileSizes, TileSizes &tripCounts,
                          unsigned &loc);
