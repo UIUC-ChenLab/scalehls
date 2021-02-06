@@ -11,12 +11,14 @@
 #include "scalehls/Transforms/Utils.h"
 #include "llvm/Support/ToolOutputFile.h"
 
+#define DEBUG_TYPE "scalehls"
+
 using namespace mlir;
 using namespace scalehls;
 
 /// Currently only support single loop band profiling.
 static void applyProfiling(FuncOp func, raw_ostream &os,
-                           HLSCppEstimator &estimator) {
+                           HLSCppEstimator &estimator, unsigned maxParallel) {
   if (!dyn_cast<AffineForOp>(func.front().front())) {
     func.emitError("first operation is not loop");
     return;
@@ -73,12 +75,19 @@ static void applyProfiling(FuncOp func, raw_ostream &os,
     }
 
     unsigned iterNum = 1;
+    unsigned parallel = 1;
     for (unsigned loc = 0; loc < loopNum; ++loc) {
       auto &tileSize = tileSizes[loc];
       if (tileSize > tripCounts[loc])
         tileSize = 1;
       iterNum *= tripCounts[loc] / tileSize;
+      parallel *= tileSize;
+      LLVM_DEBUG(llvm::dbgs() << tileSize << ", ";);
     }
+    LLVM_DEBUG(llvm::dbgs() << "\n";);
+
+    if (parallel > maxParallel)
+      continue;
 
     // Apply tiling strategy.
     auto tmpFunc = func.clone();
@@ -188,7 +197,7 @@ struct ProfileDesignSpace : public ProfileDesignSpaceBase<ProfileDesignSpace> {
           if (!output)
             emitError(module.getLoc(), errorMessage);
 
-          applyProfiling(func, output->os(), estimator);
+          applyProfiling(func, output->os(), estimator, maxParallel);
           output->keep();
         }
   }

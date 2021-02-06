@@ -496,7 +496,7 @@ void ModuleEmitter::emitScfFor(scf::ForOp op) {
 
   addIndent();
 
-  if (getIntAttrValue(op, "pipeline")) {
+  if (getBoolAttrValue(op, "pipeline")) {
     indent();
     auto targetII = getIntAttrValue(op, "target_ii");
     os << "#pragma HLS pipeline II=" << targetII << "\n";
@@ -627,7 +627,7 @@ void ModuleEmitter::emitAffineFor(AffineForOp op) {
 
   addIndent();
 
-  if (getIntAttrValue(op, "pipeline")) {
+  if (getBoolAttrValue(op, "pipeline")) {
     indent();
     auto targetII = getIntAttrValue(op, "target_ii");
     os << "#pragma HLS pipeline II=" << targetII << "\n";
