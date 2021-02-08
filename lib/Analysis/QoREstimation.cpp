@@ -518,7 +518,6 @@ bool ScaleHLSEstimator::visitOp(CallOp op, int64_t begin) {
   auto subFunc = dyn_cast<FuncOp>(callee);
   assert(subFunc && "callable is not a function operation");
 
-  auto builder = OpBuilder(subFunc);
   ScaleHLSEstimator estimator(builder, latencyMap);
   estimator.estimateFunc(subFunc);
 

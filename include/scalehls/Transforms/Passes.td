@@ -28,12 +28,7 @@ def MultipleLevelDSE : Pass<"multiple-level-dse", "ModuleOp"> {
   let options = [
     Option<"targetSpec", "target-spec", "std::string",
            /*default=*/"\"../config/target-spec.ini\"",
-           "File path: target backend specifications and configurations">,
-
-    Option<"profiling", "profiling", "bool", /*default=*/"false",
-           "Work in profiling mode to collect the performance and utilization">,
-    Option<"profilingFile", "profiling-file", "std::string",
-           /*default=*/"\"-\"", "File path: the output file path of profiling">
+           "File path: target backend specifications and configurations">
   ];
 }
 

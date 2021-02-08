@@ -36,19 +36,19 @@ After the installation and test successfully completed, you should be able to pl
 $ export PATH=$SCALEHLS_DIR/build/bin:$PATH
 $ cd $SCALEHLS_DIR
 
-$ # Loop and pragma-level optimizations, performance estimation, and C++ code generation.
-$ scalehls-opt samples/polybench/syrk.mlir \
-    -affine-loop-perfection -affine-loop-order-opt -remove-variable-bound \
-    -partial-affine-loop-tile="tile-size=2" -legalize-to-hlscpp="top-func=test_syrk" \
-    -loop-pipelining="pipeline-level=3" -simplify-affine-if -affine-store-forward \
-    -simplify-memref-access -array-partition -cse -canonicalize \
-    -qor-estimation="target-spec=config/target-spec.ini" \
-    | scalehls-translate -emit-hlscpp
-
 $ # Automatic kernel-level design space exploration.
 $ scalehls-opt samples/polybench/gemm.mlir \
     -legalize-to-hlscpp="top-func=test_gemm" \
     -multiple-level-dse="target-spec=config/target-spec.ini" -debug-only=scalehls \
+    | scalehls-translate -emit-hlscpp
+
+$ # Loop and pragma-level optimizations, performance estimation, and C++ code generation.
+$ scalehls-opt samples/polybench/syrk.mlir \
+    -affine-loop-perfection -affine-loop-order-opt -remove-variable-bound \
+    -partial-affine-loop-tile="tile-size=2" -legalize-to-hlscpp="top-func=test_syrk" \
+    -loop-pipelining="pipeline-level=3" -canonicalize -simplify-affine-if \
+    -affine-store-forward -simplify-memref-access -cse -array-partition \
+    -qor-estimation="target-spec=config/target-spec.ini" \
     | scalehls-translate -emit-hlscpp
 
 $ # Benchmark generation, dataflow-level optimization, HLSKernel lowering and bufferization.
@@ -81,7 +81,7 @@ $ # Legalize the output of ONNX-MLIR, optimize and emit C++ code.
 $ scalehls-opt resnet18.mlir -allow-unregistered-dialect \
     -legalize-onnx -affine-loop-normalize -canonicalize \
     -legalize-dataflow="min-gran=3 insert-copy=true" -split-function \
-    -convert-linalg-to-affine-loops -affine-loop-fusion \
+    -convert-linalg-to-affine-loops -affine-loop-order-opt \
     -legalize-to-hlscpp="top-func=main_graph" -loop-pipelining -canonicalize \
     | scalehls-translate -emit-hlscpp
 ```
