@@ -20,7 +20,7 @@ using namespace scalehls;
 //===----------------------------------------------------------------------===//
 
 /// Calculate the overall partition index.
-void HLSCppEstimator::getPartitionIndices(Operation *op) {
+void ScaleHLSEstimator::getPartitionIndices(Operation *op) {
   auto access = MemRefAccess(op);
   auto memrefType = access.memref.getType().cast<MemRefType>();
 
@@ -90,7 +90,7 @@ void HLSCppEstimator::getPartitionIndices(Operation *op) {
 }
 
 /// Schedule load/store operation honoring the memory ports number limitation.
-void HLSCppEstimator::estimateLoadStore(Operation *op, int64_t begin) {
+void ScaleHLSEstimator::estimateLoadStore(Operation *op, int64_t begin) {
   auto access = MemRefAccess(op);
   auto memref = access.memref;
   auto memrefType = memref.getType().cast<MemRefType>();
@@ -199,8 +199,8 @@ void HLSCppEstimator::estimateLoadStore(Operation *op, int64_t begin) {
 // AffineForOp Related Methods
 //===----------------------------------------------------------------------===//
 
-int64_t HLSCppEstimator::getResMinII(int64_t begin, int64_t end,
-                                     MemAccessesMap &map) {
+int64_t ScaleHLSEstimator::getResMinII(int64_t begin, int64_t end,
+                                       MemAccessesMap &map) {
   int64_t II = 1;
   for (auto &pair : map) {
     auto memref = pair.first;
@@ -238,8 +238,8 @@ int64_t HLSCppEstimator::getResMinII(int64_t begin, int64_t end,
 }
 
 /// Calculate the minimum dependency II of function.
-int64_t HLSCppEstimator::getDepMinII(int64_t II, FuncOp func,
-                                     MemAccessesMap &map) {
+int64_t ScaleHLSEstimator::getDepMinII(int64_t II, FuncOp func,
+                                       MemAccessesMap &map) {
   for (auto &pair : map) {
     auto loadStores = pair.second;
 
@@ -274,8 +274,8 @@ int64_t HLSCppEstimator::getDepMinII(int64_t II, FuncOp func,
 }
 
 /// Calculate the minimum dependency II of loop.
-int64_t HLSCppEstimator::getDepMinII(int64_t II, AffineForOp forOp,
-                                     MemAccessesMap &map) {
+int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
+                                       MemAccessesMap &map) {
   // Collect start and end level of the pipeline.
   int64_t endLevel = 1;
   int64_t startLevel = 1;
@@ -372,7 +372,7 @@ int64_t HLSCppEstimator::getDepMinII(int64_t II, AffineForOp forOp,
   return II;
 }
 
-bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
+bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
   // Set an attribute indicating the trip count. For now, we assume all loops
   // have static loop bound.
   int64_t tripCount = 1;
@@ -487,7 +487,7 @@ bool HLSCppEstimator::visitOp(AffineForOp op, int64_t begin) {
 // Other Operation Handlers
 //===----------------------------------------------------------------------===//
 
-bool HLSCppEstimator::visitOp(AffineIfOp op, int64_t begin) {
+bool ScaleHLSEstimator::visitOp(AffineIfOp op, int64_t begin) {
   auto end = begin;
   auto thenBlock = op.getThenBlock();
 
@@ -513,13 +513,13 @@ bool HLSCppEstimator::visitOp(AffineIfOp op, int64_t begin) {
   return true;
 }
 
-bool HLSCppEstimator::visitOp(CallOp op, int64_t begin) {
+bool ScaleHLSEstimator::visitOp(CallOp op, int64_t begin) {
   auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCallee());
   auto subFunc = dyn_cast<FuncOp>(callee);
   assert(subFunc && "callable is not a function operation");
 
   auto builder = OpBuilder(subFunc);
-  HLSCppEstimator estimator(builder, latencyMap);
+  ScaleHLSEstimator estimator(builder, latencyMap);
   estimator.estimateFunc(subFunc);
 
   // We assume enter and leave the subfunction require extra 2 clock cycles.
@@ -535,8 +535,9 @@ bool HLSCppEstimator::visitOp(CallOp op, int64_t begin) {
 // Block Scheduler and Estimator
 //===----------------------------------------------------------------------===//
 
-int64_t HLSCppEstimator::getDspAllocMap(Block &block, ResourceAllocMap &faddMap,
-                                        ResourceAllocMap &fmulMap) {
+int64_t ScaleHLSEstimator::getDspAllocMap(Block &block,
+                                          ResourceAllocMap &faddMap,
+                                          ResourceAllocMap &fmulMap) {
   int64_t staticDspNum = 0;
   for (auto &op : block) {
     auto begin = getIntAttrValue(&op, "schedule_begin");
@@ -565,7 +566,7 @@ int64_t HLSCppEstimator::getDspAllocMap(Block &block, ResourceAllocMap &faddMap,
   return staticDspNum;
 }
 
-Resource HLSCppEstimator::estimateResource(Block &block, int64_t interval) {
+Resource ScaleHLSEstimator::estimateResource(Block &block, int64_t interval) {
   ResourceAllocMap faddMap;
   ResourceAllocMap fmulMap;
   auto staticDspNum = getDspAllocMap(block, faddMap, fmulMap);
@@ -656,7 +657,8 @@ static Operation *getSameLevelDstOp(Operation *srcOp, Operation *dstOp) {
 /// Estimate the latency of a block with ALAP scheduling strategy, return the
 /// end level of schedule. Meanwhile, the input begin will also be updated if
 /// required (typically happens in AffineForOps).
-Optional<Schedule> HLSCppEstimator::estimateBlock(Block &block, int64_t begin) {
+Optional<Schedule> ScaleHLSEstimator::estimateBlock(Block &block,
+                                                    int64_t begin) {
   auto blockBegin = begin;
   auto blockEnd = begin;
 
@@ -768,7 +770,7 @@ static Operation *getSurroundingOp(Operation *op) {
   }
 }
 
-void HLSCppEstimator::reverseSchedule(Block &block) {
+void ScaleHLSEstimator::reverseSchedule(Block &block) {
   block.walk([&](Operation *op) {
     // Get schedule level.
     auto begin = getIntAttrValue(op, "schedule_begin");
@@ -796,7 +798,7 @@ void HLSCppEstimator::reverseSchedule(Block &block) {
   });
 }
 
-void HLSCppEstimator::initEstimator(Block &block) {
+void ScaleHLSEstimator::initEstimator(Block &block) {
   // Clear global maps and scheduling information. Walk through all loops and
   // establish dependencies. The rationale here is in Vivado HLS, a loop will
   // always be blocked by other loops before it, even if no actual dependency
@@ -822,7 +824,7 @@ void HLSCppEstimator::initEstimator(Block &block) {
   }
 };
 
-void HLSCppEstimator::estimateFunc(FuncOp func) {
+void ScaleHLSEstimator::estimateFunc(FuncOp func) {
   initEstimator(func.front());
 
   // Collect all memory access operations for later use.
@@ -892,7 +894,7 @@ void HLSCppEstimator::estimateFunc(FuncOp func) {
   setResourceValue(func, resource);
 }
 
-void HLSCppEstimator::estimateLoop(AffineForOp loop) {
+void ScaleHLSEstimator::estimateLoop(AffineForOp loop) {
   initEstimator(*loop.getBody());
   dispatchVisitor(loop, 0);
   reverseSchedule(*loop.getBody());
@@ -915,7 +917,7 @@ namespace {
 struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
   void runOnOperation() override {
     auto module = getOperation();
-    auto builder = OpBuilder(module);
+    auto builder = Builder(module);
 
     // Read configuration file.
     INIReader spec(targetSpec);
@@ -933,7 +935,7 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     for (auto func : module.getOps<FuncOp>())
       if (auto topFunction = func->getAttrOfType<BoolAttr>("top_function"))
         if (topFunction.getValue())
-          HLSCppEstimator(builder, latencyMap).estimateFunc(func);
+          ScaleHLSEstimator(builder, latencyMap).estimateFunc(func);
   }
 };
 } // namespace

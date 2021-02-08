@@ -14,7 +14,7 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hlscpp;
 
-static bool applyArrayPartition(FuncOp func, OpBuilder &builder) {
+static bool applyArrayPartition(FuncOp func) {
   // Check whether the input function is pipelined.
   bool funcPipeline = false;
   if (auto attr = func->getAttrOfType<BoolAttr>("pipeline"))
@@ -150,6 +150,8 @@ static bool applyArrayPartition(FuncOp func, OpBuilder &builder) {
     }
   }
 
+  auto builder = Builder(func);
+
   // Constuct and set new type to each partitioned MemRefType.
   for (auto pair : partitionsMap) {
     auto memref = pair.first;
@@ -208,12 +210,7 @@ static bool applyArrayPartition(FuncOp func, OpBuilder &builder) {
 
 namespace {
 struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
-  void runOnOperation() override {
-    auto func = getOperation();
-    auto builder = OpBuilder(func);
-
-    applyArrayPartition(func, builder);
-  }
+  void runOnOperation() override { applyArrayPartition(getOperation()); }
 };
 } // namespace
 

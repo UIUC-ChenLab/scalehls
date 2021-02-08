@@ -218,7 +218,8 @@ void AffineStoreForwardImpl::forwardStoreToLoad(AffineReadOpInterface loadOp) {
   memrefsToErase.insert(loadOp.getMemRef());
 }
 
-static bool applyAffineStoreForward(FuncOp func, OpBuilder &builder) {
+static bool applyAffineStoreForward(FuncOp func) {
+  auto builder = OpBuilder(func);
   SmallPtrSet<Value, 4> memrefsToErase;
   memrefsToErase.clear();
 
@@ -260,18 +261,7 @@ static bool applyAffineStoreForward(FuncOp func, OpBuilder &builder) {
 
 namespace {
 struct AffineStoreForward : public AffineStoreForwardBase<AffineStoreForward> {
-  void runOnOperation() override {
-    // Only supports single block functions at the moment.
-    FuncOp func = getOperation();
-    auto builder = OpBuilder(func);
-
-    if (!llvm::hasSingleElement(func)) {
-      markAllAnalysesPreserved();
-      return;
-    }
-
-    applyAffineStoreForward(func, builder);
-  }
+  void runOnOperation() override { applyAffineStoreForward(getOperation()); }
 };
 } // namespace
 

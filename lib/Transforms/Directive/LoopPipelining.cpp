@@ -4,7 +4,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/LoopUtils.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -33,11 +32,12 @@ bool scalehls::applyFullyLoopUnrolling(Block &block) {
 
 /// Apply loop pipelining to the input loop, all inner loops are automatically
 /// fully unrolled.
-bool scalehls::applyLoopPipelining(AffineForOp targetLoop, int64_t targetII,
-                                   OpBuilder &builder) {
+bool scalehls::applyLoopPipelining(AffineForOp targetLoop, int64_t targetII) {
   // All inner loops of the pipelined loop are automatically unrolled.
   if (!applyFullyLoopUnrolling(*targetLoop.getBody()))
     return false;
+
+  auto builder = Builder(targetLoop);
 
   targetLoop->setAttr("pipeline", builder.getBoolAttr(true));
   targetLoop->setAttr("target_ii", builder.getI64IntegerAttr(targetII));
@@ -66,12 +66,9 @@ bool scalehls::applyLoopPipelining(AffineForOp targetLoop, int64_t targetII,
 namespace {
 struct LoopPipelining : public LoopPipeliningBase<LoopPipelining> {
   void runOnOperation() override {
-    auto func = getOperation();
-    auto builder = OpBuilder(func);
-
     // Collect all innermost loops.
     SmallVector<AffineForOp, 4> innermostLoops;
-    func.walk([&](AffineForOp loop) {
+    getOperation().walk([&](AffineForOp loop) {
       if (getChildLoopNum(loop) == 0)
         innermostLoops.push_back(loop);
     });
@@ -85,7 +82,7 @@ struct LoopPipelining : public LoopPipeliningBase<LoopPipelining> {
 
         // If meet the outermost loop, pipeline the current loop.
         if (!parentLoop || pipelineLevel == loopLevel) {
-          applyLoopPipelining(currentLoop, targetII, builder);
+          applyLoopPipelining(currentLoop, targetII);
           break;
         }
 
@@ -94,13 +91,6 @@ struct LoopPipelining : public LoopPipeliningBase<LoopPipelining> {
         ++loopLevel;
       }
     }
-
-    // Canonicalize the IR after loop pipelining.
-    OwningRewritePatternList patterns;
-    for (auto *op : func.getContext()->getRegisteredOperations())
-      op->getCanonicalizationPatterns(patterns, func.getContext());
-
-    applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
 } // namespace

@@ -12,42 +12,33 @@
 using namespace mlir;
 using namespace scalehls;
 
-bool scalehls::applyLoopTilingStrategy(FuncOp targetFunc,
-                                       ArrayRef<TileSizes> tileSizesList,
-                                       ArrayRef<int64_t> targetIIList,
-                                       FrozenRewritePatternList &patterns,
-                                       OpBuilder &builder) {
-  AffineLoopBands targetBands;
-  getLoopBands(targetFunc.front(), targetBands);
+bool scalehls::applyOptStrategy(FuncOp func, ArrayRef<TileSizes> tileSizesList,
+                                ArrayRef<int64_t> targetIIList) {
+  AffineLoopBands bands;
+  getLoopBands(func.front(), bands);
 
-  // Apply loop tiling.
-  SmallVector<AffineForOp, 4> targetLoops;
-  unsigned idx = 0;
-  for (auto &band : targetBands)
-    if (auto loop =
-            applyPartialAffineLoopTiling(band, tileSizesList[idx++], builder))
-      targetLoops.push_back(loop);
-    else
-      return false;
-  applyPatternsAndFoldGreedily(targetFunc, patterns);
+  // Apply loop tiling and pipelining to all loop bands.
+  for (unsigned i = 0, e = bands.size(); i < e; ++i) {
+    if (auto loop = applyLoopTiling(bands[i], tileSizesList[i]))
+      if (applyLoopPipelining(loop, targetIIList[i]))
+        continue;
 
-  // Apply loop pipelining.
-  for (auto loop : targetLoops)
-    if (!applyLoopPipelining(loop, 1, builder))
-      return false;
-  applyPatternsAndFoldGreedily(targetFunc, patterns);
+    // If tiling or pipelining failed, return false.
+    return false;
+  }
 
   // Apply general optimizations and array partition.
-  PassManager passManager(targetFunc.getContext(), "func");
+  PassManager passManager(func.getContext(), "func");
+
+  passManager.addPass(createCanonicalizerPass());
   passManager.addPass(createSimplifyAffineIfPass());
   passManager.addPass(createAffineStoreForwardPass());
   passManager.addPass(createSimplifyMemrefAccessPass());
   passManager.addPass(createCSEPass());
   passManager.addPass(createArrayPartitionPass());
 
-  if (failed(passManager.run(targetFunc)))
+  if (failed(passManager.run(func)))
     return false;
-  applyPatternsAndFoldGreedily(targetFunc, patterns);
 
   return true;
 }

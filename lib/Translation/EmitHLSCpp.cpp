@@ -25,9 +25,9 @@ using namespace scalehls;
 namespace {
 /// This class maintains the mutable state that cross-cuts and is shared by the
 /// various emitters.
-class HLSCppEmitterState {
+class ScaleHLSEmitterState {
 public:
-  explicit HLSCppEmitterState(raw_ostream &os) : os(os) {}
+  explicit ScaleHLSEmitterState(raw_ostream &os) : os(os) {}
 
   // The stream to emit to.
   raw_ostream &os;
@@ -39,16 +39,16 @@ public:
   DenseMap<Value, SmallString<8>> nameTable;
 
 private:
-  HLSCppEmitterState(const HLSCppEmitterState &) = delete;
-  void operator=(const HLSCppEmitterState &) = delete;
+  ScaleHLSEmitterState(const ScaleHLSEmitterState &) = delete;
+  void operator=(const ScaleHLSEmitterState &) = delete;
 };
 } // namespace
 
 namespace {
 /// This is the base class for all of the HLSCpp Emitter components.
-class HLSCppEmitterBase {
+class ScaleHLSEmitterBase {
 public:
-  explicit HLSCppEmitterBase(HLSCppEmitterState &state)
+  explicit ScaleHLSEmitterBase(ScaleHLSEmitterState &state)
       : state(state), os(state.os) {}
 
   InFlightDiagnostic emitError(Operation *op, const Twine &message) {
@@ -62,7 +62,7 @@ public:
   void reduceIndent() { state.currentIndent -= 2; }
 
   // All of the mutable state we are maintaining.
-  HLSCppEmitterState &state;
+  ScaleHLSEmitterState &state;
 
   // The stream to emit to.
   raw_ostream &os;
@@ -82,13 +82,13 @@ public:
   }
 
 private:
-  HLSCppEmitterBase(const HLSCppEmitterBase &) = delete;
-  void operator=(const HLSCppEmitterBase &) = delete;
+  ScaleHLSEmitterBase(const ScaleHLSEmitterBase &) = delete;
+  void operator=(const ScaleHLSEmitterBase &) = delete;
 };
 } // namespace
 
 // TODO: update naming rule.
-SmallString<8> HLSCppEmitterBase::addName(Value val, bool isPtr) {
+SmallString<8> ScaleHLSEmitterBase::addName(Value val, bool isPtr) {
   assert(!isDeclared(val) && "has been declared before.");
 
   SmallString<8> valName;
@@ -101,7 +101,7 @@ SmallString<8> HLSCppEmitterBase::addName(Value val, bool isPtr) {
   return valName;
 }
 
-SmallString<8> HLSCppEmitterBase::addAlias(Value val, Value alias) {
+SmallString<8> ScaleHLSEmitterBase::addAlias(Value val, Value alias) {
   assert(!isDeclared(alias) && "has been declared before.");
   assert(isDeclared(val) && "hasn't been declared before.");
 
@@ -111,7 +111,7 @@ SmallString<8> HLSCppEmitterBase::addAlias(Value val, Value alias) {
   return valName;
 }
 
-SmallString<8> HLSCppEmitterBase::getName(Value val) {
+SmallString<8> ScaleHLSEmitterBase::getName(Value val) {
   // For constant scalar operations, the constant number will be returned rather
   // than the value name.
   if (auto defOp = val.getDefiningOp()) {
@@ -142,11 +142,11 @@ SmallString<8> HLSCppEmitterBase::getName(Value val) {
 //===----------------------------------------------------------------------===//
 
 namespace {
-class ModuleEmitter : public HLSCppEmitterBase, HLSCppAnalysisBase {
+class ModuleEmitter : public ScaleHLSEmitterBase, ScaleHLSAnalysisBase {
 public:
   using operand_range = Operation::operand_range;
-  explicit ModuleEmitter(HLSCppEmitterState &state, OpBuilder &builder)
-      : HLSCppEmitterBase(state), HLSCppAnalysisBase(builder) {}
+  explicit ModuleEmitter(ScaleHLSEmitterState &state, Builder &builder)
+      : ScaleHLSEmitterBase(state), ScaleHLSAnalysisBase(builder) {}
 
   /// SCF statement emitters.
   void emitScfFor(scf::ForOp op);
@@ -213,13 +213,13 @@ private:
 //===----------------------------------------------------------------------===//
 
 namespace {
-class AffineExprEmitter : public HLSCppEmitterBase,
+class AffineExprEmitter : public ScaleHLSEmitterBase,
                           public AffineExprVisitor<AffineExprEmitter> {
 public:
   using operand_range = Operation::operand_range;
-  explicit AffineExprEmitter(HLSCppEmitterState &state, unsigned numDim,
+  explicit AffineExprEmitter(ScaleHLSEmitterState &state, unsigned numDim,
                              operand_range operands)
-      : HLSCppEmitterBase(state), numDim(numDim), operands(operands) {}
+      : ScaleHLSEmitterBase(state), numDim(numDim), operands(operands) {}
 
   void visitAddExpr(AffineBinaryOpExpr expr) { emitAffineBinary(expr, "+"); }
   void visitMulExpr(AffineBinaryOpExpr expr) { emitAffineBinary(expr, "*"); }
@@ -713,6 +713,7 @@ void ModuleEmitter::emitAffineParallel(AffineParallelOp op) {
     }
   }
 
+  auto steps = getIntArrayAttrValue(op, op.getStepsAttrName());
   for (unsigned i = 0, e = op.getNumDims(); i < e; ++i) {
     indent();
     os << "for (";
@@ -738,10 +739,7 @@ void ModuleEmitter::emitAffineParallel(AffineParallelOp op) {
 
     // Emit increase step.
     emitValue(iterVar);
-    auto step = op->getAttrOfType<ArrayAttr>(op.getStepsAttrName())[i]
-                    .cast<IntegerAttr>()
-                    .getInt();
-    os << " += " << step << ") {\n";
+    os << " += " << steps[i] << ") {\n";
 
     addIndent();
   }
@@ -881,14 +879,14 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp op) {
     // Otherwise, generated values will be accumulated/reduced to the
     // current results with corresponding AtomicRMWKind operations.
     addIndent();
+    auto RMWAttrs =
+        getIntArrayAttrValue(parentOp, parentOp.getReductionsAttrName());
     resultIdx = 0;
     for (auto result : parentOp.getResults()) {
       unsigned rank = emitNestedLoopHead(result);
       indent();
       emitValue(result, rank);
-      auto RMWAttr = parentOp->getAttrOfType<ArrayAttr>(
-          parentOp.getReductionsAttrName())[resultIdx];
-      switch ((AtomicRMWKind)RMWAttr.cast<IntegerAttr>().getInt()) {
+      switch ((AtomicRMWKind)RMWAttrs[resultIdx]) {
       case (AtomicRMWKind::addf):
       case (AtomicRMWKind::addi):
         os << " += ";
@@ -1565,8 +1563,8 @@ using namespace std;
 //===----------------------------------------------------------------------===//
 
 static LogicalResult emitHLSCpp(ModuleOp module, llvm::raw_ostream &os) {
-  auto builder = OpBuilder(module);
-  HLSCppEmitterState state(os);
+  auto builder = Builder(module);
+  ScaleHLSEmitterState state(os);
   ModuleEmitter(state, builder).emitModule(module);
   return failure(state.encounteredError);
 }

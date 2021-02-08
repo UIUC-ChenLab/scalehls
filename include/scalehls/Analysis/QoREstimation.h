@@ -39,12 +39,16 @@ struct Schedule {
 using LatencyMap = llvm::StringMap<int64_t>;
 void getLatencyMap(INIReader spec, LatencyMap &latencyMap);
 
-class HLSCppEstimator
-    : public HLSCppVisitorBase<HLSCppEstimator, bool, int64_t>,
-      public HLSCppAnalysisBase {
+//===----------------------------------------------------------------------===//
+// ScaleHLSEstimator Class Declaration
+//===----------------------------------------------------------------------===//
+
+class ScaleHLSEstimator
+    : public HLSCppVisitorBase<ScaleHLSEstimator, bool, int64_t>,
+      public ScaleHLSAnalysisBase {
 public:
-  explicit HLSCppEstimator(OpBuilder &builder, LatencyMap &latencyMap)
-      : HLSCppAnalysisBase(builder), latencyMap(latencyMap) {}
+  explicit ScaleHLSEstimator(Builder &builder, LatencyMap &latencyMap)
+      : ScaleHLSAnalysisBase(builder), latencyMap(latencyMap) {}
 
   // For storing all dependencies indexed by the dependency source operation.
   using Depends = SmallVector<Operation *, 16>;

@@ -150,11 +150,9 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
 namespace {
 struct AffineLoopOrderOpt : public AffineLoopOrderOptBase<AffineLoopOrderOpt> {
   void runOnOperation() override {
-    auto func = getOperation();
-
     // Collect all target loop bands.
     AffineLoopBands targetBands;
-    getLoopBands(func.front(), targetBands);
+    getLoopBands(getOperation().front(), targetBands);
 
     // Apply loop order optimization to each loop band.
     for (auto band : targetBands)

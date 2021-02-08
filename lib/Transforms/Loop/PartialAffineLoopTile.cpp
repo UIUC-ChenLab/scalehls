@@ -5,7 +5,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Analysis/LoopAnalysis.h"
-#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/LoopUtils.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -15,9 +14,8 @@ using namespace scalehls;
 
 /// Apply loop tiling and return the new loop that should be pipelined or fully
 /// unrolled.
-AffineForOp scalehls::applyPartialAffineLoopTiling(AffineLoopBand &band,
-                                                   ArrayRef<unsigned> tileSizes,
-                                                   OpBuilder &builder) {
+AffineForOp scalehls::applyLoopTiling(AffineLoopBand &band,
+                                      TileSizes tileSizes) {
   if (!isPerfectlyNested(band))
     return nullptr;
 
@@ -48,6 +46,8 @@ AffineForOp scalehls::applyPartialAffineLoopTiling(AffineLoopBand &band,
     return nullptr;
   band = tiledBand;
 
+  auto builder = OpBuilder(band.back());
+
   // Remove fully tiled loops.
   for (auto loc : fullyTiledLoops) {
     auto loop = band[loc];
@@ -73,14 +73,11 @@ namespace {
 struct PartialAffineLoopTile
     : public PartialAffineLoopTileBase<PartialAffineLoopTile> {
   void runOnOperation() override {
-    auto func = getOperation();
-    auto builder = OpBuilder(func);
-
     AffineLoopBands targetBands;
-    getTileableBands(func, &targetBands);
+    getTileableBands(getOperation(), &targetBands);
 
     for (auto band : targetBands) {
-      SmallVector<unsigned, 8> sizes;
+      TileSizes sizes;
       unsigned remainTileSize = tileSize;
 
       // Calculate the tiling size of each loop level.
@@ -105,15 +102,8 @@ struct PartialAffineLoopTile
           sizes.push_back(1);
       }
 
-      applyPartialAffineLoopTiling(band, sizes, builder);
+      applyLoopTiling(band, sizes);
     }
-
-    // Canonicalize the IR after loop tiling.
-    OwningRewritePatternList patterns;
-    for (auto *op : func.getContext()->getRegisteredOperations())
-      op->getCanonicalizationPatterns(patterns, func.getContext());
-
-    applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
 } // namespace

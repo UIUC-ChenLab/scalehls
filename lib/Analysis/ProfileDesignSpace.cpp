@@ -18,22 +18,14 @@ using namespace scalehls;
 
 /// Currently only support single loop band profiling.
 static void applyProfiling(FuncOp func, raw_ostream &os,
-                           HLSCppEstimator &estimator, unsigned maxParallel) {
+                           ScaleHLSEstimator &estimator, unsigned maxParallel) {
   if (!dyn_cast<AffineForOp>(func.front().front())) {
     func.emitError("first operation is not loop");
     return;
   }
 
-  auto builder = OpBuilder(func);
-
-  // TODO: only insert affine-related patterns.
-  OwningRewritePatternList owningPatterns;
-  for (auto *op : builder.getContext()->getRegisteredOperations())
-    op->getCanonicalizationPatterns(owningPatterns, builder.getContext());
-  FrozenRewritePatternList patterns = std::move(owningPatterns);
-
   // Helper function for fetching the target loop band.
-  auto getTargetBand = [&](FuncOp targetFunc) {
+  auto getFirstBand = [&](FuncOp targetFunc) {
     // Get the first loop band as target.
     auto target = dyn_cast<AffineForOp>(targetFunc.front().front());
     AffineLoopBand band;
@@ -42,11 +34,11 @@ static void applyProfiling(FuncOp func, raw_ostream &os,
   };
 
   // Perfect and optimize loop order of the target loop band.
-  auto band = getTargetBand(func);
+  auto band = getFirstBand(func);
   auto loopNum = band.size();
-  applyAffineLoopPerfection(band.back(), builder);
+  applyAffineLoopPerfection(band.back());
   applyAffineLoopOrderOpt(band);
-  applyRemoveVariableBound(band.front(), builder);
+  applyRemoveVariableBound(band.front());
 
   // Initialize tile size and trip count vector.
   auto tileSizes = TileSizes(loopNum, 1);
@@ -91,9 +83,9 @@ static void applyProfiling(FuncOp func, raw_ostream &os,
 
     // Apply tiling strategy.
     auto tmpFunc = func.clone();
-    applyLoopTilingStrategy(tmpFunc, tileSizes, 1, patterns, builder);
+    applyOptStrategy(tmpFunc, tileSizes, 1);
     estimator.estimateFunc(tmpFunc);
-    auto tmpLoop = getTargetBand(tmpFunc).back();
+    auto tmpLoop = getFirstBand(tmpFunc).back();
 
     // Fetch latency and resource utilization.
     auto II = estimator.getIntAttrValue(tmpLoop, "ii");
@@ -173,7 +165,7 @@ namespace {
 struct ProfileDesignSpace : public ProfileDesignSpaceBase<ProfileDesignSpace> {
   void runOnOperation() override {
     auto module = getOperation();
-    auto builder = OpBuilder(module);
+    auto builder = Builder(module);
 
     // Read configuration file.
     INIReader spec(targetSpec);
@@ -186,7 +178,7 @@ struct ProfileDesignSpace : public ProfileDesignSpaceBase<ProfileDesignSpace> {
     getLatencyMap(spec, latencyMap);
 
     // Initialize an performance and resource estimator.
-    auto estimator = HLSCppEstimator(builder, latencyMap);
+    auto estimator = ScaleHLSEstimator(builder, latencyMap);
 
     // Optimize the top function.
     for (auto func : module.getOps<FuncOp>())

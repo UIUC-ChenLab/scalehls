@@ -14,11 +14,15 @@
 namespace mlir {
 namespace scalehls {
 
-class HLSCppOptimizer : public HLSCppAnalysisBase {
+//===----------------------------------------------------------------------===//
+// ScaleHLSOptimizer Class Declaration
+//===----------------------------------------------------------------------===//
+
+class ScaleHLSOptimizer : public ScaleHLSAnalysisBase {
 public:
-  explicit HLSCppOptimizer(OpBuilder &builder, HLSCppEstimator &estimator,
-                           int64_t numDSP)
-      : HLSCppAnalysisBase(builder), estimator(estimator), numDSP(numDSP) {
+  explicit ScaleHLSOptimizer(Builder &builder, ScaleHLSEstimator &estimator,
+                             int64_t numDSP)
+      : ScaleHLSAnalysisBase(builder), estimator(estimator), numDSP(numDSP) {
     // TODO: only insert affine-related patterns.
     OwningRewritePatternList owningPatterns;
     for (auto *op : builder.getContext()->getRegisteredOperations())
@@ -64,7 +68,7 @@ public:
   /// This is a temporary approach that does not scale.
   void applyMultipleLevelDSE(FuncOp func);
 
-  HLSCppEstimator &estimator;
+  ScaleHLSEstimator &estimator;
   int64_t numDSP;
   FrozenRewritePatternList patterns;
 };

@@ -37,7 +37,7 @@ static int64_t getInnerParallelism(AffineForOp forOp) {
 // Optimizer Class Definition
 //===----------------------------------------------------------------------===//
 
-void HLSCppOptimizer::emitDebugInfo(FuncOp targetFunc, StringRef message) {
+void ScaleHLSOptimizer::emitDebugInfo(FuncOp targetFunc, StringRef message) {
   LLVM_DEBUG(auto latency = getIntAttrValue(targetFunc, "latency");
              auto dsp = getIntAttrValue(targetFunc, "dsp");
 
@@ -46,8 +46,8 @@ void HLSCppOptimizer::emitDebugInfo(FuncOp targetFunc, StringRef message) {
                           << ", DSP utilization is " << Twine(dsp) << ".\n\n";);
 }
 
-void HLSCppOptimizer::emitTilingInfo(FuncOp targetFunc,
-                                     ArrayRef<TileSizes> tileSizesList) {
+void ScaleHLSOptimizer::emitTilingInfo(FuncOp targetFunc,
+                                       ArrayRef<TileSizes> tileSizesList) {
   // Estimate performance and resource utilization.
   estimator.estimateFunc(targetFunc);
   LLVM_DEBUG(llvm::dbgs() << "Current tiling strategy:\n";
@@ -64,8 +64,9 @@ void HLSCppOptimizer::emitTilingInfo(FuncOp targetFunc,
                             "opts, and array partition.");
 }
 
-bool HLSCppOptimizer::incrTileSizeAtLoc(TileSizes &tileSizes,
-                                        TileSizes &tripCounts, unsigned &loc) {
+bool ScaleHLSOptimizer::incrTileSizeAtLoc(TileSizes &tileSizes,
+                                          TileSizes &tripCounts,
+                                          unsigned &loc) {
   auto size = tileSizes[loc];
   auto tripCount = tripCounts[loc];
 
@@ -84,7 +85,7 @@ bool HLSCppOptimizer::incrTileSizeAtLoc(TileSizes &tileSizes,
 }
 
 /// This is a temporary approach that does not scale.
-void HLSCppOptimizer::applyMultipleLevelDSE(FuncOp func) {
+void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func) {
   // Canonicalize the function and start the dse.
   applyPatternsAndFoldGreedily(func, patterns);
   estimator.estimateFunc(func);
@@ -178,7 +179,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE(FuncOp func) {
       // pipelining to it.
       tmpFunc.walk([&](AffineForOp loop) {
         if (getIntAttrValue(loop, "opt_flag")) {
-          applyLoopPipelining(loop, 1, builder);
+          applyLoopPipelining(loop, 1);
           return;
         }
       });
@@ -188,7 +189,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE(FuncOp func) {
 
       // Pipeline the candidate loop or delve into child loops.
       if (getIntAttrValue(tmpFunc, "dsp") <= numDSP)
-        applyLoopPipelining(candidate, 1, builder);
+        applyLoopPipelining(candidate, 1);
       else {
         auto childForOps = candidate.getOps<AffineForOp>();
         targetLoops.append(childForOps.begin(), childForOps.end());
@@ -218,9 +219,9 @@ void HLSCppOptimizer::applyMultipleLevelDSE(FuncOp func) {
   // Loop perfection, remove variable bound, and loop order optimization are
   // always applied for the convenience of polyhedral optimizations.
   for (auto &band : targetBands) {
-    applyAffineLoopPerfection(band.back(), builder);
+    applyAffineLoopPerfection(band.back());
     applyAffineLoopOrderOpt(band);
-    applyRemoveVariableBound(band.front(), builder);
+    applyRemoveVariableBound(band.front());
   }
 
   // Estimate the current latency.
@@ -265,8 +266,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE(FuncOp func) {
 
   // Try and record the none tiling performance.
   auto nonTileFunc = func.clone();
-  applyLoopTilingStrategy(nonTileFunc, tileSizesList, targetIIList, patterns,
-                          builder);
+  applyOptStrategy(nonTileFunc, tileSizesList, targetIIList);
   emitTilingInfo(func, tileSizesList);
   unsigned minLatency = getIntAttrValue(nonTileFunc, "latency");
 
@@ -310,8 +310,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE(FuncOp func) {
           if (incrTileSizeAtLoc(tmpTileSizesList[i], tripCountsList[i], loc)) {
             // Try to apply the new tile size.
             auto tmpFunc = func.clone();
-            if (applyLoopTilingStrategy(tmpFunc, tmpTileSizesList, targetIIList,
-                                        patterns, builder)) {
+            if (applyOptStrategy(tmpFunc, tmpTileSizesList, targetIIList)) {
               emitTilingInfo(tmpFunc, tmpTileSizesList);
               auto latency = getIntAttrValue(tmpFunc, "latency");
               auto dsp = getIntAttrValue(tmpFunc, "dsp");
@@ -374,8 +373,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE(FuncOp func) {
                                 hotLoc)) {
             // Try to apply the new tile size.
             auto tmpFunc = func.clone();
-            if (applyLoopTilingStrategy(tmpFunc, tmpTileSizesList, targetIIList,
-                                        patterns, builder)) {
+            if (applyOptStrategy(tmpFunc, tmpTileSizesList, targetIIList)) {
               emitTilingInfo(tmpFunc, tmpTileSizesList);
               auto latency = getIntAttrValue(tmpFunc, "latency");
               auto dsp = getIntAttrValue(tmpFunc, "dsp");
@@ -415,7 +413,7 @@ void HLSCppOptimizer::applyMultipleLevelDSE(FuncOp func) {
 
   // Finally, we found the best tiling strategy.
   LLVM_DEBUG(llvm::dbgs() << "4. Apply the best tiling strategy.\n";);
-  applyLoopTilingStrategy(func, tileSizesList, targetIIList, patterns, builder);
+  applyOptStrategy(func, tileSizesList, targetIIList);
   emitTilingInfo(func, tileSizesList);
 }
 
@@ -423,7 +421,7 @@ namespace {
 struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
   void runOnOperation() override {
     auto module = getOperation();
-    auto builder = OpBuilder(module);
+    auto builder = Builder(module);
 
     // Read configuration file.
     INIReader spec(targetSpec);
@@ -437,8 +435,8 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
     int64_t numDSP = ceil(spec.GetInteger("specification", "dsp", 220) * 1.1);
 
     // Initialize an performance and resource estimator.
-    auto estimator = HLSCppEstimator(builder, latencyMap);
-    auto optimizer = HLSCppOptimizer(builder, estimator, numDSP);
+    auto estimator = ScaleHLSEstimator(builder, latencyMap);
+    auto optimizer = ScaleHLSOptimizer(builder, estimator, numDSP);
 
     // Optimize the top function.
     for (auto func : module.getOps<FuncOp>())

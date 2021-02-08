@@ -25,8 +25,8 @@ void scalehls::getMemAccessesMap(Block &block, MemAccessesMap &map) {
   }
 }
 
-// Check if the lhsOp and rhsOp is at the same scheduling level. In this
-// check, AffineIfOp is transparent.
+// Check if the lhsOp and rhsOp is at the same scheduling level. In this check,
+// AffineIfOp is transparent.
 Optional<std::pair<Operation *, Operation *>>
 scalehls::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
   // If lhsOp and rhsOp are already at the same level, return true.
@@ -211,8 +211,8 @@ AffineForOp scalehls::getLoopBandFromLeaf(AffineForOp forOp,
   return band.front();
 }
 
-/// Collect all loop bands in the function. If allowHavingChilds is false,
-/// only innermost loop bands will be collected.
+/// Collect all loop bands in the function. If allowHavingChilds is false, only
+/// innermost loop bands will be collected.
 void scalehls::getLoopBands(Block &block, AffineLoopBands &bands,
                             bool allowHavingChilds) {
   block.walk([&](AffineForOp loop) {

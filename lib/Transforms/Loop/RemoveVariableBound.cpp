@@ -13,14 +13,15 @@ using namespace mlir;
 using namespace scalehls;
 
 /// Apply remove variable bound to all inner loops of the input loop.
-bool scalehls::applyRemoveVariableBound(AffineForOp loop, OpBuilder &builder) {
+bool scalehls::applyRemoveVariableBound(AffineForOp loop) {
+  auto builder = OpBuilder(loop);
   SmallVector<AffineForOp, 4> nestedLoops;
   getPerfectlyNestedLoops(nestedLoops, loop);
 
   // Recursively apply remove variable bound for all child loops of the
   // innermost loop of nestedLoops.
   for (auto childLoop : nestedLoops.back().getOps<AffineForOp>())
-    if (applyRemoveVariableBound(childLoop, builder))
+    if (applyRemoveVariableBound(childLoop))
       continue;
     else
       return false;
@@ -68,12 +69,9 @@ namespace {
 struct RemoveVariableBound
     : public RemoveVariableBoundBase<RemoveVariableBound> {
   void runOnOperation() override {
-    auto func = getOperation();
-    auto builder = OpBuilder(func);
-
     // Walk through all loops.
-    for (auto loop : func.getOps<AffineForOp>())
-      applyRemoveVariableBound(loop, builder);
+    for (auto loop : getOperation().getOps<AffineForOp>())
+      applyRemoveVariableBound(loop);
   }
 };
 } // namespace
