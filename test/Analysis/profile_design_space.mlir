@@ -1,6 +1,6 @@
-// RUN: scalehls-opt -profile-design-space %s | FileCheck %s
+// RUN: scalehls-opt -profile-design-space="target-spec=../../config/target-spec.ini max-parallel=32" %s | FileCheck %s
 
-// CHECK-LABEL: func @test_for
-func @test_for() {
+// CHECK-LABEL: func @test
+func @test() {
   return
 }

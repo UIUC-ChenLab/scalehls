@@ -1,6 +1,6 @@
-// RUN: scalehls-opt -func-pipelining %s | FileCheck %s
+// RUN: scalehls-opt -func-pipelining="target-func=test" %s | FileCheck %s
 
-// CHECK-LABEL: func @test_for
-func @test_for() {
+// CHECK-LABEL: func @test
+func @test() {
   return
 }
