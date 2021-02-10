@@ -14,7 +14,14 @@ namespace scalehls {
 
 using TileSizes = SmallVector<unsigned, 8>;
 
-bool applyOptStrategy(FuncOp targetFunc, ArrayRef<TileSizes> tileSizesList,
+/// Apply optimization strategy to a loop band. The ancestor function is also
+/// passed in because the post-tiling opts have to take function as target, e.g.
+/// canonicalizer.
+bool applyOptStrategy(AffineLoopBand &band, FuncOp func, TileSizes tileSizes,
+                      int64_t targetII);
+
+/// Apply optimization strategy to a function.
+bool applyOptStrategy(FuncOp func, ArrayRef<TileSizes> tileSizesList,
                       ArrayRef<int64_t> targetIIList);
 
 /// Apply loop perfection to all outer loops of the input loop until the outer

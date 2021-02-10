@@ -9,6 +9,7 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 #include "llvm/Support/Debug.h"
+#include <pthread.h>
 
 #define DEBUG_TYPE "scalehls"
 
