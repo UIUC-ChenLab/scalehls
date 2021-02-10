@@ -19,32 +19,35 @@ using AffineLoopBands = std::vector<AffineLoopBand>;
 // AffineStoreOp) indexed by the corresponding memref.
 using MemAccessesMap = DenseMap<Value, SmallVector<Operation *, 16>>;
 
-/// Collect all load and store operations in the block.
+/// Collect all load and store operations in the block and return them in "map".
 void getMemAccessesMap(Block &block, MemAccessesMap &map);
 
-// Check if the lhsOp and rhsOp is at the same scheduling level. In this check,
-// AffineIfOp is transparent.
+/// Check if the lhsOp and rhsOp are in the same block. If so, return their
+/// ancestors that are located at the same block. Note that in this check,
+/// AffineIfOp is transparent.
 Optional<std::pair<Operation *, Operation *>> checkSameLevel(Operation *lhsOp,
                                                              Operation *rhsOp);
 
+/// Calculate the upper and lower bound of "bound" if possible.
 Optional<std::pair<int64_t, int64_t>> getBoundOfAffineBound(AffineBound bound);
 
+/// Return the layout map of "memrefType".
 AffineMap getLayoutMap(MemRefType memrefType);
 
-// Collect partition factors and overall partition number through analyzing the
-// layout map of a MemRefType.
+// Calculate partition factors through analyzing the "memrefType" and return
+// them in "factors". Meanwhile, the overall partition number is calculated and
+// returned as well.
 int64_t getPartitionFactors(MemRefType memrefType,
                             SmallVector<int64_t, 8> *factors = nullptr);
 
-/// This is method for finding the number of child loops which immediatedly
-/// contained by the input operation.
-unsigned getChildLoopNum(Operation *op);
+/// Get the whole loop band given the outermost loop and return it in "band".
+/// Meanwhile, the return value is the innermost loop of this loop band.
+AffineForOp getLoopBandFromOutermost(AffineForOp forOp, AffineLoopBand &band);
 
-AffineForOp getLoopBandFromRoot(AffineForOp forOp, AffineLoopBand &band);
-AffineForOp getLoopBandFromLeaf(AffineForOp forOp, AffineLoopBand &band);
-
-/// Collect all loop bands in the function. If allowHavingChilds is false,
-/// only innermost loop bands will be collected.
+/// Collect all loop bands in the "block" and return them in "bands". If
+/// "allowHavingChilds" is true, loop bands containing more than 1 other loop
+/// bands are also collected. Otherwise, only loop bands that contains no child
+/// loops are collected.
 void getLoopBands(Block &block, AffineLoopBands &bands,
                   bool allowHavingChilds = false);
 

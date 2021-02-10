@@ -76,7 +76,7 @@ struct PartialAffineLoopTile
     AffineLoopBands targetBands;
     getTileableBands(getOperation(), &targetBands);
 
-    for (auto band : targetBands) {
+    for (auto &band : targetBands) {
       TileSizes sizes;
       unsigned remainTileSize = tileSize;
 

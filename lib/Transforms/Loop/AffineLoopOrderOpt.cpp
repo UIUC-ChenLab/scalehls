@@ -13,6 +13,9 @@
 using namespace mlir;
 using namespace scalehls;
 
+/// Optimize loop order. Loops associated with memory access dependencies are
+/// moved to an as outer as possible location of the input loop band. If
+/// "reverse" is true, as inner as possible.
 bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
   if (!isPerfectlyNested(band))
     return false;
@@ -114,7 +117,7 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
         if (isValidLoopInterchangePermutation(band, permMap)) {
           auto newRoot = band[permuteLoops(band, permMap)];
           band.clear();
-          getLoopBandFromRoot(newRoot, band);
+          getLoopBandFromOutermost(newRoot, band);
           break;
         }
       }
@@ -139,7 +142,7 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
         if (isValidLoopInterchangePermutation(band, permMap)) {
           auto newRoot = band[permuteLoops(band, permMap)];
           band.clear();
-          getLoopBandFromRoot(newRoot, band);
+          getLoopBandFromOutermost(newRoot, band);
           break;
         }
       }
@@ -155,7 +158,7 @@ struct AffineLoopOrderOpt : public AffineLoopOrderOptBase<AffineLoopOrderOpt> {
     getLoopBands(getOperation().front(), targetBands);
 
     // Apply loop order optimization to each loop band.
-    for (auto band : targetBands)
+    for (auto &band : targetBands)
       applyAffineLoopOrderOpt(band);
   }
 };

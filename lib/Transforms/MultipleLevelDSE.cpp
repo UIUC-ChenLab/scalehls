@@ -136,42 +136,36 @@ void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func) {
       SmallVector<AffineForOp, 8>(funcForOps.begin(), funcForOps.end());
 
   while (!targetLoops.empty()) {
-    SmallVector<AffineForOp, 8> candidateLoops;
-    llvm::SmallDenseMap<Operation *, int64_t, 8> parallelismMap;
+    SmallVector<std::pair<int64_t, AffineForOp>, 8> candidateLoops;
 
     // Collect all candidate loops. Here, only loops whose innermost loop has
     // more than one inner loops will be considered as a candidate.
     for (auto target : targetLoops) {
       AffineLoopBand loopBand;
-      auto innermostLoop = getLoopBandFromRoot(target, loopBand);
+      auto innermostLoop = getLoopBandFromOutermost(target, loopBand);
 
       // Calculate the overall introduced parallelism if the innermost loop of
       // the current loop band is pipelined.
       auto parallelism = getInnerParallelism(innermostLoop);
 
-      // Collect all candidate loops into an ordered vector. The loop indicating
-      // the largest parallelism will show in the front.
-      if (parallelism > 1) {
-        parallelismMap[innermostLoop] = parallelism;
-
-        for (auto it = candidateLoops.begin(); it <= candidateLoops.end(); ++it)
-          if (it == candidateLoops.end()) {
-            candidateLoops.push_back(innermostLoop);
-            break;
-          } else if (parallelism < parallelismMap[*it]) {
-            candidateLoops.insert(it, innermostLoop);
-            break;
-          }
-      }
+      // Collect all candidate loops into an vector.
+      if (parallelism > 1)
+        candidateLoops.push_back(
+            std::pair<int64_t, AffineForOp>(parallelism, innermostLoop));
     }
 
     // Since all target loops have been handled, clear the targetLoops vector.
     targetLoops.clear();
 
+    // Sort the candidate loops.
+    std::sort(candidateLoops.begin(), candidateLoops.end());
+
     // Traverse all candidates to check whether applying loop pipelining has
     // violation with the resource constraints. If so, add all inner loops into
     // targetLoops. Otherwise, pipeline the candidate.
-    for (auto &candidate : candidateLoops) {
+    for (auto pair : candidateLoops) {
+      auto candidate = pair.second;
+
       // Create a temporary function.
       setAttrValue(candidate, "opt_flag", true);
       auto tmpFunc = func.clone();
@@ -180,7 +174,7 @@ void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func) {
       // pipelining to it.
       tmpFunc.walk([&](AffineForOp loop) {
         if (getIntAttrValue(loop, "opt_flag")) {
-          applyLoopPipelining(loop, 1);
+          applyFullyLoopUnrolling(*loop.getBody());
           return;
         }
       });
@@ -190,7 +184,7 @@ void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func) {
 
       // Pipeline the candidate loop or delve into child loops.
       if (getIntAttrValue(tmpFunc, "dsp") <= numDSP)
-        applyLoopPipelining(candidate, 1);
+        applyFullyLoopUnrolling(*candidate.getBody());
       else {
         auto childForOps = candidate.getOps<AffineForOp>();
         targetLoops.append(childForOps.begin(), childForOps.end());
@@ -220,9 +214,9 @@ void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func) {
   // Loop perfection, remove variable bound, and loop order optimization are
   // always applied for the convenience of polyhedral optimizations.
   for (auto &band : targetBands) {
-    applyAffineLoopPerfection(band.back());
+    applyAffineLoopPerfection(band);
     applyAffineLoopOrderOpt(band);
-    applyRemoveVariableBound(band.front());
+    applyRemoveVariableBound(band);
   }
 
   // Estimate the current latency.

@@ -66,16 +66,13 @@ bool scalehls::applyLoopPipelining(AffineForOp targetLoop, int64_t targetII) {
 namespace {
 struct LoopPipelining : public LoopPipeliningBase<LoopPipelining> {
   void runOnOperation() override {
-    // Collect all innermost loops.
-    SmallVector<AffineForOp, 4> innermostLoops;
-    getOperation().walk([&](AffineForOp loop) {
-      if (getChildLoopNum(loop) == 0)
-        innermostLoops.push_back(loop);
-    });
+    // Collect all target loop bands.
+    AffineLoopBands targetBands;
+    getLoopBands(getOperation().front(), targetBands);
 
-    // Apply loop pipelining to coresponding level of each innermost loop.
-    for (auto loop : innermostLoops) {
-      auto currentLoop = loop;
+    // Apply loop pipelining to corresponding level of each innermost loop.
+    for (auto &band : targetBands) {
+      auto currentLoop = band.back();
       unsigned loopLevel = 0;
       while (true) {
         auto parentLoop = currentLoop->getParentOfType<AffineForOp>();

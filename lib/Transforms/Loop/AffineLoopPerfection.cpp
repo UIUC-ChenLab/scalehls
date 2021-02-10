@@ -11,28 +11,16 @@
 using namespace mlir;
 using namespace scalehls;
 
-/// Apply loop perfection to all outer loops of the input loop until the outer
-/// operation is no longer a loop, or contains more than one child loop.
-/// TODO: passing in AffineLoopBand rather than AffineForOp to simplify the
-/// internal implementation.
-bool scalehls::applyAffineLoopPerfection(AffineForOp innermostLoop) {
+/// Apply loop perfection. Try to sink all operations between loop statements
+/// into the innermost loop of the input loop band.
+bool scalehls::applyAffineLoopPerfection(AffineLoopBand &band) {
+  auto innermostLoop = band.back();
   auto builder = OpBuilder(innermostLoop);
-  SmallVector<AffineForOp, 4> loops;
-  loops.push_back(innermostLoop);
 
-  while (true) {
-    // Get the parent loop of the child loop.
-    auto childLoop = loops.back();
-    auto loop = childLoop->getParentOfType<AffineForOp>();
-
-    // Break the procedure if the parent operation is no longer a loop.
-    if (!loop)
-      break;
-
-    // Break if the parent loop contains more than one child loop.
-    // TODO: how to handle this case? It seems possible.
-    if (getChildLoopNum(loop) != 1)
-      break;
+  for (unsigned i = band.size() - 1; i > 0; --i) {
+    // Get the current loop of the child loop.
+    auto loop = band[i - 1];
+    auto childLoop = band[i];
 
     // Collect all operations before the child loop.
     SmallVector<Operation *, 4> frontOps;
@@ -59,7 +47,7 @@ bool scalehls::applyAffineLoopPerfection(AffineForOp innermostLoop) {
       SmallVector<bool, 4> ifEqFlags;
       SmallVector<Value, 4> ifOperands;
       unsigned dim = 0;
-      for (auto innerLoop : loops) {
+      for (auto innerLoop : llvm::drop_begin(band, i)) {
         // Create all components required by constructing if operation.
         if (innerLoop.hasConstantLowerBound()) {
           ifExprs.push_back(builder.getAffineDimExpr(dim++) -
@@ -125,7 +113,7 @@ bool scalehls::applyAffineLoopPerfection(AffineForOp innermostLoop) {
       SmallVector<bool, 4> ifEqFlags;
       SmallVector<Value, 4> ifOperands;
       unsigned dim = 0;
-      for (auto innerLoop : loops) {
+      for (auto innerLoop : llvm::drop_begin(band, i)) {
         // Create all components required by constructing if operation.
         if (innerLoop.hasConstantUpperBound()) {
           ifExprs.push_back(innerLoop.getConstantUpperBound() - 1 -
@@ -169,9 +157,6 @@ bool scalehls::applyAffineLoopPerfection(AffineForOp innermostLoop) {
           op->moveBefore(ifOp.getThenBlock()->getTerminator());
       }
     }
-
-    // Push back the current loop as the new child loop.
-    loops.push_back(loop);
   }
   return true;
 }
@@ -180,17 +165,13 @@ namespace {
 struct AffineLoopPerfection
     : public AffineLoopPerfectionBase<AffineLoopPerfection> {
   void runOnOperation() override {
-    // Collect all loops that: (1) is the innermost loop (contains zero child
-    // loop nest); or (2) contains more than one child loop nest.
-    SmallVector<AffineForOp, 4> targetLoops;
-    getOperation().walk([&](AffineForOp loop) {
-      if (getChildLoopNum(loop) != 1)
-        targetLoops.push_back(loop);
-    });
+    // Collect all target loop bands.
+    AffineLoopBands targetBands;
+    getLoopBands(getOperation().front(), targetBands);
 
-    // Apply loop perfection to each target loop.
-    for (auto loop : targetLoops)
-      applyAffineLoopPerfection(loop);
+    // Apply loop order optimization to each loop band.
+    for (auto &band : targetBands)
+      applyAffineLoopPerfection(band);
   }
 };
 } // namespace

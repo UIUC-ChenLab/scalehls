@@ -30,8 +30,8 @@ static void addPassPipeline(PassManager &pm) {
 }
 
 /// Apply optimization strategy to a loop band. The ancestor function is also
-/// passed in because the post-tiling opts have to take function as target, e.g.
-/// canonicalizer.
+/// passed in because the post-tiling optimizations have to take function as
+/// target, e.g. canonicalizer and array partition.
 bool scalehls::applyOptStrategy(AffineLoopBand &band, FuncOp func,
                                 TileSizes tileSizes, int64_t targetII) {
   // Apply loop tiling.

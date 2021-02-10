@@ -10,7 +10,7 @@
 using namespace mlir;
 using namespace scalehls;
 
-/// Collect all load and store operations in the block.
+/// Collect all load and store operations in the block and return them in "map".
 void scalehls::getMemAccessesMap(Block &block, MemAccessesMap &map) {
   for (auto &op : block) {
     if (isa<AffineReadOpInterface, AffineWriteOpInterface>(op))
@@ -25,7 +25,8 @@ void scalehls::getMemAccessesMap(Block &block, MemAccessesMap &map) {
   }
 }
 
-// Check if the lhsOp and rhsOp is at the same scheduling level. In this check,
+// Check if the lhsOp and rhsOp are in the same block. If so, return their
+// ancestors that are located at the same block. Note that in this check,
 // AffineIfOp is transparent.
 Optional<std::pair<Operation *, Operation *>>
 scalehls::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
@@ -63,6 +64,7 @@ scalehls::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
   return Optional<std::pair<Operation *, Operation *>>();
 }
 
+/// Calculate the upper and lower bound of "bound" if possible.
 Optional<std::pair<int64_t, int64_t>>
 scalehls::getBoundOfAffineBound(AffineBound bound) {
   auto boundMap = bound.getMap();
@@ -122,6 +124,7 @@ scalehls::getBoundOfAffineBound(AffineBound bound) {
   return std::pair<int64_t, int64_t>(*minmax.first, *minmax.second);
 }
 
+/// Return the layout map of "memrefType".
 AffineMap scalehls::getLayoutMap(MemRefType memrefType) {
   // Check whether the memref has layout map.
   auto memrefMaps = memrefType.getAffineMaps();
@@ -131,8 +134,9 @@ AffineMap scalehls::getLayoutMap(MemRefType memrefType) {
   return memrefMaps.back();
 }
 
-// Collect partition factors and overall partition number through analyzing the
-// layout map of a MemRefType.
+// Calculate partition factors through analyzing the "memrefType" and return
+// them in "factors". Meanwhile, the overall partition number is calculated and
+// returned as well.
 int64_t scalehls::getPartitionFactors(MemRefType memrefType,
                                       SmallVector<int64_t, 8> *factors) {
   auto shape = memrefType.getShape();
@@ -164,7 +168,7 @@ int64_t scalehls::getPartitionFactors(MemRefType memrefType,
 
 /// This is method for finding the number of child loops which immediatedly
 /// contained by the input operation.
-unsigned scalehls::getChildLoopNum(Operation *op) {
+static unsigned getChildLoopNum(Operation *op) {
   unsigned childNum = 0;
   for (auto &region : op->getRegions())
     for (auto &block : region)
@@ -175,22 +179,8 @@ unsigned scalehls::getChildLoopNum(Operation *op) {
   return childNum;
 }
 
-AffineForOp scalehls::getLoopBandFromRoot(AffineForOp forOp,
-                                          AffineLoopBand &band) {
-  auto currentLoop = forOp;
-  while (true) {
-    band.push_back(currentLoop);
-
-    if (getChildLoopNum(currentLoop) == 1)
-      currentLoop = *currentLoop.getOps<AffineForOp>().begin();
-    else
-      break;
-  }
-  return band.back();
-}
-
-AffineForOp scalehls::getLoopBandFromLeaf(AffineForOp forOp,
-                                          AffineLoopBand &band) {
+/// Get the whole loop band given the innermost loop and return it in "band".
+static void getLoopBandFromInnermost(AffineForOp forOp, AffineLoopBand &band) {
   AffineLoopBand reverseBand;
 
   auto currentLoop = forOp;
@@ -208,11 +198,28 @@ AffineForOp scalehls::getLoopBandFromLeaf(AffineForOp forOp,
   }
 
   band.append(reverseBand.rbegin(), reverseBand.rend());
-  return band.front();
 }
 
-/// Collect all loop bands in the function. If allowHavingChilds is false, only
-/// innermost loop bands will be collected.
+/// Get the whole loop band given the outermost loop and return it in "band".
+/// Meanwhile, the return value is the innermost loop of this loop band.
+AffineForOp scalehls::getLoopBandFromOutermost(AffineForOp forOp,
+                                               AffineLoopBand &band) {
+  auto currentLoop = forOp;
+  while (true) {
+    band.push_back(currentLoop);
+
+    if (getChildLoopNum(currentLoop) == 1)
+      currentLoop = *currentLoop.getOps<AffineForOp>().begin();
+    else
+      break;
+  }
+  return band.back();
+}
+
+/// Collect all loop bands in the "block" and return them in "bands". If
+/// "allowHavingChilds" is true, loop bands containing more than 1 other loop
+/// bands are also collected. Otherwise, only loop bands that contains no child
+/// loops are collected.
 void scalehls::getLoopBands(Block &block, AffineLoopBands &bands,
                             bool allowHavingChilds) {
   block.walk([&](AffineForOp loop) {
@@ -220,7 +227,7 @@ void scalehls::getLoopBands(Block &block, AffineLoopBands &bands,
 
     if (childNum == 0 || (childNum > 1 && allowHavingChilds)) {
       AffineLoopBand band;
-      getLoopBandFromLeaf(loop, band);
+      getLoopBandFromInnermost(loop, band);
       bands.push_back(band);
     }
   });

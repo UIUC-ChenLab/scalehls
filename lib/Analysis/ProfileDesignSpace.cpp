@@ -29,16 +29,16 @@ static void applyProfiling(FuncOp func, raw_ostream &os,
     // Get the first loop band as target.
     auto target = dyn_cast<AffineForOp>(targetFunc.front().front());
     AffineLoopBand band;
-    getLoopBandFromRoot(target, band);
+    getLoopBandFromOutermost(target, band);
     return band;
   };
 
   // Perfect and optimize loop order of the target loop band.
   auto band = getFirstBand(func);
   auto loopNum = band.size();
-  applyAffineLoopPerfection(band.back());
+  applyAffineLoopPerfection(band);
   applyAffineLoopOrderOpt(band);
-  applyRemoveVariableBound(band.front());
+  applyRemoveVariableBound(band);
 
   // Initialize tile size and trip count vector.
   auto tileSizes = TileSizes(loopNum, 1);
