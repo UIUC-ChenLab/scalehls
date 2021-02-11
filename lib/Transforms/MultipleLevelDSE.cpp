@@ -34,6 +34,100 @@ static int64_t getInnerParallelism(AffineForOp forOp) {
   return std::max(count, (int64_t)1);
 }
 
+using TileConfig = SmallVector<int64_t, 8>;
+
+namespace {
+class TileSpace {
+public:
+  explicit TileSpace(AffineLoopBand &band) {
+    tileConfigDimNum = band.size();
+
+    for (unsigned i = 0; i < tileConfigDimNum; ++i) {
+      auto loop = band[i];
+      auto optionalTripCount = getConstantTripCount(loop);
+      if (!optionalTripCount)
+        loop.emitError("has variable loop bound");
+      auto tripCount = optionalTripCount.getValue();
+
+      SmallVector<unsigned, 8> factors;
+      unsigned factor = 1;
+      while (factor <= tripCount) {
+        // Push back the current factor.
+        factors.push_back(factor);
+
+        // Find the next possible factor.
+        factor++;
+        while (factor <= tripCount && tripCount % factor != 0)
+          factor++;
+      }
+
+      tileConfigMap.push_back(factors);
+    }
+  }
+
+  /// Check whether a tile config is valid in the tile space.
+  bool isValidTileConfig(TileConfig &tileConfig) {
+    if (tileConfig.size() == tileConfigDimNum)
+      return false;
+
+    for (unsigned i = 0; i < tileConfigDimNum; ++i) {
+      auto key = tileConfig[i];
+
+      // The tile config must fall into the range of config map to be valid.
+      if (key < 0 || key >= (int64_t)tileConfigMap[i].size())
+        return false;
+    }
+
+    return true;
+  }
+
+  /// Check whether the tile config has been estimated. Assert the tile config
+  /// is valid.
+  bool isEstimatedTileConfig(TileConfig &tileConfig) {
+    auto id = getTileConfigId(tileConfig);
+    return estimatedTileConfigIds.count(id);
+  }
+
+  /// Add a new estimated tile config. Assert the tile config is valid.
+  void addEstimatedTileConfig(TileConfig &tileConfig) {
+    auto id = getTileConfigId(tileConfig);
+    estimatedTileConfigIds.insert(id);
+  }
+
+  /// Get the tile sizes given a tile config. Assert the tile config is valid.
+  TileSizes getTileSizes(TileConfig &tileConfig) {
+    assert(isValidTileConfig(tileConfig) && "invalid tile config");
+
+    TileSizes tileSizes;
+    for (unsigned i = 0; i < tileConfigDimNum; ++i) {
+      auto key = tileConfig[i];
+      tileSizes.push_back(tileConfigMap[i][key]);
+    }
+
+    return tileSizes;
+  }
+
+  size_t tileConfigDimNum;
+  std::vector<SmallVector<unsigned, 8>> tileConfigMap;
+  std::set<int64_t> estimatedTileConfigIds;
+
+  /// Get the unique tile config ID from tile config. Assert the tile config is
+  /// valid.
+  unsigned getTileConfigId(TileConfig &tileConfig) {
+    assert(isValidTileConfig(tileConfig) && "invalid tile config");
+
+    unsigned id = 0;
+    unsigned accum = 1;
+    for (unsigned i = 0; i < tileConfigDimNum; ++i) {
+      id += accum * tileConfig[i];
+      accum *= tileConfigMap[i].size();
+    }
+
+    return id;
+  }
+};
+} // namespace
+
 //===----------------------------------------------------------------------===//
 // Optimizer Class Definition
 //===----------------------------------------------------------------------===//
@@ -189,6 +283,15 @@ void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func) {
   //===--------------------------------------------------------------------===//
   // STAGE 3: Loop Bands Tiling and Finalization
   //===--------------------------------------------------------------------===//
+
+  for (unsigned i = 0; i < targetNum; ++i) {
+    auto tileSpace = TileSpace(targetBands[i]);
+    for (auto configs : tileSpace.tileConfigMap) {
+      for (auto config : configs)
+        llvm::dbgs() << config << ", ";
+      llvm::dbgs() << "\n";
+    }
+  }
 }
 
 namespace {
