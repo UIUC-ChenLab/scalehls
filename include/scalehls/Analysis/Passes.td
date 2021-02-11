@@ -27,25 +27,4 @@ def QoREstimation : Pass<"qor-estimation", "ModuleOp"> {
   ];
 }
 
-def ProfileDesignSpace : Pass<"profile-design-space", "ModuleOp"> {
-  let summary = "Optimize HLS design at multiple abstraction level";
-  let description = [{
-    This profile-design-space pass will profile the partial design space and
-    output clock cycle and resource utilization estimation results.
-  }];
-
-  let constructor = "mlir::scalehls::createProfileDesignSpacePass()";
-
-  let options = [
-    Option<"targetSpec", "target-spec", "std::string",
-           /*default=*/"\"../config/target-spec.ini\"",
-           "File path: target backend specifications and configurations">,
-    Option<"profileFile", "profile-file", "std::string",
-           /*default=*/"\"-\"", "File path: the output file path of profiling">,
-    Option<"maxParallel", "max-parallel", "unsigned", /*default=*/"1",
-           "Positive number: the maximum tiling parallelism of the profiling">
-  ];
-}
-
-
 #endif // SCALEHLS_ANALYSIS_PASSES_TD

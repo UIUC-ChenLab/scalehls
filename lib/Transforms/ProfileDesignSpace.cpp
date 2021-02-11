@@ -6,8 +6,8 @@
 
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Support/FileUtilities.h"
-#include "scalehls/Analysis/Passes.h"
 #include "scalehls/Analysis/QoREstimation.h"
+#include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 #include "llvm/Support/ToolOutputFile.h"
 
@@ -185,7 +185,7 @@ struct ProfileDesignSpace : public ProfileDesignSpaceBase<ProfileDesignSpace> {
       if (auto topFunction = func->getAttrOfType<BoolAttr>("top_function"))
         if (topFunction.getValue()) {
           std::string errorMessage;
-          auto output = mlir::openOutputFile(profileFile, &errorMessage);
+          auto output = mlir::openOutputFile(outputFile, &errorMessage);
           if (!output)
             emitError(module.getLoc(), errorMessage);
 
