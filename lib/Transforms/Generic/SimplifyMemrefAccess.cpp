@@ -80,7 +80,7 @@ static bool applySimplifyMemrefAccess(FuncOp func) {
             break;
           }
       }
-      opIndex++;
+      ++opIndex;
     }
   }
 

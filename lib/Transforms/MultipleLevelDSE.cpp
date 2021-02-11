@@ -56,9 +56,9 @@ public:
         factors.push_back(factor);
 
         // Find the next possible factor.
-        factor++;
+        ++factor;
         while (factor <= tripCount && tripCount % factor != 0)
-          factor++;
+          ++factor;
       }
 
       tileConfigMap.push_back(factors);

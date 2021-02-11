@@ -89,7 +89,7 @@ void LegalizeToHLSCpp::runOnOperation() {
                                             operand.getType(), operand);
       returnOp->setOperand(idx, value);
     }
-    idx++;
+    ++idx;
   }
 }
 

@@ -191,7 +191,7 @@ static bool applyLegalizeDataflow(FuncOp func, OpBuilder &builder,
       // Update toMerge and newLevel if required.
       if (toMerge == 0) {
         toMerge = minGran;
-        newLevel++;
+        ++newLevel;
       }
     }
   }

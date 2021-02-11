@@ -31,7 +31,7 @@ AffineForOp scalehls::applyLoopTiling(AffineLoopBand &band,
         pipelineLoc = loc;
     } else
       return nullptr;
-    loc++;
+    ++loc;
   }
 
   // If all loops are fully tiled, keep the last loop untouched.
@@ -91,7 +91,7 @@ struct PartialAffineLoopTile
           else if (remainTileSize > 1) {
             size = 1;
             while (size < remainTileSize || tripCount % size != 0) {
-              size++;
+              ++size;
             }
             remainTileSize = 1;
           } else

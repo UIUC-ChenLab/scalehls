@@ -52,7 +52,7 @@ void ScaleHLSEstimator::getPartitionIndices(Operation *op) {
       symReplacements.push_back(
           builder.getAffineSymbolExpr(operandIdx - accessMap.getNumDims()));
     }
-    operandIdx++;
+    ++operandIdx;
   }
 
   auto newMap = accessMap.getAffineMap().replaceDimsAndSymbols(
@@ -186,7 +186,7 @@ void ScaleHLSEstimator::estimateLoadStore(Operation *op, int64_t begin) {
 
     if (successFlag)
       break;
-    resMinII++;
+    ++resMinII;
   }
 
   if (isa<AffineReadOpInterface>(op))
@@ -221,13 +221,13 @@ int64_t ScaleHLSEstimator::getResMinII(int64_t begin, int64_t end,
           for (int64_t idx = 0; idx < partitionNum; ++idx) {
             auto &info = memPortInfos[idx];
             if (storageType == MemoryKind::BRAM_1P && info.rdwrPort < 1)
-              accessNum[idx]++;
+              ++accessNum[idx];
             else if (storageType == MemoryKind::BRAM_T2P && info.rdwrPort < 2)
-              accessNum[idx]++;
+              ++accessNum[idx];
             else if (info.rdPort < 1)
-              accessNum[idx]++;
+              ++accessNum[idx];
             else if (info.wrPort < 1)
-              writeNum[idx]++;
+              ++writeNum[idx];
           }
         }
 
@@ -283,9 +283,9 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
   while (true) {
     if (auto outerLoop = dyn_cast<AffineForOp>(currentLoop->getParentOp())) {
       currentLoop = outerLoop;
-      endLevel++;
+      ++endLevel;
       if (!getBoolAttrValue(outerLoop, "flatten"))
-        startLevel++;
+        ++startLevel;
     } else
       break;
   }
@@ -545,11 +545,11 @@ int64_t ScaleHLSEstimator::getDspAllocMap(Block &block,
     // Accumulate the resource utilization of each operation.
     if (isa<AddFOp, SubFOp>(op))
       for (unsigned i = begin; i < end; ++i)
-        faddMap[i]++;
+        ++faddMap[i];
 
     else if (isa<MulFOp>(op))
       for (unsigned i = begin; i < end; ++i)
-        fmulMap[i]++;
+        ++fmulMap[i];
 
     else if (isa<AffineForOp, CallOp>(op))
       staticDspNum += getIntAttrValue(&op, "dsp");
@@ -593,9 +593,9 @@ Resource ScaleHLSEstimator::estimateResource(Block &block, int64_t interval) {
     int64_t totalFmul = 0;
     block.walk([&](Operation *op) {
       if (isa<AddFOp, SubFOp>(op))
-        totalFadd++;
+        ++totalFadd;
       else if (isa<MulFOp>(op))
-        totalFmul++;
+        ++totalFmul;
     });
 
     auto noShareDspNum = totalFadd * 2 + totalFmul * 3;
@@ -819,7 +819,7 @@ void ScaleHLSEstimator::initEstimator(Block &block) {
     for (auto dstLoop : llvm::drop_begin(loops, idx))
       if (checkSameLevel(srcLoop, dstLoop))
         dependsMap[srcLoop].push_back(dstLoop);
-    idx++;
+    ++idx;
   }
 };
 

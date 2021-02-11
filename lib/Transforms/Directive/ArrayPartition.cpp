@@ -103,7 +103,7 @@ static bool applyArrayPartition(FuncOp func) {
         // Determine array partition strategy.
         // TODO: take storage type into consideration.
         // TODO: the partition strategy requires more case study.
-        maxDistance++;
+        ++maxDistance;
         if (maxDistance == 1) {
           // This means all accesses have the same index, and this dimension
           // should not be partitioned.

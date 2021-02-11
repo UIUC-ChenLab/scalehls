@@ -68,7 +68,7 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
             }
           }
         }
-        dstIndex++;
+        ++dstIndex;
       }
     }
 
