@@ -12,12 +12,12 @@
 using namespace mlir;
 using namespace scalehls;
 
-/// Apply loop tiling and return the new loop that should be pipelined or fully
-/// unrolled.
-AffineForOp scalehls::applyLoopTiling(AffineLoopBand &band,
-                                      TileSizes tileSizes) {
+/// Apply loop tiling to the input loop band and return the location of the
+/// original innermost loop in the tiled loop band. If tile is failed, -1 will
+/// be returned.
+int64_t scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList) {
   if (!isPerfectlyNested(band))
-    return nullptr;
+    return -1;
 
   // Collect each loop location that is fully tiled and can be eliminated.
   SmallVector<unsigned, 8> fullyTiledLoops;
@@ -25,12 +25,12 @@ AffineForOp scalehls::applyLoopTiling(AffineLoopBand &band,
   unsigned loc = 0;
   for (auto loop : band) {
     if (auto tripCount = getConstantTripCount(loop)) {
-      if (tripCount.getValue() == tileSizes[loc])
+      if (tripCount.getValue() == tileList[loc])
         fullyTiledLoops.push_back(loc);
       else
         pipelineLoc = loc;
     } else
-      return nullptr;
+      return -1;
     ++loc;
   }
 
@@ -42,8 +42,8 @@ AffineForOp scalehls::applyLoopTiling(AffineLoopBand &band,
 
   // Loop tiling.
   AffineLoopBand tiledBand;
-  if (failed(tilePerfectlyNested(band, tileSizes, &tiledBand)))
-    return nullptr;
+  if (failed(tilePerfectlyNested(band, tileList, &tiledBand)))
+    return -1;
   band = tiledBand;
 
   auto builder = OpBuilder(band.back());
@@ -66,7 +66,7 @@ AffineForOp scalehls::applyLoopTiling(AffineLoopBand &band,
     loop.erase();
   }
 
-  return band[pipelineLoc];
+  return pipelineLoc;
 }
 
 namespace {
@@ -77,7 +77,7 @@ struct PartialAffineLoopTile
     getTileableBands(getOperation(), &targetBands);
 
     for (auto &band : targetBands) {
-      TileSizes sizes;
+      TileList sizes;
       unsigned remainTileSize = tileSize;
 
       // Calculate the tiling size of each loop level.

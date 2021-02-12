@@ -34,97 +34,177 @@ static int64_t getInnerParallelism(AffineForOp forOp) {
   return std::max(count, (int64_t)1);
 }
 
-using TileConfig = SmallVector<int64_t, 8>;
+using TileConfig = unsigned;
 
 namespace {
-class TileSpace {
+struct DesignPoint {
 public:
-  explicit TileSpace(AffineLoopBand &band) {
-    tileConfigDimNum = band.size();
+  explicit DesignPoint(int64_t latency, int64_t dspNum, TileConfig tileConfig,
+                       unsigned targetII)
+      : latency(latency), dspNum(dspNum), tileConfig(tileConfig),
+        targetII(targetII) {}
 
-    for (unsigned i = 0; i < tileConfigDimNum; ++i) {
-      auto loop = band[i];
+  int64_t latency;
+  int64_t dspNum;
+
+  TileConfig tileConfig;
+  unsigned targetII;
+};
+} // namespace
+
+namespace {
+class DesignSpace {
+public:
+  DesignSpace(FuncOp func, AffineLoopBand &band, ScaleHLSEstimator &estimator)
+      : func(func), band(band), estimator(estimator) {
+    // Initialize tile vector related members.
+    validTileConfigNum = 1;
+    for (auto loop : band) {
       auto optionalTripCount = getConstantTripCount(loop);
       if (!optionalTripCount)
         loop.emitError("has variable loop bound");
+
       auto tripCount = optionalTripCount.getValue();
+      tripCountList.push_back(tripCount);
 
-      SmallVector<unsigned, 8> factors;
-      unsigned factor = 1;
-      while (factor <= tripCount) {
-        // Push back the current factor.
-        factors.push_back(factor);
+      SmallVector<unsigned, 8> validSizes;
+      unsigned size = 1;
+      while (size <= tripCount) {
+        // Push back the current size.
+        validSizes.push_back(size);
 
-        // Find the next possible factor.
-        ++factor;
-        while (factor <= tripCount && tripCount % factor != 0)
-          ++factor;
+        // Find the next possible size.
+        ++size;
+        while (size <= tripCount && tripCount % size != 0)
+          ++size;
       }
 
-      tileConfigMap.push_back(factors);
+      validTileSizesList.push_back(validSizes);
+      validTileConfigNum *= validSizes.size();
     }
+
+    for (TileConfig config = 0; config < validTileConfigNum; ++config)
+      unestimatedTileConfigs.insert(config);
   }
 
-  /// Check whether a tile config is valid in the tile space.
-  bool isValidTileConfig(TileConfig &tileConfig) {
-    if (tileConfig.size() == tileConfigDimNum)
-      return false;
+  /// Return the actual tile vector given a tile config.
+  TileList getTileList(TileConfig config) {
+    assert(config < validTileConfigNum && "invalid tile config");
 
-    for (unsigned i = 0; i < tileConfigDimNum; ++i) {
-      auto key = tileConfig[i];
+    TileList tileList;
+    unsigned factor = 1;
+    for (auto validSizes : validTileSizesList) {
+      auto idx = config / factor % validSizes.size();
+      factor *= validSizes.size();
 
-      // The tile config must fall into the range of config map to be valid.
-      if (key < 0 || key >= (int64_t)tileConfigMap[i].size())
-        return false;
+      auto size = validSizes[idx];
+      tileList.push_back(size);
+    }
+    return tileList;
+  }
+
+  /// Calculate the Euclid distance of config a and config b.
+  float getTileConfigDistance(TileConfig configA, TileConfig configB) {
+    assert(configA < validTileConfigNum && configB < validTileConfigNum &&
+           "invalid tile config");
+
+    int64_t distanceSquare = 0;
+    unsigned factor = 1;
+    for (auto validSizes : validTileSizesList) {
+      int64_t idxA = configA / factor % validSizes.size();
+      int64_t idxB = configB / factor % validSizes.size();
+      factor *= validSizes.size();
+
+      auto idxDistance = idxA - idxB;
+      distanceSquare += idxDistance * idxDistance;
     }
 
+    return sqrtf(distanceSquare);
+  }
+
+  void findParetoFrontiers() {}
+
+  /// Explore all design points under the given tile config.
+  bool exploreTileConfig(TileConfig config) {
+    // Clone a temporary loop band by cloning the outermost loop.
+    auto tmpOuterLoop = band.front().clone();
+    AffineLoopBand tmpBand;
+    getLoopBandFromOutermost(tmpOuterLoop, tmpBand);
+
+    // Insert the clone loop band to the front of the original band for the
+    // convenience of the estimation.
+    auto builder = OpBuilder(func);
+    builder.setInsertionPoint(band.front());
+    builder.insert(tmpOuterLoop);
+
+    // Apply the tile config and estimate the loop band.
+    auto tileList = getTileList(config);
+    unsigned iterNum = 1;
+    for (unsigned i = 0, e = tileList.size(); i < e; ++i)
+      iterNum *= tripCountList[i] / tileList[i];
+
+    // We always don't fully unroll all loops in the loop band.
+    if (iterNum == 1)
+      return false;
+
+    // Apply the current tiling config and start the estimation. Note that after
+    // optimization, tmpBand is optimized in place and becomes a new loop band.
+    if (!applyOptStrategy(tmpBand, func, tileList, 1))
+      return false;
+    tmpOuterLoop = tmpBand.front();
+    estimator.estimateLoop(tmpOuterLoop);
+
+    // Fetch latency and resource utilization.
+    auto tmpInnerLoop = tmpBand.back();
+    auto II = estimator.getIntAttrValue(tmpInnerLoop, "ii");
+    auto iterLatency = estimator.getIntAttrValue(tmpInnerLoop, "iter_latency");
+    auto shareDspNum = estimator.getIntAttrValue(tmpInnerLoop, "share_dsp");
+    auto noShareDspNum = estimator.getIntAttrValue(tmpInnerLoop, "noshare_dsp");
+
+    // Improve target II until II is equal to iteration latency. Note that when
+    // II equal to iteration latency, the pipeline pragma is similar to a region
+    // fully unroll pragma which unrolls all contained loops.
+    for (auto tmpII = II; tmpII <= iterLatency; ++tmpII) {
+      auto tmpDspNum = std::max(shareDspNum, noShareDspNum / tmpII);
+      auto tmpLatency = iterLatency + tmpII * (iterNum - 1);
+
+      auto point = DesignPoint(tmpLatency, tmpDspNum, config, tmpII);
+      allPoints.push_back(point);
+      paretoPoints.push_back(point);
+    }
+
+    // Erase the temporary loop band and return.
+    tmpOuterLoop.erase();
     return true;
   }
 
-  /// Check whether the tile config has been estimated. Assert the tile config
-  /// is valid.
-  bool isEstimatedTileConfig(TileConfig &tileConfig) {
-    auto id = getTileConfigId(tileConfig);
-    return estimatedTileConfigIds.count(id);
-  }
-
-  /// Add a new estimated tile config. Assert the tile config is valid.
-  void addEstimatedTileConfig(TileConfig &tileConfig) {
-    auto id = getTileConfigId(tileConfig);
-    estimatedTileConfigIds.insert(id);
-  }
-
-  /// Get the tile sizes given a tile config. Assert the tile config is valid.
-  TileSizes getTileSizes(TileConfig &tileConfig) {
-    assert(isValidTileConfig(tileConfig) && "invalid tile config");
-
-    TileSizes tileSizes;
-    for (unsigned i = 0; i < tileConfigDimNum; ++i) {
-      auto key = tileConfig[i];
-      tileSizes.push_back(tileConfigMap[i][key]);
+  void initializeDesignSpace(unsigned maxInitializeParallel) {
+    for (TileConfig config = 0; config < validTileConfigNum; ++config) {
+      unestimatedTileConfigs.erase(config);
     }
-
-    return tileSizes;
   }
 
-  size_t tileConfigDimNum;
-  std::vector<SmallVector<unsigned, 8>> tileConfigMap;
-  std::set<int64_t> estimatedTileConfigIds;
+  SmallVector<DesignPoint, 16> paretoPoints;
+  SmallVector<DesignPoint, 16> allPoints;
 
-  /// Get the unique tile config ID from tile config. Assert the tile config is
-  /// valid.
-  unsigned getTileConfigId(TileConfig &tileConfig) {
-    assert(isValidTileConfig(tileConfig) && "invalid tile config");
+  /// Associated function, loop band, and estimator.
+  FuncOp func;
+  AffineLoopBand &band;
+  ScaleHLSEstimator &estimator;
 
-    unsigned id = 0;
-    unsigned accum = 1;
-    for (unsigned i = 0; i < tileConfigDimNum; ++i) {
-      id += accum * tileConfig[i];
-      accum *= tileConfigMap[i].size();
-    }
+  /// Records the trip count of each loop level.
+  SmallVector<unsigned, 8> tripCountList;
 
-    return id;
-  }
+  /// The dimension of this list is same to the number of loops in the loop
+  /// band. The n-th element of this list stores all valid tile sizes of the
+  /// n-th loop in the loop band.
+  SmallVector<SmallVector<unsigned, 8>, 8> validTileSizesList;
+
+  /// Holds the total number of valid tile size combinations.
+  unsigned validTileConfigNum;
+
+  /// Holds all tile configs that have not been estimated.
+  std::set<TileConfig> unestimatedTileConfigs;
 };
 } // namespace
 
@@ -283,13 +363,14 @@ void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func) {
   //===--------------------------------------------------------------------===//
   // STAGE 3: Loop Bands Tiling and Finalization
   //===--------------------------------------------------------------------===//
-
   for (unsigned i = 0; i < targetNum; ++i) {
-    auto tileSpace = TileSpace(targetBands[i]);
-    for (auto configs : tileSpace.tileConfigMap) {
-      for (auto config : configs)
-        llvm::dbgs() << config << ", ";
-      llvm::dbgs() << "\n";
+    auto space = DesignSpace(func, targetBands[i], estimator);
+    space.exploreTileConfig(1);
+
+    for (auto point : space.paretoPoints) {
+      llvm::outs() << "latency: " << point.latency
+                   << ", dsp_num: " << point.dspNum
+                   << ", ii: " << point.targetII << "\n";
     }
   }
 }

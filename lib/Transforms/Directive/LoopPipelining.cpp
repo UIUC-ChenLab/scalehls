@@ -32,32 +32,35 @@ bool scalehls::applyFullyLoopUnrolling(Block &block) {
 
 /// Apply loop pipelining to the input loop, all inner loops are automatically
 /// fully unrolled.
-bool scalehls::applyLoopPipelining(AffineForOp targetLoop, int64_t targetII) {
+bool scalehls::applyLoopPipelining(AffineLoopBand &band, int64_t pipelineLoc,
+                                   int64_t targetII) {
+  auto targetLoop = band[pipelineLoc];
+
   // All inner loops of the pipelined loop are automatically unrolled.
   if (!applyFullyLoopUnrolling(*targetLoop.getBody()))
     return false;
 
+  // Erase all loops in loop band that are inside of the pipelined loop.
+  band.resize(pipelineLoc + 1);
   auto builder = Builder(targetLoop);
 
   targetLoop->setAttr("pipeline", builder.getBoolAttr(true));
   targetLoop->setAttr("target_ii", builder.getI64IntegerAttr(targetII));
 
   // All outer loops that perfect nest the pipelined loop can be flattened.
-  SmallVector<AffineForOp, 4> flattenedLoops;
-  flattenedLoops.push_back(targetLoop);
+  auto currentLoop = targetLoop;
   while (true) {
-    auto currentLoop = flattenedLoops.back();
     if (auto outerLoop = currentLoop->getParentOfType<AffineForOp>()) {
       // Only if the current loop is the only child loop of the outer loop, the
       // outer loop can be flattened into the current loop.
       auto &body = *outerLoop.getBody();
       if (&body.front() == currentLoop && body.getOperations().size() == 2) {
-        flattenedLoops.push_back(outerLoop);
+        currentLoop = outerLoop;
         outerLoop->setAttr("flatten", builder.getBoolAttr(true));
-      } else
-        break;
-    } else
-      break;
+        continue;
+      }
+    }
+    break;
   }
 
   return true;
@@ -79,7 +82,7 @@ struct LoopPipelining : public LoopPipeliningBase<LoopPipelining> {
 
         // If meet the outermost loop, pipeline the current loop.
         if (!parentLoop || pipelineLevel == loopLevel) {
-          applyLoopPipelining(currentLoop, targetII);
+          applyLoopPipelining(band, band.size() - loopLevel - 1, targetII);
           break;
         }
 

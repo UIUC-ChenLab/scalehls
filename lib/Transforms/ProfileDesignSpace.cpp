@@ -41,8 +41,8 @@ static void applyProfiling(FuncOp func, raw_ostream &os,
   applyRemoveVariableBound(band);
 
   // Initialize tile size and trip count vector.
-  auto tileSizes = TileSizes(loopNum, 1);
-  auto tripCounts = TileSizes();
+  auto tileList = TileList(loopNum, 1);
+  auto tripCounts = TileList();
   unsigned iterations = 1;
   for (unsigned loc = 0; loc < loopNum; ++loc) {
     auto tripCount = getConstantTripCount(band[loc]).getValue();
@@ -59,17 +59,17 @@ static void applyProfiling(FuncOp func, raw_ostream &os,
   // Traverse each tile size configuration.
   for (unsigned i = 0; i < iterations - 1; ++i) {
     for (unsigned loc = 0; loc < loopNum; ++loc) {
-      auto &tileSize = tileSizes[loc];
+      auto &tileSize = tileList[loc];
       if (loc == 0)
         tileSize *= 2;
-      else if (tileSizes[loc - 1] > tripCounts[loc - 1])
+      else if (tileList[loc - 1] > tripCounts[loc - 1])
         tileSize *= 2;
     }
 
     unsigned iterNum = 1;
     unsigned parallel = 1;
     for (unsigned loc = 0; loc < loopNum; ++loc) {
-      auto &tileSize = tileSizes[loc];
+      auto &tileSize = tileList[loc];
       if (tileSize > tripCounts[loc])
         tileSize = 1;
       iterNum *= tripCounts[loc] / tileSize;
@@ -83,7 +83,7 @@ static void applyProfiling(FuncOp func, raw_ostream &os,
 
     // Apply tiling strategy.
     auto tmpFunc = func.clone();
-    applyOptStrategy(tmpFunc, tileSizes, 1);
+    applyOptStrategy(tmpFunc, tileList, 1);
     estimator.estimateFunc(tmpFunc);
     auto tmpLoop = getFirstBand(tmpFunc).back();
 
@@ -98,7 +98,7 @@ static void applyProfiling(FuncOp func, raw_ostream &os,
       auto tmpDspNum = std::max(shareDspNum, noShareDspNum / tmpII);
       auto tmpLatency = iterLatency + tmpII * (iterNum - 1);
 
-      auto point = SmallVector<int64_t, 8>(tileSizes.begin(), tileSizes.end());
+      auto point = SmallVector<int64_t, 8>(tileList.begin(), tileList.end());
       point.append({tmpII, tmpLatency, tmpDspNum});
       designPoints.push_back(point);
 
