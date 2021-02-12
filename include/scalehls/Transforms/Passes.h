@@ -19,7 +19,6 @@ namespace scalehls {
 
 /// Design space exploration pass.
 std::unique_ptr<Pass> createMultipleLevelDSEPass();
-std::unique_ptr<Pass> createProfileDesignSpacePass();
 
 /// Dataflow optimization passes.
 std::unique_ptr<Pass> createLegalizeDataflowPass();

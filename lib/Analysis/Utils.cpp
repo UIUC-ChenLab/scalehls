@@ -181,6 +181,7 @@ static unsigned getChildLoopNum(Operation *op) {
 
 /// Get the whole loop band given the innermost loop and return it in "band".
 static void getLoopBandFromInnermost(AffineForOp forOp, AffineLoopBand &band) {
+  band.clear();
   AffineLoopBand reverseBand;
 
   auto currentLoop = forOp;
@@ -204,6 +205,7 @@ static void getLoopBandFromInnermost(AffineForOp forOp, AffineLoopBand &band) {
 /// Meanwhile, the return value is the innermost loop of this loop band.
 AffineForOp scalehls::getLoopBandFromOutermost(AffineForOp forOp,
                                                AffineLoopBand &band) {
+  band.clear();
   auto currentLoop = forOp;
   while (true) {
     band.push_back(currentLoop);
@@ -222,6 +224,7 @@ AffineForOp scalehls::getLoopBandFromOutermost(AffineForOp forOp,
 /// loops are collected.
 void scalehls::getLoopBands(Block &block, AffineLoopBands &bands,
                             bool allowHavingChilds) {
+  bands.clear();
   block.walk([&](AffineForOp loop) {
     auto childNum = getChildLoopNum(loop);
 

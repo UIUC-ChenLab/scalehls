@@ -32,8 +32,8 @@ bool scalehls::applyFullyLoopUnrolling(Block &block) {
 
 /// Apply loop pipelining to the input loop, all inner loops are automatically
 /// fully unrolled.
-bool scalehls::applyLoopPipelining(AffineLoopBand &band, int64_t pipelineLoc,
-                                   int64_t targetII) {
+bool scalehls::applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
+                                   unsigned targetII) {
   auto targetLoop = band[pipelineLoc];
 
   // All inner loops of the pipelined loop are automatically unrolled.

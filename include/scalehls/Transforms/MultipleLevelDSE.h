@@ -22,10 +22,9 @@ public:
                              int64_t numDSP)
       : ScaleHLSAnalysisBase(builder), estimator(estimator), numDSP(numDSP) {}
 
-  void emitDebugInfo(FuncOp targetFunc, StringRef message);
-
   /// This is a temporary approach that does not scale.
-  void applyMultipleLevelDSE(FuncOp func);
+  void applyMultipleLevelDSE(FuncOp func, raw_ostream &os,
+                             unsigned maxInitializeParallel = 16);
 
   ScaleHLSEstimator &estimator;
   int64_t numDSP;

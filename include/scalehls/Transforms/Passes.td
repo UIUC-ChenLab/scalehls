@@ -28,27 +28,11 @@ def MultipleLevelDSE : Pass<"multiple-level-dse", "ModuleOp"> {
   let options = [
     Option<"targetSpec", "target-spec", "std::string",
            /*default=*/"\"../config/target-spec.ini\"",
-           "File path: target backend specifications and configurations">
-  ];
-}
-
-def ProfileDesignSpace : Pass<"profile-design-space", "ModuleOp"> {
-  let summary = "Optimize HLS design at multiple abstraction level";
-  let description = [{
-    This profile-design-space pass will profile the partial design space and
-    output clock cycle and resource utilization estimation results.
-  }];
-
-  let constructor = "mlir::scalehls::createProfileDesignSpacePass()";
-
-  let options = [
-    Option<"targetSpec", "target-spec", "std::string",
-           /*default=*/"\"../config/target-spec.ini\"",
            "File path: target backend specifications and configurations">,
     Option<"outputFile", "output-file", "std::string",
-           /*default=*/"\"-\"", "File path: the output file path of profiling">,
-    Option<"maxParallel", "max-parallel", "unsigned", /*default=*/"1",
-           "Positive number: the maximum tiling parallelism of the profiling">
+           /*default=*/"\"-\"", "File path: the output file path">,
+    Option<"maxParallel", "max-parallel", "unsigned", /*default=*/"16",
+           "Positive number: the maximum parallelism of initialization">
   ];
 }
 

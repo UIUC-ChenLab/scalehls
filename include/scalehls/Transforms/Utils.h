@@ -30,21 +30,21 @@ bool applyRemoveVariableBound(AffineLoopBand &band);
 /// passed in because the post-tiling optimizations have to take function as
 /// target, e.g. canonicalizer and array partition.
 bool applyOptStrategy(AffineLoopBand &band, FuncOp func, TileList tileList,
-                      int64_t targetII);
+                      unsigned targetII);
 
 /// Apply optimization strategy to a function.
 bool applyOptStrategy(FuncOp func, ArrayRef<TileList> tileLists,
-                      ArrayRef<int64_t> targetIIs);
+                      ArrayRef<unsigned> targetIIs);
 
-/// Apply loop tiling to the input loop band and return the location of the
-/// original innermost loop in the tiled loop band. If tile is failed, -1 will
-/// be returned.
-int64_t applyLoopTiling(AffineLoopBand &band, TileList tileList);
+/// Apply loop tiling to the input loop band and sink all intra-tile loops to
+/// the innermost loop with the original loop order. Return the location of the
+/// innermost tile-space loop.
+Optional<unsigned> applyLoopTiling(AffineLoopBand &band, TileList tileList);
 
 /// Apply loop pipelining to the pipelineLoc of the input loop band, all inner
 /// loops are automatically fully unrolled.
-bool applyLoopPipelining(AffineLoopBand &band, int64_t pipelineLoc,
-                         int64_t targetII);
+bool applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
+                         unsigned targetII);
 
 /// Fully unroll all loops insides of a loop block.
 bool applyFullyLoopUnrolling(Block &block);

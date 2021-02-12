@@ -12,61 +12,57 @@
 using namespace mlir;
 using namespace scalehls;
 
-/// Apply loop tiling to the input loop band and return the location of the
-/// original innermost loop in the tiled loop band. If tile is failed, -1 will
-/// be returned.
-int64_t scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList) {
+/// Apply loop tiling to the input loop band and sink all intra-tile loops to
+/// the innermost loop with the original loop order. Return the location of the
+/// innermost tile-space loop.
+Optional<unsigned> scalehls::applyLoopTiling(AffineLoopBand &band,
+                                             TileList tileList) {
   if (!isPerfectlyNested(band))
-    return -1;
-
-  // Collect each loop location that is fully tiled and can be eliminated.
-  SmallVector<unsigned, 8> fullyTiledLoops;
-  unsigned pipelineLoc = 0;
-  unsigned loc = 0;
-  for (auto loop : band) {
-    if (auto tripCount = getConstantTripCount(loop)) {
-      if (tripCount.getValue() == tileList[loc])
-        fullyTiledLoops.push_back(loc);
-      else
-        pipelineLoc = loc;
-    } else
-      return -1;
-    ++loc;
-  }
-
-  // If all loops are fully tiled, keep the last loop untouched.
-  if (fullyTiledLoops.size() == band.size()) {
-    fullyTiledLoops.pop_back();
-    pipelineLoc = band.size() - 1;
-  }
+    return Optional<unsigned>();
 
   // Loop tiling.
   AffineLoopBand tiledBand;
   if (failed(tilePerfectlyNested(band, tileList, &tiledBand)))
-    return -1;
-  band = tiledBand;
+    return Optional<unsigned>();
 
-  auto builder = OpBuilder(band.back());
+  // Record the band size and clear the original loop band.
+  auto originalBandSize = band.size();
+  band.clear();
 
-  // Remove fully tiled loops.
-  for (auto loc : fullyTiledLoops) {
-    auto loop = band[loc];
+  // Remove redundant loops in the tiled loop band.
+  auto builder = OpBuilder(tiledBand.back());
+  unsigned erasedLoopNum = 0;
+  unsigned loc = 0;
 
-    // Create an affine apply operation generating a constant zero.
-    builder.setInsertionPoint(loop);
-    auto constZero = builder.create<AffineApplyOp>(
-        loop.getLoc(), builder.getConstantAffineMap(0), ValueRange({}));
-    loop.getInductionVar().replaceAllUsesWith(constZero);
+  for (auto loop : tiledBand) {
+    if (erasedLoopNum >= originalBandSize - 1 || loc >= originalBandSize ||
+        getConstantTripCount(loop).getValue() > 1) {
+      // All tile-space loops which have a trip count larger than 1 and all
+      // intra-tile loops are pushed back. Meanwhile, we are not willing to see
+      // all tile-space loops removed since in that case many analysis and
+      // transforms will become very hard. Thereby we record the number of
+      // erased loop so far and always keep at least one tile-space loop
+      // remained in the loop band even if it has a trip count of 1.
+      band.push_back(loop);
+    } else {
+      // Create an affine apply operation to represent the lower bound.
+      builder.setInsertionPoint(loop);
+      auto newIterVar = builder.create<AffineApplyOp>(
+          loop.getLoc(), loop.getLowerBoundMap(), loop.getLowerBoundOperands());
+      loop.getInductionVar().replaceAllUsesWith(newIterVar);
 
-    // Move all operation except the terminator to the outside.
-    auto &parentBlock = loop->getBlock()->getOperations();
-    auto &loopBlock = loop.getBody()->getOperations();
-    parentBlock.splice(loop->getIterator(), loopBlock, loopBlock.begin(),
-                       std::prev(loopBlock.end()));
-    loop.erase();
+      // Move all operation except the terminator to the outside.
+      auto &parentBlock = loop->getBlock()->getOperations();
+      auto &loopBlock = loop.getBody()->getOperations();
+      parentBlock.splice(loop->getIterator(), loopBlock, loopBlock.begin(),
+                         std::prev(loopBlock.end()));
+      loop.erase();
+      ++erasedLoopNum;
+    }
+    ++loc;
   }
 
-  return pipelineLoc;
+  return band.size() - originalBandSize - 1;
 }
 
 namespace {

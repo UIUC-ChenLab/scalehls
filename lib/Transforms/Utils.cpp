@@ -33,18 +33,18 @@ static void addPassPipeline(PassManager &pm) {
 /// passed in because the post-tiling optimizations have to take function as
 /// target, e.g. canonicalizer and array partition.
 bool scalehls::applyOptStrategy(AffineLoopBand &band, FuncOp func,
-                                TileList tileList, int64_t targetII) {
+                                TileList tileList, unsigned targetII) {
   // By design the input function must be the ancestor of the input loop band.
   if (!func->isProperAncestor(band.front()))
     return false;
 
   // Apply loop tiling.
   auto pipelineLoc = applyLoopTiling(band, tileList);
-  if (pipelineLoc == -1)
+  if (!pipelineLoc)
     return false;
 
   // Apply loop pipelining.
-  if (!applyLoopPipelining(band, pipelineLoc, targetII))
+  if (!applyLoopPipelining(band, pipelineLoc.getValue(), targetII))
     return false;
 
   // Apply general optimizations and array partition.
@@ -59,17 +59,17 @@ bool scalehls::applyOptStrategy(AffineLoopBand &band, FuncOp func,
 
 /// Apply optimization strategy to a function.
 bool scalehls::applyOptStrategy(FuncOp func, ArrayRef<TileList> tileLists,
-                                ArrayRef<int64_t> targetIIs) {
+                                ArrayRef<unsigned> targetIIs) {
   AffineLoopBands bands;
   getLoopBands(func.front(), bands);
 
   // Apply loop tiling and pipelining to all loop bands.
   for (unsigned i = 0, e = bands.size(); i < e; ++i) {
     auto pipelineLoc = applyLoopTiling(bands[i], tileLists[i]);
-    if (pipelineLoc == -1)
+    if (!pipelineLoc)
       return false;
 
-    if (!applyLoopPipelining(bands[i], pipelineLoc, targetIIs[i]))
+    if (!applyLoopPipelining(bands[i], pipelineLoc.getValue(), targetIIs[i]))
       return false;
   }
 
