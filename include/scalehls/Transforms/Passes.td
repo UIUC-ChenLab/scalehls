@@ -31,8 +31,13 @@ def MultipleLevelDSE : Pass<"multiple-level-dse", "ModuleOp"> {
            "File path: target backend specifications and configurations">,
     Option<"outputFile", "output-file", "std::string",
            /*default=*/"\"-\"", "File path: the output file path">,
-    Option<"maxParallel", "max-parallel", "unsigned", /*default=*/"16",
-           "Positive number: the maximum parallelism of initialization">
+
+    Option<"maxInitParallel", "max-init-parallel", "unsigned", /*default=*/"16",
+           "Positive number: the maximum parallelism of initialization">,
+    Option<"maxIterNum", "max-iter-num", "unsigned", /*default=*/"8",
+           "Positive number: the maximum DSE iteration number">,
+    Option<"maxDistance", "max-distance", "float", /*default=*/"1.0",
+           "Positive float number: the maximum distance of neighbor points">,
   ];
 }
 

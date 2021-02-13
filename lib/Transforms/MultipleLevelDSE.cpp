@@ -38,6 +38,8 @@ struct DesignPoint {
 
   TileConfig tileConfig;
   unsigned targetII;
+
+  bool isActive = true;
 };
 } // namespace
 
@@ -45,7 +47,7 @@ namespace {
 class DesignSpace {
 public:
   explicit DesignSpace(FuncOp func, AffineLoopBand &band,
-                       ScaleHLSEstimator &estimator);
+                       ScaleHLSEstimator &estimator, unsigned maxDspNum);
 
   /// Return the actual tile vector given a tile config.
   TileList getTileList(TileConfig config);
@@ -60,13 +62,21 @@ public:
   bool evaluateTileConfig(TileConfig config);
 
   /// Initialize the design space.
-  void initializeDesignSpace(unsigned maxInitializeParallel);
+  void initializeDesignSpace(unsigned maxInitParallel);
 
   /// Dump pareto and non-pareto points which have been evaluated in the design
   /// space to a csv output file.
   void dumpDesignSpace(raw_ostream &os);
 
-  /// Stores current pareto frontiers and all evaluated design points.
+  /// Get a random tile config which is one of the closest neighbors of "point".
+  Optional<TileConfig> getRandomClosestNeighbor(DesignPoint point,
+                                                float maxDistance);
+
+  void exploreDesignSpace(unsigned maxIterNum, float maxDistance);
+
+  /// Stores current pareto frontiers and all evaluated design points. The
+  /// "allPoints" is mainly used for design space dumping, which is actually not
+  /// used in the DSE procedure.
   SmallVector<DesignPoint, 16> paretoPoints;
   SmallVector<DesignPoint, 16> allPoints;
 
@@ -74,6 +84,7 @@ public:
   FuncOp func;
   AffineLoopBand &band;
   ScaleHLSEstimator &estimator;
+  unsigned maxDspNum;
 
   /// Records the trip count of each loop level.
   SmallVector<unsigned, 8> tripCountList;
@@ -96,8 +107,8 @@ public:
 //===----------------------------------------------------------------------===//
 
 DesignSpace::DesignSpace(FuncOp func, AffineLoopBand &band,
-                         ScaleHLSEstimator &estimator)
-    : func(func), band(band), estimator(estimator) {
+                         ScaleHLSEstimator &estimator, unsigned maxDspNum)
+    : func(func), band(band), estimator(estimator), maxDspNum(maxDspNum) {
   // Initialize tile vector related members.
   validTileConfigNum = 1;
   for (auto loop : band) {
@@ -246,10 +257,11 @@ bool DesignSpace::evaluateTileConfig(TileConfig config) {
   for (auto tmpII = II; tmpII <= iterLatency; ++tmpII) {
     auto tmpDspNum = std::max(shareDspNum, noShareDspNum / tmpII);
     auto tmpLatency = iterLatency + tmpII * (iterNum - 1);
-
     auto point = DesignPoint(tmpLatency, tmpDspNum, config, tmpII);
+
     allPoints.push_back(point);
-    paretoPoints.push_back(point);
+    if (tmpDspNum <= maxDspNum)
+      paretoPoints.push_back(point);
   }
 
   // Erase the temporary loop band and annotate the current tile config as
@@ -260,17 +272,17 @@ bool DesignSpace::evaluateTileConfig(TileConfig config) {
 }
 
 /// Initialize the design space.
-void DesignSpace::initializeDesignSpace(unsigned maxInitializeParallel) {
-  LLVM_DEBUG(llvm::dbgs() << "3.1 Initializing the design space...\n";);
+void DesignSpace::initializeDesignSpace(unsigned maxInitParallel) {
+  LLVM_DEBUG(llvm::dbgs() << "3.1 Initialize the design space...\n";);
 
   for (TileConfig config = 0; config < validTileConfigNum; ++config) {
     auto tileList = getTileList(config);
 
     // We only evaluate the design points whose overall parallelism is smaller
-    // than the maxInitializeParallel to improve the efficiency.
+    // than the maxInitParallel to improve the efficiency.
     auto parallel = std::accumulate(tileList.begin(), tileList.end(),
                                     (unsigned)1, std::multiplies<unsigned>());
-    if (parallel > maxInitializeParallel)
+    if (parallel > maxInitParallel)
       continue;
 
     LLVM_DEBUG(llvm::dbgs() << config << ",");
@@ -308,6 +320,66 @@ void DesignSpace::dumpDesignSpace(raw_ostream &os) {
   LLVM_DEBUG(llvm::dbgs() << "Design space is dumped to output file.\n\n");
 }
 
+/// Get a random tile config which is one of the closest neighbors of "point".
+Optional<TileConfig> DesignSpace::getRandomClosestNeighbor(DesignPoint point,
+                                                           float maxDistance) {
+  SmallVector<std::pair<float, TileConfig>, 8> candidateConfigs;
+
+  // Traverse all unestimated tile configs and collect all neighbors.
+  for (auto config : unestimatedTileConfigs) {
+    auto distance = getTileConfigDistance(point.tileConfig, config);
+    if (distance <= maxDistance)
+      candidateConfigs.push_back(
+          std::pair<float, TileConfig>(distance, config));
+  }
+
+  if (candidateConfigs.empty())
+    return Optional<TileConfig>();
+
+  // Sort candidate configs and pick the first one as return.
+  // TODO: randomize this selection.
+  std::sort(candidateConfigs.begin(), candidateConfigs.end());
+  return candidateConfigs.front().second;
+}
+
+void DesignSpace::exploreDesignSpace(unsigned maxIterNum, float maxDistance) {
+  LLVM_DEBUG(llvm::dbgs() << "3.2 Explore the design space...\n";);
+  std::srand(std::time(0));
+
+  // Exploration loop of the dse.
+  for (unsigned i = 0; i < maxIterNum; ++i) {
+    bool foundValidNeighbor = false;
+    std::random_shuffle(paretoPoints.begin(), paretoPoints.end(),
+                        [&](int i) { return std::rand() % i; });
+
+    for (auto point : paretoPoints) {
+      if (!point.isActive)
+        continue;
+
+      auto closestNeighbor = getRandomClosestNeighbor(point, maxDistance);
+      if (!closestNeighbor) {
+        point.isActive = false;
+        continue;
+      }
+
+      foundValidNeighbor = true;
+      auto config = closestNeighbor.getValue();
+
+      LLVM_DEBUG(llvm::dbgs() << config << ",";);
+      evaluateTileConfig(config);
+      break;
+    }
+
+    // Early termination if no valid neighbor is found.
+    if (!foundValidNeighbor)
+      break;
+
+    // Update pareto points after each dse iteration.
+    updateParetoPoints();
+  }
+  LLVM_DEBUG(llvm::dbgs() << "\n\n";);
+}
+
 //===----------------------------------------------------------------------===//
 // Optimizer Class Definition
 //===----------------------------------------------------------------------===//
@@ -327,10 +399,9 @@ static int64_t getInnerParallelism(AffineForOp forOp) {
 }
 
 /// This is a temporary approach that does not scale.
-void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func, raw_ostream &os,
-                                              unsigned maxInitializeParallel) {
+void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func, raw_ostream &os) {
   estimator.estimateFunc(func);
-  if (getIntAttrValue(func, "dsp") > numDSP)
+  if (getIntAttrValue(func, "dsp") > maxDspNum)
     return;
 
   LLVM_DEBUG(auto latency = getIntAttrValue(func, "latency");
@@ -429,7 +500,7 @@ void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func, raw_ostream &os,
       estimator.estimateFunc(tmpFunc);
 
       // Pipeline the candidate loop or delve into child loops.
-      if (getIntAttrValue(tmpFunc, "dsp") <= numDSP)
+      if (getIntAttrValue(tmpFunc, "dsp") <= maxDspNum)
         applyFullyLoopUnrolling(*candidate.getBody());
       else {
         auto childForOps = candidate.getOps<AffineForOp>();
@@ -441,7 +512,7 @@ void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func, raw_ostream &os,
   }
 
   estimator.estimateFunc(func);
-  if (getIntAttrValue(func, "dsp") > numDSP)
+  if (getIntAttrValue(func, "dsp") > maxDspNum)
     return;
   LLVM_DEBUG(llvm::dbgs() << "1. Simplify loop nests structure.\n\n");
 
@@ -467,7 +538,7 @@ void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func, raw_ostream &os,
 
   // Estimate the current latency.
   estimator.estimateFunc(func);
-  if (getIntAttrValue(func, "dsp") > numDSP)
+  if (getIntAttrValue(func, "dsp") > maxDspNum)
     return;
   LLVM_DEBUG(llvm::dbgs() << "2. Apply loop perfection, loop order opt, and "
                              "remove variable loop bound.\n\n");
@@ -479,8 +550,9 @@ void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func, raw_ostream &os,
   LLVM_DEBUG(llvm::dbgs() << "3. Search for pareto design points...\n\n";);
 
   for (unsigned i = 0; i < targetNum; ++i) {
-    auto space = DesignSpace(func, targetBands[i], estimator);
-    space.initializeDesignSpace(maxInitializeParallel);
+    auto space = DesignSpace(func, targetBands[i], estimator, maxDspNum);
+    space.initializeDesignSpace(maxInitParallel);
+    space.exploreDesignSpace(maxIterNum, maxDistance);
     space.dumpDesignSpace(os);
   }
 }
@@ -500,7 +572,8 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
     // PYNQ-Z1 board.
     LatencyMap latencyMap;
     getLatencyMap(spec, latencyMap);
-    int64_t numDSP = ceil(spec.GetInteger("specification", "dsp", 220) * 1.1);
+    int64_t maxDspNum =
+        ceil(spec.GetInteger("specification", "dsp", 220) * 1.1);
 
     // Parse output file.
     std::string errorMessage;
@@ -509,14 +582,17 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
       emitError(module.getLoc(), errorMessage);
 
     // Initialize an performance and resource estimator.
+    // TODO: how to pass in these parameters?
     auto estimator = ScaleHLSEstimator(builder, latencyMap);
-    auto optimizer = ScaleHLSOptimizer(builder, estimator, numDSP);
+    auto optimizer =
+        ScaleHLSOptimizer(builder, estimator, maxDspNum, maxInitParallel,
+                          maxIterNum, maxDistance);
 
     // Optimize the top function.
     for (auto func : module.getOps<FuncOp>())
       if (auto topFunction = func->getAttrOfType<BoolAttr>("top_function"))
         if (topFunction.getValue())
-          optimizer.applyMultipleLevelDSE(func, output->os(), maxParallel);
+          optimizer.applyMultipleLevelDSE(func, output->os());
 
     output->keep();
   }

@@ -19,15 +19,21 @@ namespace scalehls {
 class ScaleHLSOptimizer : public ScaleHLSAnalysisBase {
 public:
   explicit ScaleHLSOptimizer(Builder &builder, ScaleHLSEstimator &estimator,
-                             int64_t numDSP)
-      : ScaleHLSAnalysisBase(builder), estimator(estimator), numDSP(numDSP) {}
+                             unsigned maxDspNum, unsigned maxInitParallel,
+                             unsigned maxIterNum, float maxDistance)
+      : ScaleHLSAnalysisBase(builder), estimator(estimator),
+        maxDspNum(maxDspNum), maxInitParallel(maxInitParallel),
+        maxIterNum(maxIterNum), maxDistance(maxDistance) {}
 
   /// This is a temporary approach that does not scale.
-  void applyMultipleLevelDSE(FuncOp func, raw_ostream &os,
-                             unsigned maxInitializeParallel = 16);
+  void applyMultipleLevelDSE(FuncOp func, raw_ostream &os);
 
   ScaleHLSEstimator &estimator;
-  int64_t numDSP;
+  unsigned maxDspNum;
+
+  unsigned maxInitParallel;
+  unsigned maxIterNum;
+  float maxDistance;
 };
 
 } // namespace scalehls
