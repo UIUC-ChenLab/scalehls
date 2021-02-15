@@ -184,11 +184,15 @@ static bool applySimplifyAffineIf(FuncOp func) {
 
     // Construct the constraints of the if statement. For now, we only add the
     // loop induction constraints and integer set constraint.
+    // TODO: handle unsuccessufl domain addition.
     FlatAffineConstraints constrs;
     constrs.addAffineIfOpDomain(ifOp);
     for (auto operand : operands)
-      if (isForInductionVar(operand))
-        constrs.addAffineForOpDomain(getForInductionVarOwner(operand));
+      if (isForInductionVar(operand)) {
+        auto iv = getForInductionVarOwner(operand);
+        if (failed(constrs.addAffineForOpDomain(iv)))
+          continue;
+      }
 
     bool alwaysTrue = false;
     bool alwaysFalse = false;

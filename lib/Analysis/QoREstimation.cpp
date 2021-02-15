@@ -294,15 +294,29 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
     auto loadStores = pair.second;
 
     // Walk through each pair of source and destination.
-    for (auto dstOp : loadStores)
-      for (auto srcOp : loadStores) {
-        if (dstOp == srcOp)
+    unsigned dstIndex = 1;
+    for (auto dstOp : loadStores) {
+      std::set<int64_t> safeSrcSchedules;
+      auto srcOps = SmallVector<Operation *, 16>(
+          llvm::drop_begin(loadStores, dstIndex++));
+
+      for (auto i = srcOps.rbegin(); i != srcOps.rend(); ++i) {
+        auto srcOp = *i;
+        auto srcBegin = getIntAttrValue(srcOp, "schedule_begin");
+        auto srcEnd = getIntAttrValue(srcOp, "schedule_end");
+
+        // Memory operations that are scheduled overlapped MUST not have
+        // dependency with each other, thus once one of them has dependency with
+        // dstOp, all other srcOps MUST not have dependency and can be skipped.
+        if (safeSrcSchedules.count(srcBegin)) {
+          for (auto schedule = srcBegin + 1; schedule < srcEnd; ++schedule)
+            safeSrcSchedules.insert(schedule);
           continue;
+        }
 
         // If delay is smaller than the current II, stop and continue because
         // the minimum distance is one.
-        auto delay = getIntAttrValue(dstOp, "schedule_end") -
-                     getIntAttrValue(srcOp, "schedule_begin");
+        auto delay = getIntAttrValue(dstOp, "schedule_end") - srcBegin;
         if (delay <= II)
           continue;
 
@@ -328,6 +342,8 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
               /*allowRAR=*/true);
 
           if (hasDependence(result)) {
+            for (auto schedule = srcBegin; schedule < srcEnd; ++schedule)
+              safeSrcSchedules.insert(schedule);
             int64_t distance = 0;
 
             if (dstMuxSize > 3 || srcMuxSize > 3) {
@@ -368,6 +384,7 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
           }
         }
       }
+    }
   }
   return II;
 }
@@ -697,7 +714,7 @@ Optional<Schedule> ScaleHLSEstimator::estimateBlock(Block &block,
             continue;
 
           // If either the depOp or the current operation is a function call,
-          // depOpendency exists and the schedule level should be updated.
+          // dependency exists and the schedule level should be updated.
           if (isa<CallOp>(op) || isa<CallOp>(depOp)) {
             opBegin = max(opBegin, depOpEnd);
             continue;
