@@ -8,7 +8,6 @@
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Support/FileUtilities.h"
 #include "scalehls/Transforms/Passes.h"
-#include "scalehls/Transforms/Utils.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ToolOutputFile.h"
 #include <numeric>
@@ -19,95 +18,50 @@
 using namespace mlir;
 using namespace scalehls;
 
-using TileConfig = unsigned;
+/// Update paretoPoints to remove design points that are not pareto frontiers.
+template <typename DesignPointType>
+static void updateParetoPoints(SmallVector<DesignPointType, 16> &paretoPoints) {
+  // Sort the pareto points with in an ascending order of latency and the an
+  // ascending order of dsp number.
+  auto latencyThenDspNum = [&](const DesignPointType &a,
+                               const DesignPointType &b) {
+    return (a.latency < b.latency ||
+            (a.latency == b.latency && a.dspNum < b.dspNum));
+  };
+  std::sort(paretoPoints.begin(), paretoPoints.end(), latencyThenDspNum);
+
+  // Find pareto frontiers. After the sorting, the first design point must be a
+  // pareto point.
+  auto paretoPoint = paretoPoints[0];
+  auto paretoLatency = paretoPoint.latency;
+  auto paretoDspNum = paretoPoint.dspNum;
+  SmallVector<DesignPointType, 16> frontiers;
+
+  for (auto point : paretoPoints) {
+    auto tmpLatency = point.latency;
+    auto tmpDspNum = point.dspNum;
+
+    if (tmpDspNum < paretoDspNum) {
+      frontiers.push_back(point);
+
+      paretoPoint = point;
+      paretoLatency = tmpLatency;
+      paretoDspNum = tmpDspNum;
+
+    } else if (tmpDspNum == paretoDspNum && tmpLatency == paretoLatency)
+      frontiers.push_back(point);
+  }
+
+  paretoPoints = frontiers;
+}
 
 //===----------------------------------------------------------------------===//
-// DesignSpace Class Declaration
+// LoopDesignSpace Class Definition
 //===----------------------------------------------------------------------===//
 
-namespace {
-/// A struct for holding a design point in the design space.
-struct DesignPoint {
-  explicit DesignPoint(int64_t latency, int64_t dspNum, TileConfig tileConfig,
-                       unsigned targetII)
-      : latency(latency), dspNum(dspNum), tileConfig(tileConfig),
-        targetII(targetII) {}
-
-  int64_t latency;
-  int64_t dspNum;
-
-  TileConfig tileConfig;
-  unsigned targetII;
-
-  bool isActive = true;
-};
-} // namespace
-
-namespace {
-class DesignSpace {
-public:
-  explicit DesignSpace(FuncOp func, AffineLoopBand &band,
-                       ScaleHLSEstimator &estimator, unsigned maxDspNum);
-
-  /// Return the actual tile vector given a tile config.
-  TileList getTileList(TileConfig config);
-
-  /// Calculate the Euclid distance of config a and config b.
-  float getTileConfigDistance(TileConfig configA, TileConfig configB);
-
-  /// Update paretoPoints to remove design points that are not pareto frontiers.
-  void updateParetoPoints();
-
-  /// Evaluate all design points under the given tile config.
-  bool evaluateTileConfig(TileConfig config);
-
-  /// Initialize the design space.
-  void initializeDesignSpace(unsigned maxInitParallel);
-
-  /// Dump pareto and non-pareto points which have been evaluated in the design
-  /// space to a csv output file.
-  void dumpDesignSpace(raw_ostream &os);
-
-  /// Get a random tile config which is one of the closest neighbors of "point".
-  Optional<TileConfig> getRandomClosestNeighbor(DesignPoint point,
-                                                float maxDistance);
-
-  void exploreDesignSpace(unsigned maxIterNum, float maxDistance);
-
-  /// Stores current pareto frontiers and all evaluated design points. The
-  /// "allPoints" is mainly used for design space dumping, which is actually not
-  /// used in the DSE procedure.
-  SmallVector<DesignPoint, 16> paretoPoints;
-  SmallVector<DesignPoint, 16> allPoints;
-
-  /// Associated function, loop band, and estimator.
-  FuncOp func;
-  AffineLoopBand &band;
-  ScaleHLSEstimator &estimator;
-  unsigned maxDspNum;
-
-  /// Records the trip count of each loop level.
-  SmallVector<unsigned, 8> tripCountList;
-
-  /// The dimension of this list is same to the number of loops in the loop
-  /// band. The n-th element of this list stores all valid tile sizes of the
-  /// n-th loop in the loop band.
-  SmallVector<SmallVector<unsigned, 8>, 8> validTileSizesList;
-
-  /// Holds the total number of valid tile size combinations.
-  unsigned validTileConfigNum;
-
-  /// Holds all tile configs that have not been estimated.
-  std::set<TileConfig> unestimatedTileConfigs;
-};
-} // namespace
-
-//===----------------------------------------------------------------------===//
-// DesignSpace Class Definition
-//===----------------------------------------------------------------------===//
-
-DesignSpace::DesignSpace(FuncOp func, AffineLoopBand &band,
-                         ScaleHLSEstimator &estimator, unsigned maxDspNum)
+LoopDesignSpace::LoopDesignSpace(FuncOp func, AffineLoopBand &band,
+                                 ScaleHLSEstimator &estimator,
+                                 unsigned maxDspNum)
     : func(func), band(band), estimator(estimator), maxDspNum(maxDspNum) {
   // Initialize tile vector related members.
   validTileConfigNum = 1;
@@ -140,7 +94,7 @@ DesignSpace::DesignSpace(FuncOp func, AffineLoopBand &band,
 }
 
 /// Return the actual tile vector given a tile config.
-TileList DesignSpace::getTileList(TileConfig config) {
+TileList LoopDesignSpace::getTileList(TileConfig config) {
   assert(config < validTileConfigNum && "invalid tile config");
 
   TileList tileList;
@@ -156,8 +110,8 @@ TileList DesignSpace::getTileList(TileConfig config) {
 }
 
 /// Calculate the Euclid distance of config a and config b.
-float DesignSpace::getTileConfigDistance(TileConfig configA,
-                                         TileConfig configB) {
+float LoopDesignSpace::getTileConfigDistance(TileConfig configA,
+                                             TileConfig configB) {
   assert(configA < validTileConfigNum && configB < validTileConfigNum &&
          "invalid tile config");
 
@@ -175,43 +129,8 @@ float DesignSpace::getTileConfigDistance(TileConfig configA,
   return sqrtf(distanceSquare);
 }
 
-/// Update paretoPoints to remove design points that are not pareto frontiers.
-void DesignSpace::updateParetoPoints() {
-  // Sort the pareto points with in an ascending order of latency and the an
-  // ascending order of dsp number.
-  auto latencyThenDspNum = [&](const DesignPoint &a, const DesignPoint &b) {
-    return (a.latency < b.latency ||
-            (a.latency == b.latency && a.dspNum < b.dspNum));
-  };
-  std::sort(paretoPoints.begin(), paretoPoints.end(), latencyThenDspNum);
-
-  // Find pareto frontiers. After the sorting, the first design point must be a
-  // pareto point.
-  auto paretoPoint = paretoPoints[0];
-  auto paretoLatency = paretoPoint.latency;
-  auto paretoDspNum = paretoPoint.dspNum;
-  SmallVector<DesignPoint, 16> frontiers;
-
-  for (auto point : paretoPoints) {
-    auto tmpLatency = point.latency;
-    auto tmpDspNum = point.dspNum;
-
-    if (tmpDspNum < paretoDspNum) {
-      frontiers.push_back(point);
-
-      paretoPoint = point;
-      paretoLatency = tmpLatency;
-      paretoDspNum = tmpDspNum;
-
-    } else if (tmpDspNum == paretoDspNum && tmpLatency == paretoLatency)
-      frontiers.push_back(point);
-  }
-
-  paretoPoints = frontiers;
-}
-
 /// Evaluate all design points under the given tile config.
-bool DesignSpace::evaluateTileConfig(TileConfig config) {
+bool LoopDesignSpace::evaluateTileConfig(TileConfig config) {
   // If the current tile config is already estimated, return true.
   if (!unestimatedTileConfigs.count(config))
     return true;
@@ -257,7 +176,7 @@ bool DesignSpace::evaluateTileConfig(TileConfig config) {
   for (auto tmpII = II; tmpII <= iterLatency; ++tmpII) {
     auto tmpDspNum = std::max(shareDspNum, noShareDspNum / tmpII);
     auto tmpLatency = iterLatency + tmpII * (iterNum - 1);
-    auto point = DesignPoint(tmpLatency, tmpDspNum, config, tmpII);
+    auto point = LoopDesignPoint(tmpLatency, tmpDspNum, config, tmpII);
 
     allPoints.push_back(point);
     if (tmpDspNum <= maxDspNum)
@@ -272,7 +191,7 @@ bool DesignSpace::evaluateTileConfig(TileConfig config) {
 }
 
 /// Initialize the design space.
-void DesignSpace::initializeDesignSpace(unsigned maxInitParallel) {
+void LoopDesignSpace::initializeLoopDesignSpace(unsigned maxInitParallel) {
   LLVM_DEBUG(llvm::dbgs() << "3.1 Initialize the design space...\n";);
 
   for (TileConfig config = 0; config < validTileConfigNum; ++config) {
@@ -290,12 +209,12 @@ void DesignSpace::initializeDesignSpace(unsigned maxInitParallel) {
   }
 
   LLVM_DEBUG(llvm::dbgs() << "\n\n");
-  updateParetoPoints();
+  updateParetoPoints(paretoPoints);
 }
 
 /// Dump pareto and non-pareto points which have been evaluated in the design
 /// space to a csv output file.
-void DesignSpace::dumpDesignSpace(raw_ostream &os) {
+void LoopDesignSpace::dumpLoopDesignSpace(raw_ostream &os) {
   // Print header row.
   for (unsigned i = 0; i < tripCountList.size(); ++i)
     os << "l" << i << ",";
@@ -321,8 +240,9 @@ void DesignSpace::dumpDesignSpace(raw_ostream &os) {
 }
 
 /// Get a random tile config which is one of the closest neighbors of "point".
-Optional<TileConfig> DesignSpace::getRandomClosestNeighbor(DesignPoint point,
-                                                           float maxDistance) {
+Optional<TileConfig>
+LoopDesignSpace::getRandomClosestNeighbor(LoopDesignPoint point,
+                                          float maxDistance) {
   SmallVector<std::pair<float, TileConfig>, 8> candidateConfigs;
 
   // Traverse all unestimated tile configs and collect all neighbors.
@@ -342,7 +262,8 @@ Optional<TileConfig> DesignSpace::getRandomClosestNeighbor(DesignPoint point,
   return candidateConfigs.front().second;
 }
 
-void DesignSpace::exploreDesignSpace(unsigned maxIterNum, float maxDistance) {
+void LoopDesignSpace::exploreLoopDesignSpace(unsigned maxIterNum,
+                                             float maxDistance) {
   LLVM_DEBUG(llvm::dbgs() << "3.2 Explore the design space...\n";);
   std::srand(std::time(0));
 
@@ -375,10 +296,14 @@ void DesignSpace::exploreDesignSpace(unsigned maxIterNum, float maxDistance) {
       break;
 
     // Update pareto points after each dse iteration.
-    updateParetoPoints();
+    updateParetoPoints(paretoPoints);
   }
   LLVM_DEBUG(llvm::dbgs() << "\n\n";);
 }
+
+//===----------------------------------------------------------------------===//
+// FuncDesignSpace Class Definition
+//===----------------------------------------------------------------------===//
 
 //===----------------------------------------------------------------------===//
 // Optimizer Class Definition
@@ -398,55 +323,40 @@ static int64_t getInnerParallelism(AffineForOp forOp) {
   return std::max(count, (int64_t)1);
 }
 
-/// This is a temporary approach that does not scale.
-void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func, raw_ostream &os) {
-  estimator.estimateFunc(func);
-  if (getIntAttrValue(func, "dsp") > maxDspNum)
-    return;
-
-  LLVM_DEBUG(auto latency = getIntAttrValue(func, "latency");
-             auto dspNum = getIntAttrValue(func, "dsp");
-
-             llvm::dbgs() << "\nStart the design space exploration.\n";
-             llvm::dbgs() << "Initial clock cycle is " << Twine(latency)
-                          << ", DSP usage is " << Twine(dspNum) << ".\n\n";);
-
-  //===--------------------------------------------------------------------===//
-  // STAGE 1: Simplify Loop Nests Structure
-  //===--------------------------------------------------------------------===//
-
-  // Simplify loop nests by pipelining. If we take the following loops as
-  // example, where each nodes represents one sequential loop nests (LN). In the
-  // simplification, we'll first try to pipeline LN1 and LN6. Suppose pipelining
-  // LN6 meets the resource constaints while pipelining LN1 not, we'll pipeline
-  // LN6 (fully unroll LN7 and LN8) and keep LN1 untouched. In the next step,
-  // we'll look into LN1 and check whether LN2 can be pipelined. Suppose
-  // pipelining LN2 meets the resource constraints, we'll pipeling LN2 (fully
-  // unroll LN7 and LN8). Note that in this simplification, all LNs that don't
-  // contain any LNs will not be pipelined, such as LN5. Their optimization will
-  // be explored later. This procedure will recursively applied to inner LNs
-  // until no eligible LN exists.
-  //
-  //     LN1      LN6
-  //      |        |
-  //     / \      / \
-  //   LN2 LN5  LN7 LN8
-  //    |
-  //   / \
-  // LN3 LN4
-  //
-  // After the simplification, the loop becomes the following one, where LN1 has
-  // been proved untouchable as loop pipelining is the primary optimization that
-  // consumes the least extra resources. Formally, in the simplified function,
-  // all non-leaf LNs is untouchable (LN1) and only leaf LNs can be further
-  // optimized (LN2, LN5, and LN6).
-  //
-  //     LN1      LN6
-  //      |
-  //     / \
-  //   LN2 LN5
-  //
-  // TODO: there is a large design space in this simplification.
+/// Simplify loop nests by unrolling. If we take the following loops as example,
+/// where each nodes represents one sequential loop nests (LN). In the
+/// simplification, we'll first try to pipeline LN1 and LN6. Suppose unrolling
+/// LN6's region meets the resource constaints while pipelining LN1 not, we'll
+/// unroll LN6's region (fully unroll LN7 and LN8) and keep LN1 untouched. In
+/// the next step, we'll look into LN1 and check whether LN2's region can be
+/// unrolled. Suppose unrolling LN2's region meets the resource constraints,
+/// we'll unrolling LN2's region (fully unroll LN7 and LN8). Note that in this
+/// simplification, all LNs that don't contain any LNs will not be touched,
+/// such as LN5. Their optimization will be explored later. This procedure will
+/// recursively applied to inner LNs until no eligible LN exists.
+///
+///     LN1      LN6
+///      |        |
+///     / \      / \
+///   LN2 LN5  LN7 LN8
+///    |
+///   / \
+/// LN3 LN4
+///
+/// After the simplification, the loop becomes the following one, where LN1 has
+/// been proved untouchable as region loop unrolling is the primary optimization
+/// that consumes the least extra resources. Formally, in the simplified
+/// function, all non-leaf LNs is untouchable (LN1) and only leaf LNs can be
+/// further optimized (LN2, LN5, and LN6).
+///
+///     LN1      LN6
+///      |
+///     / \
+///   LN2 LN5
+///
+/// TODO: there is a large design space in this simplification.
+bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
+  LLVM_DEBUG(llvm::dbgs() << "1. Simplify loop nests structure.\n\n");
 
   auto funcForOps = func.getOps<AffineForOp>();
   auto targetLoops =
@@ -513,20 +423,21 @@ void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func, raw_ostream &os) {
 
   estimator.estimateFunc(func);
   if (getIntAttrValue(func, "dsp") > maxDspNum)
-    return;
-  LLVM_DEBUG(llvm::dbgs() << "1. Simplify loop nests structure.\n\n");
+    return false;
 
-  //===--------------------------------------------------------------------===//
-  // STAGE 2: Loop Bands Optimization
-  //===--------------------------------------------------------------------===//
+  return true;
+}
 
-  // Optimize leaf loop nests. Different optimization conbinations will be
-  // applied to each leaf LNs, and the best one which meets the resource
-  // constraints will be picked as the final solution.
-  // TODO: better handle variable bound kernels.
+/// Optimize leaf loop nests. Different optimization conbinations will be
+/// applied to each leaf LNs, and the best one which meets the resource
+/// constraints will be picked as the final solution.
+/// TODO: better handle variable bound kernels.
+bool ScaleHLSOptimizer::optimizeLoopBands(FuncOp func) {
+  LLVM_DEBUG(llvm::dbgs() << "2. Apply loop perfection, loop order opt, and "
+                             "remove variable loop bound.\n\n");
+
   AffineLoopBands targetBands;
   getLoopBands(func.front(), targetBands);
-  unsigned targetNum = targetBands.size();
 
   // Loop perfection, remove variable bound, and loop order optimization are
   // always applied for the convenience of polyhedral optimizations.
@@ -539,23 +450,70 @@ void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func, raw_ostream &os) {
   // Estimate the current latency.
   estimator.estimateFunc(func);
   if (getIntAttrValue(func, "dsp") > maxDspNum)
-    return;
-  LLVM_DEBUG(llvm::dbgs() << "2. Apply loop perfection, loop order opt, and "
-                             "remove variable loop bound.\n\n");
+    return false;
 
-  //===--------------------------------------------------------------------===//
-  // STAGE 3: Search for pareto frontiers
-  //===--------------------------------------------------------------------===//
-
-  LLVM_DEBUG(llvm::dbgs() << "3. Search for pareto design points...\n\n";);
-
-  for (unsigned i = 0; i < targetNum; ++i) {
-    auto space = DesignSpace(func, targetBands[i], estimator, maxDspNum);
-    space.initializeDesignSpace(maxInitParallel);
-    space.exploreDesignSpace(maxIterNum, maxDistance);
-    space.dumpDesignSpace(os);
-  }
+  return true;
 }
+
+///
+bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func) {
+  LLVM_DEBUG(llvm::dbgs() << "3. Explore the function design space.\n\n";);
+
+  AffineLoopBands targetBands;
+  getLoopBands(func.front(), targetBands);
+  unsigned targetNum = targetBands.size();
+
+  // Search for the pareto frontiers of each target loop band.
+  SmallVector<LoopDesignSpace, 4> LoopdesignSpaces;
+  for (unsigned i = 0; i < targetNum; ++i) {
+    auto space = LoopDesignSpace(func, targetBands[i], estimator, maxDspNum);
+    space.initializeLoopDesignSpace(maxInitParallel);
+    space.exploreLoopDesignSpace(maxIterNum, maxDistance);
+    LoopdesignSpaces.push_back(space);
+  }
+
+  // Combine all design spaces using dynamic programming. This method is
+  // temporary and cannot scale to a large number of loops.
+  SmallVector<FuncDesignPoint, 16> funcParetoPoints;
+  for (unsigned i = 0; i < targetNum; ++i) {
+  }
+
+  return true;
+}
+
+void ScaleHLSOptimizer::emitDebugInfo(FuncOp func, std::string message) {
+  LLVM_DEBUG(estimator.estimateFunc(func);
+             auto latency = getIntAttrValue(func, "latency");
+             auto dspNum = getIntAttrValue(func, "dsp");
+
+             llvm::dbgs() << message + "\n";
+             llvm::dbgs() << "The clock cycle is " << Twine(latency)
+                          << ", DSP usage is " << Twine(dspNum) << ".\n\n";);
+}
+
+/// This is a temporary approach that does not scale.
+void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func, raw_ostream &os) {
+  emitDebugInfo(func, "Start multiple level DSE.");
+
+  // Simplify loop nests by unrolling.
+  if (!simplifyLoopNests(func))
+    return emitDebugInfo(func, "Finish multiple level DSE.");
+
+  // Optimize loop bands by loop perfection, loop order permutation, and loop
+  // rectangularization.
+  if (!optimizeLoopBands(func))
+    return emitDebugInfo(func, "Finish multiple level DSE.");
+
+  // Explore the design space through a multiple level approach.
+  if (!exploreDesignSpace(func))
+    return emitDebugInfo(func, "Finish multiple level DSE.");
+
+  return emitDebugInfo(func, "Finish multiple level DSE.");
+}
+
+//===----------------------------------------------------------------------===//
+// MultipleLevelDSE Entry
+//===----------------------------------------------------------------------===//
 
 namespace {
 struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {

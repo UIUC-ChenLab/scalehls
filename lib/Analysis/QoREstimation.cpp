@@ -390,6 +390,18 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
 }
 
 bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
+  // If a loop is marked as no_touch, then directly infer the schedule_end with
+  // the exist latency.
+  if (getBoolAttrValue(op, "no_touch")) {
+    auto latency = getIntAttrValue(op, "latency");
+    auto dspNum = getIntAttrValue(op, "dsp");
+
+    if (latency != -1 && dspNum != -1) {
+      setScheduleValue(op, begin, begin + latency + 2);
+      return true;
+    }
+  }
+
   // Set an attribute indicating the trip count. For now, we assume all loops
   // have static loop bound.
   int64_t tripCount = 1;
