@@ -50,6 +50,45 @@ public:
   explicit ScaleHLSEstimator(Builder &builder, LatencyMap &latencyMap)
       : ScaleHLSAnalysisBase(builder), latencyMap(latencyMap) {}
 
+  void estimateFunc(FuncOp func);
+  void estimateLoop(AffineForOp loop);
+
+  using HLSCppVisitorBase::visitOp;
+  bool visitUnhandledOp(Operation *op, int64_t begin) {
+    // Default latency of any unhandled operation is 0.
+    return setScheduleValue(op, begin, begin), true;
+  }
+
+  bool visitOp(AffineForOp op, int64_t begin);
+  bool visitOp(AffineIfOp op, int64_t begin);
+  bool visitOp(CallOp op, int64_t begin);
+  bool visitOp(AffineLoadOp op, int64_t begin) {
+    return estimateLoadStore(op, begin), true;
+  }
+  bool visitOp(AffineStoreOp op, int64_t begin) {
+    return estimateLoadStore(op, begin), true;
+  }
+  bool visitOp(LoadOp op, int64_t begin) {
+    return setScheduleValue(op, begin, begin + 2), true;
+  }
+  bool visitOp(StoreOp op, int64_t begin) {
+    return setScheduleValue(op, begin, begin + 1), true;
+  }
+
+  /// Handle operations with profiled latency.
+#define HANDLE(OPTYPE, KEYNAME)                                                \
+  bool visitOp(OPTYPE op, int64_t begin) {                                     \
+    setScheduleValue(op, begin, begin + latencyMap[KEYNAME] + 1);              \
+    return true;                                                               \
+  }
+  HANDLE(AddFOp, "fadd");
+  HANDLE(SubFOp, "fadd");
+  HANDLE(MulFOp, "fmul");
+  HANDLE(DivFOp, "fdiv");
+  HANDLE(CmpFOp, "fcmp");
+#undef HANDLE
+
+private:
   // For storing all dependencies indexed by the dependency source operation.
   using Depends = SmallVector<Operation *, 16>;
   using DependsMap = DenseMap<Operation *, Depends>;
@@ -86,50 +125,14 @@ public:
     setAttrValue(op, "schedule_end", end);
   }
 
-  using HLSCppVisitorBase::visitOp;
-  bool visitUnhandledOp(Operation *op, int64_t begin) {
-    // Default latency of any unhandled operation is 0.
-    return setScheduleValue(op, begin, begin), true;
-  }
-
   /// LoadOp and StoreOp related methods.
   void getPartitionIndices(Operation *op);
   void estimateLoadStore(Operation *op, int64_t begin);
-  bool visitOp(AffineLoadOp op, int64_t begin) {
-    return estimateLoadStore(op, begin), true;
-  }
-  bool visitOp(AffineStoreOp op, int64_t begin) {
-    return estimateLoadStore(op, begin), true;
-  }
-  bool visitOp(LoadOp op, int64_t begin) {
-    return setScheduleValue(op, begin, begin + 2), true;
-  }
-  bool visitOp(StoreOp op, int64_t begin) {
-    return setScheduleValue(op, begin, begin + 1), true;
-  }
 
   /// AffineForOp related methods.
   int64_t getResMinII(int64_t begin, int64_t end, MemAccessesMap &map);
   int64_t getDepMinII(int64_t II, FuncOp func, MemAccessesMap &map);
   int64_t getDepMinII(int64_t II, AffineForOp forOp, MemAccessesMap &map);
-  bool visitOp(AffineForOp op, int64_t begin);
-
-  /// Other operation handlers.
-  bool visitOp(AffineIfOp op, int64_t begin);
-  bool visitOp(CallOp op, int64_t begin);
-
-  /// Handle operations with profiled latency.
-#define HANDLE(OPTYPE, KEYNAME)                                                \
-  bool visitOp(OPTYPE op, int64_t begin) {                                     \
-    setScheduleValue(op, begin, begin + latencyMap[KEYNAME] + 1);              \
-    return true;                                                               \
-  }
-  HANDLE(AddFOp, "fadd");
-  HANDLE(SubFOp, "fadd");
-  HANDLE(MulFOp, "fmul");
-  HANDLE(DivFOp, "fdiv");
-  HANDLE(CmpFOp, "fcmp");
-#undef HANDLE
 
   /// Block scheduler and estimator.
   int64_t getDspAllocMap(Block &block, ResourceAllocMap &faddMap,
@@ -138,10 +141,6 @@ public:
   Optional<Schedule> estimateBlock(Block &block, int64_t begin);
   void reverseSchedule(Block &block);
   void initEstimator(Block &block);
-
-  /// Estimator entries.
-  void estimateFunc(FuncOp func);
-  void estimateLoop(AffineForOp loop);
 
   DependsMap dependsMap;
   MemPortInfosMap memPortInfosMap;

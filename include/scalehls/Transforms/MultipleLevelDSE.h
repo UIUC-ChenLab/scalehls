@@ -16,7 +16,7 @@ namespace scalehls {
 using TileConfig = unsigned;
 
 //===----------------------------------------------------------------------===//
-// DesignPoint Class Declarations
+// LoopDesignSpace Class Declaration
 //===----------------------------------------------------------------------===//
 
 struct LoopDesignPoint {
@@ -33,20 +33,6 @@ struct LoopDesignPoint {
 
   bool isActive = true;
 };
-
-struct FuncDesignPoint {
-  explicit FuncDesignPoint(int64_t latency, int64_t dspNum)
-      : latency(latency), dspNum(dspNum) {}
-
-  int64_t latency;
-  int64_t dspNum;
-
-  SmallVector<LoopDesignPoint, 4> loopDesignPoints;
-};
-
-//===----------------------------------------------------------------------===//
-// LoopDesignSpace Class Declaration
-//===----------------------------------------------------------------------===//
 
 class LoopDesignSpace {
 public:
@@ -93,7 +79,7 @@ public:
   /// The dimension of this list is same to the number of loops in the loop
   /// band. The n-th element of this list stores all valid tile sizes of the
   /// n-th loop in the loop band.
-  SmallVector<SmallVector<unsigned, 8>, 8> validTileSizesList;
+  std::vector<SmallVector<unsigned, 8>> validTileSizesList;
 
   /// Holds the total number of valid tile size combinations.
   unsigned validTileConfigNum;
@@ -106,14 +92,58 @@ public:
 // FuncDesignSpace Class Declaration
 //===----------------------------------------------------------------------===//
 
+/// Each function design point contains multiple loop design point.
+struct FuncDesignPoint {
+  explicit FuncDesignPoint(int64_t latency, int64_t dspNum)
+      : latency(latency), dspNum(dspNum) {}
+
+  explicit FuncDesignPoint(int64_t latency, int64_t dspNum,
+                           LoopDesignPoint point)
+      : latency(latency), dspNum(dspNum) {
+    loopDesignPoints.push_back(point);
+  }
+
+  explicit FuncDesignPoint(int64_t latency, int64_t dspNum,
+                           SmallVector<LoopDesignPoint, 4> &points)
+      : latency(latency), dspNum(dspNum) {
+    loopDesignPoints = points;
+  }
+
+  int64_t latency;
+  int64_t dspNum;
+
+  SmallVector<LoopDesignPoint, 4> loopDesignPoints;
+};
+
 class FuncDesignSpace {
 public:
-  /// Associated function and estimator.
+  explicit FuncDesignSpace(FuncOp func,
+                           SmallVector<LoopDesignSpace, 4> &loopDesignSpaces,
+                           ScaleHLSEstimator &estimator, unsigned maxDspNum)
+      : func(func), loopDesignSpaces(loopDesignSpaces), estimator(estimator),
+        maxDspNum(maxDspNum) {
+    AffineLoopBands targetBands;
+    getLoopBands(func.front(), targetBands);
+
+    for (auto &band : targetBands) {
+      targetLoops.push_back(band.front());
+      estimator.setAttrValue(band.front(), "no_touch", true);
+    }
+  }
+
+  void combLoopDesignSpaces();
+
+  void dumpFuncDesignSpace(raw_ostream &os);
+
+  SmallVector<FuncDesignPoint, 16> paretoPoints;
+
+  /// Associated function, loop design spaces, and estimator.
   FuncOp func;
+  SmallVector<LoopDesignSpace, 4> &loopDesignSpaces;
   ScaleHLSEstimator &estimator;
   unsigned maxDspNum;
 
-  SmallVector<FuncDesignPoint, 16> paretoPoints;
+  SmallVector<AffineForOp, 4> targetLoops;
 };
 
 //===----------------------------------------------------------------------===//
@@ -129,11 +159,11 @@ public:
         maxDspNum(maxDspNum), maxInitParallel(maxInitParallel),
         maxIterNum(maxIterNum), maxDistance(maxDistance) {}
 
+  bool emitDebugInfo(FuncOp func, std::string message);
+
   bool simplifyLoopNests(FuncOp func);
   bool optimizeLoopBands(FuncOp func);
-  bool exploreDesignSpace(FuncOp func);
-
-  void emitDebugInfo(FuncOp func, std::string message);
+  bool exploreDesignSpace(FuncOp func, raw_ostream &os);
 
   void applyMultipleLevelDSE(FuncOp func, raw_ostream &os);
 
