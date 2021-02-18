@@ -333,6 +333,11 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
         MemRefAccess dstAccess(dstOp);
         MemRefAccess srcAccess(srcOp);
 
+        // If depAnalysis is not set, only when the two memref accesses are
+        // identical, we analyze their dependency.
+        if (!depAnalysis && dstAccess != srcAccess)
+          continue;
+
         for (unsigned depth = startLevel; depth <= endLevel; ++depth) {
           FlatAffineConstraints depConstrs;
           SmallVector<DependenceComponent, 2> depComps;
@@ -547,7 +552,7 @@ bool ScaleHLSEstimator::visitOp(CallOp op, int64_t begin) {
   auto subFunc = dyn_cast<FuncOp>(callee);
   assert(subFunc && "callable is not a function operation");
 
-  ScaleHLSEstimator estimator(builder, latencyMap);
+  ScaleHLSEstimator estimator(builder, latencyMap, depAnalysis);
   estimator.estimateFunc(subFunc);
 
   // We assume enter and leave the subfunction require extra 2 clock cycles.
@@ -750,6 +755,11 @@ Optional<Schedule> ScaleHLSEstimator::estimateBlock(Block &block,
           auto opAccess = MemRefAccess(op);
           auto depOpAccess = MemRefAccess(depOp);
 
+          // If depAnalysis is not set, only when the two memref accesses are
+          // identical, we analyze their dependency.
+          if (!depAnalysis && opAccess != depOpAccess)
+            continue;
+
           auto loopDepth = getNumCommonSurroundingLoops(*op, *depOp);
           for (unsigned depth = 1; depth <= loopDepth + 1; ++depth) {
             FlatAffineConstraints dependConstrs;
@@ -922,10 +932,9 @@ void ScaleHLSEstimator::estimateFunc(FuncOp func) {
   setResourceValue(func, resource);
 }
 
-void ScaleHLSEstimator::estimateLoop(AffineForOp loop) {
-  initEstimator(*loop.getBody());
+void ScaleHLSEstimator::estimateLoop(AffineForOp loop, FuncOp func) {
+  initEstimator(func.getBody().front());
   dispatchVisitor(loop, 0);
-  reverseSchedule(*loop.getBody());
 }
 
 //===----------------------------------------------------------------------===//
@@ -963,7 +972,8 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     for (auto func : module.getOps<FuncOp>())
       if (auto topFunction = func->getAttrOfType<BoolAttr>("top_function"))
         if (topFunction.getValue())
-          ScaleHLSEstimator(builder, latencyMap).estimateFunc(func);
+          ScaleHLSEstimator(builder, latencyMap, depAnalysis)
+              .estimateFunc(func);
   }
 };
 } // namespace

@@ -32,6 +32,9 @@ def MultipleLevelDSE : Pass<"multiple-level-dse", "ModuleOp"> {
     Option<"outputFile", "output-file", "std::string",
            /*default=*/"\"-\"", "File path: the output file path">,
 
+    Option<"depAnalysis", "dep-analysis", "bool", /*default=*/"false",
+           "Whether a comprehensive dependency analysis is conducted">,
+
     Option<"maxInitParallel", "max-init-parallel", "unsigned", /*default=*/"16",
            "Positive number: the maximum parallelism of initialization">,
     Option<"maxIterNum", "max-iter-num", "unsigned", /*default=*/"8",

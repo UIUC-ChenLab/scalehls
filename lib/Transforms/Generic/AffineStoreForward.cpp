@@ -107,6 +107,10 @@ void AffineStoreForwardImpl::forwardStoreToLoad(AffineReadOpInterface loadOp) {
     unsigned d;
     // Dependences at loop depth <= minSurroundingLoops do NOT matter.
     for (d = nsLoops + 1; d > minSurroundingLoops; d--) {
+      // TODO: this is a progressive assumption.
+      if (srcAccess != destAccess)
+        continue;
+
       DependenceResult result = checkMemrefAccessDependence(
           srcAccess, destAccess, d, &dependenceConstraints,
           /*dependenceComponents=*/nullptr);

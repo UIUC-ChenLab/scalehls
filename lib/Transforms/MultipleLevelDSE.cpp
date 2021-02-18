@@ -162,7 +162,7 @@ bool LoopDesignSpace::evaluateTileConfig(TileConfig config) {
   if (!applyOptStrategy(tmpBand, func, tileList, (unsigned)1))
     return false;
   tmpOuterLoop = tmpBand.front();
-  estimator.estimateLoop(tmpOuterLoop);
+  estimator.estimateLoop(tmpOuterLoop, func);
 
   // Fetch latency and resource utilization.
   auto tmpInnerLoop = tmpBand.back();
@@ -572,14 +572,14 @@ bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, raw_ostream &os) {
     LLVM_DEBUG(llvm::dbgs() << "Loop band " << i << ": ";);
     space.exploreLoopDesignSpace(maxIterNum, maxDistance);
     loopSpaces.push_back(space);
-    space.dumpLoopDesignSpace(os);
+    // space.dumpLoopDesignSpace(os);
   }
 
   // Combine all loop design spaces into a function design space.
   tmpFunc = func.clone();
   auto funcSpace = FuncDesignSpace(tmpFunc, loopSpaces, estimator, maxDspNum);
   funcSpace.combLoopDesignSpaces();
-  // funcSpace.dumpFuncDesignSpace(os);
+  funcSpace.dumpFuncDesignSpace(os);
 
   // Apply the best function design point under the constraints.
   for (auto &funcPoint : funcSpace.paretoPoints) {
@@ -651,7 +651,7 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
 
     // Initialize an performance and resource estimator.
     // TODO: how to pass in these parameters?
-    auto estimator = ScaleHLSEstimator(builder, latencyMap);
+    auto estimator = ScaleHLSEstimator(builder, latencyMap, depAnalysis);
     auto optimizer =
         ScaleHLSOptimizer(builder, estimator, maxDspNum, maxInitParallel,
                           maxIterNum, maxDistance);
