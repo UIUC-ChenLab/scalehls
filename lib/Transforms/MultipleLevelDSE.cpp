@@ -89,6 +89,9 @@ LoopDesignSpace::LoopDesignSpace(FuncOp func, AffineLoopBand &band,
     validTileConfigNum *= validSizes.size();
   }
 
+  // The last design point (all loops are fully unrolled) is removed.
+  --validTileConfigNum;
+
   for (TileConfig config = 0; config < validTileConfigNum; ++config)
     unestimatedTileConfigs.insert(config);
 }
@@ -271,8 +274,8 @@ void LoopDesignSpace::exploreLoopDesignSpace(unsigned maxIterNum,
   // Exploration loop of the dse.
   for (unsigned i = 0; i < maxIterNum; ++i) {
     bool foundValidNeighbor = false;
-    std::random_shuffle(paretoPoints.begin(), paretoPoints.end(),
-                        [&](int i) { return std::rand() % i; });
+    // std::random_shuffle(paretoPoints.begin(), paretoPoints.end(),
+    //                     [&](int i) { return std::rand() % i; });
 
     for (auto &point : paretoPoints) {
       if (!point.isActive)
