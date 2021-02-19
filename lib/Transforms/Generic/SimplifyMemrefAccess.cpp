@@ -53,7 +53,7 @@ static bool applySimplifyMemrefAccess(FuncOp func) {
           break;
 
         // If both of the two operations are memory loads, only if both of
-        // them is not conditionally executed, elinimation could happen.
+        // them is not conditionally executed, elimination could happen.
         if (firstIsRead && secondIsRead)
           if (sameLevelOps.getValue().first == firstOp &&
               sameLevelOps.getValue().second == secondOp) {
