@@ -13,76 +13,160 @@
 using namespace mlir;
 using namespace scalehls;
 
-static bool applySimplifyMemrefAccess(FuncOp func) {
-  // Remove redundant affine load/store operations.
-  // Collect all load and store operations in the function block.
+namespace {
+class Simplifier {
+public:
+  explicit Simplifier(FuncOp func, SmallPtrSet<Operation *, 16> &opsToErase)
+      : func(func), opsToErase(opsToErase) {
+    getMemAccessesMap(func.front(), map);
+  }
+
+  void refreshMemAccessMap() {
+    map.clear();
+    getMemAccessesMap(func.front(), map);
+  }
+
+  void simplifyLoad(AffineReadOpInterface loadOp);
+  void simplifyStore(AffineWriteOpInterface storeOp);
+
+  FuncOp func;
+  SmallPtrSet<Operation *, 16> &opsToErase;
   MemAccessesMap map;
-  getMemAccessesMap(func.front(), map);
+};
+} // namespace
 
-  for (auto pair : map) {
-    auto loadStores = pair.second;
+void Simplifier::simplifyLoad(AffineReadOpInterface loadOp) {
+  auto &loadOrStoreOps = map[loadOp.getMemRef()];
 
-    // Walk through all load and store operations.
-    unsigned opIndex = 1;
-    for (auto firstOp : loadStores) {
-      auto firstAccess = MemRefAccess(firstOp);
-      auto firstIsRead = isa<AffineReadOpInterface>(firstOp);
+  // The last load operation that has identical memory access with loadOp.
+  Operation *targetLoadOp = nullptr;
+  unsigned dropBeginIdx = 0;
 
-      // Only walk through all load and store operations that MAY dominated by
-      // the first operation.
-      for (auto secondOp : llvm::drop_begin(loadStores, opIndex)) {
-        auto secondAccess = MemRefAccess(secondOp);
-        auto secondIsRead = isa<AffineReadOpInterface>(secondOp);
+  // Find all eligible store operations that dominates the load operation.
+  SmallVector<Operation *, 8> domStoreOps;
 
-        // Check whether the two operations statically have the same access.
-        // TODO: This is very progressive, because dependency analysis should be
-        // conducted here for checking whether the in between operations should
-        // break the simplification.
-        if (firstAccess != secondAccess)
-          continue;
+  unsigned minSurroundingLoops = getNestingDepth(loadOp);
+  for (auto loadOrStoreOp : loadOrStoreOps) {
+    if (loadOrStoreOp == loadOp)
+      break;
 
-        // If the second operation's access direction is different with the
-        // first operation, the first operation is known not redundant.
-        if ((firstIsRead && !secondIsRead) || (!firstIsRead && secondIsRead))
-          break;
+    unsigned nsLoops = getNumCommonSurroundingLoops(*loadOp, *loadOrStoreOp);
+    minSurroundingLoops = std::min(nsLoops, minSurroundingLoops);
 
-        // If the two operations are at different loop levels, break.
-        // TODO: memory access operation hoisting?
-        auto sameLevelOps = checkSameLevel(firstOp, secondOp);
-        if (!sameLevelOps)
-          break;
+    // If the two operations are at different loop levels, quit.
+    auto sameLevelOps = checkSameLevel(loadOrStoreOp, loadOp);
+    if (!sameLevelOps)
+      return;
 
-        // If both of the two operations are memory loads, only if both of
-        // them is not conditionally executed, elimination could happen.
-        if (firstIsRead && secondIsRead)
-          if (sameLevelOps.getValue().first == firstOp &&
-              sameLevelOps.getValue().second == secondOp) {
-            // Now we have known that the first and second operation are at
-            // the same level, and have identical memory accesses. Therefore,
-            // we can safely eliminate the first operation after replacing
-            // all its uses.
-            for (unsigned i = 0, e = firstOp->getNumResults(); i < e; ++i) {
-              firstOp->getResult(i).replaceAllUsesWith(secondOp->getResult(i));
-            }
-            // TODO: this is actually incorrect, if some AffineApplyOp is not
-            // folded, this will cause domination violation.
-            secondOp->moveAfter(firstOp);
-            firstOp->erase();
-            break;
-          }
-
-        // If both of the two operations are memory stores, only if the second
-        // operation is not conditionally executed, the first operation can be
-        // safely eliminated.
-        if (!firstIsRead && !secondIsRead)
-          if (sameLevelOps.getValue().second == secondOp) {
-            firstOp->erase();
-            break;
-          }
+    if (auto domLoadOp = dyn_cast<AffineReadOpInterface>(loadOrStoreOp)) {
+      // Check whether has identical memory access.
+      if (sameLevelOps.getValue().first == domLoadOp &&
+          sameLevelOps.getValue().second == loadOp &&
+          MemRefAccess(domLoadOp) == MemRefAccess(loadOp) &&
+          !opsToErase.count(domLoadOp)) {
+        targetLoadOp = domLoadOp;
+        dropBeginIdx = domStoreOps.size();
       }
-      ++opIndex;
+    } else {
+      domStoreOps.push_back(loadOrStoreOp);
     }
   }
+
+  if (!targetLoadOp)
+    return;
+
+  for (auto domStoreOp : llvm::drop_begin(domStoreOps, dropBeginIdx)) {
+    FlatAffineConstraints depConstrs;
+    unsigned nsLoops = getNumCommonSurroundingLoops(*loadOp, *domStoreOp);
+
+    // Dependences at loop depth <= minSurroundingLoops do NOT matter.
+    for (unsigned depth = nsLoops + 1; depth > minSurroundingLoops; depth--) {
+      DependenceResult result = checkMemrefAccessDependence(
+          MemRefAccess(domStoreOp), MemRefAccess(loadOp), depth, &depConstrs,
+          /*dependenceComponents=*/nullptr);
+      if (hasDependence(result))
+        return;
+    }
+  }
+
+  for (unsigned i = 0, e = loadOp->getNumResults(); i < e; ++i)
+    loadOp->getResult(i).replaceAllUsesWith(targetLoadOp->getResult(i));
+  opsToErase.insert(loadOp);
+}
+
+void Simplifier::simplifyStore(AffineWriteOpInterface storeOp) {
+  auto &loadOrStoreOps = map[storeOp.getMemRef()];
+
+  // The last store operation that has identical memory access with storeOp.
+  Operation *targetStoreOp = nullptr;
+
+  // Find all eligible operations that dominates the store operation.
+  SmallVector<Operation *, 8> postDomLoadOps;
+
+  auto startOpIter =
+      std::find(loadOrStoreOps.begin(), loadOrStoreOps.end(), storeOp);
+
+  unsigned minSurroundingLoops = getNestingDepth(storeOp);
+  for (auto it = std::next(startOpIter); it != loadOrStoreOps.end(); ++it) {
+    auto loadOrStoreOp = *it;
+
+    unsigned nsLoops = getNumCommonSurroundingLoops(*storeOp, *loadOrStoreOp);
+    minSurroundingLoops = std::min(nsLoops, minSurroundingLoops);
+
+    // If the two operations are at different loop levels, quit.
+    auto sameLevelOps = checkSameLevel(storeOp, loadOrStoreOp);
+    if (!sameLevelOps)
+      return;
+
+    if (auto postDomStoreOp = dyn_cast<AffineWriteOpInterface>(loadOrStoreOp)) {
+      // Check whether has identical memory access.
+      if (sameLevelOps.getValue().second == postDomStoreOp &&
+          MemRefAccess(storeOp) == MemRefAccess(postDomStoreOp)) {
+        targetStoreOp = postDomStoreOp;
+        break;
+      }
+    } else {
+      postDomLoadOps.push_back(loadOrStoreOp);
+    }
+  }
+
+  if (!targetStoreOp)
+    return;
+
+  for (auto postDomLoadOp : postDomLoadOps) {
+    FlatAffineConstraints depConstrs;
+    unsigned nsLoops = getNumCommonSurroundingLoops(*storeOp, *postDomLoadOp);
+
+    // Dependences at loop depth <= minSurroundingLoops do NOT matter.
+    for (unsigned depth = nsLoops + 1; depth > minSurroundingLoops; depth--) {
+      DependenceResult result = checkMemrefAccessDependence(
+          MemRefAccess(storeOp), MemRefAccess(postDomLoadOp), depth,
+          &depConstrs, /*dependenceComponents=*/nullptr);
+      if (hasDependence(result))
+        return;
+    }
+  }
+
+  opsToErase.insert(storeOp);
+}
+
+static bool applySimplifyMemrefAccess(FuncOp func) {
+  SmallPtrSet<Operation *, 16> opsToErase;
+  auto simplifier = Simplifier(func, opsToErase);
+  func.walk(
+      [&](AffineReadOpInterface loadOp) { simplifier.simplifyLoad(loadOp); });
+
+  for (auto loadOp : opsToErase)
+    loadOp->erase();
+
+  opsToErase.clear();
+  simplifier.refreshMemAccessMap();
+  func.walk([&](AffineWriteOpInterface storeOp) {
+    simplifier.simplifyStore(storeOp);
+  });
+
+  for (auto storeOp : opsToErase)
+    storeOp->erase();
 
   return true;
 }

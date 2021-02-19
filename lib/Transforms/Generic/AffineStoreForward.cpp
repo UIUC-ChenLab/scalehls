@@ -38,7 +38,7 @@ namespace {
 class Forwarder {
 public:
   explicit Forwarder(FuncOp func, SmallPtrSet<Value, 4> &memrefsToErase,
-                     SmallPtrSet<Operation *, 4> &loadsToErase)
+                     SmallPtrSet<Operation *, 16> &loadsToErase)
       : func(func), memrefsToErase(memrefsToErase), loadsToErase(loadsToErase) {
     getMemAccessesMap(func.front(), map);
   }
@@ -47,7 +47,7 @@ public:
 
   FuncOp func;
   SmallPtrSet<Value, 4> &memrefsToErase;
-  SmallPtrSet<Operation *, 4> &loadsToErase;
+  SmallPtrSet<Operation *, 16> &loadsToErase;
   MemAccessesMap map;
 };
 } // namespace
@@ -57,7 +57,7 @@ void Forwarder::forwardStoreToLoad(AffineReadOpInterface loadOp) {
 
   // The last store operation that meets 1) and 2) above.
   Operation *fwdingStoreOp = nullptr;
-  unsigned fwdingStoreOpIdx = 0;
+  unsigned dropBeginIdx = 0;
 
   // Find all eligible store operations that dominates the load operation.
   SmallVector<Operation *, 8> storeOps;
@@ -78,36 +78,32 @@ void Forwarder::forwardStoreToLoad(AffineReadOpInterface loadOp) {
 
     // Check whether storeOp and loadOp is at the same level.
     // TODO: support store-to-load forward between different level
-    auto pair = checkSameLevel(storeOp, loadOp);
-    if (!pair)
-      continue;
-
-    // TODO: support the case when loadOp is also surrounded by ifOp.
-    if (pair.getValue().second != loadOp)
-      continue;
-
-    if (MemRefAccess(storeOp) == MemRefAccess(loadOp)) {
-      fwdingStoreOp = storeOp;
-      fwdingStoreOpIdx = storeOps.size();
-    }
+    auto sameLevelOps = checkSameLevel(storeOp, loadOp);
+    if (!sameLevelOps)
+      return;
 
     storeOps.push_back(storeOp);
+
+    if (sameLevelOps.getValue().second == loadOp &&
+        MemRefAccess(storeOp) == MemRefAccess(loadOp)) {
+      fwdingStoreOp = storeOp;
+      dropBeginIdx = storeOps.size();
+    }
   }
 
   // There's no valid store operations that can be forwarded.
   if (!fwdingStoreOp)
     return;
 
-  // For now, we don't know whether fwdingCandidate meets 3) above. We need to
-  // make sure all store operations that post-dominates fwdingCandidate and
-  // dominates loadOp does NOT have dependency with loadOp.
-  for (auto storeOp : llvm::drop_begin(storeOps, fwdingStoreOpIdx + 1)) {
+  // For now, we don't know whether fwdingStoreOp meets 3) above. We need to
+  // make sure all store operations between fwdingStoreOp and loadOp does NOT
+  // have dependency with loadOp.
+  for (auto storeOp : llvm::drop_begin(storeOps, dropBeginIdx)) {
     FlatAffineConstraints depConstrs;
     unsigned nsLoops = getNumCommonSurroundingLoops(*loadOp, *storeOp);
-    unsigned depth;
 
     // Dependences at loop depth <= minSurroundingLoops do NOT matter.
-    for (depth = nsLoops + 1; depth > minSurroundingLoops; depth--) {
+    for (unsigned depth = nsLoops + 1; depth > minSurroundingLoops; depth--) {
       DependenceResult result = checkMemrefAccessDependence(
           MemRefAccess(storeOp), MemRefAccess(loadOp), depth, &depConstrs,
           /*dependenceComponents=*/nullptr);
@@ -126,6 +122,9 @@ void Forwarder::forwardStoreToLoad(AffineReadOpInterface loadOp) {
   if (storeSurroundingOp == fwdingStoreOp) {
     loadOp.getValue().replaceAllUsesWith(storeVal);
     loadsToErase.insert(loadOp.getOperation());
+
+    // Record the memref for a later sweep to optimize away.
+    memrefsToErase.insert(loadOp.getMemRef());
   } else {
     auto ifOp = cast<AffineIfOp>(storeSurroundingOp);
     // TODO: support AffineIfOp nests and AffineIfOp with else block.
@@ -156,16 +155,19 @@ void Forwarder::forwardStoreToLoad(AffineReadOpInterface loadOp) {
 
     // The load operation is no longer dominated by the store operation, thus
     // other store operations can be forwarded to this load operation again.
+    auto storeOpIter =
+        std::find(loadOrStoreOps.begin(), loadOrStoreOps.end(), fwdingStoreOp);
+    auto loadOpIter =
+        std::find(loadOrStoreOps.begin(), loadOrStoreOps.end(), loadOp);
+    std::rotate(storeOpIter, std::next(storeOpIter), std::next(loadOpIter));
+
     forwardStoreToLoad(loadOp);
   }
-
-  // Record the memref for a later sweep to optimize away.
-  memrefsToErase.insert(loadOp.getMemRef());
 }
 
 static bool applyAffineStoreForward(FuncOp func) {
   SmallPtrSet<Value, 4> memrefsToErase;
-  SmallPtrSet<Operation *, 4> loadsToErase;
+  SmallPtrSet<Operation *, 16> loadsToErase;
   auto forwarder = Forwarder(func, memrefsToErase, loadsToErase);
 
   // Walk all load's and perform store to load forwarding.

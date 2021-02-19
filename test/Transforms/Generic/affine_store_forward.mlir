@@ -14,7 +14,7 @@ module  {
             %2 = mulf %arg1, %1 : f32
 
             // CHECK-NOT:  affine.if #set1(%arg4) {
-            // CHECK-NOT:    affine.store %[[VAL_2:.*]], %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
+            // CHECK-NOT:    affine.store %2, %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
             affine.if #set1(%arg4) {
               affine.store %2, %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
             }

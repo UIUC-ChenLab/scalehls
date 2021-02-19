@@ -11,7 +11,7 @@ module  {
           // CHECK: affine.if #set0(%arg5, %arg6) {
           affine.if #set0(%arg5, %arg6) {
 
-            // CHECK: %[[VAL_1:.*]] = affine.load %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
+            // CHECK: %1 = affine.load %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
             %1 = affine.load %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
             %2 = mulf %arg1, %1 : f32
             affine.if #set1(%arg4) {
@@ -26,13 +26,13 @@ module  {
             affine.store %8, %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
           }
 
-          // CHECK-NOT: %[[VAL_0:.*]] = affine.apply #map(%arg4)
+          // CHECK-NOT: %0 = affine.apply #map(%arg4)
           // CHECK-NOT: affine.if #set0(%arg5, %arg6) {
           %0 = affine.apply #map(%arg4)
           affine.if #set0(%arg5, %arg6) {
 
-            // CHECK-NOT: %[[VAL_1:.*]] = affine.load %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
-            // CHECK: %[[VAL_9:.*]] = affine.load %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
+            // CHECK-NOT: %1 = affine.load %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
+            // CHECK: %9 = affine.load %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
             %1 = affine.load %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
             %2 = mulf %arg1, %1 : f32
             affine.if #set1(%0) {
