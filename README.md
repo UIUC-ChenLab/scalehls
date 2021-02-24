@@ -39,8 +39,8 @@ $ cd $SCALEHLS_DIR
 $ # Automatic kernel-level design space exploration.
 $ scalehls-opt samples/polybench/gemm.mlir \
     -legalize-to-hlscpp="top-func=test_gemm" \
-    -multiple-level-dse="target-spec=config/target-spec.ini" -debug-only=scalehls \
-    | scalehls-translate -emit-hlscpp
+    -multiple-level-dse="target-spec=config/target-spec.ini output-file=gemm_dse.csv" \
+    -debug-only=scalehls | scalehls-translate -emit-hlscpp
 
 $ # Loop and pragma-level optimizations, performance estimation, and C++ code generation.
 $ scalehls-opt samples/polybench/syrk.mlir \
