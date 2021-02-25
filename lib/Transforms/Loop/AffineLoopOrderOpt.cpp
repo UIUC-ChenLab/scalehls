@@ -10,6 +10,8 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+#define DEBUG_TYPE "scalehls"
+
 using namespace mlir;
 using namespace scalehls;
 
@@ -17,6 +19,8 @@ using namespace scalehls;
 /// moved to an as outer as possible location of the input loop band. If
 /// "reverse" is true, as inner as possible.
 bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
+  LLVM_DEBUG(llvm::dbgs() << "Apply loop order opt: ";);
+
   if (!isPerfectlyNested(band))
     return false;
 
@@ -115,6 +119,14 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
 
         // Check the validation of the current permutation.
         if (isValidLoopInterchangePermutation(band, permMap)) {
+          LLVM_DEBUG(llvm::dbgs() << "(";);
+          LLVM_DEBUG(for (unsigned i = 0, e = permMap.size(); i < e; ++i) {
+            llvm::dbgs() << permMap[i];
+            if (i != e - 1)
+              llvm::dbgs() << ",";
+          });
+          LLVM_DEBUG(llvm::dbgs() << ") ";);
+
           auto newRoot = band[permuteLoops(band, permMap)];
           band.clear();
           getLoopBandFromOutermost(newRoot, band);
@@ -147,6 +159,8 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
         }
       }
   }
+
+  LLVM_DEBUG(llvm::dbgs() << "Finish.\n";);
   return true;
 }
 

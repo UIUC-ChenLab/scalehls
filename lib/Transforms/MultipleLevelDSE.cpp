@@ -593,9 +593,15 @@ bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, raw_ostream &os) {
       for (unsigned i = 0; i < targetNum; ++i) {
         auto &loopSpace = funcSpace.loopDesignSpaces[i];
         auto &loopPoint = funcPoint.loopDesignPoints[i];
+        auto tileList = loopSpace.getTileList(loopPoint.tileConfig);
+        auto targetII = loopPoint.targetII;
 
-        tileLists.push_back(loopSpace.getTileList(loopPoint.tileConfig));
-        targetIIs.push_back(loopPoint.targetII);
+        LLVM_DEBUG(llvm::dbgs() << "Apply loop tiling & pipelining: (";);
+        LLVM_DEBUG(for (auto tile : tileList) { llvm::dbgs() << tile << ","; });
+        LLVM_DEBUG(llvm::dbgs() << targetII << ") Finish.\n");
+
+        tileLists.push_back(tileList);
+        targetIIs.push_back(targetII);
       }
 
       applyOptStrategy(func, tileLists, targetIIs);
@@ -603,7 +609,7 @@ bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, raw_ostream &os) {
     }
   }
 
-  return emitDebugInfo(func, "Apply the best design point.");
+  return emitDebugInfo(func, "----------\nApply the best design point.");
 }
 
 //===----------------------------------------------------------------------===//
