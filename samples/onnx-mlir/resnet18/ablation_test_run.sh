@@ -21,13 +21,11 @@ then
 fi
 
 # Passes pipeline.
-pred='-legalize-onnx -affine-loop-normalize -canonicalize'
+pre='-allow-unregistered-dialect -legalize-onnx -affine-loop-normalize -canonicalize'
 
-succ='-split-function -convert-linalg-to-affine-loops -canonicalize'
-succ_pipeline='-split-function -convert-linalg-to-affine-loops -loop-pipelining -canonicalize'
-
-succ_fusion='-split-function -convert-linalg-to-affine-loops -affine-loop-fusion -canonicalize'
-succ_fusion_pipeline='-split-function -convert-linalg-to-affine-loops -affine-loop-fusion -loop-pipelining -canonicalize'
+post='-split-function -convert-linalg-to-affine-loops -canonicalize'
+post_p='-split-function -convert-linalg-to-affine-loops -loop-pipelining -simplify-affine-if -affine-store-forward -simplify-memref-access -cse -canonicalize'
+post_op='-split-function -convert-linalg-to-affine-loops -affine-loop-perfection -affine-loop-order-opt -loop-pipelining -simplify-affine-if -affine-store-forward -simplify-memref-access -cse -canonicalize'
 
 # Ablation test.
 echo -e "Name\tBRAM\tDSP\tLUT\tCycles\tInterval" > test_result.log
@@ -39,32 +37,17 @@ do
 
   case $n in
     # Original.
-    0) scalehls-opt $file $pred $succ | scalehls-translate -emit-hlscpp -o $output ;;
-    1) scalehls-opt $file $pred $succ_pipeline | scalehls-translate -emit-hlscpp -o $output ;;
-
-    # Conservative dataflow legalization.
-    2) scalehls-opt $file $pred -legalize-dataflow="min-gran=1 insert-copy=false" $succ_pipeline | scalehls-translate -emit-hlscpp -o $output ;;
+    0) scalehls-opt $file $pre $post | scalehls-translate -emit-hlscpp -o $output ;;
+    1) scalehls-opt $file $pre $post_p | scalehls-translate -emit-hlscpp -o $output ;;
+    2) scalehls-opt $file $pre $post_op | scalehls-translate -emit-hlscpp -o $output ;;
 
     # Progressive dataflow legalization.
-    3) scalehls-opt $file $pred -legalize-dataflow="min-gran=1 insert-copy=true" $succ_pipeline | scalehls-translate -emit-hlscpp -o $output ;;
-    4) scalehls-opt $file $pred -legalize-dataflow="min-gran=2 insert-copy=true" $succ_pipeline | scalehls-translate -emit-hlscpp -o $output ;;
-    5) scalehls-opt $file $pred -legalize-dataflow="min-gran=3 insert-copy=true" $succ_pipeline | scalehls-translate -emit-hlscpp -o $output ;;
-    6) scalehls-opt $file $pred -legalize-dataflow="min-gran=4 insert-copy=true" $succ_pipeline | scalehls-translate -emit-hlscpp -o $output ;;
-    7) scalehls-opt $file $pred -legalize-dataflow="min-gran=5 insert-copy=true" $succ_pipeline | scalehls-translate -emit-hlscpp -o $output ;;
-
-    # Original with fusion.
-    8) scalehls-opt $file $pred $succ_fusion | scalehls-translate -emit-hlscpp -o $output ;;
-    9) scalehls-opt $file $pred $succ_fusion_pipeline | scalehls-translate -emit-hlscpp -o $output ;;
-
-    # Conservative dataflow legalization with fusion.
-    10) scalehls-opt $file $pred -legalize-dataflow="min-gran=1 insert-copy=false" $succ_fusion_pipeline | scalehls-translate -emit-hlscpp -o $output ;;
-
-    # Progressive dataflow legalization with fusion.
-    11) scalehls-opt $file $pred -legalize-dataflow="min-gran=1 insert-copy=true" $succ_fusion_pipeline | scalehls-translate -emit-hlscpp -o $output ;;
-    12) scalehls-opt $file $pred -legalize-dataflow="min-gran=2 insert-copy=true" $succ_fusion_pipeline | scalehls-translate -emit-hlscpp -o $output ;;
-    13) scalehls-opt $file $pred -legalize-dataflow="min-gran=3 insert-copy=true" $succ_fusion_pipeline | scalehls-translate -emit-hlscpp -o $output ;;
-    14) scalehls-opt $file $pred -legalize-dataflow="min-gran=4 insert-copy=true" $succ_fusion_pipeline | scalehls-translate -emit-hlscpp -o $output ;;
-    15) scalehls-opt $file $pred -legalize-dataflow="min-gran=5 insert-copy=true" $succ_fusion_pipeline | scalehls-translate -emit-hlscpp -o $output ;;
+    3) scalehls-opt $file $pre -legalize-dataflow="min-gran=6 insert-copy=true" $post_op | scalehls-translate -emit-hlscpp -o $output ;;
+    4) scalehls-opt $file $pre -legalize-dataflow="min-gran=5 insert-copy=true" $post_op | scalehls-translate -emit-hlscpp -o $output ;;
+    5) scalehls-opt $file $pre -legalize-dataflow="min-gran=4 insert-copy=true" $post_op | scalehls-translate -emit-hlscpp -o $output ;;
+    6) scalehls-opt $file $pre -legalize-dataflow="min-gran=3 insert-copy=true" $post_op | scalehls-translate -emit-hlscpp -o $output ;;
+    7) scalehls-opt $file $pre -legalize-dataflow="min-gran=2 insert-copy=true" $post_op | scalehls-translate -emit-hlscpp -o $output ;;
+    8) scalehls-opt $file $pre -legalize-dataflow="min-gran=1 insert-copy=true" $post_op | scalehls-translate -emit-hlscpp -o $output ;;
   esac
 
   if [ $n -ge $rerun_csynth_from ]
