@@ -40,18 +40,14 @@ void Simplifier::simplifyLoad(AffineReadOpInterface loadOp) {
 
   // The last load operation that has identical memory access with loadOp.
   Operation *targetLoadOp = nullptr;
-  unsigned dropBeginIdx = 0;
 
   // Find all eligible store operations that dominates the load operation.
   SmallVector<Operation *, 8> domStoreOps;
+  auto startOpIter =
+      std::find(loadOrStoreOps.rbegin(), loadOrStoreOps.rend(), loadOp);
 
-  unsigned minSurroundingLoops = getNestingDepth(loadOp);
-  for (auto loadOrStoreOp : loadOrStoreOps) {
-    if (loadOrStoreOp == loadOp)
-      break;
-
-    unsigned nsLoops = getNumCommonSurroundingLoops(*loadOp, *loadOrStoreOp);
-    minSurroundingLoops = std::min(nsLoops, minSurroundingLoops);
+  for (auto it = std::next(startOpIter); it != loadOrStoreOps.rend(); ++it) {
+    auto loadOrStoreOp = *it;
 
     // If the two operations are at different loop levels, quit.
     auto sameLevelOps = checkSameLevel(loadOrStoreOp, loadOp);
@@ -65,7 +61,7 @@ void Simplifier::simplifyLoad(AffineReadOpInterface loadOp) {
           MemRefAccess(domLoadOp) == MemRefAccess(loadOp) &&
           !opsToErase.count(domLoadOp)) {
         targetLoadOp = domLoadOp;
-        dropBeginIdx = domStoreOps.size();
+        break;
       }
     } else {
       domStoreOps.push_back(loadOrStoreOp);
@@ -75,17 +71,30 @@ void Simplifier::simplifyLoad(AffineReadOpInterface loadOp) {
   if (!targetLoadOp)
     return;
 
-  for (auto domStoreOp : llvm::drop_begin(domStoreOps, dropBeginIdx)) {
-    FlatAffineConstraints depConstrs;
-    unsigned nsLoops = getNumCommonSurroundingLoops(*loadOp, *domStoreOp);
+  if (!domStoreOps.empty()) {
+    // As we have ensured that all store operations are at the same level, thus
+    // their common surrounding loops are exactly the same.
+    AffineLoopBand commonLoops;
+    unsigned numCommonLoops =
+        getCommonSurroundingLoops(domStoreOps.back(), loadOp, &commonLoops);
 
-    // Dependences at loop depth <= minSurroundingLoops do NOT matter.
-    for (unsigned depth = nsLoops + 1; depth > minSurroundingLoops; depth--) {
-      DependenceResult result = checkMemrefAccessDependence(
-          MemRefAccess(domStoreOp), MemRefAccess(loadOp), depth, &depConstrs,
-          /*dependenceComponents=*/nullptr);
-      if (hasDependence(result))
-        return;
+    // Traverse each loop level to find dependencies.
+    for (unsigned depth = numCommonLoops; depth > 0; depth--) {
+      // Skip all parallel loop level.
+      if (auto parallelAttr =
+              commonLoops[depth - 1]->getAttrOfType<BoolAttr>("parallel"))
+        if (parallelAttr.getValue())
+          continue;
+
+      for (auto storeOp : domStoreOps) {
+        FlatAffineConstraints depConstrs;
+
+        DependenceResult result = checkMemrefAccessDependence(
+            MemRefAccess(storeOp), MemRefAccess(loadOp), depth, &depConstrs,
+            /*dependenceComponents=*/nullptr);
+        if (hasDependence(result))
+          return;
+      }
     }
   }
 
@@ -102,16 +111,11 @@ void Simplifier::simplifyStore(AffineWriteOpInterface storeOp) {
 
   // Find all eligible operations that dominates the store operation.
   SmallVector<Operation *, 8> postDomLoadOps;
-
   auto startOpIter =
       std::find(loadOrStoreOps.begin(), loadOrStoreOps.end(), storeOp);
 
-  unsigned minSurroundingLoops = getNestingDepth(storeOp);
   for (auto it = std::next(startOpIter); it != loadOrStoreOps.end(); ++it) {
     auto loadOrStoreOp = *it;
-
-    unsigned nsLoops = getNumCommonSurroundingLoops(*storeOp, *loadOrStoreOp);
-    minSurroundingLoops = std::min(nsLoops, minSurroundingLoops);
 
     // If the two operations are at different loop levels, quit.
     auto sameLevelOps = checkSameLevel(storeOp, loadOrStoreOp);
@@ -133,12 +137,38 @@ void Simplifier::simplifyStore(AffineWriteOpInterface storeOp) {
   if (!targetStoreOp)
     return;
 
+  if (!postDomLoadOps.empty()) {
+    // As we have ensured that all store operations are at the same level, thus
+    // their common surrounding loops are exactly the same.
+    AffineLoopBand commonLoops;
+    unsigned numCommonLoops =
+        getCommonSurroundingLoops(storeOp, postDomLoadOps.back(), &commonLoops);
+
+    // Traverse each loop level to find dependencies.
+    for (unsigned depth = numCommonLoops; depth > 0; depth--) {
+      // Skip all parallel loop level.
+      if (auto parallelAttr =
+              commonLoops[depth - 1]->getAttrOfType<BoolAttr>("parallel"))
+        if (parallelAttr.getValue())
+          continue;
+
+      for (auto loadOp : postDomLoadOps) {
+        FlatAffineConstraints depConstrs;
+
+        DependenceResult result = checkMemrefAccessDependence(
+            MemRefAccess(storeOp), MemRefAccess(loadOp), depth, &depConstrs,
+            /*dependenceComponents=*/nullptr);
+        if (hasDependence(result))
+          return;
+      }
+    }
+  }
+
   for (auto postDomLoadOp : postDomLoadOps) {
     FlatAffineConstraints depConstrs;
     unsigned nsLoops = getNumCommonSurroundingLoops(*storeOp, *postDomLoadOp);
 
-    // Dependences at loop depth <= minSurroundingLoops do NOT matter.
-    for (unsigned depth = nsLoops + 1; depth > minSurroundingLoops; depth--) {
+    for (unsigned depth = nsLoops + 1; depth > 0; depth--) {
       DependenceResult result = checkMemrefAccessDependence(
           MemRefAccess(storeOp), MemRefAccess(postDomLoadOp), depth,
           &depConstrs, /*dependenceComponents=*/nullptr);

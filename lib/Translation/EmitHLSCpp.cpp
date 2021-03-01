@@ -739,7 +739,8 @@ void ModuleEmitter::emitAffineParallel(AffineParallelOp op) {
 
     // Emit increase step.
     emitValue(iterVar);
-    os << " += " << steps[i] << ") {\n";
+    os << " += " << steps[i] << ") {";
+    emitInfoAndNewLine(op);
 
     addIndent();
   }
@@ -750,12 +751,8 @@ void ModuleEmitter::emitAffineParallel(AffineParallelOp op) {
     reduceIndent();
 
     indent();
-    if (i == e - 1)
-      os << "}";
-    else
-      os << "}\n";
+    os << "}\n";
   }
-  emitInfoAndNewLine(op);
 }
 
 void ModuleEmitter::emitAffineApply(AffineApplyOp op) {

@@ -6,6 +6,7 @@
 
 #include "scalehls/Analysis/Utils.h"
 #include "mlir/Analysis/AffineAnalysis.h"
+#include "mlir/Analysis/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -62,6 +63,26 @@ scalehls::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
         return std::pair<Operation *, Operation *>(lhs, rhs);
 
   return Optional<std::pair<Operation *, Operation *>>();
+}
+
+/// Returns the number of surrounding loops common to 'loopsA' and 'loopsB',
+/// where each lists loops from outer-most to inner-most in loop nest.
+unsigned scalehls::getCommonSurroundingLoops(Operation *A, Operation *B,
+                                             AffineLoopBand *band) {
+  SmallVector<AffineForOp, 4> loopsA, loopsB;
+  getLoopIVs(*A, &loopsA);
+  getLoopIVs(*B, &loopsB);
+
+  unsigned minNumLoops = std::min(loopsA.size(), loopsB.size());
+  unsigned numCommonLoops = 0;
+  for (unsigned i = 0; i < minNumLoops; ++i) {
+    if (loopsA[i] != loopsB[i])
+      break;
+    ++numCommonLoops;
+    if (band != nullptr)
+      band->push_back(loopsB[i]);
+  }
+  return numCommonLoops;
 }
 
 /// Calculate the upper and lower bound of "bound" if possible.

@@ -57,24 +57,18 @@ void Forwarder::forwardStoreToLoad(AffineReadOpInterface loadOp) {
 
   // The last store operation that meets 1) and 2) above.
   Operation *fwdingStoreOp = nullptr;
-  unsigned dropBeginIdx = 0;
 
   // Find all eligible store operations that dominates the load operation.
   SmallVector<Operation *, 8> storeOps;
+  auto startOpIter =
+      std::find(loadOrStoreOps.rbegin(), loadOrStoreOps.rend(), loadOp);
 
-  // Pass over the use list to get the minimum number of surrounding loops
-  // common between the load op and the store op.
-  unsigned minSurroundingLoops = getNestingDepth(loadOp);
-  for (auto loadOrStoreOp : loadOrStoreOps) {
-    if (loadOrStoreOp == loadOp)
-      break;
+  for (auto it = std::next(startOpIter); it != loadOrStoreOps.rend(); ++it) {
+    auto loadOrStoreOp = *it;
 
     auto storeOp = dyn_cast<AffineWriteOpInterface>(loadOrStoreOp);
     if (!storeOp)
       continue;
-
-    unsigned nsLoops = getNumCommonSurroundingLoops(*loadOp, *storeOp);
-    minSurroundingLoops = std::min(nsLoops, minSurroundingLoops);
 
     // Check whether storeOp and loadOp is at the same level.
     // TODO: support store-to-load forward between different level
@@ -82,13 +76,13 @@ void Forwarder::forwardStoreToLoad(AffineReadOpInterface loadOp) {
     if (!sameLevelOps)
       return;
 
-    storeOps.push_back(storeOp);
-
     if (sameLevelOps.getValue().second == loadOp &&
         MemRefAccess(storeOp) == MemRefAccess(loadOp)) {
       fwdingStoreOp = storeOp;
-      dropBeginIdx = storeOps.size();
+      break;
     }
+
+    storeOps.push_back(storeOp);
   }
 
   // There's no valid store operations that can be forwarded.
@@ -98,17 +92,30 @@ void Forwarder::forwardStoreToLoad(AffineReadOpInterface loadOp) {
   // For now, we don't know whether fwdingStoreOp meets 3) above. We need to
   // make sure all store operations between fwdingStoreOp and loadOp does NOT
   // have dependency with loadOp.
-  for (auto storeOp : llvm::drop_begin(storeOps, dropBeginIdx)) {
-    FlatAffineConstraints depConstrs;
-    unsigned nsLoops = getNumCommonSurroundingLoops(*loadOp, *storeOp);
+  if (!storeOps.empty()) {
+    // As we have ensured that all store operations are at the same level, thus
+    // their common surrounding loops are exactly the same.
+    AffineLoopBand commonLoops;
+    unsigned numCommonLoops =
+        getCommonSurroundingLoops(storeOps.back(), loadOp, &commonLoops);
 
-    // Dependences at loop depth <= minSurroundingLoops do NOT matter.
-    for (unsigned depth = nsLoops + 1; depth > minSurroundingLoops; depth--) {
-      DependenceResult result = checkMemrefAccessDependence(
-          MemRefAccess(storeOp), MemRefAccess(loadOp), depth, &depConstrs,
-          /*dependenceComponents=*/nullptr);
-      if (hasDependence(result))
-        return;
+    // Traverse each loop level to find dependencies.
+    for (unsigned depth = numCommonLoops; depth > 0; depth--) {
+      // Bypass all parallel loop level.
+      if (auto parallelAttr =
+              commonLoops[depth - 1]->getAttrOfType<BoolAttr>("parallel"))
+        if (parallelAttr.getValue())
+          continue;
+
+      for (auto storeOp : storeOps) {
+        FlatAffineConstraints depConstrs;
+
+        DependenceResult result = checkMemrefAccessDependence(
+            MemRefAccess(storeOp), MemRefAccess(loadOp), depth, &depConstrs,
+            /*dependenceComponents=*/nullptr);
+        if (hasDependence(result))
+          return;
+      }
     }
   }
 

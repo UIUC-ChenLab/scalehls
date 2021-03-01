@@ -4,6 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "scalehls/Conversion/Passes.h"
 #include "scalehls/Dialect/HLSCpp/HLSCpp.h"
@@ -52,6 +53,9 @@ void LegalizeToHLSCpp::runOnOperation() {
 
       if (!forOp->getAttr("flatten"))
         forOp->setAttr("flatten", builder.getBoolAttr(false));
+
+      if (isLoopParallel(forOp))
+        forOp->setAttr("parallel", builder.getBoolAttr(true));
     }
   });
 

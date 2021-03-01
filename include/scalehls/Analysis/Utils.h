@@ -28,6 +28,9 @@ void getMemAccessesMap(Block &block, MemAccessesMap &map);
 Optional<std::pair<Operation *, Operation *>> checkSameLevel(Operation *lhsOp,
                                                              Operation *rhsOp);
 
+unsigned getCommonSurroundingLoops(Operation *A, Operation *B,
+                                   AffineLoopBand *band);
+
 /// Calculate the upper and lower bound of "bound" if possible.
 Optional<std::pair<int64_t, int64_t>> getBoundOfAffineBound(AffineBound bound);
 
