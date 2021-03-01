@@ -276,18 +276,16 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, FuncOp func,
 /// Calculate the minimum dependency II of loop.
 int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
                                        MemAccessesMap &map) {
-  // Collect start and end level of the pipeline.
-  int64_t endLevel = 1;
-  int64_t startLevel = 1;
-  auto currentLoop = forOp;
-  while (true) {
-    if (auto outerLoop = dyn_cast<AffineForOp>(currentLoop->getParentOp())) {
-      currentLoop = outerLoop;
-      ++endLevel;
-      if (!getBoolAttrValue(outerLoop, "flatten"))
-        ++startLevel;
-    } else
-      break;
+  AffineLoopBand band;
+  getLoopIVs(forOp.front(), &band);
+
+  // Find all loop levels whose dependency need to be checked.
+  SmallVector<unsigned, 8> loopDepths;
+  for (unsigned i = 1, e = band.size(); i <= e; ++i) {
+    auto loop = band[i - 1];
+    if (getBoolAttrValue(loop, "flatten") || getBoolAttrValue(loop, "pipeline"))
+      if (!getBoolAttrValue(loop, "parallel"))
+        loopDepths.push_back(i);
   }
 
   for (auto &pair : map) {
@@ -338,7 +336,7 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
         if (!depAnalysis && dstAccess != srcAccess)
           continue;
 
-        for (unsigned depth = startLevel; depth <= endLevel; ++depth) {
+        for (auto depth : loopDepths) {
           FlatAffineConstraints depConstrs;
           SmallVector<DependenceComponent, 2> depComps;
 
@@ -760,8 +758,15 @@ Optional<Schedule> ScaleHLSEstimator::estimateBlock(Block &block,
           if (!depAnalysis && opAccess != depOpAccess)
             continue;
 
-          auto loopDepth = getNumCommonSurroundingLoops(*op, *depOp);
+          AffineLoopBand commonLoops;
+          auto loopDepth = getCommonSurroundingLoops(op, depOp, &commonLoops);
+
           for (unsigned depth = 1; depth <= loopDepth + 1; ++depth) {
+            // Skip all parallel loop level.
+            if (depth != loopDepth + 1)
+              if (getBoolAttrValue(commonLoops[depth - 1], "parallel"))
+                continue;
+
             FlatAffineConstraints dependConstrs;
 
             DependenceResult result = checkMemrefAccessDependence(

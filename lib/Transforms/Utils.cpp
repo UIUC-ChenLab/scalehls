@@ -7,6 +7,7 @@
 #include "scalehls/Transforms/Utils.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
+#include "scalehls/Conversion/Passes.h"
 #include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
@@ -39,19 +40,24 @@ bool scalehls::applyOptStrategy(AffineLoopBand &band, FuncOp func,
     return false;
 
   // Apply loop tiling.
-  auto pipelineLoc = applyLoopTiling(band, tileList);
-  if (!pipelineLoc)
+  auto pipelineLoopLoc = applyLoopTiling(band, tileList);
+  if (!pipelineLoopLoc)
+    return false;
+
+  // Apply LegalizeToHLSCpp conversion pass.
+  PassManager convertPM(func.getContext(), "func");
+  convertPM.addPass(createLegalizeToHLSCppPass());
+  if (failed(convertPM.run(func)))
     return false;
 
   // Apply loop pipelining.
-  if (!applyLoopPipelining(band, pipelineLoc.getValue(), targetII))
+  if (!applyLoopPipelining(band, pipelineLoopLoc.getValue(), targetII))
     return false;
 
   // Apply general optimizations and array partition.
-  PassManager passManager(func.getContext(), "func");
-  addPassPipeline(passManager);
-
-  if (failed(passManager.run(func)))
+  PassManager optPM(func.getContext(), "func");
+  addPassPipeline(optPM);
+  if (failed(optPM.run(func)))
     return false;
 
   return true;
@@ -64,20 +70,29 @@ bool scalehls::applyOptStrategy(FuncOp func, ArrayRef<TileList> tileLists,
   getLoopBands(func.front(), bands);
 
   // Apply loop tiling and pipelining to all loop bands.
+  SmallVector<unsigned, 4> pipelineLoopLocs;
   for (unsigned i = 0, e = bands.size(); i < e; ++i) {
-    auto pipelineLoc = applyLoopTiling(bands[i], tileLists[i]);
-    if (!pipelineLoc)
+    auto pipelineLoopLoc = applyLoopTiling(bands[i], tileLists[i]);
+    if (!pipelineLoopLoc)
       return false;
+    pipelineLoopLocs.push_back(pipelineLoopLoc.getValue());
+  }
 
-    if (!applyLoopPipelining(bands[i], pipelineLoc.getValue(), targetIIs[i]))
+  // Apply LegalizeToHLSCpp conversion pass.
+  PassManager convertPM(func.getContext(), "func");
+  convertPM.addPass(createLegalizeToHLSCppPass());
+  if (failed(convertPM.run(func)))
+    return false;
+
+  for (unsigned i = 0, e = bands.size(); i < e; ++i) {
+    if (!applyLoopPipelining(bands[i], pipelineLoopLocs[i], targetIIs[i]))
       return false;
   }
 
   // Apply general optimizations and array partition.
-  PassManager passManager(func.getContext(), "func");
-  addPassPipeline(passManager);
-
-  if (failed(passManager.run(func)))
+  PassManager optPM(func.getContext(), "func");
+  addPassPipeline(optPM);
+  if (failed(optPM.run(func)))
     return false;
 
   return true;

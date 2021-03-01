@@ -25,7 +25,7 @@ def QoREstimation : Pass<"qor-estimation", "ModuleOp"> {
            /*default=*/"\"../config/target-spec.ini\"",
            "File path: target backend specifications and configurations">,
 
-    Option<"depAnalysis", "dep-analysis", "bool", /*default=*/"false",
+    Option<"depAnalysis", "dep-analysis", "bool", /*default=*/"true",
            "Whether a comprehensive dependency analysis is conducted">
   ];
 }

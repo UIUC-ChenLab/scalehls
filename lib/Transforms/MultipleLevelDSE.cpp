@@ -654,7 +654,7 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
 
     // Parse output file.
     std::string errorMessage;
-    auto output = mlir::openOutputFile(outputFile, &errorMessage);
+    auto output = mlir::openOutputFile(dumpFile, &errorMessage);
     if (!output)
       emitError(module.getLoc(), errorMessage);
 
@@ -667,9 +667,8 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
 
     // Optimize the top function.
     for (auto func : module.getOps<FuncOp>())
-      if (auto topFunction = func->getAttrOfType<BoolAttr>("top_function"))
-        if (topFunction.getValue())
-          optimizer.applyMultipleLevelDSE(func, output->os());
+      if (func.getName() == topFunc)
+        optimizer.applyMultipleLevelDSE(func, output->os());
 
     output->keep();
   }

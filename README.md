@@ -38,15 +38,14 @@ $ cd $SCALEHLS_DIR
 
 $ # Automatic kernel-level design space exploration.
 $ scalehls-opt samples/polybench/gemm.mlir \
-    -legalize-to-hlscpp="top-func=test_gemm" \
-    -multiple-level-dse="target-spec=config/target-spec.ini output-file=gemm_dse.csv" \
+    -multiple-level-dse="target-spec=config/target-spec.ini dump-file=gemm_dse.csv top-func=test_gemm" \
     -debug-only=scalehls | scalehls-translate -emit-hlscpp
 
 $ # Loop and pragma-level optimizations, performance estimation, and C++ code generation.
 $ scalehls-opt samples/polybench/syrk.mlir \
     -affine-loop-perfection -affine-loop-order-opt -remove-variable-bound \
     -partial-affine-loop-tile="tile-size=2" -legalize-to-hlscpp="top-func=test_syrk" \
-    -loop-pipelining="pipeline-level=3" -canonicalize -simplify-affine-if \
+    -loop-pipelining="pipeline-level=3 target-ii=2" -canonicalize -simplify-affine-if \
     -affine-store-forward -simplify-memref-access -cse -array-partition \
     -qor-estimation="target-spec=config/target-spec.ini" \
     | scalehls-translate -emit-hlscpp

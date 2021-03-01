@@ -29,10 +29,14 @@ def MultipleLevelDSE : Pass<"multiple-level-dse", "ModuleOp"> {
     Option<"targetSpec", "target-spec", "std::string",
            /*default=*/"\"../config/target-spec.ini\"",
            "File path: target backend specifications and configurations">,
-    Option<"outputFile", "output-file", "std::string",
-           /*default=*/"\"-\"", "File path: the output file path">,
 
-    Option<"depAnalysis", "dep-analysis", "bool", /*default=*/"false",
+    Option<"dumpFile", "dump-file", "std::string",
+           /*default=*/"\"-\"", "File path: the dump file path">,
+
+    Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
+           "The top function for HLS synthesis">,
+
+    Option<"depAnalysis", "dep-analysis", "bool", /*default=*/"true",
            "Whether a comprehensive dependency analysis is conducted">,
 
     Option<"maxInitParallel", "max-init-parallel", "unsigned", /*default=*/"16",

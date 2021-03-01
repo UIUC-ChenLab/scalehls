@@ -50,15 +50,12 @@ void Simplifier::simplifyLoad(AffineReadOpInterface loadOp) {
     auto loadOrStoreOp = *it;
 
     // If the two operations are at different loop levels, quit.
-    auto sameLevelOps = checkSameLevel(loadOrStoreOp, loadOp);
-    if (!sameLevelOps)
+    if (loadOrStoreOp->getBlock() != loadOp->getBlock())
       return;
 
     if (auto domLoadOp = dyn_cast<AffineReadOpInterface>(loadOrStoreOp)) {
       // Check whether has identical memory access.
-      if (sameLevelOps.getValue().first == domLoadOp &&
-          sameLevelOps.getValue().second == loadOp &&
-          MemRefAccess(domLoadOp) == MemRefAccess(loadOp) &&
+      if (MemRefAccess(domLoadOp) == MemRefAccess(loadOp) &&
           !opsToErase.count(domLoadOp)) {
         targetLoadOp = domLoadOp;
         break;
