@@ -19,7 +19,7 @@ using namespace scalehls;
 /// moved to an as outer as possible location of the input loop band. If
 /// "reverse" is true, as inner as possible.
 bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
-  LLVM_DEBUG(llvm::dbgs() << "Apply loop order opt: ";);
+  LLVM_DEBUG(llvm::dbgs() << "Loop order opt ";);
 
   if (!isPerfectlyNested(band))
     return false;
@@ -160,7 +160,7 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
       }
   }
 
-  LLVM_DEBUG(llvm::dbgs() << "Finish.\n";);
+  LLVM_DEBUG(llvm::dbgs() << "\n";);
   return true;
 }
 

@@ -59,6 +59,17 @@ static void updateParetoPoints(SmallVector<DesignPointType, 16> &paretoPoints) {
 // LoopDesignSpace Class Definition
 //===----------------------------------------------------------------------===//
 
+static void emitTileListDebugInfo(TileList tileList) {
+  LLVM_DEBUG(llvm::dbgs() << "(";
+             for (unsigned i = 0, e = tileList.size(); i < e; ++i) {
+               llvm::dbgs() << tileList[i];
+               if (i != e - 1)
+                 llvm::dbgs() << ",";
+               else
+                 llvm::dbgs() << ") ";
+             });
+}
+
 LoopDesignSpace::LoopDesignSpace(FuncOp func, AffineLoopBand &band,
                                  ScaleHLSEstimator &estimator,
                                  unsigned maxDspNum)
@@ -208,11 +219,11 @@ void LoopDesignSpace::initializeLoopDesignSpace(unsigned maxInitParallel) {
     if (parallel > maxInitParallel)
       continue;
 
-    LLVM_DEBUG(llvm::dbgs() << config << ",");
+    // emitTileListDebugInfo(getTileList(config));
     evaluateTileConfig(config);
   }
 
-  LLVM_DEBUG(llvm::dbgs() << "\n\n");
+  // LLVM_DEBUG(llvm::dbgs() << "\n\n");
   updateParetoPoints(paretoPoints);
 }
 
@@ -274,6 +285,7 @@ void LoopDesignSpace::exploreLoopDesignSpace(unsigned maxIterNum,
   // Exploration loop of the dse.
   for (unsigned i = 0; i < maxIterNum; ++i) {
     bool foundValidNeighbor = false;
+    // TODO
     // std::random_shuffle(paretoPoints.begin(), paretoPoints.end(),
     //                     [&](int i) { return std::rand() % i; });
 
@@ -290,7 +302,7 @@ void LoopDesignSpace::exploreLoopDesignSpace(unsigned maxIterNum,
       foundValidNeighbor = true;
       auto config = closestNeighbor.getValue();
 
-      LLVM_DEBUG(llvm::dbgs() << config << ",";);
+      emitTileListDebugInfo(getTileList(config));
       evaluateTileConfig(config);
       break;
     }
@@ -409,7 +421,7 @@ void FuncDesignSpace::combLoopDesignSpaces() {
 // Optimizer Class Definition
 //===----------------------------------------------------------------------===//
 
-bool ScaleHLSOptimizer::emitDebugInfo(FuncOp func, std::string message) {
+bool ScaleHLSOptimizer::emitQoRDebugInfo(FuncOp func, std::string message) {
   estimator.estimateFunc(func);
   auto latency = getIntAttrValue(func, "latency");
   auto dspNum = getIntAttrValue(func, "dsp");
@@ -468,6 +480,9 @@ static int64_t getInnerParallelism(AffineForOp forOp) {
 ///
 /// TODO: there is a large design space in this simplification.
 bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
+  LLVM_DEBUG(llvm::dbgs()
+                 << "----------\nStage1: Simplify loop nests structure...\n";);
+
   auto funcForOps = func.getOps<AffineForOp>();
   auto targetLoops =
       SmallVector<AffineForOp, 8>(funcForOps.begin(), funcForOps.end());
@@ -531,7 +546,7 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
     }
   }
 
-  return emitDebugInfo(func, "----------\n1. Simplify loop nests structure.");
+  return emitQoRDebugInfo(func, "\nFinish Stage1.");
 }
 
 /// DSE Stage2: Optimize leaf loop nests. Different optimization conbinations
@@ -539,25 +554,30 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
 /// constraints will be picked as the final solution.
 /// TODO: better handle variable bound kernels.
 bool ScaleHLSOptimizer::optimizeLoopBands(FuncOp func) {
+  LLVM_DEBUG(llvm::dbgs() << "----------\nStage2: Apply loop perfection, loop "
+                             "order opt, and remove variable loop bound...\n";);
+
   AffineLoopBands targetBands;
   getLoopBands(func.front(), targetBands);
+  unsigned targetNum = targetBands.size();
 
   // Loop perfection, remove variable bound, and loop order optimization are
   // always applied for the convenience of polyhedral optimizations.
-  for (auto &band : targetBands) {
+  for (unsigned i = 0; i < targetNum; ++i) {
+    auto &band = targetBands[i];
+    LLVM_DEBUG(llvm::dbgs() << "Loop band " << i << ": ";);
     applyAffineLoopPerfection(band);
     applyAffineLoopOrderOpt(band);
     applyRemoveVariableBound(band);
   }
 
-  return emitDebugInfo(func, "----------\n2. Apply loop perfection, loop order "
-                             "opt, and remove variable loop bound.");
+  return emitQoRDebugInfo(func, "\nFinish Stage2.");
 }
 
 /// DSE Stage3: Explore the function design space through dynamic programming.
 bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, raw_ostream &os) {
-  LLVM_DEBUG(llvm::dbgs() << "----------\n3. Begin to explore the function "
-                             "design space...\n\n";);
+  LLVM_DEBUG(llvm::dbgs() << "----------\nStage3: Conduct top function design "
+                             "space exploration...\n";);
 
   auto tmpFunc = func.clone();
   AffineLoopBands targetBands;
@@ -596,9 +616,10 @@ bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, raw_ostream &os) {
         auto tileList = loopSpace.getTileList(loopPoint.tileConfig);
         auto targetII = loopPoint.targetII;
 
-        LLVM_DEBUG(llvm::dbgs() << "Apply loop tiling & pipelining: (";);
+        LLVM_DEBUG(llvm::dbgs() << "Loop band " << i << ": "
+                                << "Loop tiling & pipelining (";);
         LLVM_DEBUG(for (auto tile : tileList) { llvm::dbgs() << tile << ","; });
-        LLVM_DEBUG(llvm::dbgs() << targetII << ") Finish.\n");
+        LLVM_DEBUG(llvm::dbgs() << targetII << ")\n");
 
         tileLists.push_back(tileList);
         targetIIs.push_back(targetII);
@@ -609,7 +630,7 @@ bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, raw_ostream &os) {
     }
   }
 
-  return emitDebugInfo(func, "----------\nApply the best design point.");
+  return emitQoRDebugInfo(func, "\nFinish Stage3.");
 }
 
 //===----------------------------------------------------------------------===//
@@ -618,7 +639,7 @@ bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, raw_ostream &os) {
 
 /// This is a temporary approach that does not scale.
 void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func, raw_ostream &os) {
-  emitDebugInfo(func, "Start multiple level DSE.");
+  emitQoRDebugInfo(func, "Start multiple level DSE.");
 
   // Simplify loop nests by unrolling.
   if (!simplifyLoopNests(func))
@@ -649,8 +670,12 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
     // PYNQ-Z1 board.
     LatencyMap latencyMap;
     getLatencyMap(spec, latencyMap);
-    int64_t maxDspNum =
+    unsigned maxDspNum =
         ceil(spec.GetInteger("specification", "dsp", 220) * 1.1);
+
+    unsigned maxInitParallel = spec.GetInteger("dse", "max_init_parallel", 16);
+    unsigned maxIterNum = spec.GetInteger("dse", "max_iter_num", 16);
+    unsigned maxDistance = spec.GetFloat("dse", "max_distance", 1.0);
 
     // Parse output file.
     std::string errorMessage;
@@ -659,7 +684,6 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
       emitError(module.getLoc(), errorMessage);
 
     // Initialize an performance and resource estimator.
-    // TODO: how to pass in these parameters?
     auto estimator = ScaleHLSEstimator(builder, latencyMap, depAnalysis);
     auto optimizer =
         ScaleHLSOptimizer(builder, estimator, maxDspNum, maxInitParallel,

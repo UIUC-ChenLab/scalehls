@@ -159,7 +159,7 @@ public:
         maxDspNum(maxDspNum), maxInitParallel(maxInitParallel),
         maxIterNum(maxIterNum), maxDistance(maxDistance) {}
 
-  bool emitDebugInfo(FuncOp func, std::string message);
+  bool emitQoRDebugInfo(FuncOp func, std::string message);
 
   bool simplifyLoopNests(FuncOp func);
   bool optimizeLoopBands(FuncOp func);
