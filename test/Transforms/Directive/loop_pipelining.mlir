@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -loop-pipelining="pipeline-level=3" %s | FileCheck %s
+// RUN: scalehls-opt -loop-pipelining="pipeline-level=3 target-ii=2" %s | FileCheck %s
 
 // CHECK-NOT: #map0 = affine_map<(d0) -> (d0)>
 // CHECK-NOT: #map1 = affine_map<(d0) -> (d0 + 2)>
@@ -57,7 +57,7 @@ module  {
             } {flatten = false, pipeline = false}
           } {flatten = false, pipeline = false}
 
-        // CHECK: } {flatten = false, pipeline = true, target_ii = 1 : i64}
+        // CHECK: } {flatten = false, pipeline = true, target_ii = 2 : i64}
         } {flatten = false, pipeline = false}
       } {flatten = false, pipeline = false}
     } {flatten = false, pipeline = false}
