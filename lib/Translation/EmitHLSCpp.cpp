@@ -389,16 +389,20 @@ public:
   bool visitOp(AbsFOp op) { return emitter.emitUnary(op, "abs"), true; }
   bool visitOp(CeilFOp op) { return emitter.emitUnary(op, "ceil"), true; }
   bool visitOp(NegFOp op) { return emitter.emitUnary(op, "-"), true; }
-  bool visitOp(CosOp op) { return emitter.emitUnary(op, "cos"), true; }
-  bool visitOp(SinOp op) { return emitter.emitUnary(op, "sin"), true; }
-  bool visitOp(TanhOp op) { return emitter.emitUnary(op, "tanh"), true; }
-  bool visitOp(SqrtOp op) { return emitter.emitUnary(op, "sqrt"), true; }
-  bool visitOp(RsqrtOp op) { return emitter.emitUnary(op, "1.0 / sqrt"), true; }
-  bool visitOp(ExpOp op) { return emitter.emitUnary(op, "exp"), true; }
-  bool visitOp(Exp2Op op) { return emitter.emitUnary(op, "exp2"), true; }
-  bool visitOp(LogOp op) { return emitter.emitUnary(op, "log"), true; }
-  bool visitOp(Log2Op op) { return emitter.emitUnary(op, "log2"), true; }
-  bool visitOp(Log10Op op) { return emitter.emitUnary(op, "log10"), true; }
+  bool visitOp(math::CosOp op) { return emitter.emitUnary(op, "cos"), true; }
+  bool visitOp(math::SinOp op) { return emitter.emitUnary(op, "sin"), true; }
+  bool visitOp(math::TanhOp op) { return emitter.emitUnary(op, "tanh"), true; }
+  bool visitOp(math::SqrtOp op) { return emitter.emitUnary(op, "sqrt"), true; }
+  bool visitOp(math::RsqrtOp op) {
+    return emitter.emitUnary(op, "1.0 / sqrt"), true;
+  }
+  bool visitOp(math::ExpOp op) { return emitter.emitUnary(op, "exp"), true; }
+  bool visitOp(math::Exp2Op op) { return emitter.emitUnary(op, "exp2"), true; }
+  bool visitOp(math::LogOp op) { return emitter.emitUnary(op, "log"), true; }
+  bool visitOp(math::Log2Op op) { return emitter.emitUnary(op, "log2"), true; }
+  bool visitOp(math::Log10Op op) {
+    return emitter.emitUnary(op, "log10"), true;
+  }
 
   /// Special operations.
   bool visitOp(SelectOp op) { return emitter.emitSelect(op), true; }

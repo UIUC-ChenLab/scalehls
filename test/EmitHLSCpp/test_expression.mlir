@@ -52,25 +52,25 @@ func @test_float_binary_unary(%arg0: f32, %arg1: f32) -> f32 {
   // CHECK: -
   %7 = negf %6 : f32
   // CHECK: cos
-  %8 = cos %7 : f32
+  %8 = math.cos %7 : f32
   // CHECK: sin
-  %9 = sin %8 : f32
+  %9 = math.sin %8 : f32
   // CHECK: tanh
-  %10 = tanh %9 : f32
+  %10 = math.tanh %9 : f32
   // CHECK: sqrt
-  %11 = sqrt %10 : f32
+  %11 = math.sqrt %10 : f32
   // CHECK: 1.0 / sqrt
-  %12 = rsqrt %11 : f32
+  %12 = math.rsqrt %11 : f32
   // CHECK: exp
-  %13 = exp %12 : f32
+  %13 = math.exp %12 : f32
   // CHECK: exp2
-  %14 = exp2 %13 : f32
+  %14 = math.exp2 %13 : f32
   // CHECK: log
-  %15 = log %14 : f32
+  %15 = math.log %14 : f32
   // CHECK: log2
-  %16 = log2 %15 : f32
+  %16 = math.log2 %15 : f32
   // CHECK: log10
-  %17 = log10 %16 : f32
+  %17 = math.log10 %16 : f32
   return %17 : f32
 }
 

@@ -8,6 +8,7 @@
 #define SCALEHLS_DIALECT_HLSCPP_VISITOR_H
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/SCF/SCF.h"
 #include "scalehls/Dialect/HLSCpp/HLSCpp.h"
 #include "llvm/ADT/TypeSwitch.h"
@@ -41,8 +42,9 @@ public:
             TensorLoadOp, TensorStoreOp, TensorToMemrefOp, SplatOp, DimOp,
             RankOp,
             // Unary expressions.
-            AbsFOp, CeilFOp, NegFOp, CosOp, SinOp, TanhOp, SqrtOp, RsqrtOp,
-            ExpOp, Exp2Op, LogOp, Log2Op, Log10Op,
+            AbsFOp, CeilFOp, NegFOp, math::CosOp, math::SinOp, math::TanhOp,
+            math::SqrtOp, math::RsqrtOp, math::ExpOp, math::Exp2Op, math::LogOp,
+            math::Log2Op, math::Log10Op,
             // Float binary expressions.
             CmpFOp, AddFOp, SubFOp, MulFOp, DivFOp, RemFOp,
             // Integer binary expressions.
@@ -129,16 +131,16 @@ public:
   HANDLE(AbsFOp);
   HANDLE(CeilFOp);
   HANDLE(NegFOp);
-  HANDLE(CosOp);
-  HANDLE(SinOp);
-  HANDLE(TanhOp);
-  HANDLE(SqrtOp);
-  HANDLE(RsqrtOp);
-  HANDLE(ExpOp);
-  HANDLE(Exp2Op);
-  HANDLE(LogOp);
-  HANDLE(Log2Op);
-  HANDLE(Log10Op);
+  HANDLE(math::CosOp);
+  HANDLE(math::SinOp);
+  HANDLE(math::TanhOp);
+  HANDLE(math::SqrtOp);
+  HANDLE(math::RsqrtOp);
+  HANDLE(math::ExpOp);
+  HANDLE(math::Exp2Op);
+  HANDLE(math::LogOp);
+  HANDLE(math::Log2Op);
+  HANDLE(math::Log10Op);
 
   // Float binary expressions.
   HANDLE(CmpFOp);
