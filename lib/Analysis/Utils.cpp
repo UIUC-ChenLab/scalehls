@@ -256,3 +256,85 @@ void scalehls::getLoopBands(Block &block, AffineLoopBands &bands,
     }
   });
 }
+
+bool scalehls::checkDependence(Operation *A, Operation *B) {
+  AffineLoopBand commonLoops;
+  unsigned numCommonLoops = getCommonSurroundingLoops(A, B, &commonLoops);
+
+  // Traverse each loop level to find dependencies.
+  for (unsigned depth = numCommonLoops; depth > 0; depth--) {
+    // Skip all parallel loop level.
+    if (auto parallelAttr =
+            commonLoops[depth - 1]->getAttrOfType<BoolAttr>("parallel"))
+      if (parallelAttr.getValue())
+        continue;
+
+    FlatAffineConstraints depConstrs;
+    DependenceResult result = checkMemrefAccessDependence(
+        MemRefAccess(A), MemRefAccess(B), depth, &depConstrs,
+        /*dependenceComponents=*/nullptr);
+    if (hasDependence(result))
+      return true;
+  }
+
+  return false;
+}
+
+//===----------------------------------------------------------------------===//
+// PtrLikeMemRefAccess Struct Definition
+//===----------------------------------------------------------------------===//
+
+PtrLikeMemRefAccess::PtrLikeMemRefAccess(Operation *loadOrStoreOpInst) {
+  Operation *opInst = nullptr;
+  SmallVector<Value, 4> indices;
+
+  if (auto loadOp = dyn_cast<AffineReadOpInterface>(loadOrStoreOpInst)) {
+    memref = loadOp.getMemRef();
+    opInst = loadOrStoreOpInst;
+    auto loadMemrefType = loadOp.getMemRefType();
+
+    indices.reserve(loadMemrefType.getRank());
+    for (auto index : loadOp.getMapOperands()) {
+      indices.push_back(index);
+    }
+  } else {
+    assert(isa<AffineWriteOpInterface>(loadOrStoreOpInst) &&
+           "Affine read/write op expected");
+    auto storeOp = cast<AffineWriteOpInterface>(loadOrStoreOpInst);
+    opInst = loadOrStoreOpInst;
+    memref = storeOp.getMemRef();
+    auto storeMemrefType = storeOp.getMemRefType();
+
+    indices.reserve(storeMemrefType.getRank());
+    for (auto index : storeOp.getMapOperands()) {
+      indices.push_back(index);
+    }
+  }
+
+  // Get affine map from AffineLoad/Store.
+  AffineMap map;
+  if (auto loadOp = dyn_cast<AffineReadOpInterface>(opInst))
+    map = loadOp.getAffineMap();
+  else
+    map = cast<AffineWriteOpInterface>(opInst).getAffineMap();
+
+  SmallVector<Value, 8> operands(indices.begin(), indices.end());
+  fullyComposeAffineMapAndOperands(&map, &operands);
+  map = simplifyAffineMap(map);
+  canonicalizeMapAndOperands(&map, &operands);
+
+  accessMap.reset(map, operands);
+}
+
+bool PtrLikeMemRefAccess::operator==(const PtrLikeMemRefAccess &rhs) const {
+  if (memref != rhs.memref || impl != rhs.impl)
+    return false;
+
+  if (impl == rhs.impl && impl && rhs.impl)
+    return true;
+
+  AffineValueMap diff;
+  AffineValueMap::difference(accessMap, rhs.accessMap, &diff);
+  return llvm::all_of(diff.getAffineMap().getResults(),
+                      [](AffineExpr e) { return e == 0; });
+}

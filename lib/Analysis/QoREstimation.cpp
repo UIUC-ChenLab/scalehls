@@ -294,23 +294,13 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
     // Walk through each pair of source and destination.
     unsigned dstIndex = 1;
     for (auto dstOp : loadStores) {
-      std::set<int64_t> safeSrcSchedules;
       auto srcOps = SmallVector<Operation *, 16>(
           llvm::drop_begin(loadStores, dstIndex++));
 
       for (auto i = srcOps.rbegin(); i != srcOps.rend(); ++i) {
         auto srcOp = *i;
         auto srcBegin = getIntAttrValue(srcOp, "schedule_begin");
-        auto srcEnd = getIntAttrValue(srcOp, "schedule_end");
-
-        // Memory operations that are scheduled overlapped MUST not have
-        // dependency with each other, thus once one of them has dependency with
-        // dstOp, all other srcOps MUST not have dependency and can be skipped.
-        if (safeSrcSchedules.count(srcBegin)) {
-          for (auto schedule = srcBegin + 1; schedule < srcEnd; ++schedule)
-            safeSrcSchedules.insert(schedule);
-          continue;
-        }
+        // auto srcEnd = getIntAttrValue(srcOp, "schedule_end");
 
         // If delay is smaller than the current II, stop and continue because
         // the minimum distance is one.
@@ -345,8 +335,6 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
               /*allowRAR=*/true);
 
           if (hasDependence(result)) {
-            for (auto schedule = srcBegin; schedule < srcEnd; ++schedule)
-              safeSrcSchedules.insert(schedule);
             int64_t distance = 0;
 
             if (dstMuxSize > 3 || srcMuxSize > 3) {

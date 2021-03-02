@@ -8,6 +8,7 @@
 #define SCALEHLS_ANALYSIS_UTILS_H
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 
 namespace mlir {
 namespace scalehls {
@@ -53,6 +54,8 @@ AffineForOp getLoopBandFromOutermost(AffineForOp forOp, AffineLoopBand &band);
 /// loops are collected.
 void getLoopBands(Block &block, AffineLoopBands &bands,
                   bool allowHavingChilds = false);
+
+bool checkDependence(Operation *A, Operation *B);
 
 //===----------------------------------------------------------------------===//
 // ScaleHLSAnalysisBase Class Declaration
@@ -116,7 +119,63 @@ public:
   Builder &builder;
 };
 
+//===----------------------------------------------------------------------===//
+// PtrLikeMemRefAccess Struct Declaration
+//===----------------------------------------------------------------------===//
+
+/// Encapsulates a memref load or store access information.
+struct PtrLikeMemRefAccess {
+  Value memref = nullptr;
+  AffineValueMap accessMap;
+
+  void *impl = nullptr;
+
+  /// Constructs a MemRefAccess from a load or store operation.
+  explicit PtrLikeMemRefAccess(Operation *opInst);
+
+  PtrLikeMemRefAccess(const void *impl) : impl(const_cast<void *>(impl)) {}
+
+  bool operator==(const PtrLikeMemRefAccess &rhs) const;
+
+  llvm::hash_code getHashValue() {
+    return llvm::hash_combine(memref, accessMap.getAffineMap(),
+                              accessMap.getOperands(), impl);
+  }
+};
+
+using ReverseOpIteratorsMap =
+    DenseMap<PtrLikeMemRefAccess,
+             SmallVector<std::reverse_iterator<Operation **>, 16>>;
+using OpIteratorsMap =
+    DenseMap<PtrLikeMemRefAccess, SmallVector<Operation **, 16>>;
+
 } // namespace scalehls
 } // namespace mlir
+
+//===----------------------------------------------------------------------===//
+// Make PtrLikeMemRefAccess eligible as key of DenseMap
+//===----------------------------------------------------------------------===//
+
+namespace llvm {
+
+template <> struct DenseMapInfo<mlir::scalehls::PtrLikeMemRefAccess> {
+  static mlir::scalehls::PtrLikeMemRefAccess getEmptyKey() {
+    auto pointer = llvm::DenseMapInfo<void *>::getEmptyKey();
+    return mlir::scalehls::PtrLikeMemRefAccess(pointer);
+  }
+  static mlir::scalehls::PtrLikeMemRefAccess getTombstoneKey() {
+    auto pointer = llvm::DenseMapInfo<void *>::getTombstoneKey();
+    return mlir::scalehls::PtrLikeMemRefAccess(pointer);
+  }
+  static unsigned getHashValue(mlir::scalehls::PtrLikeMemRefAccess access) {
+    return access.getHashValue();
+  }
+  static bool isEqual(mlir::scalehls::PtrLikeMemRefAccess lhs,
+                      mlir::scalehls::PtrLikeMemRefAccess rhs) {
+    return lhs == rhs;
+  }
+};
+
+} // namespace llvm
 
 #endif // SCALEHLS_ANALYSIS_UTILS_H

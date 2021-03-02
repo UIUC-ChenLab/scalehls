@@ -4,196 +4,112 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Analysis/AffineAnalysis.h"
-#include "mlir/Analysis/Utils.h"
 #include "scalehls/Analysis/Utils.h"
 #include "scalehls/Transforms/Passes.h"
-#include <algorithm>
 
 using namespace mlir;
 using namespace scalehls;
 
-namespace {
-class Simplifier {
-public:
-  explicit Simplifier(FuncOp func, SmallPtrSet<Operation *, 16> &opsToErase)
-      : func(func), opsToErase(opsToErase) {
-    getMemAccessesMap(func.front(), map);
-  }
-
-  void refreshMemAccessMap() {
-    map.clear();
-    getMemAccessesMap(func.front(), map);
-  }
-
-  void simplifyLoad(AffineReadOpInterface loadOp);
-  void simplifyStore(AffineWriteOpInterface storeOp);
-
-  FuncOp func;
-  SmallPtrSet<Operation *, 16> &opsToErase;
-  MemAccessesMap map;
-};
-} // namespace
-
-void Simplifier::simplifyLoad(AffineReadOpInterface loadOp) {
-  auto &loadOrStoreOps = map[loadOp.getMemRef()];
-
-  // The last load operation that has identical memory access with loadOp.
-  Operation *targetLoadOp = nullptr;
-
-  // Find all eligible store operations that dominates the load operation.
-  SmallVector<Operation *, 8> domStoreOps;
-  auto startOpIter =
-      std::find(loadOrStoreOps.rbegin(), loadOrStoreOps.rend(), loadOp);
-
-  for (auto it = std::next(startOpIter); it != loadOrStoreOps.rend(); ++it) {
-    auto loadOrStoreOp = *it;
-
-    // If the two operations are at different loop levels, quit.
-    if (loadOrStoreOp->getBlock() != loadOp->getBlock())
-      return;
-
-    if (auto domLoadOp = dyn_cast<AffineReadOpInterface>(loadOrStoreOp)) {
-      // Check whether has identical memory access.
-      if (MemRefAccess(domLoadOp) == MemRefAccess(loadOp) &&
-          !opsToErase.count(domLoadOp)) {
-        targetLoadOp = domLoadOp;
-        break;
-      }
-    } else {
-      domStoreOps.push_back(loadOrStoreOp);
-    }
-  }
-
-  if (!targetLoadOp)
-    return;
-
-  if (!domStoreOps.empty()) {
-    // As we have ensured that all store operations are at the same level, thus
-    // their common surrounding loops are exactly the same.
-    AffineLoopBand commonLoops;
-    unsigned numCommonLoops =
-        getCommonSurroundingLoops(domStoreOps.back(), loadOp, &commonLoops);
-
-    // Traverse each loop level to find dependencies.
-    for (unsigned depth = numCommonLoops; depth > 0; depth--) {
-      // Skip all parallel loop level.
-      if (auto parallelAttr =
-              commonLoops[depth - 1]->getAttrOfType<BoolAttr>("parallel"))
-        if (parallelAttr.getValue())
-          continue;
-
-      for (auto storeOp : domStoreOps) {
-        FlatAffineConstraints depConstrs;
-
-        DependenceResult result = checkMemrefAccessDependence(
-            MemRefAccess(storeOp), MemRefAccess(loadOp), depth, &depConstrs,
-            /*dependenceComponents=*/nullptr);
-        if (hasDependence(result))
-          return;
-      }
-    }
-  }
-
-  for (unsigned i = 0, e = loadOp->getNumResults(); i < e; ++i)
-    loadOp->getResult(i).replaceAllUsesWith(targetLoadOp->getResult(i));
-  opsToErase.insert(loadOp);
-}
-
-void Simplifier::simplifyStore(AffineWriteOpInterface storeOp) {
-  auto &loadOrStoreOps = map[storeOp.getMemRef()];
-
-  // The last store operation that has identical memory access with storeOp.
-  Operation *targetStoreOp = nullptr;
-
-  // Find all eligible operations that dominates the store operation.
-  SmallVector<Operation *, 8> postDomLoadOps;
-  auto startOpIter =
-      std::find(loadOrStoreOps.begin(), loadOrStoreOps.end(), storeOp);
-
-  for (auto it = std::next(startOpIter); it != loadOrStoreOps.end(); ++it) {
-    auto loadOrStoreOp = *it;
-
-    // If the two operations are at different loop levels, quit.
-    auto sameLevelOps = checkSameLevel(storeOp, loadOrStoreOp);
-    if (!sameLevelOps)
-      return;
-
-    if (auto postDomStoreOp = dyn_cast<AffineWriteOpInterface>(loadOrStoreOp)) {
-      // Check whether has identical memory access.
-      if (sameLevelOps.getValue().second == postDomStoreOp &&
-          MemRefAccess(storeOp) == MemRefAccess(postDomStoreOp)) {
-        targetStoreOp = postDomStoreOp;
-        break;
-      }
-    } else {
-      postDomLoadOps.push_back(loadOrStoreOp);
-    }
-  }
-
-  if (!targetStoreOp)
-    return;
-
-  if (!postDomLoadOps.empty()) {
-    // As we have ensured that all store operations are at the same level, thus
-    // their common surrounding loops are exactly the same.
-    AffineLoopBand commonLoops;
-    unsigned numCommonLoops =
-        getCommonSurroundingLoops(storeOp, postDomLoadOps.back(), &commonLoops);
-
-    // Traverse each loop level to find dependencies.
-    for (unsigned depth = numCommonLoops; depth > 0; depth--) {
-      // Skip all parallel loop level.
-      if (auto parallelAttr =
-              commonLoops[depth - 1]->getAttrOfType<BoolAttr>("parallel"))
-        if (parallelAttr.getValue())
-          continue;
-
-      for (auto loadOp : postDomLoadOps) {
-        FlatAffineConstraints depConstrs;
-
-        DependenceResult result = checkMemrefAccessDependence(
-            MemRefAccess(storeOp), MemRefAccess(loadOp), depth, &depConstrs,
-            /*dependenceComponents=*/nullptr);
-        if (hasDependence(result))
-          return;
-      }
-    }
-  }
-
-  for (auto postDomLoadOp : postDomLoadOps) {
-    FlatAffineConstraints depConstrs;
-    unsigned nsLoops = getNumCommonSurroundingLoops(*storeOp, *postDomLoadOp);
-
-    for (unsigned depth = nsLoops + 1; depth > 0; depth--) {
-      DependenceResult result = checkMemrefAccessDependence(
-          MemRefAccess(storeOp), MemRefAccess(postDomLoadOp), depth,
-          &depConstrs, /*dependenceComponents=*/nullptr);
-      if (hasDependence(result))
-        return;
-    }
-  }
-
-  opsToErase.insert(storeOp);
-}
-
 static bool applySimplifyMemrefAccess(FuncOp func) {
   SmallPtrSet<Operation *, 16> opsToErase;
-  auto simplifier = Simplifier(func, opsToErase);
-  func.walk(
-      [&](AffineReadOpInterface loadOp) { simplifier.simplifyLoad(loadOp); });
 
-  for (auto loadOp : opsToErase)
-    loadOp->erase();
+  MemAccessesMap memAccessesMap;
+  getMemAccessesMap(func.front(), memAccessesMap);
 
-  opsToErase.clear();
-  simplifier.refreshMemAccessMap();
-  func.walk([&](AffineWriteOpInterface storeOp) {
-    simplifier.simplifyStore(storeOp);
-  });
+  for (auto memAccessesPair : memAccessesMap) {
+    auto loadOrStoreOps = memAccessesPair.second;
 
-  for (auto storeOp : opsToErase)
-    storeOp->erase();
+    // Collect all load operations that share the same memref access.
+    ReverseOpIteratorsMap loadsMap;
+    for (auto it = loadOrStoreOps.rbegin(); it != loadOrStoreOps.rend(); ++it) {
+      if (isa<AffineReadOpInterface>(*it))
+        loadsMap[PtrLikeMemRefAccess(*it)].push_back(it);
+    }
+
+    // Traverse each {MemRefAccess, Load operation iterator vector} element.
+    for (auto loadsPair : loadsMap) {
+      auto loadOps = loadsPair.second;
+
+      for (unsigned i = 0, e = loadOps.size() - 1; i < e; ++i) {
+        auto loadOpIt = loadOps[i];
+        auto domLoadOpIt = loadOps[i + 1];
+
+        auto loadOp = *loadOpIt;
+        auto domLoadOp = *domLoadOpIt;
+
+        // The two load operations must locate in the same basic block.
+        if (loadOp->getBlock() != domLoadOp->getBlock())
+          continue;
+
+        // Traverse all store operations between the current two load operations
+        // that share the same memref access.
+        auto it = std::next(loadOpIt);
+        for (; it != domLoadOpIt; ++it) {
+          if (!isa<AffineWriteOpInterface>(*it))
+            continue;
+          if (checkDependence(*it, loadOp))
+            break;
+        }
+
+        // We need to make sure there is no dependency exists in between.
+        if (it != domLoadOpIt)
+          continue;
+
+        // Now we know loadOp can be eliminated.
+        loadOp->getResult(0).replaceAllUsesWith(domLoadOp->getResult(0));
+        opsToErase.insert(loadOp);
+      }
+    }
+
+    // Find all store operations that share the same memref access.
+    OpIteratorsMap storesMap;
+    for (auto it = loadOrStoreOps.begin(); it != loadOrStoreOps.end(); ++it) {
+      if (isa<AffineWriteOpInterface>(*it))
+        storesMap[PtrLikeMemRefAccess(*it)].push_back(it);
+    }
+
+    // Traverse each {MemRefAccess, Store operation iterator vector} element.
+    for (auto storesPair : storesMap) {
+      auto storeOps = storesPair.second;
+
+      for (unsigned i = 0, e = storeOps.size() - 1; i < e; ++i) {
+        auto storeOpIt = storeOps[i];
+        auto postDomStoreOpIt = storeOps[i + 1];
+
+        auto storeOp = *storeOpIt;
+        auto postDomStoreOp = *postDomStoreOpIt;
+
+        // The two store operations must locate in the same loop level.
+        auto sameLevelOps = checkSameLevel(storeOp, postDomStoreOp);
+        if (!sameLevelOps)
+          continue;
+
+        // The seconde store operation must always be executed.
+        if (sameLevelOps.getValue().second != postDomStoreOp)
+          continue;
+
+        // Traverse all load operations between the current two load operations
+        // that share the same memref access.
+        auto it = std::next(storeOpIt);
+        for (; it != postDomStoreOpIt; ++it) {
+          if (!isa<AffineReadOpInterface>(*it))
+            continue;
+          if (checkDependence(storeOp, *it))
+            break;
+        }
+
+        // We need to make sure there is no dependency exists in between.
+        if (it != postDomStoreOpIt)
+          continue;
+
+        // Now we know storeOp can be eliminated.
+        opsToErase.insert(storeOp);
+      }
+    }
+  }
+
+  for (auto op : opsToErase)
+    op->erase();
 
   return true;
 }
