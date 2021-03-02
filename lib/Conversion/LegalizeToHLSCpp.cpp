@@ -31,10 +31,12 @@ void LegalizeToHLSCpp::runOnOperation() {
   if (!func->getAttr("dataflow"))
     func->setAttr("dataflow", builder.getBoolAttr(false));
 
-  if (func.getName() == topFunc)
-    func->setAttr("top_function", builder.getBoolAttr(true));
-  else
-    func->setAttr("top_function", builder.getBoolAttr(false));
+  if (!func->getAttr("top_function")) {
+    if (func.getName() == topFunc)
+      func->setAttr("top_function", builder.getBoolAttr(true));
+    else
+      func->setAttr("top_function", builder.getBoolAttr(false));
+  }
 
   SmallPtrSet<Value, 16> memrefs;
 
@@ -54,7 +56,8 @@ void LegalizeToHLSCpp::runOnOperation() {
       if (!forOp->getAttr("flatten"))
         forOp->setAttr("flatten", builder.getBoolAttr(false));
 
-      forOp->setAttr("parallel", builder.getBoolAttr(isLoopParallel(forOp)));
+      if (!forOp->getAttr("parallel"))
+        forOp->setAttr("parallel", builder.getBoolAttr(isLoopParallel(forOp)));
     }
   });
 

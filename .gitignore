@@ -1,12 +1,16 @@
-.vscode
 build
+
 **/tmp
-**/hls_proj
 **/cpp_src
-**/test_results
+**/hls_proj
+**/dump_csv
+
+.vscode
+**/.ipynb_checkpoints
 
 *.onnx*
 *.tmp
 *.gv
 *.png
 *.log
+*.csv

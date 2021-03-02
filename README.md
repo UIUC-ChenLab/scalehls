@@ -59,7 +59,7 @@ $ benchmark-gen -type "cnn" -config "config/cnn-config.ini" -number 1 \
 ## Integration with ONNX-MLIR
 If you have installed ONNX-MLIR or established ONNX-MLIR docker to `$ONNXMLIR_DIR` following the instruction from (https://github.com/onnx/onnx-mlir), you should be able to run the following integration test:
 ```sh
-$ cd $SCALEHLS_DIR/sample/onnx-mlir/resnet18
+$ cd $SCALEHLS_DIR/samples/onnx-mlir
 
 $ # Export PyTorch model to ONNX.
 $ python export_resnet18.py
@@ -82,7 +82,7 @@ $ scalehls-opt resnet18.mlir -allow-unregistered-dialect \
     -legalize-dataflow="min-gran=3 insert-copy=true" -split-function \
     -convert-linalg-to-affine-loops -affine-loop-order-opt \
     -legalize-to-hlscpp="top-func=main_graph" -loop-pipelining -canonicalize \
-    | scalehls-translate -emit-hlscpp
+    | scalehls-translate -emit-hlscpp > resnet18.cpp
 ```
 
 ## References

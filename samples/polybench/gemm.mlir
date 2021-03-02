@@ -1,7 +1,4 @@
-// RUN: scalehls-opt %s | FileCheck %s
-
-// CHECK: module {
-func @test_gemm(%alpha: f32, %beta: f32, %A: memref<1024x1024xf32>, %B: memref<1024x1024xf32>, %C: memref<1024x1024xf32>) {
+func @gemm(%alpha: f32, %beta: f32, %A: memref<1024x1024xf32>, %B: memref<1024x1024xf32>, %C: memref<1024x1024xf32>) {
   affine.for %i = 0 to 1024 {
     affine.for %j = 0 to 1024 {
       %0 = affine.load %C[%i, %j] : memref<1024x1024xf32>

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Please run: source ablation_test_run.sh -n 9 -c 0
+
 # Script options.
 while getopts 'n:c:' opt
 do
@@ -32,7 +34,7 @@ echo -e "Name\tBRAM\tDSP\tLUT\tCycles\tInterval" > test_result.log
 n=0
 while [ $n -lt $ablation_number ]
 do
-  file=../../../tmp/resnet18.mlir
+  file=resnet18.mlir
   output=cpp_src/resnet18_$n.cpp
 
   case $n in

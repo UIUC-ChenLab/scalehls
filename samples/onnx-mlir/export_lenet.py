@@ -2,6 +2,8 @@
 
 Modified based on (https://github.com/kuangliu/pytorch-cifar/blob/master/models/lenet.py)
 
+See README.md for instruction.
+
 '''
 
 import torch

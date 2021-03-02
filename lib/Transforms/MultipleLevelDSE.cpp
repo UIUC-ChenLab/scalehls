@@ -258,9 +258,8 @@ void LoopDesignSpace::dumpLoopDesignSpace(raw_ostream &os) {
 Optional<TileConfig>
 LoopDesignSpace::getRandomClosestNeighbor(LoopDesignPoint point,
                                           float maxDistance) {
-  SmallVector<std::pair<float, TileConfig>, 8> candidateConfigs;
-
   // Traverse all unestimated tile configs and collect all neighbors.
+  SmallVector<std::pair<float, TileConfig>, 8> candidateConfigs;
   for (auto config : unestimatedTileConfigs) {
     auto distance = getTileConfigDistance(point.tileConfig, config);
     if (distance <= maxDistance)
@@ -271,24 +270,38 @@ LoopDesignSpace::getRandomClosestNeighbor(LoopDesignPoint point,
   if (candidateConfigs.empty())
     return Optional<TileConfig>();
 
-  // Sort candidate configs and pick the first one as return.
-  // TODO: randomize this selection.
+  // Sort candidate configs and collect the closest points.
   std::sort(candidateConfigs.begin(), candidateConfigs.end());
-  return candidateConfigs.front().second;
+  SmallVector<TileConfig, 8> closestConfigs;
+  float minDistance = maxDistance;
+
+  for (auto configPair : candidateConfigs) {
+    if (configPair.first <= minDistance) {
+      closestConfigs.push_back(configPair.second);
+      minDistance = configPair.first;
+    } else
+      break;
+  }
+
+  // Randomly pick one as the return point.
+  std::srand(std::time(0));
+  std::random_shuffle(closestConfigs.begin(), closestConfigs.end(),
+                      [&](int i) { return std::rand() % i; });
+
+  return closestConfigs.front();
 }
 
 void LoopDesignSpace::exploreLoopDesignSpace(unsigned maxIterNum,
                                              float maxDistance) {
   LLVM_DEBUG(llvm::dbgs() << "Explore the loop design space...\n";);
-  std::srand(std::time(0));
 
   // Exploration loop of the dse.
   for (unsigned i = 0; i < maxIterNum; ++i) {
-    bool foundValidNeighbor = false;
-    // TODO
-    // std::random_shuffle(paretoPoints.begin(), paretoPoints.end(),
-    //                     [&](int i) { return std::rand() % i; });
+    std::srand(std::time(0));
+    std::random_shuffle(paretoPoints.begin(), paretoPoints.end(),
+                        [&](int i) { return std::rand() % i; });
 
+    bool foundValidNeighbor = false;
     for (auto &point : paretoPoints) {
       if (!point.isActive)
         continue;
@@ -690,9 +703,12 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
                           maxIterNum, maxDistance);
 
     // Optimize the top function.
+    // TODO: Handle sub-functions.
     for (auto func : module.getOps<FuncOp>())
-      if (func.getName() == topFunc)
+      if (func.getName() == topFunc) {
+        func->setAttr("top_function", builder.getBoolAttr(true));
         optimizer.applyMultipleLevelDSE(func, output->os());
+      }
 
     output->keep();
   }

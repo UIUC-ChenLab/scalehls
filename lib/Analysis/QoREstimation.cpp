@@ -297,14 +297,13 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
       auto srcOps = SmallVector<Operation *, 16>(
           llvm::drop_begin(loadStores, dstIndex++));
 
-      for (auto i = srcOps.rbegin(); i != srcOps.rend(); ++i) {
-        auto srcOp = *i;
-        auto srcBegin = getIntAttrValue(srcOp, "schedule_begin");
-        // auto srcEnd = getIntAttrValue(srcOp, "schedule_end");
+      for (auto it = srcOps.rbegin(); it != srcOps.rend(); ++it) {
+        auto srcOp = *it;
 
         // If delay is smaller than the current II, stop and continue because
         // the minimum distance is one.
-        auto delay = getIntAttrValue(dstOp, "schedule_end") - srcBegin;
+        auto delay = getIntAttrValue(dstOp, "schedule_end") -
+                     getIntAttrValue(srcOp, "schedule_begin");
         if (delay <= II)
           continue;
 
