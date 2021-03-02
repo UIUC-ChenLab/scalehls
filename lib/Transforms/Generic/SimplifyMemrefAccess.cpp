@@ -84,7 +84,7 @@ static bool applySimplifyMemrefAccess(FuncOp func) {
         if (!sameLevelOps)
           continue;
 
-        // The seconde store operation must always be executed.
+        // The second store operation must always be executed.
         if (sameLevelOps.getValue().second != postDomStoreOp)
           continue;
 
