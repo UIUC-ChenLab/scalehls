@@ -6,6 +6,7 @@
 
 #include "scalehls/Transforms/MultipleLevelDSE.h"
 #include "mlir/Analysis/LoopAnalysis.h"
+#include "mlir/Analysis/Utils.h"
 #include "mlir/Support/FileUtilities.h"
 #include "scalehls/Transforms/Passes.h"
 #include "llvm/Support/Debug.h"
@@ -123,6 +124,28 @@ TileList LoopDesignSpace::getTileList(TileConfig config) {
   return tileList;
 }
 
+/// Return the corresponding tile config given a tile list.
+TileConfig LoopDesignSpace::getTileConfig(TileList tileList) {
+  assert(tileList.size() == validTileSizesList.size() && "invalid tile list");
+
+  TileConfig config = 0;
+  unsigned factor = 1;
+  for (unsigned i = 0, e = tileList.size(); i < e; ++i) {
+    auto tile = tileList[i];
+    auto validSizes = validTileSizesList[i];
+
+    auto idx = std::find(validSizes.begin(), validSizes.end(), tile) -
+               validSizes.begin();
+
+    assert(idx >= 0 && idx < (long)validSizes.size() && "invalid tile list");
+
+    config += factor * idx;
+    factor *= validSizes.size();
+  }
+
+  return config;
+}
+
 /// Calculate the Euclid distance of config a and config b.
 float LoopDesignSpace::getTileConfigDistance(TileConfig configA,
                                              TileConfig configB) {
@@ -209,21 +232,32 @@ bool LoopDesignSpace::evaluateTileConfig(TileConfig config) {
 void LoopDesignSpace::initializeLoopDesignSpace(unsigned maxInitParallel) {
   LLVM_DEBUG(llvm::dbgs() << "Initialize the loop design space...\n";);
 
+  // A fully parallizable loop band will be easy and fast to be explored, thus
+  // we always evaluate the minimum fully parallel tile config.
+  TileList parallelTileList;
+  for (unsigned i = 0, e = band.size(); i < e; ++i) {
+    if (!isLoopParallel(band[i]))
+      parallelTileList.push_back(tripCountList[i]);
+    else
+      parallelTileList.push_back(1);
+  }
+  auto parallelConfig = getTileConfig(parallelTileList);
+
   for (TileConfig config = 0; config < validTileConfigNum; ++config) {
     auto tileList = getTileList(config);
 
-    // We only evaluate the design points whose overall parallelism is smaller
+    // We only evaluate the design points whose overall parallel is smaller
     // than the maxInitParallel to improve the efficiency.
     auto parallel = std::accumulate(tileList.begin(), tileList.end(),
                                     (unsigned)1, std::multiplies<unsigned>());
-    if (parallel > maxInitParallel)
-      continue;
 
-    // emitTileListDebugInfo(getTileList(config));
-    evaluateTileConfig(config);
+    if (parallel <= maxInitParallel || config == parallelConfig) {
+      emitTileListDebugInfo(tileList);
+      evaluateTileConfig(config);
+    }
   }
 
-  // LLVM_DEBUG(llvm::dbgs() << "\n\n");
+  LLVM_DEBUG(llvm::dbgs() << "\n\n");
   updateParetoPoints(paretoPoints);
 }
 
@@ -513,8 +547,9 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
       // the current loop band is pipelined.
       auto parallelism = getInnerParallelism(innermostLoop);
 
-      // Collect all candidate loops into an vector.
-      if (parallelism > 1)
+      // Collect all candidate loops into an vector, we'll ignore too large
+      // parallelism as unrolling them typically introduce very high cost.
+      if (parallelism > 1 && parallelism < 256)
         candidateLoops.push_back(
             std::pair<int64_t, AffineForOp>(parallelism, innermostLoop));
     }

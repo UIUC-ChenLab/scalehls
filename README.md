@@ -38,13 +38,13 @@ $ cd $SCALEHLS_DIR
 
 $ # Automatic kernel-level design space exploration.
 $ scalehls-opt samples/polybench/gemm.mlir \
-    -multiple-level-dse="target-spec=config/target-spec.ini dump-file=gemm_dse.csv top-func=test_gemm" \
+    -multiple-level-dse="target-spec=config/target-spec.ini dump-file=gemm_dse.csv top-func=gemm" \
     -debug-only=scalehls | scalehls-translate -emit-hlscpp
 
 $ # Loop and pragma-level optimizations, performance estimation, and C++ code generation.
 $ scalehls-opt samples/polybench/syrk.mlir \
     -affine-loop-perfection -affine-loop-order-opt -remove-variable-bound \
-    -partial-affine-loop-tile="tile-size=2" -legalize-to-hlscpp="top-func=test_syrk" \
+    -partial-affine-loop-tile="tile-size=2" -legalize-to-hlscpp="top-func=syrk" \
     -loop-pipelining="pipeline-level=3 target-ii=2" -canonicalize -simplify-affine-if \
     -affine-store-forward -simplify-memref-access -cse -array-partition \
     -qor-estimation="target-spec=config/target-spec.ini" \
@@ -90,5 +90,5 @@ $ scalehls-opt resnet18.mlir -allow-unregistered-dialect \
 2. [mlir-npcomp github](https://github.com/llvm/mlir-npcomp)
 3. [onnx-mlir github](https://github.com/onnx/onnx-mlir)
 4. [circt github](https://github.com/llvm/circt)
-5. [comba github](https://github.com/zjru/COMBA)
-6. [dahlia github](https://github.com/cucapra/dahlia)
+5. [dahlia github](https://github.com/cucapra/dahlia)
+6. [comba github](https://github.com/zjru/COMBA)
