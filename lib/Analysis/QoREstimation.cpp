@@ -481,8 +481,7 @@ bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
     auto latency = iterLatency + II * (flattenTripCount - 1);
     setAttrValue(op, "latency", latency);
 
-    // Since the loop is flattened, it will no longer be entered and left.
-    setScheduleValue(op, begin, begin + latency);
+    setScheduleValue(op, begin, begin + latency + 2);
 
     // The resource utilization of flattened loop is equal to its child's.
     setAttrValue(op, "dsp", getIntAttrValue(child, "dsp"));

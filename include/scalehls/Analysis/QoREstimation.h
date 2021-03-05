@@ -147,7 +147,7 @@ private:
   DependsMap dependsMap;
   MemPortInfosMap memPortInfosMap;
   LatencyMap &latencyMap;
-  bool depAnalysis = false;
+  bool depAnalysis = true;
 };
 
 } // namespace scalehls
