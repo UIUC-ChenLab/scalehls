@@ -45,10 +45,9 @@ static bool applySimplifyMemrefAccess(FuncOp func) {
         // that share the same memref access.
         auto it = std::next(loadOpIt);
         for (; it != domLoadOpIt; ++it) {
-          if (!isa<AffineWriteOpInterface>(*it))
-            continue;
-          if (checkDependence(*it, loadOp))
-            break;
+          if (isa<AffineWriteOpInterface>(*it))
+            if (checkDependence(*it, loadOp))
+              break;
         }
 
         // We need to make sure there is no dependency exists in between.
@@ -92,10 +91,9 @@ static bool applySimplifyMemrefAccess(FuncOp func) {
         // that share the same memref access.
         auto it = std::next(storeOpIt);
         for (; it != postDomStoreOpIt; ++it) {
-          if (!isa<AffineReadOpInterface>(*it))
-            continue;
-          if (checkDependence(storeOp, *it))
-            break;
+          if (isa<AffineReadOpInterface>(*it))
+            if (checkDependence(storeOp, *it))
+              break;
         }
 
         // We need to make sure there is no dependency exists in between.

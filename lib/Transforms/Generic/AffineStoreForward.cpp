@@ -34,39 +34,58 @@ static bool applyAffineStoreForward(FuncOp func) {
     // Traverse each {MemRefAccess, Operation iterator vector} element.
     for (auto fwdingsPair : fwdingsMap) {
       auto fwdingOps = fwdingsPair.second;
+      SmallVector<AffineReadOpInterface, 2> chainLoadOps;
+      bool lastIsChainLoadOp = false;
 
       for (unsigned i = 0, e = fwdingOps.size() - 1; i < e; ++i) {
         auto opIt = fwdingOps[i];
         auto domOpIt = fwdingOps[i + 1];
 
         auto loadOp = dyn_cast<AffineReadOpInterface>(*opIt);
-        auto domStoreOp = dyn_cast<AffineWriteOpInterface>(*domOpIt);
+        auto domOp = *domOpIt;
 
-        if (!loadOp || !domStoreOp)
+        if (!loadOp) {
+          lastIsChainLoadOp = false;
           continue;
+        }
 
         // The two operations must locate in the same loop level.
-        auto sameLevelOps = checkSameLevel(domStoreOp, loadOp);
-        if (!sameLevelOps)
+        auto sameLevelOps = checkSameLevel(domOp, loadOp);
+        if (!sameLevelOps) {
+          lastIsChainLoadOp = false;
           continue;
+        }
 
         // The second operation (load) must always be executed.
-        if (sameLevelOps.getValue().second != loadOp)
+        if (sameLevelOps.getValue().second != loadOp) {
+          lastIsChainLoadOp = false;
           continue;
+        }
 
         // Traverse all store operations between the current two operations that
         // share the same memref access.
         auto it = std::next(opIt);
         for (; it != domOpIt; ++it) {
-          if (!isa<AffineWriteOpInterface>(*it))
-            continue;
-          if (checkDependence(*it, loadOp))
-            break;
+          if (isa<AffineWriteOpInterface>(*it))
+            if (checkDependence(*it, loadOp))
+              break;
         }
 
         // We need to make sure there is no dependency exists in between.
-        if (it != domOpIt)
+        if (it != domOpIt) {
+          lastIsChainLoadOp = false;
           continue;
+        }
+
+        auto domStoreOp = dyn_cast<AffineWriteOpInterface>(domOp);
+        if (!domStoreOp) {
+          if (!lastIsChainLoadOp)
+            chainLoadOps.clear();
+
+          chainLoadOps.push_back(loadOp);
+          lastIsChainLoadOp = true;
+          continue;
+        }
 
         // Now we know the forwarding is possible. Perform the actual store to
         // load forwarding.
@@ -79,6 +98,11 @@ static bool applyAffineStoreForward(FuncOp func) {
         if (storeSurroundingOp == domStoreOp) {
           loadOp.getValue().replaceAllUsesWith(storeVal);
           opsToErase.insert(loadOp.getOperation());
+
+          for (auto chainLoadOp : chainLoadOps) {
+            chainLoadOp.getValue().replaceAllUsesWith(storeVal);
+            opsToErase.insert(chainLoadOp.getOperation());
+          }
         } else {
           auto ifOp = cast<AffineIfOp>(storeSurroundingOp);
           // TODO: support AffineIfOp nests and AffineIfOp with else block.
@@ -115,6 +139,8 @@ static bool applyAffineStoreForward(FuncOp func) {
           fwdingOps[i] = domOpIt;
           fwdingOps[i + 1] = opIt;
         }
+
+        lastIsChainLoadOp = false;
       }
     }
   }

@@ -549,7 +549,7 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
 
       // Collect all candidate loops into an vector, we'll ignore too large
       // parallelism as unrolling them typically introduce very high cost.
-      if (parallelism > 1 && parallelism < 256)
+      if (parallelism > 1 && parallelism < 128)
         candidateLoops.push_back(
             std::pair<int64_t, AffineForOp>(parallelism, innermostLoop));
     }
