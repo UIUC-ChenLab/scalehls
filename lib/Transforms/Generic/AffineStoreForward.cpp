@@ -149,8 +149,6 @@ static bool applyAffineStoreForward(FuncOp func) {
   for (auto op : opsToErase)
     op->erase();
 
-  llvm::outs() << func << "\n";
-
   return true;
 }
 

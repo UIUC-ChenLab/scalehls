@@ -590,7 +590,7 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
         targetLoops.append(childForOps.begin(), childForOps.end());
       }
 
-      candidate.removeAttr("opt_flag");
+      candidate->removeAttr("opt_flag");
     }
   }
 
