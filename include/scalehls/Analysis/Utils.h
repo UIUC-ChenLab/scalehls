@@ -55,6 +55,8 @@ AffineForOp getLoopBandFromOutermost(AffineForOp forOp, AffineLoopBand &band);
 void getLoopBands(Block &block, AffineLoopBands &bands,
                   bool allowHavingChilds = false);
 
+Optional<unsigned> getAverageTripCount(AffineForOp forOp);
+
 bool checkDependence(Operation *A, Operation *B);
 
 //===----------------------------------------------------------------------===//

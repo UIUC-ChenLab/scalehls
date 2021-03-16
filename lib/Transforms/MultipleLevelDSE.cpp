@@ -484,7 +484,7 @@ static int64_t getInnerParallelism(AffineForOp forOp) {
   int64_t count = 0;
   for (auto loop : forOp.getOps<AffineForOp>()) {
     auto innerCount = getInnerParallelism(loop);
-    if (auto trip = getConstantTripCount(loop))
+    if (auto trip = getAverageTripCount(loop))
       count += trip.getValue() * innerCount;
     else
       count += innerCount;

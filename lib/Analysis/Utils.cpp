@@ -6,6 +6,7 @@
 
 #include "scalehls/Analysis/Utils.h"
 #include "mlir/Analysis/AffineAnalysis.h"
+#include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Analysis/Utils.h"
 
 using namespace mlir;
@@ -255,6 +256,27 @@ void scalehls::getLoopBands(Block &block, AffineLoopBands &bands,
       bands.push_back(band);
     }
   });
+}
+
+Optional<unsigned> scalehls::getAverageTripCount(AffineForOp forOp) {
+  if (auto optionalTripCount = getConstantTripCount(forOp))
+    return optionalTripCount.getValue();
+  else {
+    // TODO: A temporary approach to estimate the trip count. For now, we take
+    // the average of the upper bound and lower bound of trip count as the
+    // estimated trip count.
+    auto lowerBound = getBoundOfAffineBound(forOp.getLowerBound());
+    auto upperBound = getBoundOfAffineBound(forOp.getUpperBound());
+
+    if (lowerBound && upperBound) {
+      auto lowerTripCount =
+          upperBound.getValue().second - lowerBound.getValue().first;
+      auto upperTripCount =
+          upperBound.getValue().first - lowerBound.getValue().second;
+      return (lowerTripCount + upperTripCount + 1) / 2;
+    } else
+      return Optional<unsigned>();
+  }
 }
 
 bool scalehls::checkDependence(Operation *A, Operation *B) {

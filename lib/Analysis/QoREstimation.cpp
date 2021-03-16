@@ -5,7 +5,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Analysis/QoREstimation.h"
-#include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "scalehls/Analysis/Passes.h"
@@ -395,23 +394,8 @@ bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
   // Set an attribute indicating the trip count. For now, we assume all loops
   // have static loop bound.
   int64_t tripCount = 1;
-  if (auto optionalTripCount = getConstantTripCount(op))
+  if (auto optionalTripCount = getAverageTripCount(op))
     tripCount = optionalTripCount.getValue();
-  else {
-    // TODO: A temporary approach to estimate the trip count. For now, we take
-    // the average of the upper bound and lower bound of trip count as the
-    // estimated trip count.
-    auto lowerBound = getBoundOfAffineBound(op.getLowerBound());
-    auto upperBound = getBoundOfAffineBound(op.getUpperBound());
-
-    if (lowerBound && upperBound) {
-      auto lowerTripCount =
-          upperBound.getValue().second - lowerBound.getValue().first;
-      auto upperTripCount =
-          upperBound.getValue().first - lowerBound.getValue().second;
-      tripCount = (lowerTripCount + upperTripCount + 1) / 2;
-    }
-  }
   setAttrValue(op, "trip_count", tripCount);
 
   auto end = begin;
