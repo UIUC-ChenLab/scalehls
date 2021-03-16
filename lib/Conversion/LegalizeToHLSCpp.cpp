@@ -86,7 +86,7 @@ void LegalizeToHLSCpp::runOnOperation() {
   builder.setInsertionPoint(returnOp);
   unsigned idx = 0;
   for (auto operand : returnOp->getOperands()) {
-    if (operand.getKind() == Value::Kind::BlockArgument) {
+    if (operand.dyn_cast<BlockArgument>()) {
       auto value = builder.create<AssignOp>(returnOp->getLoc(),
                                             operand.getType(), operand);
       returnOp->setOperand(idx, value);

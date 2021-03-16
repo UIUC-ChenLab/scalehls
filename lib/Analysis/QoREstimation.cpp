@@ -97,7 +97,7 @@ void ScaleHLSEstimator::estimateLoadStore(Operation *op, int64_t begin) {
 
   SmallVector<int64_t, 8> factors;
   auto partitionNum = getPartitionFactors(memrefType, &factors);
-  auto storageType = MemoryKind(memrefType.getMemorySpace());
+  auto storageType = MemoryKind(memrefType.getMemorySpaceAsInt());
   auto partitionIndices = getIntArrayAttrValue(op, "partition_indices");
 
   // Try to avoid memory port violation until a legal schedule is found. Since
@@ -206,7 +206,7 @@ int64_t ScaleHLSEstimator::getResMinII(int64_t begin, int64_t end,
     auto memref = pair.first;
     auto memrefType = memref.getType().cast<MemRefType>();
     auto partitionNum = getPartitionFactors(memrefType);
-    auto storageType = MemoryKind(memrefType.getMemorySpace());
+    auto storageType = MemoryKind(memrefType.getMemorySpaceAsInt());
 
     auto accessNum = SmallVector<int64_t, 16>(partitionNum, 0);
     // Prepare for BRAM_S1P memory kind.
@@ -906,7 +906,7 @@ void ScaleHLSEstimator::estimateFunc(FuncOp func) {
   for (auto &pair : map) {
     auto memrefType = pair.first.getType().cast<MemRefType>();
     auto partitionNum = getPartitionFactors(memrefType);
-    auto storageType = MemoryKind(memrefType.getMemorySpace());
+    auto storageType = MemoryKind(memrefType.getMemorySpaceAsInt());
 
     if (storageType == MemoryKind::BRAM_1P ||
         storageType == MemoryKind::BRAM_S2P ||

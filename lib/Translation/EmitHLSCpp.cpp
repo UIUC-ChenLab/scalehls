@@ -1341,7 +1341,7 @@ void ModuleEmitter::emitArrayPragmas(Value memref) {
   auto type = memref.getType().cast<MemRefType>();
 
   // Emit resource pragma.
-  auto kind = MemoryKind(type.getMemorySpace());
+  auto kind = MemoryKind(type.getMemorySpaceAsInt());
   if (kind != MemoryKind::DRAM) {
     emitPragmaFlag = true;
 
@@ -1423,7 +1423,7 @@ void ModuleEmitter::emitFunctionPragmas(FuncOp func, ArrayRef<Value> portList) {
         indent();
         os << "#pragma HLS interface";
         // For now, we set the offset of all m_axi interfaces as slave.
-        if (MemoryKind(memrefType.getMemorySpace()) == MemoryKind::DRAM)
+        if (MemoryKind(memrefType.getMemorySpaceAsInt()) == MemoryKind::DRAM)
           os << " m_axi offset=slave";
         else
           os << " bram";
