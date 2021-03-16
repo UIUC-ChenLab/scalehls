@@ -77,11 +77,12 @@ static bool applyAffineStoreForward(FuncOp func) {
           continue;
         }
 
-        auto domStoreOp = dyn_cast<AffineWriteOpInterface>(domOp);
-        if (!domStoreOp) {
-          if (!lastIsChainLoadOp)
-            chainLoadOps.clear();
+        if (!lastIsChainLoadOp)
+          chainLoadOps.clear();
 
+        auto domStoreOp = dyn_cast<AffineWriteOpInterface>(domOp);
+
+        if (!domStoreOp) {
           chainLoadOps.push_back(loadOp);
           lastIsChainLoadOp = true;
           continue;
@@ -147,6 +148,8 @@ static bool applyAffineStoreForward(FuncOp func) {
 
   for (auto op : opsToErase)
     op->erase();
+
+  llvm::outs() << func << "\n";
 
   return true;
 }
