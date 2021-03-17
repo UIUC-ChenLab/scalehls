@@ -26,16 +26,6 @@ bool applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse = false);
 /// Try to rectangularize the input band.
 bool applyRemoveVariableBound(AffineLoopBand &band);
 
-/// Apply optimization strategy to a loop band. The ancestor function is also
-/// passed in because the post-tiling optimizations have to take function as
-/// target, e.g. canonicalizer and array partition.
-bool applyOptStrategy(AffineLoopBand &band, FuncOp func, TileList tileList,
-                      unsigned targetII);
-
-/// Apply optimization strategy to a function.
-bool applyOptStrategy(FuncOp func, ArrayRef<TileList> tileLists,
-                      ArrayRef<unsigned> targetIIs);
-
 /// Apply loop tiling to the input loop band and sink all intra-tile loops to
 /// the innermost loop with the original loop order. Return the location of the
 /// innermost tile-space loop.
@@ -48,6 +38,18 @@ bool applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
 
 /// Fully unroll all loops insides of a loop block.
 bool applyFullyLoopUnrolling(Block &block);
+
+bool applyFullyUnrollAndPartition(Block &block, FuncOp func);
+
+/// Apply optimization strategy to a loop band. The ancestor function is also
+/// passed in because the post-tiling optimizations have to take function as
+/// target, e.g. canonicalizer and array partition.
+bool applyOptStrategy(AffineLoopBand &band, FuncOp func, TileList tileList,
+                      unsigned targetII);
+
+/// Apply optimization strategy to a function.
+bool applyOptStrategy(FuncOp func, ArrayRef<TileList> tileLists,
+                      ArrayRef<unsigned> targetIIs);
 
 } // namespace scalehls
 } // namespace mlir

@@ -4,31 +4,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Transforms/LoopUtils.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
-
-/// Fully unroll all loops insides of a block.
-bool scalehls::applyFullyLoopUnrolling(Block &block) {
-  // Try 8 iterations before exiting.
-  for (auto i = 0; i < 8; ++i) {
-    bool hasFullyUnrolled = true;
-    block.walk([&](AffineForOp loop) {
-      if (failed(loopUnrollFull(loop)))
-        hasFullyUnrolled = false;
-    });
-
-    if (hasFullyUnrolled)
-      break;
-
-    if (i == 7)
-      return false;
-  }
-  return true;
-}
 
 /// Apply loop pipelining to the input loop, all inner loops are automatically
 /// fully unrolled.

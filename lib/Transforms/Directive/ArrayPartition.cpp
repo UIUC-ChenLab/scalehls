@@ -14,6 +14,8 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hlscpp;
 
+/// TODO: support to pass in partition strategy.
+
 static bool applyArrayPartition(FuncOp func) {
   // Check whether the input function is pipelined.
   bool funcPipeline = false;
@@ -21,24 +23,26 @@ static bool applyArrayPartition(FuncOp func) {
     if (attr.getValue())
       funcPipeline = true;
 
-  // Only memory accesses in pipelined loops or function will be executed in
-  // parallel and required to partition.
-  SmallVector<Block *, 4> pipelinedBlocks;
+  // Collect target basic blocks to be considered.
+  SmallVector<Block *, 4> targetBlocks;
   if (funcPipeline)
-    pipelinedBlocks.push_back(&func.front());
-  else
-    func.walk([&](AffineForOp loop) {
-      if (auto attr = loop->getAttrOfType<BoolAttr>("pipeline"))
-        if (attr.getValue())
-          pipelinedBlocks.push_back(loop.getBody());
-    });
+    targetBlocks.push_back(&func.front());
+  else {
+    // Collect all target loop bands.
+    AffineLoopBands targetBands;
+    getLoopBands(func.front(), targetBands);
+
+    // Apply loop order optimization to each loop band.
+    for (auto &band : targetBands)
+      targetBlocks.push_back(band.back().getBody());
+  }
 
   // Storing the partition information of each memref.
   using PartitionInfo = std::pair<PartitionKind, int64_t>;
   DenseMap<Value, SmallVector<PartitionInfo, 4>> partitionsMap;
 
   // Traverse all pipelined loops.
-  for (auto block : pipelinedBlocks) {
+  for (auto block : targetBlocks) {
     MemAccessesMap accessesMap;
     getMemAccessesMap(*block, accessesMap);
 

@@ -15,6 +15,8 @@
 using namespace mlir;
 using namespace scalehls;
 
+/// TODO: support to pass in permutation map.
+
 /// Optimize loop order. Loops associated with memory access dependencies are
 /// moved to an as outer as possible location of the input loop band. If
 /// "reverse" is true, as inner as possible.

@@ -544,12 +544,12 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
       auto innermostLoop = getLoopBandFromOutermost(target, loopBand);
 
       // Calculate the overall introduced parallelism if the innermost loop of
-      // the current loop band is pipelined.
+      // the current loop band is fully unrolled.
       auto parallelism = getInnerParallelism(innermostLoop);
 
       // Collect all candidate loops into an vector, we'll ignore too large
       // parallelism as unrolling them typically introduce very high cost.
-      if (parallelism > 1 && parallelism < 128)
+      if (parallelism > 1 && parallelism < 256)
         candidateLoops.push_back(
             std::pair<int64_t, AffineForOp>(parallelism, innermostLoop));
     }
@@ -560,9 +560,9 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
     // Sort the candidate loops.
     std::sort(candidateLoops.begin(), candidateLoops.end());
 
-    // Traverse all candidates to check whether applying loop pipelining has
-    // violation with the resource constraints. If so, add all inner loops into
-    // targetLoops. Otherwise, pipeline the candidate.
+    // Traverse all candidates to check whether applying fully loop unrolling
+    // has violation with the resource constraints. If so, add all inner loops
+    // into targetLoops. Otherwise, fully unroll the candidate.
     for (auto pair : candidateLoops) {
       auto candidate = pair.second;
 
@@ -570,11 +570,11 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
       setAttrValue(candidate, "opt_flag", true);
       auto tmpFunc = func.clone();
 
-      // Find the candidate loop in the temporary function and apply loop
-      // pipelining to it.
+      // Find the candidate loop in the temporary function and apply fully loop
+      // unrolling to it.
       tmpFunc.walk([&](AffineForOp loop) {
         if (getIntAttrValue(loop, "opt_flag")) {
-          applyFullyLoopUnrolling(*loop.getBody());
+          applyFullyUnrollAndPartition(*loop.getBody(), tmpFunc);
           return;
         }
       });
@@ -582,9 +582,9 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
       // Estimate the temporary function.
       estimator.estimateFunc(tmpFunc);
 
-      // Pipeline the candidate loop or delve into child loops.
+      // Fully unroll the candidate loop or delve into child loops.
       if (getIntAttrValue(tmpFunc, "dsp") <= maxDspNum)
-        applyFullyLoopUnrolling(*candidate.getBody());
+        applyFullyUnrollAndPartition(*candidate.getBody(), func);
       else {
         auto childForOps = candidate.getOps<AffineForOp>();
         targetLoops.append(childForOps.begin(), childForOps.end());

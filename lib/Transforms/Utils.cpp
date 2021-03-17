@@ -6,12 +6,32 @@
 
 #include "scalehls/Transforms/Utils.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Transforms/LoopUtils.h"
 #include "mlir/Transforms/Passes.h"
 #include "scalehls/Conversion/Passes.h"
 #include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
 using namespace scalehls;
+
+/// Fully unroll all loops insides of a block.
+bool scalehls::applyFullyLoopUnrolling(Block &block) {
+  // Try 8 iterations before exiting.
+  for (auto i = 0; i < 8; ++i) {
+    bool hasFullyUnrolled = true;
+    block.walk([&](AffineForOp loop) {
+      if (failed(loopUnrollFull(loop)))
+        hasFullyUnrolled = false;
+    });
+
+    if (hasFullyUnrolled)
+      break;
+
+    if (i == 7)
+      return false;
+  }
+  return true;
+}
 
 static void addPassPipeline(PassManager &pm) {
   // To factor out the redundant AffineApply/AffineIf operations.
@@ -28,6 +48,18 @@ static void addPassPipeline(PassManager &pm) {
 
   // Apply the best suitable array partition strategy to the function.
   pm.addPass(createArrayPartitionPass());
+}
+
+bool scalehls::applyFullyUnrollAndPartition(Block &block, FuncOp func) {
+  applyFullyLoopUnrolling(block);
+
+  // Apply general optimizations and array partition.
+  PassManager optPM(func.getContext(), "func");
+  addPassPipeline(optPM);
+  if (failed(optPM.run(func)))
+    return false;
+
+  return true;
 }
 
 /// Apply optimization strategy to a loop band. The ancestor function is also
