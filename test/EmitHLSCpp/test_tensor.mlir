@@ -30,13 +30,13 @@ func @test_tensor_load_store(%arg0: memref<16x8xi32>) {
   // CHECK:     [[VAL_0:.*]][idx0][idx1] = [[ARG_0:.*]][idx0][idx1];
   // CHECK:   }
   // CHECK: }
-  %0 = tensor_load %arg0 : memref<16x8xi32>
+  %0 = memref.tensor_load %arg0 : memref<16x8xi32>
 
   // CHECK: for (int idx0 = 0; idx0 < 16; ++idx0) {
   // CHECK:   for (int idx1 = 0; idx1 < 8; ++idx1) {
   // CHECK:     [[ARG_0:.*]][idx0][idx1] = [[VAL_0:.*]][idx0][idx1];
   // CHECK:   }
   // CHECK: }
-  tensor_store %0, %arg0 : memref<16x8xi32>
+  memref.tensor_store %0, %arg0 : memref<16x8xi32>
   return
 }

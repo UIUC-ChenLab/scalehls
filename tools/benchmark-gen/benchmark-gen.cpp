@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "external/INIReader.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Support/FileUtilities.h"
@@ -151,10 +152,10 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
   // Generate CNN model.
   while (poolingCount < poolingNumber || topChannel < maxChannel) {
     // Create convolutional layer.
-    kernels.push_back(builder.create<mlir::AllocOp>(
+    kernels.push_back(builder.create<memref::AllocOp>(
         loc, getMemType({btmChannel, topChannel, kernelShape, kernelShape})));
     biases.push_back(
-        builder.create<mlir::AllocOp>(loc, getMemType({btmChannel})));
+        builder.create<memref::AllocOp>(loc, getMemType({btmChannel})));
 
     auto convLayer = builder.create<ConvOp>(
         loc, getTensorType({batchSize, btmChannel, topHeight, topWidth}),
@@ -197,10 +198,10 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
   }
 
   // Create the last dense layer.
-  kernels.push_back(builder.create<mlir::AllocOp>(
+  kernels.push_back(builder.create<memref::AllocOp>(
       loc, getMemType({outputChannel, topChannel, topHeight, topWidth})));
   biases.push_back(
-      builder.create<mlir::AllocOp>(loc, getMemType({outputChannel})));
+      builder.create<memref::AllocOp>(loc, getMemType({outputChannel})));
 
   auto denseLayer = builder.create<DenseOp>(
       loc, getTensorType({batchSize, outputChannel}), fmaps.back(),
@@ -271,10 +272,10 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
 
     // Insert 1x1 convolutional layer to align channel size.
     if (startFmapShape[1] != endFmapShape[1]) {
-      kernels.push_back(builder.create<mlir::AllocOp>(
+      kernels.push_back(builder.create<memref::AllocOp>(
           loc, getMemType({endFmapShape[1], startFmapShape[1], 1, 1})));
       biases.push_back(
-          builder.create<mlir::AllocOp>(loc, getMemType({endFmapShape[1]})));
+          builder.create<memref::AllocOp>(loc, getMemType({endFmapShape[1]})));
 
       auto convType = getTensorType(
           {batchSize, endFmapShape[1], endFmapShape[2], endFmapShape[3]});
@@ -353,7 +354,8 @@ LogicalResult BenchmarkGenerator::genCNN(INIReader config) {
 static LogicalResult processBenchmarkGen(raw_ostream &os) {
   // Create a new MLIR context and module.
   MLIRContext context;
-  context.loadDialect<StandardOpsDialect, HLSKernelDialect>();
+  context.loadDialect<StandardOpsDialect, memref::MemRefDialect,
+                      HLSKernelDialect>();
   auto module = ModuleOp::create(UnknownLoc::get(&context));
   BenchmarkGenerator generator(os, module);
 

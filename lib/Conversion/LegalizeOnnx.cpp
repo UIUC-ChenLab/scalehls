@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "scalehls/Conversion/Passes.h"
 
 using namespace mlir;
@@ -80,7 +81,7 @@ void LegalizeOnnx::runOnOperation() {
     });
 
     // Convert normal load operations to AffineLoad.
-    func.walk([&](LoadOp loadOp) {
+    func.walk([&](memref::LoadOp loadOp) {
       SmallVector<AffineExpr, 4> exprs;
       SmallVector<Value, 4> dims;
       SmallVector<Value, 4> symbols;
@@ -135,7 +136,7 @@ void LegalizeOnnx::runOnOperation() {
           // constant operation to substitute it.
           builder.setInsertionPoint(&op);
           auto tensor = builder.create<ConstantOp>(op.getLoc(), value);
-          auto memref = builder.create<TensorToMemrefOp>(
+          auto memref = builder.create<memref::BufferCastOp>(
               op.getLoc(), op.getResult(0).getType(), tensor);
           op.getResult(0).replaceAllUsesWith(memref);
 
@@ -176,7 +177,7 @@ void LegalizeOnnx::runOnOperation() {
 
         opsToErase.push_back(&op);
 
-      } else if (isa<DeallocOp>(op))
+      } else if (isa<memref::DeallocOp>(op))
         opsToErase.push_back(&op);
     }
 

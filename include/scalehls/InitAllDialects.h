@@ -10,6 +10,7 @@
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Linalg/IR/LinalgOps.h"
 #include "mlir/Dialect/Math/IR/Math.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/IR/Dialect.h"
 #include "scalehls/Dialect/HLSCpp/HLSCpp.h"
@@ -26,6 +27,7 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
     mlir::scalehls::hlskernel::HLSKernelDialect,
     mlir::StandardOpsDialect,
     mlir::AffineDialect,
+    mlir::memref::MemRefDialect,
     mlir::math::MathDialect,
     mlir::scf::SCFDialect,
     mlir::linalg::LinalgDialect

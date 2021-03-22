@@ -22,13 +22,13 @@ func @test_scf_for(%arg0: memref<16xindex>, %arg1: index) {
       scf.for %k = %c0 to %c16 step %c2 {
 
         // CHECK: int val7 = val0[val4];
-        %0 = load %arg0[%i] : memref<16xindex>
+        %0 = memref.load %arg0[%i] : memref<16xindex>
 
         // CHECK: int val8 = val7 + val5;
         %1 = addi %0, %j : index
 
         // CHECK: val0[val6] = val8;
-        store %1, %arg0[%k] : memref<16xindex>
+        memref.store %1, %arg0[%k] : memref<16xindex>
 
       // CHECK: }
       }

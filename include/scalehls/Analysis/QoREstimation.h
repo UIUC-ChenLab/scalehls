@@ -70,10 +70,10 @@ public:
   bool visitOp(AffineStoreOp op, int64_t begin) {
     return estimateLoadStore(op, begin), true;
   }
-  bool visitOp(LoadOp op, int64_t begin) {
+  bool visitOp(memref::LoadOp op, int64_t begin) {
     return setScheduleValue(op, begin, begin + 2), true;
   }
-  bool visitOp(StoreOp op, int64_t begin) {
+  bool visitOp(memref::StoreOp op, int64_t begin) {
     return setScheduleValue(op, begin, begin + 1), true;
   }
 

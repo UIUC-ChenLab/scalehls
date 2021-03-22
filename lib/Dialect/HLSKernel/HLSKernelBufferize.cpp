@@ -4,6 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/Builders.h"
 #include "scalehls/Dialect/HLSKernel/HLSKernel.h"
@@ -34,7 +35,7 @@ void HLSKernelBufferize::runOnOperation() {
       if (auto operandType = operand.getType().dyn_cast<RankedTensorType>()) {
         auto memRefType = MemRefType::get(operandType.getShape(),
                                           operandType.getElementType());
-        auto operandMemRef = builder.create<TensorToMemrefOp>(
+        auto operandMemRef = builder.create<memref::BufferCastOp>(
             func.getLoc(), memRefType, operand);
         op->setOperand(operandIndex, operandMemRef);
       }
@@ -44,7 +45,7 @@ void HLSKernelBufferize::runOnOperation() {
     if (op->getNumResults()) {
       auto resultType = op->getResult(0).getType().cast<RankedTensorType>();
 
-      auto resultMemRef = builder.create<AllocOp>(
+      auto resultMemRef = builder.create<memref::AllocOp>(
           op->getLoc(),
           MemRefType::get(resultType.getShape(), resultType.getElementType()));
       SmallVector<Value, 4> newOperands = op->getOperands();
@@ -54,7 +55,7 @@ void HLSKernelBufferize::runOnOperation() {
       // Create a TensorLoad operaion to replace the original returned tensor.
       builder.setInsertionPointAfter(op);
       auto resultTensor =
-          builder.create<TensorLoadOp>(func.getLoc(), resultMemRef);
+          builder.create<memref::TensorLoadOp>(func.getLoc(), resultMemRef);
       op->getResult(0).replaceAllUsesWith(resultTensor);
     }
   });

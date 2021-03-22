@@ -166,14 +166,14 @@ public:
 
   /// Memref-related statement emitters.
   template <typename OpType> void emitAlloc(OpType op);
-  void emitLoad(LoadOp op);
-  void emitStore(StoreOp op);
+  void emitLoad(memref::LoadOp op);
+  void emitStore(memref::StoreOp op);
 
   /// Tensor-related statement emitters.
-  void emitTensorLoad(TensorLoadOp op);
-  void emitTensorStore(TensorStoreOp op);
-  void emitTensorToMemref(TensorToMemrefOp op);
-  void emitDim(DimOp op);
+  void emitTensorLoad(memref::TensorLoadOp op);
+  void emitTensorStore(memref::TensorStoreOp op);
+  void emitTensorToMemref(memref::BufferCastOp op);
+  void emitDim(memref::DimOp op);
   void emitRank(RankOp op);
 
   /// Standard expression emitters.
@@ -327,19 +327,27 @@ public:
   bool visitOp(AffineYieldOp op) { return emitter.emitAffineYield(op), true; }
 
   /// Memref-related statements.
-  bool visitOp(AllocOp op) { return emitter.emitAlloc<AllocOp>(op), true; }
-  bool visitOp(AllocaOp op) { return emitter.emitAlloc<AllocaOp>(op), true; }
-  bool visitOp(LoadOp op) { return emitter.emitLoad(op), true; }
-  bool visitOp(StoreOp op) { return emitter.emitStore(op), true; }
-  bool visitOp(DeallocOp op) { return true; }
+  bool visitOp(memref::AllocOp op) {
+    return emitter.emitAlloc<memref::AllocOp>(op), true;
+  }
+  bool visitOp(memref::AllocaOp op) {
+    return emitter.emitAlloc<memref::AllocaOp>(op), true;
+  }
+  bool visitOp(memref::LoadOp op) { return emitter.emitLoad(op), true; }
+  bool visitOp(memref::StoreOp op) { return emitter.emitStore(op), true; }
+  bool visitOp(memref::DeallocOp op) { return true; }
 
   /// Tensor-related statements.
-  bool visitOp(TensorLoadOp op) { return emitter.emitTensorLoad(op), true; }
-  bool visitOp(TensorStoreOp op) { return emitter.emitTensorStore(op), true; }
-  bool visitOp(TensorToMemrefOp op) {
+  bool visitOp(memref::TensorLoadOp op) {
+    return emitter.emitTensorLoad(op), true;
+  }
+  bool visitOp(memref::TensorStoreOp op) {
+    return emitter.emitTensorStore(op), true;
+  }
+  bool visitOp(memref::BufferCastOp op) {
     return emitter.emitTensorToMemref(op), true;
   }
-  bool visitOp(DimOp op) { return emitter.emitDim(op), true; }
+  bool visitOp(memref::DimOp op) { return emitter.emitDim(op), true; }
   bool visitOp(RankOp op) { return emitter.emitRank(op), true; }
 
   /// Structure operations.
@@ -950,7 +958,7 @@ template <typename OpType> void ModuleEmitter::emitAlloc(OpType op) {
   emitArrayPragmas(op.getResult());
 }
 
-void ModuleEmitter::emitLoad(LoadOp op) {
+void ModuleEmitter::emitLoad(memref::LoadOp op) {
   indent();
   emitValue(op.getResult());
   os << " = ";
@@ -964,7 +972,7 @@ void ModuleEmitter::emitLoad(LoadOp op) {
   emitInfoAndNewLine(op);
 }
 
-void ModuleEmitter::emitStore(StoreOp op) {
+void ModuleEmitter::emitStore(memref::StoreOp op) {
   indent();
   emitValue(op.getMemRef());
   for (auto index : op.getIndices()) {
@@ -979,7 +987,7 @@ void ModuleEmitter::emitStore(StoreOp op) {
 }
 
 /// Tensor-related statement emitters.
-void ModuleEmitter::emitTensorLoad(TensorLoadOp op) {
+void ModuleEmitter::emitTensorLoad(memref::TensorLoadOp op) {
   auto rank = emitNestedLoopHead(op.getResult());
   indent();
   emitValue(op.getResult(), rank);
@@ -990,7 +998,7 @@ void ModuleEmitter::emitTensorLoad(TensorLoadOp op) {
   emitNestedLoopTail(rank);
 }
 
-void ModuleEmitter::emitTensorStore(TensorStoreOp op) {
+void ModuleEmitter::emitTensorStore(memref::TensorStoreOp op) {
   auto rank = emitNestedLoopHead(op.getOperand(0));
   indent();
   emitValue(op.getOperand(1), rank);
@@ -1001,7 +1009,7 @@ void ModuleEmitter::emitTensorStore(TensorStoreOp op) {
   emitNestedLoopTail(rank);
 }
 
-void ModuleEmitter::emitTensorToMemref(TensorToMemrefOp op) {
+void ModuleEmitter::emitTensorToMemref(memref::BufferCastOp op) {
   // A declared result indicates that the memref is output of the function, and
   // has been declared in the function signature.
   if (isDeclared(op.getResult())) {
@@ -1019,7 +1027,7 @@ void ModuleEmitter::emitTensorToMemref(TensorToMemrefOp op) {
   }
 }
 
-void ModuleEmitter::emitDim(DimOp op) {
+void ModuleEmitter::emitDim(memref::DimOp op) {
   if (auto constOp = dyn_cast<ConstantOp>(op.getOperand(1).getDefiningOp())) {
     auto constVal = constOp.getValue().cast<IntegerAttr>().getInt();
     auto type = op.getOperand(0).getType().cast<ShapedType>();

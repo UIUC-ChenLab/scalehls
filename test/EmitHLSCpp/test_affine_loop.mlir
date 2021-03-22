@@ -16,13 +16,13 @@ func @test_affine_for(%arg0: memref<16xindex>, %arg1: index) {
       affine.for %k = 0 to 16 step 2 {
 
         // CHECK: int val5 = val0[val2];
-        %0 = load %arg0[%i] : memref<16xindex>
+        %0 = memref.load %arg0[%i] : memref<16xindex>
 
         // CHECK: int val6 = val5 + val3;
         %1 = addi %0, %j : index
 
         // CHECK: val0[val4] = val6;
-        store %1, %arg0[%k] : memref<16xindex>
+        memref.store %1, %arg0[%k] : memref<16xindex>
 
       // CHECK: }
       }
@@ -43,7 +43,7 @@ func @test_affine_parallel(%arg0: memref<16xindex>) {
   %0:2 = affine.parallel (%x, %y, %z) = (0, 0, 0) to (2, 4, 8) step (1, 2, 3) reduce ("maxs", "addi") -> (index, index){
 
     // CHECK: int val13 = val7[val10];
-    %1 = load %arg0[%x] : memref<16xindex>
+    %1 = memref.load %arg0[%x] : memref<16xindex>
 
     // CHECK: int val14 = val13 + val11;
     %2 = addi %1, %y : index

@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Linalg/IR/LinalgOps.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "scalehls/Dialect/HLSKernel/HLSKernel.h"
 #include "scalehls/Transforms/Passes.h"
 
@@ -26,13 +27,13 @@ static void getSuccessorsMap(Block &block, SuccessorsMap &map) {
       if (auto affineStore = dyn_cast<AffineStoreOp>(op))
         memsMap[loop].insert(affineStore.getMemRef());
 
-      else if (auto store = dyn_cast<StoreOp>(op))
+      else if (auto store = dyn_cast<memref::StoreOp>(op))
         memsMap[loop].insert(store.getMemRef());
 
       else if (auto affineLoad = dyn_cast<AffineLoadOp>(op))
         loopsMap[affineLoad.getMemRef()].insert(loop);
 
-      else if (auto load = dyn_cast<LoadOp>(op))
+      else if (auto load = dyn_cast<memref::LoadOp>(op))
         loopsMap[load.getMemRef()].insert(loop);
     });
 
@@ -40,7 +41,8 @@ static void getSuccessorsMap(Block &block, SuccessorsMap &map) {
   // traverse will not enter any control flow operations.
   for (auto &op : block.getOperations()) {
     // TODO: Some operations are dataflow source, which will not be scheduled.
-    if (isa<AllocOp, AllocaOp, ConstantOp, TensorLoadOp, TensorToMemrefOp>(op))
+    if (isa<memref::AllocOp, memref::AllocaOp, ConstantOp, memref::TensorLoadOp,
+            memref::BufferCastOp>(op))
       continue;
 
     // Collect all memref results if the current operation is a loop.
@@ -132,7 +134,8 @@ static bool applyLegalizeDataflow(FuncOp func, OpBuilder &builder,
             Value newValue;
             Operation *copyOp;
             if (auto valueType = value.getType().dyn_cast<MemRefType>()) {
-              newValue = builder.create<AllocOp>(op->getLoc(), valueType);
+              newValue =
+                  builder.create<memref::AllocOp>(op->getLoc(), valueType);
               copyOp = builder.create<linalg::CopyOp>(op->getLoc(),
                                                       values.back(), newValue);
             } else {

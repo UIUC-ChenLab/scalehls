@@ -6,6 +6,7 @@
 
 #include "mlir/Analysis/AffineStructures.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/IntegerSet.h"
 #include "scalehls/Transforms/Passes.h"
 
@@ -284,7 +285,7 @@ static bool applySimplifyAffineIf(FuncOp func) {
             // TODO: is this check enough?
             bool notMemoryStore = true;
             for (auto op : inBetweenOps)
-              if (isa<AffineWriteOpInterface, StoreOp>(op))
+              if (isa<AffineWriteOpInterface, memref::StoreOp>(op))
                 notMemoryStore = false;
 
             // Only if the two if operations have identical statement while the

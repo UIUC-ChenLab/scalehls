@@ -71,10 +71,15 @@ static bool applyArrayPartition(FuncOp func) {
           AffineValueMap accessMap;
           MemRefAccess(accessOp).getAccessMap(&accessMap);
 
-          // Get index expression.
-          auto index = accessMap.getResult(dim);
+          // Only keep the index of the current dimension.
+          auto newMap =
+              AffineMap::get(accessMap.getNumDims(), accessMap.getNumSymbols(),
+                             accessMap.getResult(dim));
+          accessMap.reset(newMap, accessMap.getOperands());
+          (void)accessMap.canonicalize();
 
           // Only add unique index.
+          auto index = accessMap.getResult(0);
           if (std::find(indices.begin(), indices.end(), index) == indices.end())
             indices.push_back(index);
         }

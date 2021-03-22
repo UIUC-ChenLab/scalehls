@@ -9,6 +9,7 @@
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Math/IR/Math.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
 #include "scalehls/Dialect/HLSCpp/HLSCpp.h"
 #include "llvm/ADT/TypeSwitch.h"
@@ -35,12 +36,13 @@ public:
             AffineYieldOp, AffineVectorLoadOp, AffineVectorStoreOp,
             AffineDmaStartOp, AffineDmaWaitOp,
             // Memref-related statements.
-            AllocOp, AllocaOp, LoadOp, StoreOp, DeallocOp, DmaStartOp,
-            DmaWaitOp, AtomicRMWOp, GenericAtomicRMWOp, AtomicYieldOp,
-            MemRefCastOp, ViewOp, SubViewOp,
+            memref::AllocOp, memref::AllocaOp, memref::LoadOp, memref::StoreOp,
+            memref::DeallocOp, memref::DmaStartOp, memref::DmaWaitOp,
+            memref::ViewOp, memref::SubViewOp, AtomicRMWOp, GenericAtomicRMWOp,
+            AtomicYieldOp,
             // Tensor-related statements.
-            TensorLoadOp, TensorStoreOp, TensorToMemrefOp, SplatOp, DimOp,
-            RankOp,
+            memref::TensorLoadOp, memref::TensorStoreOp, memref::BufferCastOp,
+            SplatOp, memref::DimOp, RankOp,
             // Unary expressions.
             AbsFOp, CeilFOp, NegFOp, math::CosOp, math::SinOp, math::TanhOp,
             math::SqrtOp, math::RsqrtOp, math::ExpOp, math::Exp2Op, math::LogOp,
@@ -105,26 +107,25 @@ public:
   HANDLE(AffineDmaWaitOp);
 
   // Memref-related statements.
-  HANDLE(AllocOp);
-  HANDLE(AllocaOp);
-  HANDLE(LoadOp);
-  HANDLE(StoreOp);
-  HANDLE(DeallocOp);
-  HANDLE(DmaStartOp);
-  HANDLE(DmaWaitOp);
+  HANDLE(memref::AllocOp);
+  HANDLE(memref::AllocaOp);
+  HANDLE(memref::LoadOp);
+  HANDLE(memref::StoreOp);
+  HANDLE(memref::DeallocOp);
+  HANDLE(memref::DmaStartOp);
+  HANDLE(memref::DmaWaitOp);
   HANDLE(AtomicRMWOp);
   HANDLE(GenericAtomicRMWOp);
   HANDLE(AtomicYieldOp);
-  HANDLE(MemRefCastOp);
-  HANDLE(ViewOp);
-  HANDLE(SubViewOp);
+  HANDLE(memref::ViewOp);
+  HANDLE(memref::SubViewOp);
 
   // Tensor-related statements.
-  HANDLE(TensorLoadOp);
-  HANDLE(TensorStoreOp);
-  HANDLE(TensorToMemrefOp);
+  HANDLE(memref::TensorLoadOp);
+  HANDLE(memref::TensorStoreOp);
+  HANDLE(memref::BufferCastOp);
   HANDLE(SplatOp);
-  HANDLE(DimOp);
+  HANDLE(memref::DimOp);
   HANDLE(RankOp);
 
   // Unary expressions.
