@@ -1,4 +1,4 @@
-'''ResNet in PyTorch.
+'''ResNet18 in PyTorch.
 
 Modified based on (https://github.com/kuangliu/pytorch-cifar/blob/master/models/resnet.py)
 

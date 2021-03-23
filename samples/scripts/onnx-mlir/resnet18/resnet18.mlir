@@ -29,71 +29,71 @@ module {
     %c1 = constant 1 : index
     %cst = constant 1.000000e+00 : f32
     %cst_0 = constant 0.000000e+00 : f32
-    %1 = alloc() : memref<1x10xf32>
-    %2 = alloc() : memref<1x512xf32>
-    %3 = alloc() : memref<1x512x1x1xf32>
-    %4 = alloc() : memref<1x512x4x4xf32>
-    %5 = alloc() : memref<1x512x4x4xf32>
-    %6 = alloc() : memref<1x512x4x4xf32>
-    %7 = alloc() : memref<1x512x6x6xf32>
-    %8 = alloc() : memref<1x512x4x4xf32>
-    %9 = alloc() : memref<1x512x4x4xf32>
-    %10 = alloc() : memref<1x512x6x6xf32>
-    %11 = alloc() : memref<1x512x4x4xf32>
-    %12 = alloc() : memref<1x512x4x4xf32>
-    %13 = alloc() : memref<1x512x4x4xf32>
-    %14 = alloc() : memref<1x512x4x4xf32>
-    %15 = alloc() : memref<1x512x6x6xf32>
-    %16 = alloc() : memref<1x512x4x4xf32>
-    %17 = alloc() : memref<1x512x4x4xf32>
-    %18 = alloc() : memref<1x256x10x10xf32>
-    %19 = alloc() : memref<1x256x8x8xf32>
-    %20 = alloc() : memref<1x256x8x8xf32>
-    %21 = alloc() : memref<1x256x8x8xf32>
-    %22 = alloc() : memref<1x256x10x10xf32>
-    %23 = alloc() : memref<1x256x8x8xf32>
-    %24 = alloc() : memref<1x256x8x8xf32>
-    %25 = alloc() : memref<1x256x10x10xf32>
-    %26 = alloc() : memref<1x256x8x8xf32>
-    %27 = alloc() : memref<1x256x8x8xf32>
-    %28 = alloc() : memref<1x256x8x8xf32>
-    %29 = alloc() : memref<1x256x8x8xf32>
-    %30 = alloc() : memref<1x256x10x10xf32>
-    %31 = alloc() : memref<1x256x8x8xf32>
-    %32 = alloc() : memref<1x256x8x8xf32>
-    %33 = alloc() : memref<1x128x18x18xf32>
-    %34 = alloc() : memref<1x128x16x16xf32>
-    %35 = alloc() : memref<1x128x16x16xf32>
-    %36 = alloc() : memref<1x128x16x16xf32>
-    %37 = alloc() : memref<1x128x18x18xf32>
-    %38 = alloc() : memref<1x128x16x16xf32>
-    %39 = alloc() : memref<1x128x16x16xf32>
-    %40 = alloc() : memref<1x128x18x18xf32>
-    %41 = alloc() : memref<1x128x16x16xf32>
-    %42 = alloc() : memref<1x128x16x16xf32>
-    %43 = alloc() : memref<1x128x16x16xf32>
-    %44 = alloc() : memref<1x128x16x16xf32>
-    %45 = alloc() : memref<1x128x18x18xf32>
-    %46 = alloc() : memref<1x128x16x16xf32>
-    %47 = alloc() : memref<1x128x16x16xf32>
-    %48 = alloc() : memref<1x64x34x34xf32>
-    %49 = alloc() : memref<1x64x32x32xf32>
-    %50 = alloc() : memref<1x64x32x32xf32>
-    %51 = alloc() : memref<1x64x32x32xf32>
-    %52 = alloc() : memref<1x64x34x34xf32>
-    %53 = alloc() : memref<1x64x32x32xf32>
-    %54 = alloc() : memref<1x64x32x32xf32>
-    %55 = alloc() : memref<1x64x34x34xf32>
-    %56 = alloc() : memref<1x64x32x32xf32>
-    %57 = alloc() : memref<1x64x32x32xf32>
-    %58 = alloc() : memref<1x64x32x32xf32>
-    %59 = alloc() : memref<1x64x34x34xf32>
-    %60 = alloc() : memref<1x64x32x32xf32>
-    %61 = alloc() : memref<1x64x32x32xf32>
-    %62 = alloc() : memref<1x64x34x34xf32>
-    %63 = alloc() : memref<1x64x32x32xf32>
-    %64 = alloc() : memref<1x64x32x32xf32>
-    %65 = alloc() : memref<1x3x34x34xf32>
+    %1 = memref.alloc() : memref<1x10xf32>
+    %2 = memref.alloc() : memref<1x512xf32>
+    %3 = memref.alloc() : memref<1x512x1x1xf32>
+    %4 = memref.alloc() : memref<1x512x4x4xf32>
+    %5 = memref.alloc() : memref<1x512x4x4xf32>
+    %6 = memref.alloc() : memref<1x512x4x4xf32>
+    %7 = memref.alloc() : memref<1x512x6x6xf32>
+    %8 = memref.alloc() : memref<1x512x4x4xf32>
+    %9 = memref.alloc() : memref<1x512x4x4xf32>
+    %10 = memref.alloc() : memref<1x512x6x6xf32>
+    %11 = memref.alloc() : memref<1x512x4x4xf32>
+    %12 = memref.alloc() : memref<1x512x4x4xf32>
+    %13 = memref.alloc() : memref<1x512x4x4xf32>
+    %14 = memref.alloc() : memref<1x512x4x4xf32>
+    %15 = memref.alloc() : memref<1x512x6x6xf32>
+    %16 = memref.alloc() : memref<1x512x4x4xf32>
+    %17 = memref.alloc() : memref<1x512x4x4xf32>
+    %18 = memref.alloc() : memref<1x256x10x10xf32>
+    %19 = memref.alloc() : memref<1x256x8x8xf32>
+    %20 = memref.alloc() : memref<1x256x8x8xf32>
+    %21 = memref.alloc() : memref<1x256x8x8xf32>
+    %22 = memref.alloc() : memref<1x256x10x10xf32>
+    %23 = memref.alloc() : memref<1x256x8x8xf32>
+    %24 = memref.alloc() : memref<1x256x8x8xf32>
+    %25 = memref.alloc() : memref<1x256x10x10xf32>
+    %26 = memref.alloc() : memref<1x256x8x8xf32>
+    %27 = memref.alloc() : memref<1x256x8x8xf32>
+    %28 = memref.alloc() : memref<1x256x8x8xf32>
+    %29 = memref.alloc() : memref<1x256x8x8xf32>
+    %30 = memref.alloc() : memref<1x256x10x10xf32>
+    %31 = memref.alloc() : memref<1x256x8x8xf32>
+    %32 = memref.alloc() : memref<1x256x8x8xf32>
+    %33 = memref.alloc() : memref<1x128x18x18xf32>
+    %34 = memref.alloc() : memref<1x128x16x16xf32>
+    %35 = memref.alloc() : memref<1x128x16x16xf32>
+    %36 = memref.alloc() : memref<1x128x16x16xf32>
+    %37 = memref.alloc() : memref<1x128x18x18xf32>
+    %38 = memref.alloc() : memref<1x128x16x16xf32>
+    %39 = memref.alloc() : memref<1x128x16x16xf32>
+    %40 = memref.alloc() : memref<1x128x18x18xf32>
+    %41 = memref.alloc() : memref<1x128x16x16xf32>
+    %42 = memref.alloc() : memref<1x128x16x16xf32>
+    %43 = memref.alloc() : memref<1x128x16x16xf32>
+    %44 = memref.alloc() : memref<1x128x16x16xf32>
+    %45 = memref.alloc() : memref<1x128x18x18xf32>
+    %46 = memref.alloc() : memref<1x128x16x16xf32>
+    %47 = memref.alloc() : memref<1x128x16x16xf32>
+    %48 = memref.alloc() : memref<1x64x34x34xf32>
+    %49 = memref.alloc() : memref<1x64x32x32xf32>
+    %50 = memref.alloc() : memref<1x64x32x32xf32>
+    %51 = memref.alloc() : memref<1x64x32x32xf32>
+    %52 = memref.alloc() : memref<1x64x34x34xf32>
+    %53 = memref.alloc() : memref<1x64x32x32xf32>
+    %54 = memref.alloc() : memref<1x64x32x32xf32>
+    %55 = memref.alloc() : memref<1x64x34x34xf32>
+    %56 = memref.alloc() : memref<1x64x32x32xf32>
+    %57 = memref.alloc() : memref<1x64x32x32xf32>
+    %58 = memref.alloc() : memref<1x64x32x32xf32>
+    %59 = memref.alloc() : memref<1x64x34x34xf32>
+    %60 = memref.alloc() : memref<1x64x32x32xf32>
+    %61 = memref.alloc() : memref<1x64x32x32xf32>
+    %62 = memref.alloc() : memref<1x64x34x34xf32>
+    %63 = memref.alloc() : memref<1x64x32x32xf32>
+    %64 = memref.alloc() : memref<1x64x32x32xf32>
+    %65 = memref.alloc() : memref<1x3x34x34xf32>
     %66 = "krnl.global"() {name = "constant_0", offset = 0 : i64, shape = [64, 3, 3, 3]} : () -> memref<64x3x3x3xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 3 {
@@ -1296,70 +1296,70 @@ module {
         affine.store %93, %1[%arg1, %arg2] : memref<1x10xf32>
       }
     }
-    dealloc %65 : memref<1x3x34x34xf32>
-    dealloc %64 : memref<1x64x32x32xf32>
-    dealloc %63 : memref<1x64x32x32xf32>
-    dealloc %62 : memref<1x64x34x34xf32>
-    dealloc %61 : memref<1x64x32x32xf32>
-    dealloc %60 : memref<1x64x32x32xf32>
-    dealloc %59 : memref<1x64x34x34xf32>
-    dealloc %58 : memref<1x64x32x32xf32>
-    dealloc %57 : memref<1x64x32x32xf32>
-    dealloc %56 : memref<1x64x32x32xf32>
-    dealloc %55 : memref<1x64x34x34xf32>
-    dealloc %54 : memref<1x64x32x32xf32>
-    dealloc %53 : memref<1x64x32x32xf32>
-    dealloc %52 : memref<1x64x34x34xf32>
-    dealloc %51 : memref<1x64x32x32xf32>
-    dealloc %50 : memref<1x64x32x32xf32>
-    dealloc %49 : memref<1x64x32x32xf32>
-    dealloc %48 : memref<1x64x34x34xf32>
-    dealloc %47 : memref<1x128x16x16xf32>
-    dealloc %46 : memref<1x128x16x16xf32>
-    dealloc %45 : memref<1x128x18x18xf32>
-    dealloc %44 : memref<1x128x16x16xf32>
-    dealloc %43 : memref<1x128x16x16xf32>
-    dealloc %42 : memref<1x128x16x16xf32>
-    dealloc %41 : memref<1x128x16x16xf32>
-    dealloc %40 : memref<1x128x18x18xf32>
-    dealloc %39 : memref<1x128x16x16xf32>
-    dealloc %38 : memref<1x128x16x16xf32>
-    dealloc %37 : memref<1x128x18x18xf32>
-    dealloc %36 : memref<1x128x16x16xf32>
-    dealloc %35 : memref<1x128x16x16xf32>
-    dealloc %34 : memref<1x128x16x16xf32>
-    dealloc %33 : memref<1x128x18x18xf32>
-    dealloc %32 : memref<1x256x8x8xf32>
-    dealloc %31 : memref<1x256x8x8xf32>
-    dealloc %30 : memref<1x256x10x10xf32>
-    dealloc %29 : memref<1x256x8x8xf32>
-    dealloc %28 : memref<1x256x8x8xf32>
-    dealloc %27 : memref<1x256x8x8xf32>
-    dealloc %26 : memref<1x256x8x8xf32>
-    dealloc %25 : memref<1x256x10x10xf32>
-    dealloc %24 : memref<1x256x8x8xf32>
-    dealloc %23 : memref<1x256x8x8xf32>
-    dealloc %22 : memref<1x256x10x10xf32>
-    dealloc %21 : memref<1x256x8x8xf32>
-    dealloc %20 : memref<1x256x8x8xf32>
-    dealloc %19 : memref<1x256x8x8xf32>
-    dealloc %18 : memref<1x256x10x10xf32>
-    dealloc %17 : memref<1x512x4x4xf32>
-    dealloc %16 : memref<1x512x4x4xf32>
-    dealloc %15 : memref<1x512x6x6xf32>
-    dealloc %14 : memref<1x512x4x4xf32>
-    dealloc %13 : memref<1x512x4x4xf32>
-    dealloc %12 : memref<1x512x4x4xf32>
-    dealloc %11 : memref<1x512x4x4xf32>
-    dealloc %10 : memref<1x512x6x6xf32>
-    dealloc %9 : memref<1x512x4x4xf32>
-    dealloc %8 : memref<1x512x4x4xf32>
-    dealloc %7 : memref<1x512x6x6xf32>
-    dealloc %6 : memref<1x512x4x4xf32>
-    dealloc %5 : memref<1x512x4x4xf32>
-    dealloc %4 : memref<1x512x4x4xf32>
-    dealloc %3 : memref<1x512x1x1xf32>
-    dealloc %2 : memref<1x512xf32>
+    memref.dealloc %65 : memref<1x3x34x34xf32>
+    memref.dealloc %64 : memref<1x64x32x32xf32>
+    memref.dealloc %63 : memref<1x64x32x32xf32>
+    memref.dealloc %62 : memref<1x64x34x34xf32>
+    memref.dealloc %61 : memref<1x64x32x32xf32>
+    memref.dealloc %60 : memref<1x64x32x32xf32>
+    memref.dealloc %59 : memref<1x64x34x34xf32>
+    memref.dealloc %58 : memref<1x64x32x32xf32>
+    memref.dealloc %57 : memref<1x64x32x32xf32>
+    memref.dealloc %56 : memref<1x64x32x32xf32>
+    memref.dealloc %55 : memref<1x64x34x34xf32>
+    memref.dealloc %54 : memref<1x64x32x32xf32>
+    memref.dealloc %53 : memref<1x64x32x32xf32>
+    memref.dealloc %52 : memref<1x64x34x34xf32>
+    memref.dealloc %51 : memref<1x64x32x32xf32>
+    memref.dealloc %50 : memref<1x64x32x32xf32>
+    memref.dealloc %49 : memref<1x64x32x32xf32>
+    memref.dealloc %48 : memref<1x64x34x34xf32>
+    memref.dealloc %47 : memref<1x128x16x16xf32>
+    memref.dealloc %46 : memref<1x128x16x16xf32>
+    memref.dealloc %45 : memref<1x128x18x18xf32>
+    memref.dealloc %44 : memref<1x128x16x16xf32>
+    memref.dealloc %43 : memref<1x128x16x16xf32>
+    memref.dealloc %42 : memref<1x128x16x16xf32>
+    memref.dealloc %41 : memref<1x128x16x16xf32>
+    memref.dealloc %40 : memref<1x128x18x18xf32>
+    memref.dealloc %39 : memref<1x128x16x16xf32>
+    memref.dealloc %38 : memref<1x128x16x16xf32>
+    memref.dealloc %37 : memref<1x128x18x18xf32>
+    memref.dealloc %36 : memref<1x128x16x16xf32>
+    memref.dealloc %35 : memref<1x128x16x16xf32>
+    memref.dealloc %34 : memref<1x128x16x16xf32>
+    memref.dealloc %33 : memref<1x128x18x18xf32>
+    memref.dealloc %32 : memref<1x256x8x8xf32>
+    memref.dealloc %31 : memref<1x256x8x8xf32>
+    memref.dealloc %30 : memref<1x256x10x10xf32>
+    memref.dealloc %29 : memref<1x256x8x8xf32>
+    memref.dealloc %28 : memref<1x256x8x8xf32>
+    memref.dealloc %27 : memref<1x256x8x8xf32>
+    memref.dealloc %26 : memref<1x256x8x8xf32>
+    memref.dealloc %25 : memref<1x256x10x10xf32>
+    memref.dealloc %24 : memref<1x256x8x8xf32>
+    memref.dealloc %23 : memref<1x256x8x8xf32>
+    memref.dealloc %22 : memref<1x256x10x10xf32>
+    memref.dealloc %21 : memref<1x256x8x8xf32>
+    memref.dealloc %20 : memref<1x256x8x8xf32>
+    memref.dealloc %19 : memref<1x256x8x8xf32>
+    memref.dealloc %18 : memref<1x256x10x10xf32>
+    memref.dealloc %17 : memref<1x512x4x4xf32>
+    memref.dealloc %16 : memref<1x512x4x4xf32>
+    memref.dealloc %15 : memref<1x512x6x6xf32>
+    memref.dealloc %14 : memref<1x512x4x4xf32>
+    memref.dealloc %13 : memref<1x512x4x4xf32>
+    memref.dealloc %12 : memref<1x512x4x4xf32>
+    memref.dealloc %11 : memref<1x512x4x4xf32>
+    memref.dealloc %10 : memref<1x512x6x6xf32>
+    memref.dealloc %9 : memref<1x512x4x4xf32>
+    memref.dealloc %8 : memref<1x512x4x4xf32>
+    memref.dealloc %7 : memref<1x512x6x6xf32>
+    memref.dealloc %6 : memref<1x512x4x4xf32>
+    memref.dealloc %5 : memref<1x512x4x4xf32>
+    memref.dealloc %4 : memref<1x512x4x4xf32>
+    memref.dealloc %3 : memref<1x512x1x1xf32>
+    memref.dealloc %2 : memref<1x512xf32>
     return %1 : memref<1x10xf32>
   }
   "krnl.entry_point"() {func = @main_graph, numInputs = 1 : i32, numOutputs = 1 : i32} : () -> ()
