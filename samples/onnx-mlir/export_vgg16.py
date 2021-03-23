@@ -1,4 +1,4 @@
-'''VGG11 in PyTorch.
+'''VGG16 in PyTorch.
 
 Modified based on (https://github.com/kuangliu/pytorch-cifar/blob/master/models/vgg.py)
 
@@ -33,20 +33,27 @@ class VGG(nn.Module):
     def _make_layers(self, cfg):
         layers = []
         in_channels = 3
+        index = 0
         for x in cfg:
             if x == 'M':
-                layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+                layers += []
+                # layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+            elif cfg[index+1] == 'M':
+                layers += [nn.Conv2d(in_channels, x, kernel_size=3, padding=1, stride=2),
+                           nn.ReLU(inplace=True)]
+                in_channels = x
             else:
                 layers += [nn.Conv2d(in_channels, x, kernel_size=3, padding=1),
                            nn.ReLU(inplace=True)]
                 in_channels = x
-        # layers += [nn.AvgPool2d(kernel_size=1, stride=1)]
+            index += 1
+        layers += [nn.AdaptiveAvgPool2d((1, 1))]
         return nn.Sequential(*layers)
 
 
-def VGG11():
-    return VGG('VGG11')
+def VGG16():
+    return VGG('VGG16')
 
 
 input_random = torch.randn((1, 3, 32, 32))
-torch.onnx.export(VGG11(), input_random, 'vgg11.onnx', opset_version=7)
+torch.onnx.export(VGG16(), input_random, 'vgg16.onnx', opset_version=7)

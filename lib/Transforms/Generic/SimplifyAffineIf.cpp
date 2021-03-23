@@ -201,22 +201,25 @@ static bool applySimplifyAffineIf(FuncOp func) {
     if (set.getNumInputs() == 0) {
       // If the integer set is pure constant set, determine whether the
       // condition is always true or always false.
+      SmallVector<bool, 4> flagList;
       unsigned idx = 0;
       for (auto expr : set.getConstraints()) {
         bool eqFlag = set.isEq(idx++);
         auto constValue = expr.cast<AffineConstantExpr>().getValue();
-        if (eqFlag) {
-          if (constValue == 0)
-            alwaysTrue = true;
-          else
-            alwaysFalse = true;
-        } else {
-          if (constValue >= 0)
-            alwaysTrue = true;
-          else
-            alwaysFalse = true;
-        }
+
+        if (eqFlag)
+          flagList.push_back(constValue == 0);
+        else
+          flagList.push_back(constValue >= 0);
       }
+
+      // Only when all sub-conditions are met, the if statement is always true.
+      // Otherwise, the statement if always false.
+      if (llvm::all_of(flagList, [&](bool flag) { return flag; }))
+        alwaysTrue = true;
+      else
+        alwaysFalse = true;
+
     } else if (constrs.isEmpty()) {
       // If there is no solution for the constraints, the condition will always
       // be false.
