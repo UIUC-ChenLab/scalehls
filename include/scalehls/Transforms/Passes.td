@@ -123,7 +123,9 @@ def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "FuncOp"> {
 
   let options = [
     Option<"tileSize", "tile-size", "unsigned", /*default=*/"2",
-           "Positive number: the size of tiling">
+           "Positive number: the size of tiling">,
+    Option<"applyPipeline", "apply-pipeline", "bool", /*default=*/"false",
+           "Whether apply loop pipeline after tiling">
   ];
 }
 
