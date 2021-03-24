@@ -39,11 +39,11 @@ class VGG(nn.Module):
                 layers += []
                 # layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
             elif cfg[index+1] == 'M':
-                layers += [nn.Conv2d(in_channels, x, kernel_size=3, padding=1, stride=2),
+                layers += [nn.Conv2d(in_channels, x, kernel_size=3, padding=1, stride=2, bias=False),
                            nn.ReLU(inplace=True)]
                 in_channels = x
             else:
-                layers += [nn.Conv2d(in_channels, x, kernel_size=3, padding=1),
+                layers += [nn.Conv2d(in_channels, x, kernel_size=3, padding=1, bias=False),
                            nn.ReLU(inplace=True)]
                 in_channels = x
             index += 1

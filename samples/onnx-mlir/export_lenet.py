@@ -16,9 +16,9 @@ input_size = 32
 class LeNet(nn.Module):
     def __init__(self):
         super(LeNet, self).__init__()
-        self.conv1 = nn.Conv2d(3, 6, 5, stride=2)  # max_pool -> stride 2 conv
+        self.conv1 = nn.Conv2d(3, 6, 5, stride=2, bias=False)
         # self.pool1 = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(6, 16, 5, stride=2)  # max_pool -> stride 2 conv
+        self.conv2 = nn.Conv2d(6, 16, 5, stride=2, bias=False)
         # self.pool2 = nn.MaxPool2d(2, 2)
         self.fc1 = nn.Linear(16*5*5, 120)
         self.fc2 = nn.Linear(120, 84)
