@@ -167,7 +167,7 @@ def LoopPipelining : Pass<"loop-pipelining", "FuncOp"> {
   ];
 }
 
-def ArrayPartition : Pass<"array-partition", "FuncOp"> {
+def ArrayPartition : Pass<"array-partition", "ModuleOp"> {
   let summary = "Apply optimized array partition strategy";
   let description = [{
     This array-partition pass will automatically search for the best array

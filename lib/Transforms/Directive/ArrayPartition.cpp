@@ -37,11 +37,17 @@ static bool applyArrayPartition(FuncOp func) {
       targetBlocks.push_back(band.back().getBody());
   }
 
-  // Storing the partition information of each memref.
+  // Storing the partition information of each memref. The rationale is there
+  // may exist multiple blocks/functions accessing the same memref and in
+  // different blocks/functions the best partition fashions and factors are
+  // different. To eventually determine a "best" array partition strategy,
+  // tentatively we always pick the one with the largest partition factor as the
+  // final partition strategy. This "partitionsMap" is used to hold the current
+  // partition strategy of each memref.
   using PartitionInfo = std::pair<PartitionKind, int64_t>;
   DenseMap<Value, SmallVector<PartitionInfo, 4>> partitionsMap;
 
-  // Traverse all pipelined loops.
+  // Traverse all blocks that requires to be considered.
   for (auto block : targetBlocks) {
     MemAccessesMap accessesMap;
     getMemAccessesMap(*block, accessesMap);
@@ -159,9 +165,54 @@ static bool applyArrayPartition(FuncOp func) {
     }
   }
 
-  auto builder = Builder(func);
+  // Apply partition to all sub-functions and traverse all function to update
+  // the "partitionsMap".
+  func.walk([&](CallOp op) {
+    auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCallee());
+    auto subFunc = dyn_cast<FuncOp>(callee);
+    assert(subFunc && "callable is not a function operation");
+
+    // Apply array partition to the sub-function.
+    applyArrayPartition(subFunc);
+
+    auto subFuncType = subFunc.getType();
+    unsigned index = 0;
+    for (auto inputType : subFuncType.getInputs()) {
+      if (auto memrefType = inputType.dyn_cast<MemRefType>())
+        if (auto layout = getLayoutMap(memrefType)) {
+          auto &partitions = partitionsMap[op.getOperand(index)];
+
+          // If the current partitionsMap is empty, initialize it with no
+          // partition and factor of 1.
+          if (partitions.empty()) {
+            for (int64_t dim = 0; dim < memrefType.getRank(); ++dim)
+              partitions.push_back(PartitionInfo(PartitionKind::NONE, 1));
+          }
+
+          // Get the partition factor collected from sub-function.
+          SmallVector<int64_t, 8> factors;
+          getPartitionFactors(memrefType, &factors);
+
+          // Traverse all dimension of the memref.
+          for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
+            auto factor = factors[dim];
+
+            // If the factor from the sub-function is larger than the current
+            // factor, replace it.
+            if (factor > partitions[dim].second) {
+              if (layout.getResult(dim).getKind() == AffineExprKind::FloorDiv)
+                partitions[dim] = PartitionInfo(PartitionKind::BLOCK, factor);
+              else
+                partitions[dim] = PartitionInfo(PartitionKind::CYCLIC, factor);
+            }
+          }
+        }
+      ++index;
+    }
+  });
 
   // Constuct and set new type to each partitioned MemRefType.
+  auto builder = Builder(func);
   for (auto pair : partitionsMap) {
     auto memref = pair.first;
     auto memrefType = memref.getType().cast<MemRefType>();
@@ -212,14 +263,39 @@ static bool applyArrayPartition(FuncOp func) {
   auto inputTypes = func.front().getArgumentTypes();
   func.setType(builder.getFunctionType(inputTypes, resultTypes));
 
-  // TODO: how to handle the case when different sub-functions have different
-  // array partition strategy selected?
+  // Update the types of all sub-functions.
+  func.walk([&](CallOp op) {
+    auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCallee());
+    auto subFunc = dyn_cast<FuncOp>(callee);
+
+    // Set sub-function type.
+    auto subResultTypes = op.getResultTypes();
+    auto subInputTypes = op.getOperandTypes();
+    subFunc.setType(builder.getFunctionType(subInputTypes, subResultTypes));
+
+    // Set arguments type.
+    unsigned index = 0;
+    for (auto inputType : op.getOperandTypes())
+      subFunc.getArgument(index++).setType(inputType);
+
+    // Set results type.
+    auto returnOp = cast<ReturnOp>(subFunc.front().getTerminator());
+    index = 0;
+    for (auto resultType : op.getResultTypes())
+      returnOp.getOperand(index++).setType(resultType);
+  });
+
   return true;
 }
 
 namespace {
 struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
-  void runOnOperation() override { applyArrayPartition(getOperation()); }
+  void runOnOperation() override {
+    for (auto func : getOperation().getOps<FuncOp>())
+      if (auto topFunction = func->getAttrOfType<BoolAttr>("top_function"))
+        if (topFunction.getValue())
+          applyArrayPartition(func);
+  }
 };
 } // namespace
 
