@@ -132,6 +132,7 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
           auto newRoot = band[permuteLoops(band, permMap)];
           band.clear();
           getLoopBandFromOutermost(newRoot, band);
+          band.resize(bandDepth);
           break;
         }
       }
@@ -157,6 +158,7 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
           auto newRoot = band[permuteLoops(band, permMap)];
           band.clear();
           getLoopBandFromOutermost(newRoot, band);
+          band.resize(bandDepth);
           break;
         }
       }

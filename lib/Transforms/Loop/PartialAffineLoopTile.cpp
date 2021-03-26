@@ -98,10 +98,14 @@ struct PartialAffineLoopTile
           sizes.push_back(1);
       }
 
-      auto pipelineLoopLoc = applyLoopTiling(band, sizes);
+      auto tileLoc = applyLoopTiling(band, sizes).getValue();
+      band.resize(tileLoc + 1);
+
+      if (applyOrderOpt)
+        applyAffineLoopOrderOpt(band);
 
       if (applyPipeline)
-        applyLoopPipelining(band, pipelineLoopLoc.getValue(), (unsigned)1);
+        applyLoopPipelining(band, tileLoc, (unsigned)1);
     }
   }
 };
