@@ -14,8 +14,37 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hlscpp;
 
-/// TODO: support to pass in partition strategy.
+static void updateSubFuncs(FuncOp func, Builder builder) {
+  func.walk([&](CallOp op) {
+    auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCallee());
+    auto subFunc = dyn_cast<FuncOp>(callee);
 
+    // Set sub-function type.
+    auto subResultTypes = op.getResultTypes();
+    auto subInputTypes = op.getOperandTypes();
+    auto newType = builder.getFunctionType(subInputTypes, subResultTypes);
+
+    if (subFunc.getType() != newType) {
+      subFunc.setType(newType);
+
+      // Set arguments type.
+      unsigned index = 0;
+      for (auto inputType : op.getOperandTypes())
+        subFunc.getArgument(index++).setType(inputType);
+
+      // Set results type.
+      auto returnOp = cast<ReturnOp>(subFunc.front().getTerminator());
+      index = 0;
+      for (auto resultType : op.getResultTypes())
+        returnOp.getOperand(index++).setType(resultType);
+
+      // Recursively apply array partition strategy.
+      updateSubFuncs(subFunc, builder);
+    }
+  });
+}
+
+/// TODO: support to pass in partition strategy.
 static bool applyArrayPartition(FuncOp func) {
   // Check whether the input function is pipelined.
   bool funcPipeline = false;
@@ -264,26 +293,7 @@ static bool applyArrayPartition(FuncOp func) {
   func.setType(builder.getFunctionType(inputTypes, resultTypes));
 
   // Update the types of all sub-functions.
-  func.walk([&](CallOp op) {
-    auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCallee());
-    auto subFunc = dyn_cast<FuncOp>(callee);
-
-    // Set sub-function type.
-    auto subResultTypes = op.getResultTypes();
-    auto subInputTypes = op.getOperandTypes();
-    subFunc.setType(builder.getFunctionType(subInputTypes, subResultTypes));
-
-    // Set arguments type.
-    unsigned index = 0;
-    for (auto inputType : op.getOperandTypes())
-      subFunc.getArgument(index++).setType(inputType);
-
-    // Set results type.
-    auto returnOp = cast<ReturnOp>(subFunc.front().getTerminator());
-    index = 0;
-    for (auto resultType : op.getResultTypes())
-      returnOp.getOperand(index++).setType(resultType);
-  });
+  updateSubFuncs(func, builder);
 
   return true;
 }

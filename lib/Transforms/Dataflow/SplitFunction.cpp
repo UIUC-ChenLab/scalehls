@@ -154,9 +154,11 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
 
   // Further split each loop band into a function if required.
   if (splitSubFunc) {
-    SmallVector<AffineForOp, 4> loops;
-    for (auto loop : subFunc.getOps<AffineForOp>())
-      loops.push_back(loop);
+    SmallVector<Operation *, 4> loops;
+    for (auto &op : subFunc.front().getOperations()) {
+      if (isa<AffineForOp, linalg::CopyOp>(op))
+        loops.push_back(&op);
+    }
 
     if (loops.size() > 1) {
       unsigned index = 0;
