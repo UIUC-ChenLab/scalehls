@@ -14,7 +14,7 @@ using namespace mlir;
 using namespace scalehls;
 
 static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
-                               StringRef name) {
+                               StringRef name, bool splitSubFunc) {
   Liveness liveness(func);
   auto builder = OpBuilder(func);
 
@@ -152,6 +152,22 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
   for (auto op : opsToErase)
     op->erase();
 
+  // Further split each loop band into a function if required.
+  if (splitSubFunc) {
+    SmallVector<AffineForOp, 4> loops;
+    for (auto loop : subFunc.getOps<AffineForOp>())
+      loops.push_back(loop);
+
+    if (loops.size() > 1) {
+      unsigned index = 0;
+      for (auto loop : loops) {
+        auto loopName = std::string(name) + "_loop" + std::to_string(index);
+        applySplitFunction(subFunc, {loop}, loopName, splitSubFunc);
+        ++index;
+      }
+    }
+  }
+
   return true;
 }
 
@@ -172,7 +188,7 @@ struct SplitFunction : public SplitFunctionBase<SplitFunction> {
 
       for (auto pair : dataflowOps) {
         auto name = "dataflow" + std::to_string(pair.first);
-        applySplitFunction(func, pair.second, name);
+        applySplitFunction(func, pair.second, name, splitSubFunc);
       }
     }
   }

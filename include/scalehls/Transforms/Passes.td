@@ -70,6 +70,12 @@ def SplitFunction : Pass<"split-function", "ModuleOp"> {
   }];
 
   let constructor = "mlir::scalehls::createSplitFunctionPass()";
+
+  let options = [
+    Option<"splitSubFunc", "split-sub-func", "bool", /*default=*/"false",
+           "Whether to further split the sub-functions so that each generated"
+           "function only contains one loop band">
+  ];
 }
 
 //===----------------------------------------------------------------------===//
