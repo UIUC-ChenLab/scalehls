@@ -74,8 +74,10 @@ static void getSuccessorsMap(Block &block, SuccessorsMap &map) {
   }
 }
 
-static bool applyLegalizeDataflow(FuncOp func, OpBuilder &builder,
-                                  int64_t minGran, bool insertCopy) {
+static bool applyLegalizeDataflow(FuncOp func, int64_t minGran,
+                                  bool insertCopy) {
+  auto builder = OpBuilder(func);
+
   SuccessorsMap successorsMap;
   getSuccessorsMap(func.front(), successorsMap);
 
@@ -207,10 +209,7 @@ static bool applyLegalizeDataflow(FuncOp func, OpBuilder &builder,
 namespace {
 struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
   void runOnOperation() override {
-    auto func = getOperation();
-    auto builder = OpBuilder(func);
-
-    applyLegalizeDataflow(func, builder, minGran, insertCopy);
+    applyLegalizeDataflow(getOperation(), minGran, insertCopy);
   }
 };
 } // namespace
