@@ -1562,7 +1562,7 @@ using namespace std;
   for (auto &op : *module.getBody()) {
     if (auto func = dyn_cast<FuncOp>(op))
       emitFunction(func);
-    else if (!isa<ModuleTerminatorOp>(op))
+    else
       emitError(&op, "is unsupported operation.");
   }
 }
