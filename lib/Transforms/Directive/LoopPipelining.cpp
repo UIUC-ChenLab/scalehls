@@ -33,8 +33,14 @@ bool scalehls::applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
     if (auto outerLoop = currentLoop->getParentOfType<AffineForOp>()) {
       // Only if the current loop is the only child loop of the outer loop, the
       // outer loop can be flattened into the current loop.
-      auto &body = *outerLoop.getBody();
-      if (&body.front() == currentLoop && body.getOperations().size() == 2) {
+      bool canFlatten = true;
+      for (auto &op : outerLoop)
+        if (&op != currentLoop && !isa<AffineApplyOp, AffineYieldOp>(op)) {
+          canFlatten = false;
+          break;
+        }
+
+      if (canFlatten) {
         currentLoop = outerLoop;
         outerLoop->setAttr("flatten", builder.getBoolAttr(true));
         continue;

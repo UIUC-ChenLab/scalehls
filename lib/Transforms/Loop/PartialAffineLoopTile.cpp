@@ -101,6 +101,8 @@ struct PartialAffineLoopTile
       auto tileLoc = applyLoopTiling(band, sizes).getValue();
       band.resize(tileLoc + 1);
 
+      // TODO: canonicalize here to eliminate affine.apply ops.
+
       if (applyOrderOpt)
         applyAffineLoopOrderOpt(band);
 
