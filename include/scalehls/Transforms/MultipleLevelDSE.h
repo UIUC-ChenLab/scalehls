@@ -56,7 +56,7 @@ public:
 
   /// Dump pareto and non-pareto points which have been evaluated in the design
   /// space to a csv output file.
-  void dumpLoopDesignSpace(raw_ostream &os);
+  void dumpLoopDesignSpace(StringRef csvFilePath);
 
   /// Get a random tile config which is one of the closest neighbors of "point".
   Optional<TileConfig> getRandomClosestNeighbor(LoopDesignPoint point,
@@ -136,7 +136,8 @@ public:
 
   void combLoopDesignSpaces();
 
-  void dumpFuncDesignSpace(raw_ostream &os);
+  void dumpFuncDesignSpace(StringRef csvFilePath);
+  void exportParetoHLSCpp(StringRef cppRootPath);
 
   SmallVector<FuncDesignPoint, 16> paretoPoints;
 
@@ -166,9 +167,11 @@ public:
 
   bool simplifyLoopNests(FuncOp func);
   bool optimizeLoopBands(FuncOp func);
-  bool exploreDesignSpace(FuncOp func, raw_ostream &os);
+  bool exploreDesignSpace(FuncOp func, StringRef cppRootPath,
+                          StringRef csvRootPath);
 
-  void applyMultipleLevelDSE(FuncOp func, raw_ostream &os);
+  void applyMultipleLevelDSE(FuncOp func, StringRef cppRootPath,
+                             StringRef csvRootPath);
 
   ScaleHLSEstimator &estimator;
   unsigned maxDspNum;
