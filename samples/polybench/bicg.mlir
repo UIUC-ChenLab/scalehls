@@ -1,11 +1,11 @@
-func @bicg(%A: memref<64x64xf32>, %p: memref<64xf32>, %r: memref<64xf32>, %q: memref<64xf32>, %s: memref<64xf32>) {
-  // affine.for %i = 0 to 64 {
-  //   %cst = constant 0.0 : f32
-  //   affine.store %cst, %s[%i] : memref<64xf32>
-  // }
+func @bicg(%A: memref<64x64xf32>, %s: memref<64xf32>, %q: memref<64xf32>, %p: memref<64xf32>, %r: memref<64xf32>) {
   affine.for %i = 0 to 64 {
-    // %cst = constant 0.0 : f32
-    // affine.store %cst, %q[%i] : memref<64xf32>
+    %cst = constant 0.0 : f32
+    affine.store %cst, %s[%i] : memref<64xf32>
+  }
+  affine.for %i = 0 to 64 {
+    %cst = constant 0.0 : f32
+    affine.store %cst, %q[%i] : memref<64xf32>
     affine.for %j = 0 to 64 {
       %0 = affine.load %A[%i, %j] : memref<64x64xf32>
       %1 = affine.load %r[%i] : memref<64xf32>

@@ -301,10 +301,10 @@ static bool applyArrayPartition(FuncOp func) {
 namespace {
 struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
   void runOnOperation() override {
-    for (auto func : getOperation().getOps<FuncOp>())
-      if (auto topFunction = func->getAttrOfType<BoolAttr>("top_function"))
-        if (topFunction.getValue())
-          applyArrayPartition(func);
+    auto func = getOperation();
+    if (auto topAttr = func->getAttrOfType<BoolAttr>("top_function"))
+      if (topAttr.getValue())
+        applyArrayPartition(func);
   }
 };
 } // namespace

@@ -31,11 +31,13 @@ def MultipleLevelDSE : Pass<"multiple-level-dse", "ModuleOp"> {
            "File path: target backend specifications and configurations">,
     Option<"dumpFile", "dump-file", "std::string",
            /*default=*/"\"-\"", "File path: the dump file path">,
-
     Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
            "The top function for HLS synthesis">,
+
     Option<"depAnalysis", "dep-analysis", "bool", /*default=*/"true",
-           "Whether a comprehensive dependency analysis is conducted">
+           "Whether a comprehensive dependency analysis is conducted">,
+    Option<"resConstraint", "res-constraint", "bool", /*default=*/"false",
+           "Whether resource constraints are considered in DSE">
   ];
 }
 
@@ -175,7 +177,7 @@ def LoopPipelining : Pass<"loop-pipelining", "FuncOp"> {
   ];
 }
 
-def ArrayPartition : Pass<"array-partition", "ModuleOp"> {
+def ArrayPartition : Pass<"array-partition", "FuncOp"> {
   let summary = "Apply optimized array partition strategy";
   let description = [{
     This array-partition pass will automatically search for the best array

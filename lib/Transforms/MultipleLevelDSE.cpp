@@ -205,14 +205,15 @@ bool LoopDesignSpace::evaluateTileConfig(TileConfig config) {
   auto tmpInnerLoop = tmpBand.back();
   auto II = estimator.getIntAttrValue(tmpInnerLoop, "ii");
   auto iterLatency = estimator.getIntAttrValue(tmpInnerLoop, "iter_latency");
-  auto shareDspNum = estimator.getIntAttrValue(tmpInnerLoop, "share_dsp");
+  // auto shareDspNum = estimator.getIntAttrValue(tmpInnerLoop, "share_dsp");
   auto noShareDspNum = estimator.getIntAttrValue(tmpInnerLoop, "noshare_dsp");
 
   // Improve target II until II is equal to iteration latency. Note that when II
   // equal to iteration latency, the pipeline pragma is similar to a region
   // fully unroll pragma which unrolls all contained loops.
   for (auto tmpII = II; tmpII <= iterLatency; ++tmpII) {
-    auto tmpDspNum = std::max(shareDspNum, noShareDspNum / tmpII);
+    // std::max(shareDspNum, noShareDspNum / tmpII);
+    auto tmpDspNum = noShareDspNum / tmpII;
     auto tmpLatency = iterLatency + tmpII * (iterNum - 1);
     auto point = LoopDesignPoint(tmpLatency, tmpDspNum, config, tmpII);
 
@@ -721,10 +722,12 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
     getLatencyMap(spec, latencyMap);
     unsigned maxDspNum =
         ceil(spec.GetInteger("specification", "dsp", 220) * 1.1);
+    if (!resConstraint)
+      maxDspNum = UINT_MAX;
 
     unsigned maxInitParallel = spec.GetInteger("dse", "max_init_parallel", 16);
-    unsigned maxIterNum = spec.GetInteger("dse", "max_iter_num", 16);
-    unsigned maxDistance = spec.GetFloat("dse", "max_distance", 1.0);
+    unsigned maxIterNum = spec.GetInteger("dse", "max_iter_num", 50);
+    unsigned maxDistance = spec.GetFloat("dse", "max_distance", 4.0);
 
     // Parse output file.
     std::string errorMessage;
