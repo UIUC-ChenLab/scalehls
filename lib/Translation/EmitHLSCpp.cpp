@@ -1347,32 +1347,15 @@ void ModuleEmitter::emitArrayPragmas(Value memref) {
   bool emitPragmaFlag = false;
   auto type = memref.getType().cast<MemRefType>();
 
-  // Emit resource pragma.
-  auto kind = MemoryKind(type.getMemorySpaceAsInt());
-  if (kind != MemoryKind::DRAM) {
-    emitPragmaFlag = true;
-
-    indent();
-    os << "#pragma HLS resource";
-    os << " variable=";
-    emitValue(memref);
-
-    os << " core=";
-    if (kind == MemoryKind::BRAM_1P)
-      os << "ram_1p_bram";
-    else if (kind == MemoryKind::BRAM_S2P)
-      os << "ram_s2p_bram";
-    else if (kind == MemoryKind::BRAM_T2P)
-      os << "ram_t2p_bram";
-    else
-      os << "ram_s2p_bram";
-    os << "\n";
-  }
-
+  bool fullyPartition = false;
   if (auto layoutMap = getLayoutMap(type)) {
     // Emit array_partition pragma(s).
     SmallVector<int64_t, 8> factors;
     getPartitionFactors(type, &factors);
+
+    auto shapes = type.getShape();
+    fullyPartition =
+        factors == SmallVector<int64_t, 8>(shapes.begin(), shapes.end());
 
     for (int64_t dim = 0; dim < type.getRank(); ++dim) {
       if (factors[dim] != 1) {
@@ -1393,6 +1376,28 @@ void ModuleEmitter::emitArrayPragmas(Value memref) {
         os << " dim=" << dim + 1 << "\n";
       }
     }
+  }
+
+  // Emit resource pragma.
+  auto kind = MemoryKind(type.getMemorySpaceAsInt());
+  if (kind != MemoryKind::DRAM && !fullyPartition) {
+    emitPragmaFlag = true;
+
+    indent();
+    os << "#pragma HLS resource";
+    os << " variable=";
+    emitValue(memref);
+
+    os << " core=";
+    if (kind == MemoryKind::BRAM_1P)
+      os << "ram_1p_bram";
+    else if (kind == MemoryKind::BRAM_S2P)
+      os << "ram_s2p_bram";
+    else if (kind == MemoryKind::BRAM_T2P)
+      os << "ram_t2p_bram";
+    else
+      os << "ram_s2p_bram";
+    os << "\n";
   }
 
   // Emit an empty line.
