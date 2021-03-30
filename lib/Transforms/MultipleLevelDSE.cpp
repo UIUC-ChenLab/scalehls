@@ -507,11 +507,11 @@ bool FuncDesignSpace::exportParetoHLSCpp(StringRef outputRootPath) {
       auto tmpFunc = func.clone();
       if (!applyOptStrategy(tmpFunc, tileLists, targetIIs))
         return false;
+      estimator.estimateFunc(tmpFunc);
 
       // Parse a new C++ file.
-      auto outputFilePath = outputRootPath.str() + "func_" +
-                            func.getName().str() + "_" +
-                            std::to_string(sampleIndex) + ".mlir";
+      auto outputFilePath = outputRootPath.str() + func.getName().str() +
+                            "_pareto_" + std::to_string(sampleIndex) + ".mlir";
 
       std::string errorMessage;
       auto outputFile = mlir::openOutputFile(outputFilePath, &errorMessage);

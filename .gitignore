@@ -2,6 +2,7 @@ build
 
 **/tmp
 **/cpp_src
+**/mlir_src
 **/hls_proj
 **/dump_csv
 

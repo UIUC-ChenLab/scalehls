@@ -2,10 +2,10 @@
 
 # Please run: source ablation_test_run.sh -m resnet18 -n 19 -c 0
 
-# cd samples/scripts/onnx-mlir-3/ && source ablation_test_run.sh -m lenet -n 19 -c 0
-# cd samples/scripts/onnx-mlir-3/ && source ablation_test_run.sh -m mobilenetv2 -n 19 -c 0
-# cd samples/scripts/onnx-mlir-3/ && source ablation_test_run.sh -m resnet18 -n 19 -c 0
-# cd samples/scripts/onnx-mlir-3/ && source ablation_test_run.sh -m vgg16 -n 19 -c 0
+# cd samples/onnx-mlir/ && source ablation_test_run.sh -m lenet -n 19 -c 0
+# cd samples/onnx-mlir/ && source ablation_test_run.sh -m mobilenetv2 -n 19 -c 0
+# cd samples/onnx-mlir/ && source ablation_test_run.sh -m resnet18 -n 19 -c 0
+# cd samples/onnx-mlir/ && source ablation_test_run.sh -m vgg16 -n 19 -c 0
 
 # Script options.
 while getopts 'm:n:c:' opt
