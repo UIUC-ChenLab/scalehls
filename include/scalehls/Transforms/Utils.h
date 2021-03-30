@@ -41,9 +41,11 @@ bool applyFullyLoopUnrolling(Block &block);
 
 bool applyFullyUnrollAndPartition(Block &block, FuncOp func);
 
-/// Apply optimization strategy to a loop band. The ancestor function is also
-/// passed in because the post-tiling optimizations have to take function as
-/// target, e.g. canonicalizer and array partition.
+bool applyArrayPartition(FuncOp func);
+
+/// Apply optimization strategy to a loop band. The ancestor function is
+/// also passed in because the post-tiling optimizations have to take
+/// function as target, e.g. canonicalizer and array partition.
 bool applyOptStrategy(AffineLoopBand &band, FuncOp func, TileList tileList,
                       unsigned targetII);
 

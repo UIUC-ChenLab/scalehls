@@ -45,9 +45,6 @@ static void addPassPipeline(PassManager &pm) {
 
   // Generic common sub expression elimination.
   pm.addPass(createCSEPass());
-
-  // Apply the best suitable array partition strategy to the function.
-  pm.addPass(createArrayPartitionPass());
 }
 
 bool scalehls::applyFullyUnrollAndPartition(Block &block, FuncOp func) {
@@ -86,11 +83,14 @@ bool scalehls::applyOptStrategy(AffineLoopBand &band, FuncOp func,
   if (!applyLoopPipelining(band, pipelineLoopLoc.getValue(), targetII))
     return false;
 
-  // Apply general optimizations and array partition.
+  // Apply general optimizations.
   PassManager optPM(func.getContext(), "func");
   addPassPipeline(optPM);
   if (failed(optPM.run(func)))
     return false;
+
+  // Apply the best suitable array partition strategy to the function.
+  applyArrayPartition(func);
 
   return true;
 }
@@ -121,11 +121,14 @@ bool scalehls::applyOptStrategy(FuncOp func, ArrayRef<TileList> tileLists,
       return false;
   }
 
-  // Apply general optimizations and array partition.
+  // Apply general optimizations.
   PassManager optPM(func.getContext(), "func");
   addPassPipeline(optPM);
   if (failed(optPM.run(func)))
     return false;
+
+  // Apply the best suitable array partition strategy to the function.
+  applyArrayPartition(func);
 
   return true;
 }

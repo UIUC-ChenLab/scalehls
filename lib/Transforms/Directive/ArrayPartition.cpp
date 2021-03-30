@@ -9,6 +9,7 @@
 #include "scalehls/Analysis/Utils.h"
 #include "scalehls/Dialect/HLSCpp/HLSCpp.h"
 #include "scalehls/Transforms/Passes.h"
+#include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -45,7 +46,7 @@ static void updateSubFuncs(FuncOp func, Builder builder) {
 }
 
 /// TODO: support to pass in partition strategy.
-static bool applyArrayPartition(FuncOp func) {
+bool scalehls::applyArrayPartition(FuncOp func) {
   // Check whether the input function is pipelined.
   bool funcPipeline = false;
   if (auto attr = func->getAttrOfType<BoolAttr>("pipeline"))
@@ -301,10 +302,11 @@ static bool applyArrayPartition(FuncOp func) {
 namespace {
 struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
   void runOnOperation() override {
-    auto func = getOperation();
-    if (auto topAttr = func->getAttrOfType<BoolAttr>("top_function"))
-      if (topAttr.getValue())
-        applyArrayPartition(func);
+    for (auto func : getOperation().getOps<FuncOp>()) {
+      if (auto topAttr = func->getAttrOfType<BoolAttr>("top_function"))
+        if (topAttr.getValue())
+          applyArrayPartition(func);
+    }
   }
 };
 } // namespace
