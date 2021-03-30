@@ -481,20 +481,54 @@ void FuncDesignSpace::combLoopDesignSpaces() {
   LLVM_DEBUG(llvm::dbgs() << "\n";);
 }
 
-void FuncDesignSpace::exportParetoHLSCpp(StringRef cppRootPath) {
-  auto cppFilePath =
-      cppRootPath.str() + "func_" + func.getName().str() + "_.cpp";
+bool FuncDesignSpace::exportParetoHLSCpp(StringRef outputRootPath) {
+  auto paretoNum = paretoPoints.size();
+  auto sampleStep = paretoNum / 10;
 
-  std::string errorMessage;
-  auto cppFile = mlir::openOutputFile(cppFilePath, &errorMessage);
-  if (!cppFile)
-    return;
+  // Traverse all detected pareto points.
+  unsigned sampleIndex = 0;
+  for (auto &funcPoint : paretoPoints) {
+    // Only export sampled points.
+    if (sampleIndex % sampleStep == 0) {
+      std::vector<TileList> tileLists;
+      SmallVector<unsigned, 4> targetIIs;
 
-  auto &os = cppFile->os();
+      for (unsigned i = 0; i < loopDesignSpaces.size(); ++i) {
+        auto &loopSpace = loopDesignSpaces[i];
+        auto &loopPoint = funcPoint.loopDesignPoints[i];
+        auto tileList = loopSpace.getTileList(loopPoint.tileConfig);
+        auto targetII = loopPoint.targetII;
+
+        tileLists.push_back(tileList);
+        targetIIs.push_back(targetII);
+      }
+
+      // Clone a new function and apply optimization.
+      auto tmpFunc = func.clone();
+      if (!applyOptStrategy(tmpFunc, tileLists, targetIIs))
+        return false;
+
+      // Parse a new C++ file.
+      auto outputFilePath = outputRootPath.str() + "func_" +
+                            func.getName().str() + "_" +
+                            std::to_string(sampleIndex) + ".mlir";
+
+      std::string errorMessage;
+      auto outputFile = mlir::openOutputFile(outputFilePath, &errorMessage);
+      if (!outputFile)
+        return false;
+
+      auto &os = outputFile->os();
+      os << tmpFunc << "\n";
+      outputFile->keep();
+    }
+    ++sampleIndex;
+  }
 
   LLVM_DEBUG(
       llvm::dbgs() << "Sampled pareto points' C++ files are exported to path \""
-                   << cppRootPath << "\".\n\n");
+                   << outputRootPath << "\".\n\n");
+  return true;
 }
 
 //===----------------------------------------------------------------------===//
@@ -656,7 +690,8 @@ bool ScaleHLSOptimizer::optimizeLoopBands(FuncOp func) {
 }
 
 /// DSE Stage3: Explore the function design space through dynamic programming.
-bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, StringRef cppRootPath,
+bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func,
+                                           StringRef outputRootPath,
                                            StringRef csvRootPath) {
   LLVM_DEBUG(llvm::dbgs() << "----------\nStage3: Conduct top function design "
                              "space exploration...\n";);
@@ -695,7 +730,7 @@ bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, StringRef cppRootPath,
   funcSpace.dumpFuncDesignSpace(funcCsvFilePath);
 
   // Export sampled pareto points' C++ source.
-  funcSpace.exportParetoHLSCpp(cppRootPath);
+  funcSpace.exportParetoHLSCpp(outputRootPath);
 
   // Apply the best function design point under the constraints.
   for (auto &funcPoint : funcSpace.paretoPoints) {
@@ -733,7 +768,7 @@ bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, StringRef cppRootPath,
 
 /// This is a temporary approach that does not scale.
 void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func,
-                                              StringRef cppRootPath,
+                                              StringRef outputRootPath,
                                               StringRef csvRootPath) {
   emitQoRDebugInfo(func, "Start multiple level DSE.");
 
@@ -747,7 +782,7 @@ void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func,
     return;
 
   // Explore the design space through a multiple level approach.
-  if (!exploreDesignSpace(func, cppRootPath, csvRootPath))
+  if (!exploreDesignSpace(func, outputRootPath, csvRootPath))
     return;
 }
 
@@ -786,7 +821,7 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
     for (auto func : module.getOps<FuncOp>())
       if (func.getName() == topFunc) {
         func->setAttr("top_function", builder.getBoolAttr(true));
-        optimizer.applyMultipleLevelDSE(func, cppPath, csvPath);
+        optimizer.applyMultipleLevelDSE(func, outputPath, csvPath);
       }
   }
 };

@@ -7,9 +7,12 @@
 #ifndef SCALEHLS_TRANSLATION_EMITHLSCPP_H
 #define SCALEHLS_TRANSLATION_EMITHLSCPP_H
 
+#include "mlir/IR/BuiltinOps.h"
+
 namespace mlir {
 namespace scalehls {
 
+LogicalResult emitHLSCpp(ModuleOp module, llvm::raw_ostream &os);
 void registerEmitHLSCppTranslation();
 
 } // namespace scalehls

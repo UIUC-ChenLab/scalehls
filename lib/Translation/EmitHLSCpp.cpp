@@ -7,7 +7,6 @@
 #include "scalehls/Translation/EmitHLSCpp.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/IR/AffineExprVisitor.h"
-#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/Translation.h"
 #include "scalehls/Analysis/Utils.h"
@@ -1571,7 +1570,7 @@ using namespace std;
 // Entry of scalehls-translate
 //===----------------------------------------------------------------------===//
 
-static LogicalResult emitHLSCpp(ModuleOp module, llvm::raw_ostream &os) {
+LogicalResult scalehls::emitHLSCpp(ModuleOp module, llvm::raw_ostream &os) {
   auto builder = Builder(module);
   ScaleHLSEmitterState state(os);
   ModuleEmitter(state, builder).emitModule(module);
