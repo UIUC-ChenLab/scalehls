@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Please run: source dse_test_run.sh -c 0
+# Please run: source dse_test_run.sh -m gemm -c 0
 
 # cd samples/polybench/ && source dse_test_run.sh -m atax -c 0
 # cd samples/polybench/ && source dse_test_run.sh -m bicg -c 0
@@ -55,7 +55,7 @@ do
 done
 
 # Run Vivado HLS and collect results.
-echo -e "Name\tBRAM\tDSP\tLUT\tCycles\tInterval" > ${model_name}/${model_name}_result.log
+echo -e "Name\tBRAM\tDSP\tLUT\tCycles\tEstiDSP\tEstiCycles" > ${model_name}/${model_name}_result.log
 n=0
 for file in ${model_name}/cpp_src/*
 do
@@ -76,9 +76,12 @@ do
   dsp=$(awk '/<\/*DSP48E>/{gsub(/<\/*DSP48E>/,"");print $0;exit;}' $csynth_xml)
   lut=$(awk '/<\/*LUT>/{gsub(/<\/*LUT>/,"");print $0;exit;}' $csynth_xml)
   cycles=$(awk '/<\/*Best-caseLatency>/{gsub(/<\/*Best-caseLatency>/,"");print $0}' $csynth_xml)
-  interval=$(awk '/<\/*Interval-min>/{gsub(/<\/*Interval-min>/,"");print $0}' $csynth_xml)
+  # interval=$(awk '/<\/*Interval-min>/{gsub(/<\/*Interval-min>/,"");print $0}' $csynth_xml)
 
-  echo -e "${cpp_name}\t$bram\t$dsp\t$lut\t$cycles\t$interval" >> ${model_name}/${model_name}_result.log
+  esti_dsp=$(awk '/\/* DSP=/{gsub(/\/* DSP=/,"");print $0}' ${model_name}/cpp_src/${cpp_name}.cpp)
+  esti_cycles=$(awk '/\/* Latency=/{gsub(/\/* Latency=/,"");print $0}' ${model_name}/cpp_src/${cpp_name}.cpp)
+
+  echo -e "${cpp_name}\t$bram\t$dsp\t$lut\t$cycles\t${esti_dsp}\t${esti_cycles}" >> ${model_name}/${model_name}_result.log
 
   let n++
 done

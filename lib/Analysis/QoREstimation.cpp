@@ -601,7 +601,8 @@ Resource ScaleHLSEstimator::estimateResource(Block &block, int64_t interval) {
     });
 
     auto noShareDspNum = totalFadd * 2 + totalFmul * 3;
-    dsp = staticDspNum + max(shareDspNum, noShareDspNum / interval);
+    // max(shareDspNum, noShareDspNum / interval);
+    dsp = staticDspNum + noShareDspNum / interval;
 
     // Annotate dsp utilization with & without resource sharing.
     auto parentOp = block.getParentOp();
