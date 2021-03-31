@@ -137,7 +137,7 @@ public:
   void combLoopDesignSpaces();
 
   void dumpFuncDesignSpace(StringRef csvFilePath);
-  bool exportParetoHLSCpp(StringRef outputRootPath);
+  bool exportParetoHLSCpp(unsigned outputNum, StringRef outputRootPath);
 
   SmallVector<FuncDesignPoint, 16> paretoPoints;
 
@@ -167,11 +167,11 @@ public:
 
   bool simplifyLoopNests(FuncOp func);
   bool optimizeLoopBands(FuncOp func);
-  bool exploreDesignSpace(FuncOp func, StringRef outputRootPath,
-                          StringRef csvRootPath);
+  bool exploreDesignSpace(FuncOp func, unsigned outputNum,
+                          StringRef outputRootPath, StringRef csvRootPath);
 
-  void applyMultipleLevelDSE(FuncOp func, StringRef outputRootPath,
-                             StringRef csvRootPath);
+  void applyMultipleLevelDSE(FuncOp func, unsigned outputNum,
+                             StringRef outputRootPath, StringRef csvRootPath);
 
   ScaleHLSEstimator &estimator;
   unsigned maxDspNum;

@@ -1347,15 +1347,10 @@ void ModuleEmitter::emitArrayPragmas(Value memref) {
   bool emitPragmaFlag = false;
   auto type = memref.getType().cast<MemRefType>();
 
-  bool fullyPartition = false;
   if (auto layoutMap = getLayoutMap(type)) {
     // Emit array_partition pragma(s).
     SmallVector<int64_t, 8> factors;
     getPartitionFactors(type, &factors);
-
-    auto shapes = type.getShape();
-    fullyPartition =
-        factors == SmallVector<int64_t, 8>(shapes.begin(), shapes.end());
 
     for (int64_t dim = 0; dim < type.getRank(); ++dim) {
       if (factors[dim] != 1) {
@@ -1378,9 +1373,10 @@ void ModuleEmitter::emitArrayPragmas(Value memref) {
     }
   }
 
-  // Emit resource pragma.
+  // Emit resource pragma when the array is not DRAM kind and is not fully
+  // partitioned.
   auto kind = MemoryKind(type.getMemorySpaceAsInt());
-  if (kind != MemoryKind::DRAM && !fullyPartition) {
+  if (kind != MemoryKind::DRAM && !isFullyPartitioned(type)) {
     emitPragmaFlag = true;
 
     indent();
@@ -1432,18 +1428,20 @@ void ModuleEmitter::emitFunctionPragmas(FuncOp func, ArrayRef<Value> portList) {
       // Array ports and scalar ports are handled separately. Here, we only
       // handle MemRef types since we assume the IR has be fully bufferized.
       if (auto memrefType = port.getType().dyn_cast<MemRefType>()) {
-        indent();
-        os << "#pragma HLS interface";
-        // For now, we set the offset of all m_axi interfaces as slave.
-        if (MemoryKind(memrefType.getMemorySpaceAsInt()) == MemoryKind::DRAM)
-          os << " m_axi offset=slave";
-        else
-          os << " bram";
+        // Only emit interface pragma when the array is not fully partitioned.
+        if (!isFullyPartitioned(memrefType)) {
+          indent();
+          os << "#pragma HLS interface";
+          // For now, we set the offset of all m_axi interfaces as slave.
+          if (MemoryKind(memrefType.getMemorySpaceAsInt()) == MemoryKind::DRAM)
+            os << " m_axi offset=slave";
+          else
+            os << " bram";
 
-        os << " port=";
-        emitValue(port);
-        os << "\n";
-
+          os << " port=";
+          emitValue(port);
+          os << "\n";
+        }
       } else {
         indent();
         os << "#pragma HLS interface s_axilite";

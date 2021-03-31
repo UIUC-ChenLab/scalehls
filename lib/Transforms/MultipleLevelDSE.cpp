@@ -481,9 +481,10 @@ void FuncDesignSpace::combLoopDesignSpaces() {
   LLVM_DEBUG(llvm::dbgs() << "\n";);
 }
 
-bool FuncDesignSpace::exportParetoHLSCpp(StringRef outputRootPath) {
-  auto paretoNum = paretoPoints.size();
-  auto sampleStep = paretoNum / 10;
+bool FuncDesignSpace::exportParetoHLSCpp(unsigned outputNum,
+                                         StringRef outputRootPath) {
+  unsigned paretoNum = paretoPoints.size();
+  auto sampleStep = std::max(paretoNum / outputNum, (unsigned)1);
 
   // Traverse all detected pareto points.
   unsigned sampleIndex = 0;
@@ -690,7 +691,7 @@ bool ScaleHLSOptimizer::optimizeLoopBands(FuncOp func) {
 }
 
 /// DSE Stage3: Explore the function design space through dynamic programming.
-bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func,
+bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, unsigned outputNum,
                                            StringRef outputRootPath,
                                            StringRef csvRootPath) {
   LLVM_DEBUG(llvm::dbgs() << "----------\nStage3: Conduct top function design "
@@ -730,7 +731,7 @@ bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func,
   funcSpace.dumpFuncDesignSpace(funcCsvFilePath);
 
   // Export sampled pareto points' C++ source.
-  funcSpace.exportParetoHLSCpp(outputRootPath);
+  funcSpace.exportParetoHLSCpp(outputNum, outputRootPath);
 
   // Apply the best function design point under the constraints.
   for (auto &funcPoint : funcSpace.paretoPoints) {
@@ -767,7 +768,7 @@ bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func,
 //===----------------------------------------------------------------------===//
 
 /// This is a temporary approach that does not scale.
-void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func,
+void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func, unsigned outputNum,
                                               StringRef outputRootPath,
                                               StringRef csvRootPath) {
   emitQoRDebugInfo(func, "Start multiple level DSE.");
@@ -782,7 +783,7 @@ void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func,
     return;
 
   // Explore the design space through a multiple level approach.
-  if (!exploreDesignSpace(func, outputRootPath, csvRootPath))
+  if (!exploreDesignSpace(func, outputNum, outputRootPath, csvRootPath))
     return;
 }
 
@@ -821,7 +822,7 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
     for (auto func : module.getOps<FuncOp>())
       if (func.getName() == topFunc) {
         func->setAttr("top_function", builder.getBoolAttr(true));
-        optimizer.applyMultipleLevelDSE(func, outputPath, csvPath);
+        optimizer.applyMultipleLevelDSE(func, outputNum, outputPath, csvPath);
       }
   }
 };

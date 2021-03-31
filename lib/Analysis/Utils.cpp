@@ -156,6 +156,21 @@ AffineMap scalehls::getLayoutMap(MemRefType memrefType) {
   return memrefMaps.back();
 }
 
+bool scalehls::isFullyPartitioned(MemRefType memrefType) {
+  bool fullyPartitioned = false;
+
+  if (auto layoutMap = getLayoutMap(memrefType)) {
+    SmallVector<int64_t, 8> factors;
+    getPartitionFactors(memrefType, &factors);
+
+    auto shapes = memrefType.getShape();
+    fullyPartitioned =
+        factors == SmallVector<int64_t, 8>(shapes.begin(), shapes.end());
+  }
+
+  return fullyPartitioned;
+}
+
 // Calculate partition factors through analyzing the "memrefType" and return
 // them in "factors". Meanwhile, the overall partition number is calculated and
 // returned as well.

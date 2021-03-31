@@ -44,6 +44,8 @@ AffineMap getLayoutMap(MemRefType memrefType);
 int64_t getPartitionFactors(MemRefType memrefType,
                             SmallVector<int64_t, 8> *factors = nullptr);
 
+bool isFullyPartitioned(MemRefType memrefType);
+
 /// Get the whole loop band given the outermost loop and return it in "band".
 /// Meanwhile, the return value is the innermost loop of this loop band.
 AffineForOp getLoopBandFromOutermost(AffineForOp forOp, AffineLoopBand &band);

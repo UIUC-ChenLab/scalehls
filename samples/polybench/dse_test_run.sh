@@ -19,32 +19,37 @@ do
 done
 
 # Create directories.
-if [ ! -d "${model_name}/cpp_src" ]
+if [ -d "${model_name}/cpp_src" ]
 then
-  mkdir ${model_name}/cpp_src
+  rm -rf ${model_name}/cpp_src
 fi
 
-if [ ! -d "${model_name}/mlir_src" ]
+if [ -d "${model_name}/mlir_src" ]
 then
-  mkdir ${model_name}/mlir_src
+  rm -rf ${model_name}/mlir_src
 fi
 
-if [ ! -d "${model_name}/dump_csv" ]
+if [ -d "${model_name}/dump_csv" ]
 then
-  mkdir ${model_name}/dump_csv
+  rm -rf ${model_name}/dump_csv
 fi
 
-if [ ! -d "${model_name}/hls_proj" ]
+if [ -d "${model_name}/hls_proj" ]
 then
-  mkdir ${model_name}/hls_proj
+  rm -rf ${model_name}/hls_proj
 fi
+
+mkdir ${model_name}/cpp_src
+mkdir ${model_name}/mlir_src
+mkdir ${model_name}/dump_csv
+mkdir ${model_name}/hls_proj
 
 # Run DSE.
 config=../../config/target-spec.ini
 input=${model_name}/${model_name}.mlir
 
 scalehls-opt $input -legalize-to-hlscpp="top-func=${model_name}" -qor-estimation="target-spec=$config" | scalehls-translate -emit-hlscpp > ${model_name}/cpp_src/${model_name}_naive.cpp
-scalehls-opt $input -multiple-level-dse="top-func=${model_name} output-path=${model_name}/mlir_src/ csv-path=${model_name}/dump_csv/ target-spec=$config" -debug-only=scalehls > /dev/null
+scalehls-opt $input -multiple-level-dse="top-func=${model_name} output-num=30 output-path=${model_name}/mlir_src/ csv-path=${model_name}/dump_csv/ target-spec=$config" -debug-only=scalehls > /dev/null
 
 for file in ${model_name}/mlir_src/*
 do
@@ -75,8 +80,8 @@ do
   bram=$(awk '/<\/*BRAM_18K>/{gsub(/<\/*BRAM_18K>/,"");print $0;exit;}' $csynth_xml)
   dsp=$(awk '/<\/*DSP48E>/{gsub(/<\/*DSP48E>/,"");print $0;exit;}' $csynth_xml)
   lut=$(awk '/<\/*LUT>/{gsub(/<\/*LUT>/,"");print $0;exit;}' $csynth_xml)
-  cycles=$(awk '/<\/*Best-caseLatency>/{gsub(/<\/*Best-caseLatency>/,"");print $0}' $csynth_xml)
-  # interval=$(awk '/<\/*Interval-min>/{gsub(/<\/*Interval-min>/,"");print $0}' $csynth_xml)
+  cycles=$(awk '/<\/*Best-caseLatency>/{gsub(/<\/*Best-caseLatency>/,"");print $0;exit;}' $csynth_xml)
+  # interval=$(awk '/<\/*Interval-min>/{gsub(/<\/*Interval-min>/,"");print $0;exit;}' $csynth_xml)
 
   esti_dsp=$(awk '/\/* DSP=/{gsub(/\/* DSP=/,"");print $0}' ${model_name}/cpp_src/${cpp_name}.cpp)
   esti_cycles=$(awk '/\/* Latency=/{gsub(/\/* Latency=/,"");print $0}' ${model_name}/cpp_src/${cpp_name}.cpp)
