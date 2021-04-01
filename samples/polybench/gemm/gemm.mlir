@@ -10,7 +10,7 @@ func @gemm(%alpha: f32, %beta: f32, %C: memref<1024x1024xf32>, %A: memref<1024x1
         %4 = affine.load %C[%i, %j] : memref<1024x1024xf32>
         %5 = mulf %alpha, %2 : f32
         %6 = mulf %5, %3 : f32
-        %7 = addf %6, %4 : f32
+        %7 = addf %4, %6 : f32
         affine.store %7, %C[%i, %j] : memref<1024x1024xf32>
       }
     }

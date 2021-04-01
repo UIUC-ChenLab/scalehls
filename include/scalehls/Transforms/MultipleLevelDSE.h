@@ -38,7 +38,8 @@ class LoopDesignSpace {
 public:
   explicit LoopDesignSpace(FuncOp func, AffineLoopBand &band,
                            ScaleHLSEstimator &estimator, unsigned maxDspNum,
-                           bool onlyDirective);
+                           unsigned maxExplParallel, unsigned maxLoopParallel,
+                           bool directiveOnly);
 
   /// Return the actual tile vector given a tile config.
   TileList getTileList(TileConfig config);
@@ -92,7 +93,7 @@ public:
   std::set<TileConfig> unestimatedTileConfigs;
 
   // Whether to include loop transformation into the loop design space.
-  bool onlyDirective;
+  bool directiveOnly;
 };
 
 //===----------------------------------------------------------------------===//
@@ -141,7 +142,7 @@ public:
   void combLoopDesignSpaces();
 
   void dumpFuncDesignSpace(StringRef csvFilePath);
-  bool exportParetoHLSCpp(unsigned outputNum, StringRef outputRootPath);
+  bool exportParetoDesigns(unsigned outputNum, StringRef outputRootPath);
 
   SmallVector<FuncDesignPoint, 16> paretoPoints;
 
@@ -161,28 +162,43 @@ public:
 class ScaleHLSOptimizer : public ScaleHLSAnalysisBase {
 public:
   explicit ScaleHLSOptimizer(Builder &builder, ScaleHLSEstimator &estimator,
-                             unsigned maxDspNum, unsigned maxInitParallel,
-                             unsigned maxIterNum, float maxDistance)
+                             unsigned maxDspNum, unsigned outputNum,
+                             unsigned maxInitParallel, unsigned maxExplParallel,
+                             unsigned maxLoopParallel, unsigned maxIterNum,
+                             float maxDistance)
       : ScaleHLSAnalysisBase(builder), estimator(estimator),
-        maxDspNum(maxDspNum), maxInitParallel(maxInitParallel),
-        maxIterNum(maxIterNum), maxDistance(maxDistance) {}
+        maxDspNum(maxDspNum), outputNum(outputNum),
+        maxInitParallel(maxInitParallel), maxExplParallel(maxExplParallel),
+        maxLoopParallel(maxLoopParallel), maxIterNum(maxIterNum),
+        maxDistance(maxDistance) {}
 
   bool emitQoRDebugInfo(FuncOp func, std::string message);
 
   bool simplifyLoopNests(FuncOp func);
-  bool optimizeLoopBands(FuncOp func, bool onlyDirective);
-  bool exploreDesignSpace(FuncOp func, bool onlyDirective, unsigned outputNum,
+  bool optimizeLoopBands(FuncOp func, bool directiveOnly);
+  bool exploreDesignSpace(FuncOp func, bool directiveOnly,
                           StringRef outputRootPath, StringRef csvRootPath);
 
-  void applyMultipleLevelDSE(FuncOp func, bool onlyDirective,
-                             unsigned outputNum, StringRef outputRootPath,
-                             StringRef csvRootPath);
+  void applyMultipleLevelDSE(FuncOp func, bool directiveOnly,
+                             StringRef outputRootPath, StringRef csvRootPath);
 
   ScaleHLSEstimator &estimator;
   unsigned maxDspNum;
 
+  // The number of pareto designs that will be generated.
+  unsigned outputNum;
+
+  // The maximum parallelism of the initiation and exploration of phase of DSE.
   unsigned maxInitParallel;
+  unsigned maxExplParallel;
+
+  // The maximum parallelism of each loop.
+  unsigned maxLoopParallel;
+
+  // The maximum iteration number of DSE.
   unsigned maxIterNum;
+
+  // The maximum distance in the neighbor search of DSE.
   float maxDistance;
 };
 

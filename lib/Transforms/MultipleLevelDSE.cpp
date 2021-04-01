@@ -73,9 +73,9 @@ static void emitTileListDebugInfo(TileList tileList) {
 
 LoopDesignSpace::LoopDesignSpace(FuncOp func, AffineLoopBand &band,
                                  ScaleHLSEstimator &estimator,
-                                 unsigned maxDspNum, bool onlyDirective)
-    : func(func), band(band), estimator(estimator), maxDspNum(maxDspNum),
-      onlyDirective(onlyDirective) {
+                                 unsigned maxDspNum, unsigned maxExplParallel,
+                                 unsigned maxLoopParallel, bool directiveOnly)
+    : func(func), band(band), estimator(estimator), maxDspNum(maxDspNum) {
   // Initialize tile vector related members.
   validTileConfigNum = 1;
   for (auto loop : band) {
@@ -83,12 +83,12 @@ LoopDesignSpace::LoopDesignSpace(FuncOp func, AffineLoopBand &band,
     if (!optionalTripCount)
       loop.emitError("has variable loop bound");
 
-    auto tripCount = optionalTripCount.getValue();
+    unsigned tripCount = optionalTripCount.getValue();
     tripCountList.push_back(tripCount);
 
     SmallVector<unsigned, 8> validSizes;
     unsigned size = 1;
-    while (size <= tripCount) {
+    while (size <= std::min(tripCount, maxLoopParallel)) {
       // Push back the current size.
       validSizes.push_back(size);
 
@@ -105,8 +105,36 @@ LoopDesignSpace::LoopDesignSpace(FuncOp func, AffineLoopBand &band,
   // The last design point (all loops are fully unrolled) is removed.
   --validTileConfigNum;
 
-  for (TileConfig config = 0; config < validTileConfigNum; ++config)
+  for (TileConfig config = 0; config < validTileConfigNum; ++config) {
+    auto tileList = getTileList(config);
+
+    // If the overall parallelism is out of bound, continue to next config.
+    auto parallel = std::accumulate(tileList.begin(), tileList.end(),
+                                    (unsigned)1, std::multiplies<unsigned>());
+    if (parallel > maxExplParallel)
+      continue;
+
+    // In only directive opt should be applied, once one loop is unrolled, all
+    // innter loops should be fully unrolled.
+    if (directiveOnly) {
+      bool mustFullyUnroll = false;
+      bool isInvalid = false;
+      unsigned i = 0;
+
+      for (auto tile : tileList) {
+        if (mustFullyUnroll && tile != tripCountList[i])
+          isInvalid = true;
+        if (tile != 1)
+          mustFullyUnroll = true;
+        ++i;
+      }
+
+      if (isInvalid)
+        continue;
+    }
+
     unestimatedTileConfigs.insert(config);
+  }
 }
 
 /// Return the actual tile vector given a tile config.
@@ -169,10 +197,11 @@ float LoopDesignSpace::getTileConfigDistance(TileConfig configA,
 
 /// Evaluate all design points under the given tile config.
 bool LoopDesignSpace::evaluateTileConfig(TileConfig config) {
-  // If the current tile config is already estimated, return true.
+  // If the current tile config is already estimated, return false.
   if (!unestimatedTileConfigs.count(config))
-    return true;
+    return false;
 
+  // Annotate the current tile config as estimated.
   unestimatedTileConfigs.erase(config);
 
   // Clone a temporary loop band by cloning the outermost loop.
@@ -189,22 +218,9 @@ bool LoopDesignSpace::evaluateTileConfig(TileConfig config) {
 
   // Apply the tile config and estimate the loop band.
   auto tileList = getTileList(config);
+  emitTileListDebugInfo(tileList);
 
-  // In only directive opt should be applied, once one loop is unrolled, all
-  // innter loops should be fully unrolled.
-  if (onlyDirective) {
-    bool mustFullyUnroll = false;
-    unsigned i = 0;
-    for (auto tile : tileList) {
-      if (mustFullyUnroll && tile != tripCountList[i])
-        return false;
-      if (tile != 1)
-        mustFullyUnroll = true;
-      ++i;
-    }
-  }
-
-  // Calculate the totle iteration number.
+  // Calculate the total iteration number.
   unsigned iterNum = 1;
   for (unsigned i = 0, e = tileList.size(); i < e; ++i)
     iterNum *= tripCountList[i] / tileList[i];
@@ -241,8 +257,7 @@ bool LoopDesignSpace::evaluateTileConfig(TileConfig config) {
       paretoPoints.push_back(point);
   }
 
-  // Erase the temporary loop band and annotate the current tile config as
-  // estimated.
+  // Erase the temporary loop band.
   tmpOuterLoop.erase();
   return true;
 }
@@ -270,10 +285,8 @@ void LoopDesignSpace::initializeLoopDesignSpace(unsigned maxInitParallel) {
     auto parallel = std::accumulate(tileList.begin(), tileList.end(),
                                     (unsigned)1, std::multiplies<unsigned>());
 
-    if (parallel <= maxInitParallel) { // || config == parallelConfig) {
-      if (evaluateTileConfig(config))
-        emitTileListDebugInfo(tileList);
-    }
+    if (parallel <= maxInitParallel) // || config == parallelConfig)
+      evaluateTileConfig(config);
   }
 
   LLVM_DEBUG(llvm::dbgs() << "\n\n");
@@ -375,9 +388,9 @@ void LoopDesignSpace::exploreLoopDesignSpace(unsigned maxIterNum,
 
       foundValidNeighbor = true;
       auto config = closestNeighbor.getValue();
+      auto tileList = getTileList(config);
 
-      if (evaluateTileConfig(config))
-        emitTileListDebugInfo(getTileList(config));
+      evaluateTileConfig(config);
       break;
     }
 
@@ -499,8 +512,8 @@ void FuncDesignSpace::combLoopDesignSpaces() {
   LLVM_DEBUG(llvm::dbgs() << "\n";);
 }
 
-bool FuncDesignSpace::exportParetoHLSCpp(unsigned outputNum,
-                                         StringRef outputRootPath) {
+bool FuncDesignSpace::exportParetoDesigns(unsigned outputNum,
+                                          StringRef outputRootPath) {
   unsigned paretoNum = paretoPoints.size();
   auto sampleStep = std::max(paretoNum / outputNum, (unsigned)1);
 
@@ -526,7 +539,7 @@ bool FuncDesignSpace::exportParetoHLSCpp(unsigned outputNum,
       auto tmpFunc = func.clone();
       if (!applyOptStrategy(tmpFunc, tileLists, targetIIs))
         return false;
-      estimator.estimateFunc(tmpFunc);
+      // estimator.estimateFunc(tmpFunc);
 
       // Parse a new C++ file.
       auto outputFilePath = outputRootPath.str() + func.getName().str() +
@@ -635,7 +648,7 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
 
       // Collect all candidate loops into an vector, we'll ignore too large
       // parallelism as unrolling them typically introduce very high cost.
-      if (parallelism > 1 && parallelism < 256)
+      if (parallelism > 1 && parallelism <= 512)
         candidateLoops.push_back(
             std::pair<int64_t, AffineForOp>(parallelism, innermostLoop));
     }
@@ -687,7 +700,7 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
 /// will be applied to each leaf LNs, and the best one which meets the resource
 /// constraints will be picked as the final solution.
 /// TODO: better handle variable bound kernels.
-bool ScaleHLSOptimizer::optimizeLoopBands(FuncOp func, bool onlyDirective) {
+bool ScaleHLSOptimizer::optimizeLoopBands(FuncOp func, bool directiveOnly) {
   LLVM_DEBUG(llvm::dbgs() << "----------\nStage2: Apply loop perfection, loop "
                              "order opt, and remove variable loop bound...\n";);
 
@@ -703,7 +716,7 @@ bool ScaleHLSOptimizer::optimizeLoopBands(FuncOp func, bool onlyDirective) {
     applyAffineLoopPerfection(band);
 
     // If only explore directive optimizations, disable loop oreder opt.
-    if (!onlyDirective)
+    if (!directiveOnly)
       applyAffineLoopOrderOpt(band);
 
     applyRemoveVariableBound(band);
@@ -713,8 +726,7 @@ bool ScaleHLSOptimizer::optimizeLoopBands(FuncOp func, bool onlyDirective) {
 }
 
 /// DSE Stage3: Explore the function design space through dynamic programming.
-bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, bool onlyDirective,
-                                           unsigned outputNum,
+bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, bool directiveOnly,
                                            StringRef outputRootPath,
                                            StringRef csvRootPath) {
   LLVM_DEBUG(llvm::dbgs() << "----------\nStage3: Conduct top function design "
@@ -728,8 +740,9 @@ bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, bool onlyDirective,
   // Search for the pareto frontiers of each target loop band.
   SmallVector<LoopDesignSpace, 4> loopSpaces;
   for (unsigned i = 0; i < targetNum; ++i) {
-    auto space = LoopDesignSpace(tmpFunc, targetBands[i], estimator, maxDspNum,
-                                 onlyDirective);
+    auto space =
+        LoopDesignSpace(tmpFunc, targetBands[i], estimator, maxDspNum,
+                        maxExplParallel, maxLoopParallel, directiveOnly);
 
     LLVM_DEBUG(llvm::dbgs() << "Loop band " << i << ": ";);
     space.initializeLoopDesignSpace(maxInitParallel);
@@ -755,7 +768,7 @@ bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, bool onlyDirective,
   funcSpace.dumpFuncDesignSpace(funcCsvFilePath);
 
   // Export sampled pareto points' C++ source.
-  funcSpace.exportParetoHLSCpp(outputNum, outputRootPath);
+  funcSpace.exportParetoDesigns(outputNum, outputRootPath);
 
   // Apply the best function design point under the constraints.
   for (auto &funcPoint : funcSpace.paretoPoints) {
@@ -792,8 +805,7 @@ bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, bool onlyDirective,
 //===----------------------------------------------------------------------===//
 
 /// This is a temporary approach that does not scale.
-void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func, bool onlyDirective,
-                                              unsigned outputNum,
+void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func, bool directiveOnly,
                                               StringRef outputRootPath,
                                               StringRef csvRootPath) {
   emitQoRDebugInfo(func, "Start multiple level DSE.");
@@ -804,12 +816,11 @@ void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func, bool onlyDirective,
 
   // Optimize loop bands by loop perfection, loop order permutation, and loop
   // rectangularization.
-  if (!optimizeLoopBands(func, onlyDirective))
+  if (!optimizeLoopBands(func, directiveOnly))
     return;
 
   // Explore the design space through a multiple level approach.
-  if (!exploreDesignSpace(func, onlyDirective, outputNum, outputRootPath,
-                          csvRootPath))
+  if (!exploreDesignSpace(func, directiveOnly, outputRootPath, csvRootPath))
     return;
 }
 
@@ -824,6 +835,24 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
     if (spec.ParseError())
       emitError(module.getLoc(), "target spec file parse fail\n");
 
+    // Collect DSE configurations.
+    unsigned outputNum = spec.GetInteger("dse", "output_num", 30);
+
+    unsigned maxInitParallel = spec.GetInteger("dse", "max_init_parallel", 16);
+    unsigned maxExplParallel =
+        spec.GetInteger("dse", "max_expl_parallel", 4096);
+    unsigned maxLoopParallel = spec.GetInteger("dse", "max_loop_parallel", 512);
+
+    assert(maxInitParallel <= maxExplParallel &&
+           maxLoopParallel <= maxExplParallel &&
+           "invalid configuration of DSE");
+
+    unsigned maxIterNum = spec.GetInteger("dse", "max_iter_num", 50);
+    float maxDistance = spec.GetFloat("dse", "max_distance", 4.0);
+
+    bool directiveOnly = spec.GetBoolean("dse", "directive_only", false);
+    bool resConstraint = spec.GetBoolean("dse", "res_constraint", false);
+
     // Collect profiling latency data, where default values are based on Xilinx
     // PYNQ-Z1 board.
     LatencyMap latencyMap;
@@ -833,24 +862,19 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
     if (!resConstraint)
       maxDspNum = UINT_MAX;
 
-    unsigned maxInitParallel = spec.GetInteger("dse", "max_init_parallel", 16);
-    unsigned maxIterNum = spec.GetInteger("dse", "max_iter_num", 50);
-    float maxDistance = spec.GetFloat("dse", "max_distance", 4.0);
-    unsigned outputNum = spec.GetInteger("dse", "output_num", 30);
-
     // Initialize an performance and resource estimator.
     auto estimator = ScaleHLSEstimator(builder, latencyMap, depAnalysis);
-    auto optimizer =
-        ScaleHLSOptimizer(builder, estimator, maxDspNum, maxInitParallel,
-                          maxIterNum, maxDistance);
+    auto optimizer = ScaleHLSOptimizer(
+        builder, estimator, maxDspNum, outputNum, maxInitParallel,
+        maxExplParallel, maxLoopParallel, maxIterNum, maxDistance);
 
     // Optimize the top function.
     // TODO: Handle sub-functions.
     for (auto func : module.getOps<FuncOp>())
       if (func.getName() == topFunc) {
         func->setAttr("top_function", builder.getBoolAttr(true));
-        optimizer.applyMultipleLevelDSE(func, onlyDirective, outputNum,
-                                        outputPath, csvPath);
+        optimizer.applyMultipleLevelDSE(func, directiveOnly, outputPath,
+                                        csvPath);
       }
   }
 };

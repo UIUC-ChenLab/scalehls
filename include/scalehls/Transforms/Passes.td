@@ -28,9 +28,6 @@ def MultipleLevelDSE : Pass<"multiple-level-dse", "ModuleOp"> {
   let options = [
     Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
            "The top function for HLS synthesis">,
-    Option<"targetSpec", "target-spec", "std::string",
-           /*default=*/"\"../config/target-spec.ini\"",
-           "File path: target backend specifications and configurations">,
     Option<"outputPath", "output-path", "std::string",
            /*default=*/"\"-\"",
            "File path: the path for dumping the MLIR of pareto design points">,
@@ -38,12 +35,12 @@ def MultipleLevelDSE : Pass<"multiple-level-dse", "ModuleOp"> {
            /*default=*/"\"-\"",
            "File path: the path for dumping the CSV of design spaces">,
 
+    Option<"targetSpec", "target-spec", "std::string",
+           /*default=*/"\"../config/target-spec.ini\"",
+           "File path: target backend specifications and configurations">,
+
     Option<"depAnalysis", "dep-analysis", "bool", /*default=*/"true",
-           "Whether a comprehensive dependency analysis is conducted">,
-    Option<"resConstraint", "res-constraint", "bool", /*default=*/"false",
-           "Whether resource constraints are considered in DSE">,
-    Option<"onlyDirective", "only-directive", "bool", /*default=*/"false",
-           "Only use directive optimizations in DSE">
+           "Whether a comprehensive dependency analysis is conducted">
   ];
 }
 
