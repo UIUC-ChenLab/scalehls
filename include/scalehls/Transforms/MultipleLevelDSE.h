@@ -37,7 +37,8 @@ struct LoopDesignPoint {
 class LoopDesignSpace {
 public:
   explicit LoopDesignSpace(FuncOp func, AffineLoopBand &band,
-                           ScaleHLSEstimator &estimator, unsigned maxDspNum);
+                           ScaleHLSEstimator &estimator, unsigned maxDspNum,
+                           bool onlyDirective);
 
   /// Return the actual tile vector given a tile config.
   TileList getTileList(TileConfig config);
@@ -89,6 +90,9 @@ public:
 
   /// Holds all tile configs that have not been estimated.
   std::set<TileConfig> unestimatedTileConfigs;
+
+  // Whether to include loop transformation into the loop design space.
+  bool onlyDirective;
 };
 
 //===----------------------------------------------------------------------===//
@@ -166,12 +170,13 @@ public:
   bool emitQoRDebugInfo(FuncOp func, std::string message);
 
   bool simplifyLoopNests(FuncOp func);
-  bool optimizeLoopBands(FuncOp func);
-  bool exploreDesignSpace(FuncOp func, unsigned outputNum,
+  bool optimizeLoopBands(FuncOp func, bool onlyDirective);
+  bool exploreDesignSpace(FuncOp func, bool onlyDirective, unsigned outputNum,
                           StringRef outputRootPath, StringRef csvRootPath);
 
-  void applyMultipleLevelDSE(FuncOp func, unsigned outputNum,
-                             StringRef outputRootPath, StringRef csvRootPath);
+  void applyMultipleLevelDSE(FuncOp func, bool onlyDirective,
+                             unsigned outputNum, StringRef outputRootPath,
+                             StringRef csvRootPath);
 
   ScaleHLSEstimator &estimator;
   unsigned maxDspNum;

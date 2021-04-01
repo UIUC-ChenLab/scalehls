@@ -42,8 +42,8 @@ def MultipleLevelDSE : Pass<"multiple-level-dse", "ModuleOp"> {
            "Whether a comprehensive dependency analysis is conducted">,
     Option<"resConstraint", "res-constraint", "bool", /*default=*/"false",
            "Whether resource constraints are considered in DSE">,
-    Option<"outputNum", "output-num", "unsigned", /*default=*/"10",
-           "The number of sampled pareto points to be exported to C++">
+    Option<"onlyDirective", "only-directive", "bool", /*default=*/"false",
+           "Only use directive optimizations in DSE">
   ];
 }
 

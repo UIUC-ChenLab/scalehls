@@ -49,7 +49,7 @@ config=../../config/target-spec.ini
 input=${model_name}/${model_name}.mlir
 
 scalehls-opt $input -legalize-to-hlscpp="top-func=${model_name}" -qor-estimation="target-spec=$config" | scalehls-translate -emit-hlscpp > ${model_name}/cpp_src/${model_name}_naive.cpp
-scalehls-opt $input -multiple-level-dse="top-func=${model_name} output-num=30 output-path=${model_name}/mlir_src/ csv-path=${model_name}/dump_csv/ target-spec=$config" -debug-only=scalehls > /dev/null
+scalehls-opt $input -multiple-level-dse="top-func=${model_name} only-directive=false output-path=${model_name}/mlir_src/ csv-path=${model_name}/dump_csv/ target-spec=$config" -debug-only=scalehls > /dev/null
 
 for file in ${model_name}/mlir_src/*
 do
