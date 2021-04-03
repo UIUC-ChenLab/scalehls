@@ -752,8 +752,8 @@ bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, bool directiveOnly,
     loopSpaces.push_back(space);
 
     // Dump design points to csv file for each loop band.
-    auto loopCsvFilePath =
-        csvRootPath.str() + "loop_" + std::to_string(i) + "_space.csv";
+    auto loopCsvFilePath = csvRootPath.str() + func.getName().str() + "_loop_" +
+                           std::to_string(i) + "_space.csv";
     space.dumpLoopDesignSpace(loopCsvFilePath);
   }
 
@@ -764,7 +764,7 @@ bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, bool directiveOnly,
 
   // Dump design points to csv file for each function.
   auto funcCsvFilePath =
-      csvRootPath.str() + "func_" + func.getName().str() + "_space.csv";
+      csvRootPath.str() + func.getName().str() + "_space.csv";
   funcSpace.dumpFuncDesignSpace(funcCsvFilePath);
 
   // Export sampled pareto points' C++ source.
@@ -791,8 +791,8 @@ bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, bool directiveOnly,
         targetIIs.push_back(targetII);
       }
 
-      if (!applyOptStrategy(func, tileLists, targetIIs))
-        return false;
+      // if (!applyOptStrategy(func, tileLists, targetIIs))
+      //   return false;
       break;
     }
   }
@@ -838,17 +838,17 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
     // Collect DSE configurations.
     unsigned outputNum = spec.GetInteger("dse", "output_num", 30);
 
-    unsigned maxInitParallel = spec.GetInteger("dse", "max_init_parallel", 16);
+    unsigned maxInitParallel = spec.GetInteger("dse", "max_init_parallel", 32);
     unsigned maxExplParallel =
-        spec.GetInteger("dse", "max_expl_parallel", 4096);
-    unsigned maxLoopParallel = spec.GetInteger("dse", "max_loop_parallel", 512);
+        spec.GetInteger("dse", "max_expl_parallel", 1024);
+    unsigned maxLoopParallel = spec.GetInteger("dse", "max_loop_parallel", 128);
 
     assert(maxInitParallel <= maxExplParallel &&
            maxLoopParallel <= maxExplParallel &&
            "invalid configuration of DSE");
 
-    unsigned maxIterNum = spec.GetInteger("dse", "max_iter_num", 50);
-    float maxDistance = spec.GetFloat("dse", "max_distance", 4.0);
+    unsigned maxIterNum = spec.GetInteger("dse", "max_iter_num", 30);
+    float maxDistance = spec.GetFloat("dse", "max_distance", 3.0);
 
     bool directiveOnly = spec.GetBoolean("dse", "directive_only", false);
     bool resConstraint = spec.GetBoolean("dse", "res_constraint", false);

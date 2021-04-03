@@ -2,12 +2,12 @@
 
 # Please run: source dse_test_run.sh -m gemm -c 0
 
-# cd samples/polybench/ && source dse_test_run.sh -m atax -c 0
 # cd samples/polybench/ && source dse_test_run.sh -m bicg -c 0
 # cd samples/polybench/ && source dse_test_run.sh -m gemm -c 0
 # cd samples/polybench/ && source dse_test_run.sh -m gesummv -c 0
 # cd samples/polybench/ && source dse_test_run.sh -m syrk -c 0
 # cd samples/polybench/ && source dse_test_run.sh -m syr2k -c 0
+# cd samples/polybench/ && source dse_test_run.sh -m trmm -c 0
 
 # Script options.
 while getopts 'm:c:' opt
@@ -80,11 +80,20 @@ do
   bram=$(awk '/<\/*BRAM_18K>/{gsub(/<\/*BRAM_18K>/,"");print $0;exit;}' $csynth_xml)
   dsp=$(awk '/<\/*DSP48E>/{gsub(/<\/*DSP48E>/,"");print $0;exit;}' $csynth_xml)
   lut=$(awk '/<\/*LUT>/{gsub(/<\/*LUT>/,"");print $0;exit;}' $csynth_xml)
-  cycles=$(awk '/<\/*Best-caseLatency>/{gsub(/<\/*Best-caseLatency>/,"");print $0;exit;}' $csynth_xml)
+  cycles=$(awk '/<\/*Worst-caseLatency>/{gsub(/<\/*Worst-caseLatency>/,"");print $0;exit;}' $csynth_xml)
   # interval=$(awk '/<\/*Interval-min>/{gsub(/<\/*Interval-min>/,"");print $0;exit;}' $csynth_xml)
 
-  esti_dsp=$(awk '/\/* DSP=/{gsub(/\/* DSP=/,"");print $0}' ${model_name}/cpp_src/${cpp_name}.cpp)
-  esti_cycles=$(awk '/\/* Latency=/{gsub(/\/* Latency=/,"");print $0}' ${model_name}/cpp_src/${cpp_name}.cpp)
+  if [ $n -eq 0 ]
+  then
+    esti_dsp=$(awk '/\/* DSP=/{gsub(/\/* DSP=/,"");print $0}' ${model_name}/cpp_src/${cpp_name}.cpp)
+    esti_cycles=$(awk '/\/* Latency=/{gsub(/\/* Latency=/,"");print $0}' ${model_name}/cpp_src/${cpp_name}.cpp)
+  else
+    index=${cpp_name##*pareto_}
+    index=`expr $index + 2`
+
+    esti_dsp=$(awk -F ',' 'NR=="'$index'"{print $(NF-1)}' ${model_name}/dump_csv/func_${model_name}_space.csv)
+    esti_cycles=$(awk -F ',' 'NR=="'$index'"{print $(NF-2)}' ${model_name}/dump_csv/func_${model_name}_space.csv)
+  fi
 
   echo -e "${cpp_name}\t$bram\t$dsp\t$lut\t$cycles\t${esti_dsp}\t${esti_cycles}" >> ${model_name}/${model_name}_result.log
 
