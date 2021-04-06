@@ -18,6 +18,41 @@ using namespace mlir;
 using namespace scalehls;
 
 //===----------------------------------------------------------------------===//
+// Utils
+//===----------------------------------------------------------------------===//
+
+static SmallString<16> getTypeName(Value val) {
+  // Handle memref, tensor, and vector types.
+  auto valType = val.getType();
+  if (auto arrayType = val.getType().dyn_cast<ShapedType>())
+    valType = arrayType.getElementType();
+
+  // Handle float types.
+  if (valType.isa<Float32Type>())
+    return SmallString<16>("float");
+  else if (valType.isa<Float64Type>())
+    return SmallString<16>("double");
+
+  // Handle integer types.
+  else if (valType.isa<IndexType>())
+    return SmallString<16>("int");
+  else if (auto intType = valType.dyn_cast<IntegerType>()) {
+    if (intType.getWidth() == 1)
+      return SmallString<16>("bool");
+    else {
+      std::string name = "ap_";
+      if (intType.getSignedness() == IntegerType::SignednessSemantics::Unsigned)
+        name += "u";
+      name += "int<" + std::to_string(intType.getWidth()) + ">";
+      return SmallString<16>(name);
+    }
+  } else
+    val.getDefiningOp()->emitError("has unsupported type.");
+
+  return SmallString<16>();
+}
+
+//===----------------------------------------------------------------------===//
 // Some Base Classes
 //===----------------------------------------------------------------------===//
 
@@ -94,7 +129,7 @@ SmallString<8> ScaleHLSEmitterBase::addName(Value val, bool isPtr) {
   if (isPtr)
     valName += "*";
 
-  valName += StringRef("val" + std::to_string(state.nameTable.size()));
+  valName += StringRef("v" + std::to_string(state.nameTable.size()));
   state.nameTable[val] = valName;
 
   return valName;
@@ -116,6 +151,7 @@ SmallString<8> ScaleHLSEmitterBase::getName(Value val) {
   if (auto defOp = val.getDefiningOp()) {
     if (auto constOp = dyn_cast<ConstantOp>(defOp)) {
       auto constAttr = constOp.getValue();
+
       if (auto floatAttr = constAttr.dyn_cast<FloatAttr>()) {
         auto value = floatAttr.getValueAsDouble();
         if (std::isfinite(value))
@@ -1097,8 +1133,10 @@ void ModuleEmitter::emitSelect(SelectOp op) {
   os << " = ";
   emitValue(op.getCondition(), conditionRank);
   os << " ? ";
+  os << "(" << getTypeName(op.getTrueValue()) << ")";
   emitValue(op.getTrueValue(), rank);
   os << " : ";
+  os << "(" << getTypeName(op.getFalseValue()) << ")";
   emitValue(op.getFalseValue(), rank);
   os << ";";
   emitInfoAndNewLine(op);
@@ -1222,40 +1260,16 @@ void ModuleEmitter::emitValue(Value val, unsigned rank, bool isPtr) {
   if (isDeclared(val)) {
     os << getName(val);
     for (unsigned i = 0; i < rank; ++i)
-      os << "[idx" << i << "]";
+      os << "[iv" << i << "]";
     return;
   }
 
-  // Handle memref, tensor, and vector types.
-  auto valType = val.getType();
-  if (auto arrayType = val.getType().dyn_cast<ShapedType>())
-    valType = arrayType.getElementType();
-
-  // Handle float types.
-  if (valType.isa<Float32Type>())
-    os << "float ";
-  else if (valType.isa<Float64Type>())
-    os << "double ";
-
-  // Handle integer types.
-  else if (valType.isa<IndexType>())
-    os << "int ";
-  else if (auto intType = valType.dyn_cast<IntegerType>()) {
-    if (intType.getWidth() == 1)
-      os << "bool ";
-    else {
-      os << "ap_";
-      if (intType.getSignedness() == IntegerType::SignednessSemantics::Unsigned)
-        os << "u";
-      os << "int<" << intType.getWidth() << "> ";
-    }
-  } else
-    emitError(val.getDefiningOp(), "has unsupported type.");
+  os << getTypeName(val) << " ";
 
   // Add the new value to nameTable and emit its name.
   os << addName(val, isPtr);
   for (unsigned i = 0; i < rank; ++i)
-    os << "[idx" << i << "]";
+    os << "[iv" << i << "]";
 }
 
 void ModuleEmitter::emitArrayDecl(Value array) {
@@ -1290,9 +1304,9 @@ unsigned ModuleEmitter::emitNestedLoopHead(Value val) {
     unsigned dimIdx = 0;
     for (auto &shape : type.getShape()) {
       indent();
-      os << "for (int idx" << dimIdx << " = 0; ";
-      os << "idx" << dimIdx << " < " << shape << "; ";
-      os << "++idx" << dimIdx++ << ") {\n";
+      os << "for (int iv" << dimIdx << " = 0; ";
+      os << "iv" << dimIdx << " < " << shape << "; ";
+      os << "++iv" << dimIdx++ << ") {\n";
 
       addIndent();
     }

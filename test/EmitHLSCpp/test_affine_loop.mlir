@@ -6,22 +6,22 @@
 func @test_affine_for(%arg0: memref<16xindex>, %arg1: index) {
   %c11 = constant 11 : index
 
-  // CHECK: for (int val2 = 0; val2 < min(val1, (val1 + 11)); val2 += 2) {
+  // CHECK: for (int v2 = 0; v2 < min(v1, (v1 + 11)); v2 += 2) {
   affine.for %i = 0 to min #two (%arg1)[%c11] step 2 {
 
-    // CHECK: for (int val3 = max(max((val1 - 11), val1), (val1 + 11)); val3 < 16; val3 += 1) {
+    // CHECK: for (int v3 = max(max((v1 - 11), v1), (v1 + 11)); v3 < 16; v3 += 1) {
     affine.for %j = max #three (%arg1)[%c11] to 16 {
 
-      // CHECK: for (int val4 = 0; val4 < 16; val4 += 2) {
+      // CHECK: for (int v4 = 0; v4 < 16; v4 += 2) {
       affine.for %k = 0 to 16 step 2 {
 
-        // CHECK: int val5 = val0[val2];
+        // CHECK: int v5 = v0[v2];
         %0 = memref.load %arg0[%i] : memref<16xindex>
 
-        // CHECK: int val6 = val5 + val3;
+        // CHECK: int v6 = v5 + v3;
         %1 = addi %0, %j : index
 
-        // CHECK: val0[val4] = val6;
+        // CHECK: v0[v4] = v6;
         memref.store %1, %arg0[%k] : memref<16xindex>
 
       // CHECK: }
@@ -35,28 +35,28 @@ func @test_affine_for(%arg0: memref<16xindex>, %arg1: index) {
 
 func @test_affine_parallel(%arg0: memref<16xindex>) {
 
-  // CHECK: int val8;
-  // CHECK: int val9;
-  // CHECK: for (int val10 = 0; val10 < 2; val10 += 1) {
-  // CHECK:   for (int val11 = 0; val11 < 4; val11 += 2) {
-  // CHECK:     for (int val12 = 0; val12 < 8; val12 += 3) {
+  // CHECK: int v8;
+  // CHECK: int v9;
+  // CHECK: for (int v10 = 0; v10 < 2; v10 += 1) {
+  // CHECK:   for (int v11 = 0; v11 < 4; v11 += 2) {
+  // CHECK:     for (int v12 = 0; v12 < 8; v12 += 3) {
   %0:2 = affine.parallel (%x, %y, %z) = (0, 0, 0) to (2, 4, 8) step (1, 2, 3) reduce ("maxs", "addi") -> (index, index){
 
-    // CHECK: int val13 = val7[val10];
+    // CHECK: int v13 = v7[v10];
     %1 = memref.load %arg0[%x] : memref<16xindex>
 
-    // CHECK: int val14 = val13 + val11;
+    // CHECK: int v14 = v13 + v11;
     %2 = addi %1, %y : index
 
-    // CHECK: int val15 = val14 - val12;
+    // CHECK: int v15 = v14 - v12;
     %3 = subi %2, %z : index
 
-    // CHECK: if (val10 == 0 && val11 == 0 && val12 == 0) {
-    // CHECK:   val8 = val14;
-    // CHECK:   val9 = val15;
+    // CHECK: if (v10 == 0 && v11 == 0 && v12 == 0) {
+    // CHECK:   v8 = v14;
+    // CHECK:   v9 = v15;
     // CHECK: } else {
-    // CHECK:   val8 = max(val8, val14);
-    // CHECK:   val9 += val15;
+    // CHECK:   v8 = max(v8, v14);
+    // CHECK:   v9 += v15;
     // CHECK: }
     affine.yield %2, %3 : index, index
 

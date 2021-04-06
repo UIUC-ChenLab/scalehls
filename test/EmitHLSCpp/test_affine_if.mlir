@@ -5,14 +5,14 @@
 func @test_affine_if(%arg0: index, %arg1: memref<16xindex>) -> index {
   %c11 = constant 11 : index
 
-  // CHECK: int val3;
-  // CHECK: int val4[16];
-  // CHECK: if ((val0 + 11) >= 0 && (val0 * 11) == 0) {
+  // CHECK: int v3;
+  // CHECK: int v4[16];
+  // CHECK: if ((v0 + 11) >= 0 && (v0 * 11) == 0) {
   %0:2 = affine.if #set0 (%arg0)[%c11] -> (index, memref<16xindex>) {
 
-    // CHECK: val3 = val0;
-    // CHECK: for (int idx0 = 0; idx0 < 16; ++idx0) {
-    // CHECK:   val4[idx0] = val1[idx0];
+    // CHECK: v3 = v0;
+    // CHECK: for (int iv0 = 0; iv0 < 16; ++iv0) {
+    // CHECK:   v4[iv0] = v1[iv0];
     // CHECK: }
     affine.yield %arg0, %arg1 : index, memref<16xindex>
 

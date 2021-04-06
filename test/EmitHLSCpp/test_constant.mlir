@@ -24,13 +24,13 @@ func @test_constant(%arg0: i32) -> (i32, tensor<2x2xi32>, vector<2xi32>, i32) {
   %c11 = constant 11 : i32
   %6 = addi %c11, %arg0 : i32
 
-  // CHECK: for (int idx0 = 0; idx0 < 2; ++idx0) {
-  // CHECK:   for (int idx1 = 0; idx1 < 2; ++idx1) {
-  // CHECK:     [[ARG_2:.*]][idx0][idx1] = [[VAL_0:.*]][idx0][idx1];
+  // CHECK: for (int iv0 = 0; iv0 < 2; ++iv0) {
+  // CHECK:   for (int iv1 = 0; iv1 < 2; ++iv1) {
+  // CHECK:     [[ARG_2:.*]][iv0][iv1] = [[VAL_0:.*]][iv0][iv1];
   // CHECK:   }
   // CHECK: }
-  // CHECK: for (int idx0 = 0; idx0 < 2; ++idx0) {
-  // CHECK:   [[ARG_3:.*]][idx0] = [[VAL_3:.*]][idx0];
+  // CHECK: for (int iv0 = 0; iv0 < 2; ++iv0) {
+  // CHECK:   [[ARG_3:.*]][iv0] = [[VAL_3:.*]][iv0];
   // CHECK: }
   // CHECK: *[[ARG_4:.*]] = 11;
   return %6, %0, %3, %c11 : i32, tensor<2x2xi32>, vector<2xi32>, i32

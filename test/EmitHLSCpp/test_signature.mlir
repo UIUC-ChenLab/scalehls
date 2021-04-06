@@ -53,9 +53,9 @@ func @test_signature(
   %4 = rank %arg8 : tensor<16x8xf32>
 
   // CHECK: *[[VAL_13:.*]] = [[VAL_0:.*]];
-  // CHECK: for (int idx0 = 0; idx0 < 16; ++idx0) {
-  // CHECK:   for (int idx1 = 0; idx1 < 8; ++idx1) {
-  // CHECK:     [[VAL_20:.*]][idx0][idx1] = [[VAL_7:.*]][idx0][idx1];
+  // CHECK: for (int iv0 = 0; iv0 < 16; ++iv0) {
+  // CHECK:   for (int iv1 = 0; iv1 < 8; ++iv1) {
+  // CHECK:     [[VAL_20:.*]][iv0][iv1] = [[VAL_7:.*]][iv0][iv1];
   // CHECK:   }
   // CHECK: }
   return
