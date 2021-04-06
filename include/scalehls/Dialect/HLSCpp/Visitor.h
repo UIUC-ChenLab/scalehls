@@ -57,8 +57,8 @@ public:
             SelectOp, ConstantOp, CopySignOp, TruncateIOp, ZeroExtendIOp,
             SignExtendIOp, IndexCastOp, CallOp, ReturnOp, UIToFPOp, SIToFPOp,
             FPToSIOp, FPToUIOp,
-            // Structure operations.
-            AssignOp, EndOp>([&](auto opNode) -> ResultType {
+            // HLSCpp operations.
+            AssignOp, CastOp, MulOp, AddOp>([&](auto opNode) -> ResultType {
           return thisCast->visitOp(opNode, args...);
         })
         .Default([&](auto opNode) -> ResultType {
@@ -184,7 +184,9 @@ public:
 
   // Structure operations.
   HANDLE(AssignOp);
-  HANDLE(EndOp);
+  HANDLE(CastOp);
+  HANDLE(MulOp);
+  HANDLE(AddOp);
 #undef HANDLE
 };
 } // namespace scalehls

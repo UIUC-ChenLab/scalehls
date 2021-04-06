@@ -25,7 +25,7 @@ def LegalizeToHLSCpp : Pass<"legalize-to-hlscpp", "FuncOp"> {
 
   let options = [
     Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
-           "The top function for HLS synthesis">,
+           "The top function for HLS synthesis">
   ];
 }
 
@@ -51,6 +51,20 @@ def LegalizeOnnx : Pass<"legalize-onnx", "ModuleOp"> {
   }];
 
   let constructor = "mlir::scalehls::createLegalizeOnnxPass()";
+}
+
+//===----------------------------------------------------------------------===//
+// Onnx Kernel Legalization Pass
+//===----------------------------------------------------------------------===//
+
+def QuantizeDNNModel : Pass<"quantize-dnn-model", "FuncOp"> {
+  let summary = "Quantize DNN model to integer representation";
+  let description = [{
+    This pass will quantize all inputs, weights, and outputs to 8-bits int and
+    quantize bias and intermediate accumulation results to 32-bits int.
+  }];
+
+  let constructor = "mlir::scalehls::createQuantizeDNNModelPass()";
 }
 
 #endif // SCALEHLS_CONVERSION_PASSES_TD

@@ -28,6 +28,6 @@ class HLSCppOp<string mnemonic, list<OpTrait> traits = []> :
 include "Interfaces.td"
 include "Attributes.td"
 
-include "StructureOps.td"
+include "Ops.td"
 
 #endif // SCALEHLS_DIALECT_HLSCPP_HLSCPP_TD

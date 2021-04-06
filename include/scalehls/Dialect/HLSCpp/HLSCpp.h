@@ -9,6 +9,7 @@
 
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/OpDefinition.h"
+#include "mlir/Interfaces/SideEffectInterfaces.h"
 
 namespace mlir {
 namespace scalehls {
@@ -34,8 +35,7 @@ enum class PartitionKind { CYCLIC = 0, BLOCK = 1, NONE = 2 };
 } // namespace scalehls
 } // namespace mlir
 
-#include "scalehls/Dialect/HLSCpp/HLSCppEnums.h.inc"
-
+// #include "scalehls/Dialect/HLSCpp/HLSCppEnums.h.inc"
 #include "scalehls/Dialect/HLSCpp/HLSCppDialect.h.inc"
 
 #define GET_OP_CLASSES
