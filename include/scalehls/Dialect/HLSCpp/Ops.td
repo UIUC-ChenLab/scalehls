@@ -34,22 +34,22 @@ def CastOp : HLSCppOp<"cast", [NoSideEffect]> {
   let hasCanonicalizer = 1;
 }
 
-def MulOp : HLSCppOp<"mul", [NoSideEffect]> {
-  let summary = "Multiplication operation";
+def AddOp : HLSCppOp<"add", [NoSideEffect]> {
+  let summary = "Addition operation";
   let description = [{
-    This multiplication operation does not require the input and output values
-    to have the same type.
+    This addition operation does not require the input and output values to have
+    the same type.
   }];
 
   let arguments = (ins AnyType : $lhs, AnyType : $rhs);
   let results = (outs AnyType : $output);
 }
 
-def AddOp : HLSCppOp<"add", [NoSideEffect]> {
-  let summary = "Addition operation";
+def MulOp : HLSCppOp<"mul", [NoSideEffect]> {
+  let summary = "Multiplication operation";
   let description = [{
-    This addition operation does not require the input and output values to have
-    the same type.
+    This multiplication operation does not require the input and output values
+    to have the same type.
   }];
 
   let arguments = (ins AnyType : $lhs, AnyType : $rhs);

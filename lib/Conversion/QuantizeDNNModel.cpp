@@ -49,10 +49,15 @@ static void quantizeBlock(Block &block, OpBuilder &builder,
     if (auto constOp = dyn_cast<mlir::ConstantOp>(op)) {
       auto attr = constOp.value();
 
-      if (auto scalarAttr = attr.dyn_cast<FloatAttr>()) {
-        int8_t scalarValue = scalarAttr.getValue().convertToFloat();
+      if (auto floatAttr = attr.dyn_cast<FloatAttr>()) {
+        int8_t floatValue = floatAttr.getValue().convertToFloat();
         newOp = builder.create<mlir::ConstantOp>(
-            constOp.getLoc(), builder.getI8IntegerAttr(scalarValue));
+            constOp.getLoc(), builder.getI8IntegerAttr(floatValue));
+
+      } else if (auto intAttr = attr.dyn_cast<IntegerAttr>()) {
+        int8_t intValue = intAttr.getInt();
+        newOp = builder.create<mlir::ConstantOp>(
+            constOp.getLoc(), builder.getI8IntegerAttr(intValue));
 
       } else if (auto tensorAttr = attr.dyn_cast<DenseElementsAttr>()) {
         SmallVector<int8_t, 16> newTensorValues;
@@ -70,6 +75,10 @@ static void quantizeBlock(Block &block, OpBuilder &builder,
 
       } else
         constOp.emitError("unexpected constant value");
+
+    } else if (auto castOp = dyn_cast<mlir::UIToFPOp>(op)) {
+      newOp = builder.create<hlscpp::CastOp>(castOp.getLoc(), int8Type,
+                                             castOp.in());
 
     } else if (auto allocOp = dyn_cast<memref::AllocOp>(op)) {
       auto newType = quantizeType(allocOp.memref().getType(), builder);
@@ -110,6 +119,10 @@ static void quantizeBlock(Block &block, OpBuilder &builder,
       newOp =
           builder.create<hlscpp::CastOp>(addOp.getLoc(), int8Type, accValue);
     }
+
+    else if (auto divOp = dyn_cast<mlir::DivFOp>(op))
+      newOp = builder.create<mlir::SignedDivIOp>(divOp.getLoc(), divOp.lhs(),
+                                                 divOp.rhs());
 
     else if (auto cmpOp = dyn_cast<mlir::CmpFOp>(op)) {
       CmpIPredicate predicate;

@@ -185,8 +185,8 @@ public:
   // Structure operations.
   HANDLE(AssignOp);
   HANDLE(CastOp);
-  HANDLE(MulOp);
   HANDLE(AddOp);
+  HANDLE(MulOp);
 #undef HANDLE
 };
 } // namespace scalehls
