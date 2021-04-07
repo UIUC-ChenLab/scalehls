@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -quantize-dnn-model %s | FileCheck %s
+// RUN: scalehls-opt -quantize-onnx %s | FileCheck %s
 
 // CHECK: module  {
 module  {

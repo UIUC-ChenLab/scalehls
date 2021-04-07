@@ -20,7 +20,7 @@ namespace scalehls {
 // HLSKernel and HLSCpp conversion passes.
 std::unique_ptr<Pass> createLegalizeToHLSCppPass();
 std::unique_ptr<Pass> createHLSKernelToAffinePass();
-std::unique_ptr<Pass> createQuantizeDNNModelPass();
+std::unique_ptr<Pass> createQuantizeOnnxPass();
 
 /// Onnx kernel legalization pass.
 std::unique_ptr<Pass> createLegalizeOnnxPass();

@@ -50,7 +50,7 @@ graph_O5=-legalize-dataflow="min-gran=4 insert-copy=true"
 graph_O6=-legalize-dataflow="min-gran=3 insert-copy=true"
 
 # Split and canonicalize function, convert to HLSCpp, and loop perfection.
-split="-split-function -convert-linalg-to-affine-loops -quantize-dnn-model -canonicalize"
+split="-split-function -convert-linalg-to-affine-loops -quantize-onnx -canonicalize"
 hlscpp=-legalize-to-hlscpp="top-func=main_graph"
 perfect="-affine-loop-perfection"
 

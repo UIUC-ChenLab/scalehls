@@ -175,7 +175,7 @@ static void quantizeBlock(Block &block, OpBuilder &builder,
   }
 }
 
-bool applyQuantizeDNNModel(FuncOp func) {
+bool applyQuantizeOnnx(FuncOp func) {
   auto builder = OpBuilder(func);
 
   // Convert the types of arguments.
@@ -205,14 +205,14 @@ bool applyQuantizeDNNModel(FuncOp func) {
 }
 
 namespace {
-struct QuantizeDNNModel : public QuantizeDNNModelBase<QuantizeDNNModel> {
+struct QuantizeOnnx : public QuantizeOnnxBase<QuantizeOnnx> {
   void runOnOperation() override {
     auto func = getOperation();
-    applyQuantizeDNNModel(func);
+    applyQuantizeOnnx(func);
   }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createQuantizeDNNModelPass() {
-  return std::make_unique<QuantizeDNNModel>();
+std::unique_ptr<Pass> scalehls::createQuantizeOnnxPass() {
+  return std::make_unique<QuantizeOnnx>();
 }
