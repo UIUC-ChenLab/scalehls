@@ -2,7 +2,7 @@
 
 func @test_integer_binary(%arg0: i32, %arg1: i32) -> i32 {
 
-  // CHECK: ap_int<32> [[VAL_0:.*]] = [[ARG_0:.*]] + [[ARG_1:.*]];
+  // CHECK: int32_t [[VAL_0:.*]] = [[ARG_0:.*]] + [[ARG_1:.*]];
   %0 = addi %arg0, %arg1 : i32
   // CHECK: -
   %1 = subi %arg0, %0 : i32
@@ -79,7 +79,7 @@ func @test_special_expr(%arg0: i1, %arg1: index, %arg2: index) -> index {
   // CHECK: int [[VAL_0:.*]] = [[ARG_0:.*]] ? [[ARG_1:.*]] : [[ARG_2:.*]];
   %0 = select %arg0, %arg1, %arg2 : i1, index
 
-  // CHECK: ap_int<32> [[VAL_1:.*]] = [[VAL_0:.*]];
+  // CHECK: int32_t [[VAL_1:.*]] = [[VAL_0:.*]];
   %1 = index_cast %0 : index to i32
 
   // CHECK: *[[VAL_2:.*]] = [[VAL_0:.*]]

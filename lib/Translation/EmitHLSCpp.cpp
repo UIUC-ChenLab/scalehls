@@ -40,11 +40,21 @@ static SmallString<16> getTypeName(Value val) {
     if (intType.getWidth() == 1)
       return SmallString<16>("bool");
     else {
-      std::string name = "ap_";
+      std::string signedness = "";
       if (intType.getSignedness() == IntegerType::SignednessSemantics::Unsigned)
-        name += "u";
-      name += "int<" + std::to_string(intType.getWidth()) + ">";
-      return SmallString<16>(name);
+        signedness = "u";
+
+      switch (intType.getWidth()) {
+      case 8:
+      case 16:
+      case 32:
+      case 64:
+        return SmallString<16>(signedness + "int" +
+                               std::to_string(intType.getWidth()) + "_t");
+      default:
+        return SmallString<16>("ap_" + signedness + "int<" +
+                               std::to_string(intType.getWidth()) + ">");
+      }
     }
   } else
     val.getDefiningOp()->emitError("has unsupported type.");
