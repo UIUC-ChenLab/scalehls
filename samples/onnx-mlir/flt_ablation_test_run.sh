@@ -1,21 +1,21 @@
 #!/bin/bash
 
-# Please run: source ablation_test_run.sh -m resnet18 -n 15 -c 0
+# Please run: source flt_ablation_test_run.sh -m resnet18 -n 15 -c 0
 
-# cd samples/onnx-mlir-1/ && source ablation_test_run.sh -m lenet -n 15 -c 0
-# cd samples/onnx-mlir-1/ && source ablation_test_run.sh -m mobilenetv2 -n 15 -c 0
-# cd samples/onnx-mlir-1/ && source ablation_test_run.sh -m resnet18 -n 15 -c 0
-# cd samples/onnx-mlir-1/ && source ablation_test_run.sh -m vgg16 -n 15 -c 0
+# cd samples/onnx-mlir-a/ && source flt_ablation_test_run.sh -m lenet -n 15 -c 0
+# cd samples/onnx-mlir-a/ && source flt_ablation_test_run.sh -m mobilenet -n 15 -c 0
+# cd samples/onnx-mlir-a/ && source flt_ablation_test_run.sh -m resnet18 -n 15 -c 0
+# cd samples/onnx-mlir-a/ && source flt_ablation_test_run.sh -m vgg16 -n 15 -c 0
 
-# cd samples/onnx-mlir-2/ && source ablation_test_run.sh -m lenet -n 15 -c 0
-# cd samples/onnx-mlir-2/ && source ablation_test_run.sh -m mobilenetv2 -n 15 -c 0
-# cd samples/onnx-mlir-2/ && source ablation_test_run.sh -m resnet18 -n 15 -c 0
-# cd samples/onnx-mlir-2/ && source ablation_test_run.sh -m vgg16 -n 15 -c 0
+# cd samples/onnx-mlir-b/ && source flt_ablation_test_run.sh -m lenet -n 15 -c 0
+# cd samples/onnx-mlir-b/ && source flt_ablation_test_run.sh -m mobilenet -n 15 -c 0
+# cd samples/onnx-mlir-b/ && source flt_ablation_test_run.sh -m resnet18 -n 15 -c 0
+# cd samples/onnx-mlir-b/ && source flt_ablation_test_run.sh -m vgg16 -n 15 -c 0
 
-# cd samples/onnx-mlir-3/ && source ablation_test_run.sh -m lenet -n 15 -c 0
-# cd samples/onnx-mlir-3/ && source ablation_test_run.sh -m mobilenetv2 -n 15 -c 0
-# cd samples/onnx-mlir-3/ && source ablation_test_run.sh -m resnet18 -n 15 -c 0
-# cd samples/onnx-mlir-3/ && source ablation_test_run.sh -m vgg16 -n 15 -c 0
+# cd samples/onnx-mlir-c/ && source flt_ablation_test_run.sh -m lenet -n 15 -c 0
+# cd samples/onnx-mlir-c/ && source flt_ablation_test_run.sh -m mobilenet -n 15 -c 0
+# cd samples/onnx-mlir-c/ && source flt_ablation_test_run.sh -m resnet18 -n 15 -c 0
+# cd samples/onnx-mlir-c/ && source flt_ablation_test_run.sh -m vgg16 -n 15 -c 0
 
 # Script options.
 while getopts 'm:n:c:' opt
@@ -50,7 +50,7 @@ graph_O5=-legalize-dataflow="min-gran=4 insert-copy=true"
 graph_O6=-legalize-dataflow="min-gran=3 insert-copy=true"
 
 # Split and canonicalize function, convert to HLSCpp, and loop perfection.
-split="-split-function -convert-linalg-to-affine-loops -quantize-onnx -canonicalize"
+split="-split-function -convert-linalg-to-affine-loops -canonicalize"
 hlscpp=-legalize-to-hlscpp="top-func=main_graph"
 perfect="-affine-loop-perfection"
 
