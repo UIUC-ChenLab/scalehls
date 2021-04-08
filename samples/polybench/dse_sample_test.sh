@@ -1,13 +1,14 @@
 #!/bin/bash
 
-# Please run: source dse_test_run.sh -m gemm -c 0
+# This test is deprecated!
+# Please run: source dse_sample_test.sh -m gemm -c 0
 
-# cd samples/polybench/ && source dse_test_run.sh -m bicg -c 0
-# cd samples/polybench/ && source dse_test_run.sh -m gemm -c 0
-# cd samples/polybench/ && source dse_test_run.sh -m gesummv -c 0
-# cd samples/polybench/ && source dse_test_run.sh -m syrk -c 0
-# cd samples/polybench/ && source dse_test_run.sh -m syr2k -c 0
-# cd samples/polybench/ && source dse_test_run.sh -m trmm -c 0
+# cd samples/polybench/ && source dse_sample_test.sh -m bicg -c 0
+# cd samples/polybench/ && source dse_sample_test.sh -m gemm -c 0
+# cd samples/polybench/ && source dse_sample_test.sh -m gesummv -c 0
+# cd samples/polybench/ && source dse_sample_test.sh -m syrk -c 0
+# cd samples/polybench/ && source dse_sample_test.sh -m syr2k -c 0
+# cd samples/polybench/ && source dse_sample_test.sh -m trmm -c 0
 
 # Script options.
 while getopts 'm:c:' opt

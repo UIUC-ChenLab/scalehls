@@ -1,21 +1,18 @@
 #!/bin/bash
 
-# Please run: source flt_ablation_test_run.sh -m resnet18 -n 15 -c 0
+# Please run: source ablation_flt_test.sh -m resnet18 -n 15 -c 0
 
-# cd samples/onnx-mlir-a/ && source flt_ablation_test_run.sh -m lenet -n 15 -c 0
-# cd samples/onnx-mlir-a/ && source flt_ablation_test_run.sh -m mobilenet -n 15 -c 0
-# cd samples/onnx-mlir-a/ && source flt_ablation_test_run.sh -m resnet18 -n 15 -c 0
-# cd samples/onnx-mlir-a/ && source flt_ablation_test_run.sh -m vgg16 -n 15 -c 0
+# cd samples/onnx-mlir-1/ && source ablation_flt_test.sh -m mobilenet -n 15 -c 0
+# cd samples/onnx-mlir-1/ && source ablation_flt_test.sh -m resnet18 -n 15 -c 0
+# cd samples/onnx-mlir-1/ && source ablation_flt_test.sh -m vgg16 -n 15 -c 0
 
-# cd samples/onnx-mlir-b/ && source flt_ablation_test_run.sh -m lenet -n 15 -c 0
-# cd samples/onnx-mlir-b/ && source flt_ablation_test_run.sh -m mobilenet -n 15 -c 0
-# cd samples/onnx-mlir-b/ && source flt_ablation_test_run.sh -m resnet18 -n 15 -c 0
-# cd samples/onnx-mlir-b/ && source flt_ablation_test_run.sh -m vgg16 -n 15 -c 0
+# cd samples/onnx-mlir-2/ && source ablation_flt_test.sh -m mobilenet -n 15 -c 0
+# cd samples/onnx-mlir-2/ && source ablation_flt_test.sh -m resnet18 -n 15 -c 0
+# cd samples/onnx-mlir-2/ && source ablation_flt_test.sh -m vgg16 -n 15 -c 0
 
-# cd samples/onnx-mlir-c/ && source flt_ablation_test_run.sh -m lenet -n 15 -c 0
-# cd samples/onnx-mlir-c/ && source flt_ablation_test_run.sh -m mobilenet -n 15 -c 0
-# cd samples/onnx-mlir-c/ && source flt_ablation_test_run.sh -m resnet18 -n 15 -c 0
-# cd samples/onnx-mlir-c/ && source flt_ablation_test_run.sh -m vgg16 -n 15 -c 0
+# cd samples/onnx-mlir-3/ && source ablation_flt_test.sh -m mobilenet -n 15 -c 0
+# cd samples/onnx-mlir-3/ && source ablation_flt_test.sh -m resnet18 -n 15 -c 0
+# cd samples/onnx-mlir-3/ && source ablation_flt_test.sh -m vgg16 -n 15 -c 0
 
 # Script options.
 while getopts 'm:n:c:' opt

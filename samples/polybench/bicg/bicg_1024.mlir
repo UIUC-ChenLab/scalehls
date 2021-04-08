@@ -1,4 +1,4 @@
-func @bicg(%A: memref<1024x1024xf32>, %s: memref<1024xf32>, %q: memref<1024xf32>, %p: memref<1024xf32>, %r: memref<1024xf32>) {
+func @bicg_1024(%A: memref<1024x1024xf32>, %s: memref<1024xf32>, %q: memref<1024xf32>, %p: memref<1024xf32>, %r: memref<1024xf32>) {
   affine.for %i = 0 to 1024 {
     affine.for %j = 0 to 1024 {
       %0 = affine.load %s[%j] : memref<1024xf32>

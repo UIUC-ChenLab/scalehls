@@ -153,9 +153,11 @@ void ScaleHLSEstimator::estimateLoadStore(Operation *op, int64_t begin) {
           // The rationale is as long as the current read operation has
           // identical memory access information with any scheduled read
           // operation, the schedule will success.
-          for (auto rdAccess : info.rdAccesses)
-            if (access == rdAccess)
+          for (auto rdAccess : info.rdAccesses) {
+            if (access == rdAccess &&
+                op->getBlock() == rdAccess.opInst->getBlock())
               hasIdenticalAccess = true;
+          }
 
           if (hasIdenticalAccess)
             continue;

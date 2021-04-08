@@ -1,21 +1,18 @@
 #!/bin/bash
 
-# Please run: source int_ablation_test_run.sh -m resnet18 -n 17 -c 0
+# Please run: source ablation_int_test.sh -m resnet18 -n 17 -c 0
 
-# cd samples/onnx-mlir-a/ && source int_ablation_test_run.sh -m lenet -n 17 -c 0
-# cd samples/onnx-mlir-a/ && source int_ablation_test_run.sh -m mobilenet -n 17 -c 0
-# cd samples/onnx-mlir-a/ && source int_ablation_test_run.sh -m resnet18 -n 17 -c 0
-# cd samples/onnx-mlir-a/ && source int_ablation_test_run.sh -m vgg16 -n 17 -c 0
+# cd samples/onnx-mlir-1/ && source ablation_int_test.sh -m mobilenet -n 17 -c 0
+# cd samples/onnx-mlir-1/ && source ablation_int_test.sh -m resnet18 -n 17 -c 0
+# cd samples/onnx-mlir-1/ && source ablation_int_test.sh -m vgg16 -n 17 -c 0
 
-# cd samples/onnx-mlir-b/ && source int_ablation_test_run.sh -m lenet -n 17 -c 0
-# cd samples/onnx-mlir-b/ && source int_ablation_test_run.sh -m mobilenet -n 17 -c 0
-# cd samples/onnx-mlir-b/ && source int_ablation_test_run.sh -m resnet18 -n 17 -c 0
-# cd samples/onnx-mlir-b/ && source int_ablation_test_run.sh -m vgg16 -n 17 -c 0
+# cd samples/onnx-mlir-2/ && source ablation_int_test.sh -m mobilenet -n 17 -c 0
+# cd samples/onnx-mlir-2/ && source ablation_int_test.sh -m resnet18 -n 17 -c 0
+# cd samples/onnx-mlir-2/ && source ablation_int_test.sh -m vgg16 -n 17 -c 0
 
-# cd samples/onnx-mlir-c/ && source int_ablation_test_run.sh -m lenet -n 17 -c 0
-# cd samples/onnx-mlir-c/ && source int_ablation_test_run.sh -m mobilenet -n 17 -c 0
-# cd samples/onnx-mlir-c/ && source int_ablation_test_run.sh -m resnet18 -n 17 -c 0
-# cd samples/onnx-mlir-c/ && source int_ablation_test_run.sh -m vgg16 -n 17 -c 0
+# cd samples/onnx-mlir-3/ && source ablation_int_test.sh -m mobilenet -n 17 -c 0
+# cd samples/onnx-mlir-3/ && source ablation_int_test.sh -m resnet18 -n 17 -c 0
+# cd samples/onnx-mlir-3/ && source ablation_int_test.sh -m vgg16 -n 17 -c 0
 
 # Script options.
 while getopts 'm:n:c:' opt
