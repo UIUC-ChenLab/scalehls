@@ -12,14 +12,18 @@ using namespace scalehls;
 using namespace hlscpp;
 
 void HLSCppDialect::initialize() {
-
   addOperations<
 #define GET_OP_LIST
 #include "scalehls/Dialect/HLSCpp/HLSCpp.cpp.inc"
       >();
+
+  addAttributes<
+#define GET_ATTRDER_LIST
+#include "scalehls/Dialect/HLSCpp/HLSCppAttributes.cpp.inc"
+      >();
 }
 
-// #include "scalehls/Dialect/HLSCpp/HLSCppEnums.cpp.inc"
+#include "scalehls/Dialect/HLSCpp/HLSCppEnums.cpp.inc"
 #include "scalehls/Dialect/HLSCpp/HLSCppInterfaces.cpp.inc"
 
 namespace {

@@ -15,8 +15,6 @@ namespace mlir {
 namespace scalehls {
 namespace hlscpp {
 
-#include "scalehls/Dialect/HLSCpp/HLSCppInterfaces.h.inc"
-
 enum class MemoryKind {
   BRAM_1P = 0,
   BRAM_S2P = 1,
@@ -31,14 +29,19 @@ enum class MemoryKind {
 
 enum class PartitionKind { CYCLIC = 0, BLOCK = 1, NONE = 2 };
 
+#include "scalehls/Dialect/HLSCpp/HLSCppInterfaces.h.inc"
+
 } // namespace hlscpp
 } // namespace scalehls
 } // namespace mlir
 
-// #include "scalehls/Dialect/HLSCpp/HLSCppEnums.h.inc"
 #include "scalehls/Dialect/HLSCpp/HLSCppDialect.h.inc"
+#include "scalehls/Dialect/HLSCpp/HLSCppEnums.h.inc"
 
 #define GET_OP_CLASSES
 #include "scalehls/Dialect/HLSCpp/HLSCpp.h.inc"
+
+#define GET_ATTRDEF_CLASSES
+#include "scalehls/Dialect/HLSCpp/HLSCppAttributes.h.inc"
 
 #endif // SCALEHLS_DIALECT_HLSCPP_HLSCPP_H
