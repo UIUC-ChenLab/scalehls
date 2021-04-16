@@ -16,32 +16,6 @@ namespace scalehls {
 namespace hlscpp {
 
 //===----------------------------------------------------------------------===//
-// HLSCpp dialect definition
-//===----------------------------------------------------------------------===//
-
-class HLSCppDialect : public Dialect {
-public:
-  explicit HLSCppDialect(MLIRContext *context)
-      : Dialect(getDialectNamespace(), context, TypeID::get<HLSCppDialect>()) {
-    initialize();
-  }
-  void initialize();
-
-  /// Parse an attribute registered to this dialect. If 'type' is nonnull, it
-  /// refers to the expected type of the attribute.
-  Attribute parseAttribute(DialectAsmParser &parser, Type type) const override;
-
-  /// Print an attribute registered to this dialect. Note: The type of the
-  /// attribute need not be printed by this method as it is always printed by
-  /// the caller.
-  void printAttribute(Attribute, DialectAsmPrinter &) const override;
-
-  static constexpr StringRef getDialectNamespace() { return "hlscpp"; }
-
-  friend class MLIRContext;
-};
-
-//===----------------------------------------------------------------------===//
 // HLSCpp enums definition
 //===----------------------------------------------------------------------===//
 
@@ -69,7 +43,7 @@ enum class PartitionKind { CYCLIC = 0, BLOCK = 1, NONE = 2 };
 // Include tablegen classes
 //===----------------------------------------------------------------------===//
 
-// #include "scalehls/Dialect/HLSCpp/HLSCppDialect.h.inc"
+#include "scalehls/Dialect/HLSCpp/HLSCppDialect.h.inc"
 #include "scalehls/Dialect/HLSCpp/HLSCppEnums.h.inc"
 
 #define GET_OP_CLASSES

@@ -7,8 +7,6 @@
 #ifndef SCALEHLS_DIALECT_HLSCPP_ATTRIBUTES_TD
 #define SCALEHLS_DIALECT_HLSCPP_ATTRIBUTES_TD
 
-include "HLSCpp.td"
-
 class HLSCppAttr<string name, string baseCppClass = "::mlir::Attribute">
     : AttrDef<HLSCppDialect, name, baseCppClass>;
 
