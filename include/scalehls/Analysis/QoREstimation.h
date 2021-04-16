@@ -122,11 +122,6 @@ private:
     setAttrValue(op, "lut", resource.lut);
   }
 
-  void setScheduleValue(Operation *op, int64_t begin, int64_t end) {
-    setAttrValue(op, "schedule_begin", begin);
-    setAttrValue(op, "schedule_end", end);
-  }
-
   /// LoadOp and StoreOp related methods.
   void getPartitionIndices(Operation *op);
   void estimateLoadStore(Operation *op, int64_t begin);

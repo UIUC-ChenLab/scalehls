@@ -19,5 +19,5 @@ target_link_libraries(scalehls-opt
   MLIRScaleHLSTransforms
   MLIRScaleHLSAnalysis
 
-  Threads::Threads
+  # Threads::Threads
   )

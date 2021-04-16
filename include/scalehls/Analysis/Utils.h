@@ -13,6 +13,20 @@
 namespace mlir {
 namespace scalehls {
 
+//===----------------------------------------------------------------------===//
+// HLSCpp attribute utils
+//===----------------------------------------------------------------------===//
+
+/// Set and parse schedule attribute.
+void setScheduleValue(Operation *op, int64_t begin, int64_t end);
+
+int64_t getScheduleBegin(Operation *op);
+int64_t getScheduleEnd(Operation *op);
+
+//===----------------------------------------------------------------------===//
+// Memory and loop analysis utils
+//===----------------------------------------------------------------------===//
+
 using AffineLoopBand = SmallVector<AffineForOp, 6>;
 using AffineLoopBands = std::vector<AffineLoopBand>;
 

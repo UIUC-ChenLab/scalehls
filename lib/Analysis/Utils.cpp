@@ -8,9 +8,39 @@
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Analysis/Utils.h"
+#include "scalehls/Dialect/HLSCpp/HLSCpp.h"
 
 using namespace mlir;
 using namespace scalehls;
+using namespace hlscpp;
+
+//===----------------------------------------------------------------------===//
+// HLSCpp attribute utils
+//===----------------------------------------------------------------------===//
+
+/// Set and parse schedule attribute.
+void scalehls::setScheduleValue(Operation *op, int64_t begin, int64_t end) {
+  auto schedule = ScheduleAttr::get(op->getContext(), begin, end);
+  op->setAttr("schedule", schedule);
+}
+
+int64_t scalehls::getScheduleBegin(Operation *op) {
+  auto schedule = op->getAttrOfType<ScheduleAttr>("schedule");
+  if (!schedule)
+    return -1;
+  return schedule.getBegin();
+}
+
+int64_t scalehls::getScheduleEnd(Operation *op) {
+  auto schedule = op->getAttrOfType<ScheduleAttr>("schedule");
+  if (!schedule)
+    return -1;
+  return schedule.getEnd();
+}
+
+//===----------------------------------------------------------------------===//
+// Memory and loop analysis utils
+//===----------------------------------------------------------------------===//
 
 /// Collect all load and store operations in the block and return them in "map".
 void scalehls::getMemAccessesMap(Block &block, MemAccessesMap &map) {

@@ -252,8 +252,7 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, FuncOp func,
 
         // If delay is smaller than the current II, stop and continue because
         // the minimum distance is one.
-        auto delay = getIntAttrValue(dstOp, "schedule_end") -
-                     getIntAttrValue(srcOp, "schedule_begin");
+        auto delay = getScheduleEnd(dstOp) - getScheduleBegin(srcOp);
         if (delay <= II)
           continue;
 
@@ -303,8 +302,7 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
 
         // If delay is smaller than the current II, stop and continue because
         // the minimum distance is one.
-        auto delay = getIntAttrValue(dstOp, "schedule_end") -
-                     getIntAttrValue(srcOp, "schedule_begin");
+        auto delay = getScheduleEnd(dstOp) - getScheduleBegin(srcOp);
         if (delay <= II)
           continue;
 
@@ -543,8 +541,8 @@ int64_t ScaleHLSEstimator::getDspAllocMap(Block &block,
                                           ResourceAllocMap &fmulMap) {
   int64_t staticDspNum = 0;
   for (auto &op : block) {
-    auto begin = getIntAttrValue(&op, "schedule_begin");
-    auto end = getIntAttrValue(&op, "schedule_end");
+    auto begin = getScheduleBegin(&op);
+    auto end = getScheduleEnd(&op);
 
     // Accumulate the resource utilization of each operation.
     if (isa<AddFOp, SubFOp>(op))
@@ -679,13 +677,13 @@ Optional<Schedule> ScaleHLSEstimator::estimateBlock(Block &block,
     // Find the latest arrived successor depending on the current operation.
     for (auto user : op->getUsers()) {
       auto sameLevelUser = getSameLevelDstOp(op, user);
-      opBegin = max(opBegin, getIntAttrValue(sameLevelUser, "schedule_end"));
+      opBegin = max(opBegin, getScheduleEnd(sameLevelUser));
     }
 
     // Check other dependencies and update schedule level.
     for (auto dstOp : dependsMap[op]) {
       auto sameLevelDstOp = getSameLevelDstOp(op, dstOp);
-      opBegin = max(opBegin, getIntAttrValue(sameLevelDstOp, "schedule_end"));
+      opBegin = max(opBegin, getScheduleEnd(sameLevelDstOp));
     }
 
     // Check memory dependencies of the operation and update schedule level.
@@ -694,7 +692,7 @@ Optional<Schedule> ScaleHLSEstimator::estimateBlock(Block &block,
         // All users of the same memref value has the possibility to share
         // dependency with the current operation.
         for (auto depOp : operand.getUsers()) {
-          auto depOpEnd = getIntAttrValue(depOp, "schedule_end");
+          auto depOpEnd = getScheduleEnd(depOp);
 
           // If the depOp has not been scheduled or its schedule level will not
           // impact the current operation's scheduling, stop and continue.
@@ -755,7 +753,7 @@ Optional<Schedule> ScaleHLSEstimator::estimateBlock(Block &block,
 
     // Estimate the current operation.
     if (dispatchVisitor(op, opBegin))
-      opEnd = max(opEnd, getIntAttrValue(op, "schedule_end"));
+      opEnd = max(opEnd, getScheduleEnd(op));
     else
       return Optional<Schedule>();
 
@@ -789,13 +787,13 @@ static Operation *getSurroundingOp(Operation *op) {
 void ScaleHLSEstimator::reverseSchedule(Block &block) {
   block.walk([&](Operation *op) {
     // Get schedule level.
-    auto begin = getIntAttrValue(op, "schedule_begin");
-    auto end = getIntAttrValue(op, "schedule_end");
+    auto begin = getScheduleBegin(op);
+    auto end = getScheduleEnd(op);
 
     // Reverse schedule level.
     if (auto surOp = getSurroundingOp(op)) {
       if (isa<AffineForOp>(surOp)) {
-        auto surOpBegin = getIntAttrValue(surOp, "schedule_begin");
+        auto surOpBegin = getScheduleBegin(surOp);
 
         if (getBoolAttrValue(surOp, "flatten")) {
           // Handle flattened surrounding loops.
@@ -824,8 +822,7 @@ void ScaleHLSEstimator::initEstimator(Block &block) {
 
   SmallVector<Operation *, 16> loops;
   block.walk([&](Operation *op) {
-    op->removeAttr("schedule_begin");
-    op->removeAttr("schedule_end");
+    op->removeAttr("schedule");
 
     if (isa<AffineForOp>(op))
       loops.push_back(op);
@@ -855,8 +852,7 @@ void ScaleHLSEstimator::estimateFunc(FuncOp func) {
     if (getBoolAttrValue(func, "dataflow")) {
       int64_t maxInterval = 0;
       for (auto callOp : func.getOps<CallOp>()) {
-        auto latency = getIntAttrValue(callOp, "schedule_end") -
-                       getIntAttrValue(callOp, "schedule_begin");
+        auto latency = getScheduleEnd(callOp) - getScheduleBegin(callOp);
         maxInterval = max(maxInterval, latency);
       }
       setAttrValue(func, "ii", maxInterval);

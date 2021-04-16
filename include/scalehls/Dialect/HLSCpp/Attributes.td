@@ -8,34 +8,32 @@
 #define SCALEHLS_DIALECT_HLSCPP_ATTRIBUTES_TD
 
 include "HLSCpp.td"
-include "mlir/IR/OpBase.td"
 
 class HLSCppAttr<string name, string baseCppClass = "::mlir::Attribute">
     : AttrDef<HLSCppDialect, name, baseCppClass>;
 
-def ResourceAttr : HLSCppAttr<"ResourceAttr"> {
+def Resource : HLSCppAttr<"Resource"> {
   let summary = "Resource utilization information";
   let description = [{
-    This attribute includes several important on-chip resources of FPGA targets,
-    such as LUT, FF, DSP, BRAM, and URAM.
+    This attribute includes the utilization of several important on-chip
+    resources, such as LUT, FF, DSP, BRAM, and URAM.
   }];
-  let mnemonic = "resource_attr";
+  let mnemonic = "res";
 
   let parameters = (ins
     "int64_t" : $lut,
     "int64_t" : $ff,
     "int64_t" : $dsp,
-    "int64_t" : $bram,
-    "int64_t" : $uram
+    "int64_t" : $bram
   );
 }
 
-def ScheduleAttr : HLSCppAttr<"ScheduleAttr"> {
+def Schedule : HLSCppAttr<"Schedule"> {
   let summary = "Scheduling information";
   let description = [{
     This attribute indicates the scheduling begin and end of operations.
   }];
-  let mnemonic = "schedule_attr";
+  let mnemonic = "sch";
 
   let parameters = (ins
     "int64_t" : $begin,
@@ -43,51 +41,64 @@ def ScheduleAttr : HLSCppAttr<"ScheduleAttr"> {
   );
 }
 
-def LoopAttr : HLSCppAttr<"LoopAttr"> {
-  let summary = "The aggregation of loop directives and attributes";
+def ModuleInfo : HLSCppAttr<"ModuleInfo"> {
+  let summary = "module information";
   let description = [{
-    This attribute includes all loop directives (loop pipelining, target initial
-    interval, and flattening) and attributes (loop trip count, iteration
-    latency, overall latency, and minimum initial interval).
+    This attribute includes the module (function or loop) information, including
+    the overall latency, initial interval, dsp utilization without sharing.
   }];
-  let mnemonic = "loop_attr";
+  let mnemonic = "mod";
 
   let parameters = (ins
-    // Directives.
-    "bool" : $pipeline,
-    "int64_t" : $targetII,
-    "bool" : $flatten,
-
-    // Attributes.
-    "int64_t" : $tripCount,
-    "int64_t" : $flattenTripCount,
-    "int64_t" : $noshareDsp,
-    "int64_t" : $iterLatency,
-
     "int64_t" : $latency,
-    "int64_t" : $minII
+    "int64_t" : $minII,
+    "int64_t" : $noshareDsp
   );
 }
 
-def FuncAttr : HLSCppAttr<"FuncAttr"> {
-  let summary = "The aggregation of function directives";
+def LoopInfo : HLSCppAttr<"LoopInfo"> {
+  let summary = "Loop information";
   let description = [{
-    This attribute include all function directives (loop pipelining and
-    dataflow) and attributes (top function predicate, overall latency, and
-    minimum initial interval).
+    This attribute includes loop information used by estimator and optimizer,
+    including loop trip count, flattened trip count, and iteration latency.
   }];
-  let mnemonic = "func_attr";
+  let mnemonic = "loop";
 
   let parameters = (ins
-    // Directives.
+    "int64_t" : $tripCount,
+    "int64_t" : $flattenTripCount,
+    "int64_t" : $iterLatency
+  );
+}
+
+def LoopDirective : HLSCppAttr<"LoopDirective"> {
+  let summary = "Aggregation of loop directives";
+  let description = [{
+    This attribute includes all loop directives, including loop pipelining,
+    target initial interval, and flattening).
+  }];
+  let mnemonic = "ld";
+
+  let parameters = (ins
     "bool" : $pipeline,
+    "int64_t" : $targetII,
+    "bool" : $flatten
+  );
+}
+
+def FuncDirective : HLSCppAttr<"FuncDirective"> {
+  let summary = "Aggregation of function directives";
+  let description = [{
+    This attribute includes all function directives (function pipelining, target
+    initial interval, dataflow, and top function predicate.
+  }];
+  let mnemonic = "fd";
+
+  let parameters = (ins
+    "bool" : $pipeline,
+    "int64_t" : $targetII,
     "bool" : $dataflow,
-
-    // Attributes.
-    "bool" : $topFunc,
-
-    "int64_t" : $latency,
-    "int64_t" : $minII
+    "bool" : $topFunc
   );
 }
 
