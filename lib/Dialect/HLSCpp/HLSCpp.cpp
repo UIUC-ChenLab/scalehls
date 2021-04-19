@@ -60,70 +60,45 @@ void HLSCppDialect::printAttribute(Attribute attr, DialectAsmPrinter &p) const {
 
 Attribute ResourceAttr::parse(MLIRContext *ctxt, DialectAsmParser &p,
                               Type type) {
-  StringRef lutKw, ffKw, dspKw, bramKw;
-  int64_t lut, ff, dsp, bram;
-  if (p.parseLess() || p.parseKeyword(lutKw) || p.parseEqual() ||
-      p.parseInteger(lut) || p.parseComma() || p.parseKeyword(ffKw) ||
-      p.parseEqual() || p.parseInteger(ff) || p.parseComma() ||
-      p.parseKeyword(dspKw) || p.parseEqual() || p.parseInteger(dsp) ||
-      p.parseComma() || p.parseKeyword(bramKw) || p.parseEqual() ||
-      p.parseInteger(bram) || p.parseGreater())
+  StringRef lutKw, dspKw, bramKw, nonShareDspKw;
+  int64_t lut, dsp, bram, nonShareDsp;
+  if (p.parseLess() || p.parseKeyword(&lutKw) || p.parseEqual() ||
+      p.parseInteger(lut) || p.parseComma() || p.parseKeyword(&dspKw) ||
+      p.parseEqual() || p.parseInteger(dsp) || p.parseComma() ||
+      p.parseKeyword(&bramKw) || p.parseEqual() || p.parseInteger(bram) ||
+      p.parseComma() || p.parseKeyword(&nonShareDspKw) || p.parseEqual() ||
+      p.parseInteger(nonShareDsp) || p.parseGreater())
     return Attribute();
 
-  if (lutKw != "lut" || ffKw != "ff" || dspKw != "dsp" || bramKw != "bram")
+  if (lutKw != "lut" || dspKw != "dsp" || bramKw != "bram" ||
+      nonShareDspKw != "nonShareDsp")
     return Attribute();
 
-  return ResourceAttr::get(ctxt, lut, ff, dsp, bram);
+  return ResourceAttr::get(ctxt, lut, dsp, bram, nonShareDsp);
 }
 
 void ResourceAttr::print(DialectAsmPrinter &p) const {
-  p << getMnemonic() << "<lut=" << getLut() << ", ff=" << getFf()
-    << ", dsp=" << getDsp() << ", bram=" << getBram() << ">";
+  p << getMnemonic() << "<lut=" << getLut() << ", dsp=" << getDsp()
+    << ", bram=" << getBram() << ", nonShareDsp=" << getNonShareDsp() << ">";
 }
 
 //===----------------------------------------------------------------------===//
-// ScheduleAttr
+// TimingAttr
 //===----------------------------------------------------------------------===//
 
-Attribute ScheduleAttr::parse(MLIRContext *ctxt, DialectAsmParser &p,
-                              Type type) {
-  int64_t begin, end;
-  if (p.parseLSquare() || p.parseInteger(begin) || p.parseComma() ||
-      p.parseInteger(end) || p.parseRParen())
+Attribute TimingAttr::parse(MLIRContext *ctxt, DialectAsmParser &p, Type type) {
+  int64_t begin, end, latency, minII;
+  if (p.parseLess() || p.parseInteger(begin) || p.parseArrow() ||
+      p.parseInteger(end) || p.parseComma() || p.parseInteger(latency) ||
+      p.parseComma() || p.parseInteger(minII) || p.parseGreater())
     return Attribute();
 
-  return ScheduleAttr::get(ctxt, begin, end);
+  return TimingAttr::get(ctxt, begin, end, latency, minII);
 }
 
-void ScheduleAttr::print(DialectAsmPrinter &p) const {
-  p << getMnemonic() << "[" << getBegin() << ", " << getEnd() << ")";
-}
-
-//===----------------------------------------------------------------------===//
-// ModuleInfoAttr
-//===----------------------------------------------------------------------===//
-
-Attribute ModuleInfoAttr::parse(MLIRContext *ctxt, DialectAsmParser &p,
-                                Type type) {
-  StringRef latencyKw, minIIKw, noshareDspKw;
-  int64_t latency, minII, noshareDsp;
-  if (p.parseLess() || p.parseKeyword(latencyKw) || p.parseEqual() ||
-      p.parseInteger(latency) || p.parseComma() || p.parseKeyword(minIIKw) ||
-      p.parseEqual() || p.parseInteger(minII) || p.parseComma() ||
-      p.parseKeyword(noshareDspKw) || p.parseEqual() ||
-      p.parseInteger(noshareDsp) || p.parseGreater())
-    return Attribute();
-
-  if (latencyKw != "latency" || minIIKw != "minII" ||
-      noshareDspKw != "noshareDsp")
-    return Attribute();
-
-  return ModuleInfoAttr::get(ctxt, latency, minII, noshareDsp);
-}
-
-void ModuleInfoAttr::print(DialectAsmPrinter &p) const {
-  p << getMnemonic() << "<latency=" << getLatency() << ", minII=" << getMinII()
-    << ", noshareDsp=" << getNoshareDsp() << ">";
+void TimingAttr::print(DialectAsmPrinter &p) const {
+  p << getMnemonic() << "<" << getBegin() << " -> " << getEnd() << ", "
+    << getLatency() << ", " << getMinII() << ">";
 }
 
 //===----------------------------------------------------------------------===//
@@ -132,9 +107,12 @@ void ModuleInfoAttr::print(DialectAsmPrinter &p) const {
 
 Attribute LoopInfoAttr::parse(MLIRContext *ctxt, DialectAsmParser &p,
                               Type type) {
-  StringRef tripCountKw, flattenTripCountKw, iterLatencyKw;
+  StringRef parallelKw, tripCountKw, flattenTripCountKw, iterLatencyKw;
+  bool parallel;
   int64_t tripCount, flattenTripCount, iterLatency;
-  if (p.parseLess() || p.parseKeyword(tripCountKw) || p.parseEqual() ||
+  if (p.parseLess() || p.parseKeyword(parallelKw) || p.parseEqual() ||
+      p.parseInteger(parallel) || p.parseComma() ||
+      p.parseKeyword(tripCountKw) || p.parseEqual() ||
       p.parseInteger(tripCount) || p.parseComma() ||
       p.parseKeyword(flattenTripCountKw) || p.parseEqual() ||
       p.parseInteger(flattenTripCount) || p.parseComma() ||
@@ -142,15 +120,18 @@ Attribute LoopInfoAttr::parse(MLIRContext *ctxt, DialectAsmParser &p,
       p.parseInteger(iterLatency) || p.parseGreater())
     return Attribute();
 
-  if (tripCountKw != "tripCount" || flattenTripCountKw != "flattenTripCount" ||
+  if (parallelKw != "parallel" || tripCountKw != "tripCount" ||
+      flattenTripCountKw != "flattenTripCount" ||
       iterLatencyKw != "iterLatency")
     return Attribute();
 
-  return LoopInfoAttr::get(ctxt, tripCount, flattenTripCount, iterLatency);
+  return LoopInfoAttr::get(ctxt, parallel, tripCount, flattenTripCount,
+                           iterLatency);
 }
 
 void LoopInfoAttr::print(DialectAsmPrinter &p) const {
-  p << getMnemonic() << "<tripCount=" << getTripCount()
+  p << getMnemonic() << "<parallel" << getParallel()
+    << ", tripCount=" << getTripCount()
     << ", flattenTripCount=" << getFlattenTripCount()
     << ", iterLatency=" << getIterLatency() << ">";
 }

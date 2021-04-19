@@ -58,7 +58,7 @@ public:
   using HLSCppVisitorBase::visitOp;
   bool visitUnhandledOp(Operation *op, int64_t begin) {
     // Default latency of any unhandled operation is 0.
-    return setScheduleValue(op, begin, begin), true;
+    return setTiming(op, begin, begin, 0, 0), true;
   }
 
   bool visitOp(AffineForOp op, int64_t begin);
@@ -71,16 +71,17 @@ public:
     return estimateLoadStore(op, begin), true;
   }
   bool visitOp(memref::LoadOp op, int64_t begin) {
-    return setScheduleValue(op, begin, begin + 2), true;
+    return setTiming(op, begin, begin + 2, 2, 2), true;
   }
   bool visitOp(memref::StoreOp op, int64_t begin) {
-    return setScheduleValue(op, begin, begin + 1), true;
+    return setTiming(op, begin, begin + 1, 1, 1), true;
   }
 
   /// Handle operations with profiled latency.
 #define HANDLE(OPTYPE, KEYNAME)                                                \
   bool visitOp(OPTYPE op, int64_t begin) {                                     \
-    setScheduleValue(op, begin, begin + latencyMap[KEYNAME] + 1);              \
+    setTiming(op, begin, begin + latencyMap[KEYNAME] + 1, latencyMap[KEYNAME], \
+              latencyMap[KEYNAME]);                                            \
     return true;                                                               \
   }
   HANDLE(AddFOp, "fadd");
@@ -115,13 +116,6 @@ private:
   /// Collect all dependencies detected in the function.
   void getFuncDependencies();
 
-  void setResourceValue(Operation *op, Resource resource) {
-    setAttrValue(op, "bram", resource.bram);
-    setAttrValue(op, "dsp", resource.dsp);
-    setAttrValue(op, "ff", resource.ff);
-    setAttrValue(op, "lut", resource.lut);
-  }
-
   /// LoadOp and StoreOp related methods.
   void getPartitionIndices(Operation *op);
   void estimateLoadStore(Operation *op, int64_t begin);
@@ -134,9 +128,9 @@ private:
   /// Block scheduler and estimator.
   int64_t getDspAllocMap(Block &block, ResourceAllocMap &faddMap,
                          ResourceAllocMap &fmulMap);
-  Resource estimateResource(Block &block, int64_t interval = -1);
-  Optional<Schedule> estimateBlock(Block &block, int64_t begin);
-  void reverseSchedule(Block &block);
+  ResourceAttr estimateResource(Block &block, int64_t minII = -1);
+  TimingAttr estimateTiming(Block &block, int64_t begin = 0);
+  void reverseTiming(Block &block);
   void initEstimator(Block &block);
 
   DependsMap dependsMap;

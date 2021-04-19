@@ -8,7 +8,6 @@
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Analysis/Utils.h"
-#include "scalehls/Dialect/HLSCpp/HLSCpp.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -18,24 +17,35 @@ using namespace hlscpp;
 // HLSCpp attribute utils
 //===----------------------------------------------------------------------===//
 
-/// Set and parse schedule attribute.
-void scalehls::setScheduleValue(Operation *op, int64_t begin, int64_t end) {
-  auto schedule = ScheduleAttr::get(op->getContext(), begin, end);
-  op->setAttr("schedule", schedule);
+/// Set and parse timing attribute.
+void scalehls::setTiming(Operation *op, TimingAttr timing) {
+  op->setAttr("timing", timing);
 }
 
-int64_t scalehls::getScheduleBegin(Operation *op) {
-  auto schedule = op->getAttrOfType<ScheduleAttr>("schedule");
-  if (!schedule)
-    return -1;
-  return schedule.getBegin();
+void scalehls::setTiming(Operation *op, int64_t begin, int64_t end,
+                         int64_t latency, int64_t minII) {
+  auto timing = TimingAttr::get(op->getContext(), begin, end, latency, minII);
+  op->setAttr("timing", timing);
 }
 
-int64_t scalehls::getScheduleEnd(Operation *op) {
-  auto schedule = op->getAttrOfType<ScheduleAttr>("schedule");
-  if (!schedule)
-    return -1;
-  return schedule.getEnd();
+TimingAttr scalehls::getTiming(Operation *op) {
+  return op->getAttrOfType<TimingAttr>("timing");
+}
+
+/// Set and parse resource attribute.
+void scalehls::setResource(Operation *op, ResourceAttr resource) {
+  op->setAttr("resource", resource);
+}
+
+void setResource(Operation *op, int64_t lut, int64_t dsp, int64_t bram,
+                 int64_t nonShareDsp) {
+  auto resource =
+      ResourceAttr::get(op->getContext(), lut, dsp, bram, nonShareDsp);
+  op->setAttr("resource", resource);
+}
+
+ResourceAttr scalehls::getResource(Operation *op) {
+  return op->getAttrOfType<ResourceAttr>("resource");
 }
 
 //===----------------------------------------------------------------------===//

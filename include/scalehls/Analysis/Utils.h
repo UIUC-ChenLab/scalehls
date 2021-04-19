@@ -9,19 +9,28 @@
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
+#include "scalehls/Dialect/HLSCpp/HLSCpp.h"
 
 namespace mlir {
 namespace scalehls {
+
+using namespace hlscpp;
 
 //===----------------------------------------------------------------------===//
 // HLSCpp attribute utils
 //===----------------------------------------------------------------------===//
 
-/// Set and parse schedule attribute.
-void setScheduleValue(Operation *op, int64_t begin, int64_t end);
+/// Set and parse timing attribute.
+void setTiming(Operation *op, TimingAttr timing);
+void setTiming(Operation *op, int64_t begin, int64_t end, int64_t latency,
+               int64_t minII);
+TimingAttr getTiming(Operation *op);
 
-int64_t getScheduleBegin(Operation *op);
-int64_t getScheduleEnd(Operation *op);
+/// Set and parse resource attribute.
+void setResource(Operation *op, ResourceAttr resource);
+void setResource(Operation *op, int64_t lut, int64_t dsp, int64_t bram,
+                 int64_t nonShareDsp);
+ResourceAttr getResource(Operation *op);
 
 //===----------------------------------------------------------------------===//
 // Memory and loop analysis utils

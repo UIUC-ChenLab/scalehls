@@ -13,6 +13,7 @@
 using namespace std;
 using namespace mlir;
 using namespace scalehls;
+using namespace hlscpp;
 
 //===----------------------------------------------------------------------===//
 // LoadOp and StoreOp Related Methods
@@ -88,7 +89,7 @@ void ScaleHLSEstimator::getPartitionIndices(Operation *op) {
     setAttrValue(op, "max_mux_size", maxMuxSize);
 }
 
-/// Schedule load/store operation honoring the memory ports number limitation.
+/// Timing load/store operation honoring the memory ports number limitation.
 void ScaleHLSEstimator::estimateLoadStore(Operation *op, int64_t begin) {
   auto access = MemRefAccess(op);
   auto memref = access.memref;
@@ -191,9 +192,11 @@ void ScaleHLSEstimator::estimateLoadStore(Operation *op, int64_t begin) {
   }
 
   if (isa<AffineReadOpInterface>(op))
-    setScheduleValue(op, begin, begin + 2);
+    setTiming(op, begin, begin + 2, 2, 2);
   else
-    setScheduleValue(op, begin, begin + 1);
+    setTiming(op, begin, begin + 1, 2, 2);
+
+  llvm::outs() << "Annotate: " << *op << "\n";
 }
 
 //===----------------------------------------------------------------------===//
@@ -252,7 +255,7 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, FuncOp func,
 
         // If delay is smaller than the current II, stop and continue because
         // the minimum distance is one.
-        auto delay = getScheduleEnd(dstOp) - getScheduleBegin(srcOp);
+        auto delay = getTiming(dstOp).getEnd() - getTiming(srcOp).getBegin();
         if (delay <= II)
           continue;
 
@@ -302,7 +305,7 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
 
         // If delay is smaller than the current II, stop and continue because
         // the minimum distance is one.
-        auto delay = getScheduleEnd(dstOp) - getScheduleBegin(srcOp);
+        auto delay = getTiming(dstOp).getEnd() - getTiming(srcOp).getBegin();
         if (delay <= II)
           continue;
 
@@ -386,7 +389,7 @@ bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
     auto dspNum = getIntAttrValue(op, "dsp");
 
     if (latency != -1 && dspNum != -1) {
-      setScheduleValue(op, begin, begin + latency + 2);
+      setTiming(op, begin, begin + latency + 2, latency + 2, latency + 2);
       return true;
     }
   }
@@ -402,9 +405,9 @@ bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
   auto &loopBlock = *op.getBody();
 
   // Estimate the loop block.
-  if (auto schedule = estimateBlock(loopBlock, begin)) {
-    end = max(end, schedule.getValue().end);
-    begin = max(begin, schedule.getValue().begin);
+  if (auto timing = estimateTiming(loopBlock, begin)) {
+    end = max(end, timing.getEnd());
+    begin = max(begin, timing.getBegin());
   } else
     return false;
 
@@ -438,10 +441,10 @@ bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
     setAttrValue(op, "latency", latency);
 
     // Entering and leaving a loop will consume extra 2 clock cycles.
-    setScheduleValue(op, begin, begin + latency + 2);
+    setTiming(op, begin, begin + latency + 2, latency, II);
 
     // Estimate the loop block resource utilization.
-    setResourceValue(op, estimateResource(loopBlock, II));
+    setResource(op, estimateResource(loopBlock, II));
     return true;
   }
 
@@ -465,10 +468,10 @@ bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
     auto latency = iterLatency + II * (flattenTripCount - 1);
     setAttrValue(op, "latency", latency);
 
-    setScheduleValue(op, begin, begin + latency + 2);
+    setTiming(op, begin, begin + latency + 2, latency, II);
 
     // The resource utilization of flattened loop is equal to its child's.
-    setAttrValue(op, "dsp", getIntAttrValue(child, "dsp"));
+    setResource(op, getResource(child));
     return true;
   }
 
@@ -480,8 +483,8 @@ bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
   auto latency = iterLatency * tripCount;
   setAttrValue(op, "latency", latency);
 
-  setScheduleValue(op, begin, begin + latency + 2);
-  setResourceValue(op, estimateResource(loopBlock));
+  setTiming(op, begin, begin + latency + 2, latency, latency);
+  setResource(op, estimateResource(loopBlock));
   return true;
 }
 
@@ -494,8 +497,8 @@ bool ScaleHLSEstimator::visitOp(AffineIfOp op, int64_t begin) {
   auto thenBlock = op.getThenBlock();
 
   // Estimate then block.
-  if (auto schedule = estimateBlock(*thenBlock, begin))
-    end = max(end, schedule.getValue().end);
+  if (auto timing = estimateTiming(*thenBlock, begin))
+    end = max(end, timing.getEnd());
   else
     return false;
 
@@ -503,15 +506,15 @@ bool ScaleHLSEstimator::visitOp(AffineIfOp op, int64_t begin) {
   if (op.hasElse()) {
     auto elseBlock = op.getElseBlock();
 
-    if (auto schedule = estimateBlock(*elseBlock, begin))
-      end = max(end, schedule.getValue().end);
+    if (auto timing = estimateTiming(*elseBlock, begin))
+      end = max(end, timing.getEnd());
     else
       return false;
   }
 
   // In our assumption, AffineIfOp is completely transparent. Therefore, we
   // set a dummy schedule begin here.
-  setScheduleValue(op, end, end);
+  setTiming(op, end, end, 0, 0);
   return true;
 }
 
@@ -525,7 +528,7 @@ bool ScaleHLSEstimator::visitOp(CallOp op, int64_t begin) {
 
   // We assume enter and leave the subfunction require extra 2 clock cycles.
   if (auto subLatency = getIntAttrValue(subFunc, "latency")) {
-    setScheduleValue(op, begin, begin + subLatency + 2);
+    setTiming(op, begin, begin + subLatency + 2, subLatency, subLatency);
     setAttrValue(op, "dsp", getIntAttrValue(subFunc, "dsp"));
     return true;
   } else
@@ -541,8 +544,8 @@ int64_t ScaleHLSEstimator::getDspAllocMap(Block &block,
                                           ResourceAllocMap &fmulMap) {
   int64_t staticDspNum = 0;
   for (auto &op : block) {
-    auto begin = getScheduleBegin(&op);
-    auto end = getScheduleEnd(&op);
+    auto begin = getTiming(&op).getBegin();
+    auto end = getTiming(&op).getEnd();
 
     // Accumulate the resource utilization of each operation.
     if (isa<AddFOp, SubFOp>(op))
@@ -567,7 +570,7 @@ int64_t ScaleHLSEstimator::getDspAllocMap(Block &block,
   return staticDspNum;
 }
 
-Resource ScaleHLSEstimator::estimateResource(Block &block, int64_t interval) {
+ResourceAttr ScaleHLSEstimator::estimateResource(Block &block, int64_t minII) {
   ResourceAllocMap faddMap;
   ResourceAllocMap fmulMap;
   auto staticDspNum = getDspAllocMap(block, faddMap, fmulMap);
@@ -588,33 +591,34 @@ Resource ScaleHLSEstimator::estimateResource(Block &block, int64_t interval) {
   auto shareDspNum = maxFadd * 2 + maxFmul * 3;
   auto dsp = staticDspNum + shareDspNum;
 
-  // If the block is pipelined (interval is positive), the minimum resource
-  // utilization is determined by interval.
-  if (interval > 0) {
-    int64_t totalFadd = 0;
-    int64_t totalFmul = 0;
-    block.walk([&](Operation *op) {
-      if (isa<AddFOp, SubFOp>(op))
-        ++totalFadd;
-      else if (isa<MulFOp>(op))
-        ++totalFmul;
-    });
+  int64_t totalFadd = 0;
+  int64_t totalFmul = 0;
+  block.walk([&](Operation *op) {
+    if (isa<AddFOp, SubFOp>(op))
+      ++totalFadd;
+    else if (isa<MulFOp>(op))
+      ++totalFmul;
+  });
 
-    auto noShareDspNum = totalFadd * 2 + totalFmul * 3;
-    // max(shareDspNum, noShareDspNum / interval);
-    dsp = staticDspNum + noShareDspNum / interval;
+  auto nonShareDspNum = totalFadd * 2 + totalFmul * 3;
+
+  // If the block is pipelined (minII is positive), the minimum resource
+  // utilization is determined by minII.
+  if (minII > 0) {
+    // max(shareDspNum, nonShareDspNum / minII);
+    dsp = staticDspNum + nonShareDspNum / minII;
 
     // Annotate dsp utilization with & without resource sharing.
     auto parentOp = block.getParentOp();
     setAttrValue(parentOp, "share_dsp", shareDspNum);
-    setAttrValue(parentOp, "noshare_dsp", noShareDspNum);
+    setAttrValue(parentOp, "noshare_dsp", nonShareDspNum);
   }
 
   // TODO: Estimate bram, ff, lut.
-  int64_t bram = 0;
-  int64_t ff = 0;
   int64_t lut = 0;
-  return Resource(bram, dsp, ff, lut);
+  int64_t bram = 0;
+  return ResourceAttr::get(block.getParentOp()->getContext(), lut, dsp, bram,
+                           nonShareDspNum);
 }
 
 // Get the pointer of the scrOp's parent loop, which should locat at the same
@@ -659,8 +663,7 @@ static Operation *getSameLevelDstOp(Operation *srcOp, Operation *dstOp) {
 /// Estimate the latency of a block with ALAP scheduling strategy, return the
 /// end level of schedule. Meanwhile, the input begin will also be updated if
 /// required (typically happens in AffineForOps).
-Optional<Schedule> ScaleHLSEstimator::estimateBlock(Block &block,
-                                                    int64_t begin) {
+TimingAttr ScaleHLSEstimator::estimateTiming(Block &block, int64_t begin) {
   auto blockBegin = begin;
   auto blockEnd = begin;
 
@@ -670,6 +673,8 @@ Optional<Schedule> ScaleHLSEstimator::estimateBlock(Block &block,
     auto opBegin = begin;
     auto opEnd = begin;
 
+    llvm::outs() << *op << "\n";
+
     // Calculate the partition indices of memory load and store operations.
     if (isa<AffineLoadOp, AffineStoreOp>(op))
       getPartitionIndices(op);
@@ -677,26 +682,29 @@ Optional<Schedule> ScaleHLSEstimator::estimateBlock(Block &block,
     // Find the latest arrived successor depending on the current operation.
     for (auto user : op->getUsers()) {
       auto sameLevelUser = getSameLevelDstOp(op, user);
-      opBegin = max(opBegin, getScheduleEnd(sameLevelUser));
+      opBegin = max(opBegin, getTiming(sameLevelUser).getEnd());
     }
 
     // Check other dependencies and update schedule level.
     for (auto dstOp : dependsMap[op]) {
       auto sameLevelDstOp = getSameLevelDstOp(op, dstOp);
-      opBegin = max(opBegin, getScheduleEnd(sameLevelDstOp));
+      opBegin = max(opBegin, getTiming(sameLevelDstOp).getEnd());
     }
 
     // Check memory dependencies of the operation and update schedule level.
-    for (auto operand : op->getOperands())
+    for (auto operand : op->getOperands()) {
       if (operand.getType().isa<MemRefType>())
         // All users of the same memref value has the possibility to share
         // dependency with the current operation.
         for (auto depOp : operand.getUsers()) {
-          auto depOpEnd = getScheduleEnd(depOp);
-
           // If the depOp has not been scheduled or its schedule level will not
           // impact the current operation's scheduling, stop and continue.
-          if (depOpEnd == -1 || depOpEnd <= opBegin)
+          auto depOpTiming = getTiming(depOp);
+          if (!depOpTiming)
+            continue;
+
+          auto depOpEnd = depOpTiming.getEnd();
+          if (depOpEnd <= opBegin)
             continue;
 
           // If either the depOp or the current operation is a function call,
@@ -750,12 +758,15 @@ Optional<Schedule> ScaleHLSEstimator::estimateBlock(Block &block,
             }
           }
         }
+    }
 
     // Estimate the current operation.
     if (dispatchVisitor(op, opBegin))
-      opEnd = max(opEnd, getScheduleEnd(op));
-    else
-      return Optional<Schedule>();
+      opEnd = max(opEnd, getTiming(op).getEnd());
+    else {
+      op->emitError("Failed to estimate op");
+      return TimingAttr();
+    }
 
     // Update the block schedule end and begin.
     if (i == block.rbegin())
@@ -765,7 +776,10 @@ Optional<Schedule> ScaleHLSEstimator::estimateBlock(Block &block,
 
     blockEnd = max(blockEnd, opEnd);
   }
-  return Schedule(blockBegin, blockEnd);
+
+  return TimingAttr::get(block.getParentOp()->getContext(), blockBegin,
+                         blockEnd, blockEnd - blockBegin,
+                         blockEnd - blockBegin);
 }
 
 /// Get the innermost surrounding operation, either an AffineForOp or a FuncOp.
@@ -784,29 +798,30 @@ static Operation *getSurroundingOp(Operation *op) {
   }
 }
 
-void ScaleHLSEstimator::reverseSchedule(Block &block) {
+void ScaleHLSEstimator::reverseTiming(Block &block) {
   block.walk([&](Operation *op) {
     // Get schedule level.
-    auto begin = getScheduleBegin(op);
-    auto end = getScheduleEnd(op);
+    auto begin = getTiming(op).getBegin();
+    auto end = getTiming(op).getEnd();
 
     // Reverse schedule level.
     if (auto surOp = getSurroundingOp(op)) {
       if (isa<AffineForOp>(surOp)) {
-        auto surOpBegin = getScheduleBegin(surOp);
+        auto surOpBegin = getTiming(surOp).getBegin();
 
         if (getBoolAttrValue(surOp, "flatten")) {
           // Handle flattened surrounding loops.
-          setScheduleValue(op, surOpBegin, surOpBegin + end - begin);
+          setTiming(op, surOpBegin, surOpBegin + end - begin, end - begin,
+                    end - begin);
         } else {
           // Handle normal cases.
           auto iterLatency = getIntAttrValue(surOp, "iter_latency");
-          setScheduleValue(op, surOpBegin + iterLatency - end,
-                           surOpBegin + iterLatency - begin);
+          setTiming(op, surOpBegin + iterLatency - end,
+                    surOpBegin + iterLatency - begin, end - begin, end - begin);
         }
       } else if (isa<FuncOp>(surOp)) {
         auto latency = getIntAttrValue(surOp, "latency");
-        setScheduleValue(op, latency - end, latency - begin);
+        setTiming(op, latency - end, latency - begin, end - begin, end - begin);
       }
     }
   });
@@ -822,7 +837,7 @@ void ScaleHLSEstimator::initEstimator(Block &block) {
 
   SmallVector<Operation *, 16> loops;
   block.walk([&](Operation *op) {
-    op->removeAttr("schedule");
+    op->removeAttr("timing");
 
     if (isa<AffineForOp>(op))
       loops.push_back(op);
@@ -845,14 +860,15 @@ void ScaleHLSEstimator::estimateFunc(FuncOp func) {
   getMemAccessesMap(func.front(), map);
 
   // Recursively estimate blocks in the function.
-  if (auto schedule = estimateBlock(func.front(), 0)) {
-    auto latency = schedule.getValue().end;
+  if (auto timing = estimateTiming(func.front())) {
+    auto latency = timing.getEnd();
     setAttrValue(func, "latency", latency);
 
     if (getBoolAttrValue(func, "dataflow")) {
       int64_t maxInterval = 0;
       for (auto callOp : func.getOps<CallOp>()) {
-        auto latency = getScheduleEnd(callOp) - getScheduleBegin(callOp);
+        auto latency =
+            getTiming(callOp).getEnd() - getTiming(callOp).getBegin();
         maxInterval = max(maxInterval, latency);
       }
       setAttrValue(func, "ii", maxInterval);
@@ -874,7 +890,7 @@ void ScaleHLSEstimator::estimateFunc(FuncOp func) {
     // we have done the ALAP scheduling in a reverse order. Note that after
     // the reverse, the annotated scheduling level of each operation is a
     // relative level of the nearest surrounding AffineForOp or FuncOp.
-    reverseSchedule(func.front());
+    reverseTiming(func.front());
   } else {
     // Scheduling failed due to earlier error.
     setAttrValue(func, "latency", (int64_t)-1);
@@ -882,28 +898,26 @@ void ScaleHLSEstimator::estimateFunc(FuncOp func) {
 
   // Estimate the resource utilization of the function.
   auto interval = getIntAttrValue(func, "ii");
-  auto resource = estimateResource(func.front(), interval);
+  setResource(func, estimateResource(func.front(), interval));
 
-  // Calculate the function memrefs BRAM utilization.
-  int64_t numBram = 0;
-  for (auto &pair : map) {
-    auto memrefType = pair.first.getType().cast<MemRefType>();
-    auto partitionNum = getPartitionFactors(memrefType);
-    auto storageType = MemoryKind(memrefType.getMemorySpaceAsInt());
+  // // Calculate the function memrefs BRAM utilization.
+  // int64_t numBram = 0;
+  // for (auto &pair : map) {
+  //   auto memrefType = pair.first.getType().cast<MemRefType>();
+  //   auto partitionNum = getPartitionFactors(memrefType);
+  //   auto storageType = MemoryKind(memrefType.getMemorySpaceAsInt());
 
-    if (storageType == MemoryKind::BRAM_1P ||
-        storageType == MemoryKind::BRAM_S2P ||
-        storageType == MemoryKind::BRAM_T2P) {
-      // Multiply bit width of type.
-      // TODO: handle index types.
-      int64_t memrefSize =
-          memrefType.getElementTypeBitWidth() * memrefType.getNumElements();
-      numBram += ((memrefSize + 18000 - 1) / 18000) * partitionNum;
-    }
-  }
-  resource.bram += numBram;
-
-  setResourceValue(func, resource);
+  //   if (storageType == MemoryKind::BRAM_1P ||
+  //       storageType == MemoryKind::BRAM_S2P ||
+  //       storageType == MemoryKind::BRAM_T2P) {
+  //     // Multiply bit width of type.
+  //     // TODO: handle index types.
+  //     int64_t memrefSize =
+  //         memrefType.getElementTypeBitWidth() * memrefType.getNumElements();
+  //     numBram += ((memrefSize + 18000 - 1) / 18000) * partitionNum;
+  //   }
+  // }
+  // resource.bram += numBram;
 }
 
 void ScaleHLSEstimator::estimateLoop(AffineForOp loop, FuncOp func) {
