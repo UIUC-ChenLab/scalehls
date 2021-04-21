@@ -25,13 +25,10 @@ void getLatencyMap(INIReader spec, LatencyMap &latencyMap);
 //===----------------------------------------------------------------------===//
 
 class ScaleHLSEstimator
-    : public HLSCppVisitorBase<ScaleHLSEstimator, bool, int64_t>,
-      public ScaleHLSAnalysisBase {
+    : public HLSCppVisitorBase<ScaleHLSEstimator, bool, int64_t> {
 public:
-  explicit ScaleHLSEstimator(Builder &builder, LatencyMap &latencyMap,
-                             bool depAnalysis)
-      : ScaleHLSAnalysisBase(builder), latencyMap(latencyMap),
-        depAnalysis(depAnalysis) {}
+  explicit ScaleHLSEstimator(LatencyMap &latencyMap, bool depAnalysis)
+      : latencyMap(latencyMap), depAnalysis(depAnalysis) {}
 
   void estimateFunc(FuncOp func);
   void estimateLoop(AffineForOp loop, FuncOp func);

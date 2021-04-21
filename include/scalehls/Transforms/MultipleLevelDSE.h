@@ -135,7 +135,7 @@ public:
 
     for (auto &band : targetBands) {
       targetLoops.push_back(band.front());
-      estimator.setAttrValue(band.front(), "no_touch", true);
+      band.front()->setAttr("no_touch", BoolAttr::get(func.getContext(), true));
     }
   }
 
@@ -159,15 +159,13 @@ public:
 // ScaleHLSOptimizer Class Declaration
 //===----------------------------------------------------------------------===//
 
-class ScaleHLSOptimizer : public ScaleHLSAnalysisBase {
+class ScaleHLSOptimizer {
 public:
-  explicit ScaleHLSOptimizer(Builder &builder, ScaleHLSEstimator &estimator,
-                             unsigned maxDspNum, unsigned outputNum,
-                             unsigned maxInitParallel, unsigned maxExplParallel,
-                             unsigned maxLoopParallel, unsigned maxIterNum,
-                             float maxDistance)
-      : ScaleHLSAnalysisBase(builder), estimator(estimator),
-        maxDspNum(maxDspNum), outputNum(outputNum),
+  explicit ScaleHLSOptimizer(ScaleHLSEstimator &estimator, unsigned outputNum,
+                             unsigned maxDspNum, unsigned maxInitParallel,
+                             unsigned maxExplParallel, unsigned maxLoopParallel,
+                             unsigned maxIterNum, float maxDistance)
+      : estimator(estimator), outputNum(outputNum), maxDspNum(maxDspNum),
         maxInitParallel(maxInitParallel), maxExplParallel(maxExplParallel),
         maxLoopParallel(maxLoopParallel), maxIterNum(maxIterNum),
         maxDistance(maxDistance) {}
@@ -183,10 +181,11 @@ public:
                              StringRef outputRootPath, StringRef csvRootPath);
 
   ScaleHLSEstimator &estimator;
-  unsigned maxDspNum;
 
   // The number of pareto designs that will be generated.
   unsigned outputNum;
+
+  unsigned maxDspNum;
 
   // The maximum parallelism of the initiation and exploration of phase of DSE.
   unsigned maxInitParallel;

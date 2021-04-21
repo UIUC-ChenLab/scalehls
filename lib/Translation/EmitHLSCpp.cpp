@@ -187,11 +187,11 @@ SmallString<8> ScaleHLSEmitterBase::getName(Value val) {
 //===----------------------------------------------------------------------===//
 
 namespace {
-class ModuleEmitter : public ScaleHLSEmitterBase, ScaleHLSAnalysisBase {
+class ModuleEmitter : public ScaleHLSEmitterBase {
 public:
   using operand_range = Operation::operand_range;
-  explicit ModuleEmitter(ScaleHLSEmitterState &state, Builder &builder)
-      : ScaleHLSEmitterBase(state), ScaleHLSAnalysisBase(builder) {}
+  explicit ModuleEmitter(ScaleHLSEmitterState &state)
+      : ScaleHLSEmitterBase(state) {}
 
   /// SCF statement emitters.
   void emitScfFor(scf::ForOp op);
@@ -247,8 +247,9 @@ private:
 
   /// MLIR component and HLS C++ pragma emitters.
   void emitBlock(Block &block);
-  void emitArrayPragmas(Value memref);
-  void emitFunctionPragmas(FuncOp func, ArrayRef<Value> portList);
+  void emitLoopDirectives(Operation *op);
+  void emitArrayDirectives(Value memref);
+  void emitFunctionDirectives(FuncOp func, ArrayRef<Value> portList);
   void emitFunction(FuncOp func);
 };
 } // namespace
@@ -555,20 +556,7 @@ void ModuleEmitter::emitScfFor(scf::ForOp op) {
 
   addIndent();
 
-  if (getBoolAttrValue(op, "pipeline")) {
-    indent();
-    auto targetII = getIntAttrValue(op, "target_ii");
-    os << "#pragma HLS pipeline II=" << targetII << "\n";
-  }
-
-  // if (auto flatten = op->getAttrOfType<BoolAttr>("flatten")) {
-  //  indent();
-  //  if (flatten.getValue())
-  //    os << "#pragma HLS loop_flatten\n";
-  //  else
-  //    os << "#pragma HLS loop_flatten off\n";
-  //}
-
+  emitLoopDirectives(op);
   emitBlock(*op.getBody());
   reduceIndent();
 
@@ -686,20 +674,7 @@ void ModuleEmitter::emitAffineFor(AffineForOp op) {
 
   addIndent();
 
-  if (getBoolAttrValue(op, "pipeline")) {
-    indent();
-    auto targetII = getIntAttrValue(op, "target_ii");
-    os << "#pragma HLS pipeline II=" << targetII << "\n";
-  }
-
-  // if (auto flatten = op->getAttrOfType<BoolAttr>("flatten")) {
-  //  indent();
-  //  if (flatten.getValue())
-  //    os << "#pragma HLS loop_flatten\n";
-  //  else
-  //    os << "#pragma HLS loop_flatten off\n";
-  //}
-
+  emitLoopDirectives(op);
   emitBlock(*op.getBody());
   reduceIndent();
 
@@ -1002,7 +977,7 @@ template <typename OpType> void ModuleEmitter::emitAlloc(OpType op) {
   emitArrayDecl(op.getResult());
   os << ";";
   emitInfoAndNewLine(op);
-  emitArrayPragmas(op.getResult());
+  emitArrayDirectives(op.getResult());
 }
 
 void ModuleEmitter::emitLoad(memref::LoadOp op) {
@@ -1070,7 +1045,7 @@ void ModuleEmitter::emitTensorToMemref(memref::BufferCastOp op) {
     emitNestedLoopTail(rank);
   } else {
     addAlias(op.getOperand(), op.getResult());
-    emitArrayPragmas(op.getResult());
+    emitArrayDirectives(op.getResult());
   }
 }
 
@@ -1342,16 +1317,13 @@ void ModuleEmitter::emitInfoAndNewLine(Operation *op) {
     os << " L" << loc.getLine();
 
   // Print schedule information.
-  if (auto begin = op->getAttrOfType<IntegerAttr>("schedule_begin"))
-    os << ", S[" << begin.getInt();
-  if (auto end = op->getAttrOfType<IntegerAttr>("schedule_end"))
-    os << "," << end.getInt() << ")";
+  if (auto timing = getTiming(op))
+    os << ", [" << timing.getBegin() << "," << timing.getEnd() << ")";
 
   // Print loop information.
-  if (auto latency = op->getAttrOfType<IntegerAttr>("iter_latency"))
-    os << ", latency=" << latency.getInt();
-  if (auto II = op->getAttrOfType<IntegerAttr>("ii"))
-    os << ", II=" << II.getInt();
+  if (auto loopInfo = getLoopInfo(op))
+    os << ", iterCycle=" << loopInfo.getIterLatency()
+       << ", II=" << loopInfo.getMinII();
 
   os << "\n";
 }
@@ -1369,7 +1341,22 @@ void ModuleEmitter::emitBlock(Block &block) {
   }
 }
 
-void ModuleEmitter::emitArrayPragmas(Value memref) {
+void ModuleEmitter::emitLoopDirectives(Operation *op) {
+  auto loopDirect = getLoopDirective(op);
+  if (!loopDirect)
+    return;
+
+  if (loopDirect.getPipeline()) {
+    indent();
+    os << "#pragma HLS pipeline II=" << loopDirect.getTargetII() << "\n";
+
+  } else if (loopDirect.getDataflow()) {
+    indent();
+    os << "#pragma HLS dataflow\n";
+  }
+}
+
+void ModuleEmitter::emitArrayDirectives(Value memref) {
   bool emitPragmaFlag = false;
   auto type = memref.getType().cast<MemRefType>();
 
@@ -1427,8 +1414,19 @@ void ModuleEmitter::emitArrayPragmas(Value memref) {
     os << "\n";
 }
 
-void ModuleEmitter::emitFunctionPragmas(FuncOp func, ArrayRef<Value> portList) {
-  if (getBoolAttrValue(func, "dataflow")) {
+void ModuleEmitter::emitFunctionDirectives(FuncOp func,
+                                           ArrayRef<Value> portList) {
+  auto funcDirect = getFuncDirective(func);
+  if (!funcDirect)
+    return;
+
+  if (funcDirect.getPipeline()) {
+    indent();
+    os << "#pragma HLS pipeline II=" << funcDirect.getTargetInterval() << "\n";
+
+    // An empty line.
+    os << "\n";
+  } else if (funcDirect.getDataflow()) {
     indent();
     os << "#pragma HLS dataflow\n";
 
@@ -1436,17 +1434,8 @@ void ModuleEmitter::emitFunctionPragmas(FuncOp func, ArrayRef<Value> portList) {
     os << "\n";
   }
 
-  if (getBoolAttrValue(func, "pipeline")) {
-    indent();
-    auto targetII = getIntAttrValue(func, "target_ii");
-    os << "#pragma HLS pipeline II=" << targetII << "\n";
-
-    // An empty line.
-    os << "\n";
-  }
-
   // Only top function should emit interface pragmas.
-  if (getBoolAttrValue(func, "top_function")) {
+  if (funcDirect.getTopFunc()) {
     indent();
     os << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
 
@@ -1488,7 +1477,7 @@ void ModuleEmitter::emitFunctionPragmas(FuncOp func, ArrayRef<Value> portList) {
     // Emit other pragmas for function ports.
     for (auto &port : portList)
       if (port.getType().isa<MemRefType>())
-        emitArrayPragmas(port);
+        emitArrayDirectives(port);
   }
 }
 
@@ -1496,19 +1485,22 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   if (func.getBlocks().size() != 1)
     emitError(func, "has zero or more than one basic blocks.");
 
-  if (auto top = func->getAttrOfType<BoolAttr>("top_function"))
-    if (top.getValue())
+  if (auto funcDirect = getFuncDirective(func))
+    if (funcDirect.getTopFunc())
       os << "/// This is top function.\n";
 
-  if (auto latency = func->getAttrOfType<IntegerAttr>("latency")) {
-    os << "/// Latency=" << latency.getInt();
-    if (auto interval = func->getAttrOfType<IntegerAttr>("ii"))
-      os << ", II=" << interval.getInt();
+  if (auto timing = getTiming(func)) {
+    os << "/// Latency=" << timing.getLatency();
+    os << ", interval=" << timing.getInterval();
     os << "\n";
   }
 
-  if (auto dsp = func->getAttrOfType<IntegerAttr>("dsp"))
-    os << "/// DSP=" << dsp.getInt() << "\n";
+  if (auto resource = getResource(func)) {
+    os << "/// DSP=" << resource.getDsp();
+    os << ", BRAM=" << resource.getBram();
+    os << ", LUT" << resource.getLut();
+    os << "\n";
+  }
 
   // Emit function signature.
   os << "void " << func.getName() << "(\n";
@@ -1556,7 +1548,7 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   // Emit function body.
   addIndent();
 
-  emitFunctionPragmas(func, portList);
+  emitFunctionDirectives(func, portList);
   emitBlock(func.front());
   reduceIndent();
   os << "}\n";
@@ -1600,9 +1592,8 @@ using namespace std;
 //===----------------------------------------------------------------------===//
 
 LogicalResult scalehls::emitHLSCpp(ModuleOp module, llvm::raw_ostream &os) {
-  auto builder = Builder(module);
   ScaleHLSEmitterState state(os);
-  ModuleEmitter(state, builder).emitModule(module);
+  ModuleEmitter(state).emitModule(module);
   return failure(state.encounteredError);
 }
 

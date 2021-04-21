@@ -21,6 +21,7 @@ using namespace hlscpp;
 
 /// Calculate the overall partition index.
 void ScaleHLSEstimator::getPartitionIndices(Operation *op) {
+  auto builder = Builder(op);
   auto access = MemRefAccess(op);
   auto memrefType = access.memref.getType().cast<MemRefType>();
 
@@ -28,7 +29,7 @@ void ScaleHLSEstimator::getPartitionIndices(Operation *op) {
   auto layoutMap = getLayoutMap(memrefType);
   if (!layoutMap) {
     auto partitionIndices = SmallVector<int64_t, 8>(memrefType.getRank(), 0);
-    setAttrValue(op, "partition_indices", partitionIndices);
+    op->setAttr("partition_indices", builder.getI64ArrayAttr(partitionIndices));
     return;
   }
 
@@ -84,9 +85,9 @@ void ScaleHLSEstimator::getPartitionIndices(Operation *op) {
     }
   }
 
-  setAttrValue(op, "partition_indices", partitionIndices);
+  op->setAttr("partition_indices", builder.getI64ArrayAttr(partitionIndices));
   if (hasUncertainIdx)
-    setAttrValue(op, "max_mux_size", maxMuxSize);
+    op->setAttr("max_mux_size", builder.getI64IntegerAttr(maxMuxSize));
 }
 
 /// Timing load/store operation honoring the memory ports number limitation.
@@ -201,6 +202,13 @@ void ScaleHLSEstimator::estimateLoadStore(Operation *op, int64_t begin) {
 // AffineForOp Related Methods
 //===----------------------------------------------------------------------===//
 
+static int64_t getMaxMuxSize(Operation *op) {
+  if (auto maxMuxSize = op->getAttrOfType<IntegerAttr>("max_mux_size"))
+    return maxMuxSize.getInt();
+  else
+    return 1;
+}
+
 int64_t ScaleHLSEstimator::getResMinII(int64_t begin, int64_t end,
                                        MemAccessesMap &map) {
   int64_t II = 1;
@@ -259,8 +267,8 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, FuncOp func,
 
         // Similar to getFuncDependencies() method, in some cases RAR is not
         // considered as dependency in Vivado HLS.
-        auto srcMuxSize = getIntAttrValue(srcOp, "max_mux_size");
-        auto dstMuxSize = getIntAttrValue(dstOp, "max_mux_size");
+        auto srcMuxSize = getMaxMuxSize(srcOp);
+        auto dstMuxSize = getMaxMuxSize(dstOp);
         if (isa<AffineReadOpInterface>(srcOp) && srcMuxSize <= 3 &&
             isa<AffineReadOpInterface>(dstOp) && dstMuxSize <= 3)
           continue;
@@ -310,8 +318,8 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
 
         // Similar to getFuncDependencies() method, in some cases RAR is not
         // considered as dependency in Vivado HLS.
-        auto srcMuxSize = getIntAttrValue(srcOp, "max_mux_size");
-        auto dstMuxSize = getIntAttrValue(dstOp, "max_mux_size");
+        auto srcMuxSize = getMaxMuxSize(srcOp);
+        auto dstMuxSize = getMaxMuxSize(dstOp);
         if (isa<AffineReadOpInterface>(srcOp) && srcMuxSize <= 3 &&
             isa<AffineReadOpInterface>(dstOp) && dstMuxSize <= 3)
           continue;
@@ -383,16 +391,17 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
 bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
   // If a loop is marked as no_touch, then directly infer the schedule_end with
   // the exist latency.
-  if (getBoolAttrValue(op, "no_touch")) {
-    auto timing = getTiming(op);
-    auto resource = getResource(op);
+  if (auto noTouch = op->getAttrOfType<BoolAttr>("no_touch"))
+    if (noTouch.getValue()) {
+      auto timing = getTiming(op);
+      auto resource = getResource(op);
 
-    if (timing && resource) {
-      auto latency = timing.getLatency();
-      setTiming(op, begin, begin + latency + 2, latency, latency);
-      return true;
+      if (timing && resource) {
+        auto latency = timing.getLatency();
+        setTiming(op, begin, begin + latency + 2, latency, latency);
+        return true;
+      }
     }
-  }
 
   // Set an attribute indicating the trip count. For now, we assume all loops
   // have static loop bound.
@@ -511,7 +520,7 @@ bool ScaleHLSEstimator::visitOp(CallOp op, int64_t begin) {
   auto subFunc = dyn_cast<FuncOp>(callee);
   assert(subFunc && "callable is not a function operation");
 
-  ScaleHLSEstimator estimator(builder, latencyMap, depAnalysis);
+  ScaleHLSEstimator estimator(latencyMap, depAnalysis);
   estimator.estimateFunc(subFunc);
 
   // We assume enter and leave the subfunction require extra 2 clock cycles.
@@ -546,7 +555,7 @@ int64_t ScaleHLSEstimator::getDspAllocMap(Block &block,
         ++fmulMap[i];
 
     else if (isa<AffineForOp, CallOp>(op))
-      staticDspNum += getIntAttrValue(&op, "dsp");
+      staticDspNum += getResource(&op).getDsp();
 
     else if (auto ifOp = dyn_cast<AffineIfOp>(op)) {
       // AffineIfOp is transparent during scheduling, thus here we recursively
@@ -696,8 +705,8 @@ TimingAttr ScaleHLSEstimator::estimateTiming(Block &block, int64_t begin) {
 
           // Now both of the depOp and the current operation must be memory
           // load/store operation.
-          auto opMuxSize = getIntAttrValue(op, "max_mux_size");
-          auto depOpMuxSize = getIntAttrValue(depOp, "max_mux_size");
+          auto opMuxSize = getMaxMuxSize(op);
+          auto depOpMuxSize = getMaxMuxSize(depOp);
 
           // In Vivado HLS, a memory access with undetermined partition index
           // will be implemented as a function call with a multiplexer if the
@@ -794,7 +803,7 @@ void ScaleHLSEstimator::reverseTiming(Block &block) {
       if (isa<AffineForOp>(surOp)) {
         auto surOpBegin = getTiming(surOp).getBegin();
 
-        if (getBoolAttrValue(surOp, "flatten")) {
+        if (getLoopDirective(surOp).getFlatten()) {
           // Handle flattened surrounding loops.
           setTiming(op, surOpBegin, surOpBegin + latency, latency, interval);
         } else {
@@ -926,7 +935,6 @@ namespace {
 struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
   void runOnOperation() override {
     auto module = getOperation();
-    auto builder = Builder(module);
 
     // Read configuration file.
     INIReader spec(targetSpec);
@@ -944,8 +952,7 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     for (auto func : module.getOps<FuncOp>())
       if (auto funcDirect = getFuncDirective(func))
         if (funcDirect.getTopFunc())
-          ScaleHLSEstimator(builder, latencyMap, depAnalysis)
-              .estimateFunc(func);
+          ScaleHLSEstimator(latencyMap, depAnalysis).estimateFunc(func);
   }
 };
 } // namespace

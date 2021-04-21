@@ -238,18 +238,15 @@ bool LoopDesignSpace::evaluateTileConfig(TileConfig config) {
 
   // Fetch latency and resource utilization.
   auto tmpInnerLoop = tmpBand.back();
-  auto II = estimator.getIntAttrValue(tmpInnerLoop, "ii");
-  auto iterLatency = estimator.getIntAttrValue(tmpInnerLoop, "iter_latency");
-  // auto shareDspNum = estimator.getIntAttrValue(tmpInnerLoop, "share_dsp");
-  auto noShareDspNum = estimator.getIntAttrValue(tmpInnerLoop, "noshare_dsp");
+  auto info = getLoopInfo(tmpInnerLoop);
+  auto resource = getResource(tmpInnerLoop);
 
   // Improve target II until II is equal to iteration latency. Note that when II
   // equal to iteration latency, the pipeline pragma is similar to a region
   // fully unroll pragma which unrolls all contained loops.
-  for (auto tmpII = II; tmpII <= iterLatency; ++tmpII) {
-    // std::max(shareDspNum, noShareDspNum / tmpII);
-    auto tmpDspNum = noShareDspNum / tmpII;
-    auto tmpLatency = iterLatency + tmpII * (iterNum - 1);
+  for (auto tmpII = info.getMinII(); tmpII <= info.getIterLatency(); ++tmpII) {
+    auto tmpDspNum = resource.getNonShareDsp() / tmpII;
+    auto tmpLatency = info.getIterLatency() + tmpII * (iterNum - 1);
     auto point = LoopDesignPoint(tmpLatency, tmpDspNum, config, tmpII);
 
     allPoints.push_back(point);
@@ -451,13 +448,13 @@ void FuncDesignSpace::combLoopDesignSpaces() {
   for (auto &loopPoint : firstLoopSpace.paretoPoints) {
     // Annotate the first loop.
     auto loop = targetLoops[0];
-    estimator.setAttrValue(loop, "latency", loopPoint.latency);
-    estimator.setAttrValue(loop, "dsp", loopPoint.dspNum);
+    setTiming(loop, -1, -1, loopPoint.latency, -1);
+    setResource(loop, -1, loopPoint.dspNum, -1, -1);
 
     // Estimate the function and generate a new function design point.
     estimator.estimateFunc(func);
-    auto latency = estimator.getIntAttrValue(func, "latency");
-    auto dspNum = estimator.getIntAttrValue(func, "dsp");
+    auto latency = getTiming(func).getLatency();
+    auto dspNum = getResource(func).getDsp();
     auto funcPoint = FuncDesignPoint(latency, dspNum, loopPoint);
 
     paretoPoints.push_back(funcPoint);
@@ -479,24 +476,24 @@ void FuncDesignSpace::combLoopDesignSpaces() {
       for (unsigned ii = 0; ii < i; ++ii) {
         auto &oldLoopPoint = funcPoint.loopDesignPoints[ii];
         auto oldLoop = targetLoops[ii];
-        estimator.setAttrValue(oldLoop, "latency", oldLoopPoint.latency);
-        estimator.setAttrValue(oldLoop, "dsp", oldLoopPoint.dspNum);
+        setTiming(oldLoop, -1, -1, oldLoopPoint.latency, -1);
+        setResource(oldLoop, -1, oldLoopPoint.dspNum, -1, -1);
       }
 
       // Traverse all design points of the NEW loop.
       for (auto &loopPoint : loopSpace.paretoPoints) {
         // Annotate the new loop,
         auto loop = targetLoops[i];
-        estimator.setAttrValue(loop, "latency", loopPoint.latency);
-        estimator.setAttrValue(loop, "dsp", loopPoint.dspNum);
+        setTiming(loop, -1, -1, loopPoint.latency, -1);
+        setResource(loop, -1, loopPoint.dspNum, -1, -1);
 
         // Estimate the function and generate a new function design point.
         auto loopPoints = funcPoint.loopDesignPoints;
         loopPoints.push_back(loopPoint);
 
         estimator.estimateFunc(func);
-        auto latency = estimator.getIntAttrValue(func, "latency");
-        auto dspNum = estimator.getIntAttrValue(func, "dsp");
+        auto latency = getTiming(func).getLatency();
+        auto dspNum = getResource(func).getDsp();
         auto funcPoint = FuncDesignPoint(latency, dspNum, loopPoints);
 
         newParetoPoints.push_back(funcPoint);
@@ -569,8 +566,8 @@ bool FuncDesignSpace::exportParetoDesigns(unsigned outputNum,
 
 bool ScaleHLSOptimizer::emitQoRDebugInfo(FuncOp func, std::string message) {
   estimator.estimateFunc(func);
-  auto latency = getIntAttrValue(func, "latency");
-  auto dspNum = getIntAttrValue(func, "dsp");
+  auto latency = getTiming(func).getLatency();
+  auto dspNum = getResource(func).getDsp();
 
   LLVM_DEBUG(llvm::dbgs() << message + "\n";
              llvm::dbgs() << "The clock cycle is " << Twine(latency)
@@ -666,13 +663,13 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
       auto candidate = pair.second;
 
       // Create a temporary function.
-      setAttrValue(candidate, "opt_flag", true);
+      candidate->setAttr("opt_flag", BoolAttr::get(func.getContext(), true));
       auto tmpFunc = func.clone();
 
       // Find the candidate loop in the temporary function and apply fully loop
       // unrolling to it.
       tmpFunc.walk([&](AffineForOp loop) {
-        if (getIntAttrValue(loop, "opt_flag")) {
+        if (loop->getAttrOfType<BoolAttr>("opt_flag")) {
           applyFullyUnrollAndPartition(*loop.getBody(), tmpFunc);
           return;
         }
@@ -682,7 +679,7 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
       estimator.estimateFunc(tmpFunc);
 
       // Fully unroll the candidate loop or delve into child loops.
-      if (getIntAttrValue(tmpFunc, "dsp") <= maxDspNum)
+      if (getResource(tmpFunc).getDsp() <= maxDspNum)
         applyFullyUnrollAndPartition(*candidate.getBody(), func);
       else {
         auto childForOps = candidate.getOps<AffineForOp>();
@@ -863,10 +860,10 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
       maxDspNum = UINT_MAX;
 
     // Initialize an performance and resource estimator.
-    auto estimator = ScaleHLSEstimator(builder, latencyMap, depAnalysis);
+    auto estimator = ScaleHLSEstimator(latencyMap, depAnalysis);
     auto optimizer = ScaleHLSOptimizer(
-        builder, estimator, maxDspNum, outputNum, maxInitParallel,
-        maxExplParallel, maxLoopParallel, maxIterNum, maxDistance);
+        estimator, outputNum, maxDspNum, maxInitParallel, maxExplParallel,
+        maxLoopParallel, maxIterNum, maxDistance);
 
     // Optimize the top function.
     // TODO: Handle sub-functions.
