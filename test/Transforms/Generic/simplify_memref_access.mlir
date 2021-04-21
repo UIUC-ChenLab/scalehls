@@ -4,7 +4,7 @@
 #set0 = affine_set<(d0, d1) : (d0 - d1 >= 0)>
 #set1 = affine_set<(d0) : (d0 == 0)>
 module  {
-  func @test_syrk(%arg0: f32, %arg1: f32, %arg2: memref<16x16xf32, 1>, %arg3: memref<16x16xf32, 1>) attributes {dataflow = false, top_function = true} {
+  func @test_syrk(%arg0: f32, %arg1: f32, %arg2: memref<16x16xf32, 1>, %arg3: memref<16x16xf32, 1>) attributes {func_directive = #hlscpp.fd<pipeline=0, targetInterval=1, dataflow=0, topFunc=1>} {
     affine.for %arg4 = 0 to 16 step 2 {
       affine.for %arg5 = 0 to 16 {
         affine.for %arg6 = 0 to 16 {
@@ -43,9 +43,9 @@ module  {
             // CHECK: affine.store %[[VAL_15:.*]], %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
             affine.store %15, %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
           }
-        } {flatten = false, pipeline = true, target_ii = 1 : i64}
-      } {flatten = true, pipeline = false}
-    } {flatten = true, pipeline = false}
+        } {loop_directive = #hlscpp.ld<pipeline=1, targetII=2, dataflow=0, flatten=0, parallel=0>}
+      } {loop_directive = #hlscpp.ld<pipeline=0, targetII=1, dataflow=0, flatten=1, parallel=0>}
+    } {loop_directive = #hlscpp.ld<pipeline=0, targetII=1, dataflow=0, flatten=1, parallel=0>}
     return
   }
 }

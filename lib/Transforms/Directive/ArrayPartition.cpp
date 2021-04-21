@@ -303,8 +303,8 @@ namespace {
 struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
   void runOnOperation() override {
     for (auto func : getOperation().getOps<FuncOp>()) {
-      if (auto topAttr = func->getAttrOfType<BoolAttr>("top_function"))
-        if (topAttr.getValue())
+      if (auto funcDirect = getFuncDirective(func))
+        if (funcDirect.getTopFunc())
           applyArrayPartition(func);
     }
   }

@@ -942,8 +942,8 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     // called by the top function, it will be estimated in the procedure of
     // estimating the top function.
     for (auto func : module.getOps<FuncOp>())
-      if (auto topFunction = func->getAttrOfType<BoolAttr>("top_function"))
-        if (topFunction.getValue())
+      if (auto funcDirect = getFuncDirective(func))
+        if (funcDirect.getTopFunc())
           ScaleHLSEstimator(builder, latencyMap, depAnalysis)
               .estimateFunc(func);
   }

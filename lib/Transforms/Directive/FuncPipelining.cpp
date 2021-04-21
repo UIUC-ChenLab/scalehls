@@ -17,14 +17,11 @@ static bool applyFuncPipelining(FuncOp func, int64_t targetII) {
   if (!applyFullyLoopUnrolling(func.front()))
     return false;
 
-  auto builder = Builder(func);
+  auto topFunc = false;
+  if (auto funcDirect = getFuncDirective(func))
+    topFunc = funcDirect.getTopFunc();
 
-  // Set pipeling pragma and target II.
-  func->setAttr("pipeline", builder.getBoolAttr(true));
-  func->setAttr("target_ii", builder.getI64IntegerAttr(targetII));
-
-  // Once a function is pipelined, dataflow pragma will be ignored.
-  func->setAttr("dataflow", builder.getBoolAttr(false));
+  setFuncDirective(func, true, targetII, false, topFunc);
 
   return true;
 }
