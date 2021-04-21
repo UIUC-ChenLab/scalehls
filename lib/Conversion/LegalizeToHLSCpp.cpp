@@ -6,8 +6,10 @@
 
 #include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "scalehls/Analysis/Utils.h"
 #include "scalehls/Conversion/Passes.h"
 #include "scalehls/Dialect/HLSCpp/HLSCpp.h"
+#include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -24,44 +26,30 @@ void LegalizeToHLSCpp::runOnOperation() {
   auto func = getOperation();
   auto builder = OpBuilder(func);
 
+  // We constain functions to only contain one block.
   if (func.getBlocks().size() != 1)
     func.emitError("has zero or more than one basic blocks.");
 
   // Set function pragma attributes.
-  if (!func->getAttr("dataflow"))
-    func->setAttr("dataflow", builder.getBoolAttr(false));
-
-  if (!func->getAttr("top_function")) {
-    if (func.getName() == topFunc)
-      func->setAttr("top_function", builder.getBoolAttr(true));
-    else
-      func->setAttr("top_function", builder.getBoolAttr(false));
-  }
-
-  SmallPtrSet<Value, 16> memrefs;
+  if (!getFuncDirective(func))
+    setFuncDirective(func, false, 1, false, func.getName() == topFunc);
 
   // Walk through all operations in the function.
+  SmallPtrSet<Value, 16> memrefs;
   func.walk([&](Operation *op) {
     // Collect all memrefs.
     for (auto operand : op->getOperands())
       if (operand.getType().isa<MemRefType>())
         memrefs.insert(operand);
 
-    // Set loop pragma attributes.
+    // Set loop directive attributes.
     if (auto forOp = dyn_cast<AffineForOp>(op)) {
-      // Set loop pragma attributes.
-      if (!forOp->getAttr("pipeline"))
-        forOp->setAttr("pipeline", builder.getBoolAttr(false));
-
-      if (!forOp->getAttr("flatten"))
-        forOp->setAttr("flatten", builder.getBoolAttr(false));
-
-      if (!forOp->getAttr("parallel"))
-        forOp->setAttr("parallel", builder.getBoolAttr(isLoopParallel(forOp)));
+      if (!getLoopDirective(op))
+        setLoopDirective(forOp, false, 1, false, false, isLoopParallel(forOp));
     }
   });
 
-  // Set array pragma attributes.
+  // Set array directives.
   for (auto memref : memrefs) {
     auto type = memref.getType().cast<MemRefType>();
 

@@ -12,6 +12,41 @@
 namespace mlir {
 namespace scalehls {
 
+//===----------------------------------------------------------------------===//
+// HLSCpp transform utils
+//===----------------------------------------------------------------------===//
+
+using namespace hlscpp;
+
+/// Set timing attribute.
+void setTiming(Operation *op, TimingAttr timing);
+void setTiming(Operation *op, int64_t begin, int64_t end, int64_t latency,
+               int64_t interval);
+
+/// Set resource attribute.
+void setResource(Operation *op, ResourceAttr resource);
+void setResource(Operation *op, int64_t lut, int64_t dsp, int64_t bram,
+                 int64_t nonShareDsp);
+
+/// Set loop information attribute.
+void setLoopInfo(Operation *op, LoopInfoAttr loopInfo);
+void setLoopInfo(Operation *op, int64_t flattenTripCount, int64_t iterLatency,
+                 int64_t minII);
+
+/// Set loop directives.
+void setLoopDirective(Operation *op, LoopDirectiveAttr loopDirective);
+void setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
+                      bool dataflow, bool flatten, bool parallel);
+
+/// Set function directives.
+void setFuncDirective(Operation *op, FuncDirectiveAttr FuncDirective);
+void setFuncDirective(Operation *op, bool pipeline, int64_t targetInterval,
+                      bool dataflow, bool topFunc);
+
+//===----------------------------------------------------------------------===//
+// Loop transform utils
+//===----------------------------------------------------------------------===//
+
 using TileList = SmallVector<unsigned, 8>;
 
 /// Apply loop perfection. Try to sink all operations between loop statements

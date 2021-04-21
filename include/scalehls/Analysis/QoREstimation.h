@@ -12,29 +12,10 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "scalehls/Analysis/Utils.h"
 #include "scalehls/Dialect/HLSCpp/Visitor.h"
+#include "scalehls/Transforms/Utils.h"
 
 namespace mlir {
 namespace scalehls {
-
-/// For storing all resource types.
-struct Resource {
-  int64_t bram = 0;
-  int64_t dsp = 0;
-  int64_t ff = 0;
-  int64_t lut = 0;
-
-  Resource(int64_t bram, int64_t dsp, int64_t ff, int64_t lut)
-      : bram(bram), dsp(dsp), ff(ff), lut(lut) {}
-  Resource() {}
-};
-
-struct Schedule {
-  int64_t begin = 0;
-  int64_t end = 0;
-
-  Schedule(int64_t begin, int64_t end) : begin(begin), end(end) {}
-  Schedule() {}
-};
 
 using LatencyMap = llvm::StringMap<int64_t>;
 void getLatencyMap(INIReader spec, LatencyMap &latencyMap);
@@ -71,7 +52,7 @@ public:
     return estimateLoadStore(op, begin), true;
   }
   bool visitOp(memref::LoadOp op, int64_t begin) {
-    return setTiming(op, begin, begin + 2, 2, 2), true;
+    return setTiming(op, begin, begin + 2, 2, 1), true;
   }
   bool visitOp(memref::StoreOp op, int64_t begin) {
     return setTiming(op, begin, begin + 1, 1, 1), true;
@@ -80,8 +61,8 @@ public:
   /// Handle operations with profiled latency.
 #define HANDLE(OPTYPE, KEYNAME)                                                \
   bool visitOp(OPTYPE op, int64_t begin) {                                     \
-    setTiming(op, begin, begin + latencyMap[KEYNAME] + 1, latencyMap[KEYNAME], \
-              latencyMap[KEYNAME]);                                            \
+    auto latency = latencyMap[KEYNAME] + 1;                                    \
+    setTiming(op, begin, begin + latency, latency, 1);                         \
     return true;                                                               \
   }
   HANDLE(AddFOp, "fadd");

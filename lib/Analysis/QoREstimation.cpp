@@ -192,11 +192,9 @@ void ScaleHLSEstimator::estimateLoadStore(Operation *op, int64_t begin) {
   }
 
   if (isa<AffineReadOpInterface>(op))
-    setTiming(op, begin, begin + 2, 2, 2);
+    setTiming(op, begin, begin + 2, 2, 1);
   else
-    setTiming(op, begin, begin + 1, 2, 2);
-
-  llvm::outs() << "Annotate: " << *op << "\n";
+    setTiming(op, begin, begin + 1, 1, 1);
 }
 
 //===----------------------------------------------------------------------===//
@@ -286,8 +284,9 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
   SmallVector<unsigned, 8> loopDepths;
   for (unsigned i = 1, e = band.size(); i <= e; ++i) {
     auto loop = band[i - 1];
-    if (getBoolAttrValue(loop, "flatten") || getBoolAttrValue(loop, "pipeline"))
-      if (!getBoolAttrValue(loop, "parallel"))
+    auto loopDirect = getLoopDirective(loop);
+    if (loopDirect.getFlatten() || loopDirect.getPipeline())
+      if (!loopDirect.getParallel())
         loopDepths.push_back(i);
   }
 
@@ -349,9 +348,8 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
               // Calculate the distance of this dependency.
               for (auto i = depComps.rbegin(); i < depComps.rend(); ++i) {
                 auto dep = *i;
-                auto ifOp = cast<AffineForOp>(dep.op);
+                auto loop = cast<AffineForOp>(dep.op);
 
-                auto tripCount = getIntAttrValue(ifOp, "trip_count");
                 auto ub = dep.ub.getValue();
                 auto lb = dep.lb.getValue();
 
@@ -359,12 +357,13 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
                 // disatance. Otherwise, set distance to negative and break.
                 if (ub >= 0)
                   distance +=
-                      accumTrips.back() * max(lb, (int64_t)0) / ifOp.getStep();
+                      accumTrips.back() * max(lb, (int64_t)0) / loop.getStep();
                 else {
                   distance = -1;
                   break;
                 }
-                accumTrips.push_back(accumTrips.back() * tripCount);
+                accumTrips.push_back(accumTrips.back() *
+                                     getAverageTripCount(loop).getValue());
               }
             }
 
@@ -385,104 +384,93 @@ bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
   // If a loop is marked as no_touch, then directly infer the schedule_end with
   // the exist latency.
   if (getBoolAttrValue(op, "no_touch")) {
-    auto latency = getIntAttrValue(op, "latency");
-    auto dspNum = getIntAttrValue(op, "dsp");
+    auto timing = getTiming(op);
+    auto resource = getResource(op);
 
-    if (latency != -1 && dspNum != -1) {
-      setTiming(op, begin, begin + latency + 2, latency + 2, latency + 2);
+    if (timing && resource) {
+      auto latency = timing.getLatency();
+      setTiming(op, begin, begin + latency + 2, latency, latency);
       return true;
     }
   }
 
   // Set an attribute indicating the trip count. For now, we assume all loops
   // have static loop bound.
-  int64_t tripCount = 1;
-  if (auto optionalTripCount = getAverageTripCount(op))
-    tripCount = optionalTripCount.getValue();
-  setAttrValue(op, "trip_count", tripCount);
+  auto optionalTripCount = getAverageTripCount(op);
+  if (!optionalTripCount)
+    return false;
+  auto tripCount = optionalTripCount.getValue();
 
-  auto end = begin;
+  // Estimate the contained loop block.
   auto &loopBlock = *op.getBody();
-
-  // Estimate the loop block.
-  if (auto timing = estimateTiming(loopBlock, begin)) {
-    end = max(end, timing.getEnd());
-    begin = max(begin, timing.getBegin());
-  } else
+  auto timing = estimateTiming(loopBlock, begin);
+  if (!timing)
     return false;
 
-  // If the current loop is annotated as pipelined loop, extra dependency and
-  // resource aware II analysis will be executed.
-  if (getBoolAttrValue(op, "pipeline")) {
-    // Collect load and store operations in the loop block for solving
-    // possible carried dependencies.
-    // TODO: include CallOps, how? It seems dependencies always exist for all
-    // CallOps not matter its access pattern.
-    MemAccessesMap map;
-    getMemAccessesMap(loopBlock, map);
+  auto end = max(begin, timing.getEnd());
+  begin = max(begin, timing.getBegin());
 
-    // Calculate initial interval.
-    auto targetII = getIntAttrValue(op, "target_ii");
-    auto resII = getResMinII(begin, end, map);
-    auto depII = getDepMinII(max(targetII, resII), op, map);
-    auto II = max({targetII, resII, depII});
+  // Handle pipelined or flattened loops.
+  if (auto loopDirect = getLoopDirective(op)) {
+    // If the current loop is annotated as pipelined loop, extra dependency and
+    // resource aware II analysis will be executed.
+    if (loopDirect.getPipeline()) {
+      // Collect load and store operations in the loop block for solving
+      // possible carried dependencies.
+      // TODO: include CallOps, how? It seems dependencies always exist for all
+      // CallOps not matter its access pattern.
+      MemAccessesMap map;
+      getMemAccessesMap(loopBlock, map);
 
-    setAttrValue(op, "res_ii", resII);
-    setAttrValue(op, "dep_ii", depII);
-    setAttrValue(op, "ii", II);
+      // Calculate initial interval.
+      auto targetII = loopDirect.getTargetII();
+      auto resII = getResMinII(begin, end, map);
+      auto depII = getDepMinII(max(targetII, resII), op, map);
+      auto II = max({targetII, resII, depII});
 
-    setAttrValue(op, "flatten_trip_count", tripCount);
+      // Calculate latency of each iteration and update loop information.
+      auto iterLatency = end - begin;
+      setLoopInfo(op, tripCount, iterLatency, II);
 
-    // Calculate latency of each iteration.
-    auto iterLatency = end - begin;
-    setAttrValue(op, "iter_latency", iterLatency);
+      // Entering and leaving a loop will consume extra 2 clock cycles.
+      auto latency = iterLatency + II * (tripCount - 1);
+      setTiming(op, begin, begin + latency + 2, latency, latency);
 
-    auto latency = iterLatency + II * (tripCount - 1);
-    setAttrValue(op, "latency", latency);
+      // Estimate the loop block resource utilization.
+      setResource(op, estimateResource(loopBlock, II));
+      return true;
+    }
 
-    // Entering and leaving a loop will consume extra 2 clock cycles.
-    setTiming(op, begin, begin + latency + 2, latency, II);
+    // If the current loop is annotated as flatten, it will be flattened into
+    // the child pipelined loop. This will increase the flattened loop trip
+    // count without changing the iteration latency.
+    else if (loopDirect.getFlatten()) {
+      auto child = dyn_cast<AffineForOp>(op.getBody()->front());
+      assert(child && "the first containing operation is not a loop");
+      auto childLoopInfo = getLoopInfo(child);
 
-    // Estimate the loop block resource utilization.
-    setResource(op, estimateResource(loopBlock, II));
-    return true;
-  }
+      // Flattened loop share the same II with its child loop. Calculate latency
+      // of each iteration and update loop information.
+      auto iterLatency = childLoopInfo.getIterLatency();
+      auto flattenTripCount = childLoopInfo.getFlattenTripCount() * tripCount;
+      auto II = childLoopInfo.getMinII();
+      setLoopInfo(op, flattenTripCount, iterLatency, II);
 
-  // If the current loop is annotated as flatten, it will be flattened into
-  // the child pipelined loop. This will increase the flattened loop trip
-  // count without changing the iteration latency.
-  if (getBoolAttrValue(op, "flatten")) {
-    auto child = dyn_cast<AffineForOp>(op.getBody()->front());
-    assert(child && "the first containing operation is not a loop");
+      auto latency = iterLatency + II * (flattenTripCount - 1);
+      setTiming(op, begin, begin + latency + 2, latency, latency);
 
-    auto iterLatency = getIntAttrValue(child, "iter_latency");
-    setAttrValue(op, "iter_latency", iterLatency);
-
-    auto II = getIntAttrValue(child, "ii");
-    setAttrValue(op, "ii", II);
-
-    auto flattenTripCount =
-        getIntAttrValue(child, "flatten_trip_count") * tripCount;
-    setAttrValue(op, "flatten_trip_count", flattenTripCount);
-
-    auto latency = iterLatency + II * (flattenTripCount - 1);
-    setAttrValue(op, "latency", latency);
-
-    setTiming(op, begin, begin + latency + 2, latency, II);
-
-    // The resource utilization of flattened loop is equal to its child's.
-    setResource(op, getResource(child));
-    return true;
+      // The resource utilization of flattened loop is equal to its child's.
+      setResource(op, getResource(child));
+      return true;
+    }
   }
 
   // Default case (not flattend or pipelined), calculate latency and resource
   // utilization accordingly.
   auto iterLatency = end - begin;
-  setAttrValue(op, "iter_latency", iterLatency);
+  setLoopInfo(op, tripCount, iterLatency, iterLatency);
 
   auto latency = iterLatency * tripCount;
-  setAttrValue(op, "latency", latency);
-
   setTiming(op, begin, begin + latency + 2, latency, latency);
   setResource(op, estimateResource(loopBlock));
   return true;
@@ -527,9 +515,10 @@ bool ScaleHLSEstimator::visitOp(CallOp op, int64_t begin) {
   estimator.estimateFunc(subFunc);
 
   // We assume enter and leave the subfunction require extra 2 clock cycles.
-  if (auto subLatency = getIntAttrValue(subFunc, "latency")) {
-    setTiming(op, begin, begin + subLatency + 2, subLatency, subLatency);
-    setAttrValue(op, "dsp", getIntAttrValue(subFunc, "dsp"));
+  if (auto timing = getTiming(subFunc)) {
+    auto latency = timing.getLatency();
+    setTiming(op, begin, begin + latency + 2, latency, timing.getInterval());
+    setResource(op, getResource(subFunc));
     return true;
   } else
     return false;
@@ -604,15 +593,8 @@ ResourceAttr ScaleHLSEstimator::estimateResource(Block &block, int64_t minII) {
 
   // If the block is pipelined (minII is positive), the minimum resource
   // utilization is determined by minII.
-  if (minII > 0) {
-    // max(shareDspNum, nonShareDspNum / minII);
+  if (minII > 0)
     dsp = staticDspNum + nonShareDspNum / minII;
-
-    // Annotate dsp utilization with & without resource sharing.
-    auto parentOp = block.getParentOp();
-    setAttrValue(parentOp, "share_dsp", shareDspNum);
-    setAttrValue(parentOp, "noshare_dsp", nonShareDspNum);
-  }
 
   // TODO: Estimate bram, ff, lut.
   int64_t lut = 0;
@@ -672,8 +654,6 @@ TimingAttr ScaleHLSEstimator::estimateTiming(Block &block, int64_t begin) {
     auto op = &*i;
     auto opBegin = begin;
     auto opEnd = begin;
-
-    llvm::outs() << *op << "\n";
 
     // Calculate the partition indices of memory load and store operations.
     if (isa<AffineLoadOp, AffineStoreOp>(op))
@@ -742,9 +722,11 @@ TimingAttr ScaleHLSEstimator::estimateTiming(Block &block, int64_t begin) {
 
           for (unsigned depth = 1; depth <= loopDepth + 1; ++depth) {
             // Skip all parallel loop level.
-            if (depth != loopDepth + 1)
-              if (getBoolAttrValue(commonLoops[depth - 1], "parallel"))
-                continue;
+            if (depth != loopDepth + 1) {
+              if (auto loopDirect = getLoopDirective(commonLoops[depth - 1]))
+                if (loopDirect.getParallel())
+                  continue;
+            }
 
             FlatAffineConstraints dependConstrs;
 
@@ -801,8 +783,11 @@ static Operation *getSurroundingOp(Operation *op) {
 void ScaleHLSEstimator::reverseTiming(Block &block) {
   block.walk([&](Operation *op) {
     // Get schedule level.
-    auto begin = getTiming(op).getBegin();
-    auto end = getTiming(op).getEnd();
+    auto timing = getTiming(op);
+    auto begin = timing.getBegin();
+    auto end = timing.getEnd();
+    auto latency = timing.getLatency();
+    auto interval = timing.getInterval();
 
     // Reverse schedule level.
     if (auto surOp = getSurroundingOp(op)) {
@@ -811,17 +796,17 @@ void ScaleHLSEstimator::reverseTiming(Block &block) {
 
         if (getBoolAttrValue(surOp, "flatten")) {
           // Handle flattened surrounding loops.
-          setTiming(op, surOpBegin, surOpBegin + end - begin, end - begin,
-                    end - begin);
+          setTiming(op, surOpBegin, surOpBegin + latency, latency, interval);
         } else {
           // Handle normal cases.
-          auto iterLatency = getIntAttrValue(surOp, "iter_latency");
+          auto iterLatency = getLoopInfo(surOp).getIterLatency();
           setTiming(op, surOpBegin + iterLatency - end,
-                    surOpBegin + iterLatency - begin, end - begin, end - begin);
+                    surOpBegin + iterLatency - begin, latency, interval);
         }
       } else if (isa<FuncOp>(surOp)) {
-        auto latency = getIntAttrValue(surOp, "latency");
-        setTiming(op, latency - end, latency - begin, end - begin, end - begin);
+        auto surOpLatency = getTiming(surOp).getLatency();
+        setTiming(op, surOpLatency - end, surOpLatency - begin, latency,
+                  interval);
       }
     }
   });
@@ -837,7 +822,9 @@ void ScaleHLSEstimator::initEstimator(Block &block) {
 
   SmallVector<Operation *, 16> loops;
   block.walk([&](Operation *op) {
+    op->removeAttr("resource");
     op->removeAttr("timing");
+    op->removeAttr("loop_info");
 
     if (isa<AffineForOp>(op))
       loops.push_back(op);
@@ -860,45 +847,42 @@ void ScaleHLSEstimator::estimateFunc(FuncOp func) {
   getMemAccessesMap(func.front(), map);
 
   // Recursively estimate blocks in the function.
-  if (auto timing = estimateTiming(func.front())) {
-    auto latency = timing.getEnd();
-    setAttrValue(func, "latency", latency);
+  auto timing = estimateTiming(func.front());
+  if (!timing)
+    return;
 
-    if (getBoolAttrValue(func, "dataflow")) {
-      int64_t maxInterval = 0;
+  auto funcEnd = timing.getEnd();
+  auto interval = funcEnd;
+
+  // Handle pipelined or dataflowed loops.
+  if (auto funcDirect = getFuncDirective(func)) {
+    if (funcDirect.getDataflow()) {
+      interval = 1;
       for (auto callOp : func.getOps<CallOp>()) {
-        auto latency =
+        auto subFuncLatency =
             getTiming(callOp).getEnd() - getTiming(callOp).getBegin();
-        maxInterval = max(maxInterval, latency);
+        interval = max(interval, subFuncLatency);
       }
-      setAttrValue(func, "ii", maxInterval);
+
+    } else if (funcDirect.getPipeline()) {
+      // TODO: support CallOp inside of the function.
+      auto targetInterval = funcDirect.getTargetInterval();
+      auto resInterval = getResMinII(0, funcEnd, map);
+      auto depInterval =
+          getDepMinII(max(targetInterval, resInterval), func, map);
+      interval = max({targetInterval, resInterval, depInterval});
     }
-
-    // TODO: support CallOp inside of the function.
-    if (getBoolAttrValue(func, "pipeline")) {
-      auto targetII = getIntAttrValue(func, "target_ii");
-      auto resII = getResMinII(0, latency, map);
-      auto depII = getDepMinII(max(targetII, resII), func, map);
-      auto II = max({targetII, resII, depII});
-
-      setAttrValue(func, "res_ii", resII);
-      setAttrValue(func, "dep_ii", depII);
-      setAttrValue(func, "ii", II);
-    }
-
-    // Scheduled levels of all operations are reversed in this method, because
-    // we have done the ALAP scheduling in a reverse order. Note that after
-    // the reverse, the annotated scheduling level of each operation is a
-    // relative level of the nearest surrounding AffineForOp or FuncOp.
-    reverseTiming(func.front());
-  } else {
-    // Scheduling failed due to earlier error.
-    setAttrValue(func, "latency", (int64_t)-1);
   }
 
-  // Estimate the resource utilization of the function.
-  auto interval = getIntAttrValue(func, "ii");
+  // Estimate and set timing and resource attributes.
+  setTiming(func, 0, funcEnd, funcEnd, interval);
   setResource(func, estimateResource(func.front(), interval));
+
+  // Scheduled levels of all operations are reversed in this method, because
+  // we have done the ALAP scheduling in a reverse order. Note that after
+  // the reverse, the annotated scheduling level of each operation is a
+  // relative level of the nearest surrounding AffineForOp or FuncOp.
+  reverseTiming(func.front());
 
   // // Calculate the function memrefs BRAM utilization.
   // int64_t numBram = 0;

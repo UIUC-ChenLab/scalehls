@@ -14,23 +14,22 @@
 namespace mlir {
 namespace scalehls {
 
+//===----------------------------------------------------------------------===//
+// HLSCpp attribute parsing utils
+//===----------------------------------------------------------------------===//
+
 using namespace hlscpp;
 
-//===----------------------------------------------------------------------===//
-// HLSCpp attribute utils
-//===----------------------------------------------------------------------===//
-
-/// Set and parse timing attribute.
-void setTiming(Operation *op, TimingAttr timing);
-void setTiming(Operation *op, int64_t begin, int64_t end, int64_t latency,
-               int64_t minII);
+/// Parse attributes.
 TimingAttr getTiming(Operation *op);
-
-/// Set and parse resource attribute.
-void setResource(Operation *op, ResourceAttr resource);
-void setResource(Operation *op, int64_t lut, int64_t dsp, int64_t bram,
-                 int64_t nonShareDsp);
 ResourceAttr getResource(Operation *op);
+LoopInfoAttr getLoopInfo(Operation *op);
+
+/// Parse loop directives.
+LoopDirectiveAttr getLoopDirective(Operation *op);
+
+/// Parse function directives.
+FuncDirectiveAttr getFuncDirective(Operation *op);
 
 //===----------------------------------------------------------------------===//
 // Memory and loop analysis utils
@@ -39,8 +38,8 @@ ResourceAttr getResource(Operation *op);
 using AffineLoopBand = SmallVector<AffineForOp, 6>;
 using AffineLoopBands = std::vector<AffineLoopBand>;
 
-// For storing all affine memory access operations (including AffineLoadOp, and
-// AffineStoreOp) indexed by the corresponding memref.
+/// For storing all affine memory access operations (including AffineLoadOp, and
+/// AffineStoreOp) indexed by the corresponding memref.
 using MemAccessesMap = DenseMap<Value, SmallVector<Operation *, 16>>;
 
 /// Collect all load and store operations in the block and return them in "map".
@@ -61,9 +60,9 @@ Optional<std::pair<int64_t, int64_t>> getBoundOfAffineBound(AffineBound bound);
 /// Return the layout map of "memrefType".
 AffineMap getLayoutMap(MemRefType memrefType);
 
-// Calculate partition factors through analyzing the "memrefType" and return
-// them in "factors". Meanwhile, the overall partition number is calculated and
-// returned as well.
+/// Calculate partition factors through analyzing the "memrefType" and return
+/// them in "factors". Meanwhile, the overall partition number is calculated and
+/// returned as well.
 int64_t getPartitionFactors(MemRefType memrefType,
                             SmallVector<int64_t, 8> *factors = nullptr);
 

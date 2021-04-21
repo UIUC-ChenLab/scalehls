@@ -30,7 +30,7 @@ def Timing : HLSCppAttr<"Timing"> {
   let summary = "Timing information";
   let description = [{
     This attribute indicates the timing of operations, including scheduling
-    begin and end cycles, latency, and minimum initial interval.
+    begin and end cycles, latency, and interval.
   }];
   let mnemonic = "t";
 
@@ -38,7 +38,7 @@ def Timing : HLSCppAttr<"Timing"> {
     "int64_t" : $begin,
     "int64_t" : $end,
     "int64_t" : $latency,
-    "int64_t" : $minII
+    "int64_t" : $interval
   );
 }
 
@@ -46,16 +46,15 @@ def LoopInfo : HLSCppAttr<"LoopInfo"> {
   let summary = "Loop information";
   let description = [{
     This attribute includes loop information used by estimator and optimizer,
-    including loop trip count, flattened trip count, iteration latency, and
-    parallel predicate.
+    including flattened trip count, iteration latency, and minimum initial
+    interval (II).
   }];
   let mnemonic = "l";
 
   let parameters = (ins
-    "bool" : $parallel,
-    "int64_t" : $tripCount,
     "int64_t" : $flattenTripCount,
-    "int64_t" : $iterLatency
+    "int64_t" : $iterLatency,
+    "int64_t" : $minII
   );
 }
 
@@ -63,28 +62,30 @@ def LoopDirective : HLSCppAttr<"LoopDirective"> {
   let summary = "Aggregation of loop directives";
   let description = [{
     This attribute includes all loop directives, including loop pipelining,
-    target initial interval, and flattening).
+    target initial interval (II), dataflow, flattening, and whether is parallel.
   }];
   let mnemonic = "ld";
 
   let parameters = (ins
     "bool" : $pipeline,
     "int64_t" : $targetII,
-    "bool" : $flatten
+    "bool" : $dataflow,
+    "bool" : $flatten,
+    "bool" : $parallel
   );
 }
 
 def FuncDirective : HLSCppAttr<"FuncDirective"> {
   let summary = "Aggregation of function directives";
   let description = [{
-    This attribute includes all function directives (function pipelining, target
-    initial interval, dataflow, and top function predicate.
+    This attribute includes all function directives, including function
+    pipelining, target interval, dataflow, and whether is top function.
   }];
   let mnemonic = "fd";
 
   let parameters = (ins
     "bool" : $pipeline,
-    "int64_t" : $targetII,
+    "int64_t" : $targetInterval,
     "bool" : $dataflow,
     "bool" : $topFunc
   );
