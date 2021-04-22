@@ -6,9 +6,7 @@
 
 #include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "scalehls/Analysis/Utils.h"
 #include "scalehls/Conversion/Passes.h"
-#include "scalehls/Dialect/HLSCpp/HLSCpp.h"
 #include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;

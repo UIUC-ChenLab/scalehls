@@ -6,8 +6,6 @@
 
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
-#include "scalehls/Analysis/Utils.h"
-#include "scalehls/Dialect/HLSCpp/HLSCpp.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 

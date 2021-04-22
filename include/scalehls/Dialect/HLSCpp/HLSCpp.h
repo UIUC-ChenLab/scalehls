@@ -11,13 +11,13 @@
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
+//===----------------------------------------------------------------------===//
+// HLSCpp definition
+//===----------------------------------------------------------------------===//
+
 namespace mlir {
 namespace scalehls {
 namespace hlscpp {
-
-//===----------------------------------------------------------------------===//
-// HLSCpp enums definition
-//===----------------------------------------------------------------------===//
 
 enum class MemoryKind {
   BRAM_1P = 0,
