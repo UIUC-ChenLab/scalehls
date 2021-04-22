@@ -29,10 +29,10 @@ def MultipleLevelDSE : Pass<"multiple-level-dse", "ModuleOp"> {
     Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
            "The top function for HLS synthesis">,
     Option<"outputPath", "output-path", "std::string",
-           /*default=*/"\"-\"",
+           /*default=*/"\"-/\"",
            "File path: the path for dumping the MLIR of pareto design points">,
     Option<"csvPath", "csv-path", "std::string",
-           /*default=*/"\"-\"",
+           /*default=*/"\"-/\"",
            "File path: the path for dumping the CSV of design spaces">,
 
     Option<"targetSpec", "target-spec", "std::string",

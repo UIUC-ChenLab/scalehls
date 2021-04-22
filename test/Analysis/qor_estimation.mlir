@@ -5,7 +5,7 @@
 #set0 = affine_set<(d0, d1) : (d0 - d1 >= 0)>
 #set1 = affine_set<(d0) : (d0 == 0)>
 module  {
-  // CHECK: attributes {func_directive = #hlscpp.fd<pipeline=0, targetInterval=1, dataflow=0, topFunc=1>, resource = #hlscpp.r<lut=0, dsp=9, bram=0, nonShareDsp=19>, timing = #hlscpp.t<0 -> 4117, 4117, 4117>}
+  // CHECK: attributes {func_directive = #hlscpp.fd<pipeline=0, targetInterval=1, dataflow=0, topFunc=1>, resource = #hlscpp.r<lut=0, dsp=9, bram=0, nonShareDsp=19>, timing = #hlscpp.t<0 -> 4119, 4119, 4119>}
   func @test_syrk(%arg0: f32, %arg1: f32, %arg2: memref<16x16xf32, #map0, 1>, %arg3: memref<16x16xf32, #map1, 1>) attributes {func_directive = #hlscpp.fd<pipeline=0, targetInterval=1, dataflow=0, topFunc=1>} {
     affine.for %arg4 = 0 to 16 step 2 {
       affine.for %arg5 = 0 to 16 {
@@ -30,9 +30,9 @@ module  {
             %12 = addf %11, %7 : f32
             affine.store %12, %arg3[%arg5, %arg6] : memref<16x16xf32, #map1, 1>
           }
-        // CHECK: {loop_directive = #hlscpp.ld<pipeline=1, targetII=2, dataflow=0, flatten=0, parallel=0>, loop_info = #hlscpp.l<flattenTripCount=16, iterLatency=21, minII=2>, resource = #hlscpp.r<lut=0, dsp=9, bram=0, nonShareDsp=19>, timing = #hlscpp.t<0 -> 51, 51, 51>}
-        } {loop_directive = #hlscpp.ld<pipeline=1, targetII=2, dataflow=0, flatten=0, parallel=0>}
-      } {loop_directive = #hlscpp.ld<pipeline=0, targetII=1, dataflow=0, flatten=1, parallel=0>}
+        // CHECK: {loop_directive = #hlscpp.ld<pipeline=1, targetII=2, dataflow=0, flatten=0, parallel=1>, loop_info = #hlscpp.l<flattenTripCount=16, iterLatency=21, minII=2>, resource = #hlscpp.r<lut=0, dsp=9, bram=0, nonShareDsp=19>, timing = #hlscpp.t<0 -> 53, 53, 53>}
+        } {loop_directive = #hlscpp.ld<pipeline=1, targetII=2, dataflow=0, flatten=0, parallel=1>}
+      } {loop_directive = #hlscpp.ld<pipeline=0, targetII=1, dataflow=0, flatten=1, parallel=1>}
     } {loop_directive = #hlscpp.ld<pipeline=0, targetII=1, dataflow=0, flatten=1, parallel=0>}
     return
   }

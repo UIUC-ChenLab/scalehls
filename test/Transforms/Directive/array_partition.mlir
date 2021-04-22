@@ -38,8 +38,8 @@ module  {
             // CHECK: affine.store %12, %arg3[%arg5, %arg6] : memref<16x16xf32, #map1, 1>
             affine.store %12, %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
           }
-        } {loop_directive = #hlscpp.ld<pipeline=1, targetII=2, dataflow=0, flatten=0, parallel=0>}
-      } {loop_directive = #hlscpp.ld<pipeline=0, targetII=1, dataflow=0, flatten=1, parallel=0>}
+        } {loop_directive = #hlscpp.ld<pipeline=1, targetII=2, dataflow=0, flatten=0, parallel=1>}
+      } {loop_directive = #hlscpp.ld<pipeline=0, targetII=1, dataflow=0, flatten=1, parallel=1>}
     } {loop_directive = #hlscpp.ld<pipeline=0, targetII=1, dataflow=0, flatten=1, parallel=0>}
     return
   }

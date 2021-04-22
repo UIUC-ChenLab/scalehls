@@ -246,7 +246,7 @@ bool LoopDesignSpace::evaluateTileConfig(TileConfig config) {
   // fully unroll pragma which unrolls all contained loops.
   for (auto tmpII = info.getMinII(); tmpII <= info.getIterLatency(); ++tmpII) {
     auto tmpDspNum = resource.getNonShareDsp() / tmpII;
-    auto tmpLatency = info.getIterLatency() + tmpII * (iterNum - 1);
+    auto tmpLatency = info.getIterLatency() + tmpII * (iterNum - 1) + 2;
     auto point = LoopDesignPoint(tmpLatency, tmpDspNum, config, tmpII);
 
     allPoints.push_back(point);
@@ -538,7 +538,7 @@ bool FuncDesignSpace::exportParetoDesigns(unsigned outputNum,
         return false;
       // estimator.estimateFunc(tmpFunc);
 
-      // Parse a new C++ file.
+      // Parse a new output file.
       auto outputFilePath = outputRootPath.str() + func.getName().str() +
                             "_pareto_" + std::to_string(sampleIndex) + ".mlir";
 
@@ -555,7 +555,7 @@ bool FuncDesignSpace::exportParetoDesigns(unsigned outputNum,
   }
 
   LLVM_DEBUG(
-      llvm::dbgs() << "Sampled pareto points' C++ files are exported to path \""
+      llvm::dbgs() << "Sampled pareto points MLIR files are exported to path \""
                    << outputRootPath << "\".\n\n");
   return true;
 }
@@ -764,7 +764,7 @@ bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, bool directiveOnly,
       csvRootPath.str() + func.getName().str() + "_space.csv";
   funcSpace.dumpFuncDesignSpace(funcCsvFilePath);
 
-  // Export sampled pareto points' C++ source.
+  // Export sampled pareto points MLIR source.
   funcSpace.exportParetoDesigns(outputNum, outputRootPath);
 
   // Apply the best function design point under the constraints.
@@ -825,7 +825,6 @@ namespace {
 struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
   void runOnOperation() override {
     auto module = getOperation();
-    auto builder = Builder(module);
 
     // Read configuration file.
     INIReader spec(targetSpec);
@@ -866,13 +865,12 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
         maxLoopParallel, maxIterNum, maxDistance);
 
     // Optimize the top function.
-    // TODO: Handle sub-functions.
-    for (auto func : module.getOps<FuncOp>())
-      if (func.getName() == topFunc) {
-        func->setAttr("top_function", builder.getBoolAttr(true));
+    // TODO: Handle sub-functions and dataflowed or pipelined functions.
+    for (auto func : module.getOps<FuncOp>()) {
+      if (func.getName() == topFunc)
         optimizer.applyMultipleLevelDSE(func, directiveOnly, outputPath,
                                         csvPath);
-      }
+    }
   }
 };
 } // namespace

@@ -8,6 +8,7 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "scalehls/Dialect/HLSKernel/HLSKernel.h"
 #include "scalehls/Transforms/Passes.h"
+#include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -202,7 +203,11 @@ static bool applyLegalizeDataflow(FuncOp func, int64_t minGran,
   }
 
   // Set dataflow attribute.
-  func->setAttr("dataflow", builder.getBoolAttr(true));
+  auto topFunc = false;
+  if (auto funcDirect = getFuncDirective(func))
+    topFunc = funcDirect.getTopFunc();
+
+  setFuncDirective(func, false, 1, true, topFunc);
   return true;
 }
 

@@ -25,8 +25,7 @@ bool scalehls::applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
 
   auto parallel = false;
   if (auto loopDirect = getLoopDirective(targetLoop))
-    parallel = loopDirect.getPipeline();
-
+    parallel = loopDirect.getParallel();
   setLoopDirective(targetLoop, true, targetII, false, false, parallel);
 
   // All outer loops that perfect nest the pipelined loop can be flattened.
@@ -45,7 +44,7 @@ bool scalehls::applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
       if (canFlatten) {
         currentLoop = outerLoop;
         if (auto loopDirect = getLoopDirective(outerLoop))
-          parallel = loopDirect.getPipeline();
+          parallel = loopDirect.getParallel();
         setLoopDirective(outerLoop, false, 1, false, true, parallel);
         continue;
       }

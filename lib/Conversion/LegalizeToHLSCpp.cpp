@@ -15,15 +15,7 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hlscpp;
 
-namespace {
-struct LegalizeToHLSCpp : public LegalizeToHLSCppBase<LegalizeToHLSCpp> {
-public:
-  void runOnOperation() override;
-};
-} // namespace
-
-void LegalizeToHLSCpp::runOnOperation() {
-  auto func = getOperation();
+bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
   auto builder = OpBuilder(func);
 
   // We constain functions to only contain one block.
@@ -32,7 +24,7 @@ void LegalizeToHLSCpp::runOnOperation() {
 
   // Set function pragma attributes.
   if (!getFuncDirective(func))
-    setFuncDirective(func, false, 1, false, func.getName() == topFunc);
+    setFuncDirective(func, false, 1, false, isTopFunc);
 
   // Walk through all operations in the function.
   SmallPtrSet<Value, 16> memrefs;
@@ -44,7 +36,7 @@ void LegalizeToHLSCpp::runOnOperation() {
 
     // Set loop directive attributes.
     if (auto forOp = dyn_cast<AffineForOp>(op)) {
-      if (!getLoopDirective(op))
+      if (!getLoopDirective(forOp))
         setLoopDirective(forOp, false, 1, false, false, isLoopParallel(forOp));
     }
   });
@@ -85,7 +77,19 @@ void LegalizeToHLSCpp::runOnOperation() {
     }
     ++idx;
   }
+
+  return true;
 }
+
+namespace {
+struct LegalizeToHLSCpp : public LegalizeToHLSCppBase<LegalizeToHLSCpp> {
+public:
+  void runOnOperation() override {
+    auto func = getOperation();
+    applyLegalizeToHLSCpp(func, func.getName() == topFunc);
+  }
+};
+} // namespace
 
 std::unique_ptr<Pass> scalehls::createLegalizeToHLSCppPass() {
   return std::make_unique<LegalizeToHLSCpp>();

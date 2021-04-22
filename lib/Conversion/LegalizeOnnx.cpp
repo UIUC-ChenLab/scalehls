@@ -211,7 +211,6 @@ void LegalizeOnnx::runOnOperation() {
 
     // Set other function attributes if the current function is top function.
     if (func.getName() == topFunction) {
-      func->setAttr("top_function", builder.getBoolAttr(true));
       func->setAttr("weight_file_name", builder.getStringAttr(weightFileName));
       func->setAttr("weight_size_in_bytes",
                     builder.getI64IntegerAttr(weightSizeInBytes));

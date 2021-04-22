@@ -66,6 +66,8 @@ bool applyRemoveVariableBound(AffineLoopBand &band);
 /// innermost tile-space loop.
 Optional<unsigned> applyLoopTiling(AffineLoopBand &band, TileList tileList);
 
+bool applyLegalizeToHLSCpp(FuncOp func, bool topFunc);
+
 /// Apply loop pipelining to the pipelineLoc of the input loop band, all inner
 /// loops are automatically fully unrolled.
 bool applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,

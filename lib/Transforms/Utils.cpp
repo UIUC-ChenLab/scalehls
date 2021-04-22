@@ -144,17 +144,14 @@ bool scalehls::applyOptStrategy(AffineLoopBand &band, FuncOp func,
   if (!pipelineLoopLoc)
     return false;
 
-  // Apply LegalizeToHLSCpp conversion pass.
-  PassManager convertPM(func.getContext(), "func");
-  convertPM.addPass(createLegalizeToHLSCppPass());
-  if (failed(convertPM.run(func)))
-    return false;
+  // Apply LegalizeToHLSCpp conversion.
+  applyLegalizeToHLSCpp(func, /*isTopFunc=*/true);
 
   // Apply loop pipelining.
   if (!applyLoopPipelining(band, pipelineLoopLoc.getValue(), targetII))
     return false;
 
-  // Apply general optimizations.
+  // Apply generic optimizations.
   PassManager optPM(func.getContext(), "func");
   addPassPipeline(optPM);
   if (failed(optPM.run(func)))
@@ -181,18 +178,15 @@ bool scalehls::applyOptStrategy(FuncOp func, ArrayRef<TileList> tileLists,
     pipelineLoopLocs.push_back(pipelineLoopLoc.getValue());
   }
 
-  // Apply LegalizeToHLSCpp conversion pass.
-  PassManager convertPM(func.getContext(), "func");
-  convertPM.addPass(createLegalizeToHLSCppPass());
-  if (failed(convertPM.run(func)))
-    return false;
+  // Apply LegalizeToHLSCpp conversion.
+  applyLegalizeToHLSCpp(func, /*isTopFunc=*/true);
 
   for (unsigned i = 0, e = bands.size(); i < e; ++i) {
     if (!applyLoopPipelining(bands[i], pipelineLoopLocs[i], targetIIs[i]))
       return false;
   }
 
-  // Apply general optimizations.
+  // Apply generic optimizations.
   PassManager optPM(func.getContext(), "func");
   addPassPipeline(optPM);
   if (failed(optPM.run(func)))

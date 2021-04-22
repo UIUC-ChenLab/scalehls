@@ -209,6 +209,14 @@ static int64_t getMaxMuxSize(Operation *op) {
     return 1;
 }
 
+static bool isNoTouch(Operation *op) {
+  if (auto noTouch = op->getAttrOfType<BoolAttr>("no_touch"))
+    if (noTouch.getValue())
+      return true;
+
+  return false;
+}
+
 int64_t ScaleHLSEstimator::getResMinII(int64_t begin, int64_t end,
                                        MemAccessesMap &map) {
   int64_t II = 1;
@@ -293,6 +301,9 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
   for (unsigned i = 1, e = band.size(); i <= e; ++i) {
     auto loop = band[i - 1];
     auto loopDirect = getLoopDirective(loop);
+    if (!loopDirect)
+      loop.emitError("loop directives missing on for loops");
+
     if (loopDirect.getFlatten() || loopDirect.getPipeline())
       if (!loopDirect.getParallel())
         loopDepths.push_back(i);
@@ -391,17 +402,16 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
 bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
   // If a loop is marked as no_touch, then directly infer the schedule_end with
   // the exist latency.
-  if (auto noTouch = op->getAttrOfType<BoolAttr>("no_touch"))
-    if (noTouch.getValue()) {
-      auto timing = getTiming(op);
-      auto resource = getResource(op);
+  if (isNoTouch(op)) {
+    auto timing = getTiming(op);
+    auto resource = getResource(op);
 
-      if (timing && resource) {
-        auto latency = timing.getLatency();
-        setTiming(op, begin, begin + latency + 2, latency, latency);
-        return true;
-      }
+    if (timing && resource) {
+      auto latency = timing.getLatency();
+      setTiming(op, begin, begin + latency, latency, latency);
+      return true;
     }
+  }
 
   // Set an attribute indicating the trip count. For now, we assume all loops
   // have static loop bound.
@@ -442,8 +452,8 @@ bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
       setLoopInfo(op, tripCount, iterLatency, II);
 
       // Entering and leaving a loop will consume extra 2 clock cycles.
-      auto latency = iterLatency + II * (tripCount - 1);
-      setTiming(op, begin, begin + latency + 2, latency, latency);
+      auto latency = iterLatency + II * (tripCount - 1) + 2;
+      setTiming(op, begin, begin + latency, latency, latency);
 
       // Estimate the loop block resource utilization.
       setResource(op, estimateResource(loopBlock, II));
@@ -465,8 +475,8 @@ bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
       auto II = childLoopInfo.getMinII();
       setLoopInfo(op, flattenTripCount, iterLatency, II);
 
-      auto latency = iterLatency + II * (flattenTripCount - 1);
-      setTiming(op, begin, begin + latency + 2, latency, latency);
+      auto latency = iterLatency + II * (flattenTripCount - 1) + 2;
+      setTiming(op, begin, begin + latency, latency, latency);
 
       // The resource utilization of flattened loop is equal to its child's.
       setResource(op, getResource(child));
@@ -479,8 +489,8 @@ bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
   auto iterLatency = end - begin;
   setLoopInfo(op, tripCount, iterLatency, iterLatency);
 
-  auto latency = iterLatency * tripCount;
-  setTiming(op, begin, begin + latency + 2, latency, latency);
+  auto latency = iterLatency * tripCount + 2;
+  setTiming(op, begin, begin + latency, latency, latency);
   setResource(op, estimateResource(loopBlock));
   return true;
 }
@@ -526,7 +536,7 @@ bool ScaleHLSEstimator::visitOp(CallOp op, int64_t begin) {
   // We assume enter and leave the subfunction require extra 2 clock cycles.
   if (auto timing = getTiming(subFunc)) {
     auto latency = timing.getLatency();
-    setTiming(op, begin, begin + latency + 2, latency, timing.getInterval());
+    setTiming(op, begin, begin + latency, latency, timing.getInterval());
     setResource(op, getResource(subFunc));
     return true;
   } else
@@ -792,30 +802,33 @@ static Operation *getSurroundingOp(Operation *op) {
 void ScaleHLSEstimator::reverseTiming(Block &block) {
   block.walk([&](Operation *op) {
     // Get schedule level.
-    auto timing = getTiming(op);
-    auto begin = timing.getBegin();
-    auto end = timing.getEnd();
-    auto latency = timing.getLatency();
-    auto interval = timing.getInterval();
+    if (auto timing = getTiming(op)) {
+      auto begin = timing.getBegin();
+      auto end = timing.getEnd();
+      auto latency = timing.getLatency();
+      auto interval = timing.getInterval();
 
-    // Reverse schedule level.
-    if (auto surOp = getSurroundingOp(op)) {
-      if (isa<AffineForOp>(surOp)) {
-        auto surOpBegin = getTiming(surOp).getBegin();
+      // Reverse schedule level.
+      if (auto srd = getSurroundingOp(op)) {
+        if (isa<AffineForOp, scf::ForOp>(srd)) {
+          auto srdBegin = getTiming(srd).getBegin();
 
-        if (getLoopDirective(surOp).getFlatten()) {
-          // Handle flattened surrounding loops.
-          setTiming(op, surOpBegin, surOpBegin + latency, latency, interval);
-        } else {
           // Handle normal cases.
-          auto iterLatency = getLoopInfo(surOp).getIterLatency();
-          setTiming(op, surOpBegin + iterLatency - end,
-                    surOpBegin + iterLatency - begin, latency, interval);
-        }
-      } else if (isa<FuncOp>(surOp)) {
-        auto surOpLatency = getTiming(surOp).getLatency();
-        setTiming(op, surOpLatency - end, surOpLatency - begin, latency,
-                  interval);
+          auto iterLatency = getLoopInfo(srd).getIterLatency();
+          setTiming(op, srdBegin + iterLatency - end,
+                    srdBegin + iterLatency - begin, latency, interval);
+
+          // Handle flattened surrounding loops.
+          if (auto srdDirect = getLoopDirective(srd)) {
+            if (srdDirect.getFlatten())
+              setTiming(op, srdBegin, srdBegin + latency, latency, interval);
+          }
+        } else if (isa<FuncOp>(srd)) {
+          auto srdLatency = getTiming(srd).getLatency() - 2;
+          setTiming(op, srdLatency - end, srdLatency - begin, latency,
+                    interval);
+        } else
+          op->emitError("unexpected surrounding operation");
       }
     }
   });
@@ -831,9 +844,11 @@ void ScaleHLSEstimator::initEstimator(Block &block) {
 
   SmallVector<Operation *, 16> loops;
   block.walk([&](Operation *op) {
-    op->removeAttr("resource");
-    op->removeAttr("timing");
-    op->removeAttr("loop_info");
+    if (!isNoTouch(op)) {
+      op->removeAttr("resource");
+      op->removeAttr("timing");
+      op->removeAttr("loop_info");
+    }
 
     if (isa<AffineForOp>(op))
       loops.push_back(op);
@@ -860,8 +875,8 @@ void ScaleHLSEstimator::estimateFunc(FuncOp func) {
   if (!timing)
     return;
 
-  auto funcEnd = timing.getEnd();
-  auto interval = funcEnd;
+  auto latency = timing.getEnd() + 2;
+  auto interval = latency;
 
   // Handle pipelined or dataflowed loops.
   if (auto funcDirect = getFuncDirective(func)) {
@@ -876,7 +891,7 @@ void ScaleHLSEstimator::estimateFunc(FuncOp func) {
     } else if (funcDirect.getPipeline()) {
       // TODO: support CallOp inside of the function.
       auto targetInterval = funcDirect.getTargetInterval();
-      auto resInterval = getResMinII(0, funcEnd, map);
+      auto resInterval = getResMinII(0, timing.getEnd(), map);
       auto depInterval =
           getDepMinII(max(targetInterval, resInterval), func, map);
       interval = max({targetInterval, resInterval, depInterval});
@@ -884,7 +899,7 @@ void ScaleHLSEstimator::estimateFunc(FuncOp func) {
   }
 
   // Estimate and set timing and resource attributes.
-  setTiming(func, 0, funcEnd, funcEnd, interval);
+  setTiming(func, 0, latency, latency, interval);
   setResource(func, estimateResource(func.front(), interval));
 
   // Scheduled levels of all operations are reversed in this method, because
