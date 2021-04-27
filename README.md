@@ -47,7 +47,7 @@ $ scalehls-opt samples/polybench/syrk/syrk_32.mlir \
 
 $ # Automatic kernel-level design space exploration.
 $ scalehls-opt samples/polybench/gemm/gemm_32.mlir \
-    -multiple-level-dse="top-func=gemm_32 output-path=./ csv-path=./ target-spec=config/target-spec.ini" \
+    -multiple-level-dse="top-func=gemm_32 output-path=./ target-spec=config/target-spec.ini" \
     -debug-only=scalehls > /dev/null
 $ scalehls-translate -emit-hlscpp gemm_32_pareto_0.mlir > gemm_32_pareto_0.cpp
 
@@ -80,10 +80,9 @@ $ scalehls-opt resnet18.tmp -print-op-graph 2> resnet18.gv
 $ dot -Tpng resnet18.gv > resnet18.png
 
 $ # Legalize the output of ONNX-MLIR, optimize and emit C++ code.
-$ scalehls-opt resnet18.mlir -allow-unregistered-dialect \
-    -legalize-onnx -affine-loop-normalize -canonicalize \
-    -legalize-dataflow="min-gran=3 insert-copy=true" -split-function \
-    -convert-linalg-to-affine-loops -legalize-to-hlscpp="top-func=main_graph" \
+$ scalehls-opt resnet18.mlir -allow-unregistered-dialect -legalize-onnx \
+    -affine-loop-normalize -canonicalize -legalize-dataflow="min-gran=3 insert-copy=true" \
+    -split-function -convert-linalg-to-affine-loops -legalize-to-hlscpp="top-func=main_graph" \
     -affine-loop-perfection -affine-loop-order-opt -loop-pipelining -simplify-affine-if \
     -affine-store-forward -simplify-memref-access -array-partition -cse -canonicalize \
     | scalehls-translate -emit-hlscpp > resnet18.cpp
@@ -92,9 +91,8 @@ $ scalehls-opt resnet18.mlir -allow-unregistered-dialect \
 Please refer to the `samples/onnx-mlir` folder for more test cases, and `sample/onnx-mlir/ablation_int_test.sh` for how to conduct the graph, loop, and directive optimizations.
 
 ## References
-1. [MLIR documents](https://mlir.llvm.org)
-2. [mlir-npcomp github](https://github.com/llvm/mlir-npcomp)
-3. [onnx-mlir github](https://github.com/onnx/onnx-mlir)
-4. [circt github](https://github.com/llvm/circt)
-5. [dahlia github](https://github.com/cucapra/dahlia)
-6. [comba github](https://github.com/zjru/COMBA)
+1. [MLIR](https://mlir.llvm.org): Multi-Level Intermediate Representation
+2. [NPComp](https://github.com/llvm/mlir-npcomp): MLIR based compiler toolkit for numerical python programs
+3. [ONNX-MLIR](https://github.com/onnx/onnx-mlir): The Open Neural Network Exchange implementation in MLIR
+4. [CIRCT](https://github.com/llvm/circt): Circuit IR Compilers and Tools
+5. [COMBA](https://github.com/zjru/COMBA): A Model-Based Analysis Framework for High Level Synthesis on FPGAs
