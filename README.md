@@ -36,30 +36,33 @@ After the installation and test successfully completed, you should be able to pl
 $ export PATH=$SCALEHLS_DIR/build/bin:$PATH
 $ cd $SCALEHLS_DIR
 
-$ # Automatic kernel-level design space exploration.
-$ scalehls-opt samples/polybench/gemm.mlir \
-    -multiple-level-dse="target-spec=config/target-spec.ini dump-file=gemm_dse.csv top-func=gemm" \
-    -debug-only=scalehls | scalehls-translate -emit-hlscpp
-
-$ # Loop and pragma-level optimizations, performance estimation, and C++ code generation.
-$ scalehls-opt samples/polybench/syrk.mlir \
+$ # Loop and directive-level optimizations, QoR estimation, and C++ code generation.
+$ scalehls-opt samples/polybench/syrk/syrk_32.mlir \
     -affine-loop-perfection -affine-loop-order-opt -remove-variable-bound \
-    -partial-affine-loop-tile="tile-size=2" -legalize-to-hlscpp="top-func=syrk" \
+    -partial-affine-loop-tile="tile-size=2" -legalize-to-hlscpp="top-func=syrk_32" \
     -loop-pipelining="pipeline-level=3 target-ii=2" -canonicalize -simplify-affine-if \
-    -affine-store-forward -simplify-memref-access -cse -array-partition \
+    -affine-store-forward -simplify-memref-access -array-partition -cse -canonicalize \
     -qor-estimation="target-spec=config/target-spec.ini" \
     | scalehls-translate -emit-hlscpp
 
+$ # Automatic kernel-level design space exploration.
+$ scalehls-opt samples/polybench/gemm/gemm_32.mlir \
+    -multiple-level-dse="top-func=gemm_32 output-path=./ csv-path=./ target-spec=config/target-spec.ini" \
+    -debug-only=scalehls > /dev/null
+$ scalehls-translate -emit-hlscpp gemm_32_pareto_0.mlir > gemm_32_pareto_0.cpp
+
 $ # Benchmark generation, dataflow-level optimization, HLSKernel lowering and bufferization.
 $ benchmark-gen -type "cnn" -config "config/cnn-config.ini" -number 1 \
-    | scalehls-opt -legalize-dataflow="min-gran=2 insert-copy=true" -split-function \
+    | scalehls-opt -legalize-dataflow="insert-copy=true min-gran=2" -split-function \
     -hlskernel-bufferize -hlskernel-to-affine -func-bufferize -canonicalize
 ```
+
+Please refer to the `samples/polybench` folder for more test cases.
 
 ## Integration with ONNX-MLIR
 If you have installed ONNX-MLIR or established ONNX-MLIR docker to `$ONNXMLIR_DIR` following the instruction from (https://github.com/onnx/onnx-mlir), you should be able to run the following integration test:
 ```sh
-$ cd $SCALEHLS_DIR/samples/onnx-mlir
+$ cd $SCALEHLS_DIR/samples/onnx-mlir/resnet18
 
 $ # Export PyTorch model to ONNX.
 $ python export_resnet18.py
@@ -80,10 +83,13 @@ $ # Legalize the output of ONNX-MLIR, optimize and emit C++ code.
 $ scalehls-opt resnet18.mlir -allow-unregistered-dialect \
     -legalize-onnx -affine-loop-normalize -canonicalize \
     -legalize-dataflow="min-gran=3 insert-copy=true" -split-function \
-    -convert-linalg-to-affine-loops -affine-loop-order-opt \
-    -legalize-to-hlscpp="top-func=main_graph" -loop-pipelining -canonicalize \
+    -convert-linalg-to-affine-loops -legalize-to-hlscpp="top-func=main_graph" \
+    -affine-loop-perfection -affine-loop-order-opt -loop-pipelining -simplify-affine-if \
+    -affine-store-forward -simplify-memref-access -array-partition -cse -canonicalize \
     | scalehls-translate -emit-hlscpp > resnet18.cpp
 ```
+
+Please refer to the `samples/onnx-mlir` folder for more test cases, and `sample/onnx-mlir/ablation_int_test.sh` for how to conduct the graph, loop, and directive optimizations.
 
 ## References
 1. [MLIR documents](https://mlir.llvm.org)

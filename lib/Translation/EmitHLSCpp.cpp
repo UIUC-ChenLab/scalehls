@@ -1497,8 +1497,8 @@ void ModuleEmitter::emitFunction(FuncOp func) {
 
   if (auto resource = getResource(func)) {
     os << "/// DSP=" << resource.getDsp();
-    os << ", BRAM=" << resource.getBram();
-    os << ", LUT" << resource.getLut();
+    // os << ", BRAM=" << resource.getBram();
+    // os << ", LUT=" << resource.getLut();
     os << "\n";
   }
 
