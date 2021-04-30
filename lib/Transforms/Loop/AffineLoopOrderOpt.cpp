@@ -9,6 +9,7 @@
 #include "mlir/Transforms/LoopUtils.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
+#include "llvm/Support/Debug.h"
 
 #define DEBUG_TYPE "scalehls"
 
