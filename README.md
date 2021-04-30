@@ -14,7 +14,7 @@ $ git submodule update
 ```
 
 ### 1. Install LLVM and MLIR
-To build LLVM and MLIR, run:
+This step assumes this repository is cloned to `$SCALEHLS_DIR`. To build LLVM and MLIR, run:
 ```sh
 $ mkdir $SCALEHLS_DIR/llvm/build
 $ cd $SCALEHLS_DIR/llvm/build
@@ -28,7 +28,7 @@ $ ninja check-mlir
 ```
 
 ### 2. Install ScaleHLS
-This step assumes this repository is cloned to `$SCALEHLS_DIR`. To build and launch the tests, run:
+To build and launch the tests, run:
 ```sh
 $ mkdir $SCALEHLS_DIR/build
 $ cd $SCALEHLS_DIR/build
