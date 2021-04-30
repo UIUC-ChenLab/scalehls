@@ -33,8 +33,8 @@ This step assumes this repository is cloned to `$SCALEHLS_DIR`. To build and lau
 $ mkdir $SCALEHLS_DIR/build
 $ cd $SCALEHLS_DIR/build
 $ cmake -G Ninja .. \
-    -DMLIR_DIR=$SCALEHLS_DIR/llvm/build/lib/cmake/mlir \
-    -DLLVM_DIR=$SCALEHLS_DIR/llvm/build/lib/cmake/llvm \
+    -DMLIR_DIR=$PWD/../llvm/build/lib/cmake/mlir \
+    -DLLVM_DIR=$PWD/../llvm/build/lib/cmake/llvm \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=DEBUG
 $ ninja check-scalehls
