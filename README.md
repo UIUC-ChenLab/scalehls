@@ -19,7 +19,7 @@ To build LLVM and MLIR, run:
 $ mkdir $SCALEHLS_DIR/llvm/build
 $ cd $SCALEHLS_DIR/llvm/build
 $ cmake -G Ninja ../llvm \
-    -DLLVM_ENABLE_PROJECTS="mlir" \
+    -DLLVM_ENABLE_PROJECTS="mlir;llvm;clang;clang-extra-tools" \
     -DLLVM_TARGETS_TO_BUILD="X86;RISCV" \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=DEBUG
@@ -35,6 +35,9 @@ $ cd $SCALEHLS_DIR/build
 $ cmake -G Ninja .. \
     -DMLIR_DIR=$PWD/../llvm/build/lib/cmake/mlir \
     -DLLVM_DIR=$PWD/../llvm/build/lib/cmake/llvm \
+    -DCLANG_DIR=$PWD/../llvm/build/lib/cmake/clang \
+    -DCMAKE_C_COMPILER=$PWD/../llvm/build/bin/clang \
+    -DCMAKE_CXX_COMPILER=$PWD/../llvm/build/bin/clang++ \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=DEBUG
 $ ninja check-scalehls

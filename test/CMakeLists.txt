@@ -7,6 +7,7 @@ configure_lit_site_cfg(
 
 set(SCALEHLS_TEST_DEPENDS
   FileCheck count not
+  scalehls-clang
   scalehls-opt
   scalehls-translate
   benchmark-gen
