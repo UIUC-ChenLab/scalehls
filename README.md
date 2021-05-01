@@ -5,7 +5,6 @@ This project aims to create a framework that ultimately converts an algorithm wr
 ## Quick Start
 
 ### 0. Download ScaleHLS and LLVM
-
 ```
 $ git clone git@github.com:hanchenye/scalehls.git
 $ cd scalehls

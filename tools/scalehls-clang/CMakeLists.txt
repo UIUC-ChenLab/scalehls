@@ -9,6 +9,8 @@ llvm_update_compile_flags(scalehls-clang)
 
 target_link_libraries(scalehls-clang
   PRIVATE
+  ${dialect_libs}
+
   clangFrontend
   clangTooling
   clangBasic

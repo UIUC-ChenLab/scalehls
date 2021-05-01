@@ -4,6 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Support/FileUtilities.h"
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/Expr.h"
@@ -16,6 +17,9 @@
 #include "clang/Tooling/Tooling.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APInt.h"
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/ToolOutputFile.h"
 
 #include <cassert>
 #include <execinfo.h>
@@ -34,15 +38,14 @@ typedef std::vector<std::string> str_vec;
 // This tool emits the MLIR code from C code by traversing the Clang AST.
 // -------------------------------------------
 
-// Default mode configuration
-// Disable full flow check - enabling debug mode will lower the MLIR through
-// SCF, standard, handshake till HPX Ops.
-bool debug = false;
-// Output file name
-std::string output = "output.mlir";
+static llvm::cl::opt<std::string>
+    inputFilename(llvm::cl::Positional, llvm::cl::desc("Input filename"),
+                  llvm::cl::init("-"));
 
-// Output file stream
-std::ofstream mlirOut;
+static llvm::cl::opt<std::string>
+    outputFilename("o", llvm::cl::desc("Output filename"),
+                   llvm::cl::value_desc("filename"), llvm::cl::init("-"));
+
 // Number of variables in the MLIR code including intermediate variables
 int varCnt = 0;
 // Number of intermediate variables
@@ -52,19 +55,20 @@ int_vec unaryUpdateList;
 
 // Print error messages
 auto error = [](auto str) {
-  std::cout << "\033[0;31mError: " << str << "\033[0m" << std::endl;
+  llvm::errs() << "\033[0;31mError: " << str << "\033[0m\n";
   assert(0);
 };
 
 // Print highlight messages, like warning
 auto message = [](auto str) {
-  std::cout << "\033[0;33mWarning: " << str << "\033[0m" << std::endl;
+  llvm::errs() << "\033[0;33mWarning: " << str << "\033[0m\n";
 };
 
 // Translation unit
 class MLIRGeneratorVisitor : public RecursiveASTVisitor<MLIRGeneratorVisitor> {
 public:
-  explicit MLIRGeneratorVisitor(ASTContext *Context) : Context(Context) {}
+  explicit MLIRGeneratorVisitor(ASTContext *Context, raw_ostream &mlirOut)
+      : Context(Context), mlirOut(mlirOut) {}
 
   virtual bool VisitFunctionDecl(FunctionDecl *func) {
     // Currently ignore the function prototype
@@ -85,6 +89,8 @@ private:
   typedef std::vector<variable *> var_vec;
 
   ASTContext *Context;
+  raw_ostream &mlirOut;
+
   // Variable list
   var_vec vars;
 
@@ -466,7 +472,8 @@ private:
     args.pop_back();
     args.pop_back();
     args += "] : " + typePrint(arrayType) + "\n";
-    buff += "store " + getVarName(src) + ", " + getVarName(dst) + "[" + args;
+    buff +=
+        "memref.store " + getVarName(src) + ", " + getVarName(dst) + "[" + args;
     return buff;
   }
 
@@ -486,7 +493,7 @@ private:
       res = resultVar;
       resName = incrVarName(res);
     }
-    std::string args = resName + " = load " + getVarName(array) + "[";
+    std::string args = resName + " = memref.load " + getVarName(array) + "[";
     for (auto &i : *index)
       args += getVarName(castToIndex(i, buff)) + ", ";
     args.pop_back();
@@ -706,8 +713,8 @@ private:
 
   // Generate a generic expression
   int exprGen(clang::Stmt *Stmt, int resultVar, std::string *exprBuff) {
-    if (debug)
-      std::cout << "Found stmt: " << Stmt->getStmtClassName() << "\n";
+    // llvm::dbgs() << "Found stmt: " << Stmt->getStmtClassName() << "\n";
+
     auto Type = Stmt->getStmtClass();
     auto result = -1;
     switch (Type) {
@@ -990,10 +997,10 @@ private:
       isIterLHS = (opcode == clang::BinaryOperator::Opcode::BO_LT ||
                    opcode == clang::BinaryOperator::Opcode::BO_LE)
                       ? 1
-                      : (opcode == clang::BinaryOperator::Opcode::BO_GT ||
-                         opcode == clang::BinaryOperator::Opcode::BO_GE)
-                            ? 2
-                            : 0;
+                  : (opcode == clang::BinaryOperator::Opcode::BO_GT ||
+                     opcode == clang::BinaryOperator::Opcode::BO_GE)
+                      ? 2
+                      : 0;
       if (binaryCond && isIterLHS) {
         equality = (opcode == clang::BinaryOperator::Opcode::BO_GT ||
                     opcode == clang::BinaryOperator::Opcode::BO_LT)
@@ -1238,8 +1245,8 @@ private:
 
   // Generate general statements
   void stmtGen(Stmt *Stmt, std::string *stmtBuff) {
-    if (debug)
-      std::cout << "Found stmt: " << Stmt->getStmtClassName() << "\n";
+    // llvm::dbgs() << "Found stmt: " << Stmt->getStmtClassName() << "\n";
+
     std::string buffer = "";
     AsmStmt::StmtClass Type = Stmt->getStmtClass();
     int var;
@@ -1328,7 +1335,8 @@ private:
 // Consumer
 class MLIRGeneratorConsumer : public clang::ASTConsumer {
 public:
-  explicit MLIRGeneratorConsumer(ASTContext *Context) : Visitor(Context) {}
+  explicit MLIRGeneratorConsumer(ASTContext *Context, raw_ostream &mlirOut)
+      : Visitor(Context, mlirOut) {}
 
   virtual void HandleTranslationUnit(ASTContext &Context) override {
     Visitor.TraverseDecl(Context.getTranslationUnitDecl());
@@ -1341,12 +1349,17 @@ private:
 // Action
 class MLIRGeneratorAction : public clang::ASTFrontendAction {
 public:
+  explicit MLIRGeneratorAction(raw_ostream &mlirOut) : mlirOut(mlirOut) {}
+
   virtual std::unique_ptr<clang::ASTConsumer>
   CreateASTConsumer(clang::CompilerInstance &Compiler,
                     llvm::StringRef InFile) override {
     return std::unique_ptr<clang::ASTConsumer>(
-        new MLIRGeneratorConsumer(&Compiler.getASTContext()));
+        new MLIRGeneratorConsumer(&Compiler.getASTContext(), mlirOut));
   }
+
+private:
+  raw_ostream &mlirOut;
 };
 
 // Print help infomation before exit
@@ -1358,66 +1371,29 @@ void exit(void) {
             << std::endl;
 }
 
-// Tool configurations
-// * --help display help infomation
-// * --debug print additional debugging info
-bool option(std::string op) {
-  if (op == "--help")
-    return false;
-  else if (op == "--debug") {
-    debug = true;
-    return true;
-  } else {
-    std::cout << "\033[0;31mUndefined option " << op << "\033[0m" << std::endl;
-    return false;
-  }
-}
-
 int main(int argc, char **argv) {
-  if (argc < 2) {
-    exit();
-    return -1;
+  if (!llvm::cl::ParseCommandLineOptions(argc, argv,
+                                         "HLS C front-end for MLIR\n"))
+    exit(1);
+
+  // Set up the input and output file.
+  std::string errorMessage;
+  auto file = mlir::openInputFile(inputFilename, &errorMessage);
+  if (!file) {
+    llvm::errs() << errorMessage << "\n";
+    exit(1);
   }
 
-  // Detect configurations and input file
-  std::string fileName;
-  int i;
-  for (i = 1; i < argc; i++) {
-    if (argv[i][0] == '-' && argv[i][1] == '-') {
-      if (!option(argv[i])) {
-        exit();
-        return -1;
-      }
-    } else if (std::string(argv[i]) == "-o" && i < argc - 1) {
-      ++i;
-      output = argv[i];
-    } else if (fileName.empty())
-      fileName = argv[i];
-    else {
-      std::cout << "\033[0;31mError: Unrecognised command.\033[0m\n";
-      exit();
-      return -1;
-    }
-  }
-  std::ifstream fin(fileName);
-  if (!fin.is_open()) {
-    std::cout << "\033[0;31mError: Cannot find file " << fileName << "\033[0m"
-              << std::endl;
-    return -1;
+  auto output = mlir::openOutputFile(outputFilename, &errorMessage);
+  if (!output) {
+    llvm::errs() << errorMessage << "\n";
+    exit(1);
   }
 
-  // Process
-  std::stringstream code;
-  code << fin.rdbuf();
-  if (debug) {
-    std::cout << "C input: " << std::endl;
-    std::cout << code.str() << std::endl;
-  }
-  mlirOut.open(output);
-  if (debug)
-    std::cout << "Debug log: " << std::endl;
-  clang::tooling::runToolOnCode(std::make_unique<MLIRGeneratorAction>(),
-                                code.str());
-  mlirOut.close();
-  std::cout << "Translation finished." << std::endl;
+  // Process the parsing.
+  clang::tooling::runToolOnCode(
+      std::make_unique<MLIRGeneratorAction>(output->os()), file->getBuffer());
+
+  output->keep();
+  return 0;
 }

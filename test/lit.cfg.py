@@ -21,7 +21,7 @@ config.name = 'SCALEHLS'
 config.test_format = lit.formats.ShTest(not llvm_config.use_lit_shell)
 
 # suffixes: A list of file extensions to treat as test files.
-config.suffixes = ['.mlir', '.ini']
+config.suffixes = ['.mlir', '.ini', '.c']
 
 # test_source_root: The root path where tests are located.
 config.test_source_root = os.path.dirname(__file__)
@@ -51,7 +51,8 @@ config.test_exec_root = os.path.join(config.scalehls_obj_root, 'test')
 # Tweak the PATH to include the tools dir.
 llvm_config.with_environment('PATH', config.llvm_tools_dir, append_path=True)
 
-tool_dirs = [config.scalehls_tools_dir, config.mlir_tools_dir, config.llvm_tools_dir]
+tool_dirs = [config.scalehls_tools_dir,
+             config.mlir_tools_dir, config.llvm_tools_dir]
 tools = [
     'scalehls-clang',
     'scalehls-opt',
