@@ -4,15 +4,15 @@ This project aims to create a framework that ultimately converts an algorithm wr
 
 ## Quick Start
 
-### 0. Download ScaleHLS and LLVM
-```
+### 0. Download ScaleHLS
+```sh
 $ git clone git@github.com:hanchenye/scalehls.git
 $ cd scalehls
 $ git submodule init
 $ git submodule update
 ```
 
-### 1. Install LLVM and MLIR
+### 1. Install LLVM, MLIR, and Clang
 This step assumes this repository is cloned to `$SCALEHLS_DIR`. To build LLVM and MLIR, run:
 ```sh
 $ mkdir $SCALEHLS_DIR/llvm/build
@@ -35,18 +35,19 @@ $ cmake -G Ninja .. \
     -DMLIR_DIR=$PWD/../llvm/build/lib/cmake/mlir \
     -DLLVM_DIR=$PWD/../llvm/build/lib/cmake/llvm \
     -DCLANG_DIR=$PWD/../llvm/build/lib/cmake/clang \
-    -DCMAKE_C_COMPILER=$PWD/../llvm/build/bin/clang \
-    -DCMAKE_CXX_COMPILER=$PWD/../llvm/build/bin/clang++ \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=DEBUG
 $ ninja check-scalehls
+$ export PATH=$SCALEHLS_DIR/build/bin:$PATH
 ```
 
 ### 3. Try ScaleHLS
 After the installation and test successfully completed, you should be able to play with:
 ```sh
-$ export PATH=$SCALEHLS_DIR/build/bin:$PATH
 $ cd $SCALEHLS_DIR
+
+$ # Parse HLS C programs.
+$ scalehls-clang test/scalehls-clang/syrk.c | scalehls-opt
 
 $ # Loop and directive-level optimizations, QoR estimation, and C++ code generation.
 $ scalehls-opt samples/polybench/syrk/syrk_32.mlir \
@@ -93,7 +94,7 @@ $ dot -Tpng resnet18.gv > resnet18.png
 
 $ # Legalize the output of ONNX-MLIR, optimize and emit C++ code.
 $ scalehls-opt resnet18.mlir -allow-unregistered-dialect -legalize-onnx \
-    -affine-loop-normalize -canonicalize -legalize-dataflow="min-gran=3 insert-copy=true" \
+    -affine-loop-normalize -canonicalize -legalize-dataflow="insert-copy=true min-gran=3" \
     -split-function -convert-linalg-to-affine-loops -legalize-to-hlscpp="top-func=main_graph" \
     -affine-loop-perfection -affine-loop-order-opt -loop-pipelining -simplify-affine-if \
     -affine-store-forward -simplify-memref-access -array-partition -cse -canonicalize \
