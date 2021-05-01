@@ -3,13 +3,22 @@
 This project aims to create a framework that ultimately converts an algorithm written in a high level language into an efficient hardware implementation. With multiple levels of intermediate representations (IRs), MLIR appears to be the ideal tool for exploring ways to optimize the eventual design at various levels of abstraction (e.g. various levels of parallelism). Our framework will be based on MLIR, it will incorporate a backend for high level synthesis (HLS) C/C++ code. However, the key contribution will be our parameterization and optimization of a tremendously large design space.
 
 ## Quick Start
+
+### 0. Download ScaleHLS and LLVM
+```
+$ git clone git@github.com:hanchenye/scalehls.git
+$ cd scalehls
+$ git submodule init
+$ git submodule update
+```
+
 ### 1. Install LLVM and MLIR
-**IMPORTANT** This step assumes that you have cloned LLVM from (https://github.com/circt/llvm/tree/main) to `$LLVM_DIR` and checked out the `main` branch. To build LLVM and MLIR, run:
+This step assumes this repository is cloned to `$SCALEHLS_DIR`. To build LLVM and MLIR, run:
 ```sh
-$ mkdir $LLVM_DIR/build
-$ cd $LLVM_DIR/build
+$ mkdir $SCALEHLS_DIR/llvm/build
+$ cd $SCALEHLS_DIR/llvm/build
 $ cmake -G Ninja ../llvm \
-    -DLLVM_ENABLE_PROJECTS="mlir" \
+    -DLLVM_ENABLE_PROJECTS="mlir;llvm;clang;clang-extra-tools" \
     -DLLVM_TARGETS_TO_BUILD="X86;RISCV" \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=DEBUG
@@ -18,13 +27,16 @@ $ ninja check-mlir
 ```
 
 ### 2. Install ScaleHLS
-This step assumes this repository is cloned to `$SCALEHLS_DIR`. To build and launch the tests, run:
+To build and launch the tests, run:
 ```sh
 $ mkdir $SCALEHLS_DIR/build
 $ cd $SCALEHLS_DIR/build
 $ cmake -G Ninja .. \
-    -DMLIR_DIR=$LLVM_DIR/build/lib/cmake/mlir \
-    -DLLVM_DIR=$LLVM_DIR/build/lib/cmake/llvm \
+    -DMLIR_DIR=$PWD/../llvm/build/lib/cmake/mlir \
+    -DLLVM_DIR=$PWD/../llvm/build/lib/cmake/llvm \
+    -DCLANG_DIR=$PWD/../llvm/build/lib/cmake/clang \
+    -DCMAKE_C_COMPILER=$PWD/../llvm/build/bin/clang \
+    -DCMAKE_CXX_COMPILER=$PWD/../llvm/build/bin/clang++ \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=DEBUG
 $ ninja check-scalehls
