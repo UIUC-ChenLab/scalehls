@@ -9,8 +9,3 @@ set(LLVM_TARGET_DEFINITIONS HLSCpp.td)
 mlir_tablegen(HLSCppAttributes.h.inc -gen-attrdef-decls)
 mlir_tablegen(HLSCppAttributes.cpp.inc -gen-attrdef-defs)
 add_public_tablegen_target(MLIRHLSCppAttributesIncGen)
-
-set(LLVM_TARGET_DEFINITIONS Interfaces.td)
-mlir_tablegen(HLSCppInterfaces.h.inc -gen-op-interface-decls)
-mlir_tablegen(HLSCppInterfaces.cpp.inc -gen-op-interface-defs)
-add_public_tablegen_target(MLIRHLSCppInterfacesIncGen)

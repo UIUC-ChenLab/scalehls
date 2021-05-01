@@ -227,7 +227,6 @@ void CastOp::getCanonicalizationPatterns(RewritePatternSet &results,
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Dialect/HLSCpp/HLSCppEnums.cpp.inc"
-#include "scalehls/Dialect/HLSCpp/HLSCppInterfaces.cpp.inc"
 
 #define GET_OP_CLASSES
 #include "scalehls/Dialect/HLSCpp/HLSCpp.cpp.inc"

@@ -19,7 +19,7 @@ void HLSKernelDialect::initialize() {
       >();
 }
 
-#include "scalehls/Dialect/HLSCpp/HLSCppInterfaces.cpp.inc"
+#include "scalehls/Dialect/HLSKernel/HLSKernelInterfaces.cpp.inc"
 
 //===----------------------------------------------------------------------===//
 // Utilities

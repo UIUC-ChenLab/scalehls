@@ -11,37 +11,17 @@
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
-//===----------------------------------------------------------------------===//
-// HLSCpp definition
-//===----------------------------------------------------------------------===//
-
 namespace mlir {
 namespace scalehls {
 namespace hlscpp {
 
-enum class MemoryKind {
-  BRAM_1P = 0,
-  BRAM_S2P = 1,
-  BRAM_T2P = 2,
-
-  // URAM_1P = 3,
-  // URAM_S2P = 4,
-  // URAM_T2P = 5,
-
-  DRAM = 3
-};
+enum class MemoryKind { BRAM_1P = 0, BRAM_S2P = 1, BRAM_T2P = 2, DRAM = 3 };
 
 enum class PartitionKind { CYCLIC = 0, BLOCK = 1, NONE = 2 };
-
-#include "scalehls/Dialect/HLSCpp/HLSCppInterfaces.h.inc"
 
 } // namespace hlscpp
 } // namespace scalehls
 } // namespace mlir
-
-//===----------------------------------------------------------------------===//
-// Include tablegen classes
-//===----------------------------------------------------------------------===//
 
 #include "scalehls/Dialect/HLSCpp/HLSCppDialect.h.inc"
 #include "scalehls/Dialect/HLSCpp/HLSCppEnums.h.inc"
