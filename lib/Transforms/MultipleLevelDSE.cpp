@@ -576,10 +576,10 @@ bool ScaleHLSOptimizer::emitQoRDebugInfo(FuncOp func, std::string message) {
   return dspNum <= maxDspNum;
 }
 
-static int64_t getInnerParallelism(AffineForOp forOp) {
+static int64_t getInnerParallelism(Block &block) {
   int64_t count = 0;
-  for (auto loop : forOp.getOps<AffineForOp>()) {
-    auto innerCount = getInnerParallelism(loop);
+  for (auto loop : block.getOps<AffineForOp>()) {
+    auto innerCount = getInnerParallelism(loop.getLoopBody().front());
     if (auto trip = getAverageTripCount(loop))
       count += trip.getValue() * innerCount;
     else
@@ -589,6 +589,8 @@ static int64_t getInnerParallelism(AffineForOp forOp) {
   // If the current loop is innermost loop, count should be one.
   return std::max(count, (int64_t)1);
 }
+
+bool ScaleHLSOptimizer::evaluateFuncPipeline(FuncOp func) { return true; }
 
 /// DSE Stage1: Simplify loop nests by unrolling. If we take the following loops
 /// as example, where each nodes represents one sequential loop nests (LN). In
@@ -641,7 +643,8 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
 
       // Calculate the overall introduced parallelism if the innermost loop of
       // the current loop band is fully unrolled.
-      auto parallelism = getInnerParallelism(innermostLoop);
+      auto parallelism =
+          getInnerParallelism(innermostLoop.getLoopBody().front());
 
       // Collect all candidate loops into an vector, we'll ignore too large
       // parallelism as unrolling them typically introduce very high cost.

@@ -172,6 +172,7 @@ public:
 
   bool emitQoRDebugInfo(FuncOp func, std::string message);
 
+  bool evaluateFuncPipeline(FuncOp func);
   bool simplifyLoopNests(FuncOp func);
   bool optimizeLoopBands(FuncOp func, bool directiveOnly);
   bool exploreDesignSpace(FuncOp func, bool directiveOnly,
