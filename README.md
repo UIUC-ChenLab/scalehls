@@ -1,6 +1,8 @@
 # ScaleHLS Project (scalehls)
 
-This project aims to create a framework that ultimately converts an algorithm written in a high level language into an efficient hardware implementation. With multiple levels of intermediate representations (IRs), MLIR appears to be the ideal tool for exploring ways to optimize the eventual design at various levels of abstraction (e.g. various levels of parallelism). Our framework will be based on MLIR, it will incorporate a backend for high level synthesis (HLS) C/C++ code. However, the key contribution will be our parameterization and optimization of a tremendously large design space.
+ScaleHLS is a next-generation HLS compilation flow, on top of a multi-level compiler infrastructure called MLIR. ScaleHLS is able to represent and optimize HLS designs at multiple levels of abstraction and provides an HLS-dedicated transform and analysis library to solve the optimization problems at the suitable representation levels. On top of the library, we also build an automated DSE engine to explore the multi-dimensional design space efficiently. In addition, we develop an HLS C front-end and a C/C++ emission back-end to translate HLS designs into/from MLIR for enabling the end-to-end ScaleHLS flow. Experimental results show that, comparing to the baseline designs only optimized by Xilinx Vivado HLS, ScaleHLS improves the performances with amazing quality-of-results – up to 768.1× better on computation kernel level programs and up to 3825.0× better on neural network models.
+
+Please check out our [arXiv paper](https://arxiv.org/abs/2107.11673) for more details.
 
 ## Quick Start
 
