@@ -4,9 +4,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/AffineExpr.h"
 #include "mlir/IR/AffineMap.h"
@@ -80,11 +80,21 @@ LogicalResult SCFForRaising::matchAndRewrite(ForOp forOp,
                     .getValue()
                     .cast<IntegerAttr>()
                     .getInt();
-  // the loop bounds are both valid symbols - direct map #map <()[s0] -> (s0)>
-  AffineMap directSymbolMap =
-      AffineMap::get(0, 1, getAffineSymbolExpr(0, rewriter.getContext()));
-  auto f = rewriter.create<mlir::AffineForOp>(loc, lb, directSymbolMap, ub,
-                                              directSymbolMap, stepNum);
+
+  auto symbolExpr = getAffineSymbolExpr(0, rewriter.getContext());
+  auto dimExpr = getAffineDimExpr(0, rewriter.getContext());
+
+  // the loop bounds are both valid symbols or dims.
+  AffineMap lbAffineMap = AffineMap::get(0, 1, symbolExpr);
+  if (!lb.getDefiningOp())
+    lbAffineMap = AffineMap::get(1, 0, dimExpr);
+
+  AffineMap ubAffineMap = AffineMap::get(0, 1, symbolExpr);
+  if (!ub.getDefiningOp())
+    ubAffineMap = AffineMap::get(1, 0, dimExpr);
+
+  auto f = rewriter.create<mlir::AffineForOp>(loc, lb, lbAffineMap, ub,
+                                              ubAffineMap, stepNum);
   rewriter.eraseBlock(f.getBody());
   Operation *loopTerminator = forOp.region().back().getTerminator();
   ValueRange terminatorOperands = loopTerminator->getOperands();

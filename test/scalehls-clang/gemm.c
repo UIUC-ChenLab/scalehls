@@ -1,4 +1,4 @@
-// RUN: scalehls-clang %s | FileCheck %s
+// RUN: scalehls-clang %s | scalehls-opt -cse -canonicalize | FileCheck %s
 
 // CHECK: func @gemm(
 void gemm(float alpha, float beta, float C[32][32], float A[32][32],

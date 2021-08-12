@@ -48,8 +48,18 @@ After the installation and test successfully completed, you should be able to pl
 ```sh
 $ cd $SCALEHLS_DIR
 
-$ # Parse HLS C programs.
-$ scalehls-clang test/scalehls-clang/syrk.c | scalehls-opt
+$ # HLS C programs parsing and automatic kernel-level design space exploration.
+$ scalehls-clang test/scalehls-clang/gemm.c \
+    | scalehls-opt -cse -canonicalize -raise-scf-for -raise-memref-ops \
+    -simplify-affine-structures -cse -canonicalize \
+    -multiple-level-dse="top-func=gemm output-path=./ target-spec=config/target-spec.ini" \
+    -debug-only=scalehls > /dev/null
+$ scalehls-translate -emit-hlscpp gemm_pareto_0.mlir > gemm_pareto_0.cpp
+```
+
+ScaleHLS transform passes and QoR estimator:
+```sh
+$ cd $SCALEHLS_DIR
 
 $ # Loop and directive-level optimizations, QoR estimation, and C++ code generation.
 $ scalehls-opt samples/polybench/syrk/syrk_32.mlir \
@@ -60,19 +70,11 @@ $ scalehls-opt samples/polybench/syrk/syrk_32.mlir \
     -qor-estimation="target-spec=config/target-spec.ini" \
     | scalehls-translate -emit-hlscpp
 
-$ # Automatic kernel-level design space exploration.
-$ scalehls-opt samples/polybench/gemm/gemm_32.mlir \
-    -multiple-level-dse="top-func=gemm_32 output-path=./ target-spec=config/target-spec.ini" \
-    -debug-only=scalehls > /dev/null
-$ scalehls-translate -emit-hlscpp gemm_32_pareto_0.mlir > gemm_32_pareto_0.cpp
-
 $ # Benchmark generation, dataflow-level optimization, HLSKernel lowering and bufferization.
 $ benchmark-gen -type "cnn" -config "config/cnn-config.ini" -number 1 \
     | scalehls-opt -legalize-dataflow="insert-copy=true min-gran=2" -split-function \
     -hlskernel-bufferize -hlskernel-to-affine -func-bufferize -canonicalize
 ```
-
-Please refer to the `samples/polybench` folder for more test cases.
 
 ## Integration with ONNX-MLIR
 If you have installed ONNX-MLIR or established ONNX-MLIR docker to `$ONNXMLIR_DIR` following the instruction from (https://github.com/onnx/onnx-mlir), you should be able to run the following integration test:

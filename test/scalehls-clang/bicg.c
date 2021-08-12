@@ -1,4 +1,4 @@
-// RUN: scalehls-clang %s | FileCheck %s
+// RUN: scalehls-clang %s | scalehls-opt -cse -canonicalize | FileCheck %s
 
 // CHECK: func @bicg(
 void bicg(float A[32][32], float s[32], float q[32], float p[32], float r[32]) {

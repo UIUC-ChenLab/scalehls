@@ -1,4 +1,4 @@
-// RUN: scalehls-opt --raise-scf-for --raise-memref-ops %s | FileCheck %s
+// RUN: scalehls-opt -raise-scf-for -raise-memref-ops %s | FileCheck %s
 
 // CHECK-LABEL: func @gemm(%arg0: f64, %arg1: f64, %arg2: memref<32x32xf64>, %arg3: memref<32x32xf64>, %arg4: memref<32x32xf64>) {
 // CHECK:   %c32 = constant 32 : index

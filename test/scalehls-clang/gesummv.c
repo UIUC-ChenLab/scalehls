@@ -1,4 +1,4 @@
-// RUN: scalehls-clang %s | FileCheck %s
+// RUN: scalehls-clang %s | scalehls-opt -cse -canonicalize | FileCheck %s
 
 // CHECK: func @gesummv(
 void gesummv(float alpha, float beta, float A[32][32], float B[32][32],

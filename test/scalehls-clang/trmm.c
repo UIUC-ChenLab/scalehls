@@ -1,4 +1,4 @@
-// RUN: scalehls-clang %s | FileCheck %s
+// RUN: scalehls-clang %s | scalehls-opt -cse -canonicalize | FileCheck %s
 
 // CHECK: func @trmm(
 void trmm(float alpha, float A[32][32], float B[32][32]) {
