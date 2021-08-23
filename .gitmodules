@@ -1,7 +1,3 @@
-[submodule "llvm"]
-	path = llvm
-	url = git@github.com:circt/llvm.git
-
 [submodule "Polygeist"]
 	path = Polygeist
 	url = git@github.com:wsmoses/Polygeist.git
