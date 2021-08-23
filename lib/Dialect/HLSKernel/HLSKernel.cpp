@@ -255,3 +255,6 @@ static LogicalResult verify(CopyOp op) {
 
 #define GET_OP_CLASSES
 #include "scalehls/Dialect/HLSKernel/HLSKernel.cpp.inc"
+#undef GET_OP_CLASSES
+
+#include "scalehls/Dialect/HLSKernel/HLSKernelDialect.cpp.inc"

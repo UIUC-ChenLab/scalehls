@@ -230,3 +230,6 @@ void CastOp::getCanonicalizationPatterns(RewritePatternSet &results,
 
 #define GET_OP_CLASSES
 #include "scalehls/Dialect/HLSCpp/HLSCpp.cpp.inc"
+#undef GET_OP_CLASSES
+
+#include "scalehls/Dialect/HLSCpp/HLSCppDialect.cpp.inc"

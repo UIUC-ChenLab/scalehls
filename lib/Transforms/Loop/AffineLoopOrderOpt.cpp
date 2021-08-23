@@ -58,7 +58,7 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
           MemRefAccess dstAccess(dstOp);
           MemRefAccess srcAccess(srcOp);
 
-          FlatAffineConstraints depConstrs;
+          FlatAffineValueConstraints depConstrs;
           SmallVector<DependenceComponent, 2> depComps;
 
           DependenceResult result = checkMemrefAccessDependence(

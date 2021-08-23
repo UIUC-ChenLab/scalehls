@@ -353,7 +353,7 @@ bool scalehls::checkDependence(Operation *A, Operation *B) {
       if (parallelAttr.getValue())
         continue;
 
-    FlatAffineConstraints depConstrs;
+    FlatAffineValueConstraints depConstrs;
     DependenceResult result = checkMemrefAccessDependence(
         MemRefAccess(A), MemRefAccess(B), depth, &depConstrs,
         /*dependenceComponents=*/nullptr);

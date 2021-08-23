@@ -8,24 +8,35 @@ Please check out our [arXiv paper](https://arxiv.org/abs/2107.11673) for more de
 
 ### 0. Download ScaleHLS
 ```sh
-$ git clone git@github.com:hanchenye/scalehls.git
+$ git clone --recursive git@github.com:hanchenye/scalehls.git
 $ cd scalehls
-$ git submodule init
-$ git submodule update
 ```
 
 ### 1. Install LLVM, MLIR, and Clang
 This step assumes this repository is cloned to `$SCALEHLS_DIR`. To build LLVM and MLIR, run:
 ```sh
-$ mkdir $SCALEHLS_DIR/llvm/build
-$ cd $SCALEHLS_DIR/llvm/build
+$ mkdir $SCALEHLS_DIR/Polygeist/llvm-project/build
+$ cd $SCALEHLS_DIR/Polygeist/llvm-project/build
 $ cmake -G Ninja ../llvm \
-    -DLLVM_ENABLE_PROJECTS="mlir;llvm;clang;clang-extra-tools" \
-    -DLLVM_TARGETS_TO_BUILD="X86;RISCV" \
+    -DLLVM_ENABLE_PROJECTS="mlir;llvm;clang" \
+    -DLLVM_TARGETS_TO_BUILD="X86" \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=DEBUG
 $ ninja
 $ ninja check-mlir
+```
+
+### 2. Install Polygeist
+```sh
+$ mkdir $SCALEHLS_DIR/Polygeist/build
+$ cd $SCALEHLS_DIR/Polygeist/build
+$ cmake -G Ninja .. \
+    -DMLIR_DIR=$PWD/../llvm-project/build/lib/cmake/mlir \
+    -DCLANG_DIR=$PWD/../llvm-project/build/lib/cmake/clang \
+    -DLLVM_ENABLE_ASSERTIONS=ON \
+    -DCMAKE_BUILD_TYPE=DEBUG
+$ ninja
+$ ninja check-mlir-clang
 ```
 
 ### 2. Install ScaleHLS
@@ -34,9 +45,9 @@ To build and launch the tests, run:
 $ mkdir $SCALEHLS_DIR/build
 $ cd $SCALEHLS_DIR/build
 $ cmake -G Ninja .. \
-    -DMLIR_DIR=$PWD/../llvm/build/lib/cmake/mlir \
-    -DLLVM_DIR=$PWD/../llvm/build/lib/cmake/llvm \
-    -DCLANG_DIR=$PWD/../llvm/build/lib/cmake/clang \
+    -DMLIR_DIR=$PWD/../Polygeist/llvm-project/build/lib/cmake/mlir \
+    -DLLVM_DIR=$PWD/../Polygeist/llvm-project/build/lib/cmake/llvm \
+    -DCLANG_DIR=$PWD/../Polygeist/llvm-project/build/lib/cmake/clang \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=DEBUG
 $ ninja check-scalehls

@@ -642,7 +642,7 @@ private:
 
     llvm::SmallString<16> value;
     if (intLiteral)
-      value = intLiteral->getValue().toString(10, true);
+      intLiteral->getValue().toString(value, 10, true);
     else if (floatLiteral)
       floatLiteral->getValue().toString(value);
     else

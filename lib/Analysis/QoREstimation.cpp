@@ -346,7 +346,7 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
           continue;
 
         for (auto depth : loopDepths) {
-          FlatAffineConstraints depConstrs;
+          FlatAffineValueConstraints depConstrs;
           SmallVector<DependenceComponent, 2> depComps;
 
           DependenceResult result = checkMemrefAccessDependence(
@@ -747,7 +747,7 @@ TimingAttr ScaleHLSEstimator::estimateTiming(Block &block, int64_t begin) {
                   continue;
             }
 
-            FlatAffineConstraints dependConstrs;
+            FlatAffineValueConstraints dependConstrs;
 
             DependenceResult result = checkMemrefAccessDependence(
                 opAccess, depOpAccess, depth, &dependConstrs,
