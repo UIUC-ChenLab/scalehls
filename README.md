@@ -12,24 +12,26 @@ $ git clone --recursive git@github.com:hanchenye/scalehls.git
 $ cd scalehls
 ```
 
-### 1. Install LLVM, MLIR, and Clang
-This step assumes this repository is cloned to `$SCALEHLS_DIR`. To build LLVM and MLIR, run:
+### 1. Install MLIR and Clang
+This step assumes this repository is cloned to `scalehls`. To build MLIR and Clang, run:
 ```sh
-$ mkdir $SCALEHLS_DIR/Polygeist/llvm-project/build
-$ cd $SCALEHLS_DIR/Polygeist/llvm-project/build
+$ mkdir scalehls/Polygeist/llvm-project/build
+$ cd scalehls/Polygeist/llvm-project/build
 $ cmake -G Ninja ../llvm \
-    -DLLVM_ENABLE_PROJECTS="mlir;llvm;clang" \
+    -DLLVM_ENABLE_PROJECTS="mlir;clang" \
     -DLLVM_TARGETS_TO_BUILD="X86" \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=DEBUG
 $ ninja
 $ ninja check-mlir
+$ export PATH=scalehls/Polygeist/llvm-project/build/bin:$PATH
 ```
 
 ### 2. Install Polygeist
+ScaleHLS exploits the `mlir-clang` tool of Polygeist as the C front-end. To build Polygeist, run:
 ```sh
-$ mkdir $SCALEHLS_DIR/Polygeist/build
-$ cd $SCALEHLS_DIR/Polygeist/build
+$ mkdir scalehls/Polygeist/build
+$ cd scalehls/Polygeist/build
 $ cmake -G Ninja .. \
     -DMLIR_DIR=$PWD/../llvm-project/build/lib/cmake/mlir \
     -DCLANG_DIR=$PWD/../llvm-project/build/lib/cmake/clang \
@@ -37,13 +39,14 @@ $ cmake -G Ninja .. \
     -DCMAKE_BUILD_TYPE=DEBUG
 $ ninja
 $ ninja check-mlir-clang
+$ export PATH=scalehls/Polygeist/build/mlir-clang:$PATH
 ```
 
 ### 2. Install ScaleHLS
-To build and launch the tests, run:
+To build and launch the tests of ScaleHLS, run:
 ```sh
-$ mkdir $SCALEHLS_DIR/build
-$ cd $SCALEHLS_DIR/build
+$ mkdir scalehls/build
+$ cd scalehls/build
 $ cmake -G Ninja .. \
     -DMLIR_DIR=$PWD/../Polygeist/llvm-project/build/lib/cmake/mlir \
     -DLLVM_DIR=$PWD/../Polygeist/llvm-project/build/lib/cmake/llvm \
@@ -51,16 +54,16 @@ $ cmake -G Ninja .. \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=DEBUG
 $ ninja check-scalehls
-$ export PATH=$SCALEHLS_DIR/build/bin:$PATH
+$ export PATH=scalehls/build/bin:$PATH
 ```
 
 ### 3. Try ScaleHLS
 After the installation and test successfully completed, you should be able to play with:
 ```sh
-$ cd $SCALEHLS_DIR
+$ cd scalehls
 
 $ # HLS C programs parsing and automatic kernel-level design space exploration.
-$ scalehls-clang test/scalehls-clang/gemm.c \
+$ scalehls-clang samples/polybench/gemm/gemm_32.mlir \
     | scalehls-opt -cse -canonicalize -raise-scf-for -raise-memref-ops \
     -simplify-affine-structures -cse -canonicalize \
     -multiple-level-dse="top-func=gemm output-path=./ target-spec=config/target-spec.ini" \
@@ -70,7 +73,7 @@ $ scalehls-translate -emit-hlscpp gemm_pareto_0.mlir > gemm_pareto_0.cpp
 
 ScaleHLS transform passes and QoR estimator:
 ```sh
-$ cd $SCALEHLS_DIR
+$ cd scalehls
 
 $ # Loop and directive-level optimizations, QoR estimation, and C++ code generation.
 $ scalehls-opt samples/polybench/syrk/syrk_32.mlir \
@@ -90,7 +93,7 @@ $ benchmark-gen -type "cnn" -config "config/cnn-config.ini" -number 1 \
 ## Integration with ONNX-MLIR
 If you have installed ONNX-MLIR or established ONNX-MLIR docker to `$ONNXMLIR_DIR` following the instruction from (https://github.com/onnx/onnx-mlir), you should be able to run the following integration test:
 ```sh
-$ cd $SCALEHLS_DIR/samples/onnx-mlir/resnet18
+$ cd scalehls/samples/onnx-mlir/resnet18
 
 $ # Export PyTorch model to ONNX.
 $ python export_resnet18.py

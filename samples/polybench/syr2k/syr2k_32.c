@@ -1,8 +1,6 @@
-// RUN: scalehls-clang %s | scalehls-opt -cse -canonicalize | FileCheck %s
-
-// CHECK: func @syr2k(
-void syr2k(float alpha, float beta, float C[32][32], float A[32][32],
-           float B[32][32]) {
+void syr2k_32(float alpha, float beta, float C[32][32], float A[32][32],
+              float B[32][32]) {
+#pragma scop
   for (int i = 0; i < 32; i += 1) {
     for (int j = 0; j < (i + 1); j += 1) {
       C[i][j] *= beta;
@@ -12,4 +10,5 @@ void syr2k(float alpha, float beta, float C[32][32], float A[32][32],
       }
     }
   }
+#pragma endscop
 }

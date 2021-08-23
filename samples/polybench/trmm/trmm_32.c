@@ -1,7 +1,5 @@
-// RUN: scalehls-clang %s | scalehls-opt -cse -canonicalize | FileCheck %s
-
-// CHECK: func @trmm(
-void trmm(float alpha, float A[32][32], float B[32][32]) {
+void trmm_32(float alpha, float A[32][32], float B[32][32]) {
+#pragma scop
   for (int i = 0; i < 32; i += 1) {
     for (int j = 0; j < 32; j += 1) {
       for (int k = 0; k < (i + 1); k += 1) {
@@ -10,4 +8,5 @@ void trmm(float alpha, float A[32][32], float B[32][32]) {
       B[i][j] *= alpha;
     }
   }
+#pragma endscop
 }
