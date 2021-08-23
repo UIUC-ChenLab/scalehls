@@ -63,13 +63,12 @@ After the installation and test successfully completed, you should be able to pl
 $ cd scalehls
 
 $ # HLS C programs parsing and automatic kernel-level design space exploration.
-$ scalehls-clang samples/polybench/gemm/gemm_32.mlir \
-    | scalehls-opt -cse -canonicalize -raise-scf-for -raise-memref-ops \
-    -simplify-affine-structures -cse -canonicalize \
-    -multiple-level-dse="top-func=gemm output-path=./ target-spec=config/target-spec.ini" \
+$ scalehls-opt samples/polybench/gemm/gemm_32.mlir \
+    -multiple-level-dse="top-func=gemm_32 output-path=./ target-spec=config/target-spec.ini" \
     -debug-only=scalehls > /dev/null
 $ scalehls-translate -emit-hlscpp gemm_pareto_0.mlir > gemm_pareto_0.cpp
 ```
+Note: We are currently refactoring the HLS C parsing feature, hence it is temporarily unavailable at present.
 
 ScaleHLS transform passes and QoR estimator:
 ```sh

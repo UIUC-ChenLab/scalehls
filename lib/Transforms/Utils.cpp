@@ -122,7 +122,7 @@ bool scalehls::applyFullyUnrollAndPartition(Block &block, FuncOp func) {
   applyFullyLoopUnrolling(block);
 
   // Apply general optimizations and array partition.
-  PassManager optPM(func.getContext(), "func");
+  PassManager optPM(func.getContext(), "builtin.func");
   addPassPipeline(optPM);
   if (failed(optPM.run(func)))
     return false;
@@ -152,7 +152,7 @@ bool scalehls::applyOptStrategy(AffineLoopBand &band, FuncOp func,
     return false;
 
   // Apply generic optimizations.
-  PassManager optPM(func.getContext(), "func");
+  PassManager optPM(func.getContext(), "builtin.func");
   addPassPipeline(optPM);
   if (failed(optPM.run(func)))
     return false;
@@ -187,7 +187,7 @@ bool scalehls::applyOptStrategy(FuncOp func, ArrayRef<TileList> tileLists,
   }
 
   // Apply generic optimizations.
-  PassManager optPM(func.getContext(), "func");
+  PassManager optPM(func.getContext(), "builtin.func");
   addPassPipeline(optPM);
   if (failed(optPM.run(func)))
     return false;
