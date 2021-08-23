@@ -10,32 +10,6 @@
 include "mlir/Pass/PassBase.td"
 
 //===----------------------------------------------------------------------===//
-// SCF2Affine Raising passes
-//===----------------------------------------------------------------------===//
-
-def SCFForRaising : Pass<"raise-scf-for", "FuncOp"> {
-  let summary = "Raise SCF ForOps to Affine ForOps";
-  let description = [{
-    This raise-affine-for pass will check whether each scf.for op can be
-    converted to affine.for op and convert it if it can.
-  }];
-
-  let constructor = "mlir::scalehls::createRaiseSCFForPass()";
-
-}
-
-def LoadStoreRaising : Pass<"raise-memref-ops", "FuncOp"> {
-  let summary = "Raise MemoryOps (load & store) to Affine MemoryOps";
-  let description = [{
-    This raise-affine-for pass will check whether each memref.load or
-    memref.store op can be converted to affine.load or affine.store op and
-    convert it if it can.
-  }];
-
-  let constructor = "mlir::scalehls::createRaiseLoadStorePass()";
-}
-
-//===----------------------------------------------------------------------===//
 // HLSKernel and HLSCpp Conversion passes
 //===----------------------------------------------------------------------===//
 
