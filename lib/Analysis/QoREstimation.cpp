@@ -526,7 +526,7 @@ bool ScaleHLSEstimator::visitOp(AffineIfOp op, int64_t begin) {
 }
 
 bool ScaleHLSEstimator::visitOp(CallOp op, int64_t begin) {
-  auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCallee());
+  auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.calleeAttr());
   auto subFunc = dyn_cast<FuncOp>(callee);
   assert(subFunc && "callable is not a function operation");
 

@@ -15,7 +15,7 @@ using namespace hlscpp;
 
 static void updateSubFuncs(FuncOp func, Builder builder) {
   func.walk([&](CallOp op) {
-    auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCallee());
+    auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.calleeAttr());
     auto subFunc = dyn_cast<FuncOp>(callee);
 
     // Set sub-function type.
@@ -196,7 +196,7 @@ bool scalehls::applyArrayPartition(FuncOp func) {
   // Apply partition to all sub-functions and traverse all function to update
   // the "partitionsMap".
   func.walk([&](CallOp op) {
-    auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCallee());
+    auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.calleeAttr());
     auto subFunc = dyn_cast<FuncOp>(callee);
     assert(subFunc && "callable is not a function operation");
 
