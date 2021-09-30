@@ -536,7 +536,7 @@ bool FuncDesignSpace::exportParetoDesigns(unsigned outputNum,
       auto tmpFunc = func.clone();
       if (!applyOptStrategy(tmpFunc, tileLists, targetIIs))
         return false;
-      // estimator.estimateFunc(tmpFunc);
+      estimator.estimateFunc(tmpFunc);
 
       // Parse a new output file.
       auto outputFilePath = outputRootPath.str() + func.getName().str() +
@@ -566,12 +566,12 @@ bool FuncDesignSpace::exportParetoDesigns(unsigned outputNum,
 
 bool ScaleHLSOptimizer::emitQoRDebugInfo(FuncOp func, std::string message) {
   estimator.estimateFunc(func);
-  auto latency = getTiming(func).getLatency();
+  // auto latency = getTiming(func).getLatency();
   auto dspNum = getResource(func).getDsp();
 
-  LLVM_DEBUG(llvm::dbgs() << message + "\n";
-             llvm::dbgs() << "The clock cycle is " << Twine(latency)
-                          << ", DSP usage is " << Twine(dspNum) << ".\n\n";);
+  // LLVM_DEBUG(llvm::dbgs() << message + "\n";
+  //            llvm::dbgs() << "The clock cycle is " << Twine(latency)
+  //                         << ", DSP usage is " << Twine(dspNum) << ".\n\n";);
 
   return dspNum <= maxDspNum;
 }

@@ -6,17 +6,12 @@ Please check out our [arXiv paper](https://arxiv.org/abs/2107.11673) for more de
 
 ## Quick Start
 
-### 0. Download ScaleHLS
+### 1. Download and Install ScaleHLS
+To build ScaleHLS, run:
 ```sh
 $ git clone --recursive git@github.com:hanchenye/scalehls.git
-$ cd scalehls
-```
-
-### 1. Install ScaleHLS
-This step assumes this repository is cloned to `scalehls`. To build ScaleHLS, run:
-```sh
-$ mkdir build
-$ cd build
+$ mkdir scalehls/build
+$ cd scalehls/build
 $ cmake -G Ninja ../Polygeist/llvm-project/llvm \
     -DLLVM_ENABLE_PROJECTS="mlir;clang" \
     -DLLVM_EXTERNAL_PROJECTS="scalehls;polygeist" \
@@ -26,10 +21,13 @@ $ cmake -G Ninja ../Polygeist/llvm-project/llvm \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=DEBUG \
     -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
-    -DSCALEHLS_ENABLE_BINDINGS_PYTHON=ON
+    -DSCALEHLS_ENABLE_BINDINGS_PYTHON=ON \
+    -DCMAKE_LINKER=lld \
+    -DCMAKE_C_COMPILER=clang \
+    -DCMAKE_CXX_COMPILER=clang++
 $ ninja
 $ ninja check-scalehls
-$ export PATH=scalehls/build/bin:$PATH
+$ export PATH=$PWD/bin:$PATH
 ```
 
 ### 2. Try ScaleHLS
@@ -38,16 +36,10 @@ After the installation and test successfully completed, you should be able to pl
 $ cd scalehls
 
 $ # HLS C programs parsing and automatic kernel-level design space exploration.
-$ scalehls-opt samples/polybench/gemm/gemm_32.mlir \
-    -multiple-level-dse="top-func=gemm_32 output-path=./ target-spec=config/target-spec.ini" \
+$ mlir-clang samples/polybench/gemm/gemm_32.c -function=gemm_32 -memref-fullrank -S | \
+    scalehls-opt -multiple-level-dse="top-func=gemm_32 output-path=./ target-spec=config/target-spec.ini" \
     -debug-only=scalehls > /dev/null
-$ scalehls-translate -emit-hlscpp gemm_pareto_0.mlir > gemm_pareto_0.cpp
-```
-Note: We are currently refactoring the HLS C parsing feature, hence it is temporarily unavailable at present.
-
-ScaleHLS transform passes and QoR estimator:
-```sh
-$ cd scalehls
+$ scalehls-translate -emit-hlscpp gemm_32_pareto_0.mlir > gemm_32_pareto_0.cpp
 
 $ # Loop and directive-level optimizations, QoR estimation, and C++ code generation.
 $ scalehls-opt samples/polybench/syrk/syrk_32.mlir \
@@ -57,11 +49,6 @@ $ scalehls-opt samples/polybench/syrk/syrk_32.mlir \
     -affine-store-forward -simplify-memref-access -array-partition -cse -canonicalize \
     -qor-estimation="target-spec=config/target-spec.ini" \
     | scalehls-translate -emit-hlscpp
-
-$ # Benchmark generation, dataflow-level optimization, HLSKernel lowering and bufferization.
-$ benchmark-gen -type "cnn" -config "config/cnn-config.ini" -number 1 \
-    | scalehls-opt -legalize-dataflow="insert-copy=true min-gran=2" -split-function \
-    -hlskernel-bufferize -hlskernel-to-affine -func-bufferize -canonicalize
 ```
 
 ## Integration with ONNX-MLIR
