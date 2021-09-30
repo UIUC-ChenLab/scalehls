@@ -4,10 +4,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "scalehls/Analysis/QoREstimation.h"
+#include "scalehls/Transforms/QoREstimation.h"
 #include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
-#include "scalehls/Analysis/Passes.h"
+#include "scalehls/Transforms/Passes.h"
 #include "llvm/ADT/SmallPtrSet.h"
 
 using namespace std;

@@ -5,4 +5,7 @@ add_mlir_library(MLIRScaleHLSTransforms
 
   DEPENDS
   MLIRScaleHLSTransformsIncGen
+
+  LINK_LIBS PUBLIC
+  MLIRScaleHLSSupport
   )

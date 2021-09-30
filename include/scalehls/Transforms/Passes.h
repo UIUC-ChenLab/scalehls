@@ -17,6 +17,9 @@ class Pass;
 namespace mlir {
 namespace scalehls {
 
+/// QoR estimation pass.
+std::unique_ptr<Pass> createQoREstimationPass();
+
 /// Design space exploration pass.
 std::unique_ptr<Pass> createMultipleLevelDSEPass();
 

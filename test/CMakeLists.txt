@@ -1,3 +1,7 @@
+llvm_canonicalize_cmake_booleans(
+  SCALEHLS_ENABLE_BINDINGS_PYTHON
+  )
+
 configure_lit_site_cfg(
   ${CMAKE_CURRENT_SOURCE_DIR}/lit.site.cfg.py.in
   ${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg.py
@@ -7,11 +11,15 @@ configure_lit_site_cfg(
 
 set(SCALEHLS_TEST_DEPENDS
   FileCheck count not
-  # scalehls-clang
   scalehls-opt
   scalehls-translate
   benchmark-gen
   )
+
+if(SCALEHLS_ENABLE_BINDINGS_PYTHON)
+  list(APPEND SCALEHLS_TEST_DEPENDS ScaleHLSMLIRPythonModules)
+  list(APPEND SCALEHLS_TEST_DEPENDS ScaleHLSPythonModules)
+endif()
 
 add_lit_testsuite(check-scalehls "Running the scalehls regression tests"
   ${CMAKE_CURRENT_BINARY_DIR}

@@ -10,8 +10,8 @@
 #include "external/INIReader.h"
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/IR/BuiltinOps.h"
-#include "scalehls/Analysis/Utils.h"
 #include "scalehls/Dialect/HLSCpp/Visitor.h"
+#include "scalehls/Support/Utils.h"
 #include "scalehls/Transforms/Utils.h"
 
 namespace mlir {

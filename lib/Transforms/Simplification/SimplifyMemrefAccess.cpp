@@ -4,7 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "scalehls/Analysis/Utils.h"
+#include "scalehls/Support/Utils.h"
 #include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;

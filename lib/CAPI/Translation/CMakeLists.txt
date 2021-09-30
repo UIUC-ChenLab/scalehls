@@ -1,4 +1,4 @@
-add_circt_library(MLIRScaleHLSCAPIEmitHLSCpp
+add_mlir_library(MLIRScaleHLSCAPIEmitHLSCpp
   EmitHLSCpp.cpp
 
   ADDITIONAL_HEADER_DIRS

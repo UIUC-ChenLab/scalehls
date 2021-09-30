@@ -7,7 +7,7 @@
 #ifndef SCALEHLS_TRANSFORMS_MULTIPLELEVELDSE_H
 #define SCALEHLS_TRANSFORMS_MULTIPLELEVELDSE_H
 
-#include "scalehls/Analysis/QoREstimation.h"
+#include "scalehls/Transforms/QoREstimation.h"
 #include "scalehls/Transforms/Utils.h"
 
 namespace mlir {

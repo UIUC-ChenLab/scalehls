@@ -12,7 +12,7 @@ config.llvm_shlib_dir = "@SHLIBDIR@"
 config.llvm_shlib_ext = "@SHLIBEXT@"
 config.llvm_exe_ext = "@EXEEXT@"
 config.lit_tools_dir = "@LLVM_LIT_TOOLS_DIR@"
-config.python_executable = "@PYTHON_EXECUTABLE@"
+config.python_executable = "@Python3_EXECUTABLE@"
 config.gold_executable = "@GOLD_EXECUTABLE@"
 config.ld64_executable = "@LD64_EXECUTABLE@"
 config.enable_shared = @ENABLE_SHARED@
@@ -34,6 +34,8 @@ config.mlir_tools_dir = "@MLIR_TOOLS_DIR@"
 config.scalehls_src_root = "@SCALEHLS_SOURCE_DIR@"
 config.scalehls_obj_root = "@SCALEHLS_BINARY_DIR@"
 config.scalehls_tools_dir = "@SCALEHLS_TOOLS_DIR@"
+config.scalehls_python_packages_dir = "@SCALEHLS_PYTHON_PACKAGES_DIR@"
+config.enable_bindings_python = @SCALEHLS_ENABLE_BINDINGS_PYTHON@
 
 # Support substitution of the tools_dir with user parameters. This is
 # used when we can't determine the tool dir at configuration time.

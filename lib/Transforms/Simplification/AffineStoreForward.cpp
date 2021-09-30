@@ -8,7 +8,7 @@
 #include "mlir/Analysis/Utils.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/IntegerSet.h"
-#include "scalehls/Analysis/Utils.h"
+#include "scalehls/Support/Utils.h"
 #include "scalehls/Transforms/Passes.h"
 #include <algorithm>
 

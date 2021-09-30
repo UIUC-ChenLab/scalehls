@@ -6,4 +6,5 @@ add_mlir_library(MLIRScaleHLSEmitHLSCpp
   LINK_LIBS PUBLIC
   MLIRHLSCpp
   MLIRHLSKernel
+  MLIRScaleHLSSupport
   )

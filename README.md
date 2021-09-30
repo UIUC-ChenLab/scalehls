@@ -12,9 +12,11 @@ $ git clone --recursive git@github.com:hanchenye/scalehls.git
 $ cd scalehls
 ```
 
-### 1. Install MLIR, Clang, Polygeist, and ScaleHLS
+### 1. Install ScaleHLS
 This step assumes this repository is cloned to `scalehls`. To build ScaleHLS, run:
 ```sh
+$ mkdir build
+$ cd build
 $ cmake -G Ninja ../Polygeist/llvm-project/llvm \
     -DLLVM_ENABLE_PROJECTS="mlir;clang" \
     -DLLVM_EXTERNAL_PROJECTS="scalehls;polygeist" \
@@ -22,7 +24,9 @@ $ cmake -G Ninja ../Polygeist/llvm-project/llvm \
     -DLLVM_EXTERNAL_POLYGEIST_SOURCE_DIR=../Polygeist \
     -DLLVM_TARGETS_TO_BUILD="host" \
     -DLLVM_ENABLE_ASSERTIONS=ON \
-    -DCMAKE_BUILD_TYPE=DEBUG
+    -DCMAKE_BUILD_TYPE=DEBUG \
+    -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
+    -DSCALEHLS_ENABLE_BINDINGS_PYTHON=ON
 $ ninja
 $ ninja check-scalehls
 $ export PATH=scalehls/build/bin:$PATH

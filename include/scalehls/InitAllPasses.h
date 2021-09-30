@@ -8,7 +8,6 @@
 #define SCALEHLS_INITALLPASSES_H
 
 #include "mlir/InitAllPasses.h"
-#include "scalehls/Analysis/Passes.h"
 #include "scalehls/Conversion/Passes.h"
 #include "scalehls/Dialect/HLSKernel/Passes.h"
 #include "scalehls/Transforms/Passes.h"
@@ -18,7 +17,6 @@ namespace scalehls {
 
 // Add all the ScaleHLS passes.
 inline void registerAllPasses() {
-  scalehls::registerAnalysisPasses();
   scalehls::registerConversionPasses();
   scalehls::registerTransformsPasses();
   scalehls::registerHLSKernelTransformsPasses();

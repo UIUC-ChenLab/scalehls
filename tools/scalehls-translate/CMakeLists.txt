@@ -17,5 +17,5 @@ target_link_libraries(scalehls-translate
   ${translation_libs}
 
   MLIRScaleHLSEmitHLSCpp
-  MLIRScaleHLSAnalysis
+  MLIRScaleHLSSupport
   )
