@@ -12,11 +12,11 @@ To build ScaleHLS with HLS C front-end, run:
 $ git clone --recursive git@github.com:hanchenye/scalehls.git
 $ mkdir scalehls/build
 $ cd scalehls/build
-$ cmake -G Ninja ../Polygeist/llvm-project/llvm \
+$ cmake -G Ninja ../polygeist/llvm-project/llvm \
     -DLLVM_ENABLE_PROJECTS="mlir;clang" \
     -DLLVM_EXTERNAL_PROJECTS="scalehls;polygeist" \
     -DLLVM_EXTERNAL_SCALEHLS_SOURCE_DIR=.. \
-    -DLLVM_EXTERNAL_POLYGEIST_SOURCE_DIR=../Polygeist \
+    -DLLVM_EXTERNAL_POLYGEIST_SOURCE_DIR=../polygeist \
     -DLLVM_TARGETS_TO_BUILD="host" \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=DEBUG \
