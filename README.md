@@ -12,52 +12,23 @@ $ git clone --recursive git@github.com:hanchenye/scalehls.git
 $ cd scalehls
 ```
 
-### 1. Install MLIR and Clang
-This step assumes this repository is cloned to `scalehls`. To build MLIR and Clang, run:
+### 1. Install MLIR, Clang, Polygeist, and ScaleHLS
+This step assumes this repository is cloned to `scalehls`. To build ScaleHLS, run:
 ```sh
-$ mkdir scalehls/Polygeist/llvm-project/build
-$ cd scalehls/Polygeist/llvm-project/build
-$ cmake -G Ninja ../llvm \
+$ cmake -G Ninja ../Polygeist/llvm-project/llvm \
     -DLLVM_ENABLE_PROJECTS="mlir;clang" \
-    -DLLVM_TARGETS_TO_BUILD="X86" \
+    -DLLVM_EXTERNAL_PROJECTS="scalehls;polygeist" \
+    -DLLVM_EXTERNAL_SCALEHLS_SOURCE_DIR=.. \
+    -DLLVM_EXTERNAL_POLYGEIST_SOURCE_DIR=../Polygeist \
+    -DLLVM_TARGETS_TO_BUILD="host" \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=DEBUG
 $ ninja
-$ ninja check-mlir
-$ export PATH=scalehls/Polygeist/llvm-project/build/bin:$PATH
-```
-
-### 2. Install Polygeist
-ScaleHLS exploits the `mlir-clang` tool of Polygeist as the C front-end. To build Polygeist, run:
-```sh
-$ mkdir scalehls/Polygeist/build
-$ cd scalehls/Polygeist/build
-$ cmake -G Ninja .. \
-    -DMLIR_DIR=$PWD/../llvm-project/build/lib/cmake/mlir \
-    -DCLANG_DIR=$PWD/../llvm-project/build/lib/cmake/clang \
-    -DLLVM_ENABLE_ASSERTIONS=ON \
-    -DCMAKE_BUILD_TYPE=DEBUG
-$ ninja
-$ ninja check-mlir-clang
-$ export PATH=scalehls/Polygeist/build/mlir-clang:$PATH
-```
-
-### 2. Install ScaleHLS
-To build and launch the tests of ScaleHLS, run:
-```sh
-$ mkdir scalehls/build
-$ cd scalehls/build
-$ cmake -G Ninja .. \
-    -DMLIR_DIR=$PWD/../Polygeist/llvm-project/build/lib/cmake/mlir \
-    -DLLVM_DIR=$PWD/../Polygeist/llvm-project/build/lib/cmake/llvm \
-    -DCLANG_DIR=$PWD/../Polygeist/llvm-project/build/lib/cmake/clang \
-    -DLLVM_ENABLE_ASSERTIONS=ON \
-    -DCMAKE_BUILD_TYPE=DEBUG
 $ ninja check-scalehls
 $ export PATH=scalehls/build/bin:$PATH
 ```
 
-### 3. Try ScaleHLS
+### 2. Try ScaleHLS
 After the installation and test successfully completed, you should be able to play with:
 ```sh
 $ cd scalehls
