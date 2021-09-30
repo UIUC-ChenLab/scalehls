@@ -7,7 +7,7 @@ Please check out our [arXiv paper](https://arxiv.org/abs/2107.11673) for more de
 ## Quick Start
 
 ### 1. Download and Install ScaleHLS
-To build ScaleHLS, run:
+To build ScaleHLS with HLS C front-end, run:
 ```sh
 $ git clone --recursive git@github.com:hanchenye/scalehls.git
 $ mkdir scalehls/build
@@ -37,7 +37,7 @@ $ cd scalehls
 
 $ # HLS C programs parsing and automatic kernel-level design space exploration.
 $ mlir-clang samples/polybench/gemm/gemm_32.c -function=gemm_32 -memref-fullrank -S | \
-    scalehls-opt -multiple-level-dse="top-func=gemm_32 output-path=./ target-spec=config/target-spec.ini" \
+    scalehls-opt -dse="top-func=gemm_32 output-path=./ target-spec=samples/polybench/target-spec.ini" \
     -debug-only=scalehls > /dev/null
 $ scalehls-translate -emit-hlscpp gemm_32_pareto_0.mlir > gemm_32_pareto_0.cpp
 

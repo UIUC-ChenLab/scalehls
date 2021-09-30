@@ -38,7 +38,7 @@ def QoREstimation : Pass<"qor-estimation", "ModuleOp"> {
 // Design Space Exploration Pass
 //===----------------------------------------------------------------------===//
 
-def MultipleLevelDSE : Pass<"multiple-level-dse", "ModuleOp"> {
+def MultipleLevelDSE : Pass<"dse", "ModuleOp"> {
   let summary = "Optimize HLS design at multiple abstraction level";
   let description = [{
     This multiple-level-dse pass will automatically conduct the design space
