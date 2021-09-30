@@ -66,8 +66,7 @@ tool_dirs = [config.scalehls_tools_dir,
              config.mlir_tools_dir, config.llvm_tools_dir]
 tools = [
     'scalehls-opt',
-    'scalehls-translate',
-    'benchmark-gen'
+    'scalehls-translate'
 ]
 
 # The following tools are optional

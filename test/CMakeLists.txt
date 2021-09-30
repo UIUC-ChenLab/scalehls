@@ -13,7 +13,6 @@ set(SCALEHLS_TEST_DEPENDS
   FileCheck count not
   scalehls-opt
   scalehls-translate
-  benchmark-gen
   )
 
 if(SCALEHLS_ENABLE_BINDINGS_PYTHON)
