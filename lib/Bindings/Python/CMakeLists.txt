@@ -18,6 +18,7 @@ declare_mlir_python_extension(ScaleHLSBindingsPythonExtension.Core
   SOURCES
     ScaleHLSModule.cpp
   EMBED_CAPI_LINK_LIBS
+    MLIRScaleHLSCAPITransformsUtils
     MLIRScaleHLSCAPIEmitHLSCpp
   PRIVATE_LINK_LIBS
     ${_depends}

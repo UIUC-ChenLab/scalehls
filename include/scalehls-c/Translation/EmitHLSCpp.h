@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_C_EMITHLSCPP_H
-#define SCALEHLS_C_EMITHLSCPP_H
+#ifndef SCALEHLS_C_TRANSLATION_EMITHLSCPP_H
+#define SCALEHLS_C_TRANSLATION_EMITHLSCPP_H
 
 #include "mlir-c/IR.h"
 
@@ -23,4 +23,4 @@ MLIR_CAPI_EXPORTED MlirLogicalResult mlirEmitHlsCpp(MlirModule,
 }
 #endif
 
-#endif // SCALEHLS_C_EMITHLSCPP_H
+#endif // SCALEHLS_C_TRANSLATION_EMITHLSCPP_H
