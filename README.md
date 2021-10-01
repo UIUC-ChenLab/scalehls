@@ -6,23 +6,27 @@ Please check out our [arXiv paper](https://arxiv.org/abs/2107.11673) for more de
 
 ## Quick Start
 
-### 1. Download and Install ScaleHLS
-To build ScaleHLS with HLS C front-end, run:
+### 0. Download ScaleHLS
 ```sh
 $ git clone --recursive git@github.com:hanchenye/scalehls.git
+```
+
+### 1. Install ScaleHLS
+To enable the Python binding feature, please make sure the `pybind11` has been installed. To build MLIR and ScaleHLS, run (note that the `-DLLVM_PARALLEL_LINK_JOBS` option can be tuned to reduce the memory usage):
+```sh
 $ mkdir scalehls/build
 $ cd scalehls/build
 $ cmake -G Ninja ../polygeist/llvm-project/llvm \
     -DLLVM_ENABLE_PROJECTS="mlir;clang" \
-    -DLLVM_EXTERNAL_PROJECTS="scalehls;polygeist" \
-    -DLLVM_EXTERNAL_SCALEHLS_SOURCE_DIR=.. \
-    -DLLVM_EXTERNAL_POLYGEIST_SOURCE_DIR=../polygeist \
+    -DLLVM_EXTERNAL_PROJECTS="scalehls" \
+    -DLLVM_EXTERNAL_SCALEHLS_SOURCE_DIR=$PWD/.. \
     -DLLVM_TARGETS_TO_BUILD="host" \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=DEBUG \
     -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
     -DSCALEHLS_ENABLE_BINDINGS_PYTHON=ON \
-    -DCMAKE_LINKER=lld \
+    -DLLVM_PARALLEL_LINK_JOBS= \
+    -DLLVM_USE_LINKER=lld \
     -DCMAKE_C_COMPILER=clang \
     -DCMAKE_CXX_COMPILER=clang++
 $ ninja
@@ -30,8 +34,24 @@ $ ninja check-scalehls
 $ export PATH=$PWD/bin:$PATH
 ```
 
+ScaleHLS exploits the `mlir-clang` tool of Polygeist as the C front-end. To build Polygeist, run:
+```sh
+$ mkdir scalehls/polygeist/build
+$ cd scalehls/polygeist/build
+$ cmake -G Ninja .. \
+    -DMLIR_DIR=$PWD/../../build/lib/cmake/mlir \
+    -DCLANG_DIR=$PWD/../../build/lib/cmake/clang \
+    -DLLVM_ENABLE_ASSERTIONS=ON \
+    -DCMAKE_BUILD_TYPE=DEBUG \
+    -DLLVM_USE_LINKER=lld \
+    -DCMAKE_C_COMPILER=clang \
+    -DCMAKE_CXX_COMPILER=clang++
+$ ninja check-mlir-clang
+$ export PATH=$PWD/mlir-clang:$PATH
+```
+
 ### 2. Try ScaleHLS
-After the installation and test successfully completed, you should be able to play with:
+After the installation and regression test successfully completed, you should be able to play with:
 ```sh
 $ cd scalehls
 
