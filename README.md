@@ -31,7 +31,7 @@ $ cmake -G Ninja ../polygeist/llvm-project/llvm \
     -DCMAKE_CXX_COMPILER=clang++
 $ ninja
 $ ninja check-scalehls
-$ export PATH=$PWD/bin:$PATH
+$ export PATH=$PATH:$PWD/bin
 ```
 
 ScaleHLS exploits the `mlir-clang` tool of Polygeist as the C front-end. To build Polygeist, run:
@@ -47,7 +47,7 @@ $ cmake -G Ninja .. \
     -DCMAKE_C_COMPILER=clang \
     -DCMAKE_CXX_COMPILER=clang++
 $ ninja check-mlir-clang
-$ export PATH=$PWD/mlir-clang:$PATH
+$ export PATH=$PATH:$PWD/mlir-clang
 ```
 
 ### 2. Try ScaleHLS
@@ -67,7 +67,7 @@ $ scalehls-opt samples/polybench/syrk/syrk_32.mlir \
     -partial-affine-loop-tile="tile-size=2" -legalize-to-hlscpp="top-func=syrk_32" \
     -loop-pipelining="pipeline-level=3 target-ii=2" -canonicalize -simplify-affine-if \
     -affine-store-forward -simplify-memref-access -array-partition -cse -canonicalize \
-    -qor-estimation="target-spec=config/target-spec.ini" \
+    -qor-estimation="target-spec=samples/polybench/target-spec.ini" \
     | scalehls-translate -emit-hlscpp
 ```
 
