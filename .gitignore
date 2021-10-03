@@ -1,12 +1,13 @@
 build
 
+.vscode
+.env
+
 **/tmp
 **/cpp_src
 **/mlir_src
 **/hls_proj
 **/dump_csv
-
-.vscode
 **/.ipynb_checkpoints
 
 *.onnx*
