@@ -5,7 +5,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir-c/Bindings/Python/Interop.h"
-#include "mlir-c/Registration.h"
 #include "mlir/Bindings/Python/PybindAdaptors.h"
 #include "scalehls-c/Transforms/Utils.h"
 #include "scalehls-c/Translation/EmitHLSCpp.h"
@@ -22,9 +21,9 @@ PYBIND11_MODULE(_scalehls, m) {
   llvm::sys::PrintStackTraceOnErrorSignal(/*argv=*/"");
   LLVMEnablePrettyStackTrace();
 
-  m.def("apply_array_partition", [](MlirFunc func) -> bool {
+  m.def("apply_array_partition", [](MlirOperation op) -> bool {
     py::gil_scoped_release();
-    return MlirApplyArrayPartition(func);
+    return mlirApplyArrayPartition(op);
   });
 
   m.def("emit_hlscpp", [](MlirModule mod, py::object fileObject) {

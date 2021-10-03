@@ -13,10 +13,8 @@
 extern "C" {
 #endif
 
-/// Emits HLS C++ code for the specified module using the provided callback and
-/// user data.
-MLIR_CAPI_EXPORTED MlirLogicalResult mlirEmitHlsCpp(MlirModule,
-                                                    MlirStringCallback,
+MLIR_CAPI_EXPORTED MlirLogicalResult mlirEmitHlsCpp(MlirModule module,
+                                                    MlirStringCallback callback,
                                                     void *userData);
 
 #ifdef __cplusplus

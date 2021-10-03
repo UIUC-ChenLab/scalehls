@@ -17,6 +17,9 @@ def main():
     parser.add_argument('-o', dest='output',
                         metavar="output",
                         help='Output file')
+    parser.add_argument('-f', dest='function',
+                        metavar="function",
+                        help='Top function')
 
     opts = parser.parse_args()
 
