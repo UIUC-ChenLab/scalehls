@@ -65,6 +65,7 @@ if config.enable_bindings_python:
 tool_dirs = [config.scalehls_tools_dir,
              config.mlir_tools_dir, config.llvm_tools_dir]
 tools = [
+    'pyscalehls.py',
     'scalehls-opt',
     'scalehls-translate'
 ]
