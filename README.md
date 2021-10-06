@@ -56,7 +56,7 @@ After the installation and regression test successfully completed, you should be
 $ cd scalehls
 
 $ # HLS C programs parsing and automatic kernel-level design space exploration.
-$ mlir-clang samples/polybench/gemm/gemm_32.c -function=gemm_32 -memref-fullrank -S | \
+$ mlir-clang samples/polybench/gemm/gemm_32.c -function=gemm_32 -memref-fullrank -raise-scf-to-affine -S | \
     scalehls-opt -dse="top-func=gemm_32 output-path=./ target-spec=samples/polybench/target-spec.ini" \
     -debug-only=scalehls > /dev/null
 $ scalehls-translate -emit-hlscpp gemm_32_pareto_0.mlir > gemm_32_pareto_0.cpp
