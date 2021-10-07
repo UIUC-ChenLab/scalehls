@@ -13,10 +13,10 @@ def main():
     parser = argparse.ArgumentParser(prog='pyscalehls')
     parser.add_argument('input',
                         metavar="input",
-                        help='Input file')
+                        help='MLIR input file')
     parser.add_argument('-o', dest='output',
                         metavar="output",
-                        help='Output file')
+                        help='HLS C++ output file')
     parser.add_argument('-f', dest='function',
                         metavar="function",
                         help='Top function')
