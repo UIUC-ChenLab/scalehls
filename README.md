@@ -32,6 +32,7 @@ $ cmake -G Ninja ../polygeist/llvm-project/llvm \
 $ ninja
 $ ninja check-scalehls
 $ export PATH=$PATH:$PWD/bin
+$ export PYTHONPATH=$PYTHONPATH:$PWD/tools/scalehls/python_packages/scalehls_core
 ```
 
 ScaleHLS exploits the `mlir-clang` tool of Polygeist as the C front-end. To build Polygeist, run:
