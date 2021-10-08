@@ -29,6 +29,10 @@ def main():
     mod = Module.parse(fin.read(), ctx)
     fin.close()
 
+    for op in mod.body:
+        scalehls.apply_legalize_to_hlscpp(op.operation, True)
+        scalehls.apply_array_partition(op.operation)
+
     buf = io.StringIO()
     scalehls.emit_hlscpp(mod, buf)
     buf.seek(0)

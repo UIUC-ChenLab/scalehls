@@ -14,6 +14,13 @@
 using namespace mlir;
 using namespace scalehls;
 
+MLIR_CAPI_EXPORTED bool mlirApplyLegalizeToHlscpp(MlirOperation op,
+                                                  bool topFunc) {
+  if (auto func = dyn_cast<FuncOp>(unwrap(op)))
+    return applyLegalizeToHLSCpp(func, topFunc);
+  return false;
+}
+
 MLIR_CAPI_EXPORTED bool mlirApplyArrayPartition(MlirOperation op) {
   if (auto func = dyn_cast<FuncOp>(unwrap(op)))
     return applyArrayPartition(func);

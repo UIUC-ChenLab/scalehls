@@ -13,6 +13,8 @@
 extern "C" {
 #endif
 
+MLIR_CAPI_EXPORTED bool mlirApplyLegalizeToHlscpp(MlirOperation op,
+                                                  bool topFunc);
 MLIR_CAPI_EXPORTED bool mlirApplyArrayPartition(MlirOperation op);
 
 #ifdef __cplusplus

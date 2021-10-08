@@ -6,5 +6,6 @@ add_mlir_library(MLIRScaleHLSCAPITransformsUtils
 
   LINK_LIBS PUBLIC
   MLIRCAPIIR
+  MLIRScaleHLSConversion
   MLIRScaleHLSTransforms
   )
