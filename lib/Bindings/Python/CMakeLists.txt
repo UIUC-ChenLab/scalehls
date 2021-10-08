@@ -18,6 +18,7 @@ declare_mlir_python_extension(ScaleHLSBindingsPythonExtension.Core
   SOURCES
     ScaleHLSModule.cpp
   EMBED_CAPI_LINK_LIBS
+    MLIRScaleHLSCAPIHLSCpp
     MLIRScaleHLSCAPITransformsUtils
     MLIRScaleHLSCAPIEmitHLSCpp
   PRIVATE_LINK_LIBS
@@ -32,7 +33,27 @@ declare_mlir_python_sources(ScaleHLSBindingsPythonSources
   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
   SOURCES
     scalehls/__init__.py
+    scalehls/dialects/_ods_common.py
 )
+
+################################################################################
+# Declare dialect-specific bindings.
+################################################################################
+
+# Ensure the build directory for generated Python files exists. Ninja is able to
+# generate this, but make does not and the build fails.
+file(MAKE_DIRECTORY ${SCALEHLS_BINARY_DIR}/lib/Bindings/Python/scalehls/dialects)
+
+declare_mlir_python_sources(ScaleHLSBindingsPythonSources.Dialects
+  ADD_TO_PARENT ScaleHLSBindingsPythonSources)
+
+declare_mlir_dialect_python_bindings(
+  ADD_TO_PARENT ScaleHLSBindingsPythonSources.Dialects
+  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
+  TD_FILE scalehls/dialects/HLSCppOps.td
+  SOURCES
+    scalehls/dialects/hlscpp.py
+  DIALECT_NAME hlscpp)
 
 ################################################################################
 # Build composite binaries

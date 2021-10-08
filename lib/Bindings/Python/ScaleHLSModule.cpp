@@ -6,6 +6,7 @@
 
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/Bindings/Python/PybindAdaptors.h"
+#include "scalehls-c/Dialect/HLSCpp.h"
 #include "scalehls-c/Transforms/Utils.h"
 #include "scalehls-c/Translation/EmitHLSCpp.h"
 
@@ -20,6 +21,16 @@ PYBIND11_MODULE(_scalehls, m) {
   m.doc() = "ScaleHLS Python Native Extension";
   llvm::sys::PrintStackTraceOnErrorSignal(/*argv=*/"");
   LLVMEnablePrettyStackTrace();
+
+  m.def("register_dialects", [](py::object capsule) {
+    // Get the MlirContext capsule from PyMlirContext capsule.
+    auto wrappedCapsule = capsule.attr(MLIR_PYTHON_CAPI_PTR_ATTR);
+    MlirContext context = mlirPythonCapsuleToContext(wrappedCapsule.ptr());
+
+    MlirDialectHandle hlscpp = mlirGetDialectHandle__hlscpp__();
+    mlirDialectHandleRegisterDialect(hlscpp, context);
+    mlirDialectHandleLoadDialect(hlscpp, context);
+  });
 
   m.def("apply_legalize_to_hlscpp",
         [](MlirOperation op, bool top_func) -> bool {

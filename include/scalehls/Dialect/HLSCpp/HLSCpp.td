@@ -25,7 +25,7 @@ def HLSCppDialect : Dialect {
 class HLSCppOp<string mnemonic, list<OpTrait> traits = []> :
     Op<HLSCppDialect, mnemonic, traits>;
 
-include "Ops.td"
-include "Attributes.td"
+include "scalehls/Dialect/HLSCpp/Ops.td"
+include "scalehls/Dialect/HLSCpp/Attributes.td"
 
 #endif // SCALEHLS_DIALECT_HLSCPP_HLSCPP_TD

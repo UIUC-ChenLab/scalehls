@@ -6,6 +6,7 @@ import shutil
 import sys
 import io
 import scalehls
+from scalehls.dialects import hlscpp
 from mlir.ir import *
 
 
@@ -24,7 +25,7 @@ def main():
     opts = parser.parse_args()
 
     ctx = Context()
-    ctx.allow_unregistered_dialects = True
+    scalehls.register_dialects(ctx)
     fin = open(opts.input, 'r')
     mod = Module.parse(fin.read(), ctx)
     fin.close()
