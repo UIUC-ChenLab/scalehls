@@ -861,7 +861,7 @@ void ScaleHLSEstimator::initEstimator(Block &block) {
         dependsMap[srcLoop].push_back(dstLoop);
     ++idx;
   }
-};
+}
 
 void ScaleHLSEstimator::estimateFunc(FuncOp func) {
   initEstimator(func.front());
