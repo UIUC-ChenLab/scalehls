@@ -58,7 +58,9 @@ public:
             SignExtendIOp, IndexCastOp, CallOp, ReturnOp, UIToFPOp, SIToFPOp,
             FPToSIOp, FPToUIOp,
             // HLSCpp operations.
-            AssignOp, CastOp, MulOp, AddOp>([&](auto opNode) -> ResultType {
+            AssignOp, CastOp, MulOp, AddOp,
+            // IP operation. 
+            IPOp>([&](auto opNode) -> ResultType {
           return thisCast->visitOp(opNode, args...);
         })
         .Default([&](auto opNode) -> ResultType {
@@ -187,6 +189,9 @@ public:
   HANDLE(CastOp);
   HANDLE(AddOp);
   HANDLE(MulOp);
+
+  // IP operation. 
+  HANDLE(IPOp);
 #undef HANDLE
 };
 } // namespace scalehls

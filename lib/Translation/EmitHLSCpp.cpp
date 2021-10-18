@@ -225,6 +225,9 @@ public:
   void emitBinary(Operation *op, const char *syntax);
   void emitUnary(Operation *op, const char *syntax);
 
+  /// IP operation emitter. 
+  void emitIP(IPOp op);
+
   /// Special operation emitters.
   void emitSelect(SelectOp op);
   void emitConstant(ConstantOp op);
@@ -472,6 +475,9 @@ public:
   bool visitOp(FPToSIOp op) { return emitter.emitCast<FPToSIOp>(op), true; }
   bool visitOp(CallOp op) { return emitter.emitCall(op), true; }
   bool visitOp(ReturnOp op) { return true; }
+
+  /// IP operation. 
+  bool visitOp(IPOp op) { return emitter.emitIP(op), true; }
 
 private:
   ModuleEmitter &emitter;
@@ -1104,6 +1110,21 @@ void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
   os << ");";
   emitInfoAndNewLine(op);
   emitNestedLoopTail(rank);
+}
+
+/// IP operation emitter. 
+void ModuleEmitter::emitIP(IPOp op) {
+  auto name = op.name();
+  os << "  __IP__" << name << "(";
+
+  unsigned argIdx = 0;
+  for (auto arg : op.getOperands()) {
+    emitValue(arg);
+    if (argIdx++ != op.getOperands().size() - 1) {
+      os << ", ";
+    }
+  }
+  os << ");\n";
 }
 
 /// Special operation emitters.

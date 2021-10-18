@@ -56,4 +56,14 @@ def MulOp : HLSCppOp<"mul", [NoSideEffect]> {
   let results = (outs AnyType : $output);
 }
 
+def IPOp : HLSCppOp<"ip", [NoSideEffect]> {
+  let summary = "General IP";
+  let description = [{}];
+
+  let arguments = (ins
+    Variadic<AnyType>:$inputs,
+    StrAttr:$name
+  );
+}
+
 #endif // SCALEHLS_DIALECT_HLSCPP_STRUCTUREOPS_TD
