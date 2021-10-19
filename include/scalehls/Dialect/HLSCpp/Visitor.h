@@ -58,9 +58,7 @@ public:
             SignExtendIOp, IndexCastOp, CallOp, ReturnOp, UIToFPOp, SIToFPOp,
             FPToSIOp, FPToUIOp,
             // HLSCpp operations.
-            AssignOp, CastOp, MulOp, AddOp,
-            // IP operation. 
-            IPOp>([&](auto opNode) -> ResultType {
+            AssignOp, CastOp, MulOp, AddOp>([&](auto opNode) -> ResultType {
           return thisCast->visitOp(opNode, args...);
         })
         .Default([&](auto opNode) -> ResultType {
@@ -70,8 +68,9 @@ public:
 
   /// This callback is invoked on any invalid operations.
   ResultType visitInvalidOp(Operation *op, ExtraArgs... args) {
-    op->emitOpError("is unsupported operation.");
-    abort();
+    //op->emitOpError("is unsupported operation.");
+    //abort();
+    return ResultType();
   }
 
   /// This callback is invoked on any operations that are not handled by the
@@ -189,9 +188,6 @@ public:
   HANDLE(CastOp);
   HANDLE(AddOp);
   HANDLE(MulOp);
-
-  // IP operation. 
-  HANDLE(IPOp);
 #undef HANDLE
 };
 } // namespace scalehls

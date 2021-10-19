@@ -23,4 +23,14 @@ def HLSKernelOpInterface : OpInterface<"HLSKernelOpInterface"> {
   ];
 }
 
+def IPOp : HLSKernelOp<"ip", [HLSKernelOpInterface]> {
+  let summary = "General IP";
+  let description = [{}];
+
+  let arguments = (ins
+    Variadic<AnyType>:$inputs,
+    StrAttr:$name
+  );
+}
+
 #endif // SCALEHLS_DIALECT_HLSKERNEL_INTERFACES_TD

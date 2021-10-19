@@ -10,6 +10,7 @@
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/Translation.h"
 #include "scalehls/Dialect/HLSCpp/Visitor.h"
+#include "scalehls/Dialect/HLSKernel/Visitor.h"
 #include "scalehls/InitAllDialects.h"
 #include "scalehls/Support/Utils.h"
 #include "llvm/Support/raw_ostream.h"
@@ -476,6 +477,17 @@ public:
   bool visitOp(CallOp op) { return emitter.emitCall(op), true; }
   bool visitOp(ReturnOp op) { return true; }
 
+private:
+  ModuleEmitter &emitter;
+};
+} // namespace
+
+namespace {
+class KernelVisitor : public HLSKernelVisitorBase<KernelVisitor, bool> {
+public:
+  KernelVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
+
+  using HLSKernelVisitorBase::visitOp;
   /// IP operation. 
   bool visitOp(IPOp op) { return emitter.emitIP(op), true; }
 
@@ -1356,6 +1368,9 @@ void ModuleEmitter::emitBlock(Block &block) {
       continue;
 
     if (StmtVisitor(*this).dispatchVisitor(&op))
+      continue;
+
+    if (KernelVisitor(*this).dispatchVisitor(&op))
       continue;
 
     emitError(&op, "can't be correctly emitted.");

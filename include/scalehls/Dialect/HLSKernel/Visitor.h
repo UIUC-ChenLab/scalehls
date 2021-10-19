@@ -25,7 +25,9 @@ public:
             // CNN operations.
             DenseOp, ConvOp, MaxPoolOp, ReluOp, MergeOp, CopyOp,
             // BLAS operations.
-            GemmOp, SymmOp, SyrkOp, Syr2kOp, TrmmOp>(
+            GemmOp, SymmOp, SyrkOp, Syr2kOp, TrmmOp,
+            // IP operation.
+            IPOp>(
             [&](auto opNode) -> ResultType {
               return thisCast->visitOp(opNode, args...);
             })
@@ -36,8 +38,9 @@ public:
 
   /// This callback is invoked on any invalid operations.
   ResultType visitInvalidOp(Operation *op, ExtraArgs... args) {
-    op->emitOpError("is unsupported operation.");
-    abort();
+    //op->emitOpError("is unsupported operation.");
+    //abort();
+    return ResultType();
   }
 
   /// This callback is invoked on any operations that are not handled by the
@@ -65,6 +68,9 @@ public:
   HANDLE(SyrkOp);
   HANDLE(Syr2kOp);
   HANDLE(TrmmOp);
+
+  // IP operation.
+  HANDLE(IPOp);
 
 #undef HANDLE
 };
