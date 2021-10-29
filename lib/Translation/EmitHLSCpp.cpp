@@ -15,6 +15,9 @@
 #include "scalehls/Support/Utils.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include <iostream>
+#include <fstream>
+
 using namespace mlir;
 using namespace scalehls;
 
@@ -111,6 +114,7 @@ public:
 
   // The stream to emit to.
   raw_ostream &os;
+  // std::fstream &os;  // Instead of writing to stdout by default, write to file stream
 
   /// Value name management methods.
   SmallString<8> addName(Value val, bool isPtr = false);
@@ -1615,12 +1619,20 @@ using namespace std;
 
 )XXX";
 
+  // Right now, decide to emit compiled HLS C++ to the ip library store without asking the user
+  std::fstream fio;
+  std::string line = "This is a test that the emitModule function can theoretically write compiled HLS code into the ip library file.";
+  fio.open("ip_library.txt", std::ios::trunc | std::ios::out | std::ios::in);
+  fio << line << std::endl;
+
   for (auto &op : *module.getBody()) {
     if (auto func = dyn_cast<FuncOp>(op))
       emitFunction(func);
     else
       emitError(&op, "is unsupported operation.");
   }
+
+  fio.close();  
 }
 
 //===----------------------------------------------------------------------===//
