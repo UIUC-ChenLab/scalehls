@@ -8,11 +8,14 @@
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/IR/AffineExprVisitor.h"
 #include "mlir/IR/IntegerSet.h"
+#include "mlir/Support/FileUtilities.h"
 #include "mlir/Translation.h"
 #include "scalehls/Dialect/HLSCpp/Visitor.h"
 #include "scalehls/Dialect/HLSKernel/Visitor.h"
 #include "scalehls/InitAllDialects.h"
 #include "scalehls/Support/Utils.h"
+#include "llvm/Support/JSON.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace mlir;
@@ -1126,9 +1129,24 @@ void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
 
 /// IP operation emitter. 
 void ModuleEmitter::emitIP(IPOp op) {
-  auto name = op.name();
-  os << "  __IP__" << name << "(";
+  // Emit IP source from JSON if IP exists.
+  std::string jsonPath = "ip_library/" + op.name().str() + ".ip.txt";
+  std::string errorMessage;
+  if (auto jsonFile = mlir::openInputFile(jsonPath, &errorMessage)) {
+    if (auto json = llvm::json::parse(jsonFile->getBuffer())) {
+      if (auto O = json->getAsObject()) {
+        if (auto source = O->getString("source")) {
+          os << source << "\n";
+          return;
+        }
+      }
+    }
+    //emitError(op, "IP JSON cannot be parsed.");
+  }
+  //emitError(op, "IP cannot be found.");
 
+  // Emit a regular function call if IP does not exist.
+  os << "  __IP__" << op.name() << "(";
   unsigned argIdx = 0;
   for (auto arg : op.getOperands()) {
     emitValue(arg);
