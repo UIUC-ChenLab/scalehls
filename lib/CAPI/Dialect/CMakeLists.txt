@@ -1,4 +1,4 @@
-add_mlir_library(MLIRScaleHLSCAPIHLSCpp
+add_mlir_public_c_api_library(MLIRScaleHLSCAPIHLSCpp
   HLSCpp.cpp
 
   ADDITIONAL_HEADER_DIRS
