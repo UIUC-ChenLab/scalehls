@@ -68,7 +68,7 @@ add_mlir_python_common_capi_library(ScaleHLSBindingsPythonCAPI
   OUTPUT_DIRECTORY "${SCALEHLS_PYTHON_PACKAGES_DIR}/scalehls_core/mlir/_mlir_libs"
   RELATIVE_INSTALL_ROOT "../../../.."
   DECLARED_SOURCES
-    MLIRPythonSources.Core
+    MLIRPythonSources
     ScaleHLSBindingsPythonSources
     ScaleHLSBindingsPythonExtension
 )
@@ -81,7 +81,7 @@ add_mlir_python_modules(ScaleHLSMLIRPythonModules
   ROOT_PREFIX "${SCALEHLS_PYTHON_PACKAGES_DIR}/scalehls_core/mlir"
   INSTALL_PREFIX "python_packages/scalehls_core/mlir"
   DECLARED_SOURCES
-    MLIRPythonSources.Core
+    MLIRPythonSources
     # We need the scalehls extensions co-located with the MLIR extensions. When
     # the namespace is unified, this moves to the below.
     ScaleHLSBindingsPythonExtension
