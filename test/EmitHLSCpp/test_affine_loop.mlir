@@ -4,7 +4,7 @@
 #three = affine_map<(d0)[s0] -> (d0 - s0, d0, d0 + s0)>
 
 func @test_affine_for(%arg0: memref<16xindex>, %arg1: index) {
-  %c11 = constant 11 : index
+  %c11 = arith.constant 11 : index
 
   // CHECK: for (int v2 = 0; v2 < min(v1, (v1 + 11)); v2 += 2) {
   affine.for %i = 0 to min #two (%arg1)[%c11] step 2 {
@@ -19,7 +19,7 @@ func @test_affine_for(%arg0: memref<16xindex>, %arg1: index) {
         %0 = memref.load %arg0[%i] : memref<16xindex>
 
         // CHECK: int v6 = v5 + v3;
-        %1 = addi %0, %j : index
+        %1 = arith.addi %0, %j : index
 
         // CHECK: v0[v4] = v6;
         memref.store %1, %arg0[%k] : memref<16xindex>
@@ -46,10 +46,10 @@ func @test_affine_parallel(%arg0: memref<16xindex>) {
     %1 = memref.load %arg0[%x] : memref<16xindex>
 
     // CHECK: int v14 = v13 + v11;
-    %2 = addi %1, %y : index
+    %2 = arith.addi %1, %y : index
 
     // CHECK: int v15 = v14 - v12;
-    %3 = subi %2, %z : index
+    %3 = arith.subi %2, %z : index
 
     // CHECK: if (v10 == 0 && v11 == 0 && v12 == 0) {
     // CHECK:   v8 = v14;

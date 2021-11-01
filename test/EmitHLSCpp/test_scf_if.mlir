@@ -1,16 +1,16 @@
 // RUN: scalehls-translate -emit-hlscpp %s | FileCheck %s
 
 func @test_scf_if(%arg0: index, %arg1: memref<16xindex>) {
-  %c11 = constant 11 : index
-  %c0 = constant 0 : index
+  %c11 = arith.constant 11 : index
+  %c0 = arith.constant 0 : index
 
   // CHECK: int v2 = v0 + 11;
   // CHECK: bool v3 = v2 > 0;
   // CHECK: int v4;
   // CHECK: int v5[16];
   // CHECK: if (v3) {
-  %add = std.addi %arg0, %c11 : index
-  %condition = std.cmpi "sgt", %add, %c0 : index
+  %add = arith.addi %arg0, %c11 : index
+  %condition = arith.cmpi "sgt", %add, %c0 : index
   %0:2 = scf.if %condition -> (index, memref<16xindex>) {
 
     // CHECK: v4 = v0;

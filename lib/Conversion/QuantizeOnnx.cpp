@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/Builders.h"
@@ -46,23 +47,23 @@ static void quantizeBlock(Block &block, OpBuilder &builder,
     Operation *newOp = nullptr;
     builder.setInsertionPoint(&op);
 
-    if (auto constOp = dyn_cast<mlir::ConstantOp>(op)) {
+    if (auto constOp = dyn_cast<arith::ConstantOp>(op)) {
       auto attr = constOp.value();
 
       if (auto floatAttr = attr.dyn_cast<FloatAttr>()) {
         int8_t floatValue = floatAttr.getValue().convertToFloat();
-        newOp = builder.create<mlir::ConstantOp>(
+        newOp = builder.create<arith::ConstantOp>(
             constOp.getLoc(), builder.getI8IntegerAttr(floatValue));
 
       } else if (auto intAttr = attr.dyn_cast<IntegerAttr>()) {
         int8_t intValue = intAttr.getInt();
-        newOp = builder.create<mlir::ConstantOp>(
+        newOp = builder.create<arith::ConstantOp>(
             constOp.getLoc(), builder.getI8IntegerAttr(intValue));
 
       } else if (auto tensorAttr = attr.dyn_cast<DenseElementsAttr>()) {
         SmallVector<int8_t, 16> newTensorValues;
-        for (auto elem : tensorAttr.getFloatValues()) {
-          int8_t value = elem.convertToFloat();
+        for (auto elem : tensorAttr.getValues<FloatAttr>()) {
+          int8_t value = elem.getValueAsDouble();
           newTensorValues.push_back(value);
         }
 
@@ -71,12 +72,12 @@ static void quantizeBlock(Block &block, OpBuilder &builder,
         auto newTensorAttr =
             DenseIntElementsAttr::get(newTensorType, newTensorValues);
         newOp =
-            builder.create<mlir::ConstantOp>(constOp.getLoc(), newTensorAttr);
+            builder.create<arith::ConstantOp>(constOp.getLoc(), newTensorAttr);
 
       } else
         constOp.emitError("unexpected constant value");
 
-    } else if (auto castOp = dyn_cast<mlir::UIToFPOp>(op)) {
+    } else if (auto castOp = dyn_cast<arith::UIToFPOp>(op)) {
       newOp = builder.create<hlscpp::CastOp>(castOp.getLoc(), int8Type,
                                              castOp.in());
 
@@ -100,7 +101,7 @@ static void quantizeBlock(Block &block, OpBuilder &builder,
           selectOp.getLoc(), selectOp.condition(), selectOp.true_value(),
           selectOp.false_value());
 
-    else if (auto mulOp = dyn_cast<mlir::MulFOp>(op)) {
+    else if (auto mulOp = dyn_cast<arith::MulFOp>(op)) {
       auto lhsValue = builder.create<hlscpp::CastOp>(mulOp.getLoc(), int16Type,
                                                      mulOp.lhs());
       auto rhsValue = builder.create<hlscpp::CastOp>(mulOp.getLoc(), int16Type,
@@ -109,7 +110,7 @@ static void quantizeBlock(Block &block, OpBuilder &builder,
                                             rhsValue);
     }
 
-    else if (auto addOp = dyn_cast<mlir::AddFOp>(op)) {
+    else if (auto addOp = dyn_cast<arith::AddFOp>(op)) {
       auto lhsValue = builder.create<hlscpp::CastOp>(addOp.getLoc(), int32Type,
                                                      addOp.lhs());
       auto rhsValue = builder.create<hlscpp::CastOp>(addOp.getLoc(), int32Type,
@@ -120,37 +121,37 @@ static void quantizeBlock(Block &block, OpBuilder &builder,
           builder.create<hlscpp::CastOp>(addOp.getLoc(), int8Type, accValue);
     }
 
-    else if (auto divOp = dyn_cast<mlir::DivFOp>(op))
-      newOp = builder.create<mlir::SignedDivIOp>(divOp.getLoc(), divOp.lhs(),
-                                                 divOp.rhs());
+    else if (auto divOp = dyn_cast<arith::DivFOp>(op))
+      newOp = builder.create<arith::DivSIOp>(divOp.getLoc(), divOp.lhs(),
+                                             divOp.rhs());
 
-    else if (auto cmpOp = dyn_cast<mlir::CmpFOp>(op)) {
-      CmpIPredicate predicate;
+    else if (auto cmpOp = dyn_cast<arith::CmpFOp>(op)) {
+      arith::CmpIPredicate predicate;
       switch (cmpOp.predicate()) {
-      case CmpFPredicate::OEQ:
-        predicate = CmpIPredicate::eq;
+      case arith::CmpFPredicate::OEQ:
+        predicate = arith::CmpIPredicate::eq;
         break;
-      case CmpFPredicate::ONE:
-        predicate = CmpIPredicate::ne;
+      case arith::CmpFPredicate::ONE:
+        predicate = arith::CmpIPredicate::ne;
         break;
-      case CmpFPredicate::OGT:
-        predicate = CmpIPredicate::sgt;
+      case arith::CmpFPredicate::OGT:
+        predicate = arith::CmpIPredicate::sgt;
         break;
-      case CmpFPredicate::OGE:
-        predicate = CmpIPredicate::sge;
+      case arith::CmpFPredicate::OGE:
+        predicate = arith::CmpIPredicate::sge;
         break;
-      case CmpFPredicate::OLT:
-        predicate = CmpIPredicate::slt;
+      case arith::CmpFPredicate::OLT:
+        predicate = arith::CmpIPredicate::slt;
         break;
-      case CmpFPredicate::OLE:
-        predicate = CmpIPredicate::sle;
+      case arith::CmpFPredicate::OLE:
+        predicate = arith::CmpIPredicate::sle;
         break;
       default:
         cmpOp.emitError("unexpected compare predicate");
         break;
       }
-      newOp = builder.create<mlir::CmpIOp>(cmpOp.getLoc(), predicate,
-                                           cmpOp.lhs(), cmpOp.rhs());
+      newOp = builder.create<arith::CmpIOp>(cmpOp.getLoc(), predicate,
+                                            cmpOp.lhs(), cmpOp.rhs());
 
     } else if (!isa<mlir::CallOp, mlir::ReturnOp, memref::DeallocOp,
                     mlir::AffineApplyOp, mlir::AffineForOp, mlir::AffineIfOp,

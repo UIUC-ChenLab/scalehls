@@ -556,11 +556,11 @@ int64_t ScaleHLSEstimator::getDspAllocMap(Block &block,
     auto end = getTiming(&op).getEnd();
 
     // Accumulate the resource utilization of each operation.
-    if (isa<AddFOp, SubFOp>(op))
+    if (isa<arith::AddFOp, arith::SubFOp>(op))
       for (unsigned i = begin; i < end; ++i)
         ++faddMap[i];
 
-    else if (isa<MulFOp>(op))
+    else if (isa<arith::MulFOp>(op))
       for (unsigned i = begin; i < end; ++i)
         ++fmulMap[i];
 
@@ -602,9 +602,9 @@ ResourceAttr ScaleHLSEstimator::estimateResource(Block &block, int64_t minII) {
   int64_t totalFadd = 0;
   int64_t totalFmul = 0;
   block.walk([&](Operation *op) {
-    if (isa<AddFOp, SubFOp>(op))
+    if (isa<arith::AddFOp, arith::SubFOp>(op))
       ++totalFadd;
-    else if (isa<MulFOp>(op))
+    else if (isa<arith::MulFOp>(op))
       ++totalFmul;
   });
 

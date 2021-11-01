@@ -7,8 +7,8 @@
 module  {
 
   // CHECK-LABEL: func @test_syrk(
-  // CHECK-SAME:  %arg0: f32, %arg1: f32, %arg2: memref<16x16xf32, #map0, 1>, %arg3: memref<16x16xf32, #map1, 1>) attributes {func_directive = #hlscpp.fd<pipeline=0, targetInterval=1, dataflow=0, topFunc=1>} {
-  func @test_syrk(%arg0: f32, %arg1: f32, %arg2: memref<16x16xf32, 1>, %arg3: memref<16x16xf32, 1>) attributes {func_directive = #hlscpp.fd<pipeline=0, targetInterval=1, dataflow=0, topFunc=1>} {
+  // CHECK-SAME:  %arg0: f32, %arg1: f32, %arg2: memref<16x16xf32, #map0, 1>, %arg3: memref<16x16xf32, #map1, 1>) attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=false, topFunc=true>} {
+  func @test_syrk(%arg0: f32, %arg1: f32, %arg2: memref<16x16xf32, 1>, %arg3: memref<16x16xf32, 1>) attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=false, topFunc=true>} {
     affine.for %arg4 = 0 to 16 step 2 {
       affine.for %arg5 = 0 to 16 {
         affine.for %arg6 = 0 to 16 {
@@ -16,7 +16,7 @@ module  {
 
             // CHECK: %0 = affine.load %arg3[%arg5, %arg6] : memref<16x16xf32, #map1, 1>
             %0 = affine.load %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
-            %1 = mulf %arg1, %0 : f32
+            %1 = arith.mulf %arg1, %0 : f32
 
             // CHECK: %2 = affine.load %arg2[%arg5, %arg4] : memref<16x16xf32, #map0, 1>
             %2 = affine.load %arg2[%arg5, %arg4] : memref<16x16xf32, 1>
@@ -26,21 +26,21 @@ module  {
             } else {
               affine.yield %0 : f32
             }
-            %5 = mulf %arg0, %2 : f32
-            %6 = mulf %5, %3 : f32
-            %7 = addf %6, %4 : f32
+            %5 = arith.mulf %arg0, %2 : f32
+            %6 = arith.mulf %5, %3 : f32
+            %7 = arith.addf %6, %4 : f32
             %8 = affine.load %arg2[%arg5, %arg4 + 1] : memref<16x16xf32, 1>
             %9 = affine.load %arg2[%arg6, %arg4 + 1] : memref<16x16xf32, 1>
-            %10 = mulf %arg0, %8 : f32
-            %11 = mulf %10, %9 : f32
-            %12 = addf %11, %7 : f32
+            %10 = arith.mulf %arg0, %8 : f32
+            %11 = arith.mulf %10, %9 : f32
+            %12 = arith.addf %11, %7 : f32
 
             // CHECK: affine.store %12, %arg3[%arg5, %arg6] : memref<16x16xf32, #map1, 1>
             affine.store %12, %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
           }
-        } {loop_directive = #hlscpp.ld<pipeline=1, targetII=2, dataflow=0, flatten=0, parallel=1>}
-      } {loop_directive = #hlscpp.ld<pipeline=0, targetII=1, dataflow=0, flatten=1, parallel=1>}
-    } {loop_directive = #hlscpp.ld<pipeline=0, targetII=1, dataflow=0, flatten=1, parallel=0>}
+        } {loop_directive = #hlscpp.ld<pipeline=true, targetII=2, dataflow=false, flatten=false, parallel=true>}
+      } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true, parallel=true>}
+    } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true, parallel=false>}
     return
   }
 }

@@ -1,10 +1,10 @@
 // RUN: scalehls-translate -emit-hlscpp %s | FileCheck %s
 
 func @test_memref() {
-  %c0 = constant 0 : index
-  %c11 = constant 11 : index
-  %c1 = constant 1 : index
-  %c12 = constant 12 : index
+  %c0 = arith.constant 0 : index
+  %c11 = arith.constant 11 : index
+  %c1 = arith.constant 1 : index
+  %c12 = arith.constant 12 : index
 
   // CHECK: int [[VAL_0:.*]][16][8];
   %0 = memref.alloc() : memref<16x8xindex>
