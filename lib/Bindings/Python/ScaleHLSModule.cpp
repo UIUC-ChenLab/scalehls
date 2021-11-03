@@ -37,9 +37,9 @@ private:
   llvm::SmallVector<MlirOperation, 6> impl;
 };
 
-class PyAffineLoopBandIterator {
+class PyAffineLoopBandList {
 public:
-  PyAffineLoopBandIterator(MlirOperation op) {
+  PyAffineLoopBandList(MlirOperation op) {
     for (auto &region : unwrap(op)->getRegions())
       for (auto &block : region) {
         AffineLoopBands bands;
@@ -49,7 +49,7 @@ public:
       }
   }
 
-  PyAffineLoopBandIterator &dunderIter() { return *this; }
+  PyAffineLoopBandList &dunderIter() { return *this; }
 
   PyAffineLoopBand dunderNext() {
     if (nextIndex >= impl.size())
@@ -100,10 +100,9 @@ PYBIND11_MODULE(_scalehls, m) {
   });
 
   py::class_<PyAffineLoopBand>(m, "LoopBand", py::module_local());
-  py::class_<PyAffineLoopBandIterator>(m, "LoopBandIterator",
-                                       py::module_local())
+  py::class_<PyAffineLoopBandList>(m, "LoopBandList", py::module_local())
       .def(py::init<MlirOperation>(), py::arg("op"),
-           "Iterate on all loop bands contained by the given operation")
-      .def("__iter__", &PyAffineLoopBandIterator::dunderIter)
-      .def("__next__", &PyAffineLoopBandIterator::dunderNext);
+           "Initialize with all loop bands contained by the operation")
+      .def("__iter__", &PyAffineLoopBandList::dunderIter)
+      .def("__next__", &PyAffineLoopBandList::dunderNext);
 }

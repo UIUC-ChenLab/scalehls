@@ -4,10 +4,9 @@
 import argparse
 import shutil
 import io
-import scalehls
-from scalehls.dialects import hlscpp
 from subprocess import PIPE, run
-from mlir.ir import *
+import scalehls
+import mlir.ir
 
 
 def do_run(command):
@@ -40,13 +39,13 @@ def main():
                   opts.input])
 
     # Parse MLIR into memory.
-    ctx = Context()
+    ctx = mlir.ir.Context()
     scalehls.register_dialects(ctx)
-    mod = Module.parse(fin, ctx)
+    mod = mlir.ir.Module.parse(fin, ctx)
 
     # ScaleHLS optimizations.
     for op in mod.body:
-        bands = scalehls.LoopBandIterator(op)
+        bands = scalehls.LoopBandList(op)
         for band in bands:
             scalehls.apply_affine_loop_perfection(band)
         scalehls.apply_legalize_to_hlscpp(op.operation, True)
