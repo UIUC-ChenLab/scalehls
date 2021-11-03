@@ -32,9 +32,19 @@ public:
 
   operator MlirAffineLoopBand() const { return get(); }
   MlirAffineLoopBand get() const { return {impl.begin(), impl.end()}; }
+  size_t size() const { return impl.size(); }
+
+  PyAffineLoopBand &dunderIter() { return *this; }
+
+  MlirOperation dunderNext() {
+    if (nextIndex >= impl.size())
+      throw py::stop_iteration();
+    return impl[nextIndex++];
+  }
 
 private:
   llvm::SmallVector<MlirOperation, 6> impl;
+  size_t nextIndex = 0;
 };
 
 class PyAffineLoopBandList {
@@ -48,6 +58,8 @@ public:
           impl.push_back(PyAffineLoopBand(band));
       }
   }
+
+  size_t size() const { return impl.size(); }
 
   PyAffineLoopBandList &dunderIter() { return *this; }
 
@@ -121,10 +133,15 @@ PYBIND11_MODULE(_scalehls, m) {
     mlirEmitHlsCpp(mod, accum.getCallback(), accum.getUserData());
   });
 
-  py::class_<PyAffineLoopBand>(m, "LoopBand", py::module_local());
+  py::class_<PyAffineLoopBand>(m, "LoopBand", py::module_local())
+      .def_property_readonly("size", &PyAffineLoopBand::size)
+      .def("__iter__", &PyAffineLoopBand::dunderIter)
+      .def("__next__", &PyAffineLoopBand::dunderNext);
+
   py::class_<PyAffineLoopBandList>(m, "LoopBandList", py::module_local())
       .def(py::init<MlirOperation>(), py::arg("op"),
            "Initialize with all loop bands contained by the operation")
+      .def_property_readonly("size", &PyAffineLoopBandList::size)
       .def("__iter__", &PyAffineLoopBandList::dunderIter)
       .def("__next__", &PyAffineLoopBandList::dunderNext);
 }

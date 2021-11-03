@@ -50,7 +50,7 @@ def main():
             scalehls.apply_affine_loop_perfection(band)
             # scalehls.apply_affine_loop_order_opt(band)
             scalehls.apply_remove_variable_bound(band)
-            scalehls.apply_loop_pipelining(band, 2, 3)  # pipelineLoc, targetII
+            scalehls.apply_loop_pipelining(band, band.size - 1, 3)  # targetII
         scalehls.apply_legalize_to_hlscpp(op.operation, True)  # topFunc
         scalehls.apply_memory_access_opt(op.operation)
         scalehls.apply_array_partition(op.operation)
