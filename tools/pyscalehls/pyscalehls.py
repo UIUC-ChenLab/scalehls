@@ -48,6 +48,8 @@ def main():
         bands = scalehls.LoopBandList(op)
         for band in bands:
             scalehls.apply_affine_loop_perfection(band)
+            scalehls.apply_affine_loop_order_opt(band)
+            scalehls.apply_remove_variable_bound(band)
         scalehls.apply_legalize_to_hlscpp(op.operation, True)
         scalehls.apply_array_partition(op.operation)
 

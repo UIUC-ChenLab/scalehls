@@ -82,6 +82,16 @@ PYBIND11_MODULE(_scalehls, m) {
     return mlirApplyAffineLoopPerfection(band.get());
   });
 
+  m.def("apply_affine_loop_order_opt", [](PyAffineLoopBand band) -> bool {
+    py::gil_scoped_release();
+    return mlirApplyAffineLoopOrderOpt(band.get());
+  });
+
+  m.def("apply_remove_variable_bound", [](PyAffineLoopBand band) -> bool {
+    py::gil_scoped_release();
+    return mlirApplyRemoveVariableBound(band.get());
+  });
+
   m.def("apply_legalize_to_hlscpp",
         [](MlirOperation op, bool top_func) -> bool {
           py::gil_scoped_release();
