@@ -7,10 +7,9 @@
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/Bindings/Python/PybindAdaptors.h"
 #include "mlir/CAPI/IR.h"
-#include "scalehls-c/Dialect/HLSCpp.h"
-#include "scalehls-c/Transforms/Utils.h"
-#include "scalehls-c/Translation/EmitHLSCpp.h"
-#include "scalehls/Support/Utils.h"
+#include "scalehls-c/EmitHLSCpp.h"
+#include "scalehls-c/HLSCpp.h"
+#include "scalehls/Transforms/Utils.h"
 
 #include "llvm-c/ErrorHandling.h"
 #include "llvm/ADT/SmallVector.h"
@@ -25,25 +24,20 @@ using namespace scalehls;
 
 class PyAffineLoopBand {
 public:
-  PyAffineLoopBand(AffineLoopBand &band) {
-    for (auto loop : band)
-      impl.push_back(wrap(loop));
-  }
+  PyAffineLoopBand(AffineLoopBand &band) : band(band) {}
 
-  operator MlirAffineLoopBand() const { return get(); }
-  MlirAffineLoopBand get() const { return {impl.begin(), impl.end()}; }
-  size_t size() const { return impl.size(); }
+  AffineLoopBand &get() const { return band; }
+  size_t size() const { return band.size(); }
 
   PyAffineLoopBand &dunderIter() { return *this; }
-
   MlirOperation dunderNext() {
-    if (nextIndex >= impl.size())
+    if (nextIndex >= band.size())
       throw py::stop_iteration();
-    return impl[nextIndex++];
+    return wrap(band[nextIndex++]);
   }
 
 private:
-  llvm::SmallVector<MlirOperation, 6> impl;
+  AffineLoopBand &band;
   size_t nextIndex = 0;
 };
 
@@ -51,26 +45,21 @@ class PyAffineLoopBandList {
 public:
   PyAffineLoopBandList(MlirOperation op) {
     for (auto &region : unwrap(op)->getRegions())
-      for (auto &block : region) {
-        AffineLoopBands bands;
-        getLoopBands(block, bands);
-        for (auto band : bands)
-          impl.push_back(PyAffineLoopBand(band));
-      }
+      for (auto &block : region)
+        getLoopBands(block, impl);
   }
 
   size_t size() const { return impl.size(); }
 
   PyAffineLoopBandList &dunderIter() { return *this; }
-
   PyAffineLoopBand dunderNext() {
     if (nextIndex >= impl.size())
       throw py::stop_iteration();
-    return impl[nextIndex++];
+    return PyAffineLoopBand(impl[nextIndex++]);
   }
 
 private:
-  llvm::SmallVector<PyAffineLoopBand> impl;
+  AffineLoopBands impl;
   size_t nextIndex = 0;
 };
 
@@ -89,42 +78,46 @@ PYBIND11_MODULE(_scalehls, m) {
     mlirDialectHandleLoadDialect(hlscpp, context);
   });
 
-  m.def("apply_affine_loop_perfection", [](PyAffineLoopBand band) -> bool {
+  m.def("apply_affine_loop_perfection", [](PyAffineLoopBand band) {
     py::gil_scoped_release();
-    return mlirApplyAffineLoopPerfection(band.get());
+    return applyAffineLoopPerfection(band.get());
   });
 
-  m.def("apply_affine_loop_order_opt", [](PyAffineLoopBand band) -> bool {
+  m.def("apply_affine_loop_order_opt", [](PyAffineLoopBand band) {
     py::gil_scoped_release();
-    return mlirApplyAffineLoopOrderOpt(band.get());
+    return applyAffineLoopOrderOpt(band.get());
   });
 
-  m.def("apply_remove_variable_bound", [](PyAffineLoopBand band) -> bool {
+  m.def("apply_remove_variable_bound", [](PyAffineLoopBand band) {
     py::gil_scoped_release();
-    return mlirApplyRemoveVariableBound(band.get());
+    return applyRemoveVariableBound(band.get());
   });
-
-  m.def("apply_legalize_to_hlscpp",
-        [](MlirOperation op, bool top_func) -> bool {
-          py::gil_scoped_release();
-          return mlirApplyLegalizeToHlscpp(op, top_func);
-        });
 
   m.def("apply_loop_pipelining",
-        [](PyAffineLoopBand band, unsigned pipelineLoc,
-           unsigned targetII) -> bool {
+        [](PyAffineLoopBand band, unsigned pipeline_loc, unsigned target_ii) {
           py::gil_scoped_release();
-          return mlirApplyLoopPipelining(band.get(), pipelineLoc, targetII);
+          return applyLoopPipelining(band.get(), pipeline_loc, target_ii);
         });
 
-  m.def("apply_memory_access_opt", [](MlirOperation op) -> bool {
+  m.def("apply_legalize_to_hlscpp", [](MlirOperation op, bool top_func) {
     py::gil_scoped_release();
-    return mlirApplyMemoryAccessOpt(op);
+    if (auto func = dyn_cast<FuncOp>(unwrap(op)))
+      return applyLegalizeToHLSCpp(func, top_func);
+    return false;
   });
 
-  m.def("apply_array_partition", [](MlirOperation op) -> bool {
+  m.def("apply_memory_access_opt", [](MlirOperation op) {
     py::gil_scoped_release();
-    return mlirApplyArrayPartition(op);
+    if (auto func = dyn_cast<FuncOp>(unwrap(op)))
+      return applyMemoryAccessOpt(func);
+    return false;
+  });
+
+  m.def("apply_array_partition", [](MlirOperation op) {
+    py::gil_scoped_release();
+    if (auto func = dyn_cast<FuncOp>(unwrap(op)))
+      return applyArrayPartition(func);
+    return false;
   });
 
   m.def("emit_hlscpp", [](MlirModule mod, py::object fileObject) {

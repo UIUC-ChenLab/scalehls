@@ -10,8 +10,6 @@ include(AddMLIRPython)
 
 declare_mlir_python_sources(ScaleHLSBindingsPythonExtension)
 
-set(_depends LLVMSupport)
-
 declare_mlir_python_extension(ScaleHLSBindingsPythonExtension.Core
   MODULE_NAME _scalehls
   ADD_TO_PARENT ScaleHLSBindingsPythonExtension
@@ -19,10 +17,11 @@ declare_mlir_python_extension(ScaleHLSBindingsPythonExtension.Core
     ScaleHLSModule.cpp
   EMBED_CAPI_LINK_LIBS
     MLIRScaleHLSCAPIHLSCpp
-    MLIRScaleHLSCAPITransformsUtils
     MLIRScaleHLSCAPIEmitHLSCpp
   PRIVATE_LINK_LIBS
-    ${_depends}
+    LLVMSupport
+    MLIRScaleHLSConversion
+    MLIRScaleHLSTransforms
 )
 
 ################################################################################

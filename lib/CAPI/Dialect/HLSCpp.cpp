@@ -4,11 +4,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "scalehls-c/Dialect/HLSCpp.h"
-#include "mlir/CAPI/IR.h"
+#include "scalehls-c/HLSCpp.h"
 #include "mlir/CAPI/Registration.h"
-#include "mlir/CAPI/Support.h"
 #include "scalehls/Dialect/HLSCpp/HLSCpp.h"
 
-MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(HLSCpp, hlscpp,
-                                      mlir::scalehls::hlscpp::HLSCppDialect)
+using namespace mlir;
+using namespace scalehls;
+
+MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(HLSCpp, hlscpp, hlscpp::HLSCppDialect)

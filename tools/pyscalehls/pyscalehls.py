@@ -48,7 +48,7 @@ def main():
         bands = scalehls.LoopBandList(op)
         for band in bands:
             scalehls.apply_affine_loop_perfection(band)
-            # scalehls.apply_affine_loop_order_opt(band)
+            scalehls.apply_affine_loop_order_opt(band)
             scalehls.apply_remove_variable_bound(band)
             scalehls.apply_loop_pipelining(band, band.size - 1, 3)  # targetII
         scalehls.apply_legalize_to_hlscpp(op.operation, True)  # topFunc
