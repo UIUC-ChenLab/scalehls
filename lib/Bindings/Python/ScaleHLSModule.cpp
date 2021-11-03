@@ -6,16 +6,61 @@
 
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/Bindings/Python/PybindAdaptors.h"
+#include "mlir/CAPI/IR.h"
 #include "scalehls-c/Dialect/HLSCpp.h"
 #include "scalehls-c/Transforms/Utils.h"
 #include "scalehls-c/Translation/EmitHLSCpp.h"
+#include "scalehls/Support/Utils.h"
 
 #include "llvm-c/ErrorHandling.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Signals.h"
 
 #include "PybindUtils.h"
 #include <pybind11/pybind11.h>
 namespace py = pybind11;
+
+using namespace mlir;
+using namespace scalehls;
+
+class PyAffineLoopBand {
+public:
+  PyAffineLoopBand(AffineLoopBand &band) {
+    for (auto loop : band)
+      impl.push_back(wrap(loop));
+  }
+
+  operator MlirAffineLoopBand() const { return get(); }
+  MlirAffineLoopBand get() const { return {impl.begin(), impl.end()}; }
+
+private:
+  llvm::SmallVector<MlirOperation, 6> impl;
+};
+
+class PyAffineLoopBandIterator {
+public:
+  PyAffineLoopBandIterator(MlirOperation op) {
+    for (auto &region : unwrap(op)->getRegions())
+      for (auto &block : region) {
+        AffineLoopBands bands;
+        getLoopBands(block, bands);
+        for (auto band : bands)
+          impl.push_back(PyAffineLoopBand(band));
+      }
+  }
+
+  PyAffineLoopBandIterator &dunderIter() { return *this; }
+
+  PyAffineLoopBand dunderNext() {
+    if (nextIndex >= impl.size())
+      throw py::stop_iteration();
+    return impl[nextIndex++];
+  }
+
+private:
+  llvm::SmallVector<PyAffineLoopBand> impl;
+  size_t nextIndex = 0;
+};
 
 PYBIND11_MODULE(_scalehls, m) {
   m.doc() = "ScaleHLS Python Native Extension";
@@ -32,6 +77,11 @@ PYBIND11_MODULE(_scalehls, m) {
     mlirDialectHandleLoadDialect(hlscpp, context);
   });
 
+  m.def("apply_affine_loop_perfection", [](PyAffineLoopBand band) -> bool {
+    py::gil_scoped_release();
+    return mlirApplyAffineLoopPerfection(band.get());
+  });
+
   m.def("apply_legalize_to_hlscpp",
         [](MlirOperation op, bool top_func) -> bool {
           py::gil_scoped_release();
@@ -44,8 +94,16 @@ PYBIND11_MODULE(_scalehls, m) {
   });
 
   m.def("emit_hlscpp", [](MlirModule mod, py::object fileObject) {
-    scalehls::python::PyFileAccumulator accum(fileObject, false);
+    PyFileAccumulator accum(fileObject, false);
     py::gil_scoped_release();
     mlirEmitHlsCpp(mod, accum.getCallback(), accum.getUserData());
   });
+
+  py::class_<PyAffineLoopBand>(m, "LoopBand", py::module_local());
+  py::class_<PyAffineLoopBandIterator>(m, "LoopBandIterator",
+                                       py::module_local())
+      .def(py::init<MlirOperation>(), py::arg("op"),
+           "Iterate on all loop bands contained by the given operation")
+      .def("__iter__", &PyAffineLoopBandIterator::dunderIter)
+      .def("__next__", &PyAffineLoopBandIterator::dunderNext);
 }

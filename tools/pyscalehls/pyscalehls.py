@@ -46,6 +46,9 @@ def main():
 
     # ScaleHLS optimizations.
     for op in mod.body:
+        bands = scalehls.LoopBandIterator(op)
+        for band in bands:
+            scalehls.apply_affine_loop_perfection(band)
         scalehls.apply_legalize_to_hlscpp(op.operation, True)
         scalehls.apply_array_partition(op.operation)
 

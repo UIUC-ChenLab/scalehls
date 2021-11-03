@@ -14,6 +14,16 @@
 using namespace mlir;
 using namespace scalehls;
 
+MLIR_CAPI_EXPORTED bool mlirApplyAffineLoopPerfection(MlirAffineLoopBand band) {
+  AffineLoopBand unwrappedBand;
+  for (auto op = band.loopBegin; op != band.loopEnd; ++op) {
+    auto loop = dyn_cast<AffineForOp>(unwrap(*op));
+    assert(loop && "operation in loop band must be AffineForOp");
+    unwrappedBand.push_back(loop);
+  }
+  return applyAffineLoopPerfection(unwrappedBand);
+}
+
 MLIR_CAPI_EXPORTED bool mlirApplyLegalizeToHlscpp(MlirOperation op,
                                                   bool topFunc) {
   if (auto func = dyn_cast<FuncOp>(unwrap(op)))
