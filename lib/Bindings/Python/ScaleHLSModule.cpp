@@ -98,6 +98,11 @@ PYBIND11_MODULE(_scalehls, m) {
           return mlirApplyLegalizeToHlscpp(op, top_func);
         });
 
+  m.def("apply_memory_access_opt", [](MlirOperation op) -> bool {
+    py::gil_scoped_release();
+    return mlirApplyMemoryAccessOpt(op);
+  });
+
   m.def("apply_array_partition", [](MlirOperation op) -> bool {
     py::gil_scoped_release();
     return mlirApplyArrayPartition(op);

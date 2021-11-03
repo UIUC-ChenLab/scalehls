@@ -78,6 +78,8 @@ bool applyFullyLoopUnrolling(Block &block);
 
 bool applyFullyUnrollAndPartition(Block &block, FuncOp func);
 
+bool applyMemoryAccessOpt(FuncOp func);
+
 bool applyArrayPartition(FuncOp func);
 
 /// Apply optimization strategy to a loop band. The ancestor function is

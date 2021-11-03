@@ -47,6 +47,12 @@ MLIR_CAPI_EXPORTED bool mlirApplyLegalizeToHlscpp(MlirOperation op,
   return false;
 }
 
+MLIR_CAPI_EXPORTED bool mlirApplyMemoryAccessOpt(MlirOperation op) {
+  if (auto func = dyn_cast<FuncOp>(unwrap(op)))
+    return applyMemoryAccessOpt(func);
+  return false;
+}
+
 MLIR_CAPI_EXPORTED bool mlirApplyArrayPartition(MlirOperation op) {
   if (auto func = dyn_cast<FuncOp>(unwrap(op)))
     return applyArrayPartition(func);
