@@ -98,6 +98,13 @@ PYBIND11_MODULE(_scalehls, m) {
           return mlirApplyLegalizeToHlscpp(op, top_func);
         });
 
+  m.def("apply_loop_pipelining",
+        [](PyAffineLoopBand band, unsigned pipelineLoc,
+           unsigned targetII) -> bool {
+          py::gil_scoped_release();
+          return mlirApplyLoopPipelining(band.get(), pipelineLoc, targetII);
+        });
+
   m.def("apply_memory_access_opt", [](MlirOperation op) -> bool {
     py::gil_scoped_release();
     return mlirApplyMemoryAccessOpt(op);

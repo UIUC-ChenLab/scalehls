@@ -40,6 +40,14 @@ MLIR_CAPI_EXPORTED bool mlirApplyRemoveVariableBound(MlirAffineLoopBand band) {
   return applyRemoveVariableBound(unwrappedBand);
 }
 
+MLIR_CAPI_EXPORTED bool mlirApplyLoopPipelining(MlirAffineLoopBand band,
+                                                unsigned pipelineLoc,
+                                                unsigned targetII) {
+  AffineLoopBand unwrappedBand;
+  unwrapBand(band, unwrappedBand);
+  return applyLoopPipelining(unwrappedBand, pipelineLoc, targetII);
+}
+
 MLIR_CAPI_EXPORTED bool mlirApplyLegalizeToHlscpp(MlirOperation op,
                                                   bool topFunc) {
   if (auto func = dyn_cast<FuncOp>(unwrap(op)))
