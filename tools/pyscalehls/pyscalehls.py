@@ -7,6 +7,7 @@ import io
 from subprocess import PIPE, run
 import scalehls
 import mlir.ir
+from mlir.dialects import builtin
 
 
 def do_run(command):
@@ -31,7 +32,6 @@ def main():
     opts = parser.parse_args()
 
     # Call `mlir-clang` to parse HLS C/C++ into MLIR.
-    # TODO: Support Python binding for `mlir-clang`.
     fin = do_run(['mlir-clang', '-S',
                   '-function=' + opts.function,
                   '-memref-fullrank',
@@ -43,17 +43,25 @@ def main():
     scalehls.register_dialects(ctx)
     mod = mlir.ir.Module.parse(fin, ctx)
 
-    # ScaleHLS optimizations.
-    for op in mod.body:
-        bands = scalehls.LoopBandList(op)
+    # Traverse all functions in the MLIR module.
+    for func in mod.body:
+        if not isinstance(func, builtin.FuncOp):
+            pass
+        func.__class__ = builtin.FuncOp
+
+        # Apply loop optimizations to all suitable loop bands.
+        bands = scalehls.LoopBandList(func)
         for band in bands:
             scalehls.apply_affine_loop_perfection(band)
             scalehls.apply_affine_loop_order_opt(band)
             scalehls.apply_remove_variable_bound(band)
             scalehls.apply_loop_pipelining(band, band.size - 1, 3)  # targetII
-        scalehls.apply_legalize_to_hlscpp(op.operation, True)  # topFunc
-        scalehls.apply_memory_access_opt(op.operation)
-        scalehls.apply_array_partition(op.operation)
+
+        # Apply function optimizations.
+        scalehls.apply_legalize_to_hlscpp(
+            func, func.sym_name.value == opts.function)
+        scalehls.apply_memory_access_opt(func)
+        scalehls.apply_array_partition(func)
 
     # Emit MLIR to HLS C++.
     buf = io.StringIO()

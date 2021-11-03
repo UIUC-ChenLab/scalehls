@@ -132,8 +132,7 @@ PYBIND11_MODULE(_scalehls, m) {
       .def("__next__", &PyAffineLoopBand::dunderNext);
 
   py::class_<PyAffineLoopBandList>(m, "LoopBandList", py::module_local())
-      .def(py::init<MlirOperation>(), py::arg("op"),
-           "Initialize with all loop bands contained by the operation")
+      .def(py::init<MlirOperation>(), py::arg("op"))
       .def_property_readonly("size", &PyAffineLoopBandList::size)
       .def("__iter__", &PyAffineLoopBandList::dunderIter)
       .def("__next__", &PyAffineLoopBandList::dunderNext);
