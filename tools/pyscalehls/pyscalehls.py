@@ -8,6 +8,7 @@ from subprocess import PIPE, run
 import scalehls
 import mlir.ir
 from mlir.dialects import builtin
+import numpy as np
 
 
 def do_run(command):
@@ -52,10 +53,14 @@ def main():
         # Apply loop optimizations to all suitable loop bands.
         bands = scalehls.LoopBandList(func)
         for band in bands:
-            scalehls.apply_affine_loop_perfection(band)
-            scalehls.apply_affine_loop_order_opt(band)
+            scalehls.apply_loop_perfection(band)
+            scalehls.apply_loop_order_opt(band)
             scalehls.apply_remove_variable_bound(band)
-            scalehls.apply_loop_pipelining(band, band.size - 1, 3)  # targetII
+
+            tileList = np.ones(band.size, dtype=int)
+            tileList[-1] = 2
+            loc = scalehls.apply_loop_tiling(band, tileList)
+            scalehls.apply_loop_pipelining(band, loc, 3)  # targetII
 
         # Apply function optimizations.
         scalehls.apply_legalize_to_hlscpp(

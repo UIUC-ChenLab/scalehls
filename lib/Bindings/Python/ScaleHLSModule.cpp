@@ -16,7 +16,9 @@
 #include "llvm/Support/Signals.h"
 
 #include "PybindUtils.h"
+#include <numpy/arrayobject.h>
 #include <pybind11/pybind11.h>
+
 namespace py = pybind11;
 
 using namespace mlir;
@@ -63,6 +65,35 @@ private:
   size_t nextIndex = 0;
 };
 
+static bool getVectorFromUnsignedNpArray(PyObject *object,
+                                         SmallVectorImpl<unsigned> &vector) {
+  _import_array();
+  if (!PyArray_Check(object)) {
+    py::raisePyError(object, "isn't a numpy array");
+    return false;
+  }
+
+  auto array = reinterpret_cast<PyArrayObject *>(object);
+  if (PyArray_TYPE(array) != NPY_INT64 || PyArray_NDIM(array) != 1) {
+    py::raisePyError(object, "isn't int64 type or isn't single-dimensional");
+    return false;
+  }
+
+  auto dataBegin = reinterpret_cast<int64_t *>(PyArray_DATA(array));
+  auto dataEnd = dataBegin + PyArray_DIM(array, 0);
+
+  vector.clear();
+  for (auto i = dataBegin; i != dataEnd; ++i) {
+    auto value = *i;
+    if (value < 0) {
+      py::raisePyError(object, "contains negative number");
+      return false;
+    }
+    vector.push_back((unsigned)value);
+  }
+  return true;
+}
+
 PYBIND11_MODULE(_scalehls, m) {
   m.doc() = "ScaleHLS Python Native Extension";
   llvm::sys::PrintStackTraceOnErrorSignal(/*argv=*/"");
@@ -78,12 +109,12 @@ PYBIND11_MODULE(_scalehls, m) {
     mlirDialectHandleLoadDialect(hlscpp, context);
   });
 
-  m.def("apply_affine_loop_perfection", [](PyAffineLoopBand band) {
+  m.def("apply_loop_perfection", [](PyAffineLoopBand band) {
     py::gil_scoped_release();
     return applyAffineLoopPerfection(band.get());
   });
 
-  m.def("apply_affine_loop_order_opt", [](PyAffineLoopBand band) {
+  m.def("apply_loop_order_opt", [](PyAffineLoopBand band) {
     py::gil_scoped_release();
     return applyAffineLoopOrderOpt(band.get());
   });
@@ -93,10 +124,25 @@ PYBIND11_MODULE(_scalehls, m) {
     return applyRemoveVariableBound(band.get());
   });
 
-  m.def("apply_loop_pipelining",
-        [](PyAffineLoopBand band, unsigned pipeline_loc, unsigned target_ii) {
+  m.def("apply_loop_tiling",
+        [](PyAffineLoopBand band, py::object tileListObject) -> int64_t {
           py::gil_scoped_release();
-          return applyLoopPipelining(band.get(), pipeline_loc, target_ii);
+          TileList tileList;
+          if (!getVectorFromUnsignedNpArray(tileListObject.ptr(), tileList))
+            return -1;
+
+          auto loc = applyLoopTiling(band.get(), tileList);
+          if (!loc.hasValue())
+            return -1;
+          return loc.getValue();
+        });
+
+  m.def("apply_loop_pipelining",
+        [](PyAffineLoopBand band, int64_t pipelineLoc, int64_t targetII) {
+          py::gil_scoped_release();
+          if (pipelineLoc < 0 || targetII < 0)
+            return false;
+          return applyLoopPipelining(band.get(), pipelineLoc, targetII);
         });
 
   m.def("apply_legalize_to_hlscpp", [](MlirOperation op, bool top_func) {
