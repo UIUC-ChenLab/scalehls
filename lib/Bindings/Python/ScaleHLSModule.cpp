@@ -4,6 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
+
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/Bindings/Python/PybindAdaptors.h"
 #include "mlir/CAPI/IR.h"

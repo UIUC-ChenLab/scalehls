@@ -80,10 +80,12 @@ if(SCALEHLS_ENABLE_BINDINGS_PYTHON)
   message(STATUS "ScaleHLS Python bindings are enabled.")
 
   include(MLIRDetectPythonEnv)
-  find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+  find_package(Python3 COMPONENTS Interpreter Development NumPy REQUIRED)
   message(STATUS "Found Python include dirs: ${Python3_INCLUDE_DIRS}")
   message(STATUS "Found Python libraries: ${Python3_LIBRARIES}")
   message(STATUS "Found Python executable: ${Python3_EXECUTABLE}")
+  message(STATUS "Found numpy v${Python3_NumPy_VERSION}: ${Python3_NumPy_INCLUDE_DIRS}")
+  include_directories(${Python3_NumPy_INCLUDE_DIRS})
 
   mlir_detect_pybind11_install()
   find_package(pybind11 2.6 CONFIG REQUIRED)
