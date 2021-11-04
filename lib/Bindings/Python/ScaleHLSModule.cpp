@@ -26,6 +26,10 @@ namespace py = pybind11;
 using namespace mlir;
 using namespace scalehls;
 
+//===----------------------------------------------------------------------===//
+// Customized Python classes
+//===----------------------------------------------------------------------===//
+
 class PyAffineLoopBand {
 public:
   PyAffineLoopBand(AffineLoopBand &band) : band(band) {}
@@ -67,17 +71,21 @@ private:
   size_t nextIndex = 0;
 };
 
+//===----------------------------------------------------------------------===//
+// Numpy array retrieval utils
+//===----------------------------------------------------------------------===//
+
 static bool getVectorFromUnsignedNpArray(PyObject *object,
                                          SmallVectorImpl<unsigned> &vector) {
   _import_array();
   if (!PyArray_Check(object)) {
-    py::raisePyError(object, "isn't a numpy array");
+    throw py::raiseValueError("expect numpy array");
     return false;
   }
 
   auto array = reinterpret_cast<PyArrayObject *>(object);
   if (PyArray_TYPE(array) != NPY_INT64 || PyArray_NDIM(array) != 1) {
-    py::raisePyError(object, "isn't int64 type or isn't single-dimensional");
+    throw py::raiseValueError("expect single-dimensional int64 array");
     return false;
   }
 
@@ -88,13 +96,105 @@ static bool getVectorFromUnsignedNpArray(PyObject *object,
   for (auto i = dataBegin; i != dataEnd; ++i) {
     auto value = *i;
     if (value < 0) {
-      py::raisePyError(object, "contains negative number");
+      throw py::raiseValueError("expect non-negative array element");
       return false;
     }
     vector.push_back((unsigned)value);
   }
   return true;
 }
+
+//===----------------------------------------------------------------------===//
+// Loop transform APIs
+//===----------------------------------------------------------------------===//
+
+static bool loopPerfectization(PyAffineLoopBand band) {
+  py::gil_scoped_release();
+  return applyAffineLoopPerfection(band.get());
+}
+
+static bool loopOrderOpt(PyAffineLoopBand band) {
+  py::gil_scoped_release();
+  return applyAffineLoopOrderOpt(band.get());
+}
+
+static bool loopPermutation(PyAffineLoopBand band, py::object permMapObject) {
+  py::gil_scoped_release();
+  SmallVector<unsigned, 8> permMap;
+  if (!getVectorFromUnsignedNpArray(permMapObject.ptr(), permMap))
+    return false;
+  return applyAffineLoopOrderOpt(band.get(), permMap);
+}
+
+/// Loop variable bound elimination.
+static bool loopRemoveVarBound(PyAffineLoopBand band) {
+  py::gil_scoped_release();
+  return applyRemoveVariableBound(band.get());
+}
+
+/// If succeeded, return the location of the innermost tile-space loop.
+/// Otherwise, return -1.
+static int64_t loopTiling(PyAffineLoopBand band, py::object tileListObject) {
+  py::gil_scoped_release();
+  llvm::SmallVector<unsigned, 8> tileList;
+  if (!getVectorFromUnsignedNpArray(tileListObject.ptr(), tileList))
+    return -1;
+  auto loc = applyLoopTiling(band.get(), tileList);
+  return loc.hasValue() ? loc.getValue() : -1;
+}
+
+static bool loopPipelining(PyAffineLoopBand band, int64_t pipelineLoc,
+                           int64_t targetII) {
+  py::gil_scoped_release();
+  if (pipelineLoc < 0 || pipelineLoc >= (int64_t)band.size() || targetII < 1) {
+    throw py::raiseValueError("invalid location or targeted II");
+    return false;
+  }
+  return applyLoopPipelining(band.get(), pipelineLoc, targetII);
+}
+
+//===----------------------------------------------------------------------===//
+// Function transform APIs
+//===----------------------------------------------------------------------===//
+
+static bool legalizeToHLSCpp(MlirOperation op, bool topFunc) {
+  py::gil_scoped_release();
+  if (auto func = dyn_cast<FuncOp>(unwrap(op)))
+    return applyLegalizeToHLSCpp(func, topFunc);
+  throw py::raiseValueError("targeted operation not a function");
+  return false;
+}
+
+static bool memoryAccessOpt(MlirOperation op) {
+  py::gil_scoped_release();
+  if (auto func = dyn_cast<FuncOp>(unwrap(op)))
+    return applyMemoryAccessOpt(func);
+  throw py::raiseValueError("targeted operation not a function");
+  return false;
+}
+
+static bool autoArrayPartition(MlirOperation op) {
+  py::gil_scoped_release();
+  if (auto func = dyn_cast<FuncOp>(unwrap(op)))
+    return applyArrayPartition(func);
+  throw py::raiseValueError("targeted operation not a function");
+  return false;
+}
+
+//===----------------------------------------------------------------------===//
+// Emission APIs
+//===----------------------------------------------------------------------===//
+
+static bool emitHlsCpp(MlirModule mod, py::object fileObject) {
+  PyFileAccumulator accum(fileObject, false);
+  py::gil_scoped_release();
+  return mlirLogicalResultIsSuccess(
+      mlirEmitHlsCpp(mod, accum.getCallback(), accum.getUserData()));
+}
+
+//===----------------------------------------------------------------------===//
+// ScaleHLS Python module definition
+//===----------------------------------------------------------------------===//
 
 PYBIND11_MODULE(_scalehls, m) {
   m.doc() = "ScaleHLS Python Native Extension";
@@ -111,78 +211,23 @@ PYBIND11_MODULE(_scalehls, m) {
     mlirDialectHandleLoadDialect(hlscpp, context);
   });
 
-  m.def("apply_loop_perfection", [](PyAffineLoopBand band) {
-    py::gil_scoped_release();
-    return applyAffineLoopPerfection(band.get());
-  });
+  // Loop transform APIs.
+  m.def("loop_perfectization", &loopPerfectization);
+  m.def("loop_order_opt", &loopOrderOpt);
+  m.def("loop_permutation", &loopPermutation);
+  m.def("loop_remove_var_bound", &loopRemoveVarBound);
+  m.def("loop_tiling", &loopTiling);
+  m.def("loop_pipelining", &loopPipelining);
 
-  m.def("apply_loop_order_opt", [](PyAffineLoopBand band) {
-    py::gil_scoped_release();
-    return applyAffineLoopOrderOpt(band.get());
-  });
+  // Function transform APIs.
+  m.def("legalize_to_hlscpp", &legalizeToHLSCpp);
+  m.def("memory_access_opt", &memoryAccessOpt);
+  m.def("auto_array_partition", &autoArrayPartition);
 
-  m.def("apply_loop_permutation",
-        [](PyAffineLoopBand band, py::object permMapObject) {
-          py::gil_scoped_release();
-          SmallVector<unsigned, 8> permMap;
-          if (!getVectorFromUnsignedNpArray(permMapObject.ptr(), permMap))
-            return false;
-          return applyAffineLoopOrderOpt(band.get(), permMap);
-        });
+  // Emission APIs.
+  m.def("emit_hlscpp", &emitHlsCpp);
 
-  m.def("apply_remove_variable_bound", [](PyAffineLoopBand band) {
-    py::gil_scoped_release();
-    return applyRemoveVariableBound(band.get());
-  });
-
-  m.def("apply_loop_tiling",
-        [](PyAffineLoopBand band, py::object tileListObject) -> int64_t {
-          py::gil_scoped_release();
-          TileList tileList;
-          if (!getVectorFromUnsignedNpArray(tileListObject.ptr(), tileList))
-            return -1;
-
-          auto loc = applyLoopTiling(band.get(), tileList);
-          if (!loc.hasValue())
-            return -1;
-          return loc.getValue();
-        });
-
-  m.def("apply_loop_pipelining",
-        [](PyAffineLoopBand band, int64_t pipelineLoc, int64_t targetII) {
-          py::gil_scoped_release();
-          if (pipelineLoc < 0 || targetII < 0)
-            return false;
-          return applyLoopPipelining(band.get(), pipelineLoc, targetII);
-        });
-
-  m.def("apply_legalize_to_hlscpp", [](MlirOperation op, bool top_func) {
-    py::gil_scoped_release();
-    if (auto func = dyn_cast<FuncOp>(unwrap(op)))
-      return applyLegalizeToHLSCpp(func, top_func);
-    return false;
-  });
-
-  m.def("apply_memory_access_opt", [](MlirOperation op) {
-    py::gil_scoped_release();
-    if (auto func = dyn_cast<FuncOp>(unwrap(op)))
-      return applyMemoryAccessOpt(func);
-    return false;
-  });
-
-  m.def("apply_array_partition", [](MlirOperation op) {
-    py::gil_scoped_release();
-    if (auto func = dyn_cast<FuncOp>(unwrap(op)))
-      return applyArrayPartition(func);
-    return false;
-  });
-
-  m.def("emit_hlscpp", [](MlirModule mod, py::object fileObject) {
-    PyFileAccumulator accum(fileObject, false);
-    py::gil_scoped_release();
-    mlirEmitHlsCpp(mod, accum.getCallback(), accum.getUserData());
-  });
-
+  // Customized Python classes.
   py::class_<PyAffineLoopBand>(m, "LoopBand", py::module_local())
       .def_property_readonly("size", &PyAffineLoopBand::size)
       .def("__iter__", &PyAffineLoopBand::dunderIter)
