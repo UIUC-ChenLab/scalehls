@@ -6,14 +6,11 @@ Please check out our [arXiv paper](https://arxiv.org/abs/2107.11673) for more de
 
 ## Quick Start
 
-### 0. Download ScaleHLS
-```sh
-$ git clone --recursive git@github.com:hanchenye/scalehls.git
-```
-
 ### 1. Install ScaleHLS
 To enable the Python binding feature, please make sure the `pybind11` has been installed. To build MLIR and ScaleHLS, run (note that the `-DLLVM_PARALLEL_LINK_JOBS` option can be tuned to reduce the memory usage):
 ```sh
+$ git clone --recursive git@github.com:hanchenye/scalehls.git
+
 $ mkdir scalehls/build
 $ cd scalehls/build
 $ cmake -G Ninja ../polygeist/llvm-project/llvm \
@@ -31,11 +28,12 @@ $ cmake -G Ninja ../polygeist/llvm-project/llvm \
     -DCMAKE_CXX_COMPILER=clang++
 $ ninja
 $ ninja check-scalehls
+
 $ export PATH=$PATH:$PWD/bin
 $ export PYTHONPATH=$PYTHONPATH:$PWD/tools/scalehls/python_packages/scalehls_core
 ```
 
-ScaleHLS exploits the `mlir-clang` tool of Polygeist as the C front-end. To build Polygeist, run:
+ScaleHLS uses the `mlir-clang` tool of Polygeist as the C front-end. To build Polygeist, run:
 ```sh
 $ mkdir scalehls/polygeist/build
 $ cd scalehls/polygeist/build
@@ -48,6 +46,7 @@ $ cmake -G Ninja .. \
     -DCMAKE_C_COMPILER=clang \
     -DCMAKE_CXX_COMPILER=clang++
 $ ninja check-mlir-clang
+
 $ export PATH=$PATH:$PWD/mlir-clang
 ```
 
@@ -57,19 +56,24 @@ After the installation and regression test successfully completed, you should be
 $ cd scalehls
 
 $ # HLS C programs parsing and automatic kernel-level design space exploration.
-$ mlir-clang samples/polybench/gemm/gemm_32.c -function=gemm_32 -memref-fullrank -raise-scf-to-affine -S | \
-    scalehls-opt -dse="top-func=gemm_32 output-path=./ target-spec=samples/polybench/target-spec.ini" \
+$ mlir-clang samples/polybench/gemm/gemm_32.c -function=gemm_32 -memref-fullrank -raise-scf-to-affine -S \
+    | scalehls-opt -dse="top-func=gemm_32 output-path=./ target-spec=samples/polybench/target-spec.ini" \
     -debug-only=scalehls > /dev/null
 $ scalehls-translate -emit-hlscpp gemm_32_pareto_0.mlir > gemm_32_pareto_0.cpp
 
 $ # Loop and directive-level optimizations, QoR estimation, and C++ code generation.
-$ scalehls-opt samples/polybench/syrk/syrk_32.mlir \
-    -affine-loop-perfection -affine-loop-order-opt -remove-variable-bound \
+$ mlir-clang samples/polybench/syrk/syrk_32.c -function=syrk_32 -memref-fullrank -raise-scf-to-affine -S \
+    | scalehls-opt -affine-loop-perfection -affine-loop-order-opt -remove-variable-bound \
     -partial-affine-loop-tile="tile-size=2" -legalize-to-hlscpp="top-func=syrk_32" \
     -loop-pipelining="pipeline-level=3 target-ii=2" -canonicalize -simplify-affine-if \
     -affine-store-forward -simplify-memref-access -array-partition -cse -canonicalize \
     -qor-estimation="target-spec=samples/polybench/target-spec.ini" \
     | scalehls-translate -emit-hlscpp
+```
+
+If you have enabled the python binding feature, you should be able to run:
+```sh
+$ pyscalehls.py samples/polybench/syrk/syrk_32.c -f syrk_32
 ```
 
 ## Integration with ONNX-MLIR
