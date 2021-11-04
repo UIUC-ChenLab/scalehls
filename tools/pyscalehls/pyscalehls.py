@@ -50,25 +50,42 @@ def main():
             pass
         func.__class__ = builtin.FuncOp
 
-        # Apply loop optimizations to all suitable loop bands.
+        # Collect all suitable loop bands in the function.
         bands = scalehls.LoopBandList(func)
         for band in bands:
+            # Attempt to erfectize the loop band.
             scalehls.apply_loop_perfection(band)
+
+            # Maximize the distance of loop-carried dependencies through loop permutation.
             scalehls.apply_loop_order_opt(band)
+
+            # Apply loop permutation based on the provided map.
+            # Note: This example permMap will keep the loop order unchanged.
+            permMap = np.arange(band.size)
+            scalehls.apply_loop_permutation(band, permMap)
+
+            # Attempt to remove variable loop bounds if possible.
             scalehls.apply_remove_variable_bound(band)
 
+            # Apply loop tiling. Tile sizes are defined from the outermost loop to the innermost.
             tileList = np.ones(band.size, dtype=int)
             tileList[-1] = 2
             loc = scalehls.apply_loop_tiling(band, tileList)
+
+            # Apply loop pipelining. All loops inside of the pipelined loop are fully unrolled.
             scalehls.apply_loop_pipelining(band, loc, 3)  # targetII
 
-        # Apply function optimizations.
+        # Legalize the IR to make it emittable.
         scalehls.apply_legalize_to_hlscpp(
             func, func.sym_name.value == opts.function)
+
+        # Optimize memory accesses through store forwarding, etc.
         scalehls.apply_memory_access_opt(func)
+
+        # Apply suitable array partition strategies through analyzing the array access pattern.
         scalehls.apply_array_partition(func)
 
-    # Emit MLIR to HLS C++.
+    # Emit optimized MLIR to HLS C++.
     buf = io.StringIO()
     scalehls.emit_hlscpp(mod, buf)
     buf.seek(0)

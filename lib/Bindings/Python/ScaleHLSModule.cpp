@@ -121,6 +121,15 @@ PYBIND11_MODULE(_scalehls, m) {
     return applyAffineLoopOrderOpt(band.get());
   });
 
+  m.def("apply_loop_permutation",
+        [](PyAffineLoopBand band, py::object permMapObject) {
+          py::gil_scoped_release();
+          SmallVector<unsigned, 8> permMap;
+          if (!getVectorFromUnsignedNpArray(permMapObject.ptr(), permMap))
+            return false;
+          return applyAffineLoopOrderOpt(band.get(), permMap);
+        });
+
   m.def("apply_remove_variable_bound", [](PyAffineLoopBand band) {
     py::gil_scoped_release();
     return applyRemoveVariableBound(band.get());
