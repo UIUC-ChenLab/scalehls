@@ -176,9 +176,27 @@ static bool memoryAccessOpt(MlirOperation op) {
 static bool autoArrayPartition(MlirOperation op) {
   py::gil_scoped_release();
   if (auto func = dyn_cast<FuncOp>(unwrap(op)))
-    return applyArrayPartition(func);
+    return applyAutoArrayPartition(func);
   throw py::raiseValueError("targeted operation not a function");
   return false;
+}
+
+//===----------------------------------------------------------------------===//
+// Array transform APIs
+//===----------------------------------------------------------------------===//
+
+/// TODO: Support to apply different partition kind to different dimension.
+static bool arrayPartition(MlirValue array, py::object factorsObject,
+                           std::string kind) {
+  py::gil_scoped_release();
+  llvm::SmallVector<unsigned, 4> factors;
+  if (!getVectorFromUnsignedNpArray(factorsObject.ptr(), factors))
+    return false;
+  llvm::SmallVector<hlscpp::PartitionKind, 4> kinds(
+      factors.size(), kind == "cyclic"  ? hlscpp::PartitionKind::CYCLIC
+                      : kind == "block" ? hlscpp::PartitionKind::BLOCK
+                                        : hlscpp::PartitionKind::NONE);
+  return applyArrayPartition(unwrap(array), factors, kinds);
 }
 
 //===----------------------------------------------------------------------===//
@@ -223,6 +241,9 @@ PYBIND11_MODULE(_scalehls, m) {
   m.def("legalize_to_hlscpp", &legalizeToHLSCpp);
   m.def("memory_access_opt", &memoryAccessOpt);
   m.def("auto_array_partition", &autoArrayPartition);
+
+  // Array transform APIs.
+  m.def("array_partition", &arrayPartition);
 
   // Emission APIs.
   m.def("emit_hlscpp", &emitHlsCpp);

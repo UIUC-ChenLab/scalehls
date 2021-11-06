@@ -138,7 +138,7 @@ bool scalehls::applyFullyUnrollAndPartition(Block &block, FuncOp func) {
     return false;
 
   // Apply the best suitable array partition strategy to the function.
-  applyArrayPartition(func);
+  applyAutoArrayPartition(func);
 
   return true;
 }
@@ -171,7 +171,7 @@ bool scalehls::applyOptStrategy(AffineLoopBand &band, FuncOp func,
     return false;
 
   // Apply the best suitable array partition strategy to the function.
-  applyArrayPartition(func);
+  applyAutoArrayPartition(func);
 
   return true;
 }
@@ -206,7 +206,7 @@ bool scalehls::applyOptStrategy(FuncOp func, ArrayRef<TileList> tileLists,
     return false;
 
   // Apply the best suitable array partition strategy to the function.
-  applyArrayPartition(func);
+  applyAutoArrayPartition(func);
 
   return true;
 }

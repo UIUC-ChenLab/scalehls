@@ -43,8 +43,70 @@ static void updateSubFuncs(FuncOp func, Builder builder) {
   });
 }
 
-/// TODO: support to pass in partition strategy.
-bool scalehls::applyArrayPartition(FuncOp func) {
+bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
+                                   ArrayRef<hlscpp::PartitionKind> kinds,
+                                   bool updateFuncSignature) {
+  auto builder = Builder(array.getContext());
+  auto arrayType = array.getType().dyn_cast<MemRefType>();
+  if (!arrayType || !arrayType.hasStaticShape() ||
+      factors.size() != arrayType.getRank() ||
+      kinds.size() != arrayType.getRank())
+    return false;
+
+  // Walk through each dimension of the current memory.
+  SmallVector<AffineExpr, 4> partitionIndices;
+  SmallVector<AffineExpr, 4> addressIndices;
+
+  for (int64_t dim = 0; dim < arrayType.getRank(); ++dim) {
+    auto kind = kinds[dim];
+    auto factor = factors[dim];
+
+    if (kind == PartitionKind::CYCLIC) {
+      partitionIndices.push_back(builder.getAffineDimExpr(dim) % factor);
+      addressIndices.push_back(builder.getAffineDimExpr(dim).floorDiv(factor));
+
+    } else if (kind == PartitionKind::BLOCK) {
+      auto blockFactor = (arrayType.getShape()[dim] + factor - 1) / factor;
+      partitionIndices.push_back(
+          builder.getAffineDimExpr(dim).floorDiv(blockFactor));
+      addressIndices.push_back(builder.getAffineDimExpr(dim) % blockFactor);
+
+    } else {
+      partitionIndices.push_back(builder.getAffineConstantExpr(0));
+      addressIndices.push_back(builder.getAffineDimExpr(dim));
+    }
+  }
+
+  // Construct new layout map.
+  partitionIndices.append(addressIndices.begin(), addressIndices.end());
+  auto layoutMap = AffineMap::get(arrayType.getRank(), 0, partitionIndices,
+                                  builder.getContext());
+
+  // Construct new array type.
+  auto newType =
+      MemRefType::get(arrayType.getShape(), arrayType.getElementType(),
+                      layoutMap, arrayType.getMemorySpace());
+
+  // Set new type.
+  array.setType(newType);
+
+  if (updateFuncSignature)
+    if (auto func = dyn_cast<FuncOp>(array.getParentBlock()->getParentOp())) {
+      // Align function type with entry block argument types only if the array
+      // is defined as an argument of the function.
+      if (!array.getDefiningOp()) {
+        auto resultTypes = func.front().getTerminator()->getOperandTypes();
+        auto inputTypes = func.front().getArgumentTypes();
+        func.setType(builder.getFunctionType(inputTypes, resultTypes));
+      }
+
+      // Update the types of all sub-functions.
+      updateSubFuncs(func, builder);
+    }
+  return true;
+}
+
+bool scalehls::applyAutoArrayPartition(FuncOp func) {
   // Check whether the input function is pipelined.
   bool funcPipeline = false;
   if (auto attr = func->getAttrOfType<BoolAttr>("pipeline"))
@@ -201,7 +263,7 @@ bool scalehls::applyArrayPartition(FuncOp func) {
     assert(subFunc && "callable is not a function operation");
 
     // Apply array partition to the sub-function.
-    applyArrayPartition(subFunc);
+    applyAutoArrayPartition(subFunc);
 
     auto subFuncType = subFunc.getType();
     unsigned index = 0;
@@ -243,47 +305,16 @@ bool scalehls::applyArrayPartition(FuncOp func) {
   auto builder = Builder(func);
   for (auto pair : partitionsMap) {
     auto memref = pair.first;
-    auto memrefType = memref.getType().cast<MemRefType>();
     auto partitions = pair.second;
 
-    // Walk through each dimension of the current memory.
-    SmallVector<AffineExpr, 4> partitionIndices;
-    SmallVector<AffineExpr, 4> addressIndices;
-
-    for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
-      auto partition = partitions[dim];
-      auto kind = partition.first;
-      auto factor = partition.second;
-
-      if (kind == PartitionKind::CYCLIC) {
-        partitionIndices.push_back(builder.getAffineDimExpr(dim) % factor);
-        addressIndices.push_back(
-            builder.getAffineDimExpr(dim).floorDiv(factor));
-
-      } else if (kind == PartitionKind::BLOCK) {
-        auto blockFactor = (memrefType.getShape()[dim] + factor - 1) / factor;
-        partitionIndices.push_back(
-            builder.getAffineDimExpr(dim).floorDiv(blockFactor));
-        addressIndices.push_back(builder.getAffineDimExpr(dim) % blockFactor);
-
-      } else {
-        partitionIndices.push_back(builder.getAffineConstantExpr(0));
-        addressIndices.push_back(builder.getAffineDimExpr(dim));
-      }
+    SmallVector<hlscpp::PartitionKind, 4> kinds;
+    SmallVector<unsigned, 4> factors;
+    for (auto info : partitions) {
+      kinds.push_back(info.first);
+      factors.push_back(info.second);
     }
 
-    // Construct new layout map.
-    partitionIndices.append(addressIndices.begin(), addressIndices.end());
-    auto layoutMap = AffineMap::get(memrefType.getRank(), 0, partitionIndices,
-                                    builder.getContext());
-
-    // Construct new memref type.
-    auto newType =
-        MemRefType::get(memrefType.getShape(), memrefType.getElementType(),
-                        layoutMap, memrefType.getMemorySpace());
-
-    // Set new type.
-    memref.setType(newType);
+    applyArrayPartition(memref, factors, kinds, /*updateFuncSignature=*/false);
   }
 
   // Align function type with entry block argument types.
@@ -303,7 +334,7 @@ struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
     for (auto func : getOperation().getOps<FuncOp>()) {
       if (auto funcDirect = getFuncDirective(func))
         if (funcDirect.getTopFunc())
-          applyArrayPartition(func);
+          applyAutoArrayPartition(func);
     }
   }
 };

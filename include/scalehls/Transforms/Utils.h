@@ -82,7 +82,11 @@ bool applyFullyUnrollAndPartition(Block &block, FuncOp func);
 
 bool applyMemoryAccessOpt(FuncOp func);
 
-bool applyArrayPartition(FuncOp func);
+bool applyArrayPartition(Value array, ArrayRef<unsigned> factors,
+                         ArrayRef<hlscpp::PartitionKind> kinds,
+                         bool updateFuncSignature = true);
+
+bool applyAutoArrayPartition(FuncOp func);
 
 /// Apply optimization strategy to a loop band. The ancestor function is
 /// also passed in because the post-tiling optimizations have to take
