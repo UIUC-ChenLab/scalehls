@@ -50,7 +50,7 @@ def main():
             pass
         func.__class__ = builtin.FuncOp
 
-        # Collect all suitable loop bands in the function.
+        # Traverse all suitable loop bands in the function.
         bands = scalehls.LoopBandList(func)
         for band in bands:
             # Attempt to perfectize the loop band.
@@ -75,6 +75,18 @@ def main():
             # Apply loop pipelining. All loops inside of the pipelined loop are fully unrolled.
             scalehls.loop_pipelining(band, loc, 3)  # targetII
 
+        # Traverse all arrays in the function.
+        arrays = scalehls.ArrayList(func)
+        for array in arrays:
+            type = array.type
+            type.__class__ = mlir.ir.MemRefType
+            if not type.has_rank:
+                pass
+            # Apply specified factors and partition kind to the array.
+            factors = np.ones(type.rank, dtype=int)
+            factors[-1] = 2
+            scalehls.array_partition(array, factors, "cyclic")
+
         # Legalize the IR to make it emittable.
         scalehls.legalize_to_hlscpp(
             func, func.sym_name.value == opts.function)
@@ -83,7 +95,7 @@ def main():
         scalehls.memory_access_opt(func)
 
         # Apply suitable array partition strategies through analyzing the array access pattern.
-        scalehls.auto_array_partition(func)
+        # scalehls.auto_array_partition(func)
 
     # Emit optimized MLIR to HLS C++.
     buf = io.StringIO()

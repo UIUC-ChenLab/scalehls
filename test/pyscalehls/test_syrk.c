@@ -6,7 +6,7 @@
 // CHECK: float [[C:.*]][32][32]
 
 // CHECK: #pragma HLS array_partition variable=[[A]] cyclic factor=2 dim=2
-// CHECK: #pragma HLS array_partition variable=[[C]] cyclic factor=2 dim=1
+// CHECK: #pragma HLS array_partition variable=[[C]] cyclic factor=2 dim=2
 
 // CHECK: for (int [[k:.*]] = 0; [[k]] < 32; [[k]] += 1) {
 // CHECK-NEXT: for (int [[i:.*]] = 0; [[i]] < 32; [[i]] += 1) {

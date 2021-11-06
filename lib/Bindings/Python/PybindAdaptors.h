@@ -222,6 +222,27 @@ template <> struct type_caster<MlirType> {
   }
 };
 
+/// Casts object <-> MlirValue.
+template <> struct type_caster<MlirValue> {
+  PYBIND11_TYPE_CASTER(MlirValue, _("MlirValue"));
+  bool load(handle src, bool) {
+    py::object capsule = mlirApiObjectToCapsule(src);
+    value = mlirPythonCapsuleToValue(capsule.ptr());
+    if (mlirValueIsNull(value)) {
+      return false;
+    }
+    return true;
+  }
+  static handle cast(MlirValue t, return_value_policy, handle) {
+    py::object capsule =
+        py::reinterpret_steal<py::object>(mlirPythonValueToCapsule(t));
+    return py::module::import(MAKE_MLIR_PYTHON_QUALNAME("ir"))
+        .attr("Value")
+        .attr(MLIR_PYTHON_CAPI_FACTORY_ATTR)(capsule)
+        .release();
+  }
+};
+
 } // namespace detail
 } // namespace pybind11
 
