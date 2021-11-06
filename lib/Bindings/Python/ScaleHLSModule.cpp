@@ -6,8 +6,10 @@
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 
+#include "PybindAdaptors.h"
+
 #include "mlir-c/Bindings/Python/Interop.h"
-#include "mlir/Bindings/Python/PybindAdaptors.h"
+#include "mlir/../../lib/Bindings/Python/IRModule.h"
 #include "mlir/CAPI/IR.h"
 #include "scalehls-c/EmitHLSCpp.h"
 #include "scalehls-c/HLSCpp.h"
@@ -17,13 +19,13 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Signals.h"
 
-#include "PybindUtils.h"
 #include <numpy/arrayobject.h>
 #include <pybind11/pybind11.h>
 
 namespace py = pybind11;
 
 using namespace mlir;
+using namespace mlir::python;
 using namespace scalehls;
 
 //===----------------------------------------------------------------------===//
@@ -54,9 +56,9 @@ public:
   PyAffineLoopBandList(MlirOperation op) {
     auto func = dyn_cast<FuncOp>(unwrap(op));
     if (!func)
-      throw py::raiseValueError("targeted operation not a function");
+      throw SetPyError(PyExc_ValueError, "targeted operation not a function");
     if (!llvm::hasSingleElement(func.getBody()))
-      throw py::raiseValueError("function must have single block");
+      throw SetPyError(PyExc_ValueError, "function must have single block");
     getLoopBands(func.front(), impl);
   }
 
@@ -79,9 +81,9 @@ public:
   PyArrayList(MlirOperation op) {
     auto func = dyn_cast<FuncOp>(unwrap(op));
     if (!func)
-      throw py::raiseValueError("targeted operation not a function");
+      throw SetPyError(PyExc_ValueError, "targeted operation not a function");
     if (!llvm::hasSingleElement(func.getBody()))
-      throw py::raiseValueError("function must have single block");
+      throw SetPyError(PyExc_ValueError, "function must have single block");
     getArrays(func.front(), impl);
   }
 
@@ -107,10 +109,10 @@ static void getVectorFromUnsignedNpArray(PyObject *object,
                                          SmallVectorImpl<unsigned> &vector) {
   _import_array();
   if (!PyArray_Check(object))
-    throw py::raiseValueError("expect numpy array");
+    throw SetPyError(PyExc_ValueError, "expect numpy array");
   auto array = reinterpret_cast<PyArrayObject *>(object);
   if (PyArray_TYPE(array) != NPY_INT64 || PyArray_NDIM(array) != 1)
-    throw py::raiseValueError("expect single-dimensional int64 array");
+    throw SetPyError(PyExc_ValueError, "expect single-dimensional int64 array");
 
   auto dataBegin = reinterpret_cast<int64_t *>(PyArray_DATA(array));
   auto dataEnd = dataBegin + PyArray_DIM(array, 0);
@@ -119,7 +121,7 @@ static void getVectorFromUnsignedNpArray(PyObject *object,
   for (auto i = dataBegin; i != dataEnd; ++i) {
     auto value = *i;
     if (value < 0)
-      throw py::raiseValueError("expect non-negative array element");
+      throw SetPyError(PyExc_ValueError, "expect non-negative array element");
     vector.push_back((unsigned)value);
   }
 }
@@ -165,7 +167,7 @@ static bool loopPipelining(PyAffineLoopBand band, int64_t pipelineLoc,
                            int64_t targetII) {
   py::gil_scoped_release();
   if (pipelineLoc < 0 || pipelineLoc >= (int64_t)band.size() || targetII < 1)
-    throw py::raiseValueError("invalid location or targeted II");
+    throw SetPyError(PyExc_ValueError, "invalid location or targeted II");
   return applyLoopPipelining(band.get(), pipelineLoc, targetII);
 }
 
@@ -177,7 +179,7 @@ static bool legalizeToHLSCpp(MlirOperation op, bool topFunc) {
   py::gil_scoped_release();
   auto func = dyn_cast<FuncOp>(unwrap(op));
   if (!func)
-    throw py::raiseValueError("targeted operation not a function");
+    throw SetPyError(PyExc_ValueError, "targeted operation not a function");
   return applyLegalizeToHLSCpp(func, topFunc);
 }
 
@@ -185,7 +187,7 @@ static bool memoryAccessOpt(MlirOperation op) {
   py::gil_scoped_release();
   auto func = dyn_cast<FuncOp>(unwrap(op));
   if (!func)
-    throw py::raiseValueError("targeted operation not a function");
+    throw SetPyError(PyExc_ValueError, "targeted operation not a function");
   return applyMemoryAccessOpt(func);
 }
 
@@ -193,7 +195,7 @@ static bool autoArrayPartition(MlirOperation op) {
   py::gil_scoped_release();
   auto func = dyn_cast<FuncOp>(unwrap(op));
   if (!func)
-    throw py::raiseValueError("targeted operation not a function");
+    throw SetPyError(PyExc_ValueError, "targeted operation not a function");
   return applyAutoArrayPartition(func);
 }
 
