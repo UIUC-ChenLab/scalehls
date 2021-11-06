@@ -52,9 +52,12 @@ private:
 class PyAffineLoopBandList {
 public:
   PyAffineLoopBandList(MlirOperation op) {
-    for (auto &region : unwrap(op)->getRegions())
-      for (auto &block : region)
-        getLoopBands(block, impl);
+    auto func = dyn_cast<FuncOp>(unwrap(op));
+    if (!func)
+      throw py::raiseValueError("targeted operation not a function");
+    if (!llvm::hasSingleElement(func.getBody()))
+      throw py::raiseValueError("function must have single block");
+    getLoopBands(func.front(), impl);
   }
 
   size_t size() const { return impl.size(); }
@@ -71,23 +74,43 @@ private:
   size_t nextIndex = 0;
 };
 
+class PyArrayList {
+public:
+  PyArrayList(MlirOperation op) {
+    auto func = dyn_cast<FuncOp>(unwrap(op));
+    if (!func)
+      throw py::raiseValueError("targeted operation not a function");
+    if (!llvm::hasSingleElement(func.getBody()))
+      throw py::raiseValueError("function must have single block");
+    getArrays(func.front(), impl);
+  }
+
+  size_t size() const { return impl.size(); }
+
+  PyArrayList &dunderIter() { return *this; }
+  MlirValue dunderNext() {
+    if (nextIndex >= impl.size())
+      throw py::stop_iteration();
+    return wrap(impl[nextIndex++]);
+  }
+
+private:
+  SmallVector<Value, 8> impl;
+  size_t nextIndex = 0;
+};
+
 //===----------------------------------------------------------------------===//
 // Numpy array retrieval utils
 //===----------------------------------------------------------------------===//
 
-static bool getVectorFromUnsignedNpArray(PyObject *object,
+static void getVectorFromUnsignedNpArray(PyObject *object,
                                          SmallVectorImpl<unsigned> &vector) {
   _import_array();
-  if (!PyArray_Check(object)) {
+  if (!PyArray_Check(object))
     throw py::raiseValueError("expect numpy array");
-    return false;
-  }
-
   auto array = reinterpret_cast<PyArrayObject *>(object);
-  if (PyArray_TYPE(array) != NPY_INT64 || PyArray_NDIM(array) != 1) {
+  if (PyArray_TYPE(array) != NPY_INT64 || PyArray_NDIM(array) != 1)
     throw py::raiseValueError("expect single-dimensional int64 array");
-    return false;
-  }
 
   auto dataBegin = reinterpret_cast<int64_t *>(PyArray_DATA(array));
   auto dataEnd = dataBegin + PyArray_DIM(array, 0);
@@ -95,13 +118,10 @@ static bool getVectorFromUnsignedNpArray(PyObject *object,
   vector.clear();
   for (auto i = dataBegin; i != dataEnd; ++i) {
     auto value = *i;
-    if (value < 0) {
+    if (value < 0)
       throw py::raiseValueError("expect non-negative array element");
-      return false;
-    }
     vector.push_back((unsigned)value);
   }
-  return true;
 }
 
 //===----------------------------------------------------------------------===//
@@ -121,8 +141,7 @@ static bool loopOrderOpt(PyAffineLoopBand band) {
 static bool loopPermutation(PyAffineLoopBand band, py::object permMapObject) {
   py::gil_scoped_release();
   SmallVector<unsigned, 8> permMap;
-  if (!getVectorFromUnsignedNpArray(permMapObject.ptr(), permMap))
-    return false;
+  getVectorFromUnsignedNpArray(permMapObject.ptr(), permMap);
   return applyAffineLoopOrderOpt(band.get(), permMap);
 }
 
@@ -137,8 +156,7 @@ static bool loopRemoveVarBound(PyAffineLoopBand band) {
 static int64_t loopTiling(PyAffineLoopBand band, py::object tileListObject) {
   py::gil_scoped_release();
   llvm::SmallVector<unsigned, 8> tileList;
-  if (!getVectorFromUnsignedNpArray(tileListObject.ptr(), tileList))
-    return -1;
+  getVectorFromUnsignedNpArray(tileListObject.ptr(), tileList);
   auto loc = applyLoopTiling(band.get(), tileList);
   return loc.hasValue() ? loc.getValue() : -1;
 }
@@ -146,10 +164,8 @@ static int64_t loopTiling(PyAffineLoopBand band, py::object tileListObject) {
 static bool loopPipelining(PyAffineLoopBand band, int64_t pipelineLoc,
                            int64_t targetII) {
   py::gil_scoped_release();
-  if (pipelineLoc < 0 || pipelineLoc >= (int64_t)band.size() || targetII < 1) {
+  if (pipelineLoc < 0 || pipelineLoc >= (int64_t)band.size() || targetII < 1)
     throw py::raiseValueError("invalid location or targeted II");
-    return false;
-  }
   return applyLoopPipelining(band.get(), pipelineLoc, targetII);
 }
 
@@ -159,26 +175,26 @@ static bool loopPipelining(PyAffineLoopBand band, int64_t pipelineLoc,
 
 static bool legalizeToHLSCpp(MlirOperation op, bool topFunc) {
   py::gil_scoped_release();
-  if (auto func = dyn_cast<FuncOp>(unwrap(op)))
-    return applyLegalizeToHLSCpp(func, topFunc);
-  throw py::raiseValueError("targeted operation not a function");
-  return false;
+  auto func = dyn_cast<FuncOp>(unwrap(op));
+  if (!func)
+    throw py::raiseValueError("targeted operation not a function");
+  return applyLegalizeToHLSCpp(func, topFunc);
 }
 
 static bool memoryAccessOpt(MlirOperation op) {
   py::gil_scoped_release();
-  if (auto func = dyn_cast<FuncOp>(unwrap(op)))
-    return applyMemoryAccessOpt(func);
-  throw py::raiseValueError("targeted operation not a function");
-  return false;
+  auto func = dyn_cast<FuncOp>(unwrap(op));
+  if (!func)
+    throw py::raiseValueError("targeted operation not a function");
+  return applyMemoryAccessOpt(func);
 }
 
 static bool autoArrayPartition(MlirOperation op) {
   py::gil_scoped_release();
-  if (auto func = dyn_cast<FuncOp>(unwrap(op)))
-    return applyAutoArrayPartition(func);
-  throw py::raiseValueError("targeted operation not a function");
-  return false;
+  auto func = dyn_cast<FuncOp>(unwrap(op));
+  if (!func)
+    throw py::raiseValueError("targeted operation not a function");
+  return applyAutoArrayPartition(func);
 }
 
 //===----------------------------------------------------------------------===//
@@ -190,8 +206,7 @@ static bool arrayPartition(MlirValue array, py::object factorsObject,
                            std::string kind) {
   py::gil_scoped_release();
   llvm::SmallVector<unsigned, 4> factors;
-  if (!getVectorFromUnsignedNpArray(factorsObject.ptr(), factors))
-    return false;
+  getVectorFromUnsignedNpArray(factorsObject.ptr(), factors);
   llvm::SmallVector<hlscpp::PartitionKind, 4> kinds(
       factors.size(), kind == "cyclic"  ? hlscpp::PartitionKind::CYCLIC
                       : kind == "block" ? hlscpp::PartitionKind::BLOCK
@@ -259,4 +274,10 @@ PYBIND11_MODULE(_scalehls, m) {
       .def_property_readonly("size", &PyAffineLoopBandList::size)
       .def("__iter__", &PyAffineLoopBandList::dunderIter)
       .def("__next__", &PyAffineLoopBandList::dunderNext);
+
+  py::class_<PyArrayList>(m, "ArrayList", py::module_local())
+      .def(py::init<MlirOperation>(), py::arg("op"))
+      .def_property_readonly("size", &PyArrayList::size)
+      .def("__iter__", &PyArrayList::dunderIter)
+      .def("__next__", &PyArrayList::dunderNext);
 }

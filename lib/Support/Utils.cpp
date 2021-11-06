@@ -8,6 +8,7 @@
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Analysis/Utils.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -318,6 +319,22 @@ void scalehls::getLoopBands(Block &block, AffineLoopBands &bands,
       bands.push_back(band);
     }
   });
+}
+
+void scalehls::getArrays(Block &block, SmallVectorImpl<Value> &arrays,
+                         bool allowArguments) {
+  // Collect argument arrays.
+  if (allowArguments)
+    for (auto arg : block.getArguments()) {
+      if (arg.getType().isa<MemRefType>())
+        arrays.push_back(arg);
+    }
+
+  // Collect local arrays.
+  for (auto &op : block.getOperations()) {
+    if (isa<memref::AllocaOp, memref::AllocOp>(op))
+      arrays.push_back(op.getResult(0));
+  }
 }
 
 Optional<unsigned> scalehls::getAverageTripCount(AffineForOp forOp) {

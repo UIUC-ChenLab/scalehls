@@ -49,8 +49,8 @@ bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
   auto builder = Builder(array.getContext());
   auto arrayType = array.getType().dyn_cast<MemRefType>();
   if (!arrayType || !arrayType.hasStaticShape() ||
-      factors.size() != arrayType.getRank() ||
-      kinds.size() != arrayType.getRank())
+      (int64_t)factors.size() != arrayType.getRank() ||
+      (int64_t)kinds.size() != arrayType.getRank())
     return false;
 
   // Walk through each dimension of the current memory.
