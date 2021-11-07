@@ -10,6 +10,7 @@
 
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/../../lib/Bindings/Python/IRModule.h"
+#include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/CAPI/IR.h"
 #include "scalehls-c/EmitHLSCpp.h"
 #include "scalehls-c/HLSCpp.h"
@@ -37,7 +38,11 @@ public:
   PyAffineLoopBand(AffineLoopBand &band) : band(band) {}
 
   AffineLoopBand &get() const { return band; }
-  size_t size() const { return band.size(); }
+  size_t depth() const { return band.size(); }
+  int64_t getTripCount(size_t loc) {
+    auto optTripCount = getConstantTripCount(band[loc]);
+    return optTripCount.hasValue() ? optTripCount.getValue() : -1;
+  }
 
   PyAffineLoopBand &dunderIter() { return *this; }
   MlirOperation dunderNext() {
@@ -155,18 +160,18 @@ static bool loopRemoveVarBound(PyAffineLoopBand band) {
 
 /// If succeeded, return the location of the innermost tile-space loop.
 /// Otherwise, return -1.
-static int64_t loopTiling(PyAffineLoopBand band, py::object tileListObject) {
+static int64_t loopTiling(PyAffineLoopBand band, py::object factorsObject) {
   py::gil_scoped_release();
-  llvm::SmallVector<unsigned, 8> tileList;
-  getVectorFromUnsignedNpArray(tileListObject.ptr(), tileList);
-  auto loc = applyLoopTiling(band.get(), tileList);
+  llvm::SmallVector<unsigned, 8> factors;
+  getVectorFromUnsignedNpArray(factorsObject.ptr(), factors);
+  auto loc = applyLoopTiling(band.get(), factors);
   return loc.hasValue() ? loc.getValue() : -1;
 }
 
 static bool loopPipelining(PyAffineLoopBand band, int64_t pipelineLoc,
                            int64_t targetII) {
   py::gil_scoped_release();
-  if (pipelineLoc < 0 || pipelineLoc >= (int64_t)band.size() || targetII < 1)
+  if (pipelineLoc < 0 || pipelineLoc >= (int64_t)band.depth() || targetII < 1)
     throw SetPyError(PyExc_ValueError, "invalid location or targeted II");
   return applyLoopPipelining(band.get(), pipelineLoc, targetII);
 }
@@ -267,7 +272,8 @@ PYBIND11_MODULE(_scalehls, m) {
 
   // Customized Python classes.
   py::class_<PyAffineLoopBand>(m, "LoopBand", py::module_local())
-      .def_property_readonly("size", &PyAffineLoopBand::size)
+      .def_property_readonly("depth", &PyAffineLoopBand::depth)
+      .def("get_trip_count", &PyAffineLoopBand::getTripCount)
       .def("__iter__", &PyAffineLoopBand::dunderIter)
       .def("__next__", &PyAffineLoopBand::dunderNext);
 

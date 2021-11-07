@@ -17,8 +17,6 @@ declare_mlir_python_extension(ScaleHLSBindingsPythonExtension.Core
   ADD_TO_PARENT ScaleHLSBindingsPythonExtension
   SOURCES
     ScaleHLSModule.cpp
-    ${MLIR_PYTHON_SOURCE_DIR}/IRCore.cpp
-    ${MLIR_PYTHON_SOURCE_DIR}/IRModule.cpp
     ${MLIR_PYTHON_SOURCE_DIR}/PybindUtils.cpp
   EMBED_CAPI_LINK_LIBS
     MLIRScaleHLSCAPIHLSCpp

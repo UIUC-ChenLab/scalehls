@@ -76,6 +76,8 @@ If you have enabled the python binding feature, you should be able to run:
 $ pyscalehls.py samples/polybench/syrk/syrk_32.c -f syrk_32
 ```
 
+Note that you can use `help(any_module_or_class)` in Python to print the APIs of any Python module or class. For example, `help(scalehls)` can print the supported APIs in the `scalehls` module.
+
 ## Integration with ONNX-MLIR
 If you have installed ONNX-MLIR or established ONNX-MLIR docker to `$ONNXMLIR_DIR` following the instruction from (https://github.com/onnx/onnx-mlir), you should be able to run the following integration test:
 ```sh
