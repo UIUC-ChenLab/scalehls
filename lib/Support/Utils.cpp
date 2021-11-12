@@ -365,9 +365,8 @@ bool scalehls::checkDependence(Operation *A, Operation *B) {
   // Traverse each loop level to find dependencies.
   for (unsigned depth = numCommonLoops; depth > 0; depth--) {
     // Skip all parallel loop level.
-    if (auto parallelAttr =
-            commonLoops[depth - 1]->getAttrOfType<BoolAttr>("parallel"))
-      if (parallelAttr.getValue())
+    if (auto loopAttr = getLoopDirective(commonLoops[depth - 1]))
+      if (loopAttr.getParallel())
         continue;
 
     FlatAffineValueConstraints depConstrs;
