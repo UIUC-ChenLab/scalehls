@@ -1130,13 +1130,24 @@ void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
 /// IP operation emitter. 
 void ModuleEmitter::emitIP(IPOp op) {
   // Emit IP source from JSON if IP exists.
-  std::string jsonPath = "ip_library/" + op.name().str() + ".ip.txt";
   std::string errorMessage;
-  if (auto jsonFile = mlir::openInputFile(jsonPath, &errorMessage)) {
+  if (auto jsonFile = mlir::openInputFile(op.path(), &errorMessage)) {
     if (auto json = llvm::json::parse(jsonFile->getBuffer())) {
       if (auto O = json->getAsObject()) {
-        if (auto source = O->getString("source")) {
-          os << source << "\n";
+        if (auto source = O->getObject("source")) {
+          for (auto line : *source->getArray("code")) {
+            auto l = line.getAsString()->str();
+            for (size_t idx = 0; idx < source->getArray("params")->size(); idx++) {
+              auto p = source->getArray("params")->operator[](idx).getAsString()->str();
+              auto o = getName(op.getOperands()[idx]).str().str();
+              for (std::size_t pos = 0; l.npos != (pos = l.find(p, pos)); pos += o.length()) {
+                l.replace(pos, p.length(), o);
+              }
+            }
+
+            indent();
+            os << l << "\n";
+          }
           return;
         }
       }
@@ -1629,6 +1640,18 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 #include <math.h>
 #include <stdint.h>
 
+// Libraries included by user.
+)XXX";
+
+  for (auto &op : *module.getBody()) {
+    if (auto include = dyn_cast<IncludeOp>(op)) {
+      for (auto library : include.libraries()) {
+        os << "#include <" << library.dyn_cast<StringAttr>().getValue() << ">\n";
+      }
+    }
+  }
+
+  os << R"XXX(
 using namespace std;
 
 )XXX";
@@ -1636,8 +1659,8 @@ using namespace std;
   for (auto &op : *module.getBody()) {
     if (auto func = dyn_cast<FuncOp>(op))
       emitFunction(func);
-    else
-      emitError(&op, "is unsupported operation.");
+    //else
+    //  emitError(&op, "is unsupported operation.");
   }
 }
 
