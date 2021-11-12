@@ -4,13 +4,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "scalehls-c/Translation/EmitHLSCpp.h"
-
+#include "scalehls-c/EmitHLSCpp.h"
 #include "mlir/CAPI/IR.h"
 #include "mlir/CAPI/Support.h"
 #include "mlir/CAPI/Utils.h"
 #include "scalehls/Translation/EmitHLSCpp.h"
-#include "llvm/Support/raw_ostream.h"
 
 using namespace mlir;
 using namespace scalehls;

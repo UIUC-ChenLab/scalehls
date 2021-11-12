@@ -82,6 +82,9 @@ AffineForOp getLoopBandFromOutermost(AffineForOp forOp, AffineLoopBand &band);
 void getLoopBands(Block &block, AffineLoopBands &bands,
                   bool allowHavingChilds = false);
 
+void getArrays(Block &block, SmallVectorImpl<Value> &arrays,
+               bool allowArguments = true);
+
 Optional<unsigned> getAverageTripCount(AffineForOp forOp);
 
 bool checkDependence(Operation *A, Operation *B);

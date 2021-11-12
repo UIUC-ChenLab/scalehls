@@ -163,8 +163,8 @@ SmallString<8> ScaleHLSEmitterBase::getName(Value val) {
   // For constant scalar operations, the constant number will be returned rather
   // than the value name.
   if (auto defOp = val.getDefiningOp()) {
-    if (auto constOp = dyn_cast<ConstantOp>(defOp)) {
-      auto constAttr = constOp.getValue();
+    if (auto constOp = dyn_cast<arith::ConstantOp>(defOp)) {
+      auto constAttr = constOp.value();
 
       if (auto floatAttr = constAttr.dyn_cast<FloatAttr>()) {
         auto value = floatAttr.getValueAsDouble();
@@ -233,10 +233,10 @@ public:
   void emitIP(IPOp op);
 
   /// Special operation emitters.
-  void emitSelect(SelectOp op);
-  void emitConstant(ConstantOp op);
-  template <typename CastOpType> void emitCast(CastOpType op);
   void emitCall(CallOp op);
+  void emitSelect(SelectOp op);
+  void emitConstant(arith::ConstantOp op);
+  template <typename CastOpType> void emitCast(CastOpType op);
 
   /// Structure operations emitters.
   void emitAssign(AssignOp op);
@@ -403,7 +403,7 @@ public:
   bool visitOp(memref::DimOp op) { return emitter.emitDim(op), true; }
   bool visitOp(RankOp op) { return emitter.emitRank(op), true; }
 
-  /// Structure operations.
+  /// HLSCpp operations.
   bool visitOp(AssignOp op) { return emitter.emitAssign(op), true; }
   bool visitOp(CastOp op) { return emitter.emitCast<CastOp>(op), true; }
   bool visitOp(MulOp op) { return emitter.emitBinary(op, "*"), true; }
@@ -421,37 +421,32 @@ public:
 
   using HLSCppVisitorBase::visitOp;
   /// Float binary expressions.
-  bool visitOp(CmpFOp op);
-  bool visitOp(AddFOp op) { return emitter.emitBinary(op, "+"), true; }
-  bool visitOp(SubFOp op) { return emitter.emitBinary(op, "-"), true; }
-  bool visitOp(MulFOp op) { return emitter.emitBinary(op, "*"), true; }
-  bool visitOp(DivFOp op) { return emitter.emitBinary(op, "/"), true; }
-  bool visitOp(RemFOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(arith::CmpFOp op);
+  bool visitOp(arith::AddFOp op) { return emitter.emitBinary(op, "+"), true; }
+  bool visitOp(arith::SubFOp op) { return emitter.emitBinary(op, "-"), true; }
+  bool visitOp(arith::MulFOp op) { return emitter.emitBinary(op, "*"), true; }
+  bool visitOp(arith::DivFOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(arith::RemFOp op) { return emitter.emitBinary(op, "%"), true; }
 
   /// Integer binary expressions.
-  bool visitOp(CmpIOp op);
-  bool visitOp(AddIOp op) { return emitter.emitBinary(op, "+"), true; }
-  bool visitOp(SubIOp op) { return emitter.emitBinary(op, "-"), true; }
-  bool visitOp(MulIOp op) { return emitter.emitBinary(op, "*"), true; }
-  bool visitOp(SignedDivIOp op) { return emitter.emitBinary(op, "/"), true; }
-  bool visitOp(SignedRemIOp op) { return emitter.emitBinary(op, "%"), true; }
-  bool visitOp(UnsignedDivIOp op) { return emitter.emitBinary(op, "/"), true; }
-  bool visitOp(UnsignedRemIOp op) { return emitter.emitBinary(op, "%"), true; }
-  bool visitOp(XOrOp op) { return emitter.emitBinary(op, "^"), true; }
-  bool visitOp(AndOp op) { return emitter.emitBinary(op, "&"), true; }
-  bool visitOp(OrOp op) { return emitter.emitBinary(op, "|"), true; }
-  bool visitOp(ShiftLeftOp op) { return emitter.emitBinary(op, "<<"), true; }
-  bool visitOp(SignedShiftRightOp op) {
-    return emitter.emitBinary(op, ">>"), true;
-  }
-  bool visitOp(UnsignedShiftRightOp op) {
-    return emitter.emitBinary(op, ">>"), true;
-  }
+  bool visitOp(arith::CmpIOp op);
+  bool visitOp(arith::AddIOp op) { return emitter.emitBinary(op, "+"), true; }
+  bool visitOp(arith::SubIOp op) { return emitter.emitBinary(op, "-"), true; }
+  bool visitOp(arith::MulIOp op) { return emitter.emitBinary(op, "*"), true; }
+  bool visitOp(arith::DivSIOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(arith::RemSIOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(arith::DivUIOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(arith::RemUIOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(arith::XOrIOp op) { return emitter.emitBinary(op, "^"), true; }
+  bool visitOp(arith::AndIOp op) { return emitter.emitBinary(op, "&"), true; }
+  bool visitOp(arith::OrIOp op) { return emitter.emitBinary(op, "|"), true; }
+  bool visitOp(arith::ShLIOp op) { return emitter.emitBinary(op, "<<"), true; }
+  bool visitOp(arith::ShRSIOp op) { return emitter.emitBinary(op, ">>"), true; }
+  bool visitOp(arith::ShRUIOp op) { return emitter.emitBinary(op, ">>"), true; }
 
   /// Unary expressions.
-  bool visitOp(AbsFOp op) { return emitter.emitUnary(op, "abs"), true; }
-  bool visitOp(CeilFOp op) { return emitter.emitUnary(op, "ceil"), true; }
-  bool visitOp(NegFOp op) { return emitter.emitUnary(op, "-"), true; }
+  bool visitOp(math::AbsOp op) { return emitter.emitUnary(op, "abs"), true; }
+  bool visitOp(math::CeilOp op) { return emitter.emitUnary(op, "ceil"), true; }
   bool visitOp(math::CosOp op) { return emitter.emitUnary(op, "cos"), true; }
   bool visitOp(math::SinOp op) { return emitter.emitUnary(op, "sin"), true; }
   bool visitOp(math::TanhOp op) { return emitter.emitUnary(op, "tanh"), true; }
@@ -466,19 +461,28 @@ public:
   bool visitOp(math::Log10Op op) {
     return emitter.emitUnary(op, "log10"), true;
   }
+  bool visitOp(arith::NegFOp op) { return emitter.emitUnary(op, "-"), true; }
 
   /// Special operations.
-  bool visitOp(SelectOp op) { return emitter.emitSelect(op), true; }
-  bool visitOp(ConstantOp op) { return emitter.emitConstant(op), true; }
-  bool visitOp(IndexCastOp op) {
-    return emitter.emitCast<IndexCastOp>(op), true;
-  }
-  bool visitOp(UIToFPOp op) { return emitter.emitCast<UIToFPOp>(op), true; }
-  bool visitOp(SIToFPOp op) { return emitter.emitCast<SIToFPOp>(op), true; }
-  bool visitOp(FPToUIOp op) { return emitter.emitCast<FPToUIOp>(op), true; }
-  bool visitOp(FPToSIOp op) { return emitter.emitCast<FPToSIOp>(op), true; }
   bool visitOp(CallOp op) { return emitter.emitCall(op), true; }
   bool visitOp(ReturnOp op) { return true; }
+  bool visitOp(SelectOp op) { return emitter.emitSelect(op), true; }
+  bool visitOp(arith::ConstantOp op) { return emitter.emitConstant(op), true; }
+  bool visitOp(arith::IndexCastOp op) {
+    return emitter.emitCast<arith::IndexCastOp>(op), true;
+  }
+  bool visitOp(arith::UIToFPOp op) {
+    return emitter.emitCast<arith::UIToFPOp>(op), true;
+  }
+  bool visitOp(arith::SIToFPOp op) {
+    return emitter.emitCast<arith::SIToFPOp>(op), true;
+  }
+  bool visitOp(arith::FPToUIOp op) {
+    return emitter.emitCast<arith::FPToUIOp>(op), true;
+  }
+  bool visitOp(arith::FPToSIOp op) {
+    return emitter.emitCast<arith::FPToSIOp>(op), true;
+  }
 
 private:
   ModuleEmitter &emitter;
@@ -499,25 +503,25 @@ private:
 };
 } // namespace
 
-bool ExprVisitor::visitOp(CmpFOp op) {
+bool ExprVisitor::visitOp(arith::CmpFOp op) {
   switch (op.getPredicate()) {
-  case CmpFPredicate::OEQ:
-  case CmpFPredicate::UEQ:
+  case arith::CmpFPredicate::OEQ:
+  case arith::CmpFPredicate::UEQ:
     return emitter.emitBinary(op, "=="), true;
-  case CmpFPredicate::ONE:
-  case CmpFPredicate::UNE:
+  case arith::CmpFPredicate::ONE:
+  case arith::CmpFPredicate::UNE:
     return emitter.emitBinary(op, "!="), true;
-  case CmpFPredicate::OLT:
-  case CmpFPredicate::ULT:
+  case arith::CmpFPredicate::OLT:
+  case arith::CmpFPredicate::ULT:
     return emitter.emitBinary(op, "<"), true;
-  case CmpFPredicate::OLE:
-  case CmpFPredicate::ULE:
+  case arith::CmpFPredicate::OLE:
+  case arith::CmpFPredicate::ULE:
     return emitter.emitBinary(op, "<="), true;
-  case CmpFPredicate::OGT:
-  case CmpFPredicate::UGT:
+  case arith::CmpFPredicate::OGT:
+  case arith::CmpFPredicate::UGT:
     return emitter.emitBinary(op, ">"), true;
-  case CmpFPredicate::OGE:
-  case CmpFPredicate::UGE:
+  case arith::CmpFPredicate::OGE:
+  case arith::CmpFPredicate::UGE:
     return emitter.emitBinary(op, ">="), true;
   default:
     op.emitError("has unsupported compare type.");
@@ -525,23 +529,23 @@ bool ExprVisitor::visitOp(CmpFOp op) {
   }
 }
 
-bool ExprVisitor::visitOp(CmpIOp op) {
+bool ExprVisitor::visitOp(arith::CmpIOp op) {
   switch (op.getPredicate()) {
-  case CmpIPredicate::eq:
+  case arith::CmpIPredicate::eq:
     return emitter.emitBinary(op, "=="), true;
-  case CmpIPredicate::ne:
+  case arith::CmpIPredicate::ne:
     return emitter.emitBinary(op, "!="), true;
-  case CmpIPredicate::slt:
-  case CmpIPredicate::ult:
+  case arith::CmpIPredicate::slt:
+  case arith::CmpIPredicate::ult:
     return emitter.emitBinary(op, "<"), true;
-  case CmpIPredicate::sle:
-  case CmpIPredicate::ule:
+  case arith::CmpIPredicate::sle:
+  case arith::CmpIPredicate::ule:
     return emitter.emitBinary(op, "<="), true;
-  case CmpIPredicate::sgt:
-  case CmpIPredicate::ugt:
+  case arith::CmpIPredicate::sgt:
+  case arith::CmpIPredicate::ugt:
     return emitter.emitBinary(op, ">"), true;
-  case CmpIPredicate::sge:
-  case CmpIPredicate::uge:
+  case arith::CmpIPredicate::sge:
+  case arith::CmpIPredicate::uge:
     return emitter.emitBinary(op, ">="), true;
   }
 }
@@ -1071,8 +1075,9 @@ void ModuleEmitter::emitTensorToMemref(memref::BufferCastOp op) {
 }
 
 void ModuleEmitter::emitDim(memref::DimOp op) {
-  if (auto constOp = dyn_cast<ConstantOp>(op.getOperand(1).getDefiningOp())) {
-    auto constVal = constOp.getValue().cast<IntegerAttr>().getInt();
+  if (auto constOp =
+          dyn_cast<arith::ConstantOp>(op.getOperand(1).getDefiningOp())) {
+    auto constVal = constOp.value().cast<IntegerAttr>().getInt();
     auto type = op.getOperand(0).getType().cast<ShapedType>();
 
     if (type.hasStaticShape()) {
@@ -1190,19 +1195,19 @@ void ModuleEmitter::emitSelect(SelectOp op) {
   emitNestedLoopTail(rank);
 }
 
-void ModuleEmitter::emitConstant(ConstantOp op) {
+void ModuleEmitter::emitConstant(arith::ConstantOp op) {
   // This indicates the constant type is scalar (float, integer, or bool).
   if (isDeclared(op.getResult()))
     return;
 
-  if (auto denseAttr = op.getValue().dyn_cast<DenseElementsAttr>()) {
+  if (auto denseAttr = op.value().dyn_cast<DenseElementsAttr>()) {
     indent();
     emitArrayDecl(op.getResult());
     os << " = {";
     auto type = op.getResult().getType().cast<ShapedType>().getElementType();
 
     unsigned elementIdx = 0;
-    for (auto element : denseAttr.getAttributeValues()) {
+    for (auto element : denseAttr.getValues<Attribute>()) {
       if (type.isF32()) {
         auto value = element.cast<FloatAttr>().getValue().convertToFloat();
         if (std::isfinite(value))

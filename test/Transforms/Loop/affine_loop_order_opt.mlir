@@ -12,16 +12,16 @@ module  {
       affine.for %arg5 = 0 to #map(%arg4) {
         affine.for %arg6 = 0 to 16 {
           %0 = affine.load %arg3[%arg4, %arg5] : memref<16x16xf32>
-          %1 = mulf %arg1, %0 : f32
+          %1 = arith.mulf %arg1, %0 : f32
           affine.if #set(%arg6) {
             affine.store %1, %arg3[%arg4, %arg5] : memref<16x16xf32>
           }
           %2 = affine.load %arg2[%arg4, %arg6] : memref<16x16xf32>
           %3 = affine.load %arg2[%arg5, %arg6] : memref<16x16xf32>
           %4 = affine.load %arg3[%arg4, %arg5] : memref<16x16xf32>
-          %5 = mulf %arg0, %2 : f32
-          %6 = mulf %5, %3 : f32
-          %7 = addf %6, %4 : f32
+          %5 = arith.mulf %arg0, %2 : f32
+          %6 = arith.mulf %5, %3 : f32
+          %7 = arith.addf %6, %4 : f32
           affine.store %7, %arg3[%arg4, %arg5] : memref<16x16xf32>
         }
       }

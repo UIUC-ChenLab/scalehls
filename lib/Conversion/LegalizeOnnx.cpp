@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "scalehls/Conversion/Passes.h"
 
@@ -70,7 +71,7 @@ void LegalizeOnnx::runOnOperation() {
 
   for (auto func : funcs) {
     // Convert add operations to AffineApply.
-    func.walk([&](AddIOp addOp) {
+    func.walk([&](arith::AddIOp addOp) {
       builder.setInsertionPoint(addOp);
       auto map = AffineMap::get(
           2, 0, builder.getAffineDimExpr(0) + builder.getAffineDimExpr(1),

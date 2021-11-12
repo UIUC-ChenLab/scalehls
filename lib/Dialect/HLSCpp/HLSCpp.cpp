@@ -39,8 +39,7 @@ Attribute HLSCppDialect::parseAttribute(DialectAsmParser &p, Type type) const {
   if (p.parseKeyword(&attrName))
     return Attribute();
 
-  auto parseResult =
-      generatedAttributeParser(getContext(), p, attrName, type, attr);
+  auto parseResult = generatedAttributeParser(p, attrName, type, attr);
   if (parseResult.hasValue())
     return attr;
 
@@ -58,8 +57,7 @@ void HLSCppDialect::printAttribute(Attribute attr, DialectAsmPrinter &p) const {
 // ResourceAttr
 //===----------------------------------------------------------------------===//
 
-Attribute ResourceAttr::parse(MLIRContext *ctxt, DialectAsmParser &p,
-                              Type type) {
+Attribute ResourceAttr::parse(DialectAsmParser &p, Type type) {
   StringRef lutKw, dspKw, bramKw, nonShareDspKw;
   int64_t lut, dsp, bram, nonShareDsp;
   if (p.parseLess() || p.parseKeyword(&lutKw) || p.parseEqual() ||
@@ -74,7 +72,7 @@ Attribute ResourceAttr::parse(MLIRContext *ctxt, DialectAsmParser &p,
       nonShareDspKw != "nonShareDsp")
     return Attribute();
 
-  return ResourceAttr::get(ctxt, lut, dsp, bram, nonShareDsp);
+  return ResourceAttr::get(p.getContext(), lut, dsp, bram, nonShareDsp);
 }
 
 void ResourceAttr::print(DialectAsmPrinter &p) const {
@@ -86,14 +84,14 @@ void ResourceAttr::print(DialectAsmPrinter &p) const {
 // TimingAttr
 //===----------------------------------------------------------------------===//
 
-Attribute TimingAttr::parse(MLIRContext *ctxt, DialectAsmParser &p, Type type) {
+Attribute TimingAttr::parse(DialectAsmParser &p, Type type) {
   int64_t begin, end, latency, interval;
   if (p.parseLess() || p.parseInteger(begin) || p.parseArrow() ||
       p.parseInteger(end) || p.parseComma() || p.parseInteger(latency) ||
       p.parseComma() || p.parseInteger(interval) || p.parseGreater())
     return Attribute();
 
-  return TimingAttr::get(ctxt, begin, end, latency, interval);
+  return TimingAttr::get(p.getContext(), begin, end, latency, interval);
 }
 
 void TimingAttr::print(DialectAsmPrinter &p) const {
@@ -105,8 +103,7 @@ void TimingAttr::print(DialectAsmPrinter &p) const {
 // LoopInfoAttr
 //===----------------------------------------------------------------------===//
 
-Attribute LoopInfoAttr::parse(MLIRContext *ctxt, DialectAsmParser &p,
-                              Type type) {
+Attribute LoopInfoAttr::parse(DialectAsmParser &p, Type type) {
   StringRef flattenTripCountKw, iterLatencyKw, minIIKw;
   int64_t flattenTripCount, iterLatency, minII;
   if (p.parseLess() || p.parseKeyword(&flattenTripCountKw) || p.parseEqual() ||
@@ -121,7 +118,8 @@ Attribute LoopInfoAttr::parse(MLIRContext *ctxt, DialectAsmParser &p,
       iterLatencyKw != "iterLatency" || minIIKw != "minII")
     return Attribute();
 
-  return LoopInfoAttr::get(ctxt, flattenTripCount, iterLatency, minII);
+  return LoopInfoAttr::get(p.getContext(), flattenTripCount, iterLatency,
+                           minII);
 }
 
 void LoopInfoAttr::print(DialectAsmPrinter &p) const {
@@ -133,20 +131,20 @@ void LoopInfoAttr::print(DialectAsmPrinter &p) const {
 // LoopDirectiveAttr
 //===----------------------------------------------------------------------===//
 
-Attribute LoopDirectiveAttr::parse(MLIRContext *ctxt, DialectAsmParser &p,
-                                   Type type) {
+Attribute LoopDirectiveAttr::parse(DialectAsmParser &p, Type type) {
   StringRef pipelineKw, targetIIKw, dataflowKw, flattenKw, parallelKw;
-  bool pipeline, dataflow, flatten, parallel;
+  StringRef pipeline, dataflow, flatten, parallel;
   int64_t targetII;
   if (p.parseLess() || p.parseKeyword(&pipelineKw) || p.parseEqual() ||
-      p.parseInteger(pipeline) || p.parseComma() ||
+      p.parseKeyword(&pipeline) || p.parseComma() ||
       p.parseKeyword(&targetIIKw) || p.parseEqual() ||
       p.parseInteger(targetII) || p.parseComma() ||
       p.parseKeyword(&dataflowKw) || p.parseEqual() ||
-      p.parseInteger(dataflow) || p.parseComma() ||
-      p.parseKeyword(&flattenKw) || p.parseEqual() || p.parseInteger(flatten) ||
-      p.parseComma() || p.parseKeyword(&parallelKw) || p.parseEqual() ||
-      p.parseInteger(parallel) || p.parseGreater())
+      p.parseKeyword(&dataflow) || p.parseComma() ||
+      p.parseKeyword(&flattenKw) || p.parseEqual() ||
+      p.parseKeyword(&flatten) || p.parseComma() ||
+      p.parseKeyword(&parallelKw) || p.parseEqual() ||
+      p.parseKeyword(&parallel) || p.parseGreater())
     return Attribute();
 
   if (pipelineKw != "pipeline" || targetIIKw != "targetII" ||
@@ -154,8 +152,9 @@ Attribute LoopDirectiveAttr::parse(MLIRContext *ctxt, DialectAsmParser &p,
       parallelKw != "parallel")
     return Attribute();
 
-  return LoopDirectiveAttr::get(ctxt, pipeline, targetII, dataflow, flatten,
-                                parallel);
+  return LoopDirectiveAttr::get(p.getContext(), pipeline == "true", targetII,
+                                dataflow == "true", flatten == "true",
+                                parallel == "true");
 }
 
 void LoopDirectiveAttr::print(DialectAsmPrinter &p) const {
@@ -168,27 +167,27 @@ void LoopDirectiveAttr::print(DialectAsmPrinter &p) const {
 // FuncDirectiveAttr
 //===----------------------------------------------------------------------===//
 
-Attribute FuncDirectiveAttr::parse(MLIRContext *ctxt, DialectAsmParser &p,
-                                   Type type) {
+Attribute FuncDirectiveAttr::parse(DialectAsmParser &p, Type type) {
   StringRef pipelineKw, targetIntervalKw, dataflowKw, topFuncKw;
-  bool pipeline, dataflow, topFunc;
+  StringRef pipeline, dataflow, topFunc;
   int64_t targetInterval;
   if (p.parseLess() || p.parseKeyword(&pipelineKw) || p.parseEqual() ||
-      p.parseInteger(pipeline) || p.parseComma() ||
+      p.parseKeyword(&pipeline) || p.parseComma() ||
       p.parseKeyword(&targetIntervalKw) || p.parseEqual() ||
       p.parseInteger(targetInterval) || p.parseComma() ||
       p.parseKeyword(&dataflowKw) || p.parseEqual() ||
-      p.parseInteger(dataflow) || p.parseComma() ||
-      p.parseKeyword(&topFuncKw) || p.parseEqual() || p.parseInteger(topFunc) ||
-      p.parseGreater())
+      p.parseKeyword(&dataflow) || p.parseComma() ||
+      p.parseKeyword(&topFuncKw) || p.parseEqual() ||
+      p.parseKeyword(&topFunc) || p.parseGreater())
     return Attribute();
 
   if (pipelineKw != "pipeline" || targetIntervalKw != "targetInterval" ||
       dataflowKw != "dataflow" || topFuncKw != "topFunc")
     return Attribute();
 
-  return FuncDirectiveAttr::get(ctxt, pipeline, targetInterval, dataflow,
-                                topFunc);
+  return FuncDirectiveAttr::get(p.getContext(), pipeline == "true",
+                                targetInterval, dataflow == "true",
+                                topFunc == "true");
 }
 
 void FuncDirectiveAttr::print(DialectAsmPrinter &p) const {

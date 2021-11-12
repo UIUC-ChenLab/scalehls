@@ -19,7 +19,6 @@ bool scalehls::applyRemoveVariableBound(AffineLoopBand &band) {
 
   // Remove all vairable loop bound if possible.
   for (auto loop : band) {
-    // TODO: support remove variable lower bound.
     if (!loop.hasConstantUpperBound()) {
       // TODO: support variable upper bound with more than one result in the
       // getBoundOfAffineBound() method.
@@ -49,6 +48,39 @@ bool scalehls::applyRemoveVariableBound(AffineLoopBand &band) {
         // Set constant variable bound.
         auto maximum = bound.getValue().second;
         loop.setConstantUpperBound(maximum);
+      } else
+        return false;
+    }
+
+    if (!loop.hasConstantLowerBound()) {
+      // TODO: support variable lower bound with more than one result in the
+      // getBoundOfAffineBound() method.
+      if (auto bound = getBoundOfAffineBound(loop.getLowerBound())) {
+        // Collect all components for creating AffineIf operation.
+        auto lowerMap = loop.getLowerBoundMap();
+        auto ifExpr = builder.getAffineDimExpr(lowerMap.getNumDims()) -
+                      lowerMap.getResult(0);
+        auto ifCondition = IntegerSet::get(lowerMap.getNumDims() + 1, 0, ifExpr,
+                                           /*eqFlags=*/false);
+        auto ifOperands = SmallVector<Value, 4>(loop.getLowerBoundOperands());
+        ifOperands.push_back(loop.getInductionVar());
+
+        // Create if operation in the front of the innermost perfect loop.
+        builder.setInsertionPointToStart(innermostLoop.getBody());
+        auto ifOp =
+            builder.create<AffineIfOp>(loop.getLoc(), ifCondition, ifOperands,
+                                       /*withElseRegion=*/false);
+
+        // Move all operations in the innermost perfect loop into the new
+        // created AffineIf region.
+        auto &ifBlock = ifOp.getThenBlock()->getOperations();
+        auto &loopBlock = innermostLoop.getBody()->getOperations();
+        ifBlock.splice(ifBlock.begin(), loopBlock, std::next(loopBlock.begin()),
+                       std::prev(loopBlock.end(), 1));
+
+        // Set constant variable bound.
+        auto minimum = bound.getValue().first;
+        loop.setConstantLowerBound(minimum);
       } else
         return false;
     }

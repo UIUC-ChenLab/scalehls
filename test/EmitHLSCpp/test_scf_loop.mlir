@@ -1,16 +1,16 @@
 // RUN: scalehls-translate -emit-hlscpp %s | FileCheck %s
 
 func @test_scf_for(%arg0: memref<16xindex>, %arg1: index) {
-  %c11 = constant 11 : index
-  %c0 = constant 0 : index
-  %c1 = constant 1 : index
-  %c2 = constant 2 : index
-  %c16 = constant 16 : index
+  %c11 = arith.constant 11 : index
+  %c0 = arith.constant 0 : index
+  %c1 = arith.constant 1 : index
+  %c2 = arith.constant 2 : index
+  %c16 = arith.constant 16 : index
 
   // CHECK: int v2 = v1 + 11;
   // CHECK: int v3 = v1 - 11;
-  %ub = std.addi %arg1, %c11 : index
-  %lb = std.subi %arg1, %c11 : index
+  %ub = arith.addi %arg1, %c11 : index
+  %lb = arith.subi %arg1, %c11 : index
 
   // CHECK: for (int v4 = 0; v4 < v2; v4 += 2) {
   scf.for %i = %c0 to %ub step %c2 {
@@ -25,7 +25,7 @@ func @test_scf_for(%arg0: memref<16xindex>, %arg1: index) {
         %0 = memref.load %arg0[%i] : memref<16xindex>
 
         // CHECK: int v8 = v7 + v5;
-        %1 = addi %0, %j : index
+        %1 = arith.addi %0, %j : index
 
         // CHECK: v0[v6] = v8;
         memref.store %1, %arg0[%k] : memref<16xindex>

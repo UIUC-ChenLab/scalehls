@@ -68,7 +68,7 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
       auto value = builder.create<AssignOp>(returnOp->getLoc(),
                                             operand.getType(), operand);
       returnOp->setOperand(idx, value);
-    } else if (isa<ConstantOp>(operand.getDefiningOp())) {
+    } else if (isa<arith::ConstantOp>(operand.getDefiningOp())) {
       auto value = builder.create<AssignOp>(returnOp->getLoc(),
                                             operand.getType(), operand);
       returnOp->setOperand(idx, value);

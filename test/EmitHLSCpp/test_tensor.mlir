@@ -14,11 +14,11 @@ func @test_tensor_expr(%arg0: tensor<16x8xi1>, %arg1: i1, %arg2: tensor<16x8xf32
   %1 = select %arg1, %arg2, %arg3 : i1, tensor<16x8xf32>
 
   // CHECK: [[VAL_2:.*]][iv0][iv1] = [[ARG_2:.*]][iv0][iv1] + [[VAL_1:.*]][iv0][iv1];
-  %2 = addf %arg2, %1 : tensor<16x8xf32>
+  %2 = arith.addf %arg2, %1 : tensor<16x8xf32>
 
   // CHECK-NOT: float [[VAL_3:.*]][16][8];
   // CHECK: [[VAL_3:.*]][iv0][iv1] = abs([[VAL_2:.*]][iv0][iv1]);
-  %3 = absf %2 : tensor<16x8xf32>
+  %3 = math.abs %2 : tensor<16x8xf32>
   return %3 : tensor<16x8xf32>
 }
 

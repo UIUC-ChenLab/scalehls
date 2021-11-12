@@ -63,6 +63,8 @@ set(SCALEHLS_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/include )
 set(SCALEHLS_TOOLS_DIR ${CMAKE_BINARY_DIR}/bin)
 set(SCALEHLS_UTILS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/utils)
 set(SCALEHLS_PYTHON_PACKAGES_DIR ${SCALEHLS_BINARY_DIR}/python_packages)
+# TODO: This should not be hard-coded.
+set(POLYGEIST_TOOLS_DIR ${SCALEHLS_MAIN_SRC_DIR}/polygeist/build/mlir-clang)
 
 list(APPEND CMAKE_MODULE_PATH "${MLIR_MAIN_SRC_DIR}/cmake/modules")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
@@ -80,10 +82,12 @@ if(SCALEHLS_ENABLE_BINDINGS_PYTHON)
   message(STATUS "ScaleHLS Python bindings are enabled.")
 
   include(MLIRDetectPythonEnv)
-  find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+  find_package(Python3 COMPONENTS Interpreter Development NumPy REQUIRED)
   message(STATUS "Found Python include dirs: ${Python3_INCLUDE_DIRS}")
   message(STATUS "Found Python libraries: ${Python3_LIBRARIES}")
   message(STATUS "Found Python executable: ${Python3_EXECUTABLE}")
+  message(STATUS "Found numpy v${Python3_NumPy_VERSION}: ${Python3_NumPy_INCLUDE_DIRS}")
+  include_directories(${Python3_NumPy_INCLUDE_DIRS})
 
   mlir_detect_pybind11_install()
   find_package(pybind11 2.6 CONFIG REQUIRED)

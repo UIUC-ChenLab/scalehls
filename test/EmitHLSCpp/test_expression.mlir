@@ -3,54 +3,54 @@
 func @test_integer_binary(%arg0: i32, %arg1: i32) -> i32 {
 
   // CHECK: int32_t [[VAL_0:.*]] = [[ARG_0:.*]] + [[ARG_1:.*]];
-  %0 = addi %arg0, %arg1 : i32
+  %0 = arith.addi %arg0, %arg1 : i32
   // CHECK: -
-  %1 = subi %arg0, %0 : i32
+  %1 = arith.subi %arg0, %0 : i32
   // CHECK: *
-  %2 = muli %arg0, %1 : i32
+  %2 = arith.muli %arg0, %1 : i32
   // CHECK: /
-  %3 = divi_signed %arg0, %2 : i32
+  %3 = arith.divsi %arg0, %2 : i32
   // CHECK: %
-  %4 = remi_signed %arg0, %3 : i32
+  %4 = arith.remsi %arg0, %3 : i32
   // CHECK: /
-  %5 = divi_unsigned %arg0, %4 : i32
+  %5 = arith.divui %arg0, %4 : i32
   // CHECK: %
-  %6 = remi_unsigned %arg0, %5 : i32
+  %6 = arith.remui %arg0, %5 : i32
   // CHECK: ^
-  %7 = xor %arg0, %6 : i32
+  %7 = arith.xori %arg0, %6 : i32
   // CHECK: &
-  %8 = and %arg0, %7 : i32
+  %8 = arith.andi %arg0, %7 : i32
   // CHECK: |
-  %9 = or %arg0, %8 : i32
+  %9 = arith.ori %arg0, %8 : i32
   // CHECK: <<
-  %10 = shift_left %arg0, %9 : i32
+  %10 = arith.shli %arg0, %9 : i32
   // CHECK: >>
-  %11 = shift_right_signed %arg0, %10 : i32
+  %11 = arith.shrsi %arg0, %10 : i32
 
   // CHECK: *[[VAL_2:.*]] = [[ARG_0:.*]] >> [[VAL_1:.*]];
-  %12 = shift_right_unsigned %arg0, %11 : i32
+  %12 = arith.shrui %arg0, %11 : i32
   return %12 : i32
 }
 
 func @test_float_binary_unary(%arg0: f32, %arg1: f32) -> f32 {
 
   // CHECK: float [[VAL_0:.*]] = [[ARG_0:.*]] + [[ARG_1:.*]];
-  %0 = addf %arg0, %arg1 : f32
+  %0 = arith.addf %arg0, %arg1 : f32
   // CHECK: -
-  %1 = subf %arg0, %0 : f32
+  %1 = arith.subf %arg0, %0 : f32
   // CHECK: *
-  %2 = mulf %arg0, %1 : f32
+  %2 = arith.mulf %arg0, %1 : f32
   // CHECK: /
-  %3 = divf %arg0, %2 : f32
+  %3 = arith.divf %arg0, %2 : f32
   // CHECK: %
-  %4 = remf %arg0, %3 : f32
+  %4 = arith.remf %arg0, %3 : f32
 
   // CHECK: float [[VAL_2:.*]] = abs([[VAL_1:.*]]);
-  %5 = absf %4 : f32
+  %5 = math.abs %4 : f32
   // CHECK: ceil
-  %6 = ceilf %5 : f32
+  %6 = math.ceil %5 : f32
   // CHECK: -
-  %7 = negf %6 : f32
+  %7 = arith.negf %6 : f32
   // CHECK: cos
   %8 = math.cos %7 : f32
   // CHECK: sin
@@ -80,9 +80,9 @@ func @test_special_expr(%arg0: i1, %arg1: index, %arg2: index) -> index {
   %0 = select %arg0, %arg1, %arg2 : i1, index
 
   // CHECK: int32_t [[VAL_1:.*]] = [[VAL_0:.*]];
-  %1 = index_cast %0 : index to i32
+  %1 = arith.index_cast %0 : index to i32
 
   // CHECK: *[[VAL_2:.*]] = [[VAL_0:.*]]
-  %2 = index_cast %1 : i32 to index
+  %2 = arith.index_cast %1 : i32 to index
   return %2 : index
 }
