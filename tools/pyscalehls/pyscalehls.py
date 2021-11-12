@@ -65,16 +65,16 @@ def main():
             scalehls.loop_permutation(band, permMap)
 
             # Attempt to remove variable loop bounds if possible.
-            scalehls.loop_remove_var_bound(band)
+            scalehls.loop_var_bound_removal(band)
 
             # Apply loop tiling. Tile sizes are defined from the outermost loop to the innermost.
             # Note: We use the trip count to generate this example "factors".
             factors = np.ones(band.depth, dtype=int)
             factors[-1] = band.get_trip_count(band.depth - 1) / 4
-            loc = scalehls.loop_tiling(band, factors)
+            loc = scalehls.loop_tiling(band, factors, True) # simplify = True
 
             # Apply loop pipelining. All loops inside of the pipelined loop are fully unrolled.
-            scalehls.loop_pipelining(band, loc, 3)  # targetII
+            scalehls.loop_pipelining(band, loc, 3)  # targetII = 3
 
         # Traverse all arrays in the function.
         arrays = scalehls.ArrayList(func)

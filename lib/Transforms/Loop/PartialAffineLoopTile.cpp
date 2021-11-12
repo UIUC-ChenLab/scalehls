@@ -5,6 +5,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Analysis/LoopAnalysis.h"
+#include "mlir/Analysis/Utils.h"
+#include "mlir/Dialect/Affine/Utils.h"
+#include "mlir/IR/IntegerSet.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/LoopUtils.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -12,57 +16,101 @@
 using namespace mlir;
 using namespace scalehls;
 
+static IntegerSet simplify(IntegerSet set) { return simplifyIntegerSet(set); }
+
+/// Performs basic affine map simplifications.
+static AffineMap simplify(AffineMap map) {
+  MutableAffineMap mMap(map);
+  mMap.simplify();
+  return mMap.getAffineMap();
+}
+
+/// Utility to simplify an affine attribute and update its entry in the parent
+/// operation if necessary.
+template <typename AttrT>
+static void
+simplifyAndUpdateAttr(Operation *op, Identifier name, AttrT attr,
+                      DenseMap<Attribute, Attribute> &simplifiedAttrs) {
+  auto &simplified = simplifiedAttrs[attr];
+  if (simplified == attr)
+    return;
+
+  // This is a newly encountered attribute.
+  if (!simplified) {
+    // Try to simplify the value of the attribute.
+    auto value = attr.getValue();
+    auto simplifiedValue = simplify(value);
+    if (simplifiedValue == value) {
+      simplified = attr;
+      return;
+    }
+    simplified = AttrT::get(simplifiedValue);
+  }
+
+  // Simplification was successful, so update the attribute.
+  op->setAttr(name, simplified);
+}
+
+static void simplifyAffineStructures(Block &block) {
+  auto context = block.front().getContext();
+  DenseMap<Attribute, Attribute> simplifiedAttrs;
+
+  RewritePatternSet patterns(context);
+  AffineApplyOp::getCanonicalizationPatterns(patterns, context);
+  AffineForOp::getCanonicalizationPatterns(patterns, context);
+  AffineIfOp::getCanonicalizationPatterns(patterns, context);
+  FrozenRewritePatternSet frozenPatterns(std::move(patterns));
+
+  // The simplification of affine attributes will likely simplify the op. Try to
+  // fold/apply canonicalization patterns when we have affine dialect ops.
+  SmallVector<Operation *> opsToSimplify;
+  block.walk([&](Operation *op) {
+    for (auto attr : op->getAttrs()) {
+      if (auto mapAttr = attr.second.dyn_cast<AffineMapAttr>())
+        simplifyAndUpdateAttr(op, attr.first, mapAttr, simplifiedAttrs);
+      else if (auto setAttr = attr.second.dyn_cast<IntegerSetAttr>())
+        simplifyAndUpdateAttr(op, attr.first, setAttr, simplifiedAttrs);
+    }
+
+    if (isa<AffineForOp, AffineIfOp, AffineApplyOp>(op))
+      opsToSimplify.push_back(op);
+  });
+  applyOpPatternsAndFold(opsToSimplify, frozenPatterns, /*strict=*/true);
+}
+
 /// Apply loop tiling to the input loop band and sink all intra-tile loops to
 /// the innermost loop with the original loop order. Return the location of the
 /// innermost tile-space loop.
 Optional<unsigned> scalehls::applyLoopTiling(AffineLoopBand &band,
-                                             TileList tileList) {
+                                             TileList tileList, bool simplify) {
+
   if (!isPerfectlyNested(band))
     return Optional<unsigned>();
 
   // Loop tiling.
+  auto bandSize = band.size();
   AffineLoopBand tiledBand;
   if (failed(tilePerfectlyNested(band, tileList, &tiledBand)))
     return Optional<unsigned>();
 
-  // Record the band size and clear the original loop band.
-  auto originalBandSize = band.size();
-  band.clear();
-
-  // Remove redundant loops in the tiled loop band.
-  auto builder = OpBuilder(tiledBand.back());
-  unsigned erasedLoopNum = 0;
-  unsigned loc = 0;
-
-  for (auto loop : tiledBand) {
-    if (erasedLoopNum >= originalBandSize - 1 || loc >= originalBandSize ||
-        getConstantTripCount(loop).getValue() > 1) {
-      // All tile-space loops which have a trip count larger than 1 and all
-      // intra-tile loops are pushed back. Meanwhile, we are not willing to see
-      // all tile-space loops removed since in that case many analysis and
-      // transforms will become very hard. Thereby we record the number of
-      // erased loop so far and always keep at least one tile-space loop
-      // remained in the loop band even if it has a trip count of 1.
-      band.push_back(loop);
-    } else {
-      // Create an affine apply operation to represent the lower bound.
-      builder.setInsertionPoint(loop);
-      auto newIterVar = builder.create<AffineApplyOp>(
-          loop.getLoc(), loop.getLowerBoundMap(), loop.getLowerBoundOperands());
-      loop.getInductionVar().replaceAllUsesWith(newIterVar);
-
-      // Move all operation except the terminator to the outside.
-      auto &parentBlock = loop->getBlock()->getOperations();
-      auto &loopBlock = loop.getBody()->getOperations();
-      parentBlock.splice(loop->getIterator(), loopBlock, loopBlock.begin(),
-                         std::prev(loopBlock.end()));
-      loop.erase();
-      ++erasedLoopNum;
+  if (simplify) {
+    band.clear();
+    unsigned simplifiedBandSize = 0;
+    for (unsigned i = 0, e = tiledBand.size(); i < e; ++i) {
+      auto loop = tiledBand[i];
+      normalizeAffineFor(loop);
+      if (loop) {
+        band.push_back(loop);
+        if (i < bandSize)
+          ++simplifiedBandSize;
+      }
     }
-    ++loc;
+    simplifyAffineStructures(*band.front().getBody());
+    return simplifiedBandSize - 1;
+  } else {
+    band = tiledBand;
+    return bandSize - 1;
   }
-
-  return band.size() - originalBandSize - 1;
 }
 
 namespace {

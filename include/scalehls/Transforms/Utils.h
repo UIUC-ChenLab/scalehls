@@ -66,7 +66,8 @@ bool applyRemoveVariableBound(AffineLoopBand &band);
 /// Apply loop tiling to the input loop band and sink all intra-tile loops to
 /// the innermost loop with the original loop order. Return the location of the
 /// innermost tile-space loop.
-Optional<unsigned> applyLoopTiling(AffineLoopBand &band, TileList tileList);
+Optional<unsigned> applyLoopTiling(AffineLoopBand &band, TileList tileList,
+                                   bool simplify = true);
 
 bool applyLegalizeToHLSCpp(FuncOp func, bool topFunc);
 

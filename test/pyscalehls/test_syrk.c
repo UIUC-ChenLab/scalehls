@@ -10,7 +10,7 @@
 
 // CHECK: for (int [[k:.*]] = 0; [[k]] < 32; [[k]] += 1) {
 // CHECK-NEXT: for (int [[i:.*]] = 0; [[i]] < 32; [[i]] += 1) {
-// CHECK-NEXT: for (int [[j:.*]] = 0; [[j]] < 32; [[j]] += 8) {
+// CHECK-NEXT: for (int [[j:.*]] = 0; [[j]] < 4; [[j]] += 1) {
 // CHECK-NEXT: #pragma HLS pipeline II=3
 
 void test_syrk(float alpha, float beta, float C[32][32], float A[32][32]) {
