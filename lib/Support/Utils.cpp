@@ -205,8 +205,10 @@ AffineMap scalehls::getLayoutMap(MemRefType memrefType) {
 }
 
 bool scalehls::isFullyPartitioned(MemRefType memrefType) {
-  bool fullyPartitioned = false;
+  if (memrefType.getRank() == 0)
+    return true;
 
+  bool fullyPartitioned = false;
   if (auto layoutMap = getLayoutMap(memrefType)) {
     SmallVector<int64_t, 8> factors;
     getPartitionFactors(memrefType, &factors);
