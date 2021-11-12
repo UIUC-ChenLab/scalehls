@@ -1,10 +1,11 @@
-void syr2k_32(float alpha, float beta, float C[32][32], float A[32][32],
-              float B[32][32]) {
+#define N 32
+void test_syr2k(float alpha, float beta, float C[N][N], float A[N][N],
+                float B[N][N]) {
 #pragma scop
-  for (int i = 0; i < 32; i += 1) {
+  for (int i = 0; i < N; i += 1) {
     for (int j = 0; j < (i + 1); j += 1) {
       C[i][j] *= beta;
-      for (int k = 0; k < 32; k += 1) {
+      for (int k = 0; k < N; k += 1) {
         float tmp = A[i][k] * B[j][k] + B[i][k] * A[j][k];
         C[i][j] += alpha * tmp;
       }

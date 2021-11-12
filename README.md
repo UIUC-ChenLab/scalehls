@@ -36,14 +36,14 @@ $ export PYTHONPATH=$PYTHONPATH:$PWD/build/tools/scalehls/python_packages/scaleh
 ### Try ScaleHLS
 To launch the automatic kernel-level design space exploration, run:
 ```sh
-$ mlir-clang samples/polybench/gemm/gemm_32.c -function=gemm_32 -memref-fullrank -raise-scf-to-affine -S \
-    | scalehls-opt -dse="top-func=gemm_32 target-spec=samples/polybench/target-spec.ini" -debug-only=scalehls > /dev/null \
-    && scalehls-translate -emit-hlscpp gemm_32_pareto_0.mlir > gemm_32_pareto_0.cpp
+$ mlir-clang samples/polybench/gemm/test_gemm.c -function=test_gemm -memref-fullrank -raise-scf-to-affine -S \
+    | scalehls-opt -dse="top-func=test_gemm target-spec=samples/polybench/target-spec.ini" -debug-only=scalehls > /dev/null \
+    && scalehls-translate -emit-hlscpp test_gemm_pareto_0.mlir > test_gemm_pareto_0.cpp
 ```
 
 Meanwhile, we provide a `pyscalehls` tool to showcase the `scalehls` Python library:
 ```sh
-$ pyscalehls.py samples/polybench/syrk/syrk_32.c -f syrk_32
+$ pyscalehls.py samples/polybench/syrk/test_syrk.c -f test_syrk
 ```
 
 ## Integration with ONNX-MLIR

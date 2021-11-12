@@ -1,6 +1,5 @@
 #!/bin/bash
-
-# This test is deprecated!
+# This test is deprecated and will be removed soon!!
 
 # Script options.
 while getopts 'm:c:' opt
