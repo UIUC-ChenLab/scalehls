@@ -23,12 +23,12 @@
 module {
   %0 = "krnl.packed_const"() {file_name = "/tmp/packed_const-175e48.tmp", is_le = true, size_in_bytes = 44657408 : i64} : () -> i64
   func @main_graph(%arg0: memref<1x3x32x32xf32>) -> memref<1x10xf32> attributes {input_names = ["input.1"], output_names = ["70"]} {
-    %c0 = constant 0 : index
-    %c16_i64 = constant 16 : i64
-    %c512 = constant 512 : index
-    %c1 = constant 1 : index
-    %cst = constant 1.000000e+00 : f32
-    %cst_0 = constant 0.000000e+00 : f32
+    %c0 = arith.constant 0 : index
+    %c16_i64 = arith.constant 16 : i64
+    %c512 = arith.constant 512 : index
+    %c1 = arith.constant 1 : index
+    %cst = arith.constant 1.000000e+00 : f32
+    %cst_0 = arith.constant 0.000000e+00 : f32
     %1 = memref.alloc() : memref<1x10xf32>
     %2 = memref.alloc() : memref<1x512xf32>
     %3 = memref.alloc() : memref<1x512x1x1xf32>
@@ -94,7 +94,7 @@ module {
     %63 = memref.alloc() : memref<1x64x32x32xf32>
     %64 = memref.alloc() : memref<1x64x32x32xf32>
     %65 = memref.alloc() : memref<1x3x34x34xf32>
-    %66 = "krnl.global"() {name = "constant_0", offset = 0 : i64, shape = [64, 3, 3, 3]} : () -> memref<64x3x3x3xf32>
+    %66 = "krnl.global"() {name = "arith.constant_0", offset = 0 : i64, shape = [64, 3, 3, 3]} : () -> memref<64x3x3x3xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 3 {
         affine.for %arg3 = 0 to 34 {
@@ -129,8 +129,8 @@ module {
                   %91 = affine.load %65[%arg1, %arg5, %89, %90] : memref<1x3x34x34xf32>
                   %92 = affine.load %66[%arg2, %arg5, %arg6, %arg7] : memref<64x3x3x3xf32>
                   %93 = affine.load %64[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %64[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
                 }
               }
@@ -144,14 +144,14 @@ module {
         affine.for %arg3 = 0 to 32 {
           affine.for %arg4 = 0 to 32 {
             %89 = affine.load %64[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
-            %90 = cmpf "olt", %89, %cst_0 : f32
+            %90 = arith.cmpf "olt", %89, %cst_0 : f32
             %91 = select %90, %cst_0, %89 : f32
             affine.store %91, %63[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
           }
         }
       }
     }
-    %67 = "krnl.global"() {name = "constant_1", offset = 6912 : i64, shape = [64, 64, 3, 3]} : () -> memref<64x64x3x3xf32>
+    %67 = "krnl.global"() {name = "arith.constant_1", offset = 6912 : i64, shape = [64, 64, 3, 3]} : () -> memref<64x64x3x3xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 64 {
         affine.for %arg3 = 0 to 34 {
@@ -186,8 +186,8 @@ module {
                   %91 = affine.load %62[%arg1, %arg5, %89, %90] : memref<1x64x34x34xf32>
                   %92 = affine.load %67[%arg2, %arg5, %arg6, %arg7] : memref<64x64x3x3xf32>
                   %93 = affine.load %61[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %61[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
                 }
               }
@@ -201,14 +201,14 @@ module {
         affine.for %arg3 = 0 to 32 {
           affine.for %arg4 = 0 to 32 {
             %89 = affine.load %61[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
-            %90 = cmpf "olt", %89, %cst_0 : f32
+            %90 = arith.cmpf "olt", %89, %cst_0 : f32
             %91 = select %90, %cst_0, %89 : f32
             affine.store %91, %60[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
           }
         }
       }
     }
-    %68 = "krnl.global"() {name = "constant_2", offset = 154368 : i64, shape = [64, 64, 3, 3]} : () -> memref<64x64x3x3xf32>
+    %68 = "krnl.global"() {name = "arith.constant_2", offset = 154368 : i64, shape = [64, 64, 3, 3]} : () -> memref<64x64x3x3xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 64 {
         affine.for %arg3 = 0 to 34 {
@@ -243,8 +243,8 @@ module {
                   %91 = affine.load %59[%arg1, %arg5, %89, %90] : memref<1x64x34x34xf32>
                   %92 = affine.load %68[%arg2, %arg5, %arg6, %arg7] : memref<64x64x3x3xf32>
                   %93 = affine.load %58[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %58[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
                 }
               }
@@ -259,7 +259,7 @@ module {
           affine.for %arg4 = 0 to 32 {
             %89 = affine.load %58[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
             %90 = affine.load %63[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
-            %91 = addf %89, %90 : f32
+            %91 = arith.addf %89, %90 : f32
             affine.store %91, %57[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
           }
         }
@@ -270,14 +270,14 @@ module {
         affine.for %arg3 = 0 to 32 {
           affine.for %arg4 = 0 to 32 {
             %89 = affine.load %57[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
-            %90 = cmpf "olt", %89, %cst_0 : f32
+            %90 = arith.cmpf "olt", %89, %cst_0 : f32
             %91 = select %90, %cst_0, %89 : f32
             affine.store %91, %56[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
           }
         }
       }
     }
-    %69 = "krnl.global"() {name = "constant_3", offset = 301824 : i64, shape = [64, 64, 3, 3]} : () -> memref<64x64x3x3xf32>
+    %69 = "krnl.global"() {name = "arith.constant_3", offset = 301824 : i64, shape = [64, 64, 3, 3]} : () -> memref<64x64x3x3xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 64 {
         affine.for %arg3 = 0 to 34 {
@@ -312,8 +312,8 @@ module {
                   %91 = affine.load %55[%arg1, %arg5, %89, %90] : memref<1x64x34x34xf32>
                   %92 = affine.load %69[%arg2, %arg5, %arg6, %arg7] : memref<64x64x3x3xf32>
                   %93 = affine.load %54[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %54[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
                 }
               }
@@ -327,14 +327,14 @@ module {
         affine.for %arg3 = 0 to 32 {
           affine.for %arg4 = 0 to 32 {
             %89 = affine.load %54[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
-            %90 = cmpf "olt", %89, %cst_0 : f32
+            %90 = arith.cmpf "olt", %89, %cst_0 : f32
             %91 = select %90, %cst_0, %89 : f32
             affine.store %91, %53[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
           }
         }
       }
     }
-    %70 = "krnl.global"() {name = "constant_4", offset = 449280 : i64, shape = [64, 64, 3, 3]} : () -> memref<64x64x3x3xf32>
+    %70 = "krnl.global"() {name = "arith.constant_4", offset = 449280 : i64, shape = [64, 64, 3, 3]} : () -> memref<64x64x3x3xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 64 {
         affine.for %arg3 = 0 to 34 {
@@ -369,8 +369,8 @@ module {
                   %91 = affine.load %52[%arg1, %arg5, %89, %90] : memref<1x64x34x34xf32>
                   %92 = affine.load %70[%arg2, %arg5, %arg6, %arg7] : memref<64x64x3x3xf32>
                   %93 = affine.load %51[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %51[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
                 }
               }
@@ -385,7 +385,7 @@ module {
           affine.for %arg4 = 0 to 32 {
             %89 = affine.load %51[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
             %90 = affine.load %56[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
-            %91 = addf %89, %90 : f32
+            %91 = arith.addf %89, %90 : f32
             affine.store %91, %50[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
           }
         }
@@ -396,14 +396,14 @@ module {
         affine.for %arg3 = 0 to 32 {
           affine.for %arg4 = 0 to 32 {
             %89 = affine.load %50[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
-            %90 = cmpf "olt", %89, %cst_0 : f32
+            %90 = arith.cmpf "olt", %89, %cst_0 : f32
             %91 = select %90, %cst_0, %89 : f32
             affine.store %91, %49[%arg1, %arg2, %arg3, %arg4] : memref<1x64x32x32xf32>
           }
         }
       }
     }
-    %71 = "krnl.global"() {name = "constant_5", offset = 596736 : i64, shape = [128, 64, 3, 3]} : () -> memref<128x64x3x3xf32>
+    %71 = "krnl.global"() {name = "arith.constant_5", offset = 596736 : i64, shape = [128, 64, 3, 3]} : () -> memref<128x64x3x3xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 64 {
         affine.for %arg3 = 0 to 34 {
@@ -438,8 +438,8 @@ module {
                   %91 = affine.load %48[%arg1, %arg5, %89, %90] : memref<1x64x34x34xf32>
                   %92 = affine.load %71[%arg2, %arg5, %arg6, %arg7] : memref<128x64x3x3xf32>
                   %93 = affine.load %47[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %47[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
                 }
               }
@@ -453,14 +453,14 @@ module {
         affine.for %arg3 = 0 to 16 {
           affine.for %arg4 = 0 to 16 {
             %89 = affine.load %47[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
-            %90 = cmpf "olt", %89, %cst_0 : f32
+            %90 = arith.cmpf "olt", %89, %cst_0 : f32
             %91 = select %90, %cst_0, %89 : f32
             affine.store %91, %46[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
           }
         }
       }
     }
-    %72 = "krnl.global"() {name = "constant_6", offset = 891648 : i64, shape = [128, 128, 3, 3]} : () -> memref<128x128x3x3xf32>
+    %72 = "krnl.global"() {name = "arith.constant_6", offset = 891648 : i64, shape = [128, 128, 3, 3]} : () -> memref<128x128x3x3xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 128 {
         affine.for %arg3 = 0 to 18 {
@@ -495,8 +495,8 @@ module {
                   %91 = affine.load %45[%arg1, %arg5, %89, %90] : memref<1x128x18x18xf32>
                   %92 = affine.load %72[%arg2, %arg5, %arg6, %arg7] : memref<128x128x3x3xf32>
                   %93 = affine.load %44[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %44[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
                 }
               }
@@ -505,7 +505,7 @@ module {
         }
       }
     }
-    %73 = "krnl.global"() {name = "constant_7", offset = 1481472 : i64, shape = [128, 64, 1, 1]} : () -> memref<128x64x1x1xf32>
+    %73 = "krnl.global"() {name = "arith.constant_7", offset = 1481472 : i64, shape = [128, 64, 1, 1]} : () -> memref<128x64x1x1xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 128 {
         affine.for %arg3 = 0 to 16 {
@@ -519,8 +519,8 @@ module {
                   %91 = affine.load %49[%arg1, %arg5, %89, %90] : memref<1x64x32x32xf32>
                   %92 = affine.load %73[%arg2, %arg5, %arg6, %arg7] : memref<128x64x1x1xf32>
                   %93 = affine.load %43[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %43[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
                 }
               }
@@ -535,7 +535,7 @@ module {
           affine.for %arg4 = 0 to 16 {
             %89 = affine.load %44[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
             %90 = affine.load %43[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
-            %91 = addf %89, %90 : f32
+            %91 = arith.addf %89, %90 : f32
             affine.store %91, %42[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
           }
         }
@@ -546,14 +546,14 @@ module {
         affine.for %arg3 = 0 to 16 {
           affine.for %arg4 = 0 to 16 {
             %89 = affine.load %42[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
-            %90 = cmpf "olt", %89, %cst_0 : f32
+            %90 = arith.cmpf "olt", %89, %cst_0 : f32
             %91 = select %90, %cst_0, %89 : f32
             affine.store %91, %41[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
           }
         }
       }
     }
-    %74 = "krnl.global"() {name = "constant_8", offset = 1514240 : i64, shape = [128, 128, 3, 3]} : () -> memref<128x128x3x3xf32>
+    %74 = "krnl.global"() {name = "arith.constant_8", offset = 1514240 : i64, shape = [128, 128, 3, 3]} : () -> memref<128x128x3x3xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 128 {
         affine.for %arg3 = 0 to 18 {
@@ -588,8 +588,8 @@ module {
                   %91 = affine.load %40[%arg1, %arg5, %89, %90] : memref<1x128x18x18xf32>
                   %92 = affine.load %74[%arg2, %arg5, %arg6, %arg7] : memref<128x128x3x3xf32>
                   %93 = affine.load %39[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %39[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
                 }
               }
@@ -603,14 +603,14 @@ module {
         affine.for %arg3 = 0 to 16 {
           affine.for %arg4 = 0 to 16 {
             %89 = affine.load %39[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
-            %90 = cmpf "olt", %89, %cst_0 : f32
+            %90 = arith.cmpf "olt", %89, %cst_0 : f32
             %91 = select %90, %cst_0, %89 : f32
             affine.store %91, %38[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
           }
         }
       }
     }
-    %75 = "krnl.global"() {name = "constant_9", offset = 2104064 : i64, shape = [128, 128, 3, 3]} : () -> memref<128x128x3x3xf32>
+    %75 = "krnl.global"() {name = "arith.constant_9", offset = 2104064 : i64, shape = [128, 128, 3, 3]} : () -> memref<128x128x3x3xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 128 {
         affine.for %arg3 = 0 to 18 {
@@ -645,8 +645,8 @@ module {
                   %91 = affine.load %37[%arg1, %arg5, %89, %90] : memref<1x128x18x18xf32>
                   %92 = affine.load %75[%arg2, %arg5, %arg6, %arg7] : memref<128x128x3x3xf32>
                   %93 = affine.load %36[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %36[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
                 }
               }
@@ -661,7 +661,7 @@ module {
           affine.for %arg4 = 0 to 16 {
             %89 = affine.load %36[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
             %90 = affine.load %41[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
-            %91 = addf %89, %90 : f32
+            %91 = arith.addf %89, %90 : f32
             affine.store %91, %35[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
           }
         }
@@ -672,14 +672,14 @@ module {
         affine.for %arg3 = 0 to 16 {
           affine.for %arg4 = 0 to 16 {
             %89 = affine.load %35[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
-            %90 = cmpf "olt", %89, %cst_0 : f32
+            %90 = arith.cmpf "olt", %89, %cst_0 : f32
             %91 = select %90, %cst_0, %89 : f32
             affine.store %91, %34[%arg1, %arg2, %arg3, %arg4] : memref<1x128x16x16xf32>
           }
         }
       }
     }
-    %76 = "krnl.global"() {name = "constant_10", offset = 2693888 : i64, shape = [256, 128, 3, 3]} : () -> memref<256x128x3x3xf32>
+    %76 = "krnl.global"() {name = "arith.constant_10", offset = 2693888 : i64, shape = [256, 128, 3, 3]} : () -> memref<256x128x3x3xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 128 {
         affine.for %arg3 = 0 to 18 {
@@ -714,8 +714,8 @@ module {
                   %91 = affine.load %33[%arg1, %arg5, %89, %90] : memref<1x128x18x18xf32>
                   %92 = affine.load %76[%arg2, %arg5, %arg6, %arg7] : memref<256x128x3x3xf32>
                   %93 = affine.load %32[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %32[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
                 }
               }
@@ -729,14 +729,14 @@ module {
         affine.for %arg3 = 0 to 8 {
           affine.for %arg4 = 0 to 8 {
             %89 = affine.load %32[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
-            %90 = cmpf "olt", %89, %cst_0 : f32
+            %90 = arith.cmpf "olt", %89, %cst_0 : f32
             %91 = select %90, %cst_0, %89 : f32
             affine.store %91, %31[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
           }
         }
       }
     }
-    %77 = "krnl.global"() {name = "constant_11", offset = 3873536 : i64, shape = [256, 256, 3, 3]} : () -> memref<256x256x3x3xf32>
+    %77 = "krnl.global"() {name = "arith.constant_11", offset = 3873536 : i64, shape = [256, 256, 3, 3]} : () -> memref<256x256x3x3xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 256 {
         affine.for %arg3 = 0 to 10 {
@@ -771,8 +771,8 @@ module {
                   %91 = affine.load %30[%arg1, %arg5, %89, %90] : memref<1x256x10x10xf32>
                   %92 = affine.load %77[%arg2, %arg5, %arg6, %arg7] : memref<256x256x3x3xf32>
                   %93 = affine.load %29[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %29[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
                 }
               }
@@ -781,7 +781,7 @@ module {
         }
       }
     }
-    %78 = "krnl.global"() {name = "constant_12", offset = 6232832 : i64, shape = [256, 128, 1, 1]} : () -> memref<256x128x1x1xf32>
+    %78 = "krnl.global"() {name = "arith.constant_12", offset = 6232832 : i64, shape = [256, 128, 1, 1]} : () -> memref<256x128x1x1xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 256 {
         affine.for %arg3 = 0 to 8 {
@@ -795,8 +795,8 @@ module {
                   %91 = affine.load %34[%arg1, %arg5, %89, %90] : memref<1x128x16x16xf32>
                   %92 = affine.load %78[%arg2, %arg5, %arg6, %arg7] : memref<256x128x1x1xf32>
                   %93 = affine.load %28[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %28[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
                 }
               }
@@ -811,7 +811,7 @@ module {
           affine.for %arg4 = 0 to 8 {
             %89 = affine.load %29[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
             %90 = affine.load %28[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
-            %91 = addf %89, %90 : f32
+            %91 = arith.addf %89, %90 : f32
             affine.store %91, %27[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
           }
         }
@@ -822,14 +822,14 @@ module {
         affine.for %arg3 = 0 to 8 {
           affine.for %arg4 = 0 to 8 {
             %89 = affine.load %27[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
-            %90 = cmpf "olt", %89, %cst_0 : f32
+            %90 = arith.cmpf "olt", %89, %cst_0 : f32
             %91 = select %90, %cst_0, %89 : f32
             affine.store %91, %26[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
           }
         }
       }
     }
-    %79 = "krnl.global"() {name = "constant_13", offset = 6363904 : i64, shape = [256, 256, 3, 3]} : () -> memref<256x256x3x3xf32>
+    %79 = "krnl.global"() {name = "arith.constant_13", offset = 6363904 : i64, shape = [256, 256, 3, 3]} : () -> memref<256x256x3x3xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 256 {
         affine.for %arg3 = 0 to 10 {
@@ -864,8 +864,8 @@ module {
                   %91 = affine.load %25[%arg1, %arg5, %89, %90] : memref<1x256x10x10xf32>
                   %92 = affine.load %79[%arg2, %arg5, %arg6, %arg7] : memref<256x256x3x3xf32>
                   %93 = affine.load %24[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %24[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
                 }
               }
@@ -879,14 +879,14 @@ module {
         affine.for %arg3 = 0 to 8 {
           affine.for %arg4 = 0 to 8 {
             %89 = affine.load %24[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
-            %90 = cmpf "olt", %89, %cst_0 : f32
+            %90 = arith.cmpf "olt", %89, %cst_0 : f32
             %91 = select %90, %cst_0, %89 : f32
             affine.store %91, %23[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
           }
         }
       }
     }
-    %80 = "krnl.global"() {name = "constant_14", offset = 8723200 : i64, shape = [256, 256, 3, 3]} : () -> memref<256x256x3x3xf32>
+    %80 = "krnl.global"() {name = "arith.constant_14", offset = 8723200 : i64, shape = [256, 256, 3, 3]} : () -> memref<256x256x3x3xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 256 {
         affine.for %arg3 = 0 to 10 {
@@ -921,8 +921,8 @@ module {
                   %91 = affine.load %22[%arg1, %arg5, %89, %90] : memref<1x256x10x10xf32>
                   %92 = affine.load %80[%arg2, %arg5, %arg6, %arg7] : memref<256x256x3x3xf32>
                   %93 = affine.load %21[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %21[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
                 }
               }
@@ -937,7 +937,7 @@ module {
           affine.for %arg4 = 0 to 8 {
             %89 = affine.load %21[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
             %90 = affine.load %26[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
-            %91 = addf %89, %90 : f32
+            %91 = arith.addf %89, %90 : f32
             affine.store %91, %20[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
           }
         }
@@ -948,14 +948,14 @@ module {
         affine.for %arg3 = 0 to 8 {
           affine.for %arg4 = 0 to 8 {
             %89 = affine.load %20[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
-            %90 = cmpf "olt", %89, %cst_0 : f32
+            %90 = arith.cmpf "olt", %89, %cst_0 : f32
             %91 = select %90, %cst_0, %89 : f32
             affine.store %91, %19[%arg1, %arg2, %arg3, %arg4] : memref<1x256x8x8xf32>
           }
         }
       }
     }
-    %81 = "krnl.global"() {name = "constant_15", offset = 11082496 : i64, shape = [512, 256, 3, 3]} : () -> memref<512x256x3x3xf32>
+    %81 = "krnl.global"() {name = "arith.constant_15", offset = 11082496 : i64, shape = [512, 256, 3, 3]} : () -> memref<512x256x3x3xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 256 {
         affine.for %arg3 = 0 to 10 {
@@ -990,8 +990,8 @@ module {
                   %91 = affine.load %18[%arg1, %arg5, %89, %90] : memref<1x256x10x10xf32>
                   %92 = affine.load %81[%arg2, %arg5, %arg6, %arg7] : memref<512x256x3x3xf32>
                   %93 = affine.load %17[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %17[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
                 }
               }
@@ -1005,14 +1005,14 @@ module {
         affine.for %arg3 = 0 to 4 {
           affine.for %arg4 = 0 to 4 {
             %89 = affine.load %17[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
-            %90 = cmpf "olt", %89, %cst_0 : f32
+            %90 = arith.cmpf "olt", %89, %cst_0 : f32
             %91 = select %90, %cst_0, %89 : f32
             affine.store %91, %16[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
           }
         }
       }
     }
-    %82 = "krnl.global"() {name = "constant_16", offset = 15801088 : i64, shape = [512, 512, 3, 3]} : () -> memref<512x512x3x3xf32>
+    %82 = "krnl.global"() {name = "arith.constant_16", offset = 15801088 : i64, shape = [512, 512, 3, 3]} : () -> memref<512x512x3x3xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 512 {
         affine.for %arg3 = 0 to 6 {
@@ -1047,8 +1047,8 @@ module {
                   %91 = affine.load %15[%arg1, %arg5, %89, %90] : memref<1x512x6x6xf32>
                   %92 = affine.load %82[%arg2, %arg5, %arg6, %arg7] : memref<512x512x3x3xf32>
                   %93 = affine.load %14[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %14[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
                 }
               }
@@ -1057,7 +1057,7 @@ module {
         }
       }
     }
-    %83 = "krnl.global"() {name = "constant_17", offset = 25238272 : i64, shape = [512, 256, 1, 1]} : () -> memref<512x256x1x1xf32>
+    %83 = "krnl.global"() {name = "arith.constant_17", offset = 25238272 : i64, shape = [512, 256, 1, 1]} : () -> memref<512x256x1x1xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 512 {
         affine.for %arg3 = 0 to 4 {
@@ -1071,8 +1071,8 @@ module {
                   %91 = affine.load %19[%arg1, %arg5, %89, %90] : memref<1x256x8x8xf32>
                   %92 = affine.load %83[%arg2, %arg5, %arg6, %arg7] : memref<512x256x1x1xf32>
                   %93 = affine.load %13[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %13[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
                 }
               }
@@ -1087,7 +1087,7 @@ module {
           affine.for %arg4 = 0 to 4 {
             %89 = affine.load %14[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
             %90 = affine.load %13[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
-            %91 = addf %89, %90 : f32
+            %91 = arith.addf %89, %90 : f32
             affine.store %91, %12[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
           }
         }
@@ -1098,14 +1098,14 @@ module {
         affine.for %arg3 = 0 to 4 {
           affine.for %arg4 = 0 to 4 {
             %89 = affine.load %12[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
-            %90 = cmpf "olt", %89, %cst_0 : f32
+            %90 = arith.cmpf "olt", %89, %cst_0 : f32
             %91 = select %90, %cst_0, %89 : f32
             affine.store %91, %11[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
           }
         }
       }
     }
-    %84 = "krnl.global"() {name = "constant_18", offset = 25762560 : i64, shape = [512, 512, 3, 3]} : () -> memref<512x512x3x3xf32>
+    %84 = "krnl.global"() {name = "arith.constant_18", offset = 25762560 : i64, shape = [512, 512, 3, 3]} : () -> memref<512x512x3x3xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 512 {
         affine.for %arg3 = 0 to 6 {
@@ -1140,8 +1140,8 @@ module {
                   %91 = affine.load %10[%arg1, %arg5, %89, %90] : memref<1x512x6x6xf32>
                   %92 = affine.load %84[%arg2, %arg5, %arg6, %arg7] : memref<512x512x3x3xf32>
                   %93 = affine.load %9[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %9[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
                 }
               }
@@ -1155,14 +1155,14 @@ module {
         affine.for %arg3 = 0 to 4 {
           affine.for %arg4 = 0 to 4 {
             %89 = affine.load %9[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
-            %90 = cmpf "olt", %89, %cst_0 : f32
+            %90 = arith.cmpf "olt", %89, %cst_0 : f32
             %91 = select %90, %cst_0, %89 : f32
             affine.store %91, %8[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
           }
         }
       }
     }
-    %85 = "krnl.global"() {name = "constant_19", offset = 35199744 : i64, shape = [512, 512, 3, 3]} : () -> memref<512x512x3x3xf32>
+    %85 = "krnl.global"() {name = "arith.constant_19", offset = 35199744 : i64, shape = [512, 512, 3, 3]} : () -> memref<512x512x3x3xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 512 {
         affine.for %arg3 = 0 to 6 {
@@ -1197,8 +1197,8 @@ module {
                   %91 = affine.load %7[%arg1, %arg5, %89, %90] : memref<1x512x6x6xf32>
                   %92 = affine.load %85[%arg2, %arg5, %arg6, %arg7] : memref<512x512x3x3xf32>
                   %93 = affine.load %6[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
-                  %94 = mulf %91, %92 : f32
-                  %95 = addf %93, %94 : f32
+                  %94 = arith.mulf %91, %92 : f32
+                  %95 = arith.addf %93, %94 : f32
                   affine.store %95, %6[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
                 }
               }
@@ -1213,7 +1213,7 @@ module {
           affine.for %arg4 = 0 to 4 {
             %89 = affine.load %6[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
             %90 = affine.load %11[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
-            %91 = addf %89, %90 : f32
+            %91 = arith.addf %89, %90 : f32
             affine.store %91, %5[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
           }
         }
@@ -1224,7 +1224,7 @@ module {
         affine.for %arg3 = 0 to 4 {
           affine.for %arg4 = 0 to 4 {
             %89 = affine.load %5[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
-            %90 = cmpf "olt", %89, %cst_0 : f32
+            %90 = arith.cmpf "olt", %89, %cst_0 : f32
             %91 = select %90, %cst_0, %89 : f32
             affine.store %91, %4[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
           }
@@ -1246,19 +1246,19 @@ module {
           affine.for %arg4 = 0 to 4 {
             %89 = affine.load %4[%arg1, %arg2, %arg3, %arg4] : memref<1x512x4x4xf32>
             %90 = affine.load %3[%arg1, %arg2, %c0, %c0] : memref<1x512x1x1xf32>
-            %91 = addf %90, %89 : f32
+            %91 = arith.addf %90, %89 : f32
             affine.store %91, %3[%arg1, %arg2, %c0, %c0] : memref<1x512x1x1xf32>
           }
         }
       }
     }
-    %86 = uitofp %c16_i64 : i64 to f32
+    %86 = arith.uitofp %c16_i64 : i64 to f32
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 512 {
         affine.for %arg3 = 0 to 1 {
           affine.for %arg4 = 0 to 1 {
             %89 = affine.load %3[%arg1, %arg2, %arg3, %arg4] : memref<1x512x1x1xf32>
-            %90 = divf %89, %86 : f32
+            %90 = arith.divf %89, %86 : f32
             affine.store %90, %3[%arg1, %arg2, %arg3, %arg4] : memref<1x512x1x1xf32>
           }
         }
@@ -1275,8 +1275,8 @@ module {
         }
       }
     }
-    %87 = "krnl.global"() {name = "constant_20", offset = 44636928 : i64, shape = [10, 512]} : () -> memref<10x512xf32>
-    %88 = "krnl.global"() {name = "constant_21", offset = 44657408 : i64, shape = [10], value = dense<[-0.0278122574, -0.0410711654, -0.00870433543, -0.0383192934, -0.0207557045, 0.0408722125, 0.0364007317, 0.0409536846, 0.00303884572, -0.0432778746]> : tensor<10xf32>} : () -> memref<10xf32>
+    %87 = "krnl.global"() {name = "arith.constant_20", offset = 44636928 : i64, shape = [10, 512]} : () -> memref<10x512xf32>
+    %88 = "krnl.global"() {name = "arith.constant_21", offset = 44657408 : i64, shape = [10], value = dense<[-0.0278122574, -0.0410711654, -0.00870433543, -0.0383192934, -0.0207557045, 0.0408722125, 0.0364007317, 0.0409536846, 0.00303884572, -0.0432778746]> : tensor<10xf32>} : () -> memref<10xf32>
     affine.for %arg1 = 0 to 1 {
       affine.for %arg2 = 0 to 10 {
         affine.store %cst_0, %1[%arg1, %arg2] : memref<1x10xf32>
@@ -1284,15 +1284,15 @@ module {
           %94 = affine.load %2[%arg1, %arg3] : memref<1x512xf32>
           %95 = affine.load %87[%arg2, %arg3] : memref<10x512xf32>
           %96 = affine.load %1[%arg1, %arg2] : memref<1x10xf32>
-          %97 = mulf %94, %95 : f32
-          %98 = addf %96, %97 : f32
+          %97 = arith.mulf %94, %95 : f32
+          %98 = arith.addf %96, %97 : f32
           affine.store %98, %1[%arg1, %arg2] : memref<1x10xf32>
         }
         %89 = affine.load %1[%arg1, %arg2] : memref<1x10xf32>
-        %90 = mulf %cst, %89 : f32
+        %90 = arith.mulf %cst, %89 : f32
         %91 = affine.load %88[%arg2] : memref<10xf32>
-        %92 = mulf %cst, %91 : f32
-        %93 = addf %90, %92 : f32
+        %92 = arith.mulf %cst, %91 : f32
+        %93 = arith.addf %90, %92 : f32
         affine.store %93, %1[%arg1, %arg2] : memref<1x10xf32>
       }
     }

@@ -1,18 +1,7 @@
 #!/bin/bash
+# This test is deprecated and will be removed soon!!
 
 # Please run: source ablation_int_test.sh -m resnet18 -n 17 -c 0
-
-# cd samples/onnx-mlir-1/ && source ablation_int_test.sh -m mobilenet -n 17 -c 0
-# cd samples/onnx-mlir-1/ && source ablation_int_test.sh -m resnet18 -n 17 -c 0
-# cd samples/onnx-mlir-1/ && source ablation_int_test.sh -m vgg16 -n 17 -c 0
-
-# cd samples/onnx-mlir-2/ && source ablation_int_test.sh -m mobilenet -n 17 -c 0
-# cd samples/onnx-mlir-2/ && source ablation_int_test.sh -m resnet18 -n 17 -c 0
-# cd samples/onnx-mlir-2/ && source ablation_int_test.sh -m vgg16 -n 17 -c 0
-
-# cd samples/onnx-mlir-3/ && source ablation_int_test.sh -m mobilenet -n 17 -c 0
-# cd samples/onnx-mlir-3/ && source ablation_int_test.sh -m resnet18 -n 17 -c 0
-# cd samples/onnx-mlir-3/ && source ablation_int_test.sh -m vgg16 -n 17 -c 0
 
 # Script options.
 while getopts 'm:n:c:' opt

@@ -91,9 +91,9 @@ void LegalizeOnnx::runOnOperation() {
       for (auto index : loadOp.getIndices()) {
         // Handle constant defining operation.
         if (auto defOp = index.getDefiningOp())
-          if (auto constOp = dyn_cast<ConstantOp>(defOp))
+          if (auto constOp = dyn_cast<arith::ConstantOp>(defOp))
             if (constOp.getType().isa<IndexType>())
-              if (auto constAttr = constOp.getValue().dyn_cast<IntegerAttr>()) {
+              if (auto constAttr = constOp.value().dyn_cast<IntegerAttr>()) {
                 exprs.push_back(
                     builder.getAffineConstantExpr(constAttr.getUInt()));
                 continue;
@@ -136,7 +136,7 @@ void LegalizeOnnx::runOnOperation() {
           // If the kernel global operation gets a value, create a standard
           // constant operation to substitute it.
           builder.setInsertionPoint(&op);
-          auto tensor = builder.create<ConstantOp>(op.getLoc(), value);
+          auto tensor = builder.create<arith::ConstantOp>(op.getLoc(), value);
           auto memref = builder.create<memref::BufferCastOp>(
               op.getLoc(), op.getResult(0).getType(), tensor);
           op.getResult(0).replaceAllUsesWith(memref);

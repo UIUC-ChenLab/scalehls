@@ -153,18 +153,19 @@ static bool loopPermutation(PyAffineLoopBand band, py::object permMapObject) {
 }
 
 /// Loop variable bound elimination.
-static bool loopRemoveVarBound(PyAffineLoopBand band) {
+static bool loopVarBoundRemoval(PyAffineLoopBand band) {
   py::gil_scoped_release();
   return applyRemoveVariableBound(band.get());
 }
 
 /// If succeeded, return the location of the innermost tile-space loop.
 /// Otherwise, return -1.
-static int64_t loopTiling(PyAffineLoopBand band, py::object factorsObject) {
+static int64_t loopTiling(PyAffineLoopBand band, py::object factorsObject,
+                          bool simplify) {
   py::gil_scoped_release();
   llvm::SmallVector<unsigned, 8> factors;
   getVectorFromUnsignedNpArray(factorsObject.ptr(), factors);
-  auto loc = applyLoopTiling(band.get(), factors);
+  auto loc = applyLoopTiling(band.get(), factors, simplify);
   return loc.hasValue() ? loc.getValue() : -1;
 }
 
@@ -255,7 +256,7 @@ PYBIND11_MODULE(_scalehls, m) {
   m.def("loop_perfectization", &loopPerfectization);
   m.def("loop_order_opt", &loopOrderOpt);
   m.def("loop_permutation", &loopPermutation);
-  m.def("loop_remove_var_bound", &loopRemoveVarBound);
+  m.def("loop_var_bound_removal", &loopVarBoundRemoval);
   m.def("loop_tiling", &loopTiling);
   m.def("loop_pipelining", &loopPipelining);
 

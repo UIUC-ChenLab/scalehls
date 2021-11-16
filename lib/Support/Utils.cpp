@@ -205,8 +205,10 @@ AffineMap scalehls::getLayoutMap(MemRefType memrefType) {
 }
 
 bool scalehls::isFullyPartitioned(MemRefType memrefType) {
-  bool fullyPartitioned = false;
+  if (memrefType.getRank() == 0)
+    return true;
 
+  bool fullyPartitioned = false;
   if (auto layoutMap = getLayoutMap(memrefType)) {
     SmallVector<int64_t, 8> factors;
     getPartitionFactors(memrefType, &factors);
@@ -365,9 +367,8 @@ bool scalehls::checkDependence(Operation *A, Operation *B) {
   // Traverse each loop level to find dependencies.
   for (unsigned depth = numCommonLoops; depth > 0; depth--) {
     // Skip all parallel loop level.
-    if (auto parallelAttr =
-            commonLoops[depth - 1]->getAttrOfType<BoolAttr>("parallel"))
-      if (parallelAttr.getValue())
+    if (auto loopAttr = getLoopDirective(commonLoops[depth - 1]))
+      if (loopAttr.getParallel())
         continue;
 
     FlatAffineValueConstraints depConstrs;
