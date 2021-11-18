@@ -1552,6 +1552,9 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
 }
 
 void ModuleEmitter::emitFunction(FuncOp func) {
+  if (func->hasAttr("bypass") && func->getAttr("bypass"))
+    return;
+
   if (func.getBlocks().size() != 1)
     emitError(func, "has zero or more than one basic blocks.");
 
