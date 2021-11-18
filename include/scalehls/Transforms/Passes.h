@@ -43,6 +43,9 @@ std::unique_ptr<Pass> createSimplifyAffineIfPass();
 std::unique_ptr<Pass> createAffineStoreForwardPass();
 std::unique_ptr<Pass> createSimplifyMemrefAccessPass();
 
+/// Other passes.
+std::unique_ptr<Pass> createPreserveUnoptimizedPass();
+
 void registerTransformsPasses();
 
 #define GEN_PASS_CLASSES

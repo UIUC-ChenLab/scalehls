@@ -251,4 +251,18 @@ def SimplifyMemrefAccess : Pass<"simplify-memref-access", "FuncOp"> {
   let constructor = "mlir::scalehls::createSimplifyMemrefAccessPass()";
 }
 
+//===----------------------------------------------------------------------===//
+// Other Passes
+//===----------------------------------------------------------------------===//
+
+def PreserveUnoptimized : Pass<"preserve-unoptimized", "ModuleOp"> {
+  let summary = "Return unoptimized version of code along with the optimized one";
+  let description = [{
+    This preserve-unoptimized pass will create a copy of unoptimized module
+    before optimization and return it along with the optimized version. 
+  }];
+
+  let constructor = "mlir::scalehls::createPreserveUnoptimizedPass()";
+}
+
 #endif // SCALEHLS_TRANSFORMS_PASSES_TD
