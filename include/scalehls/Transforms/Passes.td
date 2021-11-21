@@ -26,7 +26,7 @@ def QoREstimation : Pass<"qor-estimation", "ModuleOp"> {
 
   let options = [
     Option<"targetSpec", "target-spec", "std::string",
-           /*default=*/"\"../config/target-spec.ini\"",
+           /*default=*/"\"./target-spec.ini\"",
            "File path: target backend specifications and configurations">,
 
     Option<"depAnalysis", "dep-analysis", "bool", /*default=*/"true",
@@ -54,14 +54,14 @@ def MultipleLevelDSE : Pass<"dse", "ModuleOp"> {
     Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
            "The top function for HLS synthesis">,
     Option<"outputPath", "output-path", "std::string",
-           /*default=*/"\"-/\"",
+           /*default=*/"\"./\"",
            "File path: the path for dumping the MLIR of pareto design points">,
     Option<"csvPath", "csv-path", "std::string",
-           /*default=*/"\"-/\"",
+           /*default=*/"\"./\"",
            "File path: the path for dumping the CSV of design spaces">,
 
     Option<"targetSpec", "target-spec", "std::string",
-           /*default=*/"\"../config/target-spec.ini\"",
+           /*default=*/"\"./target-spec.ini\"",
            "File path: target backend specifications and configurations">,
 
     Option<"depAnalysis", "dep-analysis", "bool", /*default=*/"true",
@@ -249,6 +249,20 @@ def SimplifyMemrefAccess : Pass<"simplify-memref-access", "FuncOp"> {
   }];
 
   let constructor = "mlir::scalehls::createSimplifyMemrefAccessPass()";
+}
+
+//===----------------------------------------------------------------------===//
+// Other Passes
+//===----------------------------------------------------------------------===//
+
+def PreserveUnoptimized : Pass<"preserve-unoptimized", "ModuleOp"> {
+  let summary = "Return unoptimized version of code along with the optimized one";
+  let description = [{
+    This preserve-unoptimized pass will create a copy of unoptimized module
+    before optimization and return it along with the optimized version. 
+  }];
+
+  let constructor = "mlir::scalehls::createPreserveUnoptimizedPass()";
 }
 
 #endif // SCALEHLS_TRANSFORMS_PASSES_TD

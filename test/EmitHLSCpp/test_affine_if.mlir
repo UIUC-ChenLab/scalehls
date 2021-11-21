@@ -3,7 +3,7 @@
 #set0 = affine_set<(d0)[s0]: (d0 + s0 >= 0, d0 * s0 == 0)>
 
 func @test_affine_if(%arg0: index, %arg1: memref<16xindex>) -> index {
-  %c11 = constant 11 : index
+  %c11 = arith.constant 11 : index
 
   // CHECK: int v3;
   // CHECK: int v4[16];
@@ -23,6 +23,6 @@ func @test_affine_if(%arg0: index, %arg1: memref<16xindex>) -> index {
   }
 
   %1 = affine.load %0#1[%c11] : memref<16xindex>
-  %2 = addi %0#0, %1 : index
+  %2 = arith.addi %0#0, %1 : index
   return %2 : index
 }

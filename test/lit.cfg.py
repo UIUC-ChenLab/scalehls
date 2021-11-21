@@ -54,6 +54,7 @@ config.test_exec_root = os.path.join(config.scalehls_obj_root, 'test')
 
 # Tweak the PATH to include the tools dir.
 llvm_config.with_environment('PATH', config.llvm_tools_dir, append_path=True)
+llvm_config.with_environment('PATH', config.polygeist_tools_dir, append_path=True)
 
 # Tweak the PYTHONPATH to include the binary dir.
 if config.enable_bindings_python:
@@ -62,12 +63,13 @@ if config.enable_bindings_python:
       [os.path.join(config.scalehls_python_packages_dir, 'scalehls_core')],
       append_path=True)
 
-tool_dirs = [config.scalehls_tools_dir,
+tool_dirs = [config.scalehls_tools_dir, config.polygeist_tools_dir,
              config.mlir_tools_dir, config.llvm_tools_dir]
 tools = [
     'pyscalehls.py',
     'scalehls-opt',
-    'scalehls-translate'
+    'scalehls-translate',
+    'mlir-clang'
 ]
 
 # The following tools are optional

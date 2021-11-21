@@ -8,6 +8,7 @@
 #define SCALEHLS_DIALECT_HLSCPP_VISITOR_H
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
@@ -44,21 +45,24 @@ public:
             memref::TensorLoadOp, memref::TensorStoreOp, memref::BufferCastOp,
             SplatOp, memref::DimOp, RankOp,
             // Unary expressions.
-            AbsFOp, CeilFOp, NegFOp, math::CosOp, math::SinOp, math::TanhOp,
+            math::AbsOp, math::CeilOp, math::CosOp, math::SinOp, math::TanhOp,
             math::SqrtOp, math::RsqrtOp, math::ExpOp, math::Exp2Op, math::LogOp,
-            math::Log2Op, math::Log10Op,
+            math::Log2Op, math::Log10Op, arith::NegFOp,
             // Float binary expressions.
-            CmpFOp, AddFOp, SubFOp, MulFOp, DivFOp, RemFOp,
+            arith::CmpFOp, arith::AddFOp, arith::SubFOp, arith::MulFOp,
+            arith::DivFOp, arith::RemFOp,
             // Integer binary expressions.
-            CmpIOp, AddIOp, SubIOp, MulIOp, SignedDivIOp, SignedRemIOp,
-            UnsignedDivIOp, UnsignedRemIOp, XOrOp, AndOp, OrOp, ShiftLeftOp,
-            SignedShiftRightOp, UnsignedShiftRightOp,
+            arith::CmpIOp, arith::AddIOp, arith::SubIOp, arith::MulIOp,
+            arith::DivSIOp, arith::RemSIOp, arith::DivUIOp, arith::RemUIOp,
+            arith::XOrIOp, arith::AndIOp, arith::OrIOp, arith::ShLIOp,
+            arith::ShRSIOp, arith::ShRUIOp,
             // Special operations.
-            SelectOp, ConstantOp, CopySignOp, TruncateIOp, ZeroExtendIOp,
-            SignExtendIOp, IndexCastOp, CallOp, ReturnOp, UIToFPOp, SIToFPOp,
-            FPToSIOp, FPToUIOp,
+            CallOp, ReturnOp, SelectOp, ConstantOp, arith::ConstantOp,
+            arith::TruncIOp, arith::TruncFOp, arith::ExtUIOp, arith::ExtSIOp,
+            arith::IndexCastOp, arith::UIToFPOp, arith::SIToFPOp,
+            arith::FPToSIOp, arith::FPToUIOp,
             // HLSCpp operations.
-            AssignOp, CastOp, MulOp, AddOp>([&](auto opNode) -> ResultType {
+            AssignOp, CastOp, MulOp, AddOp, IncludeOp>([&](auto opNode) -> ResultType {
           return thisCast->visitOp(opNode, args...);
         })
         .Default([&](auto opNode) -> ResultType {
@@ -130,9 +134,8 @@ public:
   HANDLE(RankOp);
 
   // Unary expressions.
-  HANDLE(AbsFOp);
-  HANDLE(CeilFOp);
-  HANDLE(NegFOp);
+  HANDLE(math::AbsOp);
+  HANDLE(math::CeilOp);
   HANDLE(math::CosOp);
   HANDLE(math::SinOp);
   HANDLE(math::TanhOp);
@@ -143,51 +146,57 @@ public:
   HANDLE(math::LogOp);
   HANDLE(math::Log2Op);
   HANDLE(math::Log10Op);
+  HANDLE(arith::NegFOp);
 
   // Float binary expressions.
-  HANDLE(CmpFOp);
-  HANDLE(AddFOp);
-  HANDLE(SubFOp);
-  HANDLE(MulFOp);
-  HANDLE(DivFOp);
-  HANDLE(RemFOp);
+  HANDLE(arith::CmpFOp);
+  HANDLE(arith::AddFOp);
+  HANDLE(arith::SubFOp);
+  HANDLE(arith::MulFOp);
+  HANDLE(arith::DivFOp);
+  HANDLE(arith::RemFOp);
 
   // Integer binary expressions.
-  HANDLE(CmpIOp);
-  HANDLE(AddIOp);
-  HANDLE(SubIOp);
-  HANDLE(MulIOp);
-  HANDLE(SignedDivIOp);
-  HANDLE(SignedRemIOp);
-  HANDLE(UnsignedDivIOp);
-  HANDLE(UnsignedRemIOp);
-  HANDLE(XOrOp);
-  HANDLE(AndOp);
-  HANDLE(OrOp);
-  HANDLE(ShiftLeftOp);
-  HANDLE(SignedShiftRightOp);
-  HANDLE(UnsignedShiftRightOp);
+  HANDLE(arith::CmpIOp);
+  HANDLE(arith::AddIOp);
+  HANDLE(arith::SubIOp);
+  HANDLE(arith::MulIOp);
+  HANDLE(arith::DivSIOp);
+  HANDLE(arith::RemSIOp);
+  HANDLE(arith::DivUIOp);
+  HANDLE(arith::RemUIOp);
+  HANDLE(arith::XOrIOp);
+  HANDLE(arith::AndIOp);
+  HANDLE(arith::OrIOp);
+  HANDLE(arith::ShLIOp);
+  HANDLE(arith::ShRSIOp);
+  HANDLE(arith::ShRUIOp);
 
   // Special operations.
-  HANDLE(SelectOp);
-  HANDLE(ConstantOp);
-  HANDLE(CopySignOp);
-  HANDLE(TruncateIOp);
-  HANDLE(ZeroExtendIOp);
-  HANDLE(SignExtendIOp);
-  HANDLE(IndexCastOp);
   HANDLE(CallOp);
   HANDLE(ReturnOp);
-  HANDLE(UIToFPOp);
-  HANDLE(SIToFPOp);
-  HANDLE(FPToUIOp);
-  HANDLE(FPToSIOp);
+  HANDLE(SelectOp);
+  HANDLE(ConstantOp);
+  HANDLE(arith::ConstantOp);
+  HANDLE(arith::TruncIOp);
+  HANDLE(arith::TruncFOp);
+  HANDLE(arith::ExtUIOp);
+  HANDLE(arith::ExtSIOp);
+  HANDLE(arith::ExtFOp);
+  HANDLE(arith::IndexCastOp);
+  HANDLE(arith::UIToFPOp);
+  HANDLE(arith::SIToFPOp);
+  HANDLE(arith::FPToUIOp);
+  HANDLE(arith::FPToSIOp);
 
-  // Structure operations.
+  // HLSCpp operations.
   HANDLE(AssignOp);
   HANDLE(CastOp);
   HANDLE(AddOp);
   HANDLE(MulOp);
+
+  // HLS C++ library include operation.
+  HANDLE(IncludeOp);
 #undef HANDLE
 };
 } // namespace scalehls

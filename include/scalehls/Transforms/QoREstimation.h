@@ -62,11 +62,11 @@ public:
     setTiming(op, begin, begin + latency, latency, 1);                         \
     return true;                                                               \
   }
-  HANDLE(AddFOp, "fadd");
-  HANDLE(SubFOp, "fadd");
-  HANDLE(MulFOp, "fmul");
-  HANDLE(DivFOp, "fdiv");
-  HANDLE(CmpFOp, "fcmp");
+  HANDLE(arith::AddFOp, "fadd");
+  HANDLE(arith::SubFOp, "fadd");
+  HANDLE(arith::MulFOp, "fmul");
+  HANDLE(arith::DivFOp, "fdiv");
+  HANDLE(arith::CmpFOp, "fcmp");
 #undef HANDLE
 
 private:

@@ -56,7 +56,9 @@ bool applyAffineLoopPerfection(AffineLoopBand &band);
 /// Optimize loop order. Loops associated with memory access dependencies are
 /// moved to an as outer as possible location of the input loop band. If
 /// "reverse" is true, as inner as possible.
-bool applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse = false);
+bool applyAffineLoopOrderOpt(AffineLoopBand &band,
+                             ArrayRef<unsigned> permMap = {},
+                             bool reverse = false);
 
 /// Try to rectangularize the input band.
 bool applyRemoveVariableBound(AffineLoopBand &band);
@@ -64,7 +66,8 @@ bool applyRemoveVariableBound(AffineLoopBand &band);
 /// Apply loop tiling to the input loop band and sink all intra-tile loops to
 /// the innermost loop with the original loop order. Return the location of the
 /// innermost tile-space loop.
-Optional<unsigned> applyLoopTiling(AffineLoopBand &band, TileList tileList);
+Optional<unsigned> applyLoopTiling(AffineLoopBand &band, TileList tileList,
+                                   bool simplify = true);
 
 bool applyLegalizeToHLSCpp(FuncOp func, bool topFunc);
 
@@ -78,7 +81,13 @@ bool applyFullyLoopUnrolling(Block &block);
 
 bool applyFullyUnrollAndPartition(Block &block, FuncOp func);
 
-bool applyArrayPartition(FuncOp func);
+bool applyMemoryAccessOpt(FuncOp func);
+
+bool applyArrayPartition(Value array, ArrayRef<unsigned> factors,
+                         ArrayRef<hlscpp::PartitionKind> kinds,
+                         bool updateFuncSignature = true);
+
+bool applyAutoArrayPartition(FuncOp func);
 
 /// Apply optimization strategy to a loop band. The ancestor function is
 /// also passed in because the post-tiling optimizations have to take

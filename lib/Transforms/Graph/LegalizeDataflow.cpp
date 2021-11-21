@@ -42,8 +42,8 @@ static void getSuccessorsMap(Block &block, SuccessorsMap &map) {
   // traverse will not enter any control flow operations.
   for (auto &op : block.getOperations()) {
     // TODO: Some operations are dataflow source, which will not be scheduled.
-    if (isa<memref::AllocOp, memref::AllocaOp, ConstantOp, memref::TensorLoadOp,
-            memref::BufferCastOp>(op))
+    if (isa<memref::AllocOp, memref::AllocaOp, arith::ConstantOp,
+            memref::TensorLoadOp, memref::BufferCastOp>(op))
       continue;
 
     // Collect all memref results if the current operation is a loop.

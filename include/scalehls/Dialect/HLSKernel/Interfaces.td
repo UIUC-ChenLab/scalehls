@@ -29,6 +29,7 @@ def IPOp : HLSKernelOp<"ip", [HLSKernelOpInterface]> {
 
   let arguments = (ins
     Variadic<AnyType>:$inputs,
+    StrAttr:$path,
     StrAttr:$name
   );
 }

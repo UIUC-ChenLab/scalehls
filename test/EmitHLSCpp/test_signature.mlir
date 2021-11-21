@@ -37,8 +37,8 @@ func @test_signature(
   memref<16x8xf32>, tensor<16x8xf32>, vector<16xf32>,
   memref<16x8xi32>, tensor<16x8xi32>, vector<16xi32>
 ) {
-  %c0 = constant 0 : index
-  %c1 = constant 1 : index
+  %c0 = arith.constant 0 : index
+  %c1 = arith.constant 1 : index
 
   // CHECK: int [[VAL_26:.*]] = 16;
   %0 = memref.dim %arg7, %c0 : memref<16x8xf32>
@@ -58,8 +58,7 @@ func @test_signature(
   return
     %arg0, %arg1, %arg2, %arg3, %arg4, %arg5, %arg6,
     %arg7, %arg8, %arg9,
-    %arg10, %arg11, %arg12
-    :
+    %arg10, %arg11, %arg12 :
     f32, f64, index, i1, i11, i32, ui32,
     memref<16x8xf32>, tensor<16x8xf32>, vector<16xf32>,
     memref<16x8xi32>, tensor<16x8xi32>, vector<16xi32>

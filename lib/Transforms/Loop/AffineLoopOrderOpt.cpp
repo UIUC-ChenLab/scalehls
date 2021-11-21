@@ -21,7 +21,9 @@ using namespace scalehls;
 /// Optimize loop order. Loops associated with memory access dependencies are
 /// moved to an as outer as possible location of the input loop band. If
 /// "reverse" is true, as inner as possible.
-bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
+bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band,
+                                       ArrayRef<unsigned> permMap,
+                                       bool reverse) {
   LLVM_DEBUG(llvm::dbgs() << "Loop order opt ";);
 
   if (!isPerfectlyNested(band))
@@ -29,6 +31,14 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band, bool reverse) {
 
   auto &loopBlock = *band.back().getBody();
   auto bandDepth = band.size();
+
+  if (!permMap.empty() && isValidLoopInterchangePermutation(band, permMap)) {
+    auto newRoot = band[permuteLoops(band, permMap)];
+    band.clear();
+    getLoopBandFromOutermost(newRoot, band);
+    band.resize(bandDepth);
+    return true;
+  }
 
   // Collect all load and store operations for each memory in the loop block,
   // and calculate the number of common surrouding loops for later uses.

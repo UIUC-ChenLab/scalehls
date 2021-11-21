@@ -8,6 +8,7 @@
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Analysis/Utils.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -204,8 +205,10 @@ AffineMap scalehls::getLayoutMap(MemRefType memrefType) {
 }
 
 bool scalehls::isFullyPartitioned(MemRefType memrefType) {
-  bool fullyPartitioned = false;
+  if (memrefType.getRank() == 0)
+    return true;
 
+  bool fullyPartitioned = false;
   if (auto layoutMap = getLayoutMap(memrefType)) {
     SmallVector<int64_t, 8> factors;
     getPartitionFactors(memrefType, &factors);
@@ -320,6 +323,22 @@ void scalehls::getLoopBands(Block &block, AffineLoopBands &bands,
   });
 }
 
+void scalehls::getArrays(Block &block, SmallVectorImpl<Value> &arrays,
+                         bool allowArguments) {
+  // Collect argument arrays.
+  if (allowArguments)
+    for (auto arg : block.getArguments()) {
+      if (arg.getType().isa<MemRefType>())
+        arrays.push_back(arg);
+    }
+
+  // Collect local arrays.
+  for (auto &op : block.getOperations()) {
+    if (isa<memref::AllocaOp, memref::AllocOp>(op))
+      arrays.push_back(op.getResult(0));
+  }
+}
+
 Optional<unsigned> scalehls::getAverageTripCount(AffineForOp forOp) {
   if (auto optionalTripCount = getConstantTripCount(forOp))
     return optionalTripCount.getValue();
@@ -348,9 +367,8 @@ bool scalehls::checkDependence(Operation *A, Operation *B) {
   // Traverse each loop level to find dependencies.
   for (unsigned depth = numCommonLoops; depth > 0; depth--) {
     // Skip all parallel loop level.
-    if (auto parallelAttr =
-            commonLoops[depth - 1]->getAttrOfType<BoolAttr>("parallel"))
-      if (parallelAttr.getValue())
+    if (auto loopAttr = getLoopDirective(commonLoops[depth - 1]))
+      if (loopAttr.getParallel())
         continue;
 
     FlatAffineValueConstraints depConstrs;

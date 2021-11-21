@@ -56,4 +56,12 @@ def MulOp : HLSCppOp<"mul", [NoSideEffect]> {
   let results = (outs AnyType : $output);
 }
 
+def IncludeOp : HLSCppOp<"include", [NoSideEffect]> {
+  let summary = "C include library operation";
+  let description = [{}];
+
+  let arguments = (ins
+    StrArrayAttr:$libraries);
+}
+
 #endif // SCALEHLS_DIALECT_HLSCPP_STRUCTUREOPS_TD
