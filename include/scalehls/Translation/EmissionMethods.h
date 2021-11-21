@@ -2,11 +2,14 @@
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/IR/AffineExprVisitor.h"
 #include "mlir/IR/IntegerSet.h"
+#include "mlir/Support/FileUtilities.h"
 #include "mlir/Translation.h"
 #include "scalehls/Dialect/HLSCpp/Visitor.h"
 #include "scalehls/Dialect/HLSKernel/Visitor.h"
 #include "scalehls/InitAllDialects.h"
 #include "scalehls/Support/Utils.h"
+#include "llvm/Support/JSON.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include <iostream>
@@ -127,16 +130,16 @@ public:
   void emitIP(IPOp op);
 
   /// Special operation emitters.
-  void emitSelect(SelectOp op);
-  void emitConstant(ConstantOp op);
-  template <typename CastOpType> void emitCast(CastOpType op);
   void emitCall(CallOp op);
+  void emitSelect(SelectOp op);
+  void emitConstant(arith::ConstantOp op);
+  template <typename CastOpType> void emitCast(CastOpType op);
 
   /// Structure operations emitters.
   void emitAssign(AssignOp op);
 
   /// Top-level MLIR module emitter.
-  void emitModule(ModuleOp module, bool emitHeader = true);
+  void emitModule(ModuleOp module);
 
 private:
   /// C++ component emitters.
@@ -293,7 +296,7 @@ public:
   bool visitOp(memref::DimOp op) { return emitter.emitDim(op), true; }
   bool visitOp(RankOp op) { return emitter.emitRank(op), true; }
 
-  /// Structure operations.
+  /// HLSCpp operations.
   bool visitOp(AssignOp op) { return emitter.emitAssign(op), true; }
   bool visitOp(CastOp op) { return emitter.emitCast<CastOp>(op), true; }
   bool visitOp(MulOp op) { return emitter.emitBinary(op, "*"), true; }
@@ -309,37 +312,32 @@ public:
 
   using HLSCppVisitorBase::visitOp;
   /// Float binary expressions.
-  bool visitOp(CmpFOp op);
-  bool visitOp(AddFOp op) { return emitter.emitBinary(op, "+"), true; }
-  bool visitOp(SubFOp op) { return emitter.emitBinary(op, "-"), true; }
-  bool visitOp(MulFOp op) { return emitter.emitBinary(op, "*"), true; }
-  bool visitOp(DivFOp op) { return emitter.emitBinary(op, "/"), true; }
-  bool visitOp(RemFOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(arith::CmpFOp op);
+  bool visitOp(arith::AddFOp op) { return emitter.emitBinary(op, "+"), true; }
+  bool visitOp(arith::SubFOp op) { return emitter.emitBinary(op, "-"), true; }
+  bool visitOp(arith::MulFOp op) { return emitter.emitBinary(op, "*"), true; }
+  bool visitOp(arith::DivFOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(arith::RemFOp op) { return emitter.emitBinary(op, "%"), true; }
 
   /// Integer binary expressions.
-  bool visitOp(CmpIOp op);
-  bool visitOp(AddIOp op) { return emitter.emitBinary(op, "+"), true; }
-  bool visitOp(SubIOp op) { return emitter.emitBinary(op, "-"), true; }
-  bool visitOp(MulIOp op) { return emitter.emitBinary(op, "*"), true; }
-  bool visitOp(SignedDivIOp op) { return emitter.emitBinary(op, "/"), true; }
-  bool visitOp(SignedRemIOp op) { return emitter.emitBinary(op, "%"), true; }
-  bool visitOp(UnsignedDivIOp op) { return emitter.emitBinary(op, "/"), true; }
-  bool visitOp(UnsignedRemIOp op) { return emitter.emitBinary(op, "%"), true; }
-  bool visitOp(XOrOp op) { return emitter.emitBinary(op, "^"), true; }
-  bool visitOp(AndOp op) { return emitter.emitBinary(op, "&"), true; }
-  bool visitOp(OrOp op) { return emitter.emitBinary(op, "|"), true; }
-  bool visitOp(ShiftLeftOp op) { return emitter.emitBinary(op, "<<"), true; }
-  bool visitOp(SignedShiftRightOp op) {
-    return emitter.emitBinary(op, ">>"), true;
-  }
-  bool visitOp(UnsignedShiftRightOp op) {
-    return emitter.emitBinary(op, ">>"), true;
-  }
+  bool visitOp(arith::CmpIOp op);
+  bool visitOp(arith::AddIOp op) { return emitter.emitBinary(op, "+"), true; }
+  bool visitOp(arith::SubIOp op) { return emitter.emitBinary(op, "-"), true; }
+  bool visitOp(arith::MulIOp op) { return emitter.emitBinary(op, "*"), true; }
+  bool visitOp(arith::DivSIOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(arith::RemSIOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(arith::DivUIOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(arith::RemUIOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(arith::XOrIOp op) { return emitter.emitBinary(op, "^"), true; }
+  bool visitOp(arith::AndIOp op) { return emitter.emitBinary(op, "&"), true; }
+  bool visitOp(arith::OrIOp op) { return emitter.emitBinary(op, "|"), true; }
+  bool visitOp(arith::ShLIOp op) { return emitter.emitBinary(op, "<<"), true; }
+  bool visitOp(arith::ShRSIOp op) { return emitter.emitBinary(op, ">>"), true; }
+  bool visitOp(arith::ShRUIOp op) { return emitter.emitBinary(op, ">>"), true; }
 
   /// Unary expressions.
-  bool visitOp(AbsFOp op) { return emitter.emitUnary(op, "abs"), true; }
-  bool visitOp(CeilFOp op) { return emitter.emitUnary(op, "ceil"), true; }
-  bool visitOp(NegFOp op) { return emitter.emitUnary(op, "-"), true; }
+  bool visitOp(math::AbsOp op) { return emitter.emitUnary(op, "abs"), true; }
+  bool visitOp(math::CeilOp op) { return emitter.emitUnary(op, "ceil"), true; }
   bool visitOp(math::CosOp op) { return emitter.emitUnary(op, "cos"), true; }
   bool visitOp(math::SinOp op) { return emitter.emitUnary(op, "sin"), true; }
   bool visitOp(math::TanhOp op) { return emitter.emitUnary(op, "tanh"), true; }
@@ -354,19 +352,28 @@ public:
   bool visitOp(math::Log10Op op) {
     return emitter.emitUnary(op, "log10"), true;
   }
+  bool visitOp(arith::NegFOp op) { return emitter.emitUnary(op, "-"), true; }
 
   /// Special operations.
-  bool visitOp(SelectOp op) { return emitter.emitSelect(op), true; }
-  bool visitOp(ConstantOp op) { return emitter.emitConstant(op), true; }
-  bool visitOp(IndexCastOp op) {
-    return emitter.emitCast<IndexCastOp>(op), true;
-  }
-  bool visitOp(UIToFPOp op) { return emitter.emitCast<UIToFPOp>(op), true; }
-  bool visitOp(SIToFPOp op) { return emitter.emitCast<SIToFPOp>(op), true; }
-  bool visitOp(FPToUIOp op) { return emitter.emitCast<FPToUIOp>(op), true; }
-  bool visitOp(FPToSIOp op) { return emitter.emitCast<FPToSIOp>(op), true; }
   bool visitOp(CallOp op) { return emitter.emitCall(op), true; }
   bool visitOp(ReturnOp op) { return true; }
+  bool visitOp(SelectOp op) { return emitter.emitSelect(op), true; }
+  bool visitOp(arith::ConstantOp op) { return emitter.emitConstant(op), true; }
+  bool visitOp(arith::IndexCastOp op) {
+    return emitter.emitCast<arith::IndexCastOp>(op), true;
+  }
+  bool visitOp(arith::UIToFPOp op) {
+    return emitter.emitCast<arith::UIToFPOp>(op), true;
+  }
+  bool visitOp(arith::SIToFPOp op) {
+    return emitter.emitCast<arith::SIToFPOp>(op), true;
+  }
+  bool visitOp(arith::FPToUIOp op) {
+    return emitter.emitCast<arith::FPToUIOp>(op), true;
+  }
+  bool visitOp(arith::FPToSIOp op) {
+    return emitter.emitCast<arith::FPToSIOp>(op), true;
+  }
 
 private:
   ModuleEmitter &emitter;

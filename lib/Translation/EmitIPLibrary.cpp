@@ -26,9 +26,7 @@ LogicalResult scalehls::emitIPLibrary(ModuleOp module, llvm::raw_ostream &os) {
   llvm::raw_string_ostream stream_to_str(optimized_source);
 
   ScaleHLSEmitterState state(stream_to_str);
-  ModuleEmitter(state).emitModule(module, false);
-
-  // std::cout << "Now emitting optimized source" << std::endl << optimized_source << std::endl;
+  ModuleEmitter(state).emitModule(module);
 
   /* Build the JSON object representing the IP */
   // llvm::json::Object ip_in_json;

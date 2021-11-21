@@ -101,8 +101,8 @@ SmallString<8> ScaleHLSEmitterBase::getName(Value val) {
   // For constant scalar operations, the constant number will be returned rather
   // than the value name.
   if (auto defOp = val.getDefiningOp()) {
-    if (auto constOp = dyn_cast<ConstantOp>(defOp)) {
-      auto constAttr = constOp.getValue();
+    if (auto constOp = dyn_cast<arith::ConstantOp>(defOp)) {
+      auto constAttr = constOp.value();
 
       if (auto floatAttr = constAttr.dyn_cast<FloatAttr>()) {
         auto value = floatAttr.getValueAsDouble();
@@ -128,25 +128,25 @@ SmallString<8> ScaleHLSEmitterBase::getName(Value val) {
 // ExprVisitor Class Definition
 //===----------------------------------------------------------------------===//
 
-bool ExprVisitor::visitOp(CmpFOp op) {
+bool ExprVisitor::visitOp(arith::CmpFOp op) {
   switch (op.getPredicate()) {
-  case CmpFPredicate::OEQ:
-  case CmpFPredicate::UEQ:
+  case arith::CmpFPredicate::OEQ:
+  case arith::CmpFPredicate::UEQ:
     return emitter.emitBinary(op, "=="), true;
-  case CmpFPredicate::ONE:
-  case CmpFPredicate::UNE:
+  case arith::CmpFPredicate::ONE:
+  case arith::CmpFPredicate::UNE:
     return emitter.emitBinary(op, "!="), true;
-  case CmpFPredicate::OLT:
-  case CmpFPredicate::ULT:
+  case arith::CmpFPredicate::OLT:
+  case arith::CmpFPredicate::ULT:
     return emitter.emitBinary(op, "<"), true;
-  case CmpFPredicate::OLE:
-  case CmpFPredicate::ULE:
+  case arith::CmpFPredicate::OLE:
+  case arith::CmpFPredicate::ULE:
     return emitter.emitBinary(op, "<="), true;
-  case CmpFPredicate::OGT:
-  case CmpFPredicate::UGT:
+  case arith::CmpFPredicate::OGT:
+  case arith::CmpFPredicate::UGT:
     return emitter.emitBinary(op, ">"), true;
-  case CmpFPredicate::OGE:
-  case CmpFPredicate::UGE:
+  case arith::CmpFPredicate::OGE:
+  case arith::CmpFPredicate::UGE:
     return emitter.emitBinary(op, ">="), true;
   default:
     op.emitError("has unsupported compare type.");
@@ -154,23 +154,23 @@ bool ExprVisitor::visitOp(CmpFOp op) {
   }
 }
 
-bool ExprVisitor::visitOp(CmpIOp op) {
+bool ExprVisitor::visitOp(arith::CmpIOp op) {
   switch (op.getPredicate()) {
-  case CmpIPredicate::eq:
+  case arith::CmpIPredicate::eq:
     return emitter.emitBinary(op, "=="), true;
-  case CmpIPredicate::ne:
+  case arith::CmpIPredicate::ne:
     return emitter.emitBinary(op, "!="), true;
-  case CmpIPredicate::slt:
-  case CmpIPredicate::ult:
+  case arith::CmpIPredicate::slt:
+  case arith::CmpIPredicate::ult:
     return emitter.emitBinary(op, "<"), true;
-  case CmpIPredicate::sle:
-  case CmpIPredicate::ule:
+  case arith::CmpIPredicate::sle:
+  case arith::CmpIPredicate::ule:
     return emitter.emitBinary(op, "<="), true;
-  case CmpIPredicate::sgt:
-  case CmpIPredicate::ugt:
+  case arith::CmpIPredicate::sgt:
+  case arith::CmpIPredicate::ugt:
     return emitter.emitBinary(op, ">"), true;
-  case CmpIPredicate::sge:
-  case CmpIPredicate::uge:
+  case arith::CmpIPredicate::sge:
+  case arith::CmpIPredicate::uge:
     return emitter.emitBinary(op, ">="), true;
   }
 }
@@ -701,8 +701,9 @@ void ModuleEmitter::emitTensorToMemref(memref::BufferCastOp op) {
 }
 
 void ModuleEmitter::emitDim(memref::DimOp op) {
-  if (auto constOp = dyn_cast<ConstantOp>(op.getOperand(1).getDefiningOp())) {
-    auto constVal = constOp.getValue().cast<IntegerAttr>().getInt();
+  if (auto constOp =
+          dyn_cast<arith::ConstantOp>(op.getOperand(1).getDefiningOp())) {
+    auto constVal = constOp.value().cast<IntegerAttr>().getInt();
     auto type = op.getOperand(0).getType().cast<ShapedType>();
 
     if (type.hasStaticShape()) {
@@ -759,9 +760,35 @@ void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
 
 /// IP operation emitter. 
 void ModuleEmitter::emitIP(IPOp op) {
-  auto name = op.name();
-  os << "  __IP__" << name << "(";
+  // Emit IP source from JSON if IP exists.
+  std::string errorMessage;
+  if (auto jsonFile = mlir::openInputFile(op.path(), &errorMessage)) {
+    if (auto json = llvm::json::parse(jsonFile->getBuffer())) {
+      if (auto O = json->getAsObject()) {
+        if (auto source = O->getObject("source")) {
+          for (auto line : *source->getArray("code")) {
+            auto l = line.getAsString()->str();
+            for (size_t idx = 0; idx < source->getArray("params")->size(); idx++) {
+              auto p = source->getArray("params")->operator[](idx).getAsString()->str();
+              auto o = getName(op.getOperands()[idx]).str().str();
+              for (std::size_t pos = 0; l.npos != (pos = l.find(p, pos)); pos += o.length()) {
+                l.replace(pos, p.length(), o);
+              }
+            }
 
+            indent();
+            os << l << "\n";
+          }
+          return;
+        }
+      }
+    }
+    //emitError(op, "IP JSON cannot be parsed.");
+  }
+  //emitError(op, "IP cannot be found.");
+
+  // Emit a regular function call if IP does not exist.
+  os << "  __IP__" << op.name() << "(";
   unsigned argIdx = 0;
   for (auto arg : op.getOperands()) {
     emitValue(arg);
@@ -794,19 +821,19 @@ void ModuleEmitter::emitSelect(SelectOp op) {
   emitNestedLoopTail(rank);
 }
 
-void ModuleEmitter::emitConstant(ConstantOp op) {
+void ModuleEmitter::emitConstant(arith::ConstantOp op) {
   // This indicates the constant type is scalar (float, integer, or bool).
   if (isDeclared(op.getResult()))
     return;
 
-  if (auto denseAttr = op.getValue().dyn_cast<DenseElementsAttr>()) {
+  if (auto denseAttr = op.value().dyn_cast<DenseElementsAttr>()) {
     indent();
     emitArrayDecl(op.getResult());
     os << " = {";
     auto type = op.getResult().getType().cast<ShapedType>().getElementType();
 
     unsigned elementIdx = 0;
-    for (auto element : denseAttr.getAttributeValues()) {
+    for (auto element : denseAttr.getValues<Attribute>()) {
       if (type.isF32()) {
         auto value = element.cast<FloatAttr>().getValue().convertToFloat();
         if (std::isfinite(value))
@@ -1228,45 +1255,45 @@ void ModuleEmitter::emitFunction(FuncOp func) {
 }
 
 /// Top-level MLIR module emitter.
-void ModuleEmitter::emitModule(ModuleOp module, bool emitHeader) {
+void ModuleEmitter::emitModule(ModuleOp module) {
+  os << R"XXX(
+//===------------------------------------------------------------*- C++ -*-===//
+//
+// Automatically generated file for High-level Synthesis (HLS).
+//
+//===----------------------------------------------------------------------===//
 
-  // Don't emit the header if emitting to an IP library file
-  if (emitHeader) {
-    os << R"XXX(
-  //===------------------------------------------------------------*- C++ -*-===//
-  //
-  // Automatically generated file for High-level Synthesis (HLS).
-  //
-  //===----------------------------------------------------------------------===//
+#include <algorithm>
+#include <ap_axi_sdata.h>
+#include <ap_fixed.h>
+#include <ap_int.h>
+#include <hls_math.h>
+#include <hls_stream.h>
+#include <math.h>
+#include <stdint.h>
 
-  #include <algorithm>
-  #include <ap_axi_sdata.h>
-  #include <ap_fixed.h>
-  #include <ap_int.h>
-  #include <hls_math.h>
-  #include <hls_stream.h>
-  #include <math.h>
-  #include <stdint.h>
+// Libraries included by user.
+)XXX";
 
-  using namespace std;
-
-  )XXX";
+  for (auto &op : *module.getBody()) {
+    if (auto include = dyn_cast<IncludeOp>(op)) {
+      for (auto library : include.libraries()) {
+        os << "#include <" << library.dyn_cast<StringAttr>().getValue() << ">\n";
+      }
+    }
   }
 
-  // Right now, decide to emit compiled HLS C++ to the ip library store without asking the user
-  std::fstream fio;
-  std::string line = "This is a test that the emitModule function that will, in the future, write compiled HLS code into the ip library file.";
-  fio.open("ip_library.txt", std::ios::trunc | std::ios::out | std::ios::in);
-  fio << line << std::endl;
+  os << R"XXX(
+using namespace std;
+
+)XXX";
 
   for (auto &op : *module.getBody()) {
     if (auto func = dyn_cast<FuncOp>(op))
       emitFunction(func);
-    else
-      emitError(&op, "is unsupported operation.");
+    //else
+    //  emitError(&op, "is unsupported operation.");
   }
-
-  fio.close();  
 }
 
 }
