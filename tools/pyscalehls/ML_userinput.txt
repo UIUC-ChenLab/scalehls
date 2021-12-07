@@ -1,0 +1,20 @@
+#target_source_file_location = shouldnotread
+target_source_file_location = ../../samples/AutoScaleHLS_tests/syr2k_32.c
+top_function = syr2k_32
+part = xc7k70tfbv676-1
+
+# add file locations
+add_files syr2k_32.c
+
+#template
+open_solution "solution1"
+set_part { {{part}} }
+create_clock -period 10 -name default
+source {{ directives_path }}
+{% if synth %}
+csynth_design
+{% endif %}
+{%- if cosim -%}
+cosim_design -O -reduce_diskspace
+{% endif %}
+exit

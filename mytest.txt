@@ -5,9 +5,23 @@ scalehls-opt -affine-loop-perfection -affine-loop-order-opt -remove-variable-bou
     -qor-estimation="target-spec=samples/polybench/target-spec.ini" \
     | scalehls-translate -emit-hlscpp
 
+mlir-clang samples/polybench/syr2k/test_syr2k.c -function=test_syr2k -memref-fullrank -raise-scf-to-affine -S |
+scalehls-opt -affine-loop-perfection -affine-loop-order-opt -remove-variable-bound \
+    -partial-affine-loop-tile="tile-size=4" -legalize-to-hlscpp="top-func=test_syr2k.c" -canonicalize -simplify-affine-if \
+    -affine-store-forward -simplify-memref-access -cse -canonicalize \
+    -qor-estimation="target-spec=samples/polybench/target-spec.ini" \
+    | scalehls-translate -emit-hlscpp
+
+mlir-clang lenet_test.c -function=main -memref-fullrank -raise-scf-to-affine -S |
+scalehls-opt -affine-loop-perfection -affine-loop-order-opt -remove-variable-bound \
+    -partial-affine-loop-tile="tile-size=4" -legalize-to-hlscpp="lenet_test.c" -canonicalize -simplify-affine-if \
+    -affine-store-forward -simplify-memref-access -cse -canonicalize \
+    -qor-estimation="target-spec=samples/polybench/target-spec.ini" \
+    | scalehls-translate -emit-hlscpp
+
 ///////////////lenet///////////////////////////
 
-mlir-clang lenet_test.c -function=lenet_accelerator -memref-fullrank -raise-scf-to-affine -S |
+mlir-clang lenet_test.c -function=main -memref-fullrank -raise-scf-to-affine -S |
 scalehls-opt -affine-loop-perfection -affine-loop-order-opt -remove-variable-bound \
     -legalize-to-hlscpp="top-func=lenet_test.c" -canonicalize -simplify-affine-if \
     -affine-store-forward -simplify-memref-access -array-partition -cse -canonicalize \
@@ -21,7 +35,7 @@ mlir-clang conv_test.c -function=conv5 -memref-fullrank -raise-scf-to-affine -S 
     && scalehls-translate -emit-hlscpp conv5_pareto_0.mlir > conv5_pareto_0.cpp
 
 mlir-clang conv_test.c -function=conv5 -memref-fullrank -raise-scf-to-affine -S |
-scalehls-opt -affine-loop-perfection -affine-loop-order-opt -remove-variable-bound \
+scalehls-opt -affine-loop-order-opt -remove-variable-bound \
     -legalize-to-hlscpp="top-func=conv5" -canonicalize -simplify-affine-if \
     -affine-store-forward -simplify-memref-access -array-partition -cse -canonicalize \
     -qor-estimation="target-spec=samples/polybench/target-spec.ini" \
