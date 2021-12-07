@@ -92,7 +92,7 @@ def generate_random_training_set(dataset, parameter_file, directives_path, templ
                 
         # evaluate the design point
         new_design_point = run_hls.get_perf(template_path, directives_path, top_function, part, parameters, verbose=False, timelimit=600)
-
+        
         print("new design point found")
         #new_design_point = pd.DataFrame.from_dict(parameters, orient='columns')
 
@@ -103,6 +103,11 @@ def generate_random_training_set(dataset, parameter_file, directives_path, templ
         
     # make sure the is_error column is boolean type
     dataset.is_error = dataset.is_error.astype('bool')
+
+def threaded_generate_random_training_set(parameter_file, directives_path, template_path, top_function, part, num_initial):
+    # generate random training sets
+    dir_gen = gen_dir.RandomDirectiveGenerator(parameter_file)
+    
 
 def random_train_RFML(top_function, part):
     parameter_file = 'generated_files/ML_params.csv'

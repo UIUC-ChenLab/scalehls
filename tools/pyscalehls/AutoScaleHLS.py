@@ -8,6 +8,9 @@ from lib import RanTrainML as RTML
 from lib import DSEinputparse as INPAR
 from lib import pyScaleHLS as PYSHLS
 
+def print_optknobs(opt_knobs, opt_knob_names):
+    for i in range(len(opt_knobs) - 1):
+        print("{0}: {1}".format(opt_knob_names[i+1], opt_knobs[i+1]))
 
 def main():
     parser = argparse.ArgumentParser(prog='Cfor_lex')
@@ -33,16 +36,26 @@ def main():
         source_file, inputtop, inputpart, inputfiles, template = INPAR.read_user_input()
 
     #scaleHLS optimization
-    PYSHLS.ScaleHLSopt(source_file, inputtop, "generated_files/ScaleHLS_opted.c")
+    opt_knobs, opt_knob_names = PYSHLS.ScaleHLSopt(source_file, inputtop, "generated_files/ScaleHLS_opted.c")
+    for i in range(len(opt_knobs) - 1):
+        print("{0}: {1}".format(opt_knob_names[i+1], opt_knobs[i+1]))
 
     #process input
-    #var_forlist, var_arraylist_sized = INPAR.process_source_file(source_file)
+    var_forlist, var_arraylist_sized = INPAR.process_source_file("generated_files/ScaleHLS_opted.c")
+
+    print("Loops")
+    for item in var_forlist :
+        print(item)
+    
+    print("Arrays")
+    for item in var_arraylist_sized :
+        print(item)
 
     #create paramfile
-    #INPAR.create_params(var_forlist, var_arraylist_sized)
+    INPAR.create_params(var_forlist, var_arraylist_sized)
 
     #create template
-    #INPAR.create_template(source_file, inputfiles, template)
+    INPAR.create_template(source_file, inputfiles, template)
 
     #RTML.random_train_RFML(inputtop, inputpart)
     

@@ -6,11 +6,70 @@ import mlir.ir
 from mlir.dialects import builtin
 import numpy as np
 
+def opts_menu():
+    
+    opt_knob = np.array(['none', 'none', 'none', 'none', 'none', 'none'])
+    opt_knob_names = np.array(["Auto ScaleHLS", "Loop perfectization", "Optimize loop order", "Optimize loop permutation", "Remove variable bound", "Memory access_opt"])
+
+    val = ""
+    while val == "":
+        val = input("Automate ScaleHLS optimization? (Y / N)\n")
+        if((val == "Y") or (val == "y") or (val == "yes")):
+            opt_knob[0] = 'yes';
+            return opt_knob, opt_knob_names
+        elif((val == "N") or (val == "n") or (val == "no")):
+            opt_knob[0] = 'no';
+#individual selection
+    val = ""
+    while val == "":
+        val = input("Do loop perfectization? (Y / N)\n")
+        if((val == "Y") or (val == "y") or (val == "yes")):
+            opt_knob[1] = 'yes';
+        elif((val == "N") or (val == "n") or (val == "no")):
+            opt_knob[1] = 'no';
+    val = ""
+    while val == "":
+        val = input("Do loop order_opt? (Y / N)\n")
+        if((val == "Y") or (val == "y") or (val == "yes")):
+            opt_knob[2] = 'yes';
+        elif((val == "N") or (val == "n") or (val == "no")):
+            opt_knob[2] = 'no';
+    val = ""
+    while val == "":
+        val = input("Do loop permutation? (Y / N)\n")
+        if((val == "Y") or (val == "y") or (val == "yes")):
+            opt_knob[3] = 'yes';
+        elif((val == "N") or (val == "n") or (val == "no")):
+            opt_knob[3] = 'no';
+    val = ""
+    while val == "":
+        val = input("Do loop variable bound removal? (Y / N)\n")
+        if((val == "Y") or (val == "y") or (val == "yes")):
+            opt_knob[4] = 'yes';
+        elif((val == "N") or (val == "n") or (val == "no")):
+            opt_knob[4] = 'no';
+    val = ""
+    while val == "":
+        val = input("Do loop memory access_opt? (Y / N)\n")
+        if((val == "Y") or (val == "y") or (val == "yes")):
+            opt_knob[5] = 'yes';
+        elif((val == "N") or (val == "n") or (val == "no")):
+            opt_knob[5] = 'no';
+
+    return opt_knob, opt_knob_names                          
+
+
 def do_run(command):
     ret = run(command, stdout=PIPE, stderr=PIPE, universal_newlines=True)
     return ret.stdout
 
 def ScaleHLSopt(source_file, topfunction, outfile):
+
+    opts_knobs, opts_knob_names = opts_menu()
+
+    if (opts_knobs[0] == 'yes'):
+        opts_knobs.fill('yes')
+
     fin = do_run(['mlir-clang', '-S',
                 '-function=' + topfunction,
                 '-memref-fullrank',
@@ -31,47 +90,30 @@ def ScaleHLSopt(source_file, topfunction, outfile):
         bands = scalehls.LoopBandList(func)
         for band in bands:
             # Attempt to perfectize the loop band.
-            scalehls.loop_perfectization(band)
+
+            if(opts_knobs[1] == 'yes'):
+                scalehls.loop_perfectization(band)
 
             # Maximize the distance of loop-carried dependencies through loop permutation.
-            scalehls.loop_order_opt(band)
+            if(opts_knobs[2] == 'yes'):
+                scalehls.loop_order_opt(band)
 
             # Apply loop permutation based on the provided map.
             # Note: This example "permMap" keeps the loop order unchanged.
-            permMap = np.arange(band.depth)
-            scalehls.loop_permutation(band, permMap)
+            if(opts_knobs[3] == 'yes'):
+                permMap = np.arange(band.depth)
+                scalehls.loop_permutation(band, permMap)
 
             # Attempt to remove variable loop bounds if possible.
-            scalehls.loop_var_bound_removal(band)
-
-            # Apply loop tiling. Tile sizes are defined from the outermost loop to the innermost.
-            # Note: We use the trip count to generate this example "factors".
-            factors = np.ones(band.depth, dtype=int)
-            factors[-1] = band.get_trip_count(band.depth - 1) / 4
-            loc = scalehls.loop_tiling(band, factors, True) # simplify = True
-
-            # Apply loop pipelining. All loops inside of the pipelined loop are fully unrolled.
-            scalehls.loop_pipelining(band, loc, 3)  # targetII = 3
-
-        # Traverse all arrays in the function.
-        arrays = scalehls.ArrayList(func)
-        for array in arrays:
-            type = array.type
-            type.__class__ = mlir.ir.MemRefType
-            if not type.has_rank:
-                pass
-            # Apply specified factors and partition kind to the array.
-            # Note: We use the dimension size to generate this example "factors".
-            factors = np.ones(type.rank, dtype=int)
-            factors[-1] = type.get_dim_size(type.rank - 1) / 4
-            scalehls.array_partition(array, factors, "cyclic")
+            if(opts_knobs[4] == 'yes'):
+                scalehls.loop_var_bound_removal(band)
 
         # Legalize the IR to make it emittable.
-        scalehls.legalize_to_hlscpp(
-            func, func.sym_name.value == topfunction)
+        scalehls.legalize_to_hlscpp(func, func.sym_name.value == topfunction)
 
         # Optimize memory accesses through store forwarding, etc.
-        scalehls.memory_access_opt(func)
+        if(opts_knobs[5] == 'yes'):
+            scalehls.memory_access_opt(func)
 
         # Apply suitable array partition strategies through analyzing the array access pattern.
         # scalehls.auto_array_partition(func)
@@ -80,9 +122,8 @@ def ScaleHLSopt(source_file, topfunction, outfile):
     buf = io.StringIO()
     scalehls.emit_hlscpp(mod, buf)
     buf.seek(0)
-    if outfile:
-        fout = open(outfile, 'w+')
-        shutil.copyfileobj(buf, fout)
-        fout.close()
-    else:
-        print(buf.read())
+    fout = open(outfile, 'w+')
+    shutil.copyfileobj(buf, fout)
+    fout.close()
+
+    return opts_knobs, opts_knob_names

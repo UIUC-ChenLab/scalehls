@@ -9,15 +9,15 @@ def read_user_input():
             elif re.findall(r'target_source_file_location', line):
                 source_file_raw = re.findall(r'=(.+)', line)
                 source_file = source_file_raw[0].strip()
-                print(source_file)
+                #print(source_file)
             elif re.findall(r'top_function', line):
                 inputtop_raw = re.findall(r'=(.+)', line)
                 inputtop = inputtop_raw[0].strip()
-                print(inputtop)
+                #print(inputtop)
             elif re.findall(r'part(\s)?=', line):
                 inputpart_raw = re.findall(r'=(.+)', line)
                 inputpart = inputpart_raw[0].strip()
-                print(inputpart)
+                #print(inputpart)
             elif re.findall(r'add_files', line):
                 inputfiles.append(line)
     file.close()    
@@ -69,8 +69,17 @@ def process_source_file(inputfile):
                     brace_cout -= 1
                 else:
                     brace_cout -= 1
-            # find loops
-            if(re.findall('for', line)): # only supports one forloop per line
+            # cleanup code                       
+#if re.findall(r'^(\s)*#', line):
+            # temp measure
+            if(re.findall(r'^(\s)*#include', line)): #ignore #include
+                None
+            elif(re.findall(r'^(\s)*#pragma', line)): #ignore #pragma
+                None
+            elif(re.findall(r'using namespace std;', line)): #ignore #pragma
+                None
+            # temp measure
+            elif(re.findall('for', line)): #find loops // only supports one forloop per line
                 if not(re.findall(r'(.)*(//)(.)*(for)(.)*', line)): # ignore for in comment
                     findbound = re.findall(r'(<|>|<=|>=)(.+?);', line) #find bound
                     testint = findbound[0][1].strip().isnumeric()
@@ -81,7 +90,9 @@ def process_source_file(inputfile):
                     var_forlist.append(("loop"+str(loopnum), line.strip(), scope, forbound))
                     newfile.write(line.replace("for", "loop" + str(loopnum)  + ": " + "for"))
                     loopnum += 1
-            else:
+                else: # copy other
+                    newfile.write(line)    
+            else: # copy other
                 newfile.write(line)
             #find array
             arr2part = re.findall(r'(int|float)\s([A-Za-z_]+[A-Za-z_\d]*)\s?(\[[\d]+\])*\s?(\[[\d]+\])+(,|;|\)|' ')', line)
