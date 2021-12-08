@@ -116,11 +116,9 @@ def execute_hls(script_path, verbose=False, timelimit=300):
     else:
         return False
 
-def get_perf (template_path, directives_path, top_function, part, parameters, verbose=False, timelimit=500):
-    # 1: create a new project if needed
-    timestamp = str(int(time.time()))
-    #project_name = top_function+'_'+timestamp
-    project_name = top_function+'_'+str(random.getrandbits(32))
+def get_perf (template_path, directives_path, top_function, part, parameters, project_ident, verbose=False, timelimit=500):
+    
+    project_name = top_function+'_'+project_ident
     script_path = os.path.join(project_name+'.tcl')
 
     # 2: generate a new script using Jinja for synthesis

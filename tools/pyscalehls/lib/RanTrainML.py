@@ -1,22 +1,26 @@
 import numpy as np
 import pandas as pd
 import os
-import logging
-import math
-from sklearn.model_selection import KFold
-from timeit import default_timer as timer
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from scipy.special import beta
-from math import factorial as fact
-from multiprocessing import Process
-import re
+import multiprocessing
+import time
 import random
-import scipy
-import pprint
-import pickle
+
+# import logging
+# import math
+# from sklearn.model_selection import KFold
+# from timeit import default_timer as timer
+# from sklearn.preprocessing import OneHotEncoder
+# from sklearn.tree import DecisionTreeRegressor
+# from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+# from sklearn.model_selection import train_test_split
+# from scipy.special import beta
+# from math import factorial as fact
+# from multiprocessing import Process
+# import re
+# import scipy
+# import pprint
+# import pickle
+
 
 from lib import run_hls
 from lib import generate_directives as gen_dir
@@ -56,6 +60,8 @@ def dataframe_create(parafile, no_partitioning = False):
     list_columns = list_columns+['latency', 'dsp_perc', 'ff_perc', 'lut_perc', 'bram_perc', 'is_feasible', 'is_error']
 
     # initialize the datset to be empty (always)
+    # made global for multiprocessing -> todo using class
+    global dataset
     dataset = pd.DataFrame(columns=list_columns)
 
     # set the feature columns and label columns
@@ -74,49 +80,69 @@ def get_row(df, row):
             srs = srs & (df[col] == val)
         return df[srs]
 
-def generate_random_training_set(dataset, parameter_file, directives_path, template_path, top_function, part, num_initial):
+def threaded_generate_random_training_set(parameter_file, directives_path, template_path, top_function, part):
+    
+    #generate unique name
+    project_ident = str(int(time.time()))+'_'+str(random.getrandbits(16))
+    directive_project_ident = directives_path + '_' + project_ident
+
+    print("Evaluating point "+project_ident)
+
     # generate random training sets
     dir_gen = gen_dir.RandomDirectiveGenerator(parameter_file)
-    for i in range(num_initial):
-        print('Generate design points: {0}/{1}'.format(i, num_initial ))
-        # generate a new design point that doesn't exist in the dataset0 
-        while (True):
-            # generate a new design point
-            _, parameters = dir_gen.generate_directives(out_file_path=directives_path, no_partitioning=False)
 
-            # check if the design point is valid
-            if (get_row(dataset, parameters).empty): 
-                break
-
-        print(parameters)
-                
-        # evaluate the design point
-        new_design_point = run_hls.get_perf(template_path, directives_path, top_function, part, parameters, verbose=False, timelimit=600)
+    while (True):
+        # generate a new design point
         
-        print("new design point found")
-        #new_design_point = pd.DataFrame.from_dict(parameters, orient='columns')
+        _, parameters = dir_gen.generate_directives(out_file_path=directive_project_ident, no_partitioning=False)
 
-        # add the evaluated design point to current dataset
-        dataset = dataset.append(new_design_point, ignore_index=True)
-        #dataset = dataset.append(parameters, ignore_index=True)
-        dataset.to_csv('generated_files/ML_train.csv')
+        # check if the design point is valid
+        if (get_row(dataset, parameters).empty): 
+            break
+
+    new_design_point = run_hls.get_perf(template_path, directive_project_ident, top_function, part, parameters, project_ident, verbose=False, timelimit=600)
+
+    # remove the tcl file
+    try:
+        os.remove(directive_project_ident)
+    except OSError as e:
+        print("Error: %s : %s" % (os.file_path, e.strerror))
+
+    # print("Finishing point "+project_ident)
+
+    return new_design_point
+
+def record_dataframe(result):
+    global dataset
+
+    # add the evaluated design point to current dataset
+    dataset = dataset.append(result, ignore_index=True)
+    #dataset = dataset.append(parameters, ignore_index=True)
+    dataset.to_csv('generated_files/ML_train.csv')
         
     # make sure the is_error column is boolean type
     dataset.is_error = dataset.is_error.astype('bool')
 
-def threaded_generate_random_training_set(parameter_file, directives_path, template_path, top_function, part, num_initial):
-    # generate random training sets
-    dir_gen = gen_dir.RandomDirectiveGenerator(parameter_file)
-    
 
-def random_train_RFML(top_function, part):
+def random_train_RFML(top_function, part, nub_of_init):
+    nub_pro = multiprocessing.cpu_count() - 2
+
     parameter_file = 'generated_files/ML_params.csv'
-    directives_path = 'generated_files/ML_directive.csv'
+    directives_path = 'generated_files/ML_directive'
     template_path = 'generated_files/ML_template.txt'
 
     dataset, feature_columns, label_columns = dataframe_create(parameter_file)
 
-    generate_random_training_set(dataset, parameter_file, directives_path, template_path, top_function, part, num_initial = 2)
+    print("\n")
+    print("Starting Evaluation of {0} Randomly Generated Design Points".format(nub_of_init))
+    with multiprocessing.Pool(processes=nub_pro) as pool:
+        for i in range(nub_of_init):
+            pool.apply_async(threaded_generate_random_training_set, args = (parameter_file, directives_path, template_path, 
+                                                                            top_function, part), callback = record_dataframe)
+
+        pool.close()
+        pool.join()
+    print("Finished Evaluation of {0} Randomly Generated Design Points".format(nub_of_init))
 
     
 

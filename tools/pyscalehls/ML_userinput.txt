@@ -1,10 +1,12 @@
 #target_source_file_location = shouldnotread
-target_source_file_location = ../../samples/AutoScaleHLS_tests/syr2k_32.c
-top_function = syr2k_32
+#target_source_file_location = ../../samples/AutoScaleHLS_tests/syr2k_32.c
+target_source_file_location = ../../samples/AutoScaleHLS_tests/mobilenet_base.cpp
+#top_function = syr2k_32
+top_function = main_graph
 part = xc7k70tfbv676-1
 
 # add file locations
-add_files syr2k_32.c
+add_files generated_files/ML_in.c
 
 #template
 open_solution "solution1"
