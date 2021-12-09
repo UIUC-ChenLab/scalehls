@@ -40,3 +40,15 @@ scalehls-opt -affine-loop-order-opt -remove-variable-bound \
     -affine-store-forward -simplify-memref-access -array-partition -cse -canonicalize \
     -qor-estimation="target-spec=samples/polybench/target-spec.ini" \
     | scalehls-translate -emit-hlscpp
+
+//mobilenet_base
+mlir-clang samples/AutoScaleHLS_tests/mobilenet_base.cpp -function=main_graph -memref-fullrank -raise-scf-to-affine -S |
+scalehls-opt -affine-loop-order-opt -legalize-to-hlscpp="top-func=main_graph" -canonicalize -cse -canonicalize
+    | scalehls-translate -emit-hlscpp
+
+scalehls-opt resnet18.mlir -allow-unregistered-dialect -legalize-onnx \
+    -affine-loop-normalize -canonicalize  \
+    -split-function -convert-linalg-to-affine-loops -legalize-to-hlscpp="top-func=main_graph" \
+    -affine-loop-perfection -affine-loop-order-opt -simplify-affine-if \
+    -affine-store-forward -simplify-memref-access -array-partition -cse -canonicalize \
+    | scalehls-translate -emit-hlscpp > resnet18.cpp

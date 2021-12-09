@@ -1,12 +1,14 @@
 #this assumes that input C file uses output from scalehls
 
 import numpy as np
+import pandas as pd
 import argparse
 
 #AutoHLS dependencies
-from lib import RanTrainML as RTML
+from lib import RandInit as RT
 from lib import DSEinputparse as INPAR
 from lib import pyScaleHLS as PYSHLS
+from lib import DSE_main as DMain
 
 def print_optknobs(opt_knobs, opt_knob_names):
     for i in range(len(opt_knobs) - 1):
@@ -45,22 +47,45 @@ def main():
         source_file, inputtop, inputpart, inputfiles, template = INPAR.read_user_input()
 
     #scaleHLS optimization
-    opt_knobs, opt_knob_names = PYSHLS.ScaleHLSopt(source_file, inputtop, "generated_files/ScaleHLS_opted.c")
-    #print
-    print_optknobs(opt_knobs, opt_knob_names)
+    val = ""
+    while val == "":
+        val = input("Do you want ScaleHLS optimizations? (Y / N)\n")
+        if((val == "Y") or (val == "y") or (val == "yes")):
+            opt_knobs, opt_knob_names = PYSHLS.ScaleHLSopt(source_file, inputtop, "generated_files/ScaleHLS_opted.c")        
+            
+            #print
+            print_optknobs(opt_knobs, opt_knob_names)
 
-    #process input
-    var_forlist, var_arraylist_sized = INPAR.process_source_file("generated_files/ScaleHLS_opted.c")
-    #print
-    print_variables(var_forlist, var_arraylist_sized)
+            var_forlist, var_arraylist_sized = INPAR.process_source_file("generated_files/ScaleHLS_opted.c")
+            #print
+            print_variables(var_forlist, var_arraylist_sized)
 
+        elif((val == "N") or (val == "n") or (val == "no")):
+            var_forlist, var_arraylist_sized = INPAR.process_source_file(source_file)
+            #print
+            print_variables(var_forlist, var_arraylist_sized)   
+    
     #create paramfile
     INPAR.create_params(var_forlist, var_arraylist_sized)
 
     #create template
     INPAR.create_template(source_file, inputfiles, template)
 
-    RTML.random_train_RFML(inputtop, inputpart, nub_of_init = 20)
+    #Create Random Training Set
+    val = ""
+    while val == "":
+        val = input("Generate Random Training Set? (Y / N)\n")
+        if((val == "Y") or (val == "y") or (val == "yes")):
+            dataset, feature_columns = RT.random_train_RFML(inputtop, inputpart, nub_of_init = 1)
+        elif((val == "N") or (val == "n") or (val == "no")):
+            parameter_file = 'generated_files/ML_params.csv'
+            dataset, feature_columns, label_columns = RT.dataframe_create(parameter_file)
+            # dataset = pd.read_csv('generated_files/ML_train.csv', index_col=0)
+            dataset = pd.read_csv('generated_files/ML_train(test).csv', index_col=0)
+            print(dataset)
+
+
+    DMain.DSE_start(dataset, 4, inputtop, inputpart, feature_columns)
     
 
 
