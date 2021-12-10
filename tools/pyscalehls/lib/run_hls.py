@@ -171,8 +171,7 @@ def get_perf (template_path, directives_path, top_function, part, parameters, pr
                 # latency is number of cycles * period, we divide by 1000 because the period is in ns
                 cycles = parse_cosim_report(report_path)
                 if cycles == None: # if something went wrong, like cosim didn't pass
-                    # avg_latency = float('inf')
-                    avg_latency = 'inf'
+                    avg_latency = float('inf')
                     raise(AssertionError, 'Co-sim failed, check code correctness')
                 else:
                     avg_latency = (float(cycles) * period)/1000.0
@@ -183,8 +182,7 @@ def get_perf (template_path, directives_path, top_function, part, parameters, pr
 
     else: # if it does not exist, then the synth must have failed
         print('Cannot find synthesis report')
-        # avg_latency, period, dsp_perc, ff_perc, lut_perc, bram_perc = float('inf'),float('inf'),1,1,1,1
-        avg_latency, period, dsp_perc, ff_perc, lut_perc, bram_perc = 'inf','inf',1,1,1,1
+        avg_latency, period, dsp_perc, ff_perc, lut_perc, bram_perc = float('inf'),float('inf'),1,1,1,1
         is_error = True
     
     # remove the directory

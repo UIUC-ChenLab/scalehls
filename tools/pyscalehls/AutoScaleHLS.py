@@ -49,7 +49,8 @@ def main():
     #scaleHLS optimization
     val = ""
     while val == "":
-        val = input("Do you want ScaleHLS optimizations? (Y / N)\n")
+        # val = input("Do you want ScaleHLS optimizations? (Y / N)\n")
+        val = "y"
         if((val == "Y") or (val == "y") or (val == "yes")):
             opt_knobs, opt_knob_names = PYSHLS.ScaleHLSopt(source_file, inputtop, "generated_files/ScaleHLS_opted.c")        
             
@@ -74,7 +75,8 @@ def main():
     #Create Random Training Set
     val = ""
     while val == "":
-        val = input("Generate Random Training Set? (Y / N)\n")
+        # val = input("Generate Random Training Set? (Y / N)\n")
+        val = "n"
         if((val == "Y") or (val == "y") or (val == "yes")):
             dataset, feature_columns = RT.random_train_RFML(inputtop, inputpart, nub_of_init = 1)
         elif((val == "N") or (val == "n") or (val == "no")):
@@ -85,7 +87,7 @@ def main():
             print(dataset)
 
 
-    DMain.DSE_start(dataset, 4, inputtop, inputpart, feature_columns)
+    DMain.DSE_start(dataset, 50, inputtop, inputpart, feature_columns)
     
 
 

@@ -285,13 +285,37 @@ def getPopulation(dataset, threshold=1.05, exclude_infeasible=True):
             population = population.append(row)
     return population
 
+
 def importanceAnalysis(models, dataset, regr_lat, weights=[1, 0.4, 0.1, 0.1, 0.4]):
     columns = dataset.columns[:-7]
     importances_raw = np.zeros_like(regr_lat.feature_importances_)
     
     for i, regr in enumerate(models):
         importances_raw = importances_raw + regr.feature_importances_ * weights[i]
-    
+
+    #get importance of encoded data
+    importances_raw_named = {}
+    pos = 0
+    for i,variable_name in enumerate(columns):
+        if (re.match('^loop_.+_type$' ,variable_name)):
+            importances_raw_named[variable_name+'_pipeline'] = importances_raw[pos+0]
+            importances_raw_named[variable_name+'_unroll'] = importances_raw[pos+1]
+            importances_raw_named[variable_name+'_none'] = importances_raw[pos+2]
+            pos = pos + 3
+        elif (re.match('^loop_.+_factor$' ,variable_name)):
+            importances_raw_named[variable_name] = importances_raw[pos+0]
+            pos = pos + 1
+        elif (re.match('^array_.+_type$' ,variable_name)):
+            importances_raw_named[variable_name+'_cyclic'] = importances_raw[pos+0]
+            importances_raw_named[variable_name+'_block'] = importances_raw[pos+1]
+            importances_raw_named[variable_name+'_complete'] = importances_raw[pos+2]
+            importances_raw_named[variable_name+'_none'] = importances_raw[pos+3]
+            pos = pos + 4
+        elif (re.match('^array_.+_factor$' ,variable_name)):
+            importances_raw_named[variable_name] = importances_raw[pos+0]
+            pos = pos + 1
+
+    #get importance of cleaned data
     importances = {}
     pos = 0
     for i,variable_name in enumerate(columns):
@@ -302,42 +326,34 @@ def importanceAnalysis(models, dataset, regr_lat, weights=[1, 0.4, 0.1, 0.1, 0.4
             importances[variable_name] = np.sum(importances_raw[pos:pos+1])/np.sum(weights)
             pos = pos + 1
         elif (re.match('^array_.+_type$' ,variable_name)):
-            importances[variable_name] = np.sum(importances_raw[pos:pos+3])/np.sum(weights)
-            pos = pos + 3
+            importances[variable_name] = np.sum(importances_raw[pos:pos+4])/np.sum(weights)
+            pos = pos + 4
         elif (re.match('^array_.+_factor$' ,variable_name)):
             importances[variable_name] = np.sum(importances_raw[pos:pos+1])/np.sum(weights)
             pos = pos + 1
-    return importances
 
-def importanceAdjustment(importances, gamma, prob_scale=1.5):
-    def getMutationProb(normalized_importance, gamma):
-        x = gamma
-        mean = normalized_importance
-        stdev = 0.3 # let's test fixed stdev first
-        y = (x - mean)/stdev
-        return scipy.stats.norm.pdf(y)*np.sqrt(2*np.pi)/2
+    return importances_raw_named, importances
+
+def normalize_importance(importances):
     
     adjusted_importances = importances.copy()
     params = importances.keys()
-    vals = list(importances.values())
-    max_val = np.max(vals)
-    min_val = np.min(vals)
+ 
+    raw_importance_val = np.array([])
     
     for param in params:
-        importance = float(importances[param])
-        
-        # normalized importance
-        normalized_importance = (importance - min_val)/(max_val - min_val)
-        
-        # get adjusted importance/ probability of mutation
-        # adjusted_importance = getMutationProb(normalized_importance, gamma) * prob_scale
-        adjusted_importance = 0.1
-        adjusted_importances.update({param: adjusted_importance})
-    
+        raw_importance_val = np.append(raw_importance_val, float(importances[param]))
+
+    norm = np.linalg.norm(raw_importance_val)
+    normed_importance_val = raw_importance_val / norm
+
+    for i, param in enumerate(params):
+        adjusted_importances.update({param: normed_importance_val[i]})
+
     return adjusted_importances
 
 
-def DSE_searching(dataset, models, total_steps, top_function, part, parameter_file, directives_path, template_path, 
+def DSE_searching(dataset, models, total_steps, top_function, part, parameter_file, directives_path, template_path, \
                                                                 dir_gen, crossover, mutator, writer, feature_columns):
 
     no_partitioning = False    
@@ -372,10 +388,10 @@ def DSE_searching(dataset, models, total_steps, top_function, part, parameter_fi
         print('Gamma: '+str(gamma))
 
         # importance analyis
-        importances = importanceAnalysis([regr_lat, regr_dsp, regr_ff, regr_lut, regr_bram], dataset,  regr_lat)
+        encoded_importance, importances = importanceAnalysis([regr_lat, regr_dsp, regr_ff, regr_lut, regr_bram], dataset,  regr_lat)
 
         # adjust the importances for better exploration
-        adjusted_importances = importanceAdjustment(importances, gamma)
+        normalize_importances = normalize_importance(importances)
 
         # set a counter to detect if we are stuck and cannot find a good value
         escape_count = 0
@@ -392,9 +408,9 @@ def DSE_searching(dataset, models, total_steps, top_function, part, parameter_fi
                 # 1.5 seems to be a good value, however, 1.5 is also quite wide
                 proba_eval = pareto.getProbabilityOfEval(predicted_perf, pareto_frontier, threshold=1.5)
             elif method == 'evo':
-                parameters, proba_eval = evoProposal(no_partitioning, adjusted_importances, gamma, dataset, feature_columns, models, crossover, mutator, pareto_frontier)
+                parameters, proba_eval = evoProposal(no_partitioning, normalize_importances, gamma, dataset, feature_columns, models, crossover, mutator, pareto_frontier)
             elif method == 'mut':
-                parameters, proba_eval = mutProposal(no_partitioning, adjusted_importances, gamma, dataset, feature_columns, models, mutator, pareto_frontier)
+                parameters, proba_eval = mutProposal(no_partitioning, normalize_importances, gamma, dataset, feature_columns, models, mutator, pareto_frontier)
             else:
                 raise(AssertionError, 'None method selected')
 
@@ -414,10 +430,11 @@ def DSE_searching(dataset, models, total_steps, top_function, part, parameter_fi
             print('probability from timeout:'+str(proba_timeout))
             print('total probability of evaluation:'+str(proba_total))
 
-            if ((random_val < proba_total) \
+            # todo: implement with simulated annealing
+            if ((proba_timeout < 0.8) and (proba_eval > 0.1)
                 and get_row(dataset, parameters).empty) \
-                or escape_count > 1000:
-                    if(escape_count > 1000): 
+                or escape_count > 20:
+                    if(escape_count > 20): 
                         print('escape!!')
                     else: 
                         print('New design point found.')
@@ -475,8 +492,8 @@ def DSE_searching(dataset, models, total_steps, top_function, part, parameter_fi
         print(pareto_frontier)
 
         # save data instantly for easier test running
-        dataset.to_csv('gemm_32_out.csv')
-        pareto_frontier.to_csv('gemm_32_out_pareto.csv')
+        dataset.to_csv('DSE_out.csv')
+        pareto_frontier.to_csv('DSE_out_pareto.csv')
         
 
         # increment the global step
@@ -485,7 +502,7 @@ def DSE_searching(dataset, models, total_steps, top_function, part, parameter_fi
         # train the models
         update_models(models, dataset)
         
-        with open('gemm_32_method_records.pickle', 'wb') as f:
+        with open('DSE_method_records.pickle', 'wb') as f:
             pickle.dump(method_records, f)
 
         # break if needed

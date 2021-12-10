@@ -13,7 +13,8 @@ def opts_menu():
 
     val = ""
     while val == "":
-        val = input("Automate ScaleHLS optimization? (Y / N)\n")
+        # val = input("Automate ScaleHLS optimization? (Y / N)\n")
+        val = "y"
         if((val == "Y") or (val == "y") or (val == "yes")):
             opt_knob[0] = 'yes';
             return opt_knob, opt_knob_names

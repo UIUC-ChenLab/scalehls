@@ -272,6 +272,14 @@ class DirectiveMutator(DirectiveGenerator):
     def gen_single_dir(self, knob, context=None):
         offspring, importances = context
         _, random_parameters = self.random_gen.gen_single_dir(knob, clear_partition_scheme=True)
+
+        #sorted from least to most
+        sorted_importance_list = sorted(importances.items(), key=lambda x:x[1], reverse=False)
+        sorted_importance = {}
+
+        #convert to dictionary
+        for a, b in sorted_importance_list:
+            sorted_importance.setdefault(a, []).append(b)
         
         boundary = knob['range']
         if (boundary != 'Variable'):
@@ -284,33 +292,39 @@ class DirectiveMutator(DirectiveGenerator):
         parameters_dict = {} # dictionary of parameters for this directive, to be converted to a pandas dataframe
         
         if (knob.type == 'loop'): # if the type of the tunable knob (directive) is a loop
-            importance_type = importances['loop_'+knob['name']+'_type']
-            importance_factor = importances['loop_'+knob['name']+'_factor']
+            importance_type_name = 'loop_'+knob['name']+'_type'
+            importance_factor_name = 'loop_'+knob['name']+'_factor'
+
+            # if (list(sorted_importance.keys()).index('loop_'+knob['name']+'_type') < (len(importances)/3)):
+            # if (list(sorted_importance.keys()).index('loop_'+knob['name']+'_factor') < (len(importances)/3)):
+            # if (list(sorted_importance.keys()).index('array_'+knob['name']+'_'+knob['scope']+'_dim'+str(int(dim))+'_type') < (len(importances)/3)):
+            # if (list(sorted_importance.keys()).index('array_'+knob['name']+'_'+knob['scope']+'_dim'+str(int(dim))+'_factor') < (len(importances)/3)):
                     
             # Step 1: check the loop boundary -- if it is fixed or not
             # skip
                 
             # Step 2: pick a loop pragma scheme, depending on the boundary type
-            if (rand_val_type < importance_type):
-                scheme = random_parameters['loop_'+knob['name']+'_type']
+            #implement with simulated annealing
+            if (list(sorted_importance.keys()).index(importance_type_name) < (len(importances)/3)):
+                scheme = random_parameters[importance_type_name]
             else:
-                scheme = offspring['loop_'+knob['name']+'_type']
+                scheme = offspring[importance_type_name]
             
             # Step 3: generate the first part of the pragma, and add to the list of parameters
             # copy from the parameters dict
 
             pragma = 'set_directive_'+scheme
             directives_list.append(pragma)
-            parameters_dict['loop_'+knob['name']+'_type'] = scheme
+            parameters_dict[importance_type_name] = scheme
             
             # Step 4: generate the loop factor for the unrolling factor if needed
             factor = 1
             if (scheme == 'unroll'):
                 # if the scheme is unroll then keep the factor
-                if (rand_val_factor < importance_factor):
-                    factor = random_parameters['loop_'+knob['name']+'_factor']
+                if (list(sorted_importance.keys()).index(importance_factor_name) < (len(importances)/3)):
+                    factor = random_parameters[importance_factor_name]
                 else:
-                    factor = offspring['loop_'+knob['name']+'_factor']
+                    factor = offspring[importance_factor_name]
                     
                 # incases that we take the scheme from one side, and factor from other and the factor is 0
                 # then we need to reroll the factor
@@ -320,9 +334,9 @@ class DirectiveMutator(DirectiveGenerator):
                         factor = random.randrange(2, min(boundary+1, 256))
                         
                 directives_list.append('-factor '+str(factor))
-                parameters_dict['loop_'+knob['name']+'_factor'] = factor
+                parameters_dict[importance_factor_name] = factor
             else: # if not unroll then we set this factor to 0 for safety and debugging purpose
-                parameters_dict['loop_'+knob['name']+'_factor'] = 0
+                parameters_dict[importance_factor_name] = 0
 
             # Step 5: add the loop label to the pragma
             loop_label = '{0}/{1}'.format(knob['scope'], knob['name'])
@@ -344,16 +358,17 @@ class DirectiveMutator(DirectiveGenerator):
             else:
                 available_schemes = ['none', 'cyclic', 'block']
             
-            importance_type = importances['array_'+knob['name']+'_'+knob['scope']+'_dim'+str(int(dim))+'_type']
-            importance_factor = importances['array_'+knob['name']+'_'+knob['scope']+'_dim'+str(int(dim))+'_factor']
+            importance_type_name = 'array_'+knob['name']+'_'+knob['scope']+'_dim'+str(int(dim))+'_type'
+            importance_factor_name = 'array_'+knob['name']+'_'+knob['scope']+'_dim'+str(int(dim))+'_factor'
 
             # to ensure that the partitioning scheme is consistent for an array
             # check if there is already a partitioning scheme picked for this array
             # if so, just use the same factor
-            if (rand_val_type < importance_type):
-                selected_scheme = random_parameters['array_'+knob['name']+'_'+knob['scope']+'_dim'+str(int(dim))+'_type']
+
+            if (list(sorted_importance.keys()).index(importance_type_name) < (len(importances)/3)):
+                selected_scheme = random_parameters[importance_type_name]
             else:
-                selected_scheme = offspring['array_'+knob['name']+'_'+knob['scope']+'_dim'+str(int(dim))+'_type']
+                selected_scheme = offspring[importance_type_name]
                 
             if(variable not in self.partition_schemes.keys()):
                 partition_scheme = selected_scheme
@@ -370,17 +385,17 @@ class DirectiveMutator(DirectiveGenerator):
                     partition_scheme = 'none'
             
             # only generate the partitioning directives when it's not 'none'
-            parameters_dict['array_'+knob['name']+'_'+knob['scope']+'_dim'+str(int(dim))+'_type'] = partition_scheme
+            parameters_dict[importance_type_name] = partition_scheme
             if partition_scheme != 'none':
                 # store the partition scheme to the list and dict
                 directives_list = directives_list+[pragma, '-type '+partition_scheme]    
          
                 if partition_scheme != 'complete':
                     # get the factor from input parameters
-                    if (rand_val_factor < importance_factor):
-                        factor = random_parameters['array_'+knob['name']+'_'+knob['scope']+'_dim'+str(int(dim))+'_factor']
+                    if (list(sorted_importance.keys()).index(importance_factor_name) < (len(importances)/3)):
+                        factor = random_parameters[importance_factor_name]
                     else:
-                        factor = offspring['array_'+knob['name']+'_'+knob['scope']+'_dim'+str(int(dim))+'_factor']
+                        factor = offspring[importance_factor_name]
                         
                     # incases that we take the scheme from one side, and factor from other and the factor is 0
                     # then we need to reroll the factor
@@ -397,9 +412,9 @@ class DirectiveMutator(DirectiveGenerator):
                     factor = 0
 
                 directives_list.append(variable)
-                parameters_dict['array_'+knob['name']+'_'+knob['scope']+'_dim'+str(int(dim))+'_factor'] = factor
+                parameters_dict[importance_factor_name] = factor
             else: # if it is none, i.e. do not partition the array
-                parameters_dict['array_'+knob['name']+'_'+knob['scope']+'_dim'+str(int(dim))+'_factor'] = 0
+                parameters_dict[importance_factor_name] = 0
         else:
             raise AssertionError('Invalid knob type')
             

@@ -110,6 +110,8 @@ def checkParetoOptimal(design_point, pareto_frontier, threshold=1.5):
     if not (pareto_frontier.columns.to_list() == ['cost','latency']):
         print(pareto_frontier.columns.to_list())
         raise AssertionError('Incorrect dataframe format for pareto frontier')
+
+    
         
     latency = design_point['latency']
     cost = 0.4*design_point['dsp_perc'] \
@@ -119,6 +121,7 @@ def checkParetoOptimal(design_point, pareto_frontier, threshold=1.5):
     
     pareto_frontier = pareto_frontier.append({'cost':cost, 'latency':latency}, ignore_index=True)
     ranking = pareto_frontier['latency'].rank(method='min')
+
     rank = int(ranking.iloc[-1])
     
     # if it's the last one
