@@ -273,6 +273,8 @@ class DirectiveMutator(DirectiveGenerator):
         offspring, importances = context
         _, random_parameters = self.random_gen.gen_single_dir(knob, clear_partition_scheme=True)
 
+        
+
         #sorted from least to most
         sorted_importance_list = sorted(importances.items(), key=lambda x:x[1], reverse=False)
         sorted_importance = {}
@@ -305,7 +307,7 @@ class DirectiveMutator(DirectiveGenerator):
                 
             # Step 2: pick a loop pragma scheme, depending on the boundary type
             #implement with simulated annealing
-            if (list(sorted_importance.keys()).index(importance_type_name) < (len(importances)/3)):
+            if (list(sorted_importance.keys()).index(importance_type_name) > (len(importances)/2)):
                 scheme = random_parameters[importance_type_name]
             else:
                 scheme = offspring[importance_type_name]
@@ -321,7 +323,7 @@ class DirectiveMutator(DirectiveGenerator):
             factor = 1
             if (scheme == 'unroll'):
                 # if the scheme is unroll then keep the factor
-                if (list(sorted_importance.keys()).index(importance_factor_name) < (len(importances)/3)):
+                if (list(sorted_importance.keys()).index(importance_factor_name) > (len(importances)/2)):
                     factor = random_parameters[importance_factor_name]
                 else:
                     factor = offspring[importance_factor_name]
@@ -365,7 +367,7 @@ class DirectiveMutator(DirectiveGenerator):
             # check if there is already a partitioning scheme picked for this array
             # if so, just use the same factor
 
-            if (list(sorted_importance.keys()).index(importance_type_name) < (len(importances)/3)):
+            if (list(sorted_importance.keys()).index(importance_type_name) > (len(importances)/2)):
                 selected_scheme = random_parameters[importance_type_name]
             else:
                 selected_scheme = offspring[importance_type_name]
@@ -392,7 +394,7 @@ class DirectiveMutator(DirectiveGenerator):
          
                 if partition_scheme != 'complete':
                     # get the factor from input parameters
-                    if (list(sorted_importance.keys()).index(importance_factor_name) < (len(importances)/3)):
+                    if (list(sorted_importance.keys()).index(importance_factor_name) > (len(importances)/2)):
                         factor = random_parameters[importance_factor_name]
                     else:
                         factor = offspring[importance_factor_name]
