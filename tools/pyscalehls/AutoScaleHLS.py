@@ -25,6 +25,9 @@ def print_variables(var_forlist, var_arraylist_sized):
 
 def main():
     parser = argparse.ArgumentParser(prog='Cfor_lex')
+    parser.add_argument('-if', dest='inputfile',
+                    metavar="inputfile",
+                    help='maunual userinput file')
     parser.add_argument('-i', dest='input',
                         metavar="input",
                         help='maunual input file')
@@ -49,8 +52,8 @@ def main():
     #scaleHLS optimization
     val = ""
     while val == "":
-        # val = input("Do you want ScaleHLS optimizations? (Y / N)\n")
-        val = "y"
+        val = input("Do you want ScaleHLS optimizations? (Y / N)\n")
+        # val = "y"
         if((val == "Y") or (val == "y") or (val == "yes")):
             opt_knobs, opt_knob_names = PYSHLS.ScaleHLSopt(source_file, inputtop, "generated_files/ScaleHLS_opted.c")        
             
@@ -75,10 +78,10 @@ def main():
     #Create Random Training Set
     val = ""
     while val == "":
-        # val = input("Generate Random Training Set? (Y / N)\n")
-        val = "n"
+        val = input("Generate Random Training Set? (Y / N)\n")
+        # val = "n"
         if((val == "Y") or (val == "y") or (val == "yes")):
-            dataset, feature_columns = RT.random_train_RFML(inputtop, inputpart, nub_of_init = 1)
+            dataset, feature_columns = RT.random_train_RFML(inputtop, inputpart, nub_of_init = 20)
         elif((val == "N") or (val == "n") or (val == "no")):
             parameter_file = 'generated_files/ML_params.csv'
             dataset, feature_columns, label_columns = RT.dataframe_create(parameter_file)

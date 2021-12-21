@@ -10,6 +10,7 @@ from sklearn.model_selection import train_test_split
 from scipy.special import beta
 from math import factorial as fact
 from multiprocessing import Process
+import os
 import re
 import random
 import scipy
@@ -371,6 +372,9 @@ def DSE_searching(dataset, models, total_steps, top_function, part, parameter_fi
     while True:
         print('Globa step: '+str(step))
 
+        project_ident = str(int(time.time()))+'_'+str(random.getrandbits(16))
+        directive_project_ident = directives_path + '_' + project_ident
+
         # select a point proposal method based on beta distribution
         method = selectMethod(method_records, view_boundary=30)
 
@@ -392,68 +396,70 @@ def DSE_searching(dataset, models, total_steps, top_function, part, parameter_fi
 
         # adjust the importances for better exploration
         normalize_importances = normalize_importance(importances)
+        
+        print("importances")
+        print(importances)
 
         # set a counter to detect if we are stuck and cannot find a good value
         escape_count = 0
+        
+        # while start!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-        while (True):
-            '''generate a new design point'''
-            if method == 'rand':
-                parameters = randProposal(directives_path, no_partitioning, dir_gen)
-
-                # make predictions on the performance
-                predicted_perf, _ = predict_perf(parameters, models, feature_columns)
-
-                # calculate the probability of evaluating the point, based on it's quality (how close it is to the Pareto curve)
-                # 1.5 seems to be a good value, however, 1.5 is also quite wide
-                proba_eval = pareto.getProbabilityOfEval(predicted_perf, pareto_frontier, threshold=1.5)
-            elif method == 'evo':
-                parameters, proba_eval = evoProposal(no_partitioning, normalize_importances, gamma, dataset, feature_columns, models, crossover, mutator, pareto_frontier)
-            elif method == 'mut':
-                parameters, proba_eval = mutProposal(no_partitioning, normalize_importances, gamma, dataset, feature_columns, models, mutator, pareto_frontier)
-            else:
-                raise(AssertionError, 'None method selected')
+        '''generate a new design point'''
+        if method == 'rand':
+            parameters = randProposal(directive_project_ident, no_partitioning, dir_gen)
 
             # make predictions on the performance
-            predicted_perf, proba_timeout = predict_perf(parameters, models, feature_columns)
+            predicted_perf, _ = predict_perf(parameters, models, feature_columns)
 
-            # increment the escape count
-            escape_count = escape_count + 1
+            # calculate the probability of evaluating the point, based on it's quality (how close it is to the Pareto curve)
+            # 1.5 seems to be a good value, however, 1.5 is also quite wide
+            proba_eval = pareto.getProbabilityOfEval(predicted_perf, pareto_frontier, threshold=1.5)
+        elif method == 'evo':
+            parameters, proba_eval = evoProposal(no_partitioning, normalize_importances, gamma, dataset, feature_columns, models, crossover, mutator, pareto_frontier)
+        elif method == 'mut':
+            parameters, proba_eval = mutProposal(no_partitioning, normalize_importances, gamma, dataset, feature_columns, models, mutator, pareto_frontier)
+        else:
+            raise(AssertionError, 'None method selected')
 
-            random_val = np.random.rand(1)[0]
-            proba_total = proba_eval*proba_timeout
-            print(predicted_perf)
-            print('Design:')
-            print(parameters)
-            print('random value:'+str(random_val))
-            print('probability from pareto: '+str(proba_eval))
-            print('probability from timeout:'+str(proba_timeout))
-            print('total probability of evaluation:'+str(proba_total))
+        # make predictions on the performance
+        predicted_perf, proba_timeout = predict_perf(parameters, models, feature_columns)
 
-            # todo: implement with simulated annealing
-            if ((proba_timeout < 0.8) and (proba_eval > 0.1)
-                and get_row(dataset, parameters).empty) \
-                or escape_count > 20:
-                    if(escape_count > 20): 
-                        print('escape!!')
-                    else: 
-                        print('New design point found.')
-                    break
+        # increment the escape count
+        escape_count = escape_count + 1
+
+        random_val = np.random.rand(1)[0]
+        proba_total = proba_eval*proba_timeout
+        print(predicted_perf)
+        print('Design:')
+        print(parameters)
+        print('random value:'+str(random_val))
+        print('probability from pareto: '+str(proba_eval))
+        print('probability from timeout:'+str(proba_timeout))
+        print('total probability of evaluation:'+str(proba_total))
+
+        # while end!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
         print(parameters)
         # output the directives
-        writer.generate_directives(out_file_path=directives_path, no_partitioning=no_partitioning,context=parameters)
+        writer.generate_directives(out_file_path=directive_project_ident, no_partitioning=no_partitioning,context=parameters)
 
         # evaluate the design point
-        project_ident = str(int(time.time()))+'_'+str(random.getrandbits(16))
+
         new_design_point = run_hls.get_perf(template_path, 
-                                    directives_path, 
+                                    directive_project_ident, 
                                     top_function, 
                                     part, 
                                     parameters,
                                     project_ident,
                                     verbose=False,
                                     timelimit=800)
+
+        # remove the tcl file
+        try:
+            os.remove(directive_project_ident)
+        except OSError as e:
+            print("Error: %s : %s" % (os.file_path, e.strerror))
 
         print(new_design_point)
 

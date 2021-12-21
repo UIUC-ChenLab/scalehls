@@ -1,9 +1,0 @@
-
-
-set_directive_pipeline syr2k_32/loop2
-set_directive_array_partition -type complete -dim 1 syr2k_32 v2
-set_directive_array_partition -type complete -dim 2 syr2k_32 v2
-set_directive_array_partition -type block -factor 32 -dim 1 syr2k_32 v3
-
-
-set_directive_array_partition -type cyclic -factor 4 -dim 2 syr2k_32 v4
