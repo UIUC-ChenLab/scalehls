@@ -38,12 +38,14 @@ def read_template():
 
 def process_source_file(inputfile):
     var_forlist = []
+    var_forlist_scoped = []
     var_arraylist_raw = []
     var_arraylist_sized = []
     filebuf = []
     loopnum = 0
     arraynum = 0
     brace_cout = 0
+    for_brace_cout = 0
     scope = None
     newfile = open ("generated_files/ML_in.c", 'w')
     with open(inputfile, 'r') as file:
@@ -60,7 +62,13 @@ def process_source_file(inputfile):
                     brace_cout += 1
                 else:
                     brace_cout += 1
+                
+                #for band
+                if for_brace_cout > 0:
+                    for_brace_cout += 1
+
             if(re.findall('}', line)):
+                #function scope
                 if brace_cout == 1:
                     filebuf.clear() #clear buf when brackets are matched
                     scope = None
@@ -69,6 +77,13 @@ def process_source_file(inputfile):
                     brace_cout -= 1
                 else:
                     brace_cout -= 1
+                
+                #for band
+                if for_brace_cout == 1:
+                    var_forlist_scoped.append(loopnum - 1)
+                    for_brace_cout -= 1
+                else:
+                    for_brace_cout -= 1
             # cleanup code                       
 #if re.findall(r'^(\s)*#', line):
             # temp measure
@@ -78,9 +93,14 @@ def process_source_file(inputfile):
                 None
             elif(re.findall(r'using namespace std;', line)): #ignore #pragma
                 None
-            # temp measure
+            # todo: temp measure -> implement using MLIR IR
             elif(re.findall('for', line)): #find loops // only supports one forloop per line
                 if not(re.findall(r'(.)*(//)(.)*(for)(.)*', line)): # ignore for in comment
+                    #for band counter
+                    if for_brace_cout == 0: 
+                        var_forlist_scoped.append(loopnum)
+                        for_brace_cout += 1
+
                     findbound = re.findall(r'(<|>|<=|>=)(.+?);', line) #find bound
                     testint = findbound[0][1].strip().isnumeric()
                     if testint: # test if variable bound
@@ -117,7 +137,7 @@ def process_source_file(inputfile):
         else:
             var_arraylist_sized.append(item)
     
-    return var_forlist, var_arraylist_sized
+    return var_forlist, var_arraylist_sized, var_forlist_scoped
 
 def create_params(var_forlist, var_arraylist_sized):
     paramfile = open ("generated_files/ML_params.csv", 'w')

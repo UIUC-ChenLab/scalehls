@@ -60,15 +60,18 @@ def main():
             #print
             print_optknobs(opt_knobs, opt_knob_names)
 
-            var_forlist, var_arraylist_sized = INPAR.process_source_file("generated_files/ScaleHLS_opted.c")
+            var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file("generated_files/ScaleHLS_opted.c")
             #print
             print_variables(var_forlist, var_arraylist_sized)
 
         elif((val == "N") or (val == "n") or (val == "no")):
-            var_forlist, var_arraylist_sized = INPAR.process_source_file(source_file)
+            var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file(source_file)
             #print
             print_variables(var_forlist, var_arraylist_sized)   
     
+    for i in var_forlist_scoped:
+        print(i)
+
     #create paramfile
     INPAR.create_params(var_forlist, var_arraylist_sized)
 
@@ -81,16 +84,16 @@ def main():
         val = input("Generate Random Training Set? (Y / N)\n")
         # val = "n"
         if((val == "Y") or (val == "y") or (val == "yes")):
-            dataset, feature_columns = RT.random_train_RFML(inputtop, inputpart, nub_of_init = 20)
+            dataset, feature_columns = RT.random_train_RFML(inputtop, inputpart, nub_of_init = 120)
         elif((val == "N") or (val == "n") or (val == "no")):
             parameter_file = 'generated_files/ML_params.csv'
             dataset, feature_columns, label_columns = RT.dataframe_create(parameter_file)
             # dataset = pd.read_csv('generated_files/ML_train.csv', index_col=0)
-            dataset = pd.read_csv('generated_files/ML_train(test).csv', index_col=0)
+            dataset = pd.read_csv('generated_files/ML_train(3mm).csv', index_col=0)
             print(dataset)
 
 
-    DMain.DSE_start(dataset, 50, inputtop, inputpart, feature_columns)
+    DMain.DSE_start(dataset, 150, inputtop, inputpart, feature_columns)
     
 
 

@@ -1,5 +1,8 @@
-target_source_file_location = ../../samples/AutoScaleHLS_tests/syr2k_32.c
-top_function = syr2k_32
+#target_source_file_location = ../../samples/AutoScaleHLS_tests/syr2k_32.c
+#top_function = syr2k_32
+target_source_file_location = ../../samples/AutoScaleHLS_tests/3mm.c
+top_function = kernel_3mm
+
 part = xc7k70tfbv676-1
 
 # add file locations

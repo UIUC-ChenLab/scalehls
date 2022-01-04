@@ -50,6 +50,18 @@ class DirectiveGenerator():
         print("was here")
         return ''
 
+class InitialDirectiveGenerator(DirectiveGenerator):
+    
+
+
+
+
+    
+    
+    
+    print("test")
+
+
 
 class RandomDirectiveGenerator(DirectiveGenerator):
     def gen_single_dir(self, knob, context=None, clear_partition_scheme=False):
