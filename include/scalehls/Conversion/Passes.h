@@ -31,6 +31,9 @@ std::unique_ptr<Pass> createQuantizeOnnxPass();
 /// Onnx kernel legalization pass.
 std::unique_ptr<Pass> createLegalizeOnnxPass();
 
+// Onnx to Tosa pass. 
+std::unique_ptr<Pass> createConvertOnnxToTosaPass();
+
 void registerConversionPasses();
 
 #define GEN_PASS_CLASSES

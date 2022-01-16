@@ -67,4 +67,23 @@ def QuantizeOnnx : Pass<"quantize-onnx", "FuncOp"> {
   let constructor = "mlir::scalehls::createQuantizeOnnxPass()";
 }
 
+//===----------------------------------------------------------------------===//
+// ONNX to TOSA Pass
+//===----------------------------------------------------------------------===//
+
+def ConvertOnnxToTosa : Pass<"convert-onnx-to-tosa", "ModuleOp"> {
+  let summary = "Convert the operations from ONNX dialect into TOSA dialect";
+  let description = [{
+    This pass only supports Constant, Conv, Relu, MaxPoolSingleOut operation of
+    ONNX dialect.
+  }];
+
+  let constructor = "mlir::scalehls::createConvertOnnxToTosaPass()";
+
+  let options = [
+    Option<"externalizeConstant", "externalize-constant", "bool",
+           /*default=*/"true", "Whether externalize constant operations">
+  ];
+}
+
 #endif // SCALEHLS_CONVERSION_PASSES_TD

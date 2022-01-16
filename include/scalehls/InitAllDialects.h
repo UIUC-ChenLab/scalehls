@@ -33,7 +33,8 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
     mlir::arith::ArithmeticDialect,
     mlir::scf::SCFDialect,
     mlir::linalg::LinalgDialect,
-    mlir::LLVM::LLVMDialect
+    mlir::LLVM::LLVMDialect,
+    mlir::tosa::TosaDialect
   >();
   // clang-format on
 }
