@@ -29,7 +29,7 @@ static void updateParetoPoints(SmallVector<DesignPointType, 16> &paretoPoints) {
     return (a.latency < b.latency ||
             (a.latency == b.latency && a.dspNum < b.dspNum));
   };
-  std::sort(paretoPoints.begin(), paretoPoints.end(), latencyThenDspNum);
+  llvm::sort(paretoPoints, latencyThenDspNum);
 
   // Find pareto frontiers. After the sorting, the first design point must be a
   // pareto point.
@@ -163,8 +163,7 @@ TileConfig LoopDesignSpace::getTileConfig(TileList tileList) {
     auto tile = tileList[i];
     auto validSizes = validTileSizesList[i];
 
-    auto idx = std::find(validSizes.begin(), validSizes.end(), tile) -
-               validSizes.begin();
+    auto idx = llvm::find(validSizes, tile) - validSizes.begin();
 
     assert(idx >= 0 && idx < (long)validSizes.size() && "invalid tile list");
 
@@ -342,7 +341,7 @@ LoopDesignSpace::getRandomClosestNeighbor(LoopDesignPoint point,
     return Optional<TileConfig>();
 
   // Sort candidate configs and collect the closest points.
-  std::sort(candidateConfigs.begin(), candidateConfigs.end());
+  llvm::sort(candidateConfigs);
   SmallVector<TileConfig, 8> closestConfigs;
   float minDistance = maxDistance;
 
@@ -356,8 +355,8 @@ LoopDesignSpace::getRandomClosestNeighbor(LoopDesignPoint point,
 
   // Randomly pick one as the return point.
   std::srand(std::time(0));
-  std::random_shuffle(closestConfigs.begin(), closestConfigs.end(),
-                      [&](int i) { return std::rand() % i; });
+  llvm::shuffle(closestConfigs.begin(), closestConfigs.end(),
+                []() { return std::rand(); });
 
   return closestConfigs.front();
 }
@@ -369,8 +368,8 @@ void LoopDesignSpace::exploreLoopDesignSpace(unsigned maxIterNum,
   // Exploration loop of the dse.
   for (unsigned i = 0; i < maxIterNum; ++i) {
     std::srand(std::time(0));
-    std::random_shuffle(paretoPoints.begin(), paretoPoints.end(),
-                        [&](int i) { return std::rand() % i; });
+    llvm::shuffle(paretoPoints.begin(), paretoPoints.end(),
+                  []() { return std::rand(); });
 
     bool foundValidNeighbor = false;
     for (auto &point : paretoPoints) {
@@ -657,7 +656,7 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
     targetLoops.clear();
 
     // Sort the candidate loops.
-    std::sort(candidateLoops.begin(), candidateLoops.end());
+    llvm::sort(candidateLoops);
 
     // Traverse all candidates to check whether applying fully loop unrolling
     // has violation with the resource constraints. If so, add all inner loops
