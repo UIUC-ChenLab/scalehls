@@ -89,8 +89,11 @@ def process_source_file_array(inputfile):
             # temp measure
             if(re.findall(r'^(\s)*#include', line)): #ignore #include
                 None
-            # elif(re.findall(r'^(\s)*#pragma', line)): #ignore #pragma
-            #     None
+            elif(re.findall(r'^(\s)*#pragma', line)):
+                if(re.findall(r'^(\s)*#pragma HLS pipeline II', line)): #keep pipeline
+                    newfile.write(line)
+                else: #ignore #pragma
+                    None 
             elif(re.findall(r'using namespace std;', line)): #ignore #pragma
                 None
             # todo: temp measure -> implement using MLIR IR

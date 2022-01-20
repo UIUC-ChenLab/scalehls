@@ -5,7 +5,16 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <algorithm>
+#include <ap_axi_sdata.h>
+#include <ap_fixed.h>
+#include <ap_int.h>
+#include <hls_math.h>
+#include <hls_stream.h>
+#include <math.h>
+#include <stdint.h>
 
+using namespace std;
 
 /// This is top function.
 /// Latency=2128, interval=2128
@@ -17,9 +26,24 @@ void test_syr2k(
   float v3[32][32],
   float v4[32][32]
 ) {	// L1, [0,2128)
+  #pragma HLS interface s_axilite port=return bundle=ctrl
+  #pragma HLS interface s_axilite port=v0 bundle=ctrl
+  #pragma HLS interface s_axilite port=v1 bundle=ctrl
+  #pragma HLS interface bram port=v2
+  #pragma HLS interface bram port=v3
+  #pragma HLS interface bram port=v4
 
+  #pragma HLS array_partition variable=v2 cyclic factor=4 dim=1
+  #pragma HLS array_partition variable=v2 cyclic factor=4 dim=2
+  #pragma HLS resource variable=v2 core=ram_s2p_bram
 
+  #pragma HLS array_partition variable=v3 cyclic factor=4 dim=1
+  #pragma HLS array_partition variable=v3 cyclic factor=8 dim=2
+  #pragma HLS resource variable=v3 core=ram_s2p_bram
 
+  #pragma HLS array_partition variable=v4 cyclic factor=4 dim=1
+  #pragma HLS array_partition variable=v4 cyclic factor=8 dim=2
+  #pragma HLS resource variable=v4 core=ram_s2p_bram
 
   for (int v5 = 0; v5 < 4; v5 += 1) {	// L2, [0,2126), iterCycle=84, II=8
     for (int v6 = 0; v6 < 8; v6 += 1) {	// L3, [0,590), iterCycle=84, II=8

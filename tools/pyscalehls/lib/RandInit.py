@@ -131,6 +131,8 @@ def random_train_RFML(top_function, part, nub_of_init):
     directives_path = 'generated_files/ML_directive'
     template_path = 'generated_files/ML_template.txt'
 
+    global dataset
+
     dataset, feature_columns, label_columns = dataframe_create(parameter_file)
 
     print("\n")

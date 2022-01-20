@@ -55,10 +55,9 @@ def main():
         val = input("What ScaleHLS optimizations? (Manual / DSE / None)\n")
         if((val == "DSE") or (val == "D") or (val == "d")):
             PYSHLS.scalehls_dse(source_file, inputtop)
-            
-            
-            print("dse done")
-            return 0     
+
+            var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file_array('generated_files/ScaleHLS_DSE_out.cpp')
+            print_variables(var_forlist, var_arraylist_sized)
         elif((val == "Manual") or (val == "M") or (val == "m")):
             opt_knobs, opt_knob_names = PYSHLS.ScaleHLSopt(source_file, inputtop, "generated_files/ScaleHLS_opted.c")   
             print_optknobs(opt_knobs, opt_knob_names)
@@ -67,8 +66,10 @@ def main():
             print_variables(var_forlist, var_arraylist_sized)
         elif((val == "None") or (val == "N") or (val == "n")):
             # var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file(source_file)
-            var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file_array(source_file)
-            print_variables(var_forlist, var_arraylist_sized)   
+
+            var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file_array('generated_files/ScaleHLS_DSE_out.cpp')
+            
+            print_variables(var_forlist, var_arraylist_sized)
     
     for i in var_forlist_scoped:
         print(i)
@@ -85,16 +86,17 @@ def main():
         val = input("Generate Random Training Set? (Y / N)\n")
         # val = "n"
         if((val == "Y") or (val == "y") or (val == "yes")):
-            dataset, feature_columns = RT.random_train_RFML(inputtop, inputpart, nub_of_init = 60)
+            dataset, feature_columns = RT.random_train_RFML(inputtop, inputpart, nub_of_init = 18)
+            print(dataset)
         elif((val == "N") or (val == "n") or (val == "no")):
             parameter_file = 'generated_files/ML_params.csv'
             dataset, feature_columns, label_columns = RT.dataframe_create(parameter_file)
             # dataset = pd.read_csv('generated_files/ML_train.csv', index_col=0)
-            dataset = pd.read_csv('generated_files/ML_train(3mmdse80).csv', index_col=0)
+            dataset = pd.read_csv('generated_files/ML_train(syr2k).csv', index_col=0)
             print(dataset)
 
 
-    DMain.DSE_start(dataset, 100, inputtop, inputpart, feature_columns)
+    DMain.DSE_start(dataset, 150, inputtop, inputpart, feature_columns)
     
 
 

@@ -65,65 +65,19 @@ def do_run(command):
     return ret.stdout
 
 def scalehls_dse(source_file, inputtop):
-    source_file = '../../samples/AutoScaleHLS_tests/3mm.c'
-    inputtop = 'kernel_3mm'
+    print("Starting ScaleHLS DSE")
+
     targetspec = 'target-spec=target-spec.ini'
 
     p1 = subprocess.Popen(['mlir-clang', source_file, '-function=' + inputtop, '-memref-fullrank', '-raise-scf-to-affine', '-S'],
                             stdout=subprocess.PIPE)                           
     process = subprocess.run(['scalehls-opt', '-dse=top-func='+ inputtop + ' output-path=./generated_files/ csv-path=./generated_files/ ' + targetspec, '-debug-only=scalehls'], 
                             stdin=p1.stdout, stdout=subprocess.DEVNULL)
-    
-    print(process.stdout)
 
-    fout = open('generated_files/'+ inputtop + '_pareto_0.cpp', 'wb')
+    fout = open('generated_files/'+ 'ScaleHLS_DSE_out.cpp', 'wb')
     subprocess.run(['scalehls-translate', '-emit-hlscpp', 'generated_files/'+ inputtop + '_pareto_0.mlir'], stdout=fout)
 
-def scalehls_pipeline(source_file, topfunction, target):
-    opts_knobs, opts_knob_names = opts_menu()
-
-    fin = do_run(['mlir-clang', '-S',
-            '-function=' + topfunction,
-            '-memref-fullrank',
-            '-raise-scf-to-affine',
-            source_file])
-
-    ctx = mlir.ir.Context()
-    scalehls.register_dialects(ctx)
-    mod = mlir.ir.Module.parse(fin, ctx)
-
-    for func in mod.body:
-        loop_count = 0
-
-        if not isinstance(func, builtin.FuncOp):
-            pass
-        func.__class__ = builtin.FuncOp       
-
-        # Traverse all suitable loop bands in the function.
-        bands = scalehls.LoopBandList(func)
-        for band in bands:
-
-            loop_count = loop_count + band.depth - 1
-
-            if target < loop_count + band.depth - 1:
-                #loop pipelining
-                scalehls.loop_pipelining(band, 1, 3)  # targetII = 3
-
-            loop_count = loop_count + band.depth - 1
-
-        # Legalize the IR to make it emittable.
-        scalehls.legalize_to_hlscpp(func, func.sym_name.value == topfunction)
-
-    # Emit optimized MLIR to HLS C++.
-    buf = io.StringIO()
-    scalehls.emit_hlscpp(mod, buf)
-    buf.seek(0)
-    fout = open(source_file, 'w+')
-    shutil.copyfileobj(buf, fout)
-    fout.close()
-
-    return 0
-
+    print("Finished ScaleHLS DSE")
 
 def ScaleHLSopt(source_file, topfunction, outfile):
     opts_knobs, opts_knob_names = opts_menu()

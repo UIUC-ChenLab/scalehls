@@ -1,0 +1,6 @@
+set_directive_array_partition -type block -factor 16 -dim 1 test_syr2k v2
+set_directive_array_partition -type block -factor 32 -dim 2 test_syr2k v2
+set_directive_array_partition -type block -factor 8 -dim 1 test_syr2k v3
+set_directive_array_partition -type block -factor 2 -dim 2 test_syr2k v3
+set_directive_array_partition -type cyclic -factor 16 -dim 1 test_syr2k v4
+set_directive_array_partition -type cyclic -factor 8 -dim 2 test_syr2k v4
