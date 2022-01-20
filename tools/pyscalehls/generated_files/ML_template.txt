@@ -1,0 +1,14 @@
+open_project {{ project_name }}
+set_top {{ top_function }}
+add_files ../../samples/AutoScaleHLS_tests/3mm_scalehlsdse.c
+open_solution "solution1"
+set_part { {{part}} }
+create_clock -period 10 -name default
+source {{ directives_path }}
+{% if synth %}
+csynth_design
+{% endif %}
+{%- if cosim -%}
+cosim_design -O -reduce_diskspace
+{% endif %}
+exit

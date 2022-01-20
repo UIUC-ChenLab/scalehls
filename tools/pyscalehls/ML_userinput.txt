@@ -1,12 +1,18 @@
 #target_source_file_location = ../../samples/AutoScaleHLS_tests/syr2k_32.c
 #top_function = syr2k_32
+
 target_source_file_location = ../../samples/AutoScaleHLS_tests/3mm.c
 top_function = kernel_3mm
+
+#target_source_file_location = ../../samples/AutoScaleHLS_tests/3mm_scalehlsdse.c
+#top_function = kernel_3mm_scalehls_dse
 
 part = xc7k70tfbv676-1
 
 # add file locations
-add_files generated_files/ML_in.c
+# add_files generated_files/ML_in.c
+
+add_files ../../samples/AutoScaleHLS_tests/3mm_scalehlsdse.c
 
 #template
 open_solution "solution1"

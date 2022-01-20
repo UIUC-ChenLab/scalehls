@@ -50,16 +50,10 @@ class DirectiveGenerator():
         print("was here")
         return ''
 
-class InitialDirectiveGenerator(DirectiveGenerator):
-    
-
-
-
-
-    
-    
-    
-    print("test")
+# class InitialDirectiveGenerator(DirectiveGenerator):
+# a working process /////////////////////////////
+# ///////////////////////////////////////////    
+#     print("test")
 
 
 

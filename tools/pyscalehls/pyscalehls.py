@@ -44,6 +44,8 @@ def main():
     scalehls.register_dialects(ctx)
     mod = mlir.ir.Module.parse(fin, ctx)
 
+    band_counter = 0
+
     # Traverse all functions in the MLIR module.
     for func in mod.body:
         if not isinstance(func, builtin.FuncOp):
@@ -53,28 +55,36 @@ def main():
         # Traverse all suitable loop bands in the function.
         bands = scalehls.LoopBandList(func)
         for band in bands:
+
+            print("test")
             # Attempt to perfectize the loop band.
             scalehls.loop_perfectization(band)
-
-            # Maximize the distance of loop-carried dependencies through loop permutation.
+            scalehls.loop_var_bound_removal(band)
             scalehls.loop_order_opt(band)
 
-            # Apply loop permutation based on the provided map.
-            # Note: This example "permMap" keeps the loop order unchanged.
-            permMap = np.arange(band.depth)
-            scalehls.loop_permutation(band, permMap)
+
+            # permMap = np.arange(band.depth)
+            # scalehls.loop_permutation(band, permMap)
 
             # Attempt to remove variable loop bounds if possible.
-            scalehls.loop_var_bound_removal(band)
+
 
             # Apply loop tiling. Tile sizes are defined from the outermost loop to the innermost.
             # Note: We use the trip count to generate this example "factors".
+
             factors = np.ones(band.depth, dtype=int)
             factors[-1] = band.get_trip_count(band.depth - 1) / 4
-            loc = scalehls.loop_tiling(band, factors, True) # simplify = True
+            factors = np.array([4, 4, 4])
+            loc = scalehls.loop_tiling(band, factors, False) # simplify = True        
+            
+            scalehls.loop_perfectization(band)
+
+            # scalehls.loop_pipelining(band, 1, 3)  # targetII = 3    
+
+            #print(loc)
 
             # Apply loop pipelining. All loops inside of the pipelined loop are fully unrolled.
-            scalehls.loop_pipelining(band, loc, 3)  # targetII = 3
+
 
         # Traverse all arrays in the function.
         arrays = scalehls.ArrayList(func)
@@ -94,7 +104,7 @@ def main():
             func, func.sym_name.value == opts.function)
 
         # Optimize memory accesses through store forwarding, etc.
-        scalehls.memory_access_opt(func)
+        # scalehls.memory_access_opt(func)
 
         # Apply suitable array partition strategies through analyzing the array access pattern.
         # scalehls.auto_array_partition(func)
