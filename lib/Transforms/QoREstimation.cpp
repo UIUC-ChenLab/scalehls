@@ -26,7 +26,7 @@ void ScaleHLSEstimator::getPartitionIndices(Operation *op) {
   auto memrefType = access.memref.getType().cast<MemRefType>();
 
   // If the layout map does not exist, it means the memory is not partitioned.
-  auto layoutMap = getLayoutMap(memrefType);
+  auto layoutMap = memrefType.getLayout().getAffineMap();
   if (!layoutMap) {
     auto partitionIndices = SmallVector<int64_t, 8>(memrefType.getRank(), 0);
     op->setAttr("partition_indices", builder.getI64ArrayAttr(partitionIndices));
@@ -526,7 +526,7 @@ bool ScaleHLSEstimator::visitOp(AffineIfOp op, int64_t begin) {
 }
 
 bool ScaleHLSEstimator::visitOp(CallOp op, int64_t begin) {
-  auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.calleeAttr());
+  auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCalleeAttr());
   auto subFunc = dyn_cast<FuncOp>(callee);
   assert(subFunc && "callable is not a function operation");
 

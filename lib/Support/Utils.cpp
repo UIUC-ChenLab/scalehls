@@ -194,29 +194,17 @@ scalehls::getBoundOfAffineBound(AffineBound bound) {
   return std::pair<int64_t, int64_t>(*minmax.first, *minmax.second);
 }
 
-/// Return the layout map of "memrefType".
-AffineMap scalehls::getLayoutMap(MemRefType memrefType) {
-  // Check whether the memref has layout map.
-  auto memrefMaps = memrefType.getAffineMaps();
-  if (memrefMaps.empty())
-    return (AffineMap) nullptr;
-
-  return memrefMaps.back();
-}
-
 bool scalehls::isFullyPartitioned(MemRefType memrefType) {
   if (memrefType.getRank() == 0)
     return true;
 
   bool fullyPartitioned = false;
-  if (auto layoutMap = getLayoutMap(memrefType)) {
-    SmallVector<int64_t, 8> factors;
-    getPartitionFactors(memrefType, &factors);
+  SmallVector<int64_t, 8> factors;
+  getPartitionFactors(memrefType, &factors);
 
-    auto shapes = memrefType.getShape();
-    fullyPartitioned =
-        factors == SmallVector<int64_t, 8>(shapes.begin(), shapes.end());
-  }
+  auto shapes = memrefType.getShape();
+  fullyPartitioned =
+      factors == SmallVector<int64_t, 8>(shapes.begin(), shapes.end());
 
   return fullyPartitioned;
 }
@@ -227,7 +215,7 @@ bool scalehls::isFullyPartitioned(MemRefType memrefType) {
 int64_t scalehls::getPartitionFactors(MemRefType memrefType,
                                       SmallVector<int64_t, 8> *factors) {
   auto shape = memrefType.getShape();
-  auto layoutMap = getLayoutMap(memrefType);
+  auto layoutMap = memrefType.getLayout().getAffineMap();
   int64_t accumFactor = 1;
 
   for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {

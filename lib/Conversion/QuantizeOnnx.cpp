@@ -6,6 +6,7 @@
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/Builders.h"
@@ -22,9 +23,9 @@ static Type quantizeType(Type type, OpBuilder &builder) {
   // biases are quantized to 32-bits.
   if (auto memrefType = type.dyn_cast<MemRefType>()) {
     auto shape = memrefType.getShape();
-    auto maps = memrefType.getAffineMaps();
+    auto layout = memrefType.getLayout();
     auto memorySpace = memrefType.getMemorySpace();
-    return MemRefType::get(shape, int8Type, maps, memorySpace);
+    return MemRefType::get(shape, int8Type, layout, memorySpace);
 
   } else if (auto tensorType = type.dyn_cast<TensorType>()) {
     auto shape = tensorType.getShape();
@@ -48,7 +49,7 @@ static void quantizeBlock(Block &block, OpBuilder &builder,
     builder.setInsertionPoint(&op);
 
     if (auto constOp = dyn_cast<arith::ConstantOp>(op)) {
-      auto attr = constOp.value();
+      auto attr = constOp.getValue();
 
       if (auto floatAttr = attr.dyn_cast<FloatAttr>()) {
         int8_t floatValue = floatAttr.getValue().convertToFloat();
@@ -79,16 +80,16 @@ static void quantizeBlock(Block &block, OpBuilder &builder,
 
     } else if (auto castOp = dyn_cast<arith::UIToFPOp>(op)) {
       newOp = builder.create<hlscpp::CastOp>(castOp.getLoc(), int8Type,
-                                             castOp.in());
+                                             castOp.getIn());
 
     } else if (auto allocOp = dyn_cast<memref::AllocOp>(op)) {
       auto newType = quantizeType(allocOp.memref().getType(), builder);
       newOp = builder.create<memref::AllocOp>(allocOp.getLoc(),
                                               newType.cast<MemRefType>());
 
-    } else if (auto bufferOp = dyn_cast<memref::BufferCastOp>(op)) {
+    } else if (auto bufferOp = dyn_cast<bufferization::ToMemrefOp>(op)) {
       auto newType = quantizeType(bufferOp.memref().getType(), builder);
-      newOp = builder.create<memref::BufferCastOp>(
+      newOp = builder.create<bufferization::ToMemrefOp>(
           bufferOp.getLoc(), newType.cast<MemRefType>(), bufferOp.tensor());
     }
 
@@ -98,23 +99,23 @@ static void quantizeBlock(Block &block, OpBuilder &builder,
 
     else if (auto selectOp = dyn_cast<mlir::SelectOp>(op))
       newOp = builder.create<mlir::SelectOp>(
-          selectOp.getLoc(), selectOp.condition(), selectOp.true_value(),
-          selectOp.false_value());
+          selectOp.getLoc(), selectOp.getCondition(), selectOp.getTrueValue(),
+          selectOp.getFalseValue());
 
     else if (auto mulOp = dyn_cast<arith::MulFOp>(op)) {
       auto lhsValue = builder.create<hlscpp::CastOp>(mulOp.getLoc(), int16Type,
-                                                     mulOp.lhs());
+                                                     mulOp.getLhs());
       auto rhsValue = builder.create<hlscpp::CastOp>(mulOp.getLoc(), int16Type,
-                                                     mulOp.rhs());
+                                                     mulOp.getRhs());
       newOp = builder.create<hlscpp::MulOp>(mulOp.getLoc(), int32Type, lhsValue,
                                             rhsValue);
     }
 
     else if (auto addOp = dyn_cast<arith::AddFOp>(op)) {
       auto lhsValue = builder.create<hlscpp::CastOp>(addOp.getLoc(), int32Type,
-                                                     addOp.lhs());
+                                                     addOp.getLhs());
       auto rhsValue = builder.create<hlscpp::CastOp>(addOp.getLoc(), int32Type,
-                                                     addOp.rhs());
+                                                     addOp.getRhs());
       auto accValue = builder.create<hlscpp::AddOp>(addOp.getLoc(), int32Type,
                                                     lhsValue, rhsValue);
       newOp =
@@ -122,12 +123,12 @@ static void quantizeBlock(Block &block, OpBuilder &builder,
     }
 
     else if (auto divOp = dyn_cast<arith::DivFOp>(op))
-      newOp = builder.create<arith::DivSIOp>(divOp.getLoc(), divOp.lhs(),
-                                             divOp.rhs());
+      newOp = builder.create<arith::DivSIOp>(divOp.getLoc(), divOp.getLhs(),
+                                             divOp.getRhs());
 
     else if (auto cmpOp = dyn_cast<arith::CmpFOp>(op)) {
       arith::CmpIPredicate predicate;
-      switch (cmpOp.predicate()) {
+      switch (cmpOp.getPredicate()) {
       case arith::CmpFPredicate::OEQ:
         predicate = arith::CmpIPredicate::eq;
         break;
@@ -151,7 +152,7 @@ static void quantizeBlock(Block &block, OpBuilder &builder,
         break;
       }
       newOp = builder.create<arith::CmpIOp>(cmpOp.getLoc(), predicate,
-                                            cmpOp.lhs(), cmpOp.rhs());
+                                            cmpOp.getLhs(), cmpOp.getRhs());
 
     } else if (!isa<mlir::CallOp, mlir::ReturnOp, memref::DeallocOp,
                     mlir::AffineApplyOp, mlir::AffineForOp, mlir::AffineIfOp,

@@ -8,8 +8,6 @@ include(AddMLIRPython)
 # Declare native Python extension
 ################################################################################
 
-set(MLIR_PYTHON_SOURCE_DIR "${MLIR_MAIN_SRC_DIR}/lib/Bindings/Python")
-
 declare_mlir_python_sources(ScaleHLSBindingsPythonExtension)
 
 declare_mlir_python_extension(ScaleHLSBindingsPythonExtension.Core
@@ -17,7 +15,6 @@ declare_mlir_python_extension(ScaleHLSBindingsPythonExtension.Core
   ADD_TO_PARENT ScaleHLSBindingsPythonExtension
   SOURCES
     ScaleHLSModule.cpp
-    ${MLIR_PYTHON_SOURCE_DIR}/PybindUtils.cpp
   EMBED_CAPI_LINK_LIBS
     MLIRScaleHLSCAPIHLSCpp
     MLIRScaleHLSCAPIEmitHLSCpp

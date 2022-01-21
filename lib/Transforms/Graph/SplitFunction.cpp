@@ -5,7 +5,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Analysis/Liveness.h"
-#include "mlir/Dialect/Linalg/IR/LinalgOps.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "scalehls/Dialect/HLSKernel/HLSKernel.h"
 #include "scalehls/Transforms/Passes.h"
@@ -75,7 +76,7 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
       // function, except BufferCastOp.
       if (auto defOp = input.getDefiningOp()) {
         if (input.getType().isa<MemRefType>() &&
-            !isa<memref::BufferCastOp>(defOp)) {
+            !isa<bufferization::ToMemrefOp>(defOp)) {
           bool isInternalMemory = true;
           for (auto user : input.getUsers()) {
             bool hasAncestor = false;

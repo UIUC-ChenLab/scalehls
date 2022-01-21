@@ -8,8 +8,9 @@
 #define SCALEHLS_INITALLDIALECTS_H
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-#include "mlir/Dialect/Linalg/IR/LinalgOps.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
@@ -32,6 +33,7 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
     mlir::math::MathDialect,
     mlir::arith::ArithmeticDialect,
     mlir::scf::SCFDialect,
+    mlir::bufferization::BufferizationDialect,
     mlir::linalg::LinalgDialect,
     mlir::LLVM::LLVMDialect
   >();

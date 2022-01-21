@@ -32,32 +32,11 @@ void HLSCppDialect::initialize() {
 #define GET_ATTRDEF_CLASSES
 #include "scalehls/Dialect/HLSCpp/HLSCppAttributes.cpp.inc"
 
-Attribute HLSCppDialect::parseAttribute(DialectAsmParser &p, Type type) const {
-  StringRef attrName;
-  Attribute attr;
-
-  if (p.parseKeyword(&attrName))
-    return Attribute();
-
-  auto parseResult = generatedAttributeParser(p, attrName, type, attr);
-  if (parseResult.hasValue())
-    return attr;
-
-  p.emitError(p.getNameLoc(), "Unexpected hlscpp attribute");
-  return Attribute();
-}
-
-void HLSCppDialect::printAttribute(Attribute attr, DialectAsmPrinter &p) const {
-  if (succeeded(generatedAttributePrinter(attr, p)))
-    return;
-  llvm_unreachable("Unexpected attribute");
-}
-
 //===----------------------------------------------------------------------===//
 // ResourceAttr
 //===----------------------------------------------------------------------===//
 
-Attribute ResourceAttr::parse(DialectAsmParser &p, Type type) {
+Attribute ResourceAttr::parse(AsmParser &p, Type type) {
   StringRef lutKw, dspKw, bramKw, nonShareDspKw;
   int64_t lut, dsp, bram, nonShareDsp;
   if (p.parseLess() || p.parseKeyword(&lutKw) || p.parseEqual() ||
@@ -75,7 +54,7 @@ Attribute ResourceAttr::parse(DialectAsmParser &p, Type type) {
   return ResourceAttr::get(p.getContext(), lut, dsp, bram, nonShareDsp);
 }
 
-void ResourceAttr::print(DialectAsmPrinter &p) const {
+void ResourceAttr::print(AsmPrinter &p) const {
   p << getMnemonic() << "<lut=" << getLut() << ", dsp=" << getDsp()
     << ", bram=" << getBram() << ", nonShareDsp=" << getNonShareDsp() << ">";
 }
@@ -84,7 +63,7 @@ void ResourceAttr::print(DialectAsmPrinter &p) const {
 // TimingAttr
 //===----------------------------------------------------------------------===//
 
-Attribute TimingAttr::parse(DialectAsmParser &p, Type type) {
+Attribute TimingAttr::parse(AsmParser &p, Type type) {
   int64_t begin, end, latency, interval;
   if (p.parseLess() || p.parseInteger(begin) || p.parseArrow() ||
       p.parseInteger(end) || p.parseComma() || p.parseInteger(latency) ||
@@ -94,7 +73,7 @@ Attribute TimingAttr::parse(DialectAsmParser &p, Type type) {
   return TimingAttr::get(p.getContext(), begin, end, latency, interval);
 }
 
-void TimingAttr::print(DialectAsmPrinter &p) const {
+void TimingAttr::print(AsmPrinter &p) const {
   p << getMnemonic() << "<" << getBegin() << " -> " << getEnd() << ", "
     << getLatency() << ", " << getInterval() << ">";
 }
@@ -103,7 +82,7 @@ void TimingAttr::print(DialectAsmPrinter &p) const {
 // LoopInfoAttr
 //===----------------------------------------------------------------------===//
 
-Attribute LoopInfoAttr::parse(DialectAsmParser &p, Type type) {
+Attribute LoopInfoAttr::parse(AsmParser &p, Type type) {
   StringRef flattenTripCountKw, iterLatencyKw, minIIKw;
   int64_t flattenTripCount, iterLatency, minII;
   if (p.parseLess() || p.parseKeyword(&flattenTripCountKw) || p.parseEqual() ||
@@ -122,7 +101,7 @@ Attribute LoopInfoAttr::parse(DialectAsmParser &p, Type type) {
                            minII);
 }
 
-void LoopInfoAttr::print(DialectAsmPrinter &p) const {
+void LoopInfoAttr::print(AsmPrinter &p) const {
   p << getMnemonic() << "<flattenTripCount=" << getFlattenTripCount()
     << ", iterLatency=" << getIterLatency() << ", minII=" << getMinII() << ">";
 }
@@ -131,7 +110,7 @@ void LoopInfoAttr::print(DialectAsmPrinter &p) const {
 // LoopDirectiveAttr
 //===----------------------------------------------------------------------===//
 
-Attribute LoopDirectiveAttr::parse(DialectAsmParser &p, Type type) {
+Attribute LoopDirectiveAttr::parse(AsmParser &p, Type type) {
   StringRef pipelineKw, targetIIKw, dataflowKw, flattenKw, parallelKw;
   StringRef pipeline, dataflow, flatten, parallel;
   int64_t targetII;
@@ -157,7 +136,7 @@ Attribute LoopDirectiveAttr::parse(DialectAsmParser &p, Type type) {
                                 parallel == "true");
 }
 
-void LoopDirectiveAttr::print(DialectAsmPrinter &p) const {
+void LoopDirectiveAttr::print(AsmPrinter &p) const {
   p << getMnemonic() << "<pipeline=" << getPipeline()
     << ", targetII=" << getTargetII() << ", dataflow=" << getDataflow()
     << ", flatten=" << getFlatten() << ", parallel=" << getParallel() << ">";
@@ -167,7 +146,7 @@ void LoopDirectiveAttr::print(DialectAsmPrinter &p) const {
 // FuncDirectiveAttr
 //===----------------------------------------------------------------------===//
 
-Attribute FuncDirectiveAttr::parse(DialectAsmParser &p, Type type) {
+Attribute FuncDirectiveAttr::parse(AsmParser &p, Type type) {
   StringRef pipelineKw, targetIntervalKw, dataflowKw, topFuncKw;
   StringRef pipeline, dataflow, topFunc;
   int64_t targetInterval;
@@ -190,7 +169,7 @@ Attribute FuncDirectiveAttr::parse(DialectAsmParser &p, Type type) {
                                 topFunc == "true");
 }
 
-void FuncDirectiveAttr::print(DialectAsmPrinter &p) const {
+void FuncDirectiveAttr::print(AsmPrinter &p) const {
   p << getMnemonic() << "<pipeline=" << getPipeline()
     << ", targetInterval=" << getTargetInterval()
     << ", dataflow=" << getDataflow() << ", topFunc=" << getTopFunc() << ">";

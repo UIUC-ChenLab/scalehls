@@ -4,7 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/Linalg/IR/LinalgOps.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "scalehls/Dialect/HLSKernel/HLSKernel.h"
 #include "scalehls/Transforms/Passes.h"
@@ -43,7 +44,7 @@ static void getSuccessorsMap(Block &block, SuccessorsMap &map) {
   for (auto &op : block.getOperations()) {
     // TODO: Some operations are dataflow source, which will not be scheduled.
     if (isa<memref::AllocOp, memref::AllocaOp, arith::ConstantOp,
-            memref::TensorLoadOp, memref::BufferCastOp>(op))
+            bufferization::ToTensorOp, bufferization::ToMemrefOp>(op))
       continue;
 
     // Collect all memref results if the current operation is a loop.

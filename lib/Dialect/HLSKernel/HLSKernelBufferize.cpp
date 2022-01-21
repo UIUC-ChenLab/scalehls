@@ -4,6 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/Builders.h"
@@ -35,7 +36,7 @@ void HLSKernelBufferize::runOnOperation() {
       if (auto operandType = operand.getType().dyn_cast<RankedTensorType>()) {
         auto memRefType = MemRefType::get(operandType.getShape(),
                                           operandType.getElementType());
-        auto operandMemRef = builder.create<memref::BufferCastOp>(
+        auto operandMemRef = builder.create<bufferization::ToMemrefOp>(
             func.getLoc(), memRefType, operand);
         op->setOperand(operandIndex, operandMemRef);
       }
@@ -54,8 +55,8 @@ void HLSKernelBufferize::runOnOperation() {
 
       // Create a TensorLoad operaion to replace the original returned tensor.
       builder.setInsertionPointAfter(op);
-      auto resultTensor =
-          builder.create<memref::TensorLoadOp>(func.getLoc(), resultMemRef);
+      auto resultTensor = builder.create<bufferization::ToTensorOp>(
+          func.getLoc(), resultMemRef);
       op->getResult(0).replaceAllUsesWith(resultTensor);
     }
   });
