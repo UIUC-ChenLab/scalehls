@@ -55,8 +55,8 @@ Attribute ResourceAttr::parse(AsmParser &p, Type type) {
 }
 
 void ResourceAttr::print(AsmPrinter &p) const {
-  p << getMnemonic() << "<lut=" << getLut() << ", dsp=" << getDsp()
-    << ", bram=" << getBram() << ", nonShareDsp=" << getNonShareDsp() << ">";
+  p << "<lut=" << getLut() << ", dsp=" << getDsp() << ", bram=" << getBram()
+    << ", nonShareDsp=" << getNonShareDsp() << ">";
 }
 
 //===----------------------------------------------------------------------===//
@@ -74,8 +74,8 @@ Attribute TimingAttr::parse(AsmParser &p, Type type) {
 }
 
 void TimingAttr::print(AsmPrinter &p) const {
-  p << getMnemonic() << "<" << getBegin() << " -> " << getEnd() << ", "
-    << getLatency() << ", " << getInterval() << ">";
+  p << "<" << getBegin() << " -> " << getEnd() << ", " << getLatency() << ", "
+    << getInterval() << ">";
 }
 
 //===----------------------------------------------------------------------===//
@@ -102,7 +102,7 @@ Attribute LoopInfoAttr::parse(AsmParser &p, Type type) {
 }
 
 void LoopInfoAttr::print(AsmPrinter &p) const {
-  p << getMnemonic() << "<flattenTripCount=" << getFlattenTripCount()
+  p << "<flattenTripCount=" << getFlattenTripCount()
     << ", iterLatency=" << getIterLatency() << ", minII=" << getMinII() << ">";
 }
 
@@ -137,9 +137,9 @@ Attribute LoopDirectiveAttr::parse(AsmParser &p, Type type) {
 }
 
 void LoopDirectiveAttr::print(AsmPrinter &p) const {
-  p << getMnemonic() << "<pipeline=" << getPipeline()
-    << ", targetII=" << getTargetII() << ", dataflow=" << getDataflow()
-    << ", flatten=" << getFlatten() << ", parallel=" << getParallel() << ">";
+  p << "<pipeline=" << getPipeline() << ", targetII=" << getTargetII()
+    << ", dataflow=" << getDataflow() << ", flatten=" << getFlatten()
+    << ", parallel=" << getParallel() << ">";
 }
 
 //===----------------------------------------------------------------------===//
@@ -170,7 +170,7 @@ Attribute FuncDirectiveAttr::parse(AsmParser &p, Type type) {
 }
 
 void FuncDirectiveAttr::print(AsmPrinter &p) const {
-  p << getMnemonic() << "<pipeline=" << getPipeline()
+  p << "<pipeline=" << getPipeline()
     << ", targetInterval=" << getTargetInterval()
     << ", dataflow=" << getDataflow() << ", topFunc=" << getTopFunc() << ">";
 }

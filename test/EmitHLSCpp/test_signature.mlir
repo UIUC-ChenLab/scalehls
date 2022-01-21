@@ -43,12 +43,6 @@ func @test_signature(
   // CHECK: int [[VAL_26:.*]] = 16;
   %0 = memref.dim %arg7, %c0 : memref<16x8xf32>
 
-  // CHECK: int [[VAL_28:.*]] = 2;
-  %3 = rank %arg7 : memref<16x8xf32>
-
-  // CHECK: int [[VAL_29:.*]] = 2;
-  %4 = rank %arg8 : tensor<16x8xf32>
-
   // CHECK: *[[VAL_13:.*]] = [[VAL_0:.*]];
   // CHECK: for (int iv0 = 0; iv0 < 16; ++iv0) {
   // CHECK:   for (int iv1 = 0; iv1 < 8; ++iv1) {

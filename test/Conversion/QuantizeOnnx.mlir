@@ -164,7 +164,7 @@ module  {
     call @dataflow4(%cst_0, %4, %arg2, %3) : (f32, memref<1x6x14x14xf32>, memref<16x6x5x5xf32>, memref<1x16x5x5xf32>) -> ()
     call @dataflow3(%3, %cst_0, %2, %arg3, %cst, %arg4) : (memref<1x16x5x5xf32>, f32, memref<1x120xf32>, memref<120x400xf32>, f32, memref<120xf32>) -> ()
     call @dataflow2(%2, %cst_0, %1, %arg5, %cst, %arg6) : (memref<1x120xf32>, f32, memref<1x84xf32>, memref<84x120xf32>, f32, memref<84xf32>) -> ()
-    %5 = memref.buffer_cast %cst_1 : memref<10xf32>
+    %5 = bufferization.to_memref %cst_1 : memref<10xf32>
     call @dataflow1(%1, %cst_0, %0, %arg7, %cst, %5) : (memref<1x84xf32>, f32, memref<1x10xf32>, memref<10x84xf32>, f32, memref<10xf32>) -> ()
     return %0 : memref<1x10xf32>
   }
