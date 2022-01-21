@@ -7,7 +7,6 @@
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "scalehls/Dialect/HLSKernel/HLSKernel.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
@@ -137,16 +136,12 @@ static bool applyLegalizeDataflow(FuncOp func, int64_t minGran,
             // Create CopyOp.
             Value newValue;
             Operation *copyOp;
-            if (auto valueType = value.getType().dyn_cast<MemRefType>()) {
-              newValue =
-                  builder.create<memref::AllocOp>(op->getLoc(), valueType);
-              copyOp = builder.create<linalg::CopyOp>(op->getLoc(),
-                                                      values.back(), newValue);
-            } else {
-              copyOp = builder.create<hlskernel::CopyOp>(
-                  op->getLoc(), value.getType(), values.back());
-              newValue = copyOp->getResult(0);
-            }
+            auto valueType = value.getType().dyn_cast<MemRefType>();
+            assert(valueType && "only support memref type now, will introduce "
+                                "TOSA dialect for tackling tensor operators");
+            newValue = builder.create<memref::AllocOp>(op->getLoc(), valueType);
+            copyOp = builder.create<linalg::CopyOp>(op->getLoc(), values.back(),
+                                                    newValue);
 
             // Set CopyOp dataflow level.
             copyOp->setAttr("dataflow_level",

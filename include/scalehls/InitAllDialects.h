@@ -16,7 +16,6 @@
 #include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/IR/Dialect.h"
 #include "scalehls/Dialect/HLSCpp/HLSCpp.h"
-#include "scalehls/Dialect/HLSKernel/HLSKernel.h"
 
 namespace mlir {
 namespace scalehls {
@@ -26,7 +25,6 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
   // clang-format off
   registry.insert<
     mlir::scalehls::hlscpp::HLSCppDialect,
-    mlir::scalehls::hlskernel::HLSKernelDialect,
     mlir::StandardOpsDialect,
     mlir::AffineDialect,
     mlir::memref::MemRefDialect,

@@ -8,7 +8,6 @@
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "scalehls/Dialect/HLSKernel/HLSKernel.h"
 #include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
