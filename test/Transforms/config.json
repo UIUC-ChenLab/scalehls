@@ -1,0 +1,23 @@
+{
+    "output_num": 1,
+    "max_init_parallel": 32,
+    "max_expl_parallel": 128,
+    "max_loop_parallel": 16,
+    "max_iter_num": 30,
+    "max_distance": 3.0,
+    "directive_only": false,
+    "res_constraint": true,
+    "frequency": "100MHz",
+    "dsp": 220,
+    "bram": 280,
+    "100MHz": {
+        "fadd": 4,
+        "fmul": 3,
+        "fdiv": 15,
+        "fcmp": 1,
+        "fadd_delay": 7.25,
+        "fmul_delay": 5.7,
+        "fdiv_delay": 6.07,
+        "fcmp_delay": 6.4
+    }
+}

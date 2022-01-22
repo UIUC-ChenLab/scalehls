@@ -37,7 +37,7 @@ $ export PYTHONPATH=$PYTHONPATH:$PWD/build/tools/scalehls/python_packages/scaleh
 To launch the automatic kernel-level design space exploration, run:
 ```sh
 $ mlir-clang samples/polybench/gemm/test_gemm.c -function=test_gemm -memref-fullrank -raise-scf-to-affine -S \
-    | scalehls-opt -dse="top-func=test_gemm target-spec=samples/polybench/target-spec.ini" -debug-only=scalehls > /dev/null \
+    | scalehls-opt -dse="top-func=test_gemm target-spec=samples/polybench/config.json" -debug-only=scalehls > /dev/null \
     && scalehls-translate -emit-hlscpp test_gemm_pareto_0.mlir > test_gemm_pareto_0.cpp
 ```
 

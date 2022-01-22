@@ -10,6 +10,7 @@
 #include "mlir/Support/FileUtilities.h"
 #include "scalehls/Transforms/Passes.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/ToolOutputFile.h"
 #include <numeric>
 // #include <pthread.h>
@@ -828,35 +829,55 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
   void runOnOperation() override {
     auto module = getOperation();
 
-    // Read configuration file.
-    INIReader spec(targetSpec);
-    if (spec.ParseError())
-      emitError(module.getLoc(), "target spec file parse fail\n");
+    // Read target specification JSON file.
+    std::string errorMessage;
+    auto configFile = mlir::openInputFile(targetSpec, &errorMessage);
+    if (!configFile) {
+      llvm::errs() << errorMessage << "\n";
+      return signalPassFailure();
+    }
+
+    // Parse JSON file into memory.
+    auto config = llvm::json::parse(configFile->getBuffer());
+    if (!config) {
+      llvm::errs() << "failed to parse the target spec json file";
+      return signalPassFailure();
+    }
+    auto configObj = config.get().getAsObject();
+    if (!configObj) {
+      llvm::errs() << "support an object in the target spec json file, found "
+                      "something else";
+      return signalPassFailure();
+    }
 
     // Collect DSE configurations.
-    unsigned outputNum = spec.GetInteger("dse", "output_num", 30);
+    unsigned outputNum = configObj->getInteger("output_num").getValueOr(30);
 
-    unsigned maxInitParallel = spec.GetInteger("dse", "max_init_parallel", 32);
+    unsigned maxInitParallel =
+        configObj->getInteger("max_init_parallel").getValueOr(32);
     unsigned maxExplParallel =
-        spec.GetInteger("dse", "max_expl_parallel", 1024);
-    unsigned maxLoopParallel = spec.GetInteger("dse", "max_loop_parallel", 128);
+        configObj->getInteger("max_expl_parallel").getValueOr(1024);
+    unsigned maxLoopParallel =
+        configObj->getInteger("max_loop_parallel").getValueOr(128);
 
     assert(maxInitParallel <= maxExplParallel &&
            maxLoopParallel <= maxExplParallel &&
            "invalid configuration of DSE");
 
-    unsigned maxIterNum = spec.GetInteger("dse", "max_iter_num", 30);
-    float maxDistance = spec.GetFloat("dse", "max_distance", 3.0);
+    unsigned maxIterNum = configObj->getInteger("max_iter_num").getValueOr(30);
+    float maxDistance = configObj->getNumber("max_distance").getValueOr(3.0);
 
-    bool directiveOnly = spec.GetBoolean("dse", "directive_only", false);
-    bool resConstraint = spec.GetBoolean("dse", "res_constraint", false);
+    bool directiveOnly =
+        configObj->getBoolean("directive_only").getValueOr(false);
+    bool resConstraint =
+        configObj->getBoolean("res_constraint").getValueOr(true);
 
     // Collect profiling latency data, where default values are based on Xilinx
     // PYNQ-Z1 board.
     LatencyMap latencyMap;
-    getLatencyMap(spec, latencyMap);
+    getLatencyMap(configObj, latencyMap);
     unsigned maxDspNum =
-        ceil(spec.GetInteger("specification", "dsp", 220) * 1.1);
+        ceil(configObj->getInteger("dsp").getValueOr(220) * 1.1);
     if (!resConstraint)
       maxDspNum = UINT_MAX;
 

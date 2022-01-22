@@ -90,7 +90,7 @@ public:
   unsigned validTileConfigNum;
 
   /// Holds all tile configs that have not been estimated.
-  std::set<TileConfig> unestimatedTileConfigs;
+  llvm::SmallDenseSet<TileConfig, 32> unestimatedTileConfigs;
 
   // Whether to include loop transformation into the loop design space.
   bool directiveOnly;
