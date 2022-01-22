@@ -1372,6 +1372,7 @@ void ModuleEmitter::emitLoopDirectives(Operation *op) {
 void ModuleEmitter::emitArrayDirectives(Value memref) {
   bool emitPragmaFlag = false;
   auto type = memref.getType().cast<MemRefType>();
+  auto layoutMap = type.getLayout().getAffineMap();
 
   // Emit array_partition pragma(s).
   SmallVector<int64_t, 8> factors;
@@ -1387,8 +1388,7 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
       emitValue(memref);
 
       // Emit partition type.
-      if (type.getLayout().getAffineMap().getResult(dim).getKind() ==
-          AffineExprKind::FloorDiv)
+      if (layoutMap.getResult(dim).getKind() == AffineExprKind::FloorDiv)
         os << " block";
       else
         os << " cyclic";

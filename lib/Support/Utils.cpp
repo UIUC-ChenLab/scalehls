@@ -220,18 +220,15 @@ int64_t scalehls::getPartitionFactors(MemRefType memrefType,
 
   for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
     int64_t factor = 1;
+    auto expr = layoutMap.getResult(dim);
 
-    if (layoutMap) {
-      auto expr = layoutMap.getResult(dim);
-
-      if (auto binaryExpr = expr.dyn_cast<AffineBinaryOpExpr>())
-        if (auto rhsExpr = binaryExpr.getRHS().dyn_cast<AffineConstantExpr>()) {
-          if (expr.getKind() == AffineExprKind::Mod)
-            factor = rhsExpr.getValue();
-          else if (expr.getKind() == AffineExprKind::FloorDiv)
-            factor = (shape[dim] + rhsExpr.getValue() - 1) / rhsExpr.getValue();
-        }
-    }
+    if (auto binaryExpr = expr.dyn_cast<AffineBinaryOpExpr>())
+      if (auto rhsExpr = binaryExpr.getRHS().dyn_cast<AffineConstantExpr>()) {
+        if (expr.getKind() == AffineExprKind::Mod)
+          factor = rhsExpr.getValue();
+        else if (expr.getKind() == AffineExprKind::FloorDiv)
+          factor = (shape[dim] + rhsExpr.getValue() - 1) / rhsExpr.getValue();
+      }
 
     accumFactor *= factor;
     if (factors != nullptr)

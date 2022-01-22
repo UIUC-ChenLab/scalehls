@@ -270,6 +270,7 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
     for (auto inputType : subFuncType.getInputs()) {
       if (auto memrefType = inputType.dyn_cast<MemRefType>()) {
         auto &partitions = partitionsMap[op.getOperand(index)];
+        auto layoutMap = memrefType.getLayout().getAffineMap();
 
         // If the current partitionsMap is empty, initialize it with no
         // partition and factor of 1.
@@ -289,10 +290,7 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
           // If the factor from the sub-function is larger than the current
           // factor, replace it.
           if (factor > partitions[dim].second) {
-            if (memrefType.getLayout()
-                    .getAffineMap()
-                    .getResult(dim)
-                    .getKind() == AffineExprKind::FloorDiv)
+            if (layoutMap.getResult(dim).getKind() == AffineExprKind::FloorDiv)
               partitions[dim] = PartitionInfo(PartitionKind::BLOCK, factor);
             else
               partitions[dim] = PartitionInfo(PartitionKind::CYCLIC, factor);
