@@ -4,13 +4,10 @@
 #define NL 70
 #define NM 80
 
-void kernel_3mm(float A[NI][NK],
-                float B[NK][NJ],
-                float C[NJ][NM],
-                float D[NM][NL],
-                float E[NI][NJ],
-                float F[NJ][NL],
+void kernel_3mm(float A[NI][NK], float B[NK][NJ], float C[NJ][NM],
+                float D[NM][NL], float E[NI][NJ], float F[NJ][NL],
                 float G[NI][NL]) {
+
   int i, j, k;
 
 #pragma scop
