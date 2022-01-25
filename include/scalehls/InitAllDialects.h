@@ -13,6 +13,7 @@
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
+#include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/IR/Dialect.h"
 #include "scalehls/Dialect/HLSCpp/HLSCpp.h"
 #include "scalehls/Dialect/HLSKernel/HLSKernel.h"

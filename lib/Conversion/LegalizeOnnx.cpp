@@ -144,8 +144,13 @@ void LegalizeOnnx::runOnOperation() {
         } else {
           // If value attribute doesn't exist, record the type and offset.
           weightTypes.push_back(op.getResult(0).getType());
-          weightOffsets.push_back(
-              op.getAttrOfType<IntegerAttr>("offset").getInt());
+          if (op.hasAttr("offset")) {
+            weightOffsets.push_back(
+                op.getAttrOfType<IntegerAttr>("offset").getInt());
+          }
+          else {
+            weightOffsets.push_back(0);
+          }
           weightValues.push_back(op.getResult(0));
         }
         // Erase the kernel global operation.
