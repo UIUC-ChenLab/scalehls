@@ -484,17 +484,6 @@ public:
     return emitter.emitCast<arith::FPToSIOp>(op), true;
   }
 
-private:
-  ModuleEmitter &emitter;
-};
-} // namespace
-
-namespace {
-class KernelVisitor : public HLSKernelVisitorBase<KernelVisitor, bool> {
-public:
-  KernelVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
-
-  using HLSKernelVisitorBase::visitOp;
   /// IP operation. 
   bool visitOp(IPOp op) { return emitter.emitIP(op), true; }
 
@@ -1402,9 +1391,6 @@ void ModuleEmitter::emitBlock(Block &block) {
       continue;
 
     if (StmtVisitor(*this).dispatchVisitor(&op))
-      continue;
-
-    if (KernelVisitor(*this).dispatchVisitor(&op))
       continue;
 
     emitError(&op, "can't be correctly emitted.");

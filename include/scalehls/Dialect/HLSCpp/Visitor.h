@@ -62,7 +62,11 @@ public:
             arith::IndexCastOp, arith::UIToFPOp, arith::SIToFPOp,
             arith::FPToSIOp, arith::FPToUIOp,
             // HLSCpp operations.
-            AssignOp, CastOp, MulOp, AddOp, IncludeOp>([&](auto opNode) -> ResultType {
+            AssignOp, CastOp, MulOp, AddOp, 
+            // HLS C++ library include operation.
+            IncludeOp,
+            // IP operation.
+            IPOp>([&](auto opNode) -> ResultType {
           return thisCast->visitOp(opNode, args...);
         })
         .Default([&](auto opNode) -> ResultType {
@@ -197,6 +201,9 @@ public:
 
   // HLS C++ library include operation.
   HANDLE(IncludeOp);
+
+  // IP operation.
+  HANDLE(IPOp);
 #undef HANDLE
 };
 } // namespace scalehls

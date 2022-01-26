@@ -25,9 +25,7 @@ public:
             // CNN operations.
             DenseOp, ConvOp, MaxPoolOp, ReluOp, MergeOp, CopyOp,
             // BLAS operations.
-            GemmOp, SymmOp, SyrkOp, Syr2kOp, TrmmOp,
-            // IP operation.
-            IPOp>(
+            GemmOp, SymmOp, SyrkOp, Syr2kOp, TrmmOp>(
             [&](auto opNode) -> ResultType {
               return thisCast->visitOp(opNode, args...);
             })
@@ -68,9 +66,6 @@ public:
   HANDLE(SyrkOp);
   HANDLE(Syr2kOp);
   HANDLE(TrmmOp);
-
-  // IP operation.
-  HANDLE(IPOp);
 
 #undef HANDLE
 };

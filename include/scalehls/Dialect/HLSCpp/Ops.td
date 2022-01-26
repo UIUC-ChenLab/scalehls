@@ -64,4 +64,15 @@ def IncludeOp : HLSCppOp<"include", [NoSideEffect]> {
     StrArrayAttr:$libraries);
 }
 
+def IPOp : HLSCppOp<"ip", [NoSideEffect]> {
+  let summary = "General IP";
+  let description = [{}];
+
+  let arguments = (ins
+    Variadic<AnyType>:$inputs,
+    StrAttr:$path,
+    StrAttr:$name
+  );
+}
+
 #endif // SCALEHLS_DIALECT_HLSCPP_STRUCTUREOPS_TD
