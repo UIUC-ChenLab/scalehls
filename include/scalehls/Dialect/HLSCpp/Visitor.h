@@ -9,6 +9,7 @@
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
@@ -39,11 +40,11 @@ public:
             // Memref-related statements.
             memref::AllocOp, memref::AllocaOp, memref::LoadOp, memref::StoreOp,
             memref::DeallocOp, memref::DmaStartOp, memref::DmaWaitOp,
-            memref::ViewOp, memref::SubViewOp, AtomicRMWOp, GenericAtomicRMWOp,
-            AtomicYieldOp,
+            memref::ViewOp, memref::SubViewOp, memref::AtomicRMWOp,
+            GenericAtomicRMWOp, AtomicYieldOp,
             // Tensor-related statements.
-            memref::TensorLoadOp, memref::TensorStoreOp, memref::BufferCastOp,
-            SplatOp, memref::DimOp, RankOp,
+            bufferization::ToMemrefOp, bufferization::ToTensorOp,
+            memref::TensorStoreOp, SplatOp, memref::DimOp, memref::RankOp,
             // Unary expressions.
             math::AbsOp, math::CeilOp, math::CosOp, math::SinOp, math::TanhOp,
             math::SqrtOp, math::RsqrtOp, math::ExpOp, math::Exp2Op, math::LogOp,
@@ -123,19 +124,19 @@ public:
   HANDLE(memref::DeallocOp);
   HANDLE(memref::DmaStartOp);
   HANDLE(memref::DmaWaitOp);
-  HANDLE(AtomicRMWOp);
+  HANDLE(memref::AtomicRMWOp);
   HANDLE(GenericAtomicRMWOp);
   HANDLE(AtomicYieldOp);
   HANDLE(memref::ViewOp);
   HANDLE(memref::SubViewOp);
 
   // Tensor-related statements.
-  HANDLE(memref::TensorLoadOp);
+  HANDLE(bufferization::ToMemrefOp);
+  HANDLE(bufferization::ToTensorOp);
   HANDLE(memref::TensorStoreOp);
-  HANDLE(memref::BufferCastOp);
   HANDLE(SplatOp);
   HANDLE(memref::DimOp);
-  HANDLE(RankOp);
+  HANDLE(memref::RankOp);
 
   // Unary expressions.
   HANDLE(math::AbsOp);

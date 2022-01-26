@@ -30,7 +30,7 @@ func @test_tensor_load_store(%arg0: memref<16x8xi32>) {
   // CHECK:     [[VAL_0:.*]][iv0][iv1] = [[ARG_0:.*]][iv0][iv1];
   // CHECK:   }
   // CHECK: }
-  %0 = memref.tensor_load %arg0 : memref<16x8xi32>
+  %0 = bufferization.to_tensor %arg0 : memref<16x8xi32>
 
   // CHECK: for (int iv0 = 0; iv0 < 16; ++iv0) {
   // CHECK:   for (int iv1 = 0; iv1 < 8; ++iv1) {

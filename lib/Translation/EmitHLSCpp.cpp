@@ -164,7 +164,7 @@ SmallString<8> ScaleHLSEmitterBase::getName(Value val) {
   // than the value name.
   if (auto defOp = val.getDefiningOp()) {
     if (auto constOp = dyn_cast<arith::ConstantOp>(defOp)) {
-      auto constAttr = constOp.value();
+      auto constAttr = constOp.getValue();
 
       if (auto floatAttr = constAttr.dyn_cast<FloatAttr>()) {
         auto value = floatAttr.getValueAsDouble();
@@ -219,11 +219,11 @@ public:
   void emitStore(memref::StoreOp op);
 
   /// Tensor-related statement emitters.
-  void emitTensorLoad(memref::TensorLoadOp op);
+  void emitTensorToMemref(bufferization::ToMemrefOp op);
+  void emitMemrefToTensor(bufferization::ToTensorOp op);
   void emitTensorStore(memref::TensorStoreOp op);
-  void emitTensorToMemref(memref::BufferCastOp op);
   void emitDim(memref::DimOp op);
-  void emitRank(RankOp op);
+  void emitRank(memref::RankOp op);
 
   /// Standard expression emitters.
   void emitBinary(Operation *op, const char *syntax);
@@ -391,17 +391,17 @@ public:
   bool visitOp(memref::DeallocOp op) { return true; }
 
   /// Tensor-related statements.
-  bool visitOp(memref::TensorLoadOp op) {
-    return emitter.emitTensorLoad(op), true;
+  bool visitOp(bufferization::ToMemrefOp op) {
+    return emitter.emitTensorToMemref(op), true;
+  }
+  bool visitOp(bufferization::ToTensorOp op) {
+    return emitter.emitMemrefToTensor(op), true;
   }
   bool visitOp(memref::TensorStoreOp op) {
     return emitter.emitTensorStore(op), true;
   }
-  bool visitOp(memref::BufferCastOp op) {
-    return emitter.emitTensorToMemref(op), true;
-  }
   bool visitOp(memref::DimOp op) { return emitter.emitDim(op), true; }
-  bool visitOp(RankOp op) { return emitter.emitRank(op), true; }
+  bool visitOp(memref::RankOp op) { return emitter.emitRank(op), true; }
 
   /// HLSCpp operations.
   bool visitOp(AssignOp op) { return emitter.emitAssign(op), true; }
@@ -552,19 +552,19 @@ void ModuleEmitter::emitScfFor(scf::ForOp op) {
   // Emit lower bound.
   emitValue(iterVar);
   os << " = ";
-  emitValue(op.lowerBound());
+  emitValue(op.getLowerBound());
   os << "; ";
 
   // Emit upper bound.
   emitValue(iterVar);
   os << " < ";
-  emitValue(op.upperBound());
+  emitValue(op.getUpperBound());
   os << "; ";
 
   // Emit increase step.
   emitValue(iterVar);
   os << " += ";
-  emitValue(op.step());
+  emitValue(op.getStep());
   os << ") {";
   emitInfoAndNewLine(op);
 
@@ -594,19 +594,19 @@ void ModuleEmitter::emitScfIf(scf::IfOp op) {
 
   indent();
   os << "if (";
-  emitValue(op.condition());
+  emitValue(op.getCondition());
   os << ") {";
   emitInfoAndNewLine(op);
 
   addIndent();
-  emitBlock(op.thenRegion().front());
+  emitBlock(op.getThenRegion().front());
   reduceIndent();
 
-  if (!op.elseRegion().empty()) {
+  if (!op.getElseRegion().empty()) {
     indent();
     os << "} else {\n";
     addIndent();
-    emitBlock(op.elseRegion().front());
+    emitBlock(op.getElseRegion().front());
     reduceIndent();
   }
 
@@ -922,7 +922,7 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp op) {
     os << "} else {\n";
 
     // Otherwise, generated values will be accumulated/reduced to the
-    // current results with corresponding AtomicRMWKind operations.
+    // current results with corresponding arith::AtomicRMWKind operations.
     addIndent();
     auto RMWAttrs =
         getIntArrayAttrValue(parentOp, parentOp.getReductionsAttrName());
@@ -931,37 +931,45 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp op) {
       unsigned rank = emitNestedLoopHead(result);
       indent();
       emitValue(result, rank);
-      switch ((AtomicRMWKind)RMWAttrs[resultIdx]) {
-      case (AtomicRMWKind::addf):
-      case (AtomicRMWKind::addi):
+      switch ((arith::AtomicRMWKind)RMWAttrs[resultIdx]) {
+      case (arith::AtomicRMWKind::addf):
+      case (arith::AtomicRMWKind::addi):
         os << " += ";
         emitValue(op.getOperand(resultIdx++), rank);
         break;
-      case (AtomicRMWKind::assign):
+      case (arith::AtomicRMWKind::assign):
         os << " = ";
         emitValue(op.getOperand(resultIdx++), rank);
         break;
-      case (AtomicRMWKind::maxf):
-      case (AtomicRMWKind::maxs):
-      case (AtomicRMWKind::maxu):
+      case (arith::AtomicRMWKind::maxf):
+      case (arith::AtomicRMWKind::maxs):
+      case (arith::AtomicRMWKind::maxu):
         os << " = max(";
         emitValue(result, rank);
         os << ", ";
         emitValue(op.getOperand(resultIdx++), rank);
         os << ")";
         break;
-      case (AtomicRMWKind::minf):
-      case (AtomicRMWKind::mins):
-      case (AtomicRMWKind::minu):
+      case (arith::AtomicRMWKind::minf):
+      case (arith::AtomicRMWKind::mins):
+      case (arith::AtomicRMWKind::minu):
         os << " = min(";
         emitValue(result, rank);
         os << ", ";
         emitValue(op.getOperand(resultIdx++), rank);
         os << ")";
         break;
-      case (AtomicRMWKind::mulf):
-      case (AtomicRMWKind::muli):
+      case (arith::AtomicRMWKind::mulf):
+      case (arith::AtomicRMWKind::muli):
         os << " *= ";
+        emitValue(op.getOperand(resultIdx++), rank);
+        break;
+      case (arith::AtomicRMWKind::ori):
+        os << " |= ";
+        emitValue(op.getOperand(resultIdx++), rank);
+        break;
+      case (arith::AtomicRMWKind::andi):
+        os << " &= ";
         emitValue(op.getOperand(resultIdx++), rank);
         break;
       }
@@ -1023,7 +1031,25 @@ void ModuleEmitter::emitStore(memref::StoreOp op) {
 }
 
 /// Tensor-related statement emitters.
-void ModuleEmitter::emitTensorLoad(memref::TensorLoadOp op) {
+void ModuleEmitter::emitTensorToMemref(bufferization::ToMemrefOp op) {
+  // A declared result indicates that the memref is output of the function, and
+  // has been declared in the function signature.
+  if (isDeclared(op.getResult())) {
+    auto rank = emitNestedLoopHead(op.getResult());
+    indent();
+    emitValue(op.getResult(), rank);
+    os << " = ";
+    emitValue(op.getOperand(), rank);
+    os << ";";
+    emitInfoAndNewLine(op);
+    emitNestedLoopTail(rank);
+  } else {
+    addAlias(op.getOperand(), op.getResult());
+    emitArrayDirectives(op.getResult());
+  }
+}
+
+void ModuleEmitter::emitMemrefToTensor(bufferization::ToTensorOp op) {
   auto rank = emitNestedLoopHead(op.getResult());
   indent();
   emitValue(op.getResult(), rank);
@@ -1045,28 +1071,10 @@ void ModuleEmitter::emitTensorStore(memref::TensorStoreOp op) {
   emitNestedLoopTail(rank);
 }
 
-void ModuleEmitter::emitTensorToMemref(memref::BufferCastOp op) {
-  // A declared result indicates that the memref is output of the function, and
-  // has been declared in the function signature.
-  if (isDeclared(op.getResult())) {
-    auto rank = emitNestedLoopHead(op.getResult());
-    indent();
-    emitValue(op.getResult(), rank);
-    os << " = ";
-    emitValue(op.getOperand(), rank);
-    os << ";";
-    emitInfoAndNewLine(op);
-    emitNestedLoopTail(rank);
-  } else {
-    addAlias(op.getOperand(), op.getResult());
-    emitArrayDirectives(op.getResult());
-  }
-}
-
 void ModuleEmitter::emitDim(memref::DimOp op) {
   if (auto constOp =
           dyn_cast<arith::ConstantOp>(op.getOperand(1).getDefiningOp())) {
-    auto constVal = constOp.value().cast<IntegerAttr>().getInt();
+    auto constVal = constOp.getValue().cast<IntegerAttr>().getInt();
     auto type = op.getOperand(0).getType().cast<ShapedType>();
 
     if (type.hasStaticShape()) {
@@ -1084,7 +1092,7 @@ void ModuleEmitter::emitDim(memref::DimOp op) {
     emitError(op, "index is not a constant.");
 }
 
-void ModuleEmitter::emitRank(RankOp op) {
+void ModuleEmitter::emitRank(memref::RankOp op) {
   auto type = op.getOperand().getType().cast<ShapedType>();
   if (type.hasRank()) {
     indent();
@@ -1189,7 +1197,7 @@ void ModuleEmitter::emitConstant(arith::ConstantOp op) {
   if (isDeclared(op.getResult()))
     return;
 
-  if (auto denseAttr = op.value().dyn_cast<DenseElementsAttr>()) {
+  if (auto denseAttr = op.getValue().dyn_cast<DenseElementsAttr>()) {
     indent();
     emitArrayDecl(op.getResult());
     os << " = {";
@@ -1415,30 +1423,29 @@ void ModuleEmitter::emitLoopDirectives(Operation *op) {
 void ModuleEmitter::emitArrayDirectives(Value memref) {
   bool emitPragmaFlag = false;
   auto type = memref.getType().cast<MemRefType>();
+  auto layoutMap = type.getLayout().getAffineMap();
 
-  if (auto layoutMap = getLayoutMap(type)) {
-    // Emit array_partition pragma(s).
-    SmallVector<int64_t, 8> factors;
-    getPartitionFactors(type, &factors);
+  // Emit array_partition pragma(s).
+  SmallVector<int64_t, 8> factors;
+  getPartitionFactors(type, &factors);
 
-    for (int64_t dim = 0; dim < type.getRank(); ++dim) {
-      if (factors[dim] != 1) {
-        emitPragmaFlag = true;
+  for (int64_t dim = 0; dim < type.getRank(); ++dim) {
+    if (factors[dim] != 1) {
+      emitPragmaFlag = true;
 
-        indent();
-        os << "#pragma HLS array_partition";
-        os << " variable=";
-        emitValue(memref);
+      indent();
+      os << "#pragma HLS array_partition";
+      os << " variable=";
+      emitValue(memref);
 
-        // Emit partition type.
-        if (layoutMap.getResult(dim).getKind() == AffineExprKind::FloorDiv)
-          os << " block";
-        else
-          os << " cyclic";
+      // Emit partition type.
+      if (layoutMap.getResult(dim).getKind() == AffineExprKind::FloorDiv)
+        os << " block";
+      else
+        os << " cyclic";
 
-        os << " factor=" << factors[dim];
-        os << " dim=" << dim + 1 << "\n";
-      }
+      os << " factor=" << factors[dim];
+      os << " dim=" << dim + 1 << "\n";
     }
   }
 

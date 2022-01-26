@@ -47,8 +47,9 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
       // TODO: determine memory kind according to data type.
       MemoryKind kind = MemoryKind::BRAM_S2P;
 
-      auto newType = MemRefType::get(type.getShape(), type.getElementType(),
-                                     type.getAffineMaps(), (unsigned)kind);
+      auto newType =
+          MemRefType::get(type.getShape(), type.getElementType(),
+                          type.getLayout().getAffineMap(), (unsigned)kind);
       memref.setType(newType);
     }
   }

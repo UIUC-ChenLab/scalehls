@@ -6,6 +6,7 @@
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "scalehls/Conversion/Passes.h"
 
@@ -93,7 +94,7 @@ void LegalizeOnnx::runOnOperation() {
         if (auto defOp = index.getDefiningOp())
           if (auto constOp = dyn_cast<arith::ConstantOp>(defOp))
             if (constOp.getType().isa<IndexType>())
-              if (auto constAttr = constOp.value().dyn_cast<IntegerAttr>()) {
+              if (auto constAttr = constOp.getValue().dyn_cast<IntegerAttr>()) {
                 exprs.push_back(
                     builder.getAffineConstantExpr(constAttr.getUInt()));
                 continue;
@@ -137,7 +138,7 @@ void LegalizeOnnx::runOnOperation() {
           // constant operation to substitute it.
           builder.setInsertionPoint(&op);
           auto tensor = builder.create<arith::ConstantOp>(op.getLoc(), value);
-          auto memref = builder.create<memref::BufferCastOp>(
+          auto memref = builder.create<bufferization::ToMemrefOp>(
               op.getLoc(), op.getResult(0).getType(), tensor);
           op.getResult(0).replaceAllUsesWith(memref);
 

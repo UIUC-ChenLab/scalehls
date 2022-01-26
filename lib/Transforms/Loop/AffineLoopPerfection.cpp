@@ -4,6 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/IntegerSet.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -18,31 +19,58 @@ bool scalehls::applyAffineLoopPerfection(AffineLoopBand &band) {
   auto builder = OpBuilder(innermostLoop);
 
   for (unsigned i = band.size() - 1; i > 0; --i) {
-    // Get the current loop of the child loop.
+    // Get the current loop and the child loop.
     auto loop = band[i - 1];
     auto childLoop = band[i];
 
-    // Collect all operations before the child loop.
-    SmallVector<Operation *, 4> frontOps;
-    for (auto &op : loop.getBody()->getOperations()) {
-      if (&op != childLoop)
-        frontOps.push_back(&op);
-      else
+    for (auto &op : llvm::make_early_inc_range(loop.getOps())) {
+      if (&op == childLoop)
         break;
+      // If any user of prefix operations is in the child loop, we need to
+      // buffer the result in a memory on stack such that the users can fetch
+      // the correct data from the stack.
+      for (auto result : op.getResults())
+        if (llvm::any_of(result.getUsers(), [&](Operation *user) {
+              return childLoop->isProperAncestor(user);
+            })) {
+          auto type = MemRefType::get({1}, result.getType());
+          auto map = builder.getConstantAffineMap(0);
+
+          builder.setInsertionPoint(band.front());
+          auto alloc = builder.create<memref::AllocOp>(loop.getLoc(), type);
+          builder.setInsertionPointAfter(&op);
+          builder.create<AffineStoreOp>(loop.getLoc(), result, alloc, map,
+                                        ValueRange({}));
+
+          for (auto &use : llvm::make_early_inc_range(result.getUses())) {
+            if (!childLoop->isProperAncestor(use.getOwner()))
+              continue;
+            builder.setInsertionPoint(use.getOwner());
+            auto load = builder.create<AffineLoadOp>(loop.getLoc(), alloc, map,
+                                                     ValueRange({}));
+            use.set(load);
+          }
+        }
     }
 
-    // All operations before the child loop should be moved to the innermost
-    // loop, they are collected in frontOps.
-    if (!frontOps.empty()) {
-      // TODO: for now, we assume all users are inside of the current loop. This
-      // is important because if any user is located at inner loops, it is
-      // required to create a memref for holding the result.
-      for (auto op : frontOps)
-        for (auto user : op->getUsers())
-          if (user->getParentOp() != loop)
-            return false;
+    // Collect all operations before and afterthe child loop.
+    SmallVector<Operation *, 4> prefixOps;
+    SmallVector<Operation *, 4> suffixOps;
+    bool isPrefix = true;
+    for (auto &op : loop.getOps()) {
+      if (&op == childLoop) {
+        isPrefix = false;
+        continue;
+      }
+      if (isPrefix)
+        prefixOps.push_back(&op);
+      else if (!isa<AffineYieldOp>(op))
+        suffixOps.push_back(&op);
+    }
 
-      // Create AffineIf in the front of the innermost loop.
+    // Handle prefix operations.
+    if (!prefixOps.empty()) {
+      // Construct the condition of the if statement.
       SmallVector<AffineExpr, 4> ifExprs;
       SmallVector<bool, 4> ifEqFlags;
       SmallVector<Value, 4> ifOperands;
@@ -72,43 +100,23 @@ bool scalehls::applyAffineLoopPerfection(AffineLoopBand &band) {
       }
       auto ifCondition = IntegerSet::get(dim, 0, ifExprs, ifEqFlags);
 
-      // Set builder insertion point and create AffineIf operation.
-      builder.setInsertionPointToStart(innermostLoop.getBody());
-      auto ifOp =
-          builder.create<AffineIfOp>(loop.getLoc(), ifCondition, ifOperands,
-                                     /*withElseRegion=*/false);
-
-      // Move all operations in frontOps into the innermost loop. Note that if
-      // the operation has result, it will always be executed. However, if the
-      // operation doesn't have result (e.g. AffineStore operation), it will be
-      // putted into the generated AffineIf operation and conditionally
-      // executed.
-      for (auto op : frontOps) {
-        if (op->getNumResults())
-          op->moveBefore(ifOp);
-        else
+      // Move all operations before the child loop to the innermost loop.
+      auto destOp = &innermostLoop.front();
+      for (auto op : prefixOps) {
+        if (isa<AffineStoreOp>(op)) {
+          // FIXME: Now we only consider affine store operations.
+          builder.setInsertionPoint(destOp);
+          auto ifOp = builder.create<AffineIfOp>(
+              loop.getLoc(), ifCondition, ifOperands, /*withElseRegion=*/false);
           op->moveBefore(ifOp.getThenBlock()->getTerminator());
+        } else
+          op->moveBefore(destOp);
       }
     }
 
-    // Collect all operations after the inner loop.
-    SmallVector<Operation *, 4> backOps;
-    auto &opList = loop.getBody()->getOperations();
-    for (auto opIt = opList.rbegin(); opIt != opList.rend(); ++opIt) {
-      auto &op = *opIt;
-      if (!isa<AffineYieldOp>(op)) {
-        if (&op != childLoop)
-          backOps.push_back(&op);
-        else
-          break;
-      }
-    }
-
-    // All operations after the inner loop should be moved to the
-    // innermost loop, they are collected in backOps.
-    if (!backOps.empty()) {
-      // Create AffineIf in the back of the innermost loop (before the
-      // terminator).
+    // Handle suffix operations.
+    if (!suffixOps.empty()) {
+      // Construct the condition of the if statement.
       SmallVector<AffineExpr, 4> ifExprs;
       SmallVector<bool, 4> ifEqFlags;
       SmallVector<Value, 4> ifOperands;
@@ -138,23 +146,17 @@ bool scalehls::applyAffineLoopPerfection(AffineLoopBand &band) {
       }
       auto ifCondition = IntegerSet::get(dim, 0, ifExprs, ifEqFlags);
 
-      // Set builder insertion point and create AffineIf operation.
-      builder.setInsertionPoint(innermostLoop.getBody()->getTerminator());
-      auto ifOp =
-          builder.create<AffineIfOp>(loop.getLoc(), ifCondition, ifOperands,
-                                     /*withElseRegion=*/false);
-
-      // Move all operations in backOps into the innermost loop. Note that if
-      // the operation has result, it will always be executed. However, if the
-      // operation doesn't have result (e.g. AffineStore operation), it will be
-      // putted into the generated AffineIf operation and conditionally
-      // executed.
-      for (auto opIt = backOps.rbegin(); opIt < backOps.rend(); ++opIt) {
-        auto op = *opIt;
-        if (op->getNumResults())
-          op->moveBefore(ifOp);
-        else
+      // Move all operations after the child loop to the innermost loop.
+      auto destOp = innermostLoop.getBody()->getTerminator();
+      for (auto op : suffixOps) {
+        if (isa<AffineStoreOp>(op)) {
+          // FIXME: Now we only consider affine store operations.
+          builder.setInsertionPoint(destOp);
+          auto ifOp = builder.create<AffineIfOp>(
+              loop.getLoc(), ifCondition, ifOperands, /*withElseRegion=*/false);
           op->moveBefore(ifOp.getThenBlock()->getTerminator());
+        } else
+          op->moveBefore(destOp);
       }
     }
   }

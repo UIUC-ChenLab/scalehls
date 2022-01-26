@@ -9,7 +9,8 @@
 
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
-def AssignOp : HLSCppOp<"assign", [SameOperandsAndResultType, NoSideEffect]> {
+def AssignOp : HLSCppOp<"assign",
+    [SameOperandsAndResultElementType, NoSideEffect]> {
   let summary = "Assign the input value to the output";
   let description = [{
     This hlscpp.assign operation assigns the input value to the output, and can

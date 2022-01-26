@@ -29,16 +29,6 @@ def LegalizeToHLSCpp : Pass<"legalize-to-hlscpp", "FuncOp"> {
   ];
 }
 
-def HLSKernelToAffine : Pass<"hlskernel-to-affine", "FuncOp"> {
-  let summary = "Convert HLSKernel operation to Affine loops";
-  let description = [{
-    This hlskernel-to-affine pass converts HLSKernel operations to their Affine
-    level representations.
-  }];
-
-  let constructor = "mlir::scalehls::createHLSKernelToAffinePass()";
-}
-
 //===----------------------------------------------------------------------===//
 // Onnx Kernel Legalization Pass
 //===----------------------------------------------------------------------===//
@@ -53,6 +43,7 @@ def LegalizeOnnx : Pass<"legalize-onnx", "ModuleOp"> {
   let constructor = "mlir::scalehls::createLegalizeOnnxPass()";
 }
 
+<<<<<<< HEAD
 //===----------------------------------------------------------------------===//
 // Onnx Kernel Legalization Pass
 //===----------------------------------------------------------------------===//
@@ -86,4 +77,6 @@ def ConvertOnnxToTosa : Pass<"convert-onnx-to-tosa", "ModuleOp"> {
   ];
 }
 
+=======
+>>>>>>> master
 #endif // SCALEHLS_CONVERSION_PASSES_TD

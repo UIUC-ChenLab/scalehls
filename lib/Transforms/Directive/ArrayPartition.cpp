@@ -15,7 +15,7 @@ using namespace hlscpp;
 
 static void updateSubFuncs(FuncOp func, Builder builder) {
   func.walk([&](CallOp op) {
-    auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.calleeAttr());
+    auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCalleeAttr());
     auto subFunc = dyn_cast<FuncOp>(callee);
 
     // Set sub-function type.
@@ -258,7 +258,7 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
   // Apply partition to all sub-functions and traverse all function to update
   // the "partitionsMap".
   func.walk([&](CallOp op) {
-    auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.calleeAttr());
+    auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCalleeAttr());
     auto subFunc = dyn_cast<FuncOp>(callee);
     assert(subFunc && "callable is not a function operation");
 
@@ -268,35 +268,36 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
     auto subFuncType = subFunc.getType();
     unsigned index = 0;
     for (auto inputType : subFuncType.getInputs()) {
-      if (auto memrefType = inputType.dyn_cast<MemRefType>())
-        if (auto layout = getLayoutMap(memrefType)) {
-          auto &partitions = partitionsMap[op.getOperand(index)];
+      if (auto memrefType = inputType.dyn_cast<MemRefType>()) {
+        auto &partitions = partitionsMap[op.getOperand(index)];
+        auto layoutMap = memrefType.getLayout().getAffineMap();
 
-          // If the current partitionsMap is empty, initialize it with no
-          // partition and factor of 1.
-          if (partitions.empty()) {
-            for (int64_t dim = 0; dim < memrefType.getRank(); ++dim)
-              partitions.push_back(PartitionInfo(PartitionKind::NONE, 1));
-          }
+        // If the current partitionsMap is empty, initialize it with no
+        // partition and factor of 1.
+        if (partitions.empty()) {
+          for (int64_t dim = 0; dim < memrefType.getRank(); ++dim)
+            partitions.push_back(PartitionInfo(PartitionKind::NONE, 1));
+        }
 
-          // Get the partition factor collected from sub-function.
-          SmallVector<int64_t, 8> factors;
-          getPartitionFactors(memrefType, &factors);
+        // Get the partition factor collected from sub-function.
+        SmallVector<int64_t, 8> factors;
+        getPartitionFactors(memrefType, &factors);
 
-          // Traverse all dimension of the memref.
-          for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
-            auto factor = factors[dim];
+        // Traverse all dimension of the memref.
+        for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
+          auto factor = factors[dim];
 
-            // If the factor from the sub-function is larger than the current
-            // factor, replace it.
-            if (factor > partitions[dim].second) {
-              if (layout.getResult(dim).getKind() == AffineExprKind::FloorDiv)
-                partitions[dim] = PartitionInfo(PartitionKind::BLOCK, factor);
-              else
-                partitions[dim] = PartitionInfo(PartitionKind::CYCLIC, factor);
-            }
+          // If the factor from the sub-function is larger than the current
+          // factor, replace it.
+          if (factor > partitions[dim].second) {
+            if (layoutMap.getResult(dim).getKind() == AffineExprKind::FloorDiv)
+              partitions[dim] = PartitionInfo(PartitionKind::BLOCK, factor);
+            else
+              partitions[dim] = PartitionInfo(PartitionKind::CYCLIC, factor);
           }
         }
+      }
+
       ++index;
     }
   });
