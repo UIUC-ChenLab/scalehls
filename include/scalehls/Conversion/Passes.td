@@ -43,21 +43,6 @@ def LegalizeOnnx : Pass<"legalize-onnx", "ModuleOp"> {
   let constructor = "mlir::scalehls::createLegalizeOnnxPass()";
 }
 
-<<<<<<< HEAD
-//===----------------------------------------------------------------------===//
-// Onnx Kernel Legalization Pass
-//===----------------------------------------------------------------------===//
-
-def QuantizeOnnx : Pass<"quantize-onnx", "FuncOp"> {
-  let summary = "Quantize DNN model to integer representation";
-  let description = [{
-    This pass will quantize all inputs, weights, and outputs to 8-bits int and
-    quantize bias and intermediate accumulation results to 32-bits int.
-  }];
-
-  let constructor = "mlir::scalehls::createQuantizeOnnxPass()";
-}
-
 //===----------------------------------------------------------------------===//
 // ONNX to TOSA Pass
 //===----------------------------------------------------------------------===//
@@ -77,6 +62,4 @@ def ConvertOnnxToTosa : Pass<"convert-onnx-to-tosa", "ModuleOp"> {
   ];
 }
 
-=======
->>>>>>> master
 #endif // SCALEHLS_CONVERSION_PASSES_TD

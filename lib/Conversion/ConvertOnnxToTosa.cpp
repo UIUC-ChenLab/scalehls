@@ -10,7 +10,6 @@
 
 using namespace mlir;
 using namespace scalehls;
-using namespace tosa;
 
 namespace {
 struct ConvertOnnxToTosa : public ConvertOnnxToTosaBase<ConvertOnnxToTosa> {

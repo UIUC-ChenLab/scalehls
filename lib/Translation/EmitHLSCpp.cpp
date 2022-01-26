@@ -11,7 +11,6 @@
 #include "mlir/Support/FileUtilities.h"
 #include "mlir/Translation.h"
 #include "scalehls/Dialect/HLSCpp/Visitor.h"
-#include "scalehls/Dialect/HLSKernel/Visitor.h"
 #include "scalehls/InitAllDialects.h"
 #include "scalehls/Support/Utils.h"
 #include "llvm/Support/JSON.h"
