@@ -197,11 +197,11 @@ def get_perf (template_path, directives_path, top_function, part, parameters, pr
     except OSError as e:
         print("Error: %s : %s" % (os.file_path, e.strerror))
 
-    # # remove the log file
-    # try:
-    #     os.remove("vivado_hls.log")
-    # except OSError as e:
-    #     print("Error: %s : %s" % (os.file_path, e.strerror))
+    # remove the log file
+    try:
+        os.remove("vivado_hls.log")
+    except OSError as e:
+        print("Error: %s : %s" % (os.file_path, e.strerror))
     
     # put the data into the dictionary to be converted to a dataframe (with a single row)
     parameters.update({'latency':avg_latency, 
@@ -211,5 +211,5 @@ def get_perf (template_path, directives_path, top_function, part, parameters, pr
                        'bram_perc':bram_perc,
                        'is_feasible':is_feasible,
                        'is_error':is_error})
-
+                       
     return parameters

@@ -1,6 +1,7 @@
 #this assumes that input C file uses output from scalehls
 
-import numpy as np
+import os
+import shutil
 import pandas as pd
 import argparse
 
@@ -24,6 +25,10 @@ def print_variables(var_forlist, var_arraylist_sized):
         print(item)      
 
 def main():
+
+    #temp files store location
+    tar_dir = "generated_files"
+
     parser = argparse.ArgumentParser(prog='Cfor_lex')
     parser.add_argument('-if', dest='inputfile',
                     metavar="inputfile",
@@ -36,8 +41,17 @@ def main():
                     help='top_function')
     parser.add_argument('-p', dest='part',
                     metavar="part",
-                    help='SoC part')                    
+                    help='SoC part')
+    parser.add_argument('-c', '--clean', action='store_true',
+                help='clean directories')
     opts = parser.parse_args()
+
+    if opts.clean:
+        try:
+            shutil.rmtree(tar_dir)
+        except OSError as e:
+            print("Error: %s : %s" % (os.file_path, e.strerror))
+        return 0
 
     #cheak if manual input is given
     inputfiles = []
@@ -49,7 +63,11 @@ def main():
     else:
         source_file, inputtop, inputpart, inputfiles, template = INPAR.read_user_input()
 
-    #scaleHLS optimization
+    #check if generated_files directory exists
+    if not(os.path.exists(tar_dir)):
+        os.makedirs(tar_dir)
+
+    #scaleHLS manual optimization
     val = ""
     while val == "":
         val = input("What ScaleHLS optimizations? (Manual / DSE / None)\n")

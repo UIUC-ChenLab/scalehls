@@ -1,7 +1,7 @@
-#define NI 32
-#define NJ 32
-#define NK 32
-#define NL 32
+#define NI 64
+#define NJ 64
+#define NK 64
+#define NL 64
 
 void kernel_2mm(float alpha, float beta, float tmp[NI][NJ], float A[NI][NK],
                 float B[NK][NJ], float C[NL][NJ], float D[NI][NL]) {

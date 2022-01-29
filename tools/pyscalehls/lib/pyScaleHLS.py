@@ -1,3 +1,4 @@
+import os
 import shutil
 import io
 import subprocess
@@ -67,15 +68,21 @@ def do_run(command):
 def scalehls_dse(source_file, inputtop):
     print("Starting ScaleHLS DSE")
 
+    #scalehls dse temp directory
+    sdse_dir = "generated_files/scalehls_dse_temp/"
+
+    if not(os.path.exists(sdse_dir)):
+        os.makedirs(sdse_dir)
+
     targetspec = 'target-spec=target-spec.ini'
 
     p1 = subprocess.Popen(['mlir-clang', source_file, '-function=' + inputtop, '-memref-fullrank', '-raise-scf-to-affine', '-S'],
                             stdout=subprocess.PIPE)                           
-    process = subprocess.run(['scalehls-opt', '-dse=top-func='+ inputtop + ' output-path=./generated_files/ csv-path=./generated_files/ ' + targetspec, '-debug-only=scalehls'], 
+    process = subprocess.run(['scalehls-opt', '-dse=top-func='+ inputtop + ' output-path=./' + sdse_dir + ' csv-path=./' + sdse_dir + ' ' + targetspec, '-debug-only=scalehls'], 
                             stdin=p1.stdout, stdout=subprocess.DEVNULL)
 
     fout = open('generated_files/'+ 'ScaleHLS_DSE_out.cpp', 'wb')
-    subprocess.run(['scalehls-translate', '-emit-hlscpp', 'generated_files/'+ inputtop + '_pareto_0.mlir'], stdout=fout)
+    subprocess.run(['scalehls-translate', '-emit-hlscpp', sdse_dir + inputtop + '_pareto_0.mlir'], stdout=fout)
 
     print("Finished ScaleHLS DSE")
 

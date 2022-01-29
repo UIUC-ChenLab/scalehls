@@ -34,3 +34,4 @@ void kernel_3mm(float A[NI][NK], float B[NK][NJ], float C[NJ][NM],
     }
 #pragma endscop
 }
+
