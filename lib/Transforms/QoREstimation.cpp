@@ -966,13 +966,13 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     // Parse JSON file into memory.
     auto config = llvm::json::parse(configFile->getBuffer());
     if (!config) {
-      llvm::errs() << "failed to parse the target spec json file";
+      llvm::errs() << "failed to parse the target spec json file\n";
       return signalPassFailure();
     }
     auto configObj = config.get().getAsObject();
     if (!configObj) {
       llvm::errs() << "support an object in the target spec json file, found "
-                      "something else";
+                      "something else\n";
       return signalPassFailure();
     }
 

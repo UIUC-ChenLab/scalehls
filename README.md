@@ -29,7 +29,7 @@ $ ./build-scalehls.sh
 
 After the build, we suggest to export the following paths.
 ```sh
-$ export PATH=$PATH:$PWD/build/bin:$PWD/polygeist/build/mlir-clang
+$ export PATH=$PATH:$PWD/build/bin:$PWD/polygeist/build/bin
 $ export PYTHONPATH=$PYTHONPATH:$PWD/build/tools/scalehls/python_packages/scalehls_core
 ```
 

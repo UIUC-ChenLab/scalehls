@@ -64,7 +64,7 @@ set(SCALEHLS_TOOLS_DIR ${CMAKE_BINARY_DIR}/bin)
 set(SCALEHLS_UTILS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/utils)
 set(SCALEHLS_PYTHON_PACKAGES_DIR ${SCALEHLS_BINARY_DIR}/python_packages)
 # TODO: This should not be hard-coded.
-set(POLYGEIST_TOOLS_DIR ${SCALEHLS_MAIN_SRC_DIR}/polygeist/build/mlir-clang)
+set(POLYGEIST_TOOLS_DIR ${SCALEHLS_MAIN_SRC_DIR}/polygeist/build/bin)
 
 list(APPEND CMAKE_MODULE_PATH "${MLIR_MAIN_SRC_DIR}/cmake/modules")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
