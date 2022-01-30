@@ -97,7 +97,8 @@ def main():
         if((val == "DSE") or (val == "D") or (val == "d")):
             PYSHLS.scalehls_dse(source_file, inputtop)
 
-            var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file_array('generated_files/ScaleHLS_DSE_out.cpp')
+            var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file('generated_files/ScaleHLS_DSE_out.cpp')
+            var_forlist = []
             print_variables(var_forlist, var_arraylist_sized)
         elif((val == "Manual") or (val == "M") or (val == "m")):
             opt_knobs, opt_knob_names = PYSHLS.ScaleHLSopt(source_file, inputtop, "generated_files/ScaleHLS_opted.c")   
@@ -121,6 +122,8 @@ def main():
 
     #create template
     INPAR.create_template(source_file, inputfiles, template)
+
+    return 0
 
     #Create Random Training Set
     val = ""

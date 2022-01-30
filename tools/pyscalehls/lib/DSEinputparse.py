@@ -43,114 +43,9 @@ def read_template():
     file.close()
     return template
 
-def process_source_file_array(inputfile):
-    var_forlist = []
-    var_forlist_scoped = []
-    var_arraylist_raw = []
-    var_arraylist_sized = []
-    filebuf = []
-    loopnum = 0
-    arraynum = 0
-    brace_cout = 0
-    for_brace_cout = 0
-    scope = None
-    newfile = open ("generated_files/ML_in.c", 'w')
-    with open(inputfile, 'r') as file:
-        for line in file:
-            #scope finder
-            if brace_cout == 0: 
-                #filebuf.append(line) # store file in buffer
-                raw_scope = re.findall(r'((void|int|float))\s([A-Za-z_]+[A-Za-z_\d]*)(\s)?(\()', line)
-                if raw_scope:
-                    scope = raw_scope[0][2]
-            if(re.findall('{', line)):
-                if brace_cout == 0:
-                    #scope = find_scope(filebuf)
-                    brace_cout += 1
-                else:
-                    brace_cout += 1
-                
-                #for band
-                if for_brace_cout > 0:
-                    for_brace_cout += 1
-
-            if(re.findall('}', line)):
-                #function scope
-                if brace_cout == 1:
-                    filebuf.clear() #clear buf when brackets are matched
-                    scope = None
-                    var_forlist.append("")
-                    var_arraylist_raw.append("")
-                    brace_cout -= 1
-                else:
-                    brace_cout -= 1
-                
-                #for band
-                if for_brace_cout == 1:
-                    var_forlist_scoped.append(loopnum - 1)
-                    for_brace_cout -= 1
-                else:
-                    for_brace_cout -= 1
-            # cleanup code                       
-#if re.findall(r'^(\s)*#', line):
-            # temp measure
-            if(re.findall(r'^(\s)*#include', line)): #ignore #include
-                None
-            elif(re.findall(r'^(\s)*#pragma', line)):
-                if(re.findall(r'^(\s)*#pragma HLS pipeline II', line)): #keep pipeline
-                    newfile.write(line)
-                else: #ignore #pragma
-                    None 
-            elif(re.findall(r'using namespace std;', line)): #ignore #pragma
-                None
-            # todo: temp measure -> implement using MLIR IR
-            # elif(re.findall('for', line)): #find loops // only supports one forloop per line
-            #     if not(re.findall(r'(.)*(//)(.)*(for)(.)*', line)): # ignore for in comment
-            #         #for band counter
-            #         if for_brace_cout == 0: 
-            #             var_forlist_scoped.append(loopnum)
-            #             for_brace_cout += 1
-
-            #         findbound = re.findall(r'(<|>|<=|>=)(.+?);', line) #find bound
-            #         testint = findbound[0][1].strip().isnumeric()
-            #         if testint: # test if variable bound
-            #             forbound = findbound[0][1].strip()
-            #         else:                        
-            #             forbound = 'Variable'
-            #         var_forlist.append(("loop"+str(loopnum), line.strip(), scope, forbound))
-            #         newfile.write(line.replace("for", "loop" + str(loopnum)  + ": " + "for"))
-            #         loopnum += 1
-            #     else: # copy other
-            #         newfile.write(line)    
-            else: # copy other
-                newfile.write(line)
-            #find array
-            arr2part = re.findall(r'(int|float)\s([A-Za-z_]+[A-Za-z_\d]*)\s?(\[[\d]+\])*\s?(\[[\d]+\])+(,|;|\)|' ')', line)
-            if(arr2part):
-                for item in arr2part:
-                    var_arraylist_raw.append(("array"+str(arraynum), "".join(item[1:-1]), scope))
-                    #var_arraylist_raw.append(("array"+str(arraynum), item[0] + " " + "".join(item[1:-1]), scope))
-                    arraynum += 1
-    file.close()
-    newfile.close()
-    
-    #find dimension and size
-    for item in var_arraylist_raw :
-        if item: # not empty
-            current = list(item)
-            array_sizing = re.findall(r'(\[)(.+?)(\])', current[1])
-            array_dim = len(array_sizing)
-            current.append(array_dim)
-            for cdim in array_sizing:
-                current.append(cdim[1])
-            var_arraylist_sized.append(tuple(current))
-        else:
-            var_arraylist_sized.append(item)
-    
-    return var_forlist, var_arraylist_sized, var_forlist_scoped
-
 def process_source_file(inputfile):
     var_forlist = []
+    var_forlist_scoped_start = 0
     var_forlist_scoped = []
     var_arraylist_raw = []
     var_arraylist_sized = []
@@ -193,9 +88,10 @@ def process_source_file(inputfile):
                 
                 #for band
                 if for_brace_cout == 1:
-                    var_forlist_scoped.append(loopnum - 1)
+
+                    var_forlist_scoped.append((var_forlist_scoped_start, loopnum - 1))
                     for_brace_cout -= 1
-                else:
+                elif for_brace_cout > 1:
                     for_brace_cout -= 1
             # cleanup code                       
 #if re.findall(r'^(\s)*#', line):
@@ -210,8 +106,8 @@ def process_source_file(inputfile):
             elif(re.findall('for', line)): #find loops // only supports one forloop per line
                 if not(re.findall(r'(.)*(//)(.)*(for)(.)*', line)): # ignore for in comment
                     #for band counter
-                    if for_brace_cout == 0: 
-                        var_forlist_scoped.append(loopnum)
+                    if for_brace_cout == 0:
+                        var_forlist_scoped_start = loopnum
                         for_brace_cout += 1
 
                     findbound = re.findall(r'(<|>|<=|>=)(.+?);', line) #find bound
@@ -280,3 +176,11 @@ def create_template(sourcefile, inputfiles, template):
         templatefile.write("add_files "+str(sourcefile)+"\n")
     for item in template:
         templatefile.write(item)
+
+def find_array_dependencies(inputfile, array_list, loop_scope_list):
+    
+    
+    with open(inputfile, 'r') as file:
+        for tar_array in array_list:
+            for line in file:
+                print("test")
