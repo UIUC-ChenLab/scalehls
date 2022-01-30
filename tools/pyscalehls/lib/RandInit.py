@@ -118,20 +118,29 @@ def record_dataframe(result):
     # add the evaluated design point to current dataset
     dataset = dataset.append(result, ignore_index=True)
     #dataset = dataset.append(parameters, ignore_index=True)
-    dataset.to_csv('generated_files/ML_train.csv')
+    dataset.to_csv('../ML_train.csv')
         
     # make sure the is_error column is boolean type
     dataset.is_error = dataset.is_error.astype('bool')
 
 
 def random_train_RFML(top_function, part, nub_of_init):
-    nub_pro = multiprocessing.cpu_count() - 2
-
-    parameter_file = 'generated_files/ML_params.csv'
-    directives_path = 'generated_files/ML_directive'
-    template_path = 'generated_files/ML_template.txt'
-
     global dataset
+
+    parameter_file = '../ML_params.csv'
+    directives_path = 'ML_directive'
+    template_path = '../ML_template.txt'
+
+    #run hls in temp folder
+    vhls_dir = "generated_files/vhls_dse_temp"
+    if not(os.path.exists(vhls_dir)):
+        os.makedirs(vhls_dir)    
+    os.chdir(vhls_dir)
+
+    # print("randomtranin start")
+    # print(os.getcwd())
+    
+    nub_pro = multiprocessing.cpu_count() - 2
 
     dataset, feature_columns, label_columns = dataframe_create(parameter_file)
 
@@ -141,10 +150,15 @@ def random_train_RFML(top_function, part, nub_of_init):
         for i in range(nub_of_init):
             pool.apply_async(threaded_generate_random_training_set, args = (parameter_file, directives_path, template_path, 
                                                                             top_function, part), callback = record_dataframe)
-
         pool.close()
-        pool.join()
+        pool.join()        
     print("Finished Evaluation of {0} Randomly Generated Design Points".format(nub_of_init))
+
+    #return to main working directory
+    os.chdir("../..")
+
+    # print("randomtranin end")
+    # print(os.getcwd())
 
     return dataset, feature_columns
 

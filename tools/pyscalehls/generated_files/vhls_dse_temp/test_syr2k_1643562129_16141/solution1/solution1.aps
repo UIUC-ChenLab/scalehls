@@ -1,0 +1,6 @@
+<AutoPilot:solution xmlns:AutoPilot="com.autoesl.autopilot.solution">
+    <config>
+        <schedule model="test_syr2k"/>
+    </config>
+</AutoPilot:solution>
+

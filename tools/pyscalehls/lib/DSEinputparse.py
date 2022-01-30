@@ -1,6 +1,8 @@
+from pickle import FALSE
 import re
 
 def read_user_input():
+    default_file_flag = False
     inputfiles = []
     with open("ML_userinput.txt", 'r') as file:
         for line in file:
@@ -19,7 +21,12 @@ def read_user_input():
                 inputpart = inputpart_raw[0].strip()
                 #print(inputpart)
             elif re.findall(r'add_files', line):
-                inputfiles.append(line)
+                if line.strip() == "add_files default":
+                    inputfiles = ["add_files ../ML_in.c\n"]
+                    default_file_flag = True
+                else:
+                    if default_file_flag == False:
+                        inputfiles.append(line)
     file.close()    
     template = read_template()
     return source_file, inputtop, inputpart, inputfiles, template

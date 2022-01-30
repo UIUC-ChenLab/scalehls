@@ -25,7 +25,6 @@ def print_variables(var_forlist, var_arraylist_sized):
         print(item)      
 
 def main():
-
     #temp files store location
     tar_dir = "generated_files"
 
@@ -42,15 +41,39 @@ def main():
     parser.add_argument('-p', dest='part',
                     metavar="part",
                     help='SoC part')
-    parser.add_argument('-c', '--clean', action='store_true',
-                help='clean directories')
+    parser.add_argument('-c', '--clean_temp', action='store_true',
+                help='clean tempfiles')
+    parser.add_argument('-cf', '--clean_all', action='store_true',
+                help='clean all generated files')                
     opts = parser.parse_args()
 
-    if opts.clean:
+    if opts.clean_all:
+        #remove dse output
+        fl = []        
+        for var in os.listdir():
+            if var.endswith(".csv"):
+                fl.append(var)
+        for var in fl:
+            os.remove(var)
+        #remove generated files
         try:
             shutil.rmtree(tar_dir)
         except OSError as e:
-            print("Error: %s : %s" % (os.file_path, e.strerror))
+            print("Did not find \"generated_files\"")
+            # print("Error: %s : %s" % (os.file_path, e.strerror))
+        return 0
+
+    if opts.clean_temp:
+        try:
+            shutil.rmtree(tar_dir + "/scalehls_dse_temp")
+        except OSError as e:
+            print("Did not find \"scalehls_dse_temp\"")
+            # print("Error: %s : %s" % (os.file_path, e.strerror))
+        try:
+            shutil.rmtree(tar_dir + "/vhls_dse_temp")
+        except OSError as e:
+            print("Did not find \"vhls_dse_temp\"")
+            # print("Error: %s : %s" % (os.file_path, e.strerror))
         return 0
 
     #cheak if manual input is given
@@ -110,8 +133,8 @@ def main():
         elif((val == "N") or (val == "n") or (val == "no")):
             parameter_file = 'generated_files/ML_params.csv'
             dataset, feature_columns, label_columns = RT.dataframe_create(parameter_file)
-            # dataset = pd.read_csv('generated_files/ML_train.csv', index_col=0)
-            dataset = pd.read_csv('generated_files/ML_train(2mm).csv', index_col=0)
+            dataset = pd.read_csv('generated_files/ML_train.csv', index_col=0)
+            # dataset = pd.read_csv('generated_files/ML_train(2mm).csv', index_col=0)
             print(dataset)
 
 

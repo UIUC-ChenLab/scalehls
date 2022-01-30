@@ -12,8 +12,9 @@ top_function = kernel_2mm
 
 part = xc7k70tfbv676-1
 
-# add file locations
-add_files generated_files/ML_in.c
+# Extra file locations
+add_files asdf
+add_files default
 
 #template
 open_solution "solution1"

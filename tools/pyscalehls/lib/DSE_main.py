@@ -498,8 +498,8 @@ def DSE_searching(dataset, models, total_steps, top_function, part, parameter_fi
         print(pareto_frontier)
 
         # save data instantly for easier test running
-        dataset.to_csv('DSE_out.csv')
-        pareto_frontier.to_csv('DSE_out_pareto.csv')
+        dataset.to_csv('../../DSE_out.csv')
+        pareto_frontier.to_csv('../../DSE_out_pareto.csv')
         
 
         # increment the global step
@@ -508,8 +508,8 @@ def DSE_searching(dataset, models, total_steps, top_function, part, parameter_fi
         # train the models
         update_models(models, dataset)
         
-        with open('DSE_method_records.pickle', 'wb') as f:
-            pickle.dump(method_records, f)
+        # with open('DSE_method_records.pickle', 'wb') as f:
+        #     pickle.dump(method_records, f)
 
         # break if needed
         if step >= total_steps: break
@@ -518,9 +518,15 @@ def DSE_searching(dataset, models, total_steps, top_function, part, parameter_fi
 
 def DSE_start(dataset, total_steps, top_function, part, feature_columns):
 
-    parameter_file = 'generated_files/ML_params.csv'
-    directives_path = 'generated_files/ML_directive'
-    template_path = 'generated_files/ML_template.txt'
+    #run hls in temp folder
+    vhls_dir = "generated_files/vhls_dse_temp"
+    if not(os.path.exists(vhls_dir)):
+        os.makedirs(vhls_dir)
+    os.chdir(vhls_dir)
+
+    parameter_file = '../ML_params.csv'
+    directives_path = 'ML_directive'
+    template_path = '../ML_template.txt'
 
     dir_gen = generate_directives.RandomDirectiveGenerator(parameter_file)
     crossover = generate_directives.DirectiveCrossover(parameter_file)
@@ -538,5 +544,8 @@ def DSE_start(dataset, total_steps, top_function, part, feature_columns):
     update_models(models, dataset)
 
     DSE_searching(dataset, models, total_steps, top_function, part, parameter_file, directives_path, template_path, dir_gen, crossover, mutator, writer, feature_columns)
+
+    #return to main working directory
+    os.chdir("../..")
     
 
