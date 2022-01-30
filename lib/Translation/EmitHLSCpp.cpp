@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Translation/EmitHLSCpp.h"
+#include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/IR/AffineExprVisitor.h"
 #include "mlir/IR/IntegerSet.h"
@@ -254,6 +255,7 @@ private:
   /// MLIR component and HLS C++ pragma emitters.
   void emitBlock(Block &block);
   void emitLoopDirectives(Operation *op);
+  void emitLoopTripCount(AffineForOp op);
   void emitArrayDirectives(Value memref);
   void emitFunctionDirectives(FuncOp func, ArrayRef<Value> portList);
   void emitFunction(FuncOp func);
@@ -688,6 +690,7 @@ void ModuleEmitter::emitAffineFor(AffineForOp op) {
   addIndent();
 
   emitLoopDirectives(op);
+  emitLoopTripCount(op);
   emitBlock(*op.getBody());
   reduceIndent();
 
@@ -1416,6 +1419,16 @@ void ModuleEmitter::emitLoopDirectives(Operation *op) {
   } else if (loopDirect.getDataflow()) {
     indent();
     os << "#pragma HLS dataflow\n";
+  }
+}
+
+void ModuleEmitter::emitLoopTripCount(AffineForOp op) {
+  if (getConstantTripCount(op)) {
+    return;
+  }
+  else {
+    indent();
+    os << "#pragma HLS loop_tripcount max=" << getMaximumTripCount(op) << "\n";
   }
 }
 

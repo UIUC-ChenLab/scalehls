@@ -84,6 +84,8 @@ void getArrays(Block &block, SmallVectorImpl<Value> &arrays,
 
 Optional<unsigned> getAverageTripCount(AffineForOp forOp);
 
+Optional<unsigned> getMaximumTripCount(AffineForOp forOp);
+
 bool checkDependence(Operation *A, Operation *B);
 
 //===----------------------------------------------------------------------===//
