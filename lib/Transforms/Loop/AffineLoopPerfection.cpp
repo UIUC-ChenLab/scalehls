@@ -26,6 +26,16 @@ bool scalehls::applyAffineLoopPerfection(AffineLoopBand &band) {
     for (auto &op : llvm::make_early_inc_range(loop.getOps())) {
       if (&op == childLoop)
         break;
+      // Any operations that generate memrefs should be promoted out of the loop
+      // nest. If the operation has more than one results, return false.
+      if (llvm::any_of(op.getResultTypes(),
+                       [](Type type) { return type.isa<MemRefType>(); })) {
+        if (op.getNumResults() != 1)
+          return false;
+        op.moveBefore(band.front());
+        continue;
+      }
+
       // If any user of prefix operations is in the child loop, we need to
       // buffer the result in a memory on stack such that the users can fetch
       // the correct data from the stack.
