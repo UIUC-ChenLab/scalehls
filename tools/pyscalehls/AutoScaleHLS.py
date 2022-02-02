@@ -97,7 +97,7 @@ def main():
         if((val == "DSE") or (val == "D") or (val == "d")):
             PYSHLS.scalehls_dse(source_file, inputtop)
 
-            var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file('generated_files/ScaleHLS_DSE_out.cpp')
+            var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file('generated_files/ScaleHLS_DSE_out.cpp', sdse=True)
             var_forlist = []
             print_variables(var_forlist, var_arraylist_sized)
         elif((val == "Manual") or (val == "M") or (val == "m")):
@@ -113,7 +113,7 @@ def main():
             
             print_variables(var_forlist, var_arraylist_sized)
     
-    print("Scope")
+    print("\nScope")
     for i in var_forlist_scoped:
         print(i)
 
@@ -123,15 +123,13 @@ def main():
     #create template
     INPAR.create_template(source_file, inputfiles, template)
 
-    return 0
-
     #Create Random Training Set
     val = ""
     while val == "":
         val = input("Generate Random Training Set? (Y / N)\n")
         # val = "n"
         if((val == "Y") or (val == "y") or (val == "yes")):
-            dataset, feature_columns = RT.random_train_RFML(inputtop, inputpart, nub_of_init = 40)
+            dataset, feature_columns = RT.random_train_RFML(inputtop, inputpart, nub_of_init = 20)
             print(dataset)
         elif((val == "N") or (val == "n") or (val == "no")):
             parameter_file = 'generated_files/ML_params.csv'
