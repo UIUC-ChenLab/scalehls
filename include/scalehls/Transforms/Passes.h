@@ -28,6 +28,7 @@ std::unique_ptr<Pass> createLegalizeDataflowPass();
 std::unique_ptr<Pass> createSplitFunctionPass();
 
 /// Loop optimization passes.
+std::unique_ptr<Pass> createMaterializeReductionPass();
 std::unique_ptr<Pass> createAffineLoopPerfectionPass();
 std::unique_ptr<Pass> createRemoveVariableBoundPass();
 std::unique_ptr<Pass> createAffineLoopOrderOptPass();
@@ -38,7 +39,7 @@ std::unique_ptr<Pass> createFuncPipeliningPass();
 std::unique_ptr<Pass> createLoopPipeliningPass();
 std::unique_ptr<Pass> createArrayPartitionPass();
 
-/// Standard operation optimization passes.
+/// Simplification passes.
 std::unique_ptr<Pass> createSimplifyAffineIfPass();
 std::unique_ptr<Pass> createAffineStoreForwardPass();
 std::unique_ptr<Pass> createSimplifyMemrefAccessPass();

@@ -112,6 +112,16 @@ def SplitFunction : Pass<"split-function", "ModuleOp"> {
 // Loop Optimization Passes
 //===----------------------------------------------------------------------===//
 
+def MaterializeReduction : Pass<"materialize-reduction", "FuncOp"> {
+  let summary = "Materialize loop reductions";
+  let description = [{
+    This materialize-reduction pass will materialize loop reductions with local
+    buffer read/writes in order to expose more optimizations targeting HLS.
+  }];
+
+  let constructor = "mlir::scalehls::createMaterializeReductionPass()";
+}
+
 def AffineLoopPerfection : Pass<"affine-loop-perfection", "FuncOp"> {
   let summary = "Try to perfect a nested loop";
   let description = [{
@@ -217,7 +227,7 @@ def ArrayPartition : Pass<"array-partition", "ModuleOp"> {
 }
 
 //===----------------------------------------------------------------------===//
-// Standard Operation Optimization Passes
+// Simplification Passes
 //===----------------------------------------------------------------------===//
 
 def SimplifyAffineIf : Pass<"simplify-affine-if", "FuncOp"> {
