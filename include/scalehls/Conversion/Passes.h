@@ -17,16 +17,8 @@ class Pass;
 namespace mlir {
 namespace scalehls {
 
-// SCF2Affine Raising passes
-std::unique_ptr<Pass> createRaiseLoadStorePass();
-std::unique_ptr<Pass> createRaiseSCFForPass();
-void LoadStoreRaisingPatterns(RewritePatternSet &patterns);
-void SCFForRaisingPatterns(RewritePatternSet &patterns);
-
-// HLSKernel and HLSCpp conversion passes.
+/// HLSCpp conversion passes.
 std::unique_ptr<Pass> createLegalizeToHLSCppPass();
-std::unique_ptr<Pass> createHLSKernelToAffinePass();
-std::unique_ptr<Pass> createQuantizeOnnxPass();
 
 /// Onnx kernel legalization pass.
 std::unique_ptr<Pass> createLegalizeOnnxPass();

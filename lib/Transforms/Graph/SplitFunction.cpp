@@ -5,9 +5,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Analysis/Liveness.h"
-#include "mlir/Dialect/Linalg/IR/LinalgOps.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "scalehls/Dialect/HLSKernel/HLSKernel.h"
 #include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
@@ -18,87 +18,61 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
   Liveness liveness(func);
   auto builder = OpBuilder(func);
 
-  // Collect output types and values.
+  // A helper that checks whether a value is a liveout value.
+  auto isLiveOut = [&](Value value) {
+    return any_of(value.getUsers(), [&](auto user) {
+      return all_of(ops, [&](auto op) { return !op->isAncestor(user); });
+    });
+  };
+
+  // Output types and values of the sub-function.
   SmallVector<Type, 8> outputTypes;
   SmallVector<Value, 8> outputValues;
-  SmallVector<Value, 8> internalValues;
 
-  for (auto op : ops) {
+  // Internal values of the sub-function.
+  llvm::SmallDenseSet<Value, 16> internalValues;
+
+  for (auto op : ops)
     for (auto result : op->getResults()) {
-      // Only add values that are used.
-      if (result.getUses().empty())
-        continue;
+      internalValues.insert(result);
 
-      // If the result is only used by operations in the same level, it is
-      // an internal value and will not be returned.
-      bool isInternalResult = true;
-      for (auto user : result.getUsers())
-        if (std::find(ops.begin(), ops.end(), user) == ops.end()) {
-          isInternalResult = false;
-          break;
-        }
-
-      if (isInternalResult) {
-        internalValues.push_back(result);
-        continue;
+      if (isLiveOut(result)) {
+        outputTypes.push_back(result.getType());
+        outputValues.push_back(result);
       }
-
-      outputTypes.push_back(result.getType());
-      outputValues.push_back(result);
     }
-  }
 
-  // Collect input types and values.
+  // Input types and values of the sub-function.
   SmallVector<Type, 8> inputTypes;
   SmallVector<Value, 8> inputValues;
-  SmallVector<Operation *, 8> internalMemories;
+
+  // Local buffers of the sub-function.
+  llvm::SmallDenseSet<Operation *, 8> localBufs;
 
   for (auto op : ops) {
-    // Push back all operands and live ins as candidates.
+    // Push back all operands and liveins as candidates.
     SmallVector<Value, 8> inputCandidates(op->getOperands());
     if (auto loop = dyn_cast<AffineForOp>(op)) {
       auto liveIns = liveness.getLiveIn(loop.getBody());
-      for (auto liveIn : liveIns)
-        if (!isForInductionVar(liveIn))
-          inputCandidates.push_back(liveIn);
+      inputCandidates.append(liveIns.begin(), liveIns.end());
     }
 
-    // Collect input types and values.
     for (auto input : inputCandidates) {
-      // If the current input candidate is internal value, it does not need
-      // to be passed in as argument.
-      if (std::find(internalValues.begin(), internalValues.end(), input) !=
-          internalValues.end())
+      // If the current input is a induction variable or internal value, it
+      // doesn't needs to be passed in as argument.
+      if (isForInductionVar(input) || internalValues.count(input))
         continue;
 
-      // Internal memory defining operation should be moved into the sub
-      // function, except BufferCastOp.
-      if (auto defOp = input.getDefiningOp()) {
-        if (input.getType().isa<MemRefType>() &&
-            !isa<memref::BufferCastOp>(defOp)) {
-          bool isInternalMemory = true;
-          for (auto user : input.getUsers()) {
-            bool hasAncestor = false;
-            for (auto op : ops)
-              if (op->isAncestor(user))
-                hasAncestor = true;
-
-            if (!hasAncestor) {
-              isInternalMemory = false;
-              break;
-            }
-          }
-
-          if (isInternalMemory) {
-            internalMemories.push_back(defOp);
-            continue;
-          }
+      // If the current input is not a liveout and it's defined by an memref
+      // alloc op, it is a local buffer and can be localized later.
+      if (!isLiveOut(input))
+        if (auto alloc = input.getDefiningOp<memref::AllocOp>()) {
+          localBufs.insert(alloc);
+          continue;
         }
-      }
 
       // Only unique inputs will be added.
-      if (std::find(inputValues.begin(), inputValues.end(), input) !=
-          inputValues.end())
+      if (llvm::find(inputValues, input) != inputValues.end())
         continue;
 
       inputTypes.push_back(input.getType());
@@ -123,22 +97,23 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
   builder.setInsertionPointToEnd(entry);
   auto returnOp = builder.create<ReturnOp>(subFunc.getLoc(), outputValues);
 
+  // Move local buffers into the new created function.
+  for (auto alloc : localBufs)
+    alloc->moveBefore(&subFunc.front().front());
+
   // Move same level operations into the new created function.
   for (auto op : ops) {
     op->moveBefore(returnOp);
     op->removeAttr("dataflow_level");
-    // Connect operands to the arguments of the new created function.
-    for (unsigned i = 0, e = inputValues.size(); i < e; ++i)
-      inputValues[i].replaceUsesWithIf(
-          entry->getArgument(i),
-          [&](OpOperand &use) { return subFunc->isAncestor(use.getOwner()); });
   }
 
-  // Move internal memory defining operation into the new created function.
-  for (auto memoryDefOp : internalMemories)
-    memoryDefOp->moveBefore(&subFunc.front().front());
+  // Connect operands to the arguments of the new created function.
+  for (unsigned i = 0, e = inputValues.size(); i < e; ++i)
+    inputValues[i].replaceUsesWithIf(
+        entry->getArgument(i),
+        [&](OpOperand &use) { return subFunc->isAncestor(use.getOwner()); });
 
-  // Remove redundant copy nodes. As lond as the defining operation of the
+  // Remove redundant copy nodes. As long as the defining operation of the
   // target memory is contained in the sub-function, the copy operation and
   // the target memory are redundant.
   SmallVector<Operation *, 4> opsToErase;

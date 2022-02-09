@@ -7,18 +7,18 @@
 #ifndef SCALEHLS_ANALYSIS_QORESTIMATION_H
 #define SCALEHLS_ANALYSIS_QORESTIMATION_H
 
-#include "external/INIReader.h"
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "scalehls/Dialect/HLSCpp/Visitor.h"
 #include "scalehls/Support/Utils.h"
 #include "scalehls/Transforms/Utils.h"
+#include "llvm/Support/JSON.h"
 
 namespace mlir {
 namespace scalehls {
 
 using LatencyMap = llvm::StringMap<int64_t>;
-void getLatencyMap(INIReader spec, LatencyMap &latencyMap);
+void getLatencyMap(llvm::json::Object *config, LatencyMap &latencyMap);
 
 //===----------------------------------------------------------------------===//
 // ScaleHLSEstimator Class Declaration

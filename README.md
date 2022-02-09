@@ -29,7 +29,7 @@ $ ./build-scalehls.sh
 
 After the build, we suggest to export the following paths.
 ```sh
-$ export PATH=$PATH:$PWD/build/bin:$PWD/polygeist/build/mlir-clang
+$ export PATH=$PATH:$PWD/build/bin:$PWD/polygeist/build/bin
 $ export PYTHONPATH=$PYTHONPATH:$PWD/build/tools/scalehls/python_packages/scalehls_core
 ```
 
@@ -37,8 +37,12 @@ $ export PYTHONPATH=$PYTHONPATH:$PWD/build/tools/scalehls/python_packages/scaleh
 To launch the automatic kernel-level design space exploration, run:
 ```sh
 $ mlir-clang samples/polybench/gemm/test_gemm.c -function=test_gemm -memref-fullrank -raise-scf-to-affine -S \
-    | scalehls-opt -dse="top-func=test_gemm target-spec=samples/polybench/target-spec.ini" -debug-only=scalehls > /dev/null \
+    | scalehls-opt -dse="top-func=test_gemm target-spec=samples/polybench/config.json" -debug-only=scalehls > /dev/null \
     && scalehls-translate -emit-hlscpp test_gemm_pareto_0.mlir > test_gemm_pareto_0.cpp
+
+$ mlir-clang samples/rosetta/spam-filter/sgd_sw.c -function=SgdLR_sw -memref-fullrank -raise-scf-to-affine -S \
+    | scalehls-opt -materialize-reduction -dse="top-func=SgdLR_sw target-spec=samples/polybench/config.json" -debug-only=scalehls > /dev/null \
+    && scalehls-translate -emit-hlscpp SgdLR_sw_pareto_0.mlir > Sgd_sw_pareto_0.cpp
 ```
 
 Meanwhile, we provide a `pyscalehls` tool to showcase the `scalehls` Python library:
@@ -55,19 +59,10 @@ $ # Export PyTorch model to ONNX.
 $ python3 export_resnet18.py
 
 $ # Parse ONNX model to MLIR.
-$ $ONNXMLIR_DIR/build/bin/onnx-mlir -EmitONNXIR resnet18.onnx
-
-$ # Lower from ONNX dialect to Affine dialect.
-$ $ONNXMLIR_DIR/build/bin/onnx-mlir-opt resnet18.onnx.mlir \
-    -shape-inference -convert-onnx-to-krnl -pack-krnl-constants \
-    -convert-krnl-to-affine > resnet18.mlir
-
-$ # (Optional) Print model graph.
-$ scalehls-opt resnet18.tmp -print-op-graph 2> resnet18.gv
-$ dot -Tpng resnet18.gv > resnet18.png
+$ $ONNXMLIR_DIR/build/bin/onnx-mlir -EmitMLIRIR resnet18.onnx
 
 $ # Legalize the output of ONNX-MLIR, optimize and emit C++ code.
-$ scalehls-opt resnet18.mlir -allow-unregistered-dialect -legalize-onnx \
+$ scalehls-opt resnet18.onnx.mlir -allow-unregistered-dialect -legalize-onnx \
     -affine-loop-normalize -canonicalize -legalize-dataflow="insert-copy=true min-gran=3" \
     -split-function -convert-linalg-to-affine-loops -legalize-to-hlscpp="top-func=main_graph" \
     -affine-loop-perfection -affine-loop-order-opt -loop-pipelining -simplify-affine-if \

@@ -60,9 +60,6 @@ unsigned getCommonSurroundingLoops(Operation *A, Operation *B,
 /// Calculate the upper and lower bound of "bound" if possible.
 Optional<std::pair<int64_t, int64_t>> getBoundOfAffineBound(AffineBound bound);
 
-/// Return the layout map of "memrefType".
-AffineMap getLayoutMap(MemRefType memrefType);
-
 /// Calculate partition factors through analyzing the "memrefType" and return
 /// them in "factors". Meanwhile, the overall partition number is calculated and
 /// returned as well.

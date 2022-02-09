@@ -29,7 +29,7 @@ static AffineMap simplify(AffineMap map) {
 /// operation if necessary.
 template <typename AttrT>
 static void
-simplifyAndUpdateAttr(Operation *op, Identifier name, AttrT attr,
+simplifyAndUpdateAttr(Operation *op, StringAttr name, AttrT attr,
                       DenseMap<Attribute, Attribute> &simplifiedAttrs) {
   auto &simplified = simplifiedAttrs[attr];
   if (simplified == attr)
@@ -66,10 +66,10 @@ static void simplifyAffineStructures(Block &block) {
   SmallVector<Operation *> opsToSimplify;
   block.walk([&](Operation *op) {
     for (auto attr : op->getAttrs()) {
-      if (auto mapAttr = attr.second.dyn_cast<AffineMapAttr>())
-        simplifyAndUpdateAttr(op, attr.first, mapAttr, simplifiedAttrs);
-      else if (auto setAttr = attr.second.dyn_cast<IntegerSetAttr>())
-        simplifyAndUpdateAttr(op, attr.first, setAttr, simplifiedAttrs);
+      if (auto mapAttr = attr.getValue().dyn_cast<AffineMapAttr>())
+        simplifyAndUpdateAttr(op, attr.getName(), mapAttr, simplifiedAttrs);
+      else if (auto setAttr = attr.getValue().dyn_cast<IntegerSetAttr>())
+        simplifyAndUpdateAttr(op, attr.getName(), setAttr, simplifiedAttrs);
     }
 
     if (isa<AffineForOp, AffineIfOp, AffineApplyOp>(op))

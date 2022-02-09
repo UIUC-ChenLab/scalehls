@@ -29,16 +29,6 @@ def LegalizeToHLSCpp : Pass<"legalize-to-hlscpp", "FuncOp"> {
   ];
 }
 
-def HLSKernelToAffine : Pass<"hlskernel-to-affine", "FuncOp"> {
-  let summary = "Convert HLSKernel operation to Affine loops";
-  let description = [{
-    This hlskernel-to-affine pass converts HLSKernel operations to their Affine
-    level representations.
-  }];
-
-  let constructor = "mlir::scalehls::createHLSKernelToAffinePass()";
-}
-
 //===----------------------------------------------------------------------===//
 // Onnx Kernel Legalization Pass
 //===----------------------------------------------------------------------===//
@@ -51,20 +41,6 @@ def LegalizeOnnx : Pass<"legalize-onnx", "ModuleOp"> {
   }];
 
   let constructor = "mlir::scalehls::createLegalizeOnnxPass()";
-}
-
-//===----------------------------------------------------------------------===//
-// Onnx Kernel Legalization Pass
-//===----------------------------------------------------------------------===//
-
-def QuantizeOnnx : Pass<"quantize-onnx", "FuncOp"> {
-  let summary = "Quantize DNN model to integer representation";
-  let description = [{
-    This pass will quantize all inputs, weights, and outputs to 8-bits int and
-    quantize bias and intermediate accumulation results to 32-bits int.
-  }];
-
-  let constructor = "mlir::scalehls::createQuantizeOnnxPass()";
 }
 
 #endif // SCALEHLS_CONVERSION_PASSES_TD

@@ -15,7 +15,7 @@ using namespace hlscpp;
 
 static void updateSubFuncs(FuncOp func, Builder builder) {
   func.walk([&](CallOp op) {
-    auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.calleeAttr());
+    auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCalleeAttr());
     auto subFunc = dyn_cast<FuncOp>(callee);
 
     // Set sub-function type.
@@ -155,13 +155,11 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
           partitions.push_back(PartitionInfo(PartitionKind::NONE, 1));
       }
 
-      // TODO: the issue is the same dimension of different memref accesses
-      // represent different value. Therefore, the two memref access map need to
-      // be somehow merged to keep things correct.
       // Find the best partition solution for each dimensions of the memref.
       for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
         // Collect all array access indices of the current dimension.
-        SmallVector<AffineExpr, 4> indices;
+        SmallVector<AffineValueMap, 4> indices;
+
         for (auto accessOp : loadStores) {
           // Get memory access map.
           AffineValueMap accessMap;
@@ -175,9 +173,11 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
           (void)accessMap.canonicalize();
 
           // Only add unique index.
-          auto index = accessMap.getResult(0);
-          if (std::find(indices.begin(), indices.end(), index) == indices.end())
-            indices.push_back(index);
+          if (find_if(indices, [&](auto index) {
+                return index.getAffineMap() == accessMap.getAffineMap() &&
+                       index.getOperands() == accessMap.getOperands();
+              }) == indices.end())
+            indices.push_back(accessMap);
         }
         auto accessNum = indices.size();
 
@@ -187,17 +187,16 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
 
         for (unsigned i = 0; i < accessNum; ++i) {
           for (unsigned j = i + 1; j < accessNum; ++j) {
-            // TODO: this expression can't be simplified in some cases.
-            AffineExpr expr;
-            auto index = indices[i];
+            if (indices[i].getOperands() != indices[j].getOperands()) {
+              requireMux = true;
+              continue;
+            }
 
-            if (index.getKind() == AffineExprKind::Add) {
-              auto addExpr = index.dyn_cast<AffineBinaryOpExpr>();
-              expr = indices[j] - addExpr.getLHS() - addExpr.getRHS();
-            } else
-              expr = indices[j] - index;
+            auto expr = indices[j].getResult(0) - indices[i].getResult(0);
+            auto newExpr = simplifyAffineExpr(expr, indices[i].getNumDims(),
+                                              indices[i].getNumSymbols());
 
-            if (auto constDistance = expr.dyn_cast<AffineConstantExpr>()) {
+            if (auto constDistance = newExpr.dyn_cast<AffineConstantExpr>()) {
               unsigned distance = std::abs(constDistance.getValue());
               maxDistance = std::max(maxDistance, distance);
             } else
@@ -258,7 +257,7 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
   // Apply partition to all sub-functions and traverse all function to update
   // the "partitionsMap".
   func.walk([&](CallOp op) {
-    auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.calleeAttr());
+    auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCalleeAttr());
     auto subFunc = dyn_cast<FuncOp>(callee);
     assert(subFunc && "callable is not a function operation");
 
@@ -268,35 +267,36 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
     auto subFuncType = subFunc.getType();
     unsigned index = 0;
     for (auto inputType : subFuncType.getInputs()) {
-      if (auto memrefType = inputType.dyn_cast<MemRefType>())
-        if (auto layout = getLayoutMap(memrefType)) {
-          auto &partitions = partitionsMap[op.getOperand(index)];
+      if (auto memrefType = inputType.dyn_cast<MemRefType>()) {
+        auto &partitions = partitionsMap[op.getOperand(index)];
+        auto layoutMap = memrefType.getLayout().getAffineMap();
 
-          // If the current partitionsMap is empty, initialize it with no
-          // partition and factor of 1.
-          if (partitions.empty()) {
-            for (int64_t dim = 0; dim < memrefType.getRank(); ++dim)
-              partitions.push_back(PartitionInfo(PartitionKind::NONE, 1));
-          }
+        // If the current partitionsMap is empty, initialize it with no
+        // partition and factor of 1.
+        if (partitions.empty()) {
+          for (int64_t dim = 0; dim < memrefType.getRank(); ++dim)
+            partitions.push_back(PartitionInfo(PartitionKind::NONE, 1));
+        }
 
-          // Get the partition factor collected from sub-function.
-          SmallVector<int64_t, 8> factors;
-          getPartitionFactors(memrefType, &factors);
+        // Get the partition factor collected from sub-function.
+        SmallVector<int64_t, 8> factors;
+        getPartitionFactors(memrefType, &factors);
 
-          // Traverse all dimension of the memref.
-          for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
-            auto factor = factors[dim];
+        // Traverse all dimension of the memref.
+        for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
+          auto factor = factors[dim];
 
-            // If the factor from the sub-function is larger than the current
-            // factor, replace it.
-            if (factor > partitions[dim].second) {
-              if (layout.getResult(dim).getKind() == AffineExprKind::FloorDiv)
-                partitions[dim] = PartitionInfo(PartitionKind::BLOCK, factor);
-              else
-                partitions[dim] = PartitionInfo(PartitionKind::CYCLIC, factor);
-            }
+          // If the factor from the sub-function is larger than the current
+          // factor, replace it.
+          if (factor > partitions[dim].second) {
+            if (layoutMap.getResult(dim).getKind() == AffineExprKind::FloorDiv)
+              partitions[dim] = PartitionInfo(PartitionKind::BLOCK, factor);
+            else
+              partitions[dim] = PartitionInfo(PartitionKind::CYCLIC, factor);
           }
         }
+      }
+
       ++index;
     }
   });
@@ -314,7 +314,8 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
       factors.push_back(info.second);
     }
 
-    applyArrayPartition(memref, factors, kinds, /*updateFuncSignature=*/false);
+    applyArrayPartition(memref, factors, kinds,
+                        /*updateFuncSignature=*/false);
   }
 
   // Align function type with entry block argument types.

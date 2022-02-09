@@ -14,7 +14,6 @@ target_link_libraries(scalehls-opt
   MLIROptLib
 
   MLIRHLSCpp
-  MLIRHLSKernel
   MLIRScaleHLSConversion
   MLIRScaleHLSTransforms
 

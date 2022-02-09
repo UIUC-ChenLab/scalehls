@@ -7,8 +7,10 @@
 #include "scalehls/Transforms/QoREstimation.h"
 #include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
+#include "mlir/Support/FileUtilities.h"
 #include "scalehls/Transforms/Passes.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/Support/MemoryBuffer.h"
 
 using namespace std;
 using namespace mlir;
@@ -26,7 +28,7 @@ void ScaleHLSEstimator::getPartitionIndices(Operation *op) {
   auto memrefType = access.memref.getType().cast<MemRefType>();
 
   // If the layout map does not exist, it means the memory is not partitioned.
-  auto layoutMap = getLayoutMap(memrefType);
+  auto layoutMap = memrefType.getLayout().getAffineMap();
   if (!layoutMap) {
     auto partitionIndices = SmallVector<int64_t, 8>(memrefType.getRank(), 0);
     op->setAttr("partition_indices", builder.getI64ArrayAttr(partitionIndices));
@@ -95,6 +97,13 @@ void ScaleHLSEstimator::estimateLoadStore(Operation *op, int64_t begin) {
   auto access = MemRefAccess(op);
   auto memref = access.memref;
   auto memrefType = memref.getType().cast<MemRefType>();
+
+  // No port limitation for single-element memories as they are implemented with
+  // registers.
+  if (memrefType.getNumElements() == 1) {
+    setTiming(op, begin, begin + 1, 1, 1);
+    return;
+  }
 
   SmallVector<int64_t, 8> factors;
   auto partitionNum = getPartitionFactors(memrefType, &factors);
@@ -526,7 +535,7 @@ bool ScaleHLSEstimator::visitOp(AffineIfOp op, int64_t begin) {
 }
 
 bool ScaleHLSEstimator::visitOp(CallOp op, int64_t begin) {
-  auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.calleeAttr());
+  auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCalleeAttr());
   auto subFunc = dyn_cast<FuncOp>(callee);
   assert(subFunc && "callable is not a function operation");
 
@@ -937,13 +946,15 @@ void ScaleHLSEstimator::estimateLoop(AffineForOp loop, FuncOp func) {
 // Entry of scalehls-opt
 //===----------------------------------------------------------------------===//
 
-void scalehls::getLatencyMap(INIReader spec, LatencyMap &latencyMap) {
-  auto freq = spec.Get("specification", "frequency", "100MHz");
+void scalehls::getLatencyMap(llvm::json::Object *config,
+                             LatencyMap &latencyMap) {
+  auto frequency =
+      config->getObject(config->getString("frequency").getValueOr("100MHz"));
 
-  latencyMap["fadd"] = spec.GetInteger(freq, "fadd", 4);
-  latencyMap["fmul"] = spec.GetInteger(freq, "fmul", 3);
-  latencyMap["fdiv"] = spec.GetInteger(freq, "fdiv", 15);
-  latencyMap["fcmp"] = spec.GetInteger(freq, "fcmp", 1);
+  latencyMap["fadd"] = frequency->getInteger("fadd").getValueOr(4);
+  latencyMap["fmul"] = frequency->getInteger("fmul").getValueOr(3);
+  latencyMap["fdiv"] = frequency->getInteger("fdiv").getValueOr(15);
+  latencyMap["fcmp"] = frequency->getInteger("fcmp").getValueOr(1);
 }
 
 namespace {
@@ -951,15 +962,31 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
   void runOnOperation() override {
     auto module = getOperation();
 
-    // Read configuration file.
-    INIReader spec(targetSpec);
-    if (spec.ParseError())
-      emitError(module.getLoc(), "target spec file parse fail\n");
+    // Read target specification JSON file.
+    std::string errorMessage;
+    auto configFile = mlir::openInputFile(targetSpec, &errorMessage);
+    if (!configFile) {
+      llvm::errs() << errorMessage << "\n";
+      return signalPassFailure();
+    }
+
+    // Parse JSON file into memory.
+    auto config = llvm::json::parse(configFile->getBuffer());
+    if (!config) {
+      llvm::errs() << "failed to parse the target spec json file\n";
+      return signalPassFailure();
+    }
+    auto configObj = config.get().getAsObject();
+    if (!configObj) {
+      llvm::errs() << "support an object in the target spec json file, found "
+                      "something else\n";
+      return signalPassFailure();
+    }
 
     // Collect profiling latency data, where default values are based on Xilinx
     // PYNQ-Z1 board.
     LatencyMap latencyMap;
-    getLatencyMap(spec, latencyMap);
+    getLatencyMap(configObj, latencyMap);
 
     // Estimate performance and resource utilization. If any other functions are
     // called by the top function, it will be estimated in the procedure of

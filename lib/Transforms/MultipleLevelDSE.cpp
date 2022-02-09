@@ -10,6 +10,7 @@
 #include "mlir/Support/FileUtilities.h"
 #include "scalehls/Transforms/Passes.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/ToolOutputFile.h"
 #include <numeric>
 // #include <pthread.h>
@@ -29,7 +30,7 @@ static void updateParetoPoints(SmallVector<DesignPointType, 16> &paretoPoints) {
     return (a.latency < b.latency ||
             (a.latency == b.latency && a.dspNum < b.dspNum));
   };
-  std::sort(paretoPoints.begin(), paretoPoints.end(), latencyThenDspNum);
+  llvm::sort(paretoPoints, latencyThenDspNum);
 
   // Find pareto frontiers. After the sorting, the first design point must be a
   // pareto point.
@@ -163,8 +164,7 @@ TileConfig LoopDesignSpace::getTileConfig(TileList tileList) {
     auto tile = tileList[i];
     auto validSizes = validTileSizesList[i];
 
-    auto idx = std::find(validSizes.begin(), validSizes.end(), tile) -
-               validSizes.begin();
+    auto idx = llvm::find(validSizes, tile) - validSizes.begin();
 
     assert(idx >= 0 && idx < (long)validSizes.size() && "invalid tile list");
 
@@ -342,7 +342,7 @@ LoopDesignSpace::getRandomClosestNeighbor(LoopDesignPoint point,
     return Optional<TileConfig>();
 
   // Sort candidate configs and collect the closest points.
-  std::sort(candidateConfigs.begin(), candidateConfigs.end());
+  llvm::sort(candidateConfigs);
   SmallVector<TileConfig, 8> closestConfigs;
   float minDistance = maxDistance;
 
@@ -356,8 +356,8 @@ LoopDesignSpace::getRandomClosestNeighbor(LoopDesignPoint point,
 
   // Randomly pick one as the return point.
   std::srand(std::time(0));
-  std::random_shuffle(closestConfigs.begin(), closestConfigs.end(),
-                      [&](int i) { return std::rand() % i; });
+  llvm::shuffle(closestConfigs.begin(), closestConfigs.end(),
+                []() { return std::rand(); });
 
   return closestConfigs.front();
 }
@@ -369,8 +369,8 @@ void LoopDesignSpace::exploreLoopDesignSpace(unsigned maxIterNum,
   // Exploration loop of the dse.
   for (unsigned i = 0; i < maxIterNum; ++i) {
     std::srand(std::time(0));
-    std::random_shuffle(paretoPoints.begin(), paretoPoints.end(),
-                        [&](int i) { return std::rand() % i; });
+    llvm::shuffle(paretoPoints.begin(), paretoPoints.end(),
+                  []() { return std::rand(); });
 
     bool foundValidNeighbor = false;
     for (auto &point : paretoPoints) {
@@ -657,7 +657,7 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
     targetLoops.clear();
 
     // Sort the candidate loops.
-    std::sort(candidateLoops.begin(), candidateLoops.end());
+    llvm::sort(candidateLoops);
 
     // Traverse all candidates to check whether applying fully loop unrolling
     // has violation with the resource constraints. If so, add all inner loops
@@ -829,35 +829,55 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
   void runOnOperation() override {
     auto module = getOperation();
 
-    // Read configuration file.
-    INIReader spec(targetSpec);
-    if (spec.ParseError())
-      emitError(module.getLoc(), "target spec file parse fail\n");
+    // Read target specification JSON file.
+    std::string errorMessage;
+    auto configFile = mlir::openInputFile(targetSpec, &errorMessage);
+    if (!configFile) {
+      llvm::errs() << errorMessage << "\n";
+      return signalPassFailure();
+    }
+
+    // Parse JSON file into memory.
+    auto config = llvm::json::parse(configFile->getBuffer());
+    if (!config) {
+      llvm::errs() << "failed to parse the target spec json file\n";
+      return signalPassFailure();
+    }
+    auto configObj = config.get().getAsObject();
+    if (!configObj) {
+      llvm::errs() << "support an object in the target spec json file, found "
+                      "something else\n";
+      return signalPassFailure();
+    }
 
     // Collect DSE configurations.
-    unsigned outputNum = spec.GetInteger("dse", "output_num", 30);
+    unsigned outputNum = configObj->getInteger("output_num").getValueOr(30);
 
-    unsigned maxInitParallel = spec.GetInteger("dse", "max_init_parallel", 32);
+    unsigned maxInitParallel =
+        configObj->getInteger("max_init_parallel").getValueOr(32);
     unsigned maxExplParallel =
-        spec.GetInteger("dse", "max_expl_parallel", 1024);
-    unsigned maxLoopParallel = spec.GetInteger("dse", "max_loop_parallel", 128);
+        configObj->getInteger("max_expl_parallel").getValueOr(1024);
+    unsigned maxLoopParallel =
+        configObj->getInteger("max_loop_parallel").getValueOr(128);
 
     assert(maxInitParallel <= maxExplParallel &&
            maxLoopParallel <= maxExplParallel &&
            "invalid configuration of DSE");
 
-    unsigned maxIterNum = spec.GetInteger("dse", "max_iter_num", 30);
-    float maxDistance = spec.GetFloat("dse", "max_distance", 3.0);
+    unsigned maxIterNum = configObj->getInteger("max_iter_num").getValueOr(30);
+    float maxDistance = configObj->getNumber("max_distance").getValueOr(3.0);
 
-    bool directiveOnly = spec.GetBoolean("dse", "directive_only", false);
-    bool resConstraint = spec.GetBoolean("dse", "res_constraint", false);
+    bool directiveOnly =
+        configObj->getBoolean("directive_only").getValueOr(false);
+    bool resConstraint =
+        configObj->getBoolean("res_constraint").getValueOr(true);
 
     // Collect profiling latency data, where default values are based on Xilinx
     // PYNQ-Z1 board.
     LatencyMap latencyMap;
-    getLatencyMap(spec, latencyMap);
+    getLatencyMap(configObj, latencyMap);
     unsigned maxDspNum =
-        ceil(spec.GetInteger("specification", "dsp", 220) * 1.1);
+        ceil(configObj->getInteger("dsp").getValueOr(220) * 1.1);
     if (!resConstraint)
       maxDspNum = UINT_MAX;
 
