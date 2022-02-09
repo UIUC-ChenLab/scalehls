@@ -33,6 +33,7 @@ std::unique_ptr<Pass> createAffineLoopPerfectionPass();
 std::unique_ptr<Pass> createRemoveVariableBoundPass();
 std::unique_ptr<Pass> createAffineLoopOrderOptPass();
 std::unique_ptr<Pass> createPartialAffineLoopTilePass();
+std::unique_ptr<Pass> createReduceInitialIntervalPass();
 
 /// Directive optimization passes.
 std::unique_ptr<Pass> createFuncPipeliningPass();
