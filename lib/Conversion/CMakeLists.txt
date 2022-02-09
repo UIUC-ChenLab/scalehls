@@ -1,7 +1,7 @@
-file(GLOB globbed *.cpp)
-
 add_mlir_library(MLIRScaleHLSConversion
-  ${globbed}
+  LegalizeOnnx.cpp
+  LegalizeToHLSCpp.cpp
+  Passes.cpp
 
   DEPENDS
   MLIRScaleHLSConversionIncGen
