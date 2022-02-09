@@ -50,7 +50,6 @@ struct ReduceInitialIntervalPattern : public OpRewritePattern<AffineForOp> {
 
     // Traverse all buffer accesses in the loop body.
     for (auto pair : map) {
-      auto buf = pair.first;
       auto accesses = pair.second;
 
       // Only if a load depends on a dominated store (a back dependence), the

@@ -116,6 +116,7 @@ static void addPassPipeline(PassManager &pm) {
 
   // Generic common sub expression elimination.
   pm.addPass(createCSEPass());
+  pm.addPass(createReduceInitialIntervalPass());
 }
 
 bool scalehls::applyMemoryAccessOpt(FuncOp func) {
