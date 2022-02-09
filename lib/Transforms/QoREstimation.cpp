@@ -98,6 +98,13 @@ void ScaleHLSEstimator::estimateLoadStore(Operation *op, int64_t begin) {
   auto memref = access.memref;
   auto memrefType = memref.getType().cast<MemRefType>();
 
+  // No port limitation for single-element memories as they are implemented with
+  // registers.
+  if (memrefType.getNumElements() == 1) {
+    setTiming(op, begin, begin + 1, 1, 1);
+    return;
+  }
+
   SmallVector<int64_t, 8> factors;
   auto partitionNum = getPartitionFactors(memrefType, &factors);
   auto storageType = MemoryKind(memrefType.getMemorySpaceAsInt());
