@@ -41,7 +41,7 @@ $ mlir-clang samples/polybench/gemm/test_gemm.c -function=test_gemm -memref-full
     && scalehls-translate -emit-hlscpp test_gemm_pareto_0.mlir > test_gemm_pareto_0.cpp
 
 $ mlir-clang samples/rosetta/spam-filter/sgd_sw.c -function=SgdLR_sw -memref-fullrank -raise-scf-to-affine -S \
-    | scalehls-opt -materialize-reduction -dse="top-func=SgdLR_sw target-spec=samples/polybench/config.json" -debug-only=scalehls > /dev/null \
+    | scalehls-opt -materialize-reduction -dse="top-func=SgdLR_sw target-spec=samples/rosetta/config.json" -debug-only=scalehls > /dev/null \
     && scalehls-translate -emit-hlscpp SgdLR_sw_pareto_0.mlir > Sgd_sw_pareto_0.cpp
 ```
 
