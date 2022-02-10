@@ -177,6 +177,16 @@ def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "FuncOp"> {
   ];
 }
 
+def ReduceInitialInterval : Pass<"reduce-initial-interval", "FuncOp"> {
+  let summary = "Try to reduce the intiail interval";
+  let description = [{
+    This reduce-initial-interval pass try to reduce the II by optimizing the
+    commutative operator trees and iteration variables.
+  }];
+
+  let constructor = "mlir::scalehls::createReduceInitialIntervalPass()";
+}
+
 //===----------------------------------------------------------------------===//
 // Directive Optimization Passes
 //===----------------------------------------------------------------------===//
