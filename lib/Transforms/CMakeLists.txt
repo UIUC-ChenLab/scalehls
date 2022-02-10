@@ -15,6 +15,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Simplification/SimplifyMemrefAccess.cpp
   MultipleLevelDSE.cpp
   Passes.cpp
+  PreserveUnoptimized.cpp
   QoREstimation.cpp
   Utils.cpp
 
