@@ -45,6 +45,7 @@ public:
             // Tensor-related statements.
             bufferization::ToMemrefOp, bufferization::ToTensorOp,
             memref::TensorStoreOp, SplatOp, memref::DimOp, memref::RankOp,
+            memref::ReinterpretCastOp,
             // Unary expressions.
             math::AbsOp, math::CeilOp, math::CosOp, math::SinOp, math::TanhOp,
             math::SqrtOp, math::RsqrtOp, math::ExpOp, math::Exp2Op, math::LogOp,
@@ -137,6 +138,7 @@ public:
   HANDLE(SplatOp);
   HANDLE(memref::DimOp);
   HANDLE(memref::RankOp);
+  HANDLE(memref::ReinterpretCastOp);
 
   // Unary expressions.
   HANDLE(math::AbsOp);

@@ -224,6 +224,7 @@ public:
   void emitTensorStore(memref::TensorStoreOp op);
   void emitDim(memref::DimOp op);
   void emitRank(memref::RankOp op);
+  void emitReinterpretCast(memref::ReinterpretCastOp op);
 
   /// Standard expression emitters.
   void emitBinary(Operation *op, const char *syntax);
@@ -403,6 +404,7 @@ public:
   }
   bool visitOp(memref::DimOp op) { return emitter.emitDim(op), true; }
   bool visitOp(memref::RankOp op) { return emitter.emitRank(op), true; }
+  bool visitOp(memref::ReinterpretCastOp op) { return emitter.emitReinterpretCast(op), true; }
 
   /// HLSCpp operations.
   bool visitOp(AssignOp op) { return emitter.emitAssign(op), true; }
@@ -1104,6 +1106,31 @@ void ModuleEmitter::emitRank(memref::RankOp op) {
     emitInfoAndNewLine(op);
   } else
     emitError(op, "is unranked.");
+}
+
+void ModuleEmitter::emitReinterpretCast(memref::ReinterpretCastOp op) {
+  auto array = op.getResult();
+  assert(!isDeclared(array) && "has been declared before.");
+
+  auto arrayType = array.getType().cast<ShapedType>();
+  indent();
+  os << getTypeName(array) << " (*";
+
+  // Add the new value to nameTable and emit its name.
+  os << addName(array, false);
+  os << ")";
+
+  for (auto &shape : llvm::drop_begin(arrayType.getShape(), 1))
+    os << "[" << shape << "]";
+
+  os << " = (" << getTypeName(array) << "(*)";
+  for (auto &shape : llvm::drop_begin(arrayType.getShape(), 1))
+    os << "[" << shape << "]";
+  os << ") ";
+  
+  emitValue(op.getOperand(0));
+  os << ";";
+  emitInfoAndNewLine(op);
 }
 
 /// Standard expression emitters.
