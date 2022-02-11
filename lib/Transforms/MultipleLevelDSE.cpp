@@ -494,9 +494,9 @@ void FuncDesignSpace::combLoopDesignSpaces() {
         estimator.estimateFunc(func);
         auto latency = getTiming(func).getLatency();
         auto dspNum = getResource(func).getDsp();
-        auto funcPoint = FuncDesignPoint(latency, dspNum, loopPoints);
+        auto newFuncPoint = FuncDesignPoint(latency, dspNum, loopPoints);
 
-        newParetoPoints.push_back(funcPoint);
+        newParetoPoints.push_back(newFuncPoint);
       }
     }
 

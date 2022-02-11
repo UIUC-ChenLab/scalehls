@@ -9,6 +9,7 @@
 
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/Dominance.h"
 #include "scalehls/Dialect/HLSCpp/Visitor.h"
 #include "scalehls/Support/Utils.h"
 #include "scalehls/Transforms/Utils.h"
@@ -70,10 +71,6 @@ public:
 #undef HANDLE
 
 private:
-  // For storing all dependencies indexed by the dependency source operation.
-  using Depends = SmallVector<Operation *, 16>;
-  using DependsMap = DenseMap<Operation *, Depends>;
-
   // Hold the memory ports information.
   struct MemPortInfo {
     unsigned rdPort = 0;
@@ -111,7 +108,7 @@ private:
   void reverseTiming(Block &block);
   void initEstimator(Block &block);
 
-  DependsMap dependsMap;
+  DominanceInfo DT;
   MemPortInfosMap memPortInfosMap;
   LatencyMap &latencyMap;
   bool depAnalysis = true;

@@ -693,11 +693,11 @@ TimingAttr ScaleHLSEstimator::estimateTiming(Block &block, int64_t begin) {
       opBegin = max(opBegin, getTiming(sameLevelUser).getEnd());
     }
 
-    // Check other dependencies and update schedule level.
-    for (auto dstOp : dependsMap[op]) {
-      auto sameLevelDstOp = getSameLevelDstOp(op, dstOp);
-      opBegin = max(opBegin, getTiming(sameLevelDstOp).getEnd());
-    }
+    // Loop shouldn't overlap with any other scheduled operations. The rationale
+    // here is in Vivado HLS, a loop will always be blocked by other operations
+    // before it, even if no actual dependency exists between them.
+    if (isa<mlir::AffineForOp>(op))
+      opBegin = max(opBegin, blockEnd);
 
     // Check memory dependencies of the operation and update schedule level.
     for (auto operand : op->getOperands()) {
@@ -707,12 +707,13 @@ TimingAttr ScaleHLSEstimator::estimateTiming(Block &block, int64_t begin) {
         for (auto depOp : operand.getUsers()) {
           // If the depOp has not been scheduled or its schedule level will not
           // impact the current operation's scheduling, stop and continue.
-          auto depOpTiming = getTiming(depOp);
+          auto sameLevelDstOp = getSameLevelDstOp(op, depOp);
+          auto depOpTiming = getTiming(sameLevelDstOp);
           if (!depOpTiming)
             continue;
 
           auto depOpEnd = depOpTiming.getEnd();
-          if (depOpEnd <= opBegin)
+          if (depOpEnd <= opBegin || !DT.properlyDominates(op, depOp))
             continue;
 
           // If either the depOp or the current operation is a function call,
@@ -844,36 +845,21 @@ void ScaleHLSEstimator::reverseTiming(Block &block) {
 }
 
 void ScaleHLSEstimator::initEstimator(Block &block) {
-  // Clear global maps and scheduling information. Walk through all loops and
-  // establish dependencies. The rationale here is in Vivado HLS, a loop will
-  // always be blocked by other loops before it, even if no actual dependency
-  // exists between them.
-  dependsMap.clear();
+  // Clear global maps and scheduling information.
   memPortInfosMap.clear();
 
-  SmallVector<Operation *, 16> loops;
   block.walk([&](Operation *op) {
     if (!isNoTouch(op)) {
       op->removeAttr("resource");
       op->removeAttr("timing");
       op->removeAttr("loop_info");
     }
-
-    if (isa<AffineForOp>(op))
-      loops.push_back(op);
   });
-
-  unsigned idx = 1;
-  for (auto srcLoop : loops) {
-    for (auto dstLoop : llvm::drop_begin(loops, idx))
-      if (checkSameLevel(srcLoop, dstLoop))
-        dependsMap[srcLoop].push_back(dstLoop);
-    ++idx;
-  }
 }
 
 void ScaleHLSEstimator::estimateFunc(FuncOp func) {
   initEstimator(func.front());
+  DT = DominanceInfo(func);
 
   // Collect all memory access operations for later use.
   MemAccessesMap map;
@@ -939,6 +925,7 @@ void ScaleHLSEstimator::estimateFunc(FuncOp func) {
 
 void ScaleHLSEstimator::estimateLoop(AffineForOp loop, FuncOp func) {
   initEstimator(func.getBody().front());
+  DT = DominanceInfo(loop);
   dispatchVisitor(loop, 0);
 }
 
