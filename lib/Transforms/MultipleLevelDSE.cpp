@@ -869,20 +869,23 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
 
     bool directiveOnly =
         configObj->getBoolean("directive_only").getValueOr(false);
-    bool resConstraint =
-        configObj->getBoolean("res_constraint").getValueOr(true);
+    bool resourceConstr =
+        configObj->getBoolean("resource_constr").getValueOr(true);
 
-    // Collect profiling latency data, where default values are based on Xilinx
-    // PYNQ-Z1 board.
-    LatencyMap latencyMap;
+    // Collect profiling latency and DSP usage data, where default values are
+    // based on Xilinx PYNQ-Z1 board.
+    llvm::StringMap<int64_t> latencyMap;
     getLatencyMap(configObj, latencyMap);
+    llvm::StringMap<int64_t> dspUsageMap;
+    getDspUsageMap(configObj, dspUsageMap);
+
     unsigned maxDspNum =
         ceil(configObj->getInteger("dsp").getValueOr(220) * 1.1);
-    if (!resConstraint)
+    if (!resourceConstr)
       maxDspNum = UINT_MAX;
 
     // Initialize an performance and resource estimator.
-    auto estimator = ScaleHLSEstimator(latencyMap, depAnalysis);
+    auto estimator = ScaleHLSEstimator(latencyMap, dspUsageMap, depAnalysis);
     auto optimizer = ScaleHLSOptimizer(
         estimator, outputNum, maxDspNum, maxInitParallel, maxExplParallel,
         maxLoopParallel, maxIterNum, maxDistance);

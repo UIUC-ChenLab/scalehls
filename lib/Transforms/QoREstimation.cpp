@@ -539,7 +539,7 @@ bool ScaleHLSEstimator::visitOp(CallOp op, int64_t begin) {
   auto subFunc = dyn_cast<FuncOp>(callee);
   assert(subFunc && "callable is not a function operation");
 
-  ScaleHLSEstimator estimator(latencyMap, depAnalysis);
+  ScaleHLSEstimator estimator(latencyMap, dspUsageMap, depAnalysis);
   estimator.estimateFunc(subFunc);
 
   // We assume enter and leave the subfunction require extra 2 clock cycles.
@@ -934,7 +934,7 @@ void ScaleHLSEstimator::estimateLoop(AffineForOp loop, FuncOp func) {
 //===----------------------------------------------------------------------===//
 
 void scalehls::getLatencyMap(llvm::json::Object *config,
-                             LatencyMap &latencyMap) {
+                             llvm::StringMap<int64_t> &latencyMap) {
   auto frequency =
       config->getObject(config->getString("frequency").getValueOr("100MHz"));
 
@@ -942,6 +942,18 @@ void scalehls::getLatencyMap(llvm::json::Object *config,
   latencyMap["fmul"] = frequency->getInteger("fmul").getValueOr(3);
   latencyMap["fdiv"] = frequency->getInteger("fdiv").getValueOr(15);
   latencyMap["fcmp"] = frequency->getInteger("fcmp").getValueOr(1);
+  latencyMap["fexp"] = frequency->getInteger("fexp").getValueOr(8);
+}
+
+void scalehls::getDspUsageMap(llvm::json::Object *config,
+                              llvm::StringMap<int64_t> &dspUsageMap) {
+  auto dspUsage = config->getObject("dsp_usage");
+
+  dspUsageMap["fadd"] = dspUsage->getInteger("fadd").getValueOr(2);
+  dspUsageMap["fmul"] = dspUsage->getInteger("fmul").getValueOr(3);
+  dspUsageMap["fdiv"] = dspUsage->getInteger("fdiv").getValueOr(0);
+  dspUsageMap["fcmp"] = dspUsage->getInteger("fcmp").getValueOr(0);
+  dspUsageMap["fexp"] = dspUsage->getInteger("fexp").getValueOr(7);
 }
 
 namespace {
@@ -970,10 +982,12 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
       return signalPassFailure();
     }
 
-    // Collect profiling latency data, where default values are based on Xilinx
-    // PYNQ-Z1 board.
-    LatencyMap latencyMap;
+    // Collect profiling latency and DSP usage data, where default values are
+    // based on Xilinx PYNQ-Z1 board.
+    llvm::StringMap<int64_t> latencyMap;
     getLatencyMap(configObj, latencyMap);
+    llvm::StringMap<int64_t> dspUsageMap;
+    getDspUsageMap(configObj, dspUsageMap);
 
     // Estimate performance and resource utilization. If any other functions are
     // called by the top function, it will be estimated in the procedure of
@@ -981,7 +995,8 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     for (auto func : module.getOps<FuncOp>())
       if (auto funcDirect = getFuncDirective(func))
         if (funcDirect.getTopFunc())
-          ScaleHLSEstimator(latencyMap, depAnalysis).estimateFunc(func);
+          ScaleHLSEstimator(latencyMap, dspUsageMap, depAnalysis)
+              .estimateFunc(func);
   }
 };
 } // namespace

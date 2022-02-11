@@ -18,8 +18,10 @@
 namespace mlir {
 namespace scalehls {
 
-using LatencyMap = llvm::StringMap<int64_t>;
-void getLatencyMap(llvm::json::Object *config, LatencyMap &latencyMap);
+void getLatencyMap(llvm::json::Object *config,
+                   llvm::StringMap<int64_t> &latencyMap);
+void getDspUsageMap(llvm::json::Object *config,
+                    llvm::StringMap<int64_t> &dspUsageMap);
 
 //===----------------------------------------------------------------------===//
 // ScaleHLSEstimator Class Declaration
@@ -28,8 +30,11 @@ void getLatencyMap(llvm::json::Object *config, LatencyMap &latencyMap);
 class ScaleHLSEstimator
     : public HLSCppVisitorBase<ScaleHLSEstimator, bool, int64_t> {
 public:
-  explicit ScaleHLSEstimator(LatencyMap &latencyMap, bool depAnalysis)
-      : latencyMap(latencyMap), depAnalysis(depAnalysis) {}
+  explicit ScaleHLSEstimator(llvm::StringMap<int64_t> &latencyMap,
+                             llvm::StringMap<int64_t> &dspUsageMap,
+                             bool depAnalysis)
+      : latencyMap(latencyMap), dspUsageMap(dspUsageMap),
+        depAnalysis(depAnalysis) {}
 
   void estimateFunc(FuncOp func);
   void estimateLoop(AffineForOp loop, FuncOp func);
@@ -68,6 +73,7 @@ public:
   HANDLE(arith::MulFOp, "fmul");
   HANDLE(arith::DivFOp, "fdiv");
   HANDLE(arith::CmpFOp, "fcmp");
+  HANDLE(math::ExpOp, "fexp");
 #undef HANDLE
 
 private:
@@ -110,7 +116,8 @@ private:
 
   DominanceInfo DT;
   MemPortInfosMap memPortInfosMap;
-  LatencyMap &latencyMap;
+  llvm::StringMap<int64_t> &latencyMap;
+  llvm::StringMap<int64_t> &dspUsageMap;
   bool depAnalysis = true;
 };
 
