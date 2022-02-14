@@ -37,8 +37,8 @@ void HLSCppDialect::initialize() {
 //===----------------------------------------------------------------------===//
 
 Attribute ResourceAttr::parse(AsmParser &p, Type type) {
-  StringRef lutKw, dspKw, bramKw, nonShareDspKw;
-  int64_t lut, dsp, bram, nonShareDsp;
+  StringRef lutKw, dspKw, bramKw;
+  int64_t lut, dsp, bram;
   if (p.parseLess() || p.parseKeyword(&lutKw) || p.parseEqual() ||
       p.parseInteger(lut) || p.parseComma() || p.parseKeyword(&dspKw) ||
       p.parseEqual() || p.parseInteger(dsp) || p.parseComma() ||
@@ -178,13 +178,13 @@ void FuncDirectiveAttr::print(AsmPrinter &p) const {
 //===----------------------------------------------------------------------===//
 
 namespace {
-struct SimplifyCastOp : public OpRewritePattern<CastOp> {
-  using OpRewritePattern<CastOp>::OpRewritePattern;
+struct SimplifyCastOp : public OpRewritePattern<CastPrimOp> {
+  using OpRewritePattern<CastPrimOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(CastOp castOp,
+  LogicalResult matchAndRewrite(CastPrimOp castOp,
                                 PatternRewriter &rewriter) const override {
-    if (castOp.input().getType() == castOp.output().getType()) {
-      castOp.output().replaceAllUsesWith(castOp.input());
+    if (castOp.in().getType() == castOp.out().getType()) {
+      castOp.in().replaceAllUsesWith(castOp.out());
       rewriter.eraseOp(castOp);
     }
 
@@ -193,8 +193,8 @@ struct SimplifyCastOp : public OpRewritePattern<CastOp> {
 };
 } // namespace
 
-void CastOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                         MLIRContext *context) {
+void CastPrimOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                             MLIRContext *context) {
   results.add<SimplifyCastOp>(context);
 }
 

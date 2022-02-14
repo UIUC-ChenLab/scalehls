@@ -397,10 +397,9 @@ public:
   bool visitOp(memref::RankOp op) { return emitter.emitRank(op), true; }
 
   /// HLSCpp operations.
+  bool visitOp(MulPrimOp op) { return emitter.emitBinary(op, "*"), true; }
+  bool visitOp(CastPrimOp op) { return emitter.emitCast<CastPrimOp>(op), true; }
   bool visitOp(AssignOp op) { return emitter.emitAssign(op), true; }
-  bool visitOp(CastOp op) { return emitter.emitCast<CastOp>(op), true; }
-  bool visitOp(MulOp op) { return emitter.emitBinary(op, "*"), true; }
-  bool visitOp(AddOp op) { return emitter.emitBinary(op, "+"), true; }
 
 private:
   ModuleEmitter &emitter;

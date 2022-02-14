@@ -63,7 +63,7 @@ public:
             arith::IndexCastOp, arith::UIToFPOp, arith::SIToFPOp,
             arith::FPToSIOp, arith::FPToUIOp,
             // HLSCpp operations.
-            AssignOp, CastOp, MulOp, AddOp>([&](auto opNode) -> ResultType {
+            MulPrimOp, CastPrimOp, AssignOp>([&](auto opNode) -> ResultType {
           return thisCast->visitOp(opNode, args...);
         })
         .Default([&](auto opNode) -> ResultType {
@@ -190,10 +190,9 @@ public:
   HANDLE(arith::FPToSIOp);
 
   // HLSCpp operations.
+  HANDLE(MulPrimOp);
+  HANDLE(CastPrimOp);
   HANDLE(AssignOp);
-  HANDLE(CastOp);
-  HANDLE(AddOp);
-  HANDLE(MulOp);
 #undef HANDLE
 };
 } // namespace scalehls
