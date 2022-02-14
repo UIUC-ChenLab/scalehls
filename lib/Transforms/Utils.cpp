@@ -21,6 +21,7 @@ using namespace hlscpp;
 
 /// Set timing attribute.
 void scalehls::setTiming(Operation *op, TimingAttr timing) {
+  assert(timing.getBegin() <= timing.getEnd() && "invalid timing attribute");
   op->setAttr("timing", timing);
 }
 
@@ -36,9 +37,8 @@ void scalehls::setResource(Operation *op, ResourceAttr resource) {
 }
 
 void scalehls::setResource(Operation *op, int64_t lut, int64_t dsp,
-                           int64_t bram, int64_t nonShareDsp) {
-  auto resource =
-      ResourceAttr::get(op->getContext(), lut, dsp, bram, nonShareDsp);
+                           int64_t bram) {
+  auto resource = ResourceAttr::get(op->getContext(), lut, dsp, bram);
   setResource(op, resource);
 }
 

@@ -239,13 +239,15 @@ bool LoopDesignSpace::evaluateTileConfig(TileConfig config) {
   // Fetch latency and resource utilization.
   auto tmpInnerLoop = tmpBand.back();
   auto info = getLoopInfo(tmpInnerLoop);
-  auto resource = getResource(tmpInnerLoop);
+  auto resource = getResource(tmpOuterLoop);
+  assert(info && resource && "loop info or resource is not estimated");
+  auto totalDsp = resource.getDsp() * info.getMinII();
 
   // Improve target II until II is equal to iteration latency. Note that when II
   // equal to iteration latency, the pipeline pragma is similar to a region
   // fully unroll pragma which unrolls all contained loops.
   for (auto tmpII = info.getMinII(); tmpII <= info.getIterLatency(); ++tmpII) {
-    auto tmpDspNum = resource.getNonShareDsp() / tmpII;
+    auto tmpDspNum = totalDsp / tmpII + 1;
     auto tmpLatency = info.getIterLatency() + tmpII * (iterNum - 1) + 2;
     auto point = LoopDesignPoint(tmpLatency, tmpDspNum, config, tmpII);
 
@@ -449,7 +451,7 @@ void FuncDesignSpace::combLoopDesignSpaces() {
     // Annotate the first loop.
     auto loop = targetLoops[0];
     setTiming(loop, -1, -1, loopPoint.latency, -1);
-    setResource(loop, -1, loopPoint.dspNum, -1, -1);
+    setResource(loop, -1, loopPoint.dspNum, -1);
 
     // Estimate the function and generate a new function design point.
     estimator.estimateFunc(func);
@@ -477,7 +479,7 @@ void FuncDesignSpace::combLoopDesignSpaces() {
         auto &oldLoopPoint = funcPoint.loopDesignPoints[ii];
         auto oldLoop = targetLoops[ii];
         setTiming(oldLoop, -1, -1, oldLoopPoint.latency, -1);
-        setResource(oldLoop, -1, oldLoopPoint.dspNum, -1, -1);
+        setResource(oldLoop, -1, oldLoopPoint.dspNum, -1);
       }
 
       // Traverse all design points of the NEW loop.
@@ -485,7 +487,7 @@ void FuncDesignSpace::combLoopDesignSpaces() {
         // Annotate the new loop,
         auto loop = targetLoops[i];
         setTiming(loop, -1, -1, loopPoint.latency, -1);
-        setResource(loop, -1, loopPoint.dspNum, -1, -1);
+        setResource(loop, -1, loopPoint.dspNum, -1);
 
         // Estimate the function and generate a new function design point.
         auto loopPoints = funcPoint.loopDesignPoints;
@@ -569,9 +571,10 @@ bool ScaleHLSOptimizer::emitQoRDebugInfo(FuncOp func, std::string message) {
   // auto latency = getTiming(func).getLatency();
   auto dspNum = getResource(func).getDsp();
 
-  // LLVM_DEBUG(llvm::dbgs() << message + "\n";
-  //            llvm::dbgs() << "The clock cycle is " << Twine(latency)
-  //                         << ", DSP usage is " << Twine(dspNum) << ".\n\n";);
+  LLVM_DEBUG(llvm::dbgs() << message + "\n";
+             //  llvm::dbgs() << "The clock cycle is " << Twine(latency)
+             //               << ", DSP usage is " << Twine(dspNum) << ".\n\n";
+  );
 
   return dspNum <= maxDspNum;
 }

@@ -43,20 +43,18 @@ Attribute ResourceAttr::parse(AsmParser &p, Type type) {
       p.parseInteger(lut) || p.parseComma() || p.parseKeyword(&dspKw) ||
       p.parseEqual() || p.parseInteger(dsp) || p.parseComma() ||
       p.parseKeyword(&bramKw) || p.parseEqual() || p.parseInteger(bram) ||
-      p.parseComma() || p.parseKeyword(&nonShareDspKw) || p.parseEqual() ||
-      p.parseInteger(nonShareDsp) || p.parseGreater())
+      p.parseGreater())
     return Attribute();
 
-  if (lutKw != "lut" || dspKw != "dsp" || bramKw != "bram" ||
-      nonShareDspKw != "nonShareDsp")
+  if (lutKw != "lut" || dspKw != "dsp" || bramKw != "bram")
     return Attribute();
 
-  return ResourceAttr::get(p.getContext(), lut, dsp, bram, nonShareDsp);
+  return ResourceAttr::get(p.getContext(), lut, dsp, bram);
 }
 
 void ResourceAttr::print(AsmPrinter &p) const {
   p << "<lut=" << getLut() << ", dsp=" << getDsp() << ", bram=" << getBram()
-    << ", nonShareDsp=" << getNonShareDsp() << ">";
+    << ">";
 }
 
 //===----------------------------------------------------------------------===//
