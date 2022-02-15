@@ -104,12 +104,22 @@ void ConvertOnnxToTosa::runOnOperation() {
         auto input = op.getOperand(0);
         auto weight = op.getOperand(1);
         auto bias = op.getOperand(2);
-        auto pad = builder.getArrayAttr(ArrayRef<Attribute>({0, 0, 0, 0}));
+        ArrayAttr pad;
         if (op.hasAttr("pads")) {
           pad = op.getAttrOfType<ArrayAttr>("pads");
         }
+        else {
+          pad = builder.getArrayAttr(ArrayRef<Attribute>({0, 0, 0, 0}));
+        }
         auto stride = op.getAttrOfType<ArrayAttr>("strides");
-        auto dilation = op.getAttrOfType<ArrayAttr>("dilations");
+        ArrayAttr dilation;
+        if (op.hasAttr("dilations")) {
+          dilation = op.getAttrOfType<ArrayAttr>("dilations");
+        }
+        else {
+          auto i64_1 = builder.getI64IntegerAttr(1);
+          dilation = builder.getArrayAttr(ArrayRef<Attribute>({i64_1, i64_1}));
+        }
 
         // Create the tosa conv2d op and replace all use.
         auto newOp =
@@ -231,7 +241,7 @@ void ConvertOnnxToTosa::runOnOperation() {
 
         // Get input and reshape attribute.
         auto input = op.getOperand(0);
-        auto shape = op.getOperand(1);
+        //auto shape = op.getOperand(1);
         auto shapeAttr = builder.getI64ArrayAttr(
             outputType.cast<RankedTensorType>().getShape());
 
@@ -239,6 +249,12 @@ void ConvertOnnxToTosa::runOnOperation() {
         auto newOp = builder.create<tosa::ReshapeOp>(op.getLoc(), outputType,
                                                      input, shapeAttr);
         op.replaceAllUsesWith(newOp);
+
+      } else if (opIsa(&op, "onnx.NoValue")) {
+        continue;
+
+      } else if (opIsa(&op, "onnx.MatMul")) {
+        continue;
 
       } else if (op.getName().getDialectNamespace() == "onnx")
         op.emitError("is unsupported onnx op");
