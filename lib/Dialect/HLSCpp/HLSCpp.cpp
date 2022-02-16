@@ -181,14 +181,23 @@ namespace {
 struct SimplifyCastOp : public OpRewritePattern<CastPrimOp> {
   using OpRewritePattern<CastPrimOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(CastPrimOp castOp,
+  LogicalResult matchAndRewrite(CastPrimOp cast,
                                 PatternRewriter &rewriter) const override {
-    if (castOp.in().getType() == castOp.out().getType()) {
-      castOp.in().replaceAllUsesWith(castOp.out());
-      rewriter.eraseOp(castOp);
+    if (cast.in().getType() == cast.out().getType()) {
+      rewriter.replaceOp(cast, cast.in());
+      return success();
     }
 
-    return success();
+    // If the input of the cast is defined by another cast, then the two casts
+    // can be merged into one.
+    if (cast.in().hasOneUse())
+      if (auto defCast = cast.in().getDefiningOp<CastPrimOp>()) {
+        rewriter.replaceOpWithNewOp<CastPrimOp>(cast, cast.getType(),
+                                                defCast.in());
+        return success();
+      }
+
+    return failure();
   }
 };
 } // namespace
