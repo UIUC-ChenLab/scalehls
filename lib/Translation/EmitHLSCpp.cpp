@@ -376,6 +376,12 @@ public:
   }
   bool visitOp(AffineLoadOp op) { return emitter.emitAffineLoad(op), true; }
   bool visitOp(AffineStoreOp op) { return emitter.emitAffineStore(op), true; }
+  bool visitOp(AffineVectorLoadOp op) {
+    return emitter.emitAffineVectorLoad(op), true;
+  }
+  bool visitOp(AffineVectorStoreOp op) {
+    return emitter.emitAffineVectorStore(op), true;
+  }
   bool visitOp(AffineYieldOp op) { return emitter.emitAffineYield(op), true; }
 
   /// Vector-related statements.
@@ -979,9 +985,7 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp op) {
 }
 
 /// Vector-related statement emitters.
-void ModuleEmitter::emitTransferRead(vector::TransferReadOp op) { 
-
-  return; }
+void ModuleEmitter::emitTransferRead(vector::TransferReadOp op) { return; }
 
 void ModuleEmitter::emitTransferWrite(vector::TransferWriteOp op) { return; }
 
