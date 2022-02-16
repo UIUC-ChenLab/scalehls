@@ -99,7 +99,7 @@ Optional<unsigned> scalehls::applyLoopTiling(AffineLoopBand &band,
     for (unsigned i = 0, e = tiledBand.size(); i < e; ++i) {
       auto loop = tiledBand[i];
       normalizeAffineFor(loop);
-      if (loop) {
+      if (loop && !loop.getLoopBody().empty()) {
         band.push_back(loop);
         if (i < bandSize)
           ++simplifiedBandSize;
@@ -116,6 +116,11 @@ Optional<unsigned> scalehls::applyLoopTiling(AffineLoopBand &band,
 namespace {
 struct PartialAffineLoopTile
     : public PartialAffineLoopTileBase<PartialAffineLoopTile> {
+  PartialAffineLoopTile() = default;
+  PartialAffineLoopTile(const ScaleHLSOptions &opts) {
+    tileSize = opts.loopTileSize;
+  }
+
   void runOnOperation() override {
     AffineLoopBands targetBands;
     getTileableBands(getOperation(), &targetBands);
@@ -163,4 +168,8 @@ struct PartialAffineLoopTile
 
 std::unique_ptr<Pass> scalehls::createPartialAffineLoopTilePass() {
   return std::make_unique<PartialAffineLoopTile>();
+}
+std::unique_ptr<Pass>
+scalehls::createPartialAffineLoopTilePass(const ScaleHLSOptions &opts) {
+  return std::make_unique<PartialAffineLoopTile>(opts);
 }

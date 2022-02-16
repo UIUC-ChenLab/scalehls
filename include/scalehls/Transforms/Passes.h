@@ -18,9 +18,17 @@ namespace mlir {
 namespace scalehls {
 
 struct ScaleHLSOptions : public PassPipelineOptions<ScaleHLSOptions> {
-  Option<std::string> LegalizeToHLSCppTopFunc{
+  Option<std::string> hlscppTopFunc{
       *this, "top-func", llvm::cl::init("main"),
       llvm::cl::desc("Specify the top function of the design")};
+
+  Option<unsigned> dataflowMinGran{
+      *this, "min-gran", llvm::cl::init(1),
+      llvm::cl::desc("Positive number: the minimum granularity of dataflow")};
+
+  Option<unsigned> loopTileSize{
+      *this, "tile-size", llvm::cl::init(2),
+      llvm::cl::desc("Positive number: the size of tiling")};
 };
 
 /// QoR estimation pass.
@@ -31,6 +39,7 @@ std::unique_ptr<Pass> createMultipleLevelDSEPass();
 
 /// Dataflow optimization passes.
 std::unique_ptr<Pass> createLegalizeDataflowPass();
+std::unique_ptr<Pass> createLegalizeDataflowPass(const ScaleHLSOptions &opts);
 std::unique_ptr<Pass> createSplitFunctionPass();
 
 /// Loop optimization passes.
@@ -39,6 +48,8 @@ std::unique_ptr<Pass> createAffineLoopPerfectionPass();
 std::unique_ptr<Pass> createRemoveVariableBoundPass();
 std::unique_ptr<Pass> createAffineLoopOrderOptPass();
 std::unique_ptr<Pass> createPartialAffineLoopTilePass();
+std::unique_ptr<Pass>
+createPartialAffineLoopTilePass(const ScaleHLSOptions &opts);
 
 /// Directive optimization passes.
 std::unique_ptr<Pass> createLegalizeToHLSCppPass();

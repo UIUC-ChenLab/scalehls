@@ -22,7 +22,10 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
     func.emitError("has zero or more than one basic blocks.");
 
   // Set function pragma attributes.
-  if (!getFuncDirective(func))
+  if (auto fd = getFuncDirective(func))
+    setFuncDirective(func, fd.getPipeline(), fd.getTargetInterval(),
+                     fd.getDataflow(), isTopFunc);
+  else
     setFuncDirective(func, false, 1, false, isTopFunc);
 
   // Walk through all operations in the function.
@@ -85,10 +88,9 @@ namespace {
 struct LegalizeToHLSCpp : public LegalizeToHLSCppBase<LegalizeToHLSCpp> {
   LegalizeToHLSCpp() = default;
   LegalizeToHLSCpp(const ScaleHLSOptions &opts) {
-    topFunc = opts.LegalizeToHLSCppTopFunc;
+    topFunc = opts.hlscppTopFunc;
   }
 
-public:
   void runOnOperation() override {
     auto func = getOperation();
     applyLegalizeToHLSCpp(func, func.getName() == topFunc);

@@ -29,20 +29,22 @@ void scalehls::registerScaleHLSPassPipeline() {
         pm.addPass(createSimplifyAffineStructuresPass());
         pm.addPass(createCanonicalizerPass());
 
-        pm.addPass(createLegalizeDataflowPass());
+        pm.addPass(createLegalizeDataflowPass(opts));
         pm.addPass(createSplitFunctionPass());
         pm.addPass(createConvertLinalgToAffineLoopsPass());
         pm.addPass(createCanonicalizerPass());
 
-        pm.addPass(createMaterializeReductionPass());
         pm.addPass(createLegalizeToHLSCppPass(opts));
-        pm.addPass(createPartialAffineLoopTilePass());
+        pm.addPass(createMaterializeReductionPass());
+        pm.addPass(createAffineLoopPerfectionPass());
+        pm.addPass(createPartialAffineLoopTilePass(opts));
+
         pm.addPass(createSimplifyAffineIfPass());
         pm.addPass(createAffineStoreForwardPass());
         pm.addPass(createSimplifyMemrefAccessPass());
-        pm.addPass(createArrayPartitionPass());
-
         pm.addPass(createReduceInitialIntervalPass());
+
+        pm.addPass(createArrayPartitionPass());
         // pm.addPass(createCreateHLSCppPrimitivePass());
         pm.addPass(createCSEPass());
         pm.addPass(createCanonicalizerPass());
