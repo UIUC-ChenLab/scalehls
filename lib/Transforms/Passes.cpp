@@ -35,11 +35,13 @@ void scalehls::registerScaleHLSPassPipeline() {
         pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
-        // Loop-level optimizations.
-        pm.addPass(scalehls::createMaterializeReductionPass());
+        // Loop-level optimizations. Loop pipelining is included.
         if (opts.vecSize != 1)
           pm.addPass(mlir::createSuperVectorizePass({opts.vecSize}));
+        pm.addPass(scalehls::createLegalizeToHLSCppPass(opts));
+        pm.addPass(scalehls::createMaterializeReductionPass());
         pm.addPass(scalehls::createAffineLoopPerfectionPass());
+        pm.addPass(scalehls::createRemoveVariableBoundPass());
         pm.addPass(scalehls::createPartialAffineLoopTilePass(opts));
         pm.addPass(mlir::createCanonicalizerPass());
 
@@ -51,7 +53,6 @@ void scalehls::registerScaleHLSPassPipeline() {
         pm.addPass(mlir::createCanonicalizerPass());
 
         // Directive-level optimizations.
-        pm.addPass(scalehls::createLegalizeToHLSCppPass(opts));
         pm.addPass(scalehls::createArrayPartitionPass());
         pm.addPass(scalehls::createCreateHLSCppPrimitivePass());
         pm.addPass(mlir::createCSEPass());

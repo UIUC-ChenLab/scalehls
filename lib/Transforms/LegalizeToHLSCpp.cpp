@@ -6,6 +6,8 @@
 
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Vector/VectorOps.h"
+#include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -13,6 +15,42 @@
 using namespace mlir;
 using namespace scalehls;
 using namespace hlscpp;
+
+namespace {
+struct TransferReadConversionPattern
+    : public OpConversionPattern<vector::TransferReadOp> {
+  using OpConversionPattern<vector::TransferReadOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(vector::TransferReadOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    if (!op.permutation_map().isMinorIdentity() ||
+        !op.source().getType().isa<MemRefType>())
+      return failure();
+    rewriter.replaceOpWithNewOp<AffineVectorLoadOp>(op, op.getType(),
+                                                    op.source(), op.indices());
+    return success();
+  }
+};
+} // namespace
+
+namespace {
+struct TransferWriteConversionPattern
+    : public OpConversionPattern<vector::TransferWriteOp> {
+  using OpConversionPattern<vector::TransferWriteOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(vector::TransferWriteOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    if (!op.permutation_map().isMinorIdentity() ||
+        !op.source().getType().isa<MemRefType>())
+      return failure();
+    rewriter.replaceOpWithNewOp<AffineVectorStoreOp>(op, op.vector(),
+                                                     op.source(), op.indices());
+    return success();
+  }
+};
+} // namespace
 
 bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
   auto builder = OpBuilder(func);
@@ -80,6 +118,20 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
     }
     ++idx;
   }
+
+  RewritePatternSet patterns(func.getContext());
+  ConversionTarget target(*func.getContext());
+
+  // TODO: Make sure the lowering is safe and thorough.
+  patterns.add<TransferReadConversionPattern>(patterns.getContext());
+  patterns.add<TransferWriteConversionPattern>(patterns.getContext());
+  target.addLegalOp<AffineVectorLoadOp>();
+  target.addLegalOp<AffineVectorStoreOp>();
+  (void)applyPartialConversion(func, target, std::move(patterns));
+
+  // patterns.clear();
+  // vector::populateVectorTransferLoweringPatterns(patterns);
+  // (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
   return true;
 }
