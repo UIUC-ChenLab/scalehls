@@ -24,30 +24,38 @@ void scalehls::registerScaleHLSPassPipeline() {
   PassPipelineRegistration<ScaleHLSOptions>(
       "scalehls-pipeline", "Compile to HLS C++",
       [](OpPassManager &pm, const ScaleHLSOptions &opts) {
-        pm.addPass(createLegalizeOnnxPass());
-        pm.addPass(createAffineLoopNormalizePass());
-        pm.addPass(createSimplifyAffineStructuresPass());
-        pm.addPass(createCanonicalizerPass());
+        pm.addPass(scalehls::createLegalizeOnnxPass());
+        pm.addPass(mlir::createAffineLoopNormalizePass());
+        pm.addPass(mlir::createSimplifyAffineStructuresPass());
+        pm.addPass(mlir::createCanonicalizerPass());
 
-        pm.addPass(createLegalizeDataflowPass(opts));
-        pm.addPass(createSplitFunctionPass());
-        pm.addPass(createConvertLinalgToAffineLoopsPass());
-        pm.addPass(createCanonicalizerPass());
+        // Graph-level optimizations.
+        pm.addPass(scalehls::createLegalizeDataflowPass(opts));
+        pm.addPass(scalehls::createSplitFunctionPass());
+        pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
+        pm.addPass(mlir::createCanonicalizerPass());
 
-        pm.addPass(createLegalizeToHLSCppPass(opts));
-        pm.addPass(createMaterializeReductionPass());
-        pm.addPass(createAffineLoopPerfectionPass());
-        pm.addPass(createPartialAffineLoopTilePass(opts));
+        // Loop-level optimizations.
+        pm.addPass(scalehls::createMaterializeReductionPass());
+        if (opts.vecSize != 1)
+          pm.addPass(mlir::createSuperVectorizePass({opts.vecSize}));
+        pm.addPass(scalehls::createAffineLoopPerfectionPass());
+        pm.addPass(scalehls::createPartialAffineLoopTilePass(opts));
+        pm.addPass(mlir::createCanonicalizerPass());
 
-        pm.addPass(createSimplifyAffineIfPass());
-        pm.addPass(createAffineStoreForwardPass());
-        pm.addPass(createSimplifyMemrefAccessPass());
-        pm.addPass(createReduceInitialIntervalPass());
+        // Simplifications.
+        pm.addPass(scalehls::createSimplifyAffineIfPass());
+        pm.addPass(scalehls::createAffineStoreForwardPass());
+        pm.addPass(scalehls::createSimplifyMemrefAccessPass());
+        pm.addPass(scalehls::createReduceInitialIntervalPass());
+        pm.addPass(mlir::createCanonicalizerPass());
 
-        pm.addPass(createArrayPartitionPass());
-        // pm.addPass(createCreateHLSCppPrimitivePass());
-        pm.addPass(createCSEPass());
-        pm.addPass(createCanonicalizerPass());
+        // Directive-level optimizations.
+        pm.addPass(scalehls::createLegalizeToHLSCppPass(opts));
+        pm.addPass(scalehls::createArrayPartitionPass());
+        pm.addPass(scalehls::createCreateHLSCppPrimitivePass());
+        pm.addPass(mlir::createCSEPass());
+        pm.addPass(mlir::createCanonicalizerPass());
       });
 }
 

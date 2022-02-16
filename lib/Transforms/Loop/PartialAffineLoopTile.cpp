@@ -119,6 +119,7 @@ struct PartialAffineLoopTile
   PartialAffineLoopTile() = default;
   PartialAffineLoopTile(const ScaleHLSOptions &opts) {
     tileSize = opts.loopTileSize;
+    applyOrderOpt = opts.loopOrderOpt;
   }
 
   void runOnOperation() override {

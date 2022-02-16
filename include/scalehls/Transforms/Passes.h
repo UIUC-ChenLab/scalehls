@@ -23,12 +23,20 @@ struct ScaleHLSOptions : public PassPipelineOptions<ScaleHLSOptions> {
       llvm::cl::desc("Specify the top function of the design")};
 
   Option<unsigned> dataflowMinGran{
-      *this, "min-gran", llvm::cl::init(1),
+      *this, "min-gran", llvm::cl::init(3),
       llvm::cl::desc("Positive number: the minimum granularity of dataflow")};
 
   Option<unsigned> loopTileSize{
       *this, "tile-size", llvm::cl::init(2),
       llvm::cl::desc("Positive number: the size of tiling")};
+
+  Option<bool> loopOrderOpt{
+      *this, "order-opt", llvm::cl::init(false),
+      llvm::cl::desc("Whether apply loop order optimization after tiling")};
+
+  Option<unsigned> vecSize{
+      *this, "vec-size", llvm::cl::init(1),
+      llvm::cl::desc("Positive number: the size of vectorization")};
 };
 
 /// QoR estimation pass.

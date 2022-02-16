@@ -15,7 +15,7 @@
 using namespace mlir;
 using namespace scalehls;
 
-static bool findCommutativeChain(mlir::AffineStoreOp store,
+static bool findCommutativeChain(AffineWriteOpInterface store,
                                  SmallVectorImpl<Operation *> &chain) {
   auto op = chain.back();
   if (store == op)
@@ -44,7 +44,7 @@ struct ReduceInitialIntervalPattern : public OpRewritePattern<AffineForOp> {
                                 PatternRewriter &rewriter) const override {
     MemAccessesMap map;
     for (auto &op : *loop.getBody()) {
-      if (isa<mlir::AffineLoadOp, mlir::AffineStoreOp>(op))
+      if (isa<AffineReadOpInterface, AffineWriteOpInterface>(op))
         map[MemRefAccess(&op).memref].push_back(&op);
     }
 
@@ -55,11 +55,11 @@ struct ReduceInitialIntervalPattern : public OpRewritePattern<AffineForOp> {
       // Only if a load depends on a dominated store (a back dependence), the
       // associated II constraint is possible to be optimized.
       for (unsigned i = 0, e = accesses.size(); i < e; ++i) {
-        auto dstLoad = dyn_cast<mlir::AffineLoadOp>(accesses[i]);
+        auto dstLoad = dyn_cast<AffineReadOpInterface>(accesses[i]);
         if (!dstLoad)
           continue;
         for (unsigned j = i + 1, e = accesses.size(); j < e; ++j) {
-          auto srcStore = dyn_cast<mlir::AffineStoreOp>(accesses[j]);
+          auto srcStore = dyn_cast<AffineWriteOpInterface>(accesses[j]);
           if (!srcStore || MemRefAccess(srcStore) != MemRefAccess(dstLoad))
             continue;
 
@@ -111,7 +111,7 @@ struct ReduceInitialIntervalPattern : public OpRewritePattern<AffineForOp> {
           auto headOperator = *std::next(chain.begin());
           if (targetOperator == headOperator || targetOperator == dstLoad)
             continue;
-          auto &headOperand = headOperator->getOperand(0) != dstLoad.result()
+          auto &headOperand = headOperator->getOperand(0) != dstLoad.getValue()
                                   ? headOperator->getOpOperand(0)
                                   : headOperator->getOpOperand(1);
 
