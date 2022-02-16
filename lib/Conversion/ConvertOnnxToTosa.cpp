@@ -251,10 +251,42 @@ void ConvertOnnxToTosa::runOnOperation() {
         op.replaceAllUsesWith(newOp);
 
       } else if (opIsa(&op, "onnx.NoValue")) {
-        continue;
+        //opToErase.push_back(&op);
+        op.emitError("is unsupported onnx op");
+        //continue;
 
       } else if (opIsa(&op, "onnx.MatMul")) {
-        continue;
+        //opToErase.push_back(&op);
+        op.emitError("is unsupported onnx op");
+        //continue;
+
+      } else if (opIsa(&op, "onnx.ReduceMean")) {
+        opToErase.push_back(&op);
+
+        // Get output type.
+        auto output = op.getResult(0);
+        auto outputType = permuteShape(output.getType());
+        auto outputShape = outputType.cast<RankedTensorType>().getShape();
+        output.setType(outputType);
+
+        // Get input and attributes.
+        auto input = op.getOperand(0);
+        auto inputShape = input.getType().cast<RankedTensorType>().getShape();
+
+        auto i64_0 = builder.getI64IntegerAttr(0);
+        auto i64_1 = builder.getI64IntegerAttr(1);
+        auto stride = builder.getArrayAttr(ArrayRef<Attribute>({i64_1, i64_1}));
+
+        auto pad = builder.getArrayAttr(ArrayRef<Attribute>({i64_0, i64_0, i64_0, i64_0}));
+
+        auto kernelH = builder.getI64IntegerAttr(inputShape[1] / outputShape[1]);
+        auto kernelW = builder.getI64IntegerAttr(inputShape[2] / outputShape[2]);
+        auto kernel = builder.getArrayAttr(ArrayRef<Attribute>({kernelH, kernelW}));
+
+        // Create tosa avgpool2d op and replace all use.
+        auto newOp = builder.create<tosa::AvgPool2dOp>(op.getLoc(), outputType,
+                                                     input, kernel, stride, pad);
+        op.replaceAllUsesWith(newOp);
 
       } else if (op.getName().getDialectNamespace() == "onnx")
         op.emitError("is unsupported onnx op");
