@@ -13,6 +13,7 @@
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
+#include "mlir/Dialect/Vector/VectorOps.h"
 #include "scalehls/Dialect/HLSCpp/HLSCpp.h"
 #include "llvm/ADT/TypeSwitch.h"
 
@@ -32,45 +33,55 @@ public:
             // SCF statements.
             scf::ForOp, scf::IfOp, scf::ParallelOp, scf::ReduceOp,
             scf::ReduceReturnOp, scf::YieldOp,
+
             // Affine statements.
             AffineForOp, AffineIfOp, AffineParallelOp, AffineApplyOp,
             AffineMaxOp, AffineMinOp, AffineLoadOp, AffineStoreOp,
-            AffineYieldOp, AffineVectorLoadOp, AffineVectorStoreOp,
-            AffineDmaStartOp, AffineDmaWaitOp,
+            AffineVectorLoadOp, AffineVectorStoreOp, AffineYieldOp,
+
+            // Vector-related statements.
+            vector::TransferReadOp, vector::TransferWriteOp,
+            vector::BroadcastOp,
+
             // Memref-related statements.
             memref::AllocOp, memref::AllocaOp, memref::LoadOp, memref::StoreOp,
-            memref::DeallocOp, memref::DmaStartOp, memref::DmaWaitOp,
-            memref::ViewOp, memref::SubViewOp, memref::AtomicRMWOp,
-            GenericAtomicRMWOp, AtomicYieldOp,
-            // Tensor-related statements.
-            bufferization::ToMemrefOp, bufferization::ToTensorOp,
-            memref::TensorStoreOp, SplatOp, memref::DimOp, memref::RankOp,
-            memref::ReinterpretCastOp,
+            memref::DeallocOp, memref::TensorStoreOp, bufferization::ToMemrefOp,
+            bufferization::ToTensorOp, memref::ReinterpretCastOp,
+
+            // HLSCpp primitive operations.
+            MulPrimOp, CastPrimOp, AssignOp,
+
+            // HLS C++ library include operation.
+            IncludeOp,
+
+            // IP operation.
+            IPOp,
+
+            // Control flow operations.
+            CallOp, ReturnOp,
+
             // Unary expressions.
             math::AbsOp, math::CeilOp, math::CosOp, math::SinOp, math::TanhOp,
             math::SqrtOp, math::RsqrtOp, math::ExpOp, math::Exp2Op, math::LogOp,
             math::Log2Op, math::Log10Op, arith::NegFOp,
+
             // Float binary expressions.
             arith::CmpFOp, arith::AddFOp, arith::SubFOp, arith::MulFOp,
             arith::DivFOp, arith::RemFOp,
+
             // Integer binary expressions.
             arith::CmpIOp, arith::AddIOp, arith::SubIOp, arith::MulIOp,
             arith::DivSIOp, arith::RemSIOp, arith::DivUIOp, arith::RemUIOp,
             arith::XOrIOp, arith::AndIOp, arith::OrIOp, arith::ShLIOp,
             arith::ShRSIOp, arith::ShRUIOp,
-            // Special operations.
-            CallOp, ReturnOp, SelectOp, ConstantOp, arith::ConstantOp,
-            arith::TruncIOp, arith::TruncFOp, arith::ExtUIOp, arith::ExtSIOp,
-            arith::IndexCastOp, arith::UIToFPOp, arith::SIToFPOp,
-            arith::FPToSIOp, arith::FPToUIOp,
-            // HLSCpp operations.
-            AssignOp, CastOp, MulOp, AddOp, 
-            // HLS C++ library include operation.
-            IncludeOp,
-            // IP operation.
-            IPOp>([&](auto opNode) -> ResultType {
-          return thisCast->visitOp(opNode, args...);
-        })
+
+            // Special expressions.
+            SelectOp, ConstantOp, arith::ConstantOp, arith::TruncIOp,
+            arith::TruncFOp, arith::ExtUIOp, arith::ExtSIOp, arith::IndexCastOp,
+            arith::UIToFPOp, arith::SIToFPOp, arith::FPToSIOp, arith::FPToUIOp>(
+            [&](auto opNode) -> ResultType {
+              return thisCast->visitOp(opNode, args...);
+            })
         .Default([&](auto opNode) -> ResultType {
           return thisCast->visitInvalidOp(op, args...);
         });
@@ -111,11 +122,14 @@ public:
   HANDLE(AffineMinOp);
   HANDLE(AffineLoadOp);
   HANDLE(AffineStoreOp);
-  HANDLE(AffineYieldOp);
   HANDLE(AffineVectorLoadOp);
   HANDLE(AffineVectorStoreOp);
-  HANDLE(AffineDmaStartOp);
-  HANDLE(AffineDmaWaitOp);
+  HANDLE(AffineYieldOp);
+
+  // Vector-related statements.
+  HANDLE(vector::TransferReadOp);
+  HANDLE(vector::TransferWriteOp);
+  HANDLE(vector::BroadcastOp);
 
   // Memref-related statements.
   HANDLE(memref::AllocOp);
@@ -123,22 +137,25 @@ public:
   HANDLE(memref::LoadOp);
   HANDLE(memref::StoreOp);
   HANDLE(memref::DeallocOp);
-  HANDLE(memref::DmaStartOp);
-  HANDLE(memref::DmaWaitOp);
-  HANDLE(memref::AtomicRMWOp);
-  HANDLE(GenericAtomicRMWOp);
-  HANDLE(AtomicYieldOp);
-  HANDLE(memref::ViewOp);
-  HANDLE(memref::SubViewOp);
-
-  // Tensor-related statements.
+  HANDLE(memref::TensorStoreOp);
   HANDLE(bufferization::ToMemrefOp);
   HANDLE(bufferization::ToTensorOp);
-  HANDLE(memref::TensorStoreOp);
-  HANDLE(SplatOp);
-  HANDLE(memref::DimOp);
-  HANDLE(memref::RankOp);
   HANDLE(memref::ReinterpretCastOp);
+
+  // HLSCpp primitive operations.
+  HANDLE(MulPrimOp);
+  HANDLE(CastPrimOp);
+  HANDLE(AssignOp);
+
+  // Control flow operations.
+  HANDLE(CallOp);
+  HANDLE(ReturnOp);
+
+  // HLS C++ library include operation.
+  HANDLE(IncludeOp);
+
+  // IP operation.
+  HANDLE(IPOp);
 
   // Unary expressions.
   HANDLE(math::AbsOp);
@@ -179,9 +196,7 @@ public:
   HANDLE(arith::ShRSIOp);
   HANDLE(arith::ShRUIOp);
 
-  // Special operations.
-  HANDLE(CallOp);
-  HANDLE(ReturnOp);
+  // Special expressions.
   HANDLE(SelectOp);
   HANDLE(ConstantOp);
   HANDLE(arith::ConstantOp);
@@ -195,18 +210,6 @@ public:
   HANDLE(arith::SIToFPOp);
   HANDLE(arith::FPToUIOp);
   HANDLE(arith::FPToSIOp);
-
-  // HLSCpp operations.
-  HANDLE(AssignOp);
-  HANDLE(CastOp);
-  HANDLE(AddOp);
-  HANDLE(MulOp);
-
-  // HLS C++ library include operation.
-  HANDLE(IncludeOp);
-
-  // IP operation.
-  HANDLE(IPOp);
 #undef HANDLE
 };
 } // namespace scalehls

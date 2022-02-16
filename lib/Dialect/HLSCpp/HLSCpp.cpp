@@ -37,26 +37,24 @@ void HLSCppDialect::initialize() {
 //===----------------------------------------------------------------------===//
 
 Attribute ResourceAttr::parse(AsmParser &p, Type type) {
-  StringRef lutKw, dspKw, bramKw, nonShareDspKw;
-  int64_t lut, dsp, bram, nonShareDsp;
+  StringRef lutKw, dspKw, bramKw;
+  int64_t lut, dsp, bram;
   if (p.parseLess() || p.parseKeyword(&lutKw) || p.parseEqual() ||
       p.parseInteger(lut) || p.parseComma() || p.parseKeyword(&dspKw) ||
       p.parseEqual() || p.parseInteger(dsp) || p.parseComma() ||
       p.parseKeyword(&bramKw) || p.parseEqual() || p.parseInteger(bram) ||
-      p.parseComma() || p.parseKeyword(&nonShareDspKw) || p.parseEqual() ||
-      p.parseInteger(nonShareDsp) || p.parseGreater())
+      p.parseGreater())
     return Attribute();
 
-  if (lutKw != "lut" || dspKw != "dsp" || bramKw != "bram" ||
-      nonShareDspKw != "nonShareDsp")
+  if (lutKw != "lut" || dspKw != "dsp" || bramKw != "bram")
     return Attribute();
 
-  return ResourceAttr::get(p.getContext(), lut, dsp, bram, nonShareDsp);
+  return ResourceAttr::get(p.getContext(), lut, dsp, bram);
 }
 
 void ResourceAttr::print(AsmPrinter &p) const {
   p << "<lut=" << getLut() << ", dsp=" << getDsp() << ", bram=" << getBram()
-    << ", nonShareDsp=" << getNonShareDsp() << ">";
+    << ">";
 }
 
 //===----------------------------------------------------------------------===//
@@ -180,23 +178,32 @@ void FuncDirectiveAttr::print(AsmPrinter &p) const {
 //===----------------------------------------------------------------------===//
 
 namespace {
-struct SimplifyCastOp : public OpRewritePattern<CastOp> {
-  using OpRewritePattern<CastOp>::OpRewritePattern;
+struct SimplifyCastOp : public OpRewritePattern<CastPrimOp> {
+  using OpRewritePattern<CastPrimOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(CastOp castOp,
+  LogicalResult matchAndRewrite(CastPrimOp cast,
                                 PatternRewriter &rewriter) const override {
-    if (castOp.input().getType() == castOp.output().getType()) {
-      castOp.output().replaceAllUsesWith(castOp.input());
-      rewriter.eraseOp(castOp);
+    if (cast.in().getType() == cast.out().getType()) {
+      rewriter.replaceOp(cast, cast.in());
+      return success();
     }
 
-    return success();
+    // If the input of the cast is defined by another cast, then the two casts
+    // can be merged into one.
+    if (cast.in().hasOneUse())
+      if (auto defCast = cast.in().getDefiningOp<CastPrimOp>()) {
+        rewriter.replaceOpWithNewOp<CastPrimOp>(cast, cast.getType(),
+                                                defCast.in());
+        return success();
+      }
+
+    return failure();
   }
 };
 } // namespace
 
-void CastOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                         MLIRContext *context) {
+void CastPrimOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                             MLIRContext *context) {
   results.add<SimplifyCastOp>(context);
 }
 

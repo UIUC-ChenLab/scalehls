@@ -6,12 +6,51 @@
 
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "scalehls/Conversion/Passes.h"
+#include "mlir/Dialect/Vector/VectorOps.h"
+#include "mlir/Transforms/DialectConversion.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
 using namespace hlscpp;
+
+namespace {
+struct TransferReadConversionPattern
+    : public OpConversionPattern<vector::TransferReadOp> {
+  using OpConversionPattern<vector::TransferReadOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(vector::TransferReadOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    if (!op.permutation_map().isMinorIdentity() ||
+        !op.source().getType().isa<MemRefType>())
+      return failure();
+    rewriter.replaceOpWithNewOp<AffineVectorLoadOp>(op, op.getType(),
+                                                    op.source(), op.indices());
+    return success();
+  }
+};
+} // namespace
+
+namespace {
+struct TransferWriteConversionPattern
+    : public OpConversionPattern<vector::TransferWriteOp> {
+  using OpConversionPattern<vector::TransferWriteOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(vector::TransferWriteOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    if (!op.permutation_map().isMinorIdentity() ||
+        !op.source().getType().isa<MemRefType>())
+      return failure();
+    rewriter.replaceOpWithNewOp<AffineVectorStoreOp>(op, op.vector(),
+                                                     op.source(), op.indices());
+    return success();
+  }
+};
+} // namespace
 
 bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
   auto builder = OpBuilder(func);
@@ -21,7 +60,10 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
     func.emitError("has zero or more than one basic blocks.");
 
   // Set function pragma attributes.
-  if (!getFuncDirective(func))
+  if (auto fd = getFuncDirective(func))
+    setFuncDirective(func, fd.getPipeline(), fd.getTargetInterval(),
+                     fd.getDataflow(), isTopFunc);
+  else
     setFuncDirective(func, false, 1, false, isTopFunc);
 
   // Walk through all operations in the function.
@@ -77,12 +119,30 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
     ++idx;
   }
 
+  RewritePatternSet patterns(func.getContext());
+  ConversionTarget target(*func.getContext());
+
+  // TODO: Make sure the lowering is safe and thorough.
+  patterns.add<TransferReadConversionPattern>(patterns.getContext());
+  patterns.add<TransferWriteConversionPattern>(patterns.getContext());
+  target.addLegalOp<AffineVectorLoadOp>();
+  target.addLegalOp<AffineVectorStoreOp>();
+  (void)applyPartialConversion(func, target, std::move(patterns));
+
+  // patterns.clear();
+  // vector::populateVectorTransferLoweringPatterns(patterns);
+  // (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+
   return true;
 }
 
 namespace {
 struct LegalizeToHLSCpp : public LegalizeToHLSCppBase<LegalizeToHLSCpp> {
-public:
+  LegalizeToHLSCpp() = default;
+  LegalizeToHLSCpp(const ScaleHLSOptions &opts) {
+    topFunc = opts.hlscppTopFunc;
+  }
+
   void runOnOperation() override {
     auto func = getOperation();
     applyLegalizeToHLSCpp(func, func.getName() == topFunc);
@@ -92,4 +152,8 @@ public:
 
 std::unique_ptr<Pass> scalehls::createLegalizeToHLSCppPass() {
   return std::make_unique<LegalizeToHLSCpp>();
+}
+std::unique_ptr<Pass>
+scalehls::createLegalizeToHLSCppPass(const ScaleHLSOptions &opts) {
+  return std::make_unique<LegalizeToHLSCpp>(opts);
 }

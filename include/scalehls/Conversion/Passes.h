@@ -17,9 +17,6 @@ class Pass;
 namespace mlir {
 namespace scalehls {
 
-/// HLSCpp conversion passes.
-std::unique_ptr<Pass> createLegalizeToHLSCppPass();
-
 /// Onnx kernel legalization pass.
 std::unique_ptr<Pass> createLegalizeOnnxPass();
 

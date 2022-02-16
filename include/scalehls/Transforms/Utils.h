@@ -25,8 +25,7 @@ void setTiming(Operation *op, int64_t begin, int64_t end, int64_t latency,
 
 /// Set resource attribute.
 void setResource(Operation *op, ResourceAttr resource);
-void setResource(Operation *op, int64_t lut, int64_t dsp, int64_t bram,
-                 int64_t nonShareDsp);
+void setResource(Operation *op, int64_t lut, int64_t dsp, int64_t bram);
 
 /// Set loop information attribute.
 void setLoopInfo(Operation *op, LoopInfoAttr loopInfo);

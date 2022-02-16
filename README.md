@@ -62,11 +62,7 @@ $ # Parse ONNX model to MLIR.
 $ $ONNXMLIR_DIR/build/bin/onnx-mlir -EmitMLIRIR resnet18.onnx
 
 $ # Legalize the output of ONNX-MLIR, optimize and emit C++ code.
-$ scalehls-opt resnet18.onnx.mlir -allow-unregistered-dialect -legalize-onnx \
-    -affine-loop-normalize -canonicalize -legalize-dataflow="insert-copy=true min-gran=3" \
-    -split-function -convert-linalg-to-affine-loops -legalize-to-hlscpp="top-func=main_graph" \
-    -affine-loop-perfection -affine-loop-order-opt -loop-pipelining -simplify-affine-if \
-    -affine-store-forward -simplify-memref-access -array-partition -cse -canonicalize \
+$ scalehls-opt resnet18.onnx.mlir -allow-unregistered-dialect -scalehls-pipeline="top-func=main_graph" \
     | scalehls-translate -emit-hlscpp > resnet18.cpp
 ```
 

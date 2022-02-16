@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -partial-affine-loop-tile="tile-size=2" %s | FileCheck %s
+// RUN: scalehls-opt -partial-affine-loop-tile="tile-size=2 apply-order-opt=false apply-pipeline=false" %s | FileCheck %s
 
 // CHECK: #map = affine_map<(d0, d1) -> (d0 + d1 * 2)>
 // CHECK: #set0 = affine_set<(d0, d1) : (d0 - d1 >= 0)>

@@ -15,6 +15,7 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
+#include "mlir/Dialect/Vector/VectorOps.h"
 #include "mlir/IR/Dialect.h"
 #include "scalehls/Dialect/HLSCpp/HLSCpp.h"
 
@@ -36,6 +37,7 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
     mlir::linalg::LinalgDialect,
     mlir::LLVM::LLVMDialect,
     mlir::tosa::TosaDialect
+    mlir::vector::VectorDialect,
   >();
   // clang-format on
 }

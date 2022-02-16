@@ -71,16 +71,16 @@ void LegalizeOnnx::runOnOperation() {
   }
 
   for (auto func : funcs) {
-    // Convert add operations to AffineApply.
-    func.walk([&](arith::AddIOp addOp) {
-      builder.setInsertionPoint(addOp);
-      auto map = AffineMap::get(
-          2, 0, builder.getAffineDimExpr(0) + builder.getAffineDimExpr(1),
-          builder.getContext());
-      auto newAdd = builder.create<AffineApplyOp>(
-          addOp.getLoc(), addOp.getType(), map, addOp.getOperands());
-      addOp.getResult().replaceAllUsesWith(newAdd);
-    });
+    // // Convert add operations to AffineApply.
+    // func.walk([&](arith::AddIOp addOp) {
+    //   builder.setInsertionPoint(addOp);
+    //   auto map = AffineMap::get(
+    //       2, 0, builder.getAffineDimExpr(0) + builder.getAffineDimExpr(1),
+    //       builder.getContext());
+    //   auto newAdd = builder.create<AffineApplyOp>(
+    //       addOp.getLoc(), addOp.getType(), map, addOp.getOperands());
+    //   addOp.getResult().replaceAllUsesWith(newAdd);
+    // });
 
     // Convert normal load operations to AffineLoad.
     func.walk([&](memref::LoadOp loadOp) {
