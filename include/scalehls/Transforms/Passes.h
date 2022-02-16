@@ -17,6 +17,12 @@ class Pass;
 namespace mlir {
 namespace scalehls {
 
+struct ScaleHLSOptions : public PassPipelineOptions<ScaleHLSOptions> {
+  Option<std::string> LegalizeToHLSCppTopFunc{
+      *this, "top-func", llvm::cl::init("main"),
+      llvm::cl::desc("Specify the top function of the design")};
+};
+
 /// QoR estimation pass.
 std::unique_ptr<Pass> createQoREstimationPass();
 
@@ -33,18 +39,22 @@ std::unique_ptr<Pass> createAffineLoopPerfectionPass();
 std::unique_ptr<Pass> createRemoveVariableBoundPass();
 std::unique_ptr<Pass> createAffineLoopOrderOptPass();
 std::unique_ptr<Pass> createPartialAffineLoopTilePass();
-std::unique_ptr<Pass> createReduceInitialIntervalPass();
 
 /// Directive optimization passes.
+std::unique_ptr<Pass> createLegalizeToHLSCppPass();
+std::unique_ptr<Pass> createLegalizeToHLSCppPass(const ScaleHLSOptions &opts);
 std::unique_ptr<Pass> createFuncPipeliningPass();
 std::unique_ptr<Pass> createLoopPipeliningPass();
 std::unique_ptr<Pass> createArrayPartitionPass();
+std::unique_ptr<Pass> createCreateHLSCppPrimitivePass();
 
 /// Simplification passes.
 std::unique_ptr<Pass> createSimplifyAffineIfPass();
 std::unique_ptr<Pass> createAffineStoreForwardPass();
 std::unique_ptr<Pass> createSimplifyMemrefAccessPass();
+std::unique_ptr<Pass> createReduceInitialIntervalPass();
 
+void registerScaleHLSPassPipeline();
 void registerTransformsPasses();
 
 #define GEN_PASS_CLASSES

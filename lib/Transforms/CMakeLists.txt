@@ -1,6 +1,8 @@
 add_mlir_library(MLIRScaleHLSTransforms
   Directive/ArrayPartition.cpp
+  Directive/CreateHLSCppPrimitive.cpp
   Directive/FuncPipelining.cpp
+  Directive/LegalizeToHLSCpp.cpp
   Directive/LoopPipelining.cpp
   Graph/LegalizeDataflow.cpp
   Graph/SplitFunction.cpp
