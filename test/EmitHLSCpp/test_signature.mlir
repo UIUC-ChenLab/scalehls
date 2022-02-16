@@ -40,9 +40,6 @@ func @test_signature(
   %c0 = arith.constant 0 : index
   %c1 = arith.constant 1 : index
 
-  // CHECK: int [[VAL_26:.*]] = 16;
-  %0 = memref.dim %arg7, %c0 : memref<16x8xf32>
-
   // CHECK: *[[VAL_13:.*]] = [[VAL_0:.*]];
   // CHECK: for (int iv0 = 0; iv0 < 16; ++iv0) {
   // CHECK:   for (int iv1 = 0; iv1 < 8; ++iv1) {
