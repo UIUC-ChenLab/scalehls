@@ -235,6 +235,7 @@ public:
   /// Standard expression emitters.
   void emitUnary(Operation *op, const char *syntax);
   void emitBinary(Operation *op, const char *syntax);
+  template <typename OpType> void emitMaxMin(OpType op, const char *syntax);
 
   /// Special expression emitters.
   void emitSelect(SelectOp op);
@@ -461,6 +462,8 @@ public:
   bool visitOp(arith::MulFOp op) { return emitter.emitBinary(op, "*"), true; }
   bool visitOp(arith::DivFOp op) { return emitter.emitBinary(op, "/"), true; }
   bool visitOp(arith::RemFOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(arith::MaxFOp op) { return emitter.emitMaxMin(op, "max"), true; }
+  bool visitOp(arith::MinFOp op) { return emitter.emitMaxMin(op, "min"), true; }
 
   /// Integer binary expressions.
   bool visitOp(arith::CmpIOp op);
@@ -477,6 +480,18 @@ public:
   bool visitOp(arith::ShLIOp op) { return emitter.emitBinary(op, "<<"), true; }
   bool visitOp(arith::ShRSIOp op) { return emitter.emitBinary(op, ">>"), true; }
   bool visitOp(arith::ShRUIOp op) { return emitter.emitBinary(op, ">>"), true; }
+  bool visitOp(arith::MaxSIOp op) {
+    return emitter.emitMaxMin(op, "max"), true;
+  }
+  bool visitOp(arith::MinSIOp op) {
+    return emitter.emitMaxMin(op, "min"), true;
+  }
+  bool visitOp(arith::MaxUIOp op) {
+    return emitter.emitMaxMin(op, "max"), true;
+  }
+  bool visitOp(arith::MinUIOp op) {
+    return emitter.emitMaxMin(op, "min"), true;
+  }
 
   /// Special expressions.
   bool visitOp(SelectOp op) { return emitter.emitSelect(op), true; }
@@ -1183,6 +1198,20 @@ void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
   os << " " << syntax << " ";
   emitValue(op->getOperand(1), rank);
   os << ";";
+  emitInfoAndNewLine(op);
+  emitNestedLoopFooter(rank);
+}
+
+template <typename OpType>
+void ModuleEmitter::emitMaxMin(OpType op, const char *syntax) {
+  auto rank = emitNestedLoopHeader(op.getResult());
+  indent();
+  emitValue(op.getResult());
+  os << " = " << syntax << "(";
+  emitValue(op.getLhs(), rank);
+  os << ", ";
+  emitValue(op.getRhs(), rank);
+  os << ");";
   emitInfoAndNewLine(op);
   emitNestedLoopFooter(rank);
 }

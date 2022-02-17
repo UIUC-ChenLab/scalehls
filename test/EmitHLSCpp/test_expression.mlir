@@ -26,10 +26,15 @@ func @test_integer_binary(%arg0: i32, %arg1: i32) -> i32 {
   %10 = arith.shli %arg0, %9 : i32
   // CHECK: >>
   %11 = arith.shrsi %arg0, %10 : i32
-
-  // CHECK: *[[VAL_2:.*]] = [[ARG_0:.*]] >> [[VAL_1:.*]];
+  // CHECK: >>
   %12 = arith.shrui %arg0, %11 : i32
-  return %12 : i32
+
+  // CHECK: int32_t [[VAL_3:.*]] = max([[ARG_0:.*]], [[VAL_2:.*]]);
+  %13 = arith.maxsi %arg0, %12 : i32
+
+  // CHECK: *[[VAL_4:.*]] = min([[ARG_0:.*]], [[VAL_3]]);
+  %14 = arith.minui %arg0, %13 : i32
+  return %14 : i32
 }
 
 func @test_float_binary_unary(%arg0: f32, %arg1: f32) -> f32 {
@@ -71,7 +76,13 @@ func @test_float_binary_unary(%arg0: f32, %arg1: f32) -> f32 {
   %16 = math.log2 %15 : f32
   // CHECK: log10
   %17 = math.log10 %16 : f32
-  return %17 : f32
+
+  // CHECK: float [[VAL_4:.*]] = max([[ARG_0:.*]], [[VAL_3:.*]]);
+  %18 = arith.maxf %arg0, %17 : f32
+
+  // CHECK: *[[VAL_5:.*]] = min([[ARG_0:.*]], [[VAL_4]]);
+  %19 = arith.minf %arg0, %18 : f32
+  return %19 : f32
 }
 
 func @test_special_expr(%arg0: i1, %arg1: index, %arg2: index) -> index {
