@@ -36,8 +36,8 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
     mlir::bufferization::BufferizationDialect,
     mlir::linalg::LinalgDialect,
     mlir::LLVM::LLVMDialect,
-    mlir::tosa::TosaDialect
-    mlir::vector::VectorDialect,
+    mlir::tosa::TosaDialect,
+    mlir::vector::VectorDialect
   >();
   // clang-format on
 }
