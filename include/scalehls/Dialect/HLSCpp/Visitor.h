@@ -67,13 +67,14 @@ public:
 
             // Float binary expressions.
             arith::CmpFOp, arith::AddFOp, arith::SubFOp, arith::MulFOp,
-            arith::DivFOp, arith::RemFOp,
+            arith::DivFOp, arith::RemFOp, arith::MaxFOp, arith::MinFOp,
 
             // Integer binary expressions.
             arith::CmpIOp, arith::AddIOp, arith::SubIOp, arith::MulIOp,
             arith::DivSIOp, arith::RemSIOp, arith::DivUIOp, arith::RemUIOp,
             arith::XOrIOp, arith::AndIOp, arith::OrIOp, arith::ShLIOp,
-            arith::ShRSIOp, arith::ShRUIOp,
+            arith::ShRSIOp, arith::ShRUIOp, arith::MaxSIOp, arith::MinSIOp,
+            arith::MaxUIOp, arith::MinUIOp,
 
             // Special expressions.
             SelectOp, ConstantOp, arith::ConstantOp, arith::TruncIOp,
@@ -179,6 +180,8 @@ public:
   HANDLE(arith::MulFOp);
   HANDLE(arith::DivFOp);
   HANDLE(arith::RemFOp);
+  HANDLE(arith::MaxFOp);
+  HANDLE(arith::MinFOp);
 
   // Integer binary expressions.
   HANDLE(arith::CmpIOp);
@@ -195,6 +198,10 @@ public:
   HANDLE(arith::ShLIOp);
   HANDLE(arith::ShRSIOp);
   HANDLE(arith::ShRUIOp);
+  HANDLE(arith::MaxSIOp);
+  HANDLE(arith::MinSIOp);
+  HANDLE(arith::MaxUIOp);
+  HANDLE(arith::MinUIOp);
 
   // Special expressions.
   HANDLE(SelectOp);

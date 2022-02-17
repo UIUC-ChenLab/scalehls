@@ -239,6 +239,7 @@ public:
   /// Standard expression emitters.
   void emitUnary(Operation *op, const char *syntax);
   void emitBinary(Operation *op, const char *syntax);
+  template <typename OpType> void emitMaxMin(OpType op, const char *syntax);
 
   /// IP operation emitter. 
   void emitIP(IPOp op);
@@ -385,6 +386,12 @@ public:
   }
   bool visitOp(AffineLoadOp op) { return emitter.emitAffineLoad(op), true; }
   bool visitOp(AffineStoreOp op) { return emitter.emitAffineStore(op), true; }
+  bool visitOp(AffineVectorLoadOp op) {
+    return emitter.emitAffineVectorLoad(op), true;
+  }
+  bool visitOp(AffineVectorStoreOp op) {
+    return emitter.emitAffineVectorStore(op), true;
+  }
   bool visitOp(AffineYieldOp op) { return emitter.emitAffineYield(op), true; }
 
   /// Vector-related statements.
@@ -413,7 +420,9 @@ public:
   bool visitOp(bufferization::ToTensorOp op) {
     return emitter.emitMemrefToTensor(op), true;
   }
-  bool visitOp(memref::ReinterpretCastOp op) { return emitter.emitReinterpretCast(op), true; }
+  bool visitOp(memref::ReinterpretCastOp op) {
+    return emitter.emitReinterpretCast(op), true;
+  }
 
   /// HLSCpp primitive operations.
   bool visitOp(MulPrimOp op) { return emitter.emitMulPrim(op), true; }
@@ -461,6 +470,8 @@ public:
   bool visitOp(arith::MulFOp op) { return emitter.emitBinary(op, "*"), true; }
   bool visitOp(arith::DivFOp op) { return emitter.emitBinary(op, "/"), true; }
   bool visitOp(arith::RemFOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(arith::MaxFOp op) { return emitter.emitMaxMin(op, "max"), true; }
+  bool visitOp(arith::MinFOp op) { return emitter.emitMaxMin(op, "min"), true; }
 
   /// Integer binary expressions.
   bool visitOp(arith::CmpIOp op);
@@ -477,6 +488,18 @@ public:
   bool visitOp(arith::ShLIOp op) { return emitter.emitBinary(op, "<<"), true; }
   bool visitOp(arith::ShRSIOp op) { return emitter.emitBinary(op, ">>"), true; }
   bool visitOp(arith::ShRUIOp op) { return emitter.emitBinary(op, ">>"), true; }
+  bool visitOp(arith::MaxSIOp op) {
+    return emitter.emitMaxMin(op, "max"), true;
+  }
+  bool visitOp(arith::MinSIOp op) {
+    return emitter.emitMaxMin(op, "min"), true;
+  }
+  bool visitOp(arith::MaxUIOp op) {
+    return emitter.emitMaxMin(op, "max"), true;
+  }
+  bool visitOp(arith::MinUIOp op) {
+    return emitter.emitMaxMin(op, "min"), true;
+  }
 
   /// Special expressions.
   bool visitOp(SelectOp op) { return emitter.emitSelect(op), true; }
@@ -993,9 +1016,7 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp op) {
 }
 
 /// Vector-related statement emitters.
-void ModuleEmitter::emitTransferRead(vector::TransferReadOp op) { 
-
-  return; }
+void ModuleEmitter::emitTransferRead(vector::TransferReadOp op) { return; }
 
 void ModuleEmitter::emitTransferWrite(vector::TransferWriteOp op) { return; }
 
@@ -1085,6 +1106,31 @@ void ModuleEmitter::emitMemrefToTensor(bufferization::ToTensorOp op) {
   os << ";";
   emitInfoAndNewLine(op);
   emitNestedLoopFooter(rank);
+}
+
+void ModuleEmitter::emitReinterpretCast(memref::ReinterpretCastOp op) {
+  auto array = op.getResult();
+  assert(!isDeclared(array) && "has been declared before.");
+
+  auto arrayType = array.getType().cast<ShapedType>();
+  indent();
+  os << getTypeName(array) << " (*";
+
+  // Add the new value to nameTable and emit its name.
+  os << addName(array, false);
+  os << ")";
+
+  for (auto &shape : llvm::drop_begin(arrayType.getShape(), 1))
+    os << "[" << shape << "]";
+
+  os << " = (" << getTypeName(array) << "(*)";
+  for (auto &shape : llvm::drop_begin(arrayType.getShape(), 1))
+    os << "[" << shape << "]";
+  os << ") ";
+
+  emitValue(op.getOperand(0));
+  os << ";";
+  emitInfoAndNewLine(op);
 }
 
 /// HLSCpp primitive operation emitters.
@@ -1235,6 +1281,21 @@ void ModuleEmitter::emitIP(IPOp op) {
 }
 
 /// Special operation emitters.
+template <typename OpType>
+void ModuleEmitter::emitMaxMin(OpType op, const char *syntax) {
+  auto rank = emitNestedLoopHeader(op.getResult());
+  indent();
+  emitValue(op.getResult());
+  os << " = " << syntax << "(";
+  emitValue(op.getLhs(), rank);
+  os << ", ";
+  emitValue(op.getRhs(), rank);
+  os << ");";
+  emitInfoAndNewLine(op);
+  emitNestedLoopFooter(rank);
+}
+
+/// Special expression emitters.
 void ModuleEmitter::emitSelect(SelectOp op) {
   unsigned rank = emitNestedLoopHeader(op.getResult());
   unsigned conditionRank = rank;
