@@ -225,7 +225,7 @@ public:
 
   /// HLSCpp primitive operation emitters.
   void emitMulPrim(MulPrimOp op);
-  void emitAssign(AssignOp op);
+  template <typename AssignOpType> void emitAssign(AssignOpType op);
 
   /// Control flow operation emitters.
   void emitCall(CallOp op);
@@ -238,7 +238,6 @@ public:
   /// Special expression emitters.
   void emitSelect(SelectOp op);
   void emitConstant(arith::ConstantOp op);
-  template <typename CastOpType> void emitCast(CastOpType op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
@@ -416,7 +415,7 @@ public:
 
   /// HLSCpp primitive operations.
   bool visitOp(MulPrimOp op) { return emitter.emitMulPrim(op), true; }
-  bool visitOp(CastPrimOp op) { return emitter.emitCast<CastPrimOp>(op), true; }
+  bool visitOp(CastPrimOp op) { return emitter.emitAssign(op), true; }
   bool visitOp(AssignOp op) { return emitter.emitAssign(op), true; }
 
   /// Control flow operations.
@@ -494,11 +493,11 @@ public:
   /// Special expressions.
   bool visitOp(SelectOp op) { return emitter.emitSelect(op), true; }
   bool visitOp(arith::ConstantOp op) { return emitter.emitConstant(op), true; }
-  bool visitOp(arith::IndexCastOp op) { return emitter.emitCast(op), true; }
-  bool visitOp(arith::UIToFPOp op) { return emitter.emitCast(op), true; }
-  bool visitOp(arith::SIToFPOp op) { return emitter.emitCast(op), true; }
-  bool visitOp(arith::FPToUIOp op) { return emitter.emitCast(op), true; }
-  bool visitOp(arith::FPToSIOp op) { return emitter.emitCast(op), true; }
+  bool visitOp(arith::IndexCastOp op) { return emitter.emitAssign(op), true; }
+  bool visitOp(arith::UIToFPOp op) { return emitter.emitAssign(op), true; }
+  bool visitOp(arith::SIToFPOp op) { return emitter.emitAssign(op), true; }
+  bool visitOp(arith::FPToUIOp op) { return emitter.emitAssign(op), true; }
+  bool visitOp(arith::FPToSIOp op) { return emitter.emitAssign(op), true; }
 
 private:
   ModuleEmitter &emitter;
@@ -1234,9 +1233,45 @@ void ModuleEmitter::emitReinterpretCast(memref::ReinterpretCastOp op) {
 }
 
 /// HLSCpp primitive operation emitters.
-void ModuleEmitter::emitMulPrim(MulPrimOp op) { return; }
+void ModuleEmitter::emitMulPrim(MulPrimOp op) {
+  if (op.isPackMul()) {
+    if (op.A().getType().isa<VectorType>()) {
+      os << "pack_mul(";
+      emitValue(op.A());
+      os << ", ";
+      emitValue(op.B());
+      os << ", ";
+      emitValue(op.C());
+      os << ");";
+    } else {
+      os << "pack_mul(";
+      emitValue(op.B());
+      os << ", ";
+      emitValue(op.A());
+      os << ", ";
+      emitValue(op.C());
+      os << ");";
+    }
+    emitInfoAndNewLine(op);
 
-void ModuleEmitter::emitAssign(AssignOp op) {
+  } else {
+    // To ensure DSP is utilized, the two operands are casted to 16-bits integer
+    // before the multiplication.
+    auto rank = emitNestedLoopHeader(op.C());
+    indent();
+    emitValue(op.C(), rank);
+    os << " = (int16_t)";
+    emitValue(op.A(), rank);
+    os << " * (int16_t)";
+    emitValue(op.B(), rank);
+    os << ";";
+    emitInfoAndNewLine(op);
+    emitNestedLoopFooter(rank);
+  }
+}
+
+template <typename AssignOpType>
+void ModuleEmitter::emitAssign(AssignOpType op) {
   unsigned rank = emitNestedLoopHeader(op.getResult());
   indent();
   emitValue(op.getResult(), rank);
@@ -1395,15 +1430,6 @@ void ModuleEmitter::emitConstant(arith::ConstantOp op) {
     emitInfoAndNewLine(op);
   } else
     emitError(op, "has unsupported constant type.");
-}
-
-template <typename CastOpType> void ModuleEmitter::emitCast(CastOpType op) {
-  indent();
-  emitValue(op.getResult());
-  os << " = ";
-  emitValue(op.getOperand());
-  os << ";";
-  emitInfoAndNewLine(op);
 }
 
 /// C++ component emitters.
@@ -1755,6 +1781,21 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 #include <stdint.h>
 
 using namespace std;
+
+)XXX";
+
+  // Emit the multiplication primitive if required.
+  if (module.walk([](MulPrimOp op) {
+        return op.isPackMul() ? WalkResult::interrupt() : WalkResult::advance();
+      }) == WalkResult::interrupt())
+    os << R"XXX(
+void pack_mul(int8_t A[2], int8_t B, int16_t C[2]) {
+  #pragma HLS inline
+  ap_int<27> packA = (ap_int<27>)A[0] + (ap_int<27>)A[1] << 18;
+  ap_int<45> packC = packA * (ap_int<18>)B;
+  C[0] = packC.range(15, 0);
+  C[1] = packC.range(33, 18);
+}
 
 )XXX";
 

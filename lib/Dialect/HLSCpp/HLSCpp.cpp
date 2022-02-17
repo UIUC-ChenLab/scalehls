@@ -33,6 +33,28 @@ void HLSCppDialect::initialize() {
 #include "scalehls/Dialect/HLSCpp/HLSCppAttributes.cpp.inc"
 
 //===----------------------------------------------------------------------===//
+// MulPrimOp
+//===----------------------------------------------------------------------===//
+
+static LogicalResult verify(MulPrimOp op) {
+  auto AIsVector = op.A().getType().isa<VectorType>();
+  auto BIsVector = op.B().getType().isa<VectorType>();
+  auto CIsVector = op.C().getType().isa<VectorType>();
+
+  if ((AIsVector || BIsVector) && CIsVector)
+    return success();
+  if (!AIsVector && !BIsVector && !CIsVector)
+    return success();
+  return failure();
+}
+
+bool MulPrimOp::isPackMul() {
+  auto AIsVector = A().getType().isa<VectorType>();
+  auto BIsVector = B().getType().isa<VectorType>();
+  return (AIsVector && !BIsVector) || (!AIsVector && BIsVector);
+}
+
+//===----------------------------------------------------------------------===//
 // ResourceAttr
 //===----------------------------------------------------------------------===//
 
