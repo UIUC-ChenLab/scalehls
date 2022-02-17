@@ -223,6 +223,7 @@ public:
   void emitTensorStore(memref::TensorStoreOp op);
   void emitTensorToMemref(bufferization::ToMemrefOp op);
   void emitMemrefToTensor(bufferization::ToTensorOp op);
+  void emitReinterpretCast(memref::ReinterpretCastOp op);
 
   /// HLSCpp primitive operation emitters.
   void emitMulPrim(MulPrimOp op);
@@ -409,6 +410,9 @@ public:
   }
   bool visitOp(bufferization::ToTensorOp op) {
     return emitter.emitMemrefToTensor(op), true;
+  }
+  bool visitOp(memref::ReinterpretCastOp op) {
+    return emitter.emitReinterpretCast(op), true;
   }
 
   /// HLSCpp primitive operations.
@@ -1075,6 +1079,31 @@ void ModuleEmitter::emitMemrefToTensor(bufferization::ToTensorOp op) {
   os << ";";
   emitInfoAndNewLine(op);
   emitNestedLoopFooter(rank);
+}
+
+void ModuleEmitter::emitReinterpretCast(memref::ReinterpretCastOp op) {
+  auto array = op.getResult();
+  assert(!isDeclared(array) && "has been declared before.");
+
+  auto arrayType = array.getType().cast<ShapedType>();
+  indent();
+  os << getTypeName(array) << " (*";
+
+  // Add the new value to nameTable and emit its name.
+  os << addName(array, false);
+  os << ")";
+
+  for (auto &shape : llvm::drop_begin(arrayType.getShape(), 1))
+    os << "[" << shape << "]";
+
+  os << " = (" << getTypeName(array) << "(*)";
+  for (auto &shape : llvm::drop_begin(arrayType.getShape(), 1))
+    os << "[" << shape << "]";
+  os << ") ";
+
+  emitValue(op.getOperand(0));
+  os << ";";
+  emitInfoAndNewLine(op);
 }
 
 /// HLSCpp primitive operation emitters.
