@@ -123,11 +123,11 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
   ConversionTarget target(*func.getContext());
 
   // TODO: Make sure the lowering is safe and thorough.
-  patterns.add<TransferReadConversionPattern>(patterns.getContext());
-  patterns.add<TransferWriteConversionPattern>(patterns.getContext());
-  target.addLegalOp<AffineVectorLoadOp>();
-  target.addLegalOp<AffineVectorStoreOp>();
-  (void)applyPartialConversion(func, target, std::move(patterns));
+  // patterns.add<TransferReadConversionPattern>(patterns.getContext());
+  // patterns.add<TransferWriteConversionPattern>(patterns.getContext());
+  // target.addLegalOp<AffineVectorLoadOp>();
+  // target.addLegalOp<AffineVectorStoreOp>();
+  // (void)applyPartialConversion(func, target, std::move(patterns));
 
   // patterns.clear();
   // vector::populateVectorTransferLoweringPatterns(patterns);

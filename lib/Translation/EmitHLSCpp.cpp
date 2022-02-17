@@ -207,8 +207,6 @@ public:
   void emitAffineMaxMin(OpType op, const char *syntax);
   void emitAffineLoad(AffineLoadOp op);
   void emitAffineStore(AffineStoreOp op);
-  void emitAffineVectorLoad(AffineVectorLoadOp op);
-  void emitAffineVectorStore(AffineVectorStoreOp op);
   void emitAffineYield(AffineYieldOp op);
 
   /// Vector-related statement emitters.
@@ -246,6 +244,10 @@ public:
   void emitModule(ModuleOp module);
 
 private:
+  /// Helper to get the string indices of TransferRead/Write operations.
+  template <typename TransferOpType>
+  SmallVector<SmallString<8>, 4> getTransferIndices(TransferOpType op);
+
   /// C++ component emitters.
   void emitValue(Value val, unsigned rank = 0, bool isPtr = false);
   void emitArrayDecl(Value array);
@@ -378,12 +380,8 @@ public:
   }
   bool visitOp(AffineLoadOp op) { return emitter.emitAffineLoad(op), true; }
   bool visitOp(AffineStoreOp op) { return emitter.emitAffineStore(op), true; }
-  bool visitOp(AffineVectorLoadOp op) {
-    return emitter.emitAffineVectorLoad(op), true;
-  }
-  bool visitOp(AffineVectorStoreOp op) {
-    return emitter.emitAffineVectorStore(op), true;
-  }
+  bool visitOp(AffineVectorLoadOp op) { return false; }
+  bool visitOp(AffineVectorStoreOp op) { return false; }
   bool visitOp(AffineYieldOp op) { return emitter.emitAffineYield(op), true; }
 
   /// Vector-related statements.
@@ -883,10 +881,6 @@ void ModuleEmitter::emitAffineStore(AffineStoreOp op) {
   emitInfoAndNewLine(op);
 }
 
-void ModuleEmitter::emitAffineVectorLoad(AffineVectorLoadOp op) { return; }
-
-void ModuleEmitter::emitAffineVectorStore(AffineVectorStoreOp op) { return; }
-
 // TODO: For now, all values created in the AffineIf region will be declared
 // in the generated C++. However, values which will be returned by affine
 // yield operation should not be declared again. How to "bind" the pair of
@@ -1003,12 +997,130 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp op) {
   }
 }
 
+/// Helper to get the string indices of TransferRead/Write operations.
+template <typename TransferOpType>
+SmallVector<SmallString<8>, 4>
+ModuleEmitter::getTransferIndices(TransferOpType op) {
+  // Get the head indices of the transfer read/write.
+  SmallVector<SmallString<8>, 4> indices;
+  for (auto index : op.indices()) {
+    assert(isDeclared(index) && "index has not been declared");
+    indices.push_back(getName(index));
+  }
+  // Construct the physical indices.
+  for (unsigned i = 0, e = op.permutation_map().getNumResults(); i < e; ++i) {
+    auto expr = op.permutation_map().getResult(i);
+    if (auto dimExpr = expr.template dyn_cast<AffineDimExpr>())
+      indices[dimExpr.getPosition()] += " + iv" + std::to_string(i);
+  }
+  return indices;
+}
+
+/// Helper to get the TransferRead/Write condition.
+template <typename TransferOpType>
+static SmallString<16>
+getTransferCondition(TransferOpType op,
+                     const SmallVector<SmallString<8>, 4> &indices) {
+  // Figure out whether the transfer read/write could be out of bound.
+  SmallVector<unsigned, 4> outOfBoundDims;
+  for (unsigned i = 0, e = op.getVectorType().getRank(); i < e; ++i)
+    if (!op.isDimInBounds(i))
+      outOfBoundDims.push_back(i);
+
+  // Construct the condition of transfer if required.
+  SmallString<16> condition;
+  for (auto i : outOfBoundDims) {
+    auto expr = op.permutation_map().getResult(i);
+    if (auto dimExpr = expr.template dyn_cast<AffineDimExpr>()) {
+      auto pos = dimExpr.getPosition();
+      condition += indices[pos];
+      condition += " < " + std::to_string(op.getShapedType().getDimSize(pos));
+      if (i != outOfBoundDims.back())
+        condition += " && ";
+    }
+  }
+  return condition;
+}
+
 /// Vector-related statement emitters.
-void ModuleEmitter::emitTransferRead(vector::TransferReadOp op) { return; }
+void ModuleEmitter::emitTransferRead(vector::TransferReadOp op) {
+  auto rank = emitNestedLoopHeader(op.vector());
+  auto indices = getTransferIndices(op);
+  auto condition = getTransferCondition(op, indices);
 
-void ModuleEmitter::emitTransferWrite(vector::TransferWriteOp op) { return; }
+  if (!condition.empty()) {
+    indent() << "if (" << condition << ")\n";
+    addIndent();
+  }
 
-void ModuleEmitter::emitBroadcast(vector::BroadcastOp) { return; }
+  indent();
+  emitValue(op.vector(), rank);
+  os << " = ";
+  emitValue(op.source());
+  for (auto index : indices)
+    os << "[" << index << "]";
+  os << ";";
+  emitInfoAndNewLine(op);
+
+  if (!condition.empty()) {
+    reduceIndent();
+    indent() << "else\n";
+    addIndent();
+
+    indent();
+    emitValue(op.vector(), rank);
+    os << " = ";
+    emitValue(op.padding());
+    os << ";\n";
+    reduceIndent();
+  }
+  emitNestedLoopFooter(rank);
+}
+
+void ModuleEmitter::emitTransferWrite(vector::TransferWriteOp op) {
+  auto rank = emitNestedLoopHeader(op.vector());
+  auto indices = getTransferIndices(op);
+  auto condition = getTransferCondition(op, indices);
+
+  if (!condition.empty()) {
+    indent() << "if (" << condition << ")\n";
+    addIndent();
+  }
+
+  indent();
+  emitValue(op.source());
+  for (auto index : indices)
+    os << "[" << index << "]";
+  os << " = ";
+  emitValue(op.vector(), rank);
+  os << ";";
+  emitInfoAndNewLine(op);
+
+  if (!condition.empty())
+    reduceIndent();
+  emitNestedLoopFooter(rank);
+}
+
+void ModuleEmitter::emitBroadcast(vector::BroadcastOp op) {
+  auto rank = emitNestedLoopHeader(op.vector());
+  indent();
+  emitValue(op.vector(), rank);
+  os << " = ";
+  emitValue(op.source());
+
+  // Figure out whether each dimision is broadcast or multicast.
+  if (auto type = op.source().getType().dyn_cast<ShapedType>())
+    for (unsigned dim = 0, e = type.getRank(); dim < e; ++dim) {
+      if (type.getDimSize(dim) == 1)
+        os << "[0]";
+      else
+        os << "[iv" << dim + op.getType().getRank() - type.getRank() << "]";
+    }
+
+  os << ";";
+  emitInfoAndNewLine(op);
+  emitNestedLoopFooter(rank);
+}
 
 /// Memref-related statement emitters.
 template <typename OpType> void ModuleEmitter::emitAlloc(OpType op) {
@@ -1340,6 +1452,13 @@ unsigned ModuleEmitter::emitNestedLoopHeader(Value val) {
       indent();
       emitArrayDecl(val);
       os << ";\n";
+      // TODO: More precise control here. Now we assume vectors are always
+      // completely partitioned at all dimensions.
+      if (type.isa<VectorType>()) {
+        indent() << "#pragma HLS array_partition variable=";
+        emitValue(val);
+        os << " complete dim=0\n";
+      }
     }
 
     // Create nested loop.
@@ -1351,6 +1470,10 @@ unsigned ModuleEmitter::emitNestedLoopHeader(Value val) {
       os << "++iv" << dimIdx++ << ") {\n";
 
       addIndent();
+      // TODO: More precise control here. Now we assume vectorization loops are
+      // always fully unrolled.
+      if (type.isa<VectorType>())
+        indent() << "#pragma HLS unroll\n";
     }
     rank = type.getRank();
   }
