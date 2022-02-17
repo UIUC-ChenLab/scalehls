@@ -1235,23 +1235,25 @@ void ModuleEmitter::emitReinterpretCast(memref::ReinterpretCastOp op) {
 /// HLSCpp primitive operation emitters.
 void ModuleEmitter::emitMulPrim(MulPrimOp op) {
   if (op.isPackMul()) {
-    if (op.A().getType().isa<VectorType>()) {
-      os << "pack_mul(";
-      emitValue(op.A());
-      os << ", ";
-      emitValue(op.B());
-      os << ", ";
+    // Declare the result C array.
+    if (!isDeclared(op.C())) {
+      indent();
+      emitArrayDecl(op.C());
+      os << ";\n";
+
+      indent() << "#pragma HLS array_partition variable=";
       emitValue(op.C());
-      os << ");";
-    } else {
-      os << "pack_mul(";
-      emitValue(op.B());
-      os << ", ";
-      emitValue(op.A());
-      os << ", ";
-      emitValue(op.C());
-      os << ");";
+      os << " complete dim=0\n";
     }
+
+    auto AIsVector = op.A().getType().isa<VectorType>();
+    indent() << "pack_mul(";
+    emitValue(AIsVector ? op.A() : op.B());
+    os << ", ";
+    emitValue(AIsVector ? op.B() : op.A());
+    os << ", ";
+    emitValue(op.C());
+    os << ");";
     emitInfoAndNewLine(op);
 
   } else {
