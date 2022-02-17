@@ -1189,31 +1189,6 @@ void ModuleEmitter::emitCall(CallOp op) {
   emitInfoAndNewLine(op);
 }
 
-void ModuleEmitter::emitReinterpretCast(memref::ReinterpretCastOp op) {
-  auto array = op.getResult();
-  assert(!isDeclared(array) && "has been declared before.");
-
-  auto arrayType = array.getType().cast<ShapedType>();
-  indent();
-  os << getTypeName(array) << " (*";
-
-  // Add the new value to nameTable and emit its name.
-  os << addName(array, false);
-  os << ")";
-
-  for (auto &shape : llvm::drop_begin(arrayType.getShape(), 1))
-    os << "[" << shape << "]";
-
-  os << " = (" << getTypeName(array) << "(*)";
-  for (auto &shape : llvm::drop_begin(arrayType.getShape(), 1))
-    os << "[" << shape << "]";
-  os << ") ";
-  
-  emitValue(op.getOperand(0));
-  os << ";";
-  emitInfoAndNewLine(op);
-}
-
 /// Standard expression emitters.
 void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
   auto rank = emitNestedLoopHeader(op->getResult(0));
