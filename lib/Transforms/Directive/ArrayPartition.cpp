@@ -6,6 +6,7 @@
 
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
+#include "mlir/Dialect/Vector/VectorOps.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
@@ -106,6 +107,53 @@ bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
   return true;
 }
 
+static AffineMap getIdentityAffineMap(const SmallVectorImpl<Value> &operands,
+                                      unsigned rank, MLIRContext *context) {
+  SmallVector<AffineExpr, 4> exprs;
+  exprs.reserve(rank);
+  unsigned dimCount = 0;
+  unsigned symbolCount = 0;
+
+  for (auto operand : operands) {
+    if (isValidDim(operand))
+      exprs.push_back(getAffineDimExpr(dimCount++, context));
+    else if (isValidSymbol(operand))
+      exprs.push_back(getAffineSymbolExpr(symbolCount++, context));
+    else
+      return AffineMap();
+  }
+  return AffineMap::get(dimCount, symbolCount, exprs, context);
+}
+
+static AffineValueMap getAccessMap(Operation *op) {
+  // Get affine map from AffineLoad/Store.
+  AffineMap map;
+  SmallVector<Value, 4> operands;
+  if (auto loadOp = dyn_cast<mlir::AffineReadOpInterface>(op)) {
+    operands = loadOp.getMapOperands();
+    map = loadOp.getAffineMap();
+
+  } else if (auto storeOp = dyn_cast<mlir::AffineWriteOpInterface>(op)) {
+    operands = storeOp.getMapOperands();
+    map = storeOp.getAffineMap();
+
+  } else if (auto readOp = dyn_cast<vector::TransferReadOp>(op)) {
+    operands = readOp.indices();
+    map = getIdentityAffineMap(operands, readOp.getShapedType().getRank(),
+                               readOp.getContext());
+  } else {
+    auto writeOp = cast<vector::TransferWriteOp>(op);
+    operands = writeOp.indices();
+    map = getIdentityAffineMap(operands, writeOp.getShapedType().getRank(),
+                               writeOp.getContext());
+  }
+
+  fullyComposeAffineMapAndOperands(&map, &operands);
+  map = simplifyAffineMap(map);
+  canonicalizeMapAndOperands(&map, &operands);
+  return AffineValueMap(map, operands);
+}
+
 bool scalehls::applyAutoArrayPartition(FuncOp func) {
   // Check whether the input function is pipelined.
   bool funcPipeline = false;
@@ -140,7 +188,7 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
   // Traverse all blocks that requires to be considered.
   for (auto block : targetBlocks) {
     MemAccessesMap accessesMap;
-    getMemAccessesMap(*block, accessesMap);
+    getMemAccessesMap(*block, accessesMap, /*includeVectorTransfer=*/true);
 
     for (auto pair : accessesMap) {
       auto memref = pair.first;
@@ -161,9 +209,9 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
         SmallVector<AffineValueMap, 4> indices;
 
         for (auto accessOp : loadStores) {
-          // Get memory access map.
-          AffineValueMap accessMap;
-          MemRefAccess(accessOp).getAccessMap(&accessMap);
+          auto accessMap = getAccessMap(accessOp);
+          if (accessMap.getAffineMap().isEmpty())
+            continue;
 
           // Only keep the index of the current dimension.
           auto newMap =
