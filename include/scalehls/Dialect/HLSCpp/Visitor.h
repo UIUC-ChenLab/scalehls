@@ -45,8 +45,9 @@ public:
 
             // Memref-related statements.
             memref::AllocOp, memref::AllocaOp, memref::LoadOp, memref::StoreOp,
-            memref::DeallocOp, memref::TensorStoreOp, bufferization::ToMemrefOp,
-            bufferization::ToTensorOp, memref::ReinterpretCastOp,
+            memref::DeallocOp, memref::TensorStoreOp, memref::ReinterpretCastOp,
+            memref::CollapseShapeOp, bufferization::ToMemrefOp, 
+            bufferization::ToTensorOp, 
 
             // HLSCpp primitive operations.
             MulPrimOp, CastPrimOp, AssignOp,
@@ -139,9 +140,10 @@ public:
   HANDLE(memref::StoreOp);
   HANDLE(memref::DeallocOp);
   HANDLE(memref::TensorStoreOp);
+  HANDLE(memref::ReinterpretCastOp);
+  HANDLE(memref::CollapseShapeOp);
   HANDLE(bufferization::ToMemrefOp);
   HANDLE(bufferization::ToTensorOp);
-  HANDLE(memref::ReinterpretCastOp);
 
   // HLSCpp primitive operations.
   HANDLE(MulPrimOp);
