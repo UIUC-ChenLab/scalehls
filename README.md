@@ -10,7 +10,7 @@ For more details, please see our [HPCA'22 paper](https://arxiv.org/abs/2107.1167
 
 ### Prerequisites
 - cmake
-- ninja (recommended)
+- ninja
 - clang and lld (recommended)
 - pybind11
 - python3 with numpy
@@ -66,7 +66,7 @@ $ scalehls-opt resnet18.onnx.mlir -allow-unregistered-dialect -scalehls-pipeline
     | scalehls-translate -emit-hlscpp > resnet18.cpp
 ```
 
-Please refer to the `samples/onnx-mlir` folder for more test cases, and `sample/onnx-mlir/ablation_int_test.sh` for how to conduct the graph, loop, and directive optimizations.
+Please refer to the `samples/onnx-mlir` folder for more test cases.
 
 ## References
 - [CIRCT](https://github.com/llvm/circt): Circuit IR Compilers and Tools

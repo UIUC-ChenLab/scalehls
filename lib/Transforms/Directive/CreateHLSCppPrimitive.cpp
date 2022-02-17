@@ -4,6 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Dialect/Vector/VectorOps.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/LoopUtils.h"
 #include "scalehls/Transforms/Passes.h"
@@ -27,7 +28,7 @@ struct AddOpRewritePattern : public OpRewritePattern<arith::AddIOp> {
                                 PatternRewriter &rewriter) const override {
     // Figure out whether the add op can be rewritten.
     auto dataType = getIntDataType(add.getType());
-    if (!dataType || dataType.getWidth() == 32)
+    if (!dataType || dataType.getWidth() == 32 || dataType.isSigned())
       return failure();
 
     // Generate new type.
@@ -63,7 +64,7 @@ struct MulOpRewritePattern : public OpRewritePattern<arith::MulIOp> {
                                 PatternRewriter &rewriter) const override {
     // Figure out whether the mul op can be rewritten.
     auto dataType = getIntDataType(mul.getType());
-    if (!dataType || dataType.getWidth() != 8)
+    if (!dataType || dataType.getWidth() != 8 || dataType.isSigned())
       return failure();
 
     // Generate new type.
@@ -75,11 +76,18 @@ struct MulOpRewritePattern : public OpRewritePattern<arith::MulIOp> {
                                 IntegerType::get(rewriter.getContext(), 16));
     }
 
+    auto lhs = mul.getLhs();
+    if (auto broadcast = lhs.getDefiningOp<vector::BroadcastOp>())
+      lhs = broadcast.source();
+
+    auto rhs = mul.getRhs();
+    if (auto broadcast = rhs.getDefiningOp<vector::BroadcastOp>())
+      rhs = broadcast.source();
+
     // Replace the original op with multiplication primitive op.
     auto loc = mul.getLoc();
     rewriter.setInsertionPoint(mul);
-    auto mulResult =
-        rewriter.create<MulPrimOp>(loc, newType, mul.getLhs(), mul.getRhs());
+    auto mulResult = rewriter.create<MulPrimOp>(loc, newType, lhs, rhs);
     auto cast = rewriter.create<CastPrimOp>(loc, mul.getType(), mulResult);
     rewriter.replaceOp(mul, cast.getResult());
 
