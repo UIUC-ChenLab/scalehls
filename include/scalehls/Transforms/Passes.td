@@ -170,26 +170,42 @@ def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "FuncOp"> {
   let options = [
     Option<"tileSize", "tile-size", "unsigned", /*default=*/"2",
            "Positive number: the size of tiling">,
-    Option<"applyOrderOpt", "apply-order-opt", "bool", /*default=*/"false",
+    Option<"applyOrderOpt", "apply-order-opt", "bool", /*default=*/"true",
            "Whether apply loop order optimization after tiling">,
-    Option<"applyPipeline", "apply-pipeline", "bool", /*default=*/"false",
+    Option<"applyPipeline", "apply-pipeline", "bool", /*default=*/"true",
            "Whether apply loop pipeline after tiling">
   ];
-}
-
-def ReduceInitialInterval : Pass<"reduce-initial-interval", "FuncOp"> {
-  let summary = "Try to reduce the intiail interval";
-  let description = [{
-    This reduce-initial-interval pass try to reduce the II by optimizing the
-    commutative operator trees and iteration variables.
-  }];
-
-  let constructor = "mlir::scalehls::createReduceInitialIntervalPass()";
 }
 
 //===----------------------------------------------------------------------===//
 // Directive Optimization Passes
 //===----------------------------------------------------------------------===//
+
+def LegalizeToHLSCpp : Pass<"legalize-to-hlscpp", "FuncOp"> {
+  let summary = "Convert to emittable MLIR code";
+  let description = [{
+    This legalize-to-hlscpp pass will legalize the input IR to make it
+    emittable. Meanwhile, this pass will set some default pragmas for the
+    convenience of the subsequent transforms and analysis.
+  }];
+
+  let constructor = "mlir::scalehls::createLegalizeToHLSCppPass()";
+
+  let options = [
+    Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
+           "The top function for HLS synthesis">
+  ];
+}
+
+def CreateHLSCppPrimitive : Pass<"create-hlscpp-primitive", "FuncOp"> {
+  let summary = "Create HLS C++ multiplification primitives";
+  let description = [{
+    This create-hlscpp-primitive pass will convert 8-bits multiplifications to
+    HLS C++ primitives in order to utilize DSP instances in FPGA.
+  }];
+
+  let constructor = "mlir::scalehls::createCreateHLSCppPrimitivePass()";
+}
 
 def FuncPipelining : Pass<"func-pipelining", "FuncOp"> {
   let summary = "Apply function pipelining";
@@ -269,6 +285,16 @@ def SimplifyMemrefAccess : Pass<"simplify-memref-access", "FuncOp"> {
   }];
 
   let constructor = "mlir::scalehls::createSimplifyMemrefAccessPass()";
+}
+
+def ReduceInitialInterval : Pass<"reduce-initial-interval", "FuncOp"> {
+  let summary = "Try to reduce the intiail interval";
+  let description = [{
+    This reduce-initial-interval pass try to reduce the II by optimizing the
+    commutative operator trees and iteration variables.
+  }];
+
+  let constructor = "mlir::scalehls::createReduceInitialIntervalPass()";
 }
 
 #endif // SCALEHLS_TRANSFORMS_PASSES_TD

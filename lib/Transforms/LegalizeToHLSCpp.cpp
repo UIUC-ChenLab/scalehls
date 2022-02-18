@@ -6,12 +6,53 @@
 
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "scalehls/Conversion/Passes.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/Vector/VectorOps.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
 using namespace hlscpp;
+
+namespace {
+/// Simple memref load to affine load raising.
+struct MemrefLoadRewritePattern : public OpRewritePattern<memref::LoadOp> {
+  using OpRewritePattern<memref::LoadOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(memref::LoadOp load,
+                                PatternRewriter &rewriter) const override {
+    if (llvm::all_of(load.getIndices(), [&](Value operand) {
+          return isValidDim(operand) || isValidSymbol(operand);
+        })) {
+      rewriter.replaceOpWithNewOp<AffineLoadOp>(load, load.memref(),
+                                                load.getIndices());
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
+/// Simple memref store to affine store raising.
+struct MemrefStoreRewritePattern : public OpRewritePattern<memref::StoreOp> {
+  using OpRewritePattern<memref::StoreOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(memref::StoreOp store,
+                                PatternRewriter &rewriter) const override {
+    if (llvm::all_of(store.getIndices(), [&](Value operand) {
+          return isValidDim(operand) || isValidSymbol(operand);
+        })) {
+      rewriter.replaceOpWithNewOp<AffineStoreOp>(
+          store, store.value(), store.memref(), store.getIndices());
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
 
 bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
   auto builder = OpBuilder(func);
@@ -21,7 +62,10 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
     func.emitError("has zero or more than one basic blocks.");
 
   // Set function pragma attributes.
-  if (!getFuncDirective(func))
+  if (auto fd = getFuncDirective(func))
+    setFuncDirective(func, fd.getPipeline(), fd.getTargetInterval(),
+                     fd.getDataflow(), isTopFunc);
+  else
     setFuncDirective(func, false, 1, false, isTopFunc);
 
   // Walk through all operations in the function.
@@ -77,12 +121,22 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
     ++idx;
   }
 
+  mlir::RewritePatternSet patterns(func.getContext());
+  patterns.add<MemrefLoadRewritePattern>(func.getContext());
+  patterns.add<MemrefStoreRewritePattern>(func.getContext());
+  vector::populateVectorTransferLoweringPatterns(patterns);
+  (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+
   return true;
 }
 
 namespace {
 struct LegalizeToHLSCpp : public LegalizeToHLSCppBase<LegalizeToHLSCpp> {
-public:
+  LegalizeToHLSCpp() = default;
+  LegalizeToHLSCpp(const ScaleHLSOptions &opts) {
+    topFunc = opts.hlscppTopFunc;
+  }
+
   void runOnOperation() override {
     auto func = getOperation();
     applyLegalizeToHLSCpp(func, func.getName() == topFunc);
@@ -92,4 +146,8 @@ public:
 
 std::unique_ptr<Pass> scalehls::createLegalizeToHLSCppPass() {
   return std::make_unique<LegalizeToHLSCpp>();
+}
+std::unique_ptr<Pass>
+scalehls::createLegalizeToHLSCppPass(const ScaleHLSOptions &opts) {
+  return std::make_unique<LegalizeToHLSCpp>(opts);
 }

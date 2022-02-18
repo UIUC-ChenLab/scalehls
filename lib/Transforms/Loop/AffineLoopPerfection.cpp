@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/Vector/VectorOps.h"
 #include "mlir/IR/IntegerSet.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -113,7 +114,7 @@ bool scalehls::applyAffineLoopPerfection(AffineLoopBand &band) {
       // Move all operations before the child loop to the innermost loop.
       auto destOp = &innermostLoop.front();
       for (auto op : prefixOps) {
-        if (isa<AffineStoreOp>(op)) {
+        if (isa<AffineWriteOpInterface, vector::TransferWriteOp>(op)) {
           // FIXME: Now we only consider affine store operations.
           builder.setInsertionPoint(destOp);
           auto ifOp = builder.create<AffineIfOp>(
@@ -159,7 +160,7 @@ bool scalehls::applyAffineLoopPerfection(AffineLoopBand &band) {
       // Move all operations after the child loop to the innermost loop.
       auto destOp = innermostLoop.getBody()->getTerminator();
       for (auto op : suffixOps) {
-        if (isa<AffineStoreOp>(op)) {
+        if (isa<AffineWriteOpInterface, vector::TransferWriteOp>(op)) {
           // FIXME: Now we only consider affine store operations.
           builder.setInsertionPoint(destOp);
           auto ifOp = builder.create<AffineIfOp>(

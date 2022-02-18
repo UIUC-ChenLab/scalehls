@@ -17,13 +17,13 @@
 using namespace std;
 
 /// This is top function.
-/// Latency=26550014, interval=26550014
-/// DSP=265
+/// Latency=11430014, interval=11430014
+/// DSP=167
 void SgdLR_sw(
   float v0[4608000],
   int32_t v1[4500],
   float v2[1024]
-) {	// L1, [0,26550014)
+) {	// L1, [0,11430014)
   #pragma HLS interface s_axilite port=return bundle=ctrl
   #pragma HLS interface bram port=v0
   #pragma HLS interface bram port=v1
@@ -41,13 +41,13 @@ void SgdLR_sw(
   #pragma HLS array_partition variable=v3 cyclic factor=32 dim=1
   #pragma HLS resource variable=v3 core=ram_s2p_bram
 
-  for (int v4 = 0; v4 < 5; v4 += 1) {	// L6, [0,26550012), iterCycle=5310002, II=5310002
-    for (int v5 = 0; v5 < 4500; v5 += 1) {	// L7, [0,5310002), iterCycle=1180, II=1180
+  for (int v4 = 0; v4 < 5; v4 += 1) {	// L6, [0,11430012), iterCycle=2286002, II=2286002
+    for (int v5 = 0; v5 < 4500; v5 += 1) {	// L7, [0,2286002), iterCycle=508, II=508
       float v6[1];	// L8, [0,0)
-      v6[0] = 0.000000;	// L9, [1060,1061)
+      v6[0] = 0.000000;	// L9, [0,1)
       float v7[1];	// L10, [0,0)
-      v7[0] = 0.000000;	// L11, [1066,1067)
-      for (int v8 = 0; v8 < 32; v8 += 1) {	// L12, [0,1090), iterCycle=189, II=29
+      v7[0] = 0.000000;	// L11, [0,1)
+      for (int v8 = 0; v8 < 32; v8 += 1) {	// L12, [1,387), iterCycle=167, II=7
         #pragma HLS pipeline II=7
         float v9 = v2[(v8 * 32)];	// L13, [0,2)
         float v10 = v0[((v5 * 1024) + (v8 * 32))];	// L14, [0,2)
@@ -178,15 +178,15 @@ void SgdLR_sw(
         float v135 = v131 + v134;	// L139, [156,161)
         float v136 = v6[0];	// L140, [160,161)
         float v137 = v136 + v135;	// L141, [161,166)
-        v6[0] = v137;	// L142, [188,189)
+        v6[0] = v137;	// L142, [166,167)
         v7[0] = v137;	// L143, [166,167)
       }
-      float v138 = v7[0];	// L145, [1068,1069)
-      float v139 = -(v138);	// L146, [1069,1069)
-      float v140 = exp(v139);	// L147, [1069,1069)
-      float v141 = 1.000000 + v140;	// L148, [1069,1074)
-      float v142 = 1.000000 / v141;	// L149, [1074,1090)
-      for (int v143 = 0; v143 < 32; v143 += 1) {	// L150, [1090,1135), iterCycle=12, II=1
+      float v138 = v7[0];	// L145, [387,388)
+      float v139 = -(v138);	// L146, [388,388)
+      float v140 = exp(v139);	// L147, [388,397)
+      float v141 = 1.000000 + v140;	// L148, [397,402)
+      float v142 = 1.000000 / v141;	// L149, [402,418)
+      for (int v143 = 0; v143 < 32; v143 += 1) {	// L150, [418,463), iterCycle=12, II=1
         #pragma HLS pipeline II=1
         int32_t v144 = v1[v5];	// L151, [0,2)
         float v145 = v144;	// L152, [2,2)
@@ -288,7 +288,7 @@ void SgdLR_sw(
         float v210 = v146 * v209;	// L248, [7,11)
         v3[((v143 * 32) + 31)] = v210;	// L249, [11,12)
       }
-      for (int v211 = 0; v211 < 32; v211 += 1) {	// L251, [1135,1180), iterCycle=12, II=1
+      for (int v211 = 0; v211 < 32; v211 += 1) {	// L251, [463,508), iterCycle=12, II=1
         #pragma HLS pipeline II=1
         float v212 = v3[(v211 * 32)];	// L252, [0,2)
         float v213 = -60000.000000 * v212;	// L253, [2,6)

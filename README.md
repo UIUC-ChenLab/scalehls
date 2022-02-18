@@ -10,7 +10,7 @@ For more details, please see our [HPCA'22 paper](https://arxiv.org/abs/2107.1167
 
 ### Prerequisites
 - cmake
-- ninja (recommended)
+- ninja
 - clang and lld (recommended)
 - pybind11
 - python3 with numpy
@@ -62,15 +62,12 @@ $ # Parse ONNX model to MLIR.
 $ $ONNXMLIR_DIR/build/bin/onnx-mlir -EmitMLIRIR resnet18.onnx
 
 $ # Legalize the output of ONNX-MLIR, optimize and emit C++ code.
-$ scalehls-opt resnet18.onnx.mlir -allow-unregistered-dialect -legalize-onnx \
-    -affine-loop-normalize -canonicalize -legalize-dataflow="insert-copy=true min-gran=3" \
-    -split-function -convert-linalg-to-affine-loops -legalize-to-hlscpp="top-func=main_graph" \
-    -affine-loop-perfection -affine-loop-order-opt -loop-pipelining -simplify-affine-if \
-    -affine-store-forward -simplify-memref-access -array-partition -cse -canonicalize \
+$ scalehls-opt resnet18.onnx.mlir -allow-unregistered-dialect \
+    -scalehls-pipeline="top-func=main_graph min-gran=3 tile-size=2" \
     | scalehls-translate -emit-hlscpp > resnet18.cpp
 ```
 
-Please refer to the `samples/onnx-mlir` folder for more test cases, and `sample/onnx-mlir/ablation_int_test.sh` for how to conduct the graph, loop, and directive optimizations.
+Please refer to the `samples/onnx-mlir` folder for more test cases.
 
 ## References
 - [CIRCT](https://github.com/llvm/circt): Circuit IR Compilers and Tools

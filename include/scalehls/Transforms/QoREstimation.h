@@ -9,6 +9,7 @@
 
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/Dominance.h"
 #include "scalehls/Dialect/HLSCpp/Visitor.h"
 #include "scalehls/Support/Utils.h"
 #include "scalehls/Transforms/Utils.h"
@@ -17,8 +18,11 @@
 namespace mlir {
 namespace scalehls {
 
-using LatencyMap = llvm::StringMap<int64_t>;
-void getLatencyMap(llvm::json::Object *config, LatencyMap &latencyMap);
+// Get the operator name to latency/DSP usage mapping.
+void getLatencyMap(llvm::json::Object *config,
+                   llvm::StringMap<int64_t> &latencyMap);
+void getDspUsageMap(llvm::json::Object *config,
+                    llvm::StringMap<int64_t> &dspUsageMap);
 
 //===----------------------------------------------------------------------===//
 // ScaleHLSEstimator Class Declaration
@@ -27,9 +31,13 @@ void getLatencyMap(llvm::json::Object *config, LatencyMap &latencyMap);
 class ScaleHLSEstimator
     : public HLSCppVisitorBase<ScaleHLSEstimator, bool, int64_t> {
 public:
-  explicit ScaleHLSEstimator(LatencyMap &latencyMap, bool depAnalysis)
-      : latencyMap(latencyMap), depAnalysis(depAnalysis) {}
+  explicit ScaleHLSEstimator(llvm::StringMap<int64_t> &latencyMap,
+                             llvm::StringMap<int64_t> &dspUsageMap,
+                             bool depAnalysis)
+      : latencyMap(latencyMap), dspUsageMap(dspUsageMap),
+        depAnalysis(depAnalysis) {}
 
+  // Entry for estimating function and loop.
   void estimateFunc(FuncOp func);
   void estimateLoop(AffineForOp loop, FuncOp func);
 
@@ -41,12 +49,13 @@ public:
 
   bool visitOp(AffineForOp op, int64_t begin);
   bool visitOp(AffineIfOp op, int64_t begin);
+  bool visitOp(scf::IfOp op, int64_t begin);
   bool visitOp(CallOp op, int64_t begin);
   bool visitOp(AffineLoadOp op, int64_t begin) {
-    return estimateLoadStore(op, begin), true;
+    return estimateLoadStoreTiming(op, begin), true;
   }
   bool visitOp(AffineStoreOp op, int64_t begin) {
-    return estimateLoadStore(op, begin), true;
+    return estimateLoadStoreTiming(op, begin), true;
   }
   bool visitOp(memref::LoadOp op, int64_t begin) {
     return setTiming(op, begin, begin + 2, 2, 1), true;
@@ -60,6 +69,9 @@ public:
   bool visitOp(OPTYPE op, int64_t begin) {                                     \
     auto latency = latencyMap[KEYNAME] + 1;                                    \
     setTiming(op, begin, begin + latency, latency, 1);                         \
+    for (unsigned i = 0; i < latency; ++i)                                     \
+      ++numOperatorMap[begin + i][KEYNAME];                                    \
+    ++totalNumOperatorMap[KEYNAME];                                            \
     return true;                                                               \
   }
   HANDLE(arith::AddFOp, "fadd");
@@ -67,12 +79,24 @@ public:
   HANDLE(arith::MulFOp, "fmul");
   HANDLE(arith::DivFOp, "fdiv");
   HANDLE(arith::CmpFOp, "fcmp");
+  HANDLE(math::ExpOp, "fexp");
 #undef HANDLE
 
 private:
-  // For storing all dependencies indexed by the dependency source operation.
-  using Depends = SmallVector<Operation *, 16>;
-  using DependsMap = DenseMap<Operation *, Depends>;
+  /// LoadOp and StoreOp related methods.
+  void getPartitionIndices(Operation *op);
+  void estimateLoadStoreTiming(Operation *op, int64_t begin);
+
+  /// AffineForOp related methods.
+  int64_t getResMinII(int64_t begin, int64_t end, MemAccessesMap &map);
+  int64_t getDepMinII(int64_t II, FuncOp func, MemAccessesMap &map);
+  int64_t getDepMinII(int64_t II, AffineForOp forOp, MemAccessesMap &map);
+
+  /// Block scheduler and estimator.
+  ResourceAttr calculateResource(Operation *funcOrLoop);
+  TimingAttr estimateBlock(Block &block, int64_t begin = 0);
+  void reverseTiming(Block &block);
+  void initEstimator(Block &block);
 
   // Hold the memory ports information.
   struct MemPortInfo {
@@ -87,33 +111,18 @@ private:
   // {schedule_level, memref}.
   using MemPortInfos = std::vector<MemPortInfo>;
   using MemPortInfosMap = DenseMap<int64_t, DenseMap<Value, MemPortInfos>>;
-
-  // For storing the resource utilization indexed by the schedule level.
-  using ResourceAllocMap = DenseMap<int64_t, int64_t>;
-
-  /// Collect all dependencies detected in the function.
-  void getFuncDependencies();
-
-  /// LoadOp and StoreOp related methods.
-  void getPartitionIndices(Operation *op);
-  void estimateLoadStore(Operation *op, int64_t begin);
-
-  /// AffineForOp related methods.
-  int64_t getResMinII(int64_t begin, int64_t end, MemAccessesMap &map);
-  int64_t getDepMinII(int64_t II, FuncOp func, MemAccessesMap &map);
-  int64_t getDepMinII(int64_t II, AffineForOp forOp, MemAccessesMap &map);
-
-  /// Block scheduler and estimator.
-  int64_t getDspAllocMap(Block &block, ResourceAllocMap &faddMap,
-                         ResourceAllocMap &fmulMap);
-  ResourceAttr estimateResource(Block &block, int64_t minII = -1);
-  TimingAttr estimateTiming(Block &block, int64_t begin = 0);
-  void reverseTiming(Block &block);
-  void initEstimator(Block &block);
-
-  DependsMap dependsMap;
   MemPortInfosMap memPortInfosMap;
-  LatencyMap &latencyMap;
+
+  // For storing the number of each operator indexed by the schedule level.
+  using NumOperatorMap = DenseMap<int64_t, llvm::StringMap<int64_t>>;
+  NumOperatorMap numOperatorMap;
+  llvm::StringMap<int64_t> totalNumOperatorMap;
+
+  // Store the operator name to latency/DSP usage mapping.
+  llvm::StringMap<int64_t> &latencyMap;
+  llvm::StringMap<int64_t> &dspUsageMap;
+
+  DominanceInfo DT;
   bool depAnalysis = true;
 };
 

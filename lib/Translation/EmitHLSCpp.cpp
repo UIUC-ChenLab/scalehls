@@ -209,40 +209,49 @@ public:
   void emitAffineStore(AffineStoreOp op);
   void emitAffineYield(AffineYieldOp op);
 
+  /// Vector-related statement emitters.
+  void emitTransferRead(vector::TransferReadOp op);
+  void emitTransferWrite(vector::TransferWriteOp op);
+  void emitBroadcast(vector::BroadcastOp);
+
   /// Memref-related statement emitters.
   template <typename OpType> void emitAlloc(OpType op);
   void emitLoad(memref::LoadOp op);
   void emitStore(memref::StoreOp op);
-
-  /// Tensor-related statement emitters.
+  void emitTensorStore(memref::TensorStoreOp op);
   void emitTensorToMemref(bufferization::ToMemrefOp op);
   void emitMemrefToTensor(bufferization::ToTensorOp op);
-  void emitTensorStore(memref::TensorStoreOp op);
-  void emitDim(memref::DimOp op);
-  void emitRank(memref::RankOp op);
+  void emitReinterpretCast(memref::ReinterpretCastOp op);
+
+  /// HLSCpp primitive operation emitters.
+  void emitMulPrim(MulPrimOp op);
+  template <typename AssignOpType> void emitAssign(AssignOpType op);
+
+  /// Control flow operation emitters.
+  void emitCall(CallOp op);
 
   /// Standard expression emitters.
-  void emitBinary(Operation *op, const char *syntax);
   void emitUnary(Operation *op, const char *syntax);
+  void emitBinary(Operation *op, const char *syntax);
+  template <typename OpType> void emitMaxMin(OpType op, const char *syntax);
 
-  /// Special operation emitters.
-  void emitCall(CallOp op);
+  /// Special expression emitters.
   void emitSelect(SelectOp op);
   void emitConstant(arith::ConstantOp op);
-  template <typename CastOpType> void emitCast(CastOpType op);
-
-  /// Structure operations emitters.
-  void emitAssign(AssignOp op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
 
 private:
+  /// Helper to get the string indices of TransferRead/Write operations.
+  template <typename TransferOpType>
+  SmallVector<SmallString<8>, 4> getTransferIndices(TransferOpType op);
+
   /// C++ component emitters.
   void emitValue(Value val, unsigned rank = 0, bool isPtr = false);
   void emitArrayDecl(Value array);
-  unsigned emitNestedLoopHead(Value val);
-  void emitNestedLoopTail(unsigned rank);
+  unsigned emitNestedLoopHeader(Value val);
+  void emitNestedLoopFooter(unsigned rank);
   void emitInfoAndNewLine(Operation *op);
 
   /// MLIR component and HLS C++ pragma emitters.
@@ -350,9 +359,9 @@ public:
   /// SCF statements.
   bool visitOp(scf::ForOp op) { return emitter.emitScfFor(op), true; };
   bool visitOp(scf::IfOp op) { return emitter.emitScfIf(op), true; };
-  bool visitOp(scf::ParallelOp op) { return true; };
-  bool visitOp(scf::ReduceOp op) { return true; };
-  bool visitOp(scf::ReduceReturnOp op) { return true; };
+  bool visitOp(scf::ParallelOp op) { return false; };
+  bool visitOp(scf::ReduceOp op) { return false; };
+  bool visitOp(scf::ReduceReturnOp op) { return false; };
   bool visitOp(scf::YieldOp op) { return emitter.emitScfYield(op), true; };
 
   /// Affine statements.
@@ -363,44 +372,55 @@ public:
   }
   bool visitOp(AffineApplyOp op) { return emitter.emitAffineApply(op), true; }
   bool visitOp(AffineMaxOp op) {
-    return emitter.emitAffineMaxMin<AffineMaxOp>(op, "max"), true;
+    return emitter.emitAffineMaxMin(op, "max"), true;
   }
   bool visitOp(AffineMinOp op) {
-    return emitter.emitAffineMaxMin<AffineMinOp>(op, "min"), true;
+    return emitter.emitAffineMaxMin(op, "min"), true;
   }
   bool visitOp(AffineLoadOp op) { return emitter.emitAffineLoad(op), true; }
   bool visitOp(AffineStoreOp op) { return emitter.emitAffineStore(op), true; }
+  bool visitOp(AffineVectorLoadOp op) { return false; }
+  bool visitOp(AffineVectorStoreOp op) { return false; }
   bool visitOp(AffineYieldOp op) { return emitter.emitAffineYield(op), true; }
 
+  /// Vector-related statements.
+  bool visitOp(vector::TransferReadOp op) {
+    return emitter.emitTransferRead(op), true;
+  };
+  bool visitOp(vector::TransferWriteOp op) {
+    return emitter.emitTransferWrite(op), true;
+  };
+  bool visitOp(vector::BroadcastOp op) {
+    return emitter.emitBroadcast(op), true;
+  };
+
   /// Memref-related statements.
-  bool visitOp(memref::AllocOp op) {
-    return emitter.emitAlloc<memref::AllocOp>(op), true;
-  }
-  bool visitOp(memref::AllocaOp op) {
-    return emitter.emitAlloc<memref::AllocaOp>(op), true;
-  }
+  bool visitOp(memref::AllocOp op) { return emitter.emitAlloc(op), true; }
+  bool visitOp(memref::AllocaOp op) { return emitter.emitAlloc(op), true; }
   bool visitOp(memref::LoadOp op) { return emitter.emitLoad(op), true; }
   bool visitOp(memref::StoreOp op) { return emitter.emitStore(op), true; }
   bool visitOp(memref::DeallocOp op) { return true; }
-
-  /// Tensor-related statements.
+  bool visitOp(memref::TensorStoreOp op) {
+    return emitter.emitTensorStore(op), true;
+  }
   bool visitOp(bufferization::ToMemrefOp op) {
     return emitter.emitTensorToMemref(op), true;
   }
   bool visitOp(bufferization::ToTensorOp op) {
     return emitter.emitMemrefToTensor(op), true;
   }
-  bool visitOp(memref::TensorStoreOp op) {
-    return emitter.emitTensorStore(op), true;
+  bool visitOp(memref::ReinterpretCastOp op) {
+    return emitter.emitReinterpretCast(op), true;
   }
-  bool visitOp(memref::DimOp op) { return emitter.emitDim(op), true; }
-  bool visitOp(memref::RankOp op) { return emitter.emitRank(op), true; }
 
-  /// HLSCpp operations.
+  /// HLSCpp primitive operations.
+  bool visitOp(MulPrimOp op) { return emitter.emitMulPrim(op), true; }
+  bool visitOp(CastPrimOp op) { return emitter.emitAssign(op), true; }
   bool visitOp(AssignOp op) { return emitter.emitAssign(op), true; }
-  bool visitOp(CastOp op) { return emitter.emitCast<CastOp>(op), true; }
-  bool visitOp(MulOp op) { return emitter.emitBinary(op, "*"), true; }
-  bool visitOp(AddOp op) { return emitter.emitBinary(op, "+"), true; }
+
+  /// Control flow operations.
+  bool visitOp(CallOp op) { return emitter.emitCall(op), true; }
+  bool visitOp(ReturnOp op) { return true; }
 
 private:
   ModuleEmitter &emitter;
@@ -411,31 +431,7 @@ namespace {
 class ExprVisitor : public HLSCppVisitorBase<ExprVisitor, bool> {
 public:
   ExprVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
-
   using HLSCppVisitorBase::visitOp;
-  /// Float binary expressions.
-  bool visitOp(arith::CmpFOp op);
-  bool visitOp(arith::AddFOp op) { return emitter.emitBinary(op, "+"), true; }
-  bool visitOp(arith::SubFOp op) { return emitter.emitBinary(op, "-"), true; }
-  bool visitOp(arith::MulFOp op) { return emitter.emitBinary(op, "*"), true; }
-  bool visitOp(arith::DivFOp op) { return emitter.emitBinary(op, "/"), true; }
-  bool visitOp(arith::RemFOp op) { return emitter.emitBinary(op, "%"), true; }
-
-  /// Integer binary expressions.
-  bool visitOp(arith::CmpIOp op);
-  bool visitOp(arith::AddIOp op) { return emitter.emitBinary(op, "+"), true; }
-  bool visitOp(arith::SubIOp op) { return emitter.emitBinary(op, "-"), true; }
-  bool visitOp(arith::MulIOp op) { return emitter.emitBinary(op, "*"), true; }
-  bool visitOp(arith::DivSIOp op) { return emitter.emitBinary(op, "/"), true; }
-  bool visitOp(arith::RemSIOp op) { return emitter.emitBinary(op, "%"), true; }
-  bool visitOp(arith::DivUIOp op) { return emitter.emitBinary(op, "/"), true; }
-  bool visitOp(arith::RemUIOp op) { return emitter.emitBinary(op, "%"), true; }
-  bool visitOp(arith::XOrIOp op) { return emitter.emitBinary(op, "^"), true; }
-  bool visitOp(arith::AndIOp op) { return emitter.emitBinary(op, "&"), true; }
-  bool visitOp(arith::OrIOp op) { return emitter.emitBinary(op, "|"), true; }
-  bool visitOp(arith::ShLIOp op) { return emitter.emitBinary(op, "<<"), true; }
-  bool visitOp(arith::ShRSIOp op) { return emitter.emitBinary(op, ">>"), true; }
-  bool visitOp(arith::ShRUIOp op) { return emitter.emitBinary(op, ">>"), true; }
 
   /// Unary expressions.
   bool visitOp(math::AbsOp op) { return emitter.emitUnary(op, "abs"), true; }
@@ -456,26 +452,52 @@ public:
   }
   bool visitOp(arith::NegFOp op) { return emitter.emitUnary(op, "-"), true; }
 
-  /// Special operations.
-  bool visitOp(CallOp op) { return emitter.emitCall(op), true; }
-  bool visitOp(ReturnOp op) { return true; }
+  /// Float binary expressions.
+  bool visitOp(arith::CmpFOp op);
+  bool visitOp(arith::AddFOp op) { return emitter.emitBinary(op, "+"), true; }
+  bool visitOp(arith::SubFOp op) { return emitter.emitBinary(op, "-"), true; }
+  bool visitOp(arith::MulFOp op) { return emitter.emitBinary(op, "*"), true; }
+  bool visitOp(arith::DivFOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(arith::RemFOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(arith::MaxFOp op) { return emitter.emitMaxMin(op, "max"), true; }
+  bool visitOp(arith::MinFOp op) { return emitter.emitMaxMin(op, "min"), true; }
+
+  /// Integer binary expressions.
+  bool visitOp(arith::CmpIOp op);
+  bool visitOp(arith::AddIOp op) { return emitter.emitBinary(op, "+"), true; }
+  bool visitOp(arith::SubIOp op) { return emitter.emitBinary(op, "-"), true; }
+  bool visitOp(arith::MulIOp op) { return emitter.emitBinary(op, "*"), true; }
+  bool visitOp(arith::DivSIOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(arith::RemSIOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(arith::DivUIOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(arith::RemUIOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(arith::XOrIOp op) { return emitter.emitBinary(op, "^"), true; }
+  bool visitOp(arith::AndIOp op) { return emitter.emitBinary(op, "&"), true; }
+  bool visitOp(arith::OrIOp op) { return emitter.emitBinary(op, "|"), true; }
+  bool visitOp(arith::ShLIOp op) { return emitter.emitBinary(op, "<<"), true; }
+  bool visitOp(arith::ShRSIOp op) { return emitter.emitBinary(op, ">>"), true; }
+  bool visitOp(arith::ShRUIOp op) { return emitter.emitBinary(op, ">>"), true; }
+  bool visitOp(arith::MaxSIOp op) {
+    return emitter.emitMaxMin(op, "max"), true;
+  }
+  bool visitOp(arith::MinSIOp op) {
+    return emitter.emitMaxMin(op, "min"), true;
+  }
+  bool visitOp(arith::MaxUIOp op) {
+    return emitter.emitMaxMin(op, "max"), true;
+  }
+  bool visitOp(arith::MinUIOp op) {
+    return emitter.emitMaxMin(op, "min"), true;
+  }
+
+  /// Special expressions.
   bool visitOp(SelectOp op) { return emitter.emitSelect(op), true; }
   bool visitOp(arith::ConstantOp op) { return emitter.emitConstant(op), true; }
-  bool visitOp(arith::IndexCastOp op) {
-    return emitter.emitCast<arith::IndexCastOp>(op), true;
-  }
-  bool visitOp(arith::UIToFPOp op) {
-    return emitter.emitCast<arith::UIToFPOp>(op), true;
-  }
-  bool visitOp(arith::SIToFPOp op) {
-    return emitter.emitCast<arith::SIToFPOp>(op), true;
-  }
-  bool visitOp(arith::FPToUIOp op) {
-    return emitter.emitCast<arith::FPToUIOp>(op), true;
-  }
-  bool visitOp(arith::FPToSIOp op) {
-    return emitter.emitCast<arith::FPToSIOp>(op), true;
-  }
+  bool visitOp(arith::IndexCastOp op) { return emitter.emitAssign(op), true; }
+  bool visitOp(arith::UIToFPOp op) { return emitter.emitAssign(op), true; }
+  bool visitOp(arith::SIToFPOp op) { return emitter.emitAssign(op), true; }
+  bool visitOp(arith::FPToUIOp op) { return emitter.emitAssign(op), true; }
+  bool visitOp(arith::FPToSIOp op) { return emitter.emitAssign(op), true; }
 
 private:
   ModuleEmitter &emitter;
@@ -613,14 +635,14 @@ void ModuleEmitter::emitScfYield(scf::YieldOp op) {
   if (auto parentOp = dyn_cast<scf::IfOp>(op->getParentOp())) {
     unsigned resultIdx = 0;
     for (auto result : parentOp.getResults()) {
-      unsigned rank = emitNestedLoopHead(result);
+      unsigned rank = emitNestedLoopHeader(result);
       indent();
       emitValue(result, rank);
       os << " = ";
       emitValue(op.getOperand(resultIdx++), rank);
       os << ";";
       emitInfoAndNewLine(op);
-      emitNestedLoopTail(rank);
+      emitNestedLoopFooter(rank);
     }
   }
 }
@@ -871,14 +893,14 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp op) {
   if (auto parentOp = dyn_cast<AffineIfOp>(op->getParentOp())) {
     unsigned resultIdx = 0;
     for (auto result : parentOp.getResults()) {
-      unsigned rank = emitNestedLoopHead(result);
+      unsigned rank = emitNestedLoopHeader(result);
       indent();
       emitValue(result, rank);
       os << " = ";
       emitValue(op.getOperand(resultIdx++), rank);
       os << ";";
       emitInfoAndNewLine(op);
-      emitNestedLoopTail(rank);
+      emitNestedLoopFooter(rank);
     }
   } else if (auto parentOp = dyn_cast<AffineParallelOp>(op->getParentOp())) {
     indent();
@@ -897,14 +919,14 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp op) {
     addIndent();
     unsigned resultIdx = 0;
     for (auto result : parentOp.getResults()) {
-      unsigned rank = emitNestedLoopHead(result);
+      unsigned rank = emitNestedLoopHeader(result);
       indent();
       emitValue(result, rank);
       os << " = ";
       emitValue(op.getOperand(resultIdx++), rank);
       os << ";";
       emitInfoAndNewLine(op);
-      emitNestedLoopTail(rank);
+      emitNestedLoopFooter(rank);
     }
     reduceIndent();
 
@@ -918,7 +940,7 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp op) {
         getIntArrayAttrValue(parentOp, parentOp.getReductionsAttrName());
     resultIdx = 0;
     for (auto result : parentOp.getResults()) {
-      unsigned rank = emitNestedLoopHead(result);
+      unsigned rank = emitNestedLoopHeader(result);
       indent();
       emitValue(result, rank);
       switch ((arith::AtomicRMWKind)RMWAttrs[resultIdx]) {
@@ -965,13 +987,138 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp op) {
       }
       os << ";";
       emitInfoAndNewLine(op);
-      emitNestedLoopTail(rank);
+      emitNestedLoopFooter(rank);
     }
     reduceIndent();
 
     indent();
     os << "}\n";
   }
+}
+
+/// Helper to get the string indices of TransferRead/Write operations.
+template <typename TransferOpType>
+SmallVector<SmallString<8>, 4>
+ModuleEmitter::getTransferIndices(TransferOpType op) {
+  // Get the head indices of the transfer read/write.
+  SmallVector<SmallString<8>, 4> indices;
+  for (auto index : op.indices()) {
+    assert(isDeclared(index) && "index has not been declared");
+    indices.push_back(getName(index));
+  }
+  // Construct the physical indices.
+  for (unsigned i = 0, e = op.permutation_map().getNumResults(); i < e; ++i) {
+    auto expr = op.permutation_map().getResult(i);
+    if (auto dimExpr = expr.template dyn_cast<AffineDimExpr>())
+      indices[dimExpr.getPosition()] += " + iv" + std::to_string(i);
+  }
+  return indices;
+}
+
+/// Helper to get the TransferRead/Write condition.
+template <typename TransferOpType>
+static SmallString<16>
+getTransferCondition(TransferOpType op,
+                     const SmallVector<SmallString<8>, 4> &indices) {
+  // Figure out whether the transfer read/write could be out of bound.
+  SmallVector<unsigned, 4> outOfBoundDims;
+  for (unsigned i = 0, e = op.getVectorType().getRank(); i < e; ++i)
+    if (!op.isDimInBounds(i))
+      outOfBoundDims.push_back(i);
+
+  // Construct the condition of transfer if required.
+  SmallString<16> condition;
+  for (auto i : outOfBoundDims) {
+    auto expr = op.permutation_map().getResult(i);
+    if (auto dimExpr = expr.template dyn_cast<AffineDimExpr>()) {
+      auto pos = dimExpr.getPosition();
+      condition += indices[pos];
+      condition += " < " + std::to_string(op.getShapedType().getDimSize(pos));
+      if (i != outOfBoundDims.back())
+        condition += " && ";
+    }
+  }
+  return condition;
+}
+
+/// Vector-related statement emitters.
+void ModuleEmitter::emitTransferRead(vector::TransferReadOp op) {
+  auto rank = emitNestedLoopHeader(op.vector());
+  auto indices = getTransferIndices(op);
+  auto condition = getTransferCondition(op, indices);
+
+  if (!condition.empty()) {
+    indent() << "if (" << condition << ")\n";
+    addIndent();
+  }
+
+  indent();
+  emitValue(op.vector(), rank);
+  os << " = ";
+  emitValue(op.source());
+  for (auto index : indices)
+    os << "[" << index << "]";
+  os << ";";
+  emitInfoAndNewLine(op);
+
+  if (!condition.empty()) {
+    reduceIndent();
+    indent() << "else\n";
+    addIndent();
+
+    indent();
+    emitValue(op.vector(), rank);
+    os << " = ";
+    emitValue(op.padding());
+    os << ";\n";
+    reduceIndent();
+  }
+  emitNestedLoopFooter(rank);
+}
+
+void ModuleEmitter::emitTransferWrite(vector::TransferWriteOp op) {
+  auto rank = emitNestedLoopHeader(op.vector());
+  auto indices = getTransferIndices(op);
+  auto condition = getTransferCondition(op, indices);
+
+  if (!condition.empty()) {
+    indent() << "if (" << condition << ")\n";
+    addIndent();
+  }
+
+  indent();
+  emitValue(op.source());
+  for (auto index : indices)
+    os << "[" << index << "]";
+  os << " = ";
+  emitValue(op.vector(), rank);
+  os << ";";
+  emitInfoAndNewLine(op);
+
+  if (!condition.empty())
+    reduceIndent();
+  emitNestedLoopFooter(rank);
+}
+
+void ModuleEmitter::emitBroadcast(vector::BroadcastOp op) {
+  auto rank = emitNestedLoopHeader(op.vector());
+  indent();
+  emitValue(op.vector(), rank);
+  os << " = ";
+  emitValue(op.source());
+
+  // Figure out whether each dimision is broadcast or multicast.
+  if (auto type = op.source().getType().dyn_cast<ShapedType>())
+    for (unsigned dim = 0, e = type.getRank(); dim < e; ++dim) {
+      if (type.getDimSize(dim) == 1)
+        os << "[0]";
+      else
+        os << "[iv" << dim + op.getType().getRank() - type.getRank() << "]";
+    }
+
+  os << ";";
+  emitInfoAndNewLine(op);
+  emitNestedLoopFooter(rank);
 }
 
 /// Memref-related statement emitters.
@@ -1020,19 +1167,29 @@ void ModuleEmitter::emitStore(memref::StoreOp op) {
   emitInfoAndNewLine(op);
 }
 
-/// Tensor-related statement emitters.
+void ModuleEmitter::emitTensorStore(memref::TensorStoreOp op) {
+  auto rank = emitNestedLoopHeader(op.getOperand(0));
+  indent();
+  emitValue(op.getOperand(1), rank);
+  os << " = ";
+  emitValue(op.getOperand(0), rank);
+  os << ";";
+  emitInfoAndNewLine(op);
+  emitNestedLoopFooter(rank);
+}
+
 void ModuleEmitter::emitTensorToMemref(bufferization::ToMemrefOp op) {
   // A declared result indicates that the memref is output of the function, and
   // has been declared in the function signature.
   if (isDeclared(op.getResult())) {
-    auto rank = emitNestedLoopHead(op.getResult());
+    auto rank = emitNestedLoopHeader(op.getResult());
     indent();
     emitValue(op.getResult(), rank);
     os << " = ";
     emitValue(op.getOperand(), rank);
     os << ";";
     emitInfoAndNewLine(op);
-    emitNestedLoopTail(rank);
+    emitNestedLoopFooter(rank);
   } else {
     addAlias(op.getOperand(), op.getResult());
     emitArrayDirectives(op.getResult());
@@ -1040,63 +1197,149 @@ void ModuleEmitter::emitTensorToMemref(bufferization::ToMemrefOp op) {
 }
 
 void ModuleEmitter::emitMemrefToTensor(bufferization::ToTensorOp op) {
-  auto rank = emitNestedLoopHead(op.getResult());
+  auto rank = emitNestedLoopHeader(op.getResult());
   indent();
   emitValue(op.getResult(), rank);
   os << " = ";
   emitValue(op.getOperand(), rank);
   os << ";";
   emitInfoAndNewLine(op);
-  emitNestedLoopTail(rank);
+  emitNestedLoopFooter(rank);
 }
 
-void ModuleEmitter::emitTensorStore(memref::TensorStoreOp op) {
-  auto rank = emitNestedLoopHead(op.getOperand(0));
+void ModuleEmitter::emitReinterpretCast(memref::ReinterpretCastOp op) {
+  auto array = op.getResult();
+  assert(!isDeclared(array) && "has been declared before.");
+
+  auto arrayType = array.getType().cast<ShapedType>();
   indent();
-  emitValue(op.getOperand(1), rank);
-  os << " = ";
-  emitValue(op.getOperand(0), rank);
+  os << getTypeName(array) << " (*";
+
+  // Add the new value to nameTable and emit its name.
+  os << addName(array, false);
+  os << ")";
+
+  for (auto &shape : llvm::drop_begin(arrayType.getShape(), 1))
+    os << "[" << shape << "]";
+
+  os << " = (" << getTypeName(array) << "(*)";
+  for (auto &shape : llvm::drop_begin(arrayType.getShape(), 1))
+    os << "[" << shape << "]";
+  os << ") ";
+
+  emitValue(op.getOperand(0));
   os << ";";
   emitInfoAndNewLine(op);
-  emitNestedLoopTail(rank);
 }
 
-void ModuleEmitter::emitDim(memref::DimOp op) {
-  if (auto constOp =
-          dyn_cast<arith::ConstantOp>(op.getOperand(1).getDefiningOp())) {
-    auto constVal = constOp.getValue().cast<IntegerAttr>().getInt();
-    auto type = op.getOperand(0).getType().cast<ShapedType>();
+/// HLSCpp primitive operation emitters.
+void ModuleEmitter::emitMulPrim(MulPrimOp op) {
+  if (op.isPackMul()) {
+    // Declare the result C array.
+    if (!isDeclared(op.C())) {
+      indent();
+      emitArrayDecl(op.C());
+      os << ";\n";
 
-    if (type.hasStaticShape()) {
-      if (constVal >= 0 && constVal < (int64_t)type.getShape().size()) {
-        indent();
-        emitValue(op.getResult());
-        os << " = ";
-        os << type.getShape()[constVal] << ";";
-        emitInfoAndNewLine(op);
-      } else
-        emitError(op, "index is out of range.");
-    } else
-      emitError(op, "is unranked or has dynamic shape.");
-  } else
-    emitError(op, "index is not a constant.");
-}
+      indent() << "#pragma HLS array_partition variable=";
+      emitValue(op.C());
+      os << " complete dim=0\n";
+    }
 
-void ModuleEmitter::emitRank(memref::RankOp op) {
-  auto type = op.getOperand().getType().cast<ShapedType>();
-  if (type.hasRank()) {
-    indent();
-    emitValue(op.getResult());
-    os << " = ";
-    os << type.getRank() << ";";
+    auto AIsVector = op.A().getType().isa<VectorType>();
+    indent() << "pack_mul(";
+    emitValue(AIsVector ? op.A() : op.B());
+    os << ", ";
+    emitValue(AIsVector ? op.B() : op.A());
+    os << ", ";
+    emitValue(op.C());
+    os << ");";
     emitInfoAndNewLine(op);
-  } else
-    emitError(op, "is unranked.");
+
+  } else {
+    // To ensure DSP is utilized, the two operands are casted to 16-bits integer
+    // before the multiplication.
+    auto rank = emitNestedLoopHeader(op.C());
+    indent();
+    emitValue(op.C(), rank);
+    os << " = (int16_t)";
+    emitValue(op.A(), rank);
+    os << " * (int16_t)";
+    emitValue(op.B(), rank);
+    os << ";";
+    emitInfoAndNewLine(op);
+    emitNestedLoopFooter(rank);
+  }
+}
+
+template <typename AssignOpType>
+void ModuleEmitter::emitAssign(AssignOpType op) {
+  unsigned rank = emitNestedLoopHeader(op.getResult());
+  indent();
+  emitValue(op.getResult(), rank);
+  os << " = ";
+  emitValue(op.getOperand(), rank);
+  os << ";";
+  emitInfoAndNewLine(op);
+  emitNestedLoopFooter(rank);
+}
+
+/// Control flow operation emitters.
+void ModuleEmitter::emitCall(CallOp op) {
+  // Handle returned value by the callee.
+  for (auto result : op.getResults()) {
+    if (!isDeclared(result)) {
+      indent();
+      if (result.getType().isa<ShapedType>())
+        emitArrayDecl(result);
+      else
+        emitValue(result);
+      os << ";\n";
+    }
+  }
+
+  // Emit the function call.
+  indent();
+  os << op.getCallee() << "(";
+
+  // Handle input arguments.
+  unsigned argIdx = 0;
+  for (auto arg : op.getOperands()) {
+    emitValue(arg);
+
+    if (argIdx++ != op.getNumOperands() - 1)
+      os << ", ";
+  }
+
+  // Handle output arguments.
+  for (auto result : op.getResults()) {
+    // The address should be passed in for scalar result arguments.
+    if (result.getType().isa<ShapedType>())
+      os << ", ";
+    else
+      os << ", &";
+
+    emitValue(result);
+  }
+
+  os << ");";
+  emitInfoAndNewLine(op);
 }
 
 /// Standard expression emitters.
+void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
+  auto rank = emitNestedLoopHeader(op->getResult(0));
+  indent();
+  emitValue(op->getResult(0), rank);
+  os << " = " << syntax << "(";
+  emitValue(op->getOperand(0), rank);
+  os << ");";
+  emitInfoAndNewLine(op);
+  emitNestedLoopFooter(rank);
+}
+
 void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
-  auto rank = emitNestedLoopHead(op->getResult(0));
+  auto rank = emitNestedLoopHeader(op->getResult(0));
   indent();
   emitValue(op->getResult(0), rank);
   os << " = ";
@@ -1105,23 +1348,26 @@ void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
   emitValue(op->getOperand(1), rank);
   os << ";";
   emitInfoAndNewLine(op);
-  emitNestedLoopTail(rank);
+  emitNestedLoopFooter(rank);
 }
 
-void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
-  auto rank = emitNestedLoopHead(op->getResult(0));
+template <typename OpType>
+void ModuleEmitter::emitMaxMin(OpType op, const char *syntax) {
+  auto rank = emitNestedLoopHeader(op.getResult());
   indent();
-  emitValue(op->getResult(0), rank);
+  emitValue(op.getResult());
   os << " = " << syntax << "(";
-  emitValue(op->getOperand(0), rank);
+  emitValue(op.getLhs(), rank);
+  os << ", ";
+  emitValue(op.getRhs(), rank);
   os << ");";
   emitInfoAndNewLine(op);
-  emitNestedLoopTail(rank);
+  emitNestedLoopFooter(rank);
 }
 
-/// Special operation emitters.
+/// Special expression emitters.
 void ModuleEmitter::emitSelect(SelectOp op) {
-  unsigned rank = emitNestedLoopHead(op.getResult());
+  unsigned rank = emitNestedLoopHeader(op.getResult());
   unsigned conditionRank = rank;
   if (!op.getCondition().getType().isa<ShapedType>())
     conditionRank = 0;
@@ -1138,7 +1384,7 @@ void ModuleEmitter::emitSelect(SelectOp op) {
   emitValue(op.getFalseValue(), rank);
   os << ";";
   emitInfoAndNewLine(op);
-  emitNestedLoopTail(rank);
+  emitNestedLoopFooter(rank);
 }
 
 void ModuleEmitter::emitConstant(arith::ConstantOp op) {
@@ -1188,68 +1434,6 @@ void ModuleEmitter::emitConstant(arith::ConstantOp op) {
     emitError(op, "has unsupported constant type.");
 }
 
-template <typename CastOpType> void ModuleEmitter::emitCast(CastOpType op) {
-  indent();
-  emitValue(op.getResult());
-  os << " = ";
-  emitValue(op.getOperand());
-  os << ";";
-  emitInfoAndNewLine(op);
-}
-
-void ModuleEmitter::emitCall(CallOp op) {
-  // Handle returned value by the callee.
-  for (auto result : op.getResults()) {
-    if (!isDeclared(result)) {
-      indent();
-      if (result.getType().isa<ShapedType>())
-        emitArrayDecl(result);
-      else
-        emitValue(result);
-      os << ";\n";
-    }
-  }
-
-  // Emit the function call.
-  indent();
-  os << op.getCallee() << "(";
-
-  // Handle input arguments.
-  unsigned argIdx = 0;
-  for (auto arg : op.getOperands()) {
-    emitValue(arg);
-
-    if (argIdx++ != op.getNumOperands() - 1)
-      os << ", ";
-  }
-
-  // Handle output arguments.
-  for (auto result : op.getResults()) {
-    // The address should be passed in for scalar result arguments.
-    if (result.getType().isa<ShapedType>())
-      os << ", ";
-    else
-      os << ", &";
-
-    emitValue(result);
-  }
-
-  os << ");";
-  emitInfoAndNewLine(op);
-}
-
-/// Structure operation emitters.
-void ModuleEmitter::emitAssign(AssignOp op) {
-  unsigned rank = emitNestedLoopHead(op.getResult());
-  indent();
-  emitValue(op.getResult(), rank);
-  os << " = ";
-  emitValue(op.getOperand(), rank);
-  os << ";";
-  emitInfoAndNewLine(op);
-  emitNestedLoopTail(rank);
-}
-
 /// C++ component emitters.
 void ModuleEmitter::emitValue(Value val, unsigned rank, bool isPtr) {
   assert(!(rank && isPtr) && "should be either an array or a pointer.");
@@ -1282,7 +1466,7 @@ void ModuleEmitter::emitArrayDecl(Value array) {
     emitValue(array, /*rank=*/0, /*isPtr=*/true);
 }
 
-unsigned ModuleEmitter::emitNestedLoopHead(Value val) {
+unsigned ModuleEmitter::emitNestedLoopHeader(Value val) {
   unsigned rank = 0;
 
   if (auto type = val.getType().dyn_cast<ShapedType>()) {
@@ -1296,6 +1480,13 @@ unsigned ModuleEmitter::emitNestedLoopHead(Value val) {
       indent();
       emitArrayDecl(val);
       os << ";\n";
+      // TODO: More precise control here. Now we assume vectors are always
+      // completely partitioned at all dimensions.
+      if (type.isa<VectorType>()) {
+        indent() << "#pragma HLS array_partition variable=";
+        emitValue(val);
+        os << " complete dim=0\n";
+      }
     }
 
     // Create nested loop.
@@ -1307,6 +1498,10 @@ unsigned ModuleEmitter::emitNestedLoopHead(Value val) {
       os << "++iv" << dimIdx++ << ") {\n";
 
       addIndent();
+      // TODO: More precise control here. Now we assume vectorization loops are
+      // always fully unrolled.
+      if (type.isa<VectorType>())
+        indent() << "#pragma HLS unroll\n";
     }
     rank = type.getRank();
   }
@@ -1314,7 +1509,7 @@ unsigned ModuleEmitter::emitNestedLoopHead(Value val) {
   return rank;
 }
 
-void ModuleEmitter::emitNestedLoopTail(unsigned rank) {
+void ModuleEmitter::emitNestedLoopFooter(unsigned rank) {
   for (unsigned i = 0; i < rank; ++i) {
     reduceIndent();
 
@@ -1588,6 +1783,21 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 #include <stdint.h>
 
 using namespace std;
+
+)XXX";
+
+  // Emit the multiplication primitive if required.
+  if (module.walk([](MulPrimOp op) {
+        return op.isPackMul() ? WalkResult::interrupt() : WalkResult::advance();
+      }) == WalkResult::interrupt())
+    os << R"XXX(
+void pack_mul(int8_t A[2], int8_t B, int16_t C[2]) {
+  #pragma HLS inline
+  ap_int<27> packA = (ap_int<27>)A[0] + (ap_int<27>)A[1] << 18;
+  ap_int<45> packC = packA * (ap_int<18>)B;
+  C[0] = packC.range(15, 0);
+  C[1] = packC.range(33, 18);
+}
 
 )XXX";
 

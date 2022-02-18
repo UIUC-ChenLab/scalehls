@@ -93,7 +93,7 @@ void ScaleHLSEstimator::getPartitionIndices(Operation *op) {
 }
 
 /// Timing load/store operation honoring the memory ports number limitation.
-void ScaleHLSEstimator::estimateLoadStore(Operation *op, int64_t begin) {
+void ScaleHLSEstimator::estimateLoadStoreTiming(Operation *op, int64_t begin) {
   auto access = MemRefAccess(op);
   auto memref = access.memref;
   auto memrefType = memref.getType().cast<MemRefType>();
@@ -282,8 +282,7 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, FuncOp func,
         if (delay <= II)
           continue;
 
-        // Similar to getFuncDependencies() method, in some cases RAR is not
-        // considered as dependency in Vivado HLS.
+        // In some cases RAR is not considered as dependency in Vivado HLS.
         auto srcMuxSize = getMaxMuxSize(srcOp);
         auto dstMuxSize = getMaxMuxSize(dstOp);
         if (isa<AffineReadOpInterface>(srcOp) && srcMuxSize <= 3 &&
@@ -336,8 +335,7 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
         if (delay <= II)
           continue;
 
-        // Similar to getFuncDependencies() method, in some cases RAR is not
-        // considered as dependency in Vivado HLS.
+        // In some cases RAR is not considered as dependency in Vivado HLS.
         auto srcMuxSize = getMaxMuxSize(srcOp);
         auto dstMuxSize = getMaxMuxSize(dstOp);
         if (isa<AffineReadOpInterface>(srcOp) && srcMuxSize <= 3 &&
@@ -431,12 +429,12 @@ bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
 
   // Estimate the contained loop block.
   auto &loopBlock = *op.getBody();
-  auto timing = estimateTiming(loopBlock, begin);
+  auto timing = estimateBlock(loopBlock, begin);
   if (!timing)
     return false;
 
-  auto end = max(begin, timing.getEnd());
-  begin = max(begin, timing.getBegin());
+  assert(begin == timing.getBegin() && "unexpected estimation result");
+  auto end = timing.getEnd();
 
   // Handle pipelined or flattened loops.
   if (auto loopDirect = getLoopDirective(op)) {
@@ -464,8 +462,15 @@ bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
       auto latency = iterLatency + II * (tripCount - 1) + 2;
       setTiming(op, begin, begin + latency, latency, latency);
 
-      // Estimate the loop block resource utilization.
-      setResource(op, estimateResource(loopBlock, II));
+      // Once the loop is pipelined, the resource sharing scheme is different.
+      // Specifically, all operators are shared inside of II cycles. Therefore,
+      // we need to update the numOperatorMap here.
+      for (auto &pair : totalNumOperatorMap)
+        pair.second = (pair.second + II - 1) / II;
+
+      for (auto i = begin; i < end; ++i)
+        numOperatorMap.erase(i);
+      numOperatorMap[begin] = totalNumOperatorMap;
       return true;
     }
 
@@ -486,9 +491,6 @@ bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
 
       auto latency = iterLatency + II * (flattenTripCount - 1) + 2;
       setTiming(op, begin, begin + latency, latency, latency);
-
-      // The resource utilization of flattened loop is equal to its child's.
-      setResource(op, getResource(child));
       return true;
     }
   }
@@ -500,7 +502,6 @@ bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
 
   auto latency = iterLatency * tripCount + 2;
   setTiming(op, begin, begin + latency, latency, latency);
-  setResource(op, estimateResource(loopBlock));
   return true;
 }
 
@@ -513,7 +514,7 @@ bool ScaleHLSEstimator::visitOp(AffineIfOp op, int64_t begin) {
   auto thenBlock = op.getThenBlock();
 
   // Estimate then block.
-  if (auto timing = estimateTiming(*thenBlock, begin))
+  if (auto timing = estimateBlock(*thenBlock, begin))
     end = max(end, timing.getEnd());
   else
     return false;
@@ -522,7 +523,7 @@ bool ScaleHLSEstimator::visitOp(AffineIfOp op, int64_t begin) {
   if (op.hasElse()) {
     auto elseBlock = op.getElseBlock();
 
-    if (auto timing = estimateTiming(*elseBlock, begin))
+    if (auto timing = estimateBlock(*elseBlock, begin))
       end = max(end, timing.getEnd());
     else
       return false;
@@ -530,7 +531,31 @@ bool ScaleHLSEstimator::visitOp(AffineIfOp op, int64_t begin) {
 
   // In our assumption, AffineIfOp is completely transparent. Therefore, we
   // set a dummy schedule begin here.
-  setTiming(op, end, end, 0, 0);
+  setTiming(op, begin, end, end - begin, 0);
+  return true;
+}
+
+bool ScaleHLSEstimator::visitOp(scf::IfOp op, int64_t begin) {
+  auto end = begin;
+  auto thenBlock = op.thenBlock();
+
+  // Estimate then block.
+  if (auto timing = estimateBlock(*thenBlock, begin))
+    end = max(end, timing.getEnd());
+  else
+    return false;
+
+  // Handle else block if required.
+  if (auto elseBlock = op.elseBlock()) {
+    if (auto timing = estimateBlock(*elseBlock, begin))
+      end = max(end, timing.getEnd());
+    else
+      return false;
+  }
+
+  // In our assumption, scf::IfOp is completely transparent. Therefore, we
+  // set a dummy schedule begin here.
+  setTiming(op, begin, end, end - begin, 0);
   return true;
 }
 
@@ -539,7 +564,7 @@ bool ScaleHLSEstimator::visitOp(CallOp op, int64_t begin) {
   auto subFunc = dyn_cast<FuncOp>(callee);
   assert(subFunc && "callable is not a function operation");
 
-  ScaleHLSEstimator estimator(latencyMap, depAnalysis);
+  ScaleHLSEstimator estimator(latencyMap, dspUsageMap, depAnalysis);
   estimator.estimateFunc(subFunc);
 
   // We assume enter and leave the subfunction require extra 2 clock cycles.
@@ -556,81 +581,6 @@ bool ScaleHLSEstimator::visitOp(CallOp op, int64_t begin) {
 // Block Scheduler and Estimator
 //===----------------------------------------------------------------------===//
 
-int64_t ScaleHLSEstimator::getDspAllocMap(Block &block,
-                                          ResourceAllocMap &faddMap,
-                                          ResourceAllocMap &fmulMap) {
-  int64_t staticDspNum = 0;
-  for (auto &op : block) {
-    auto begin = getTiming(&op).getBegin();
-    auto end = getTiming(&op).getEnd();
-
-    // Accumulate the resource utilization of each operation.
-    if (isa<arith::AddFOp, arith::SubFOp>(op))
-      for (unsigned i = begin; i < end; ++i)
-        ++faddMap[i];
-
-    else if (isa<arith::MulFOp>(op))
-      for (unsigned i = begin; i < end; ++i)
-        ++fmulMap[i];
-
-    else if (isa<AffineForOp, CallOp>(op))
-      staticDspNum += getResource(&op).getDsp();
-
-    else if (auto ifOp = dyn_cast<AffineIfOp>(op)) {
-      // AffineIfOp is transparent during scheduling, thus here we recursively
-      // enter each if block.
-      staticDspNum += getDspAllocMap(*ifOp.getThenBlock(), faddMap, fmulMap);
-      if (ifOp.hasElse())
-        staticDspNum += getDspAllocMap(*ifOp.getElseBlock(), faddMap, fmulMap);
-    }
-  }
-  return staticDspNum;
-}
-
-ResourceAttr ScaleHLSEstimator::estimateResource(Block &block, int64_t minII) {
-  ResourceAllocMap faddMap;
-  ResourceAllocMap fmulMap;
-  auto staticDspNum = getDspAllocMap(block, faddMap, fmulMap);
-
-  // Find the max resource utilization across all schedule levels.
-  int64_t maxFadd = 0;
-  for (auto level : faddMap)
-    maxFadd = max(maxFadd, level.second);
-
-  int64_t maxFmul = 0;
-  for (auto level : fmulMap)
-    maxFmul = max(maxFmul, level.second);
-
-  // We assume the loop resource utilization cannot be shared. Therefore, the
-  // overall resource utilization is loops' plus other operstions'. According
-  // to profiling, floating-point add and muliply will consume 2 and 3 DSP
-  // units, respectively.
-  auto shareDspNum = maxFadd * 2 + maxFmul * 3;
-  auto dsp = staticDspNum + shareDspNum;
-
-  int64_t totalFadd = 0;
-  int64_t totalFmul = 0;
-  block.walk([&](Operation *op) {
-    if (isa<arith::AddFOp, arith::SubFOp>(op))
-      ++totalFadd;
-    else if (isa<arith::MulFOp>(op))
-      ++totalFmul;
-  });
-
-  auto nonShareDspNum = totalFadd * 2 + totalFmul * 3;
-
-  // If the block is pipelined (minII is positive), the minimum resource
-  // utilization is determined by minII.
-  if (minII > 0)
-    dsp = staticDspNum + nonShareDspNum / minII;
-
-  // TODO: Estimate bram, ff, lut.
-  int64_t lut = 0;
-  int64_t bram = 0;
-  return ResourceAttr::get(block.getParentOp()->getContext(), lut, dsp, bram,
-                           nonShareDspNum);
-}
-
 // Get the pointer of the scrOp's parent loop, which should locat at the same
 // level with dstOp's any parent loop.
 static Operation *getSameLevelDstOp(Operation *srcOp, Operation *dstOp) {
@@ -644,10 +594,11 @@ static Operation *getSameLevelDstOp(Operation *srcOp, Operation *dstOp) {
         nests.push_back(op);
         auto currentOp = op;
         while (true) {
-          if (auto parentOp = currentOp->getParentOfType<AffineForOp>()) {
+          auto parentOp = currentOp->getParentOp();
+          if (isa<AffineForOp>(parentOp)) {
             nests.push_back(parentOp);
             currentOp = parentOp;
-          } else if (auto parentOp = currentOp->getParentOfType<AffineIfOp>())
+          } else if (isa<AffineIfOp, scf::IfOp>(parentOp))
             currentOp = parentOp;
           else
             break;
@@ -671,9 +622,11 @@ static Operation *getSameLevelDstOp(Operation *srcOp, Operation *dstOp) {
 }
 
 /// Estimate the latency of a block with ALAP scheduling strategy, return the
-/// end level of schedule. Meanwhile, the input begin will also be updated if
-/// required (typically happens in AffineForOps).
-TimingAttr ScaleHLSEstimator::estimateTiming(Block &block, int64_t begin) {
+/// estimated timing attribute.
+TimingAttr ScaleHLSEstimator::estimateBlock(Block &block, int64_t begin) {
+  if (!isa<AffineIfOp, scf::IfOp>(block.getParentOp()))
+    totalNumOperatorMap.clear();
+
   auto blockBegin = begin;
   auto blockEnd = begin;
 
@@ -693,11 +646,11 @@ TimingAttr ScaleHLSEstimator::estimateTiming(Block &block, int64_t begin) {
       opBegin = max(opBegin, getTiming(sameLevelUser).getEnd());
     }
 
-    // Check other dependencies and update schedule level.
-    for (auto dstOp : dependsMap[op]) {
-      auto sameLevelDstOp = getSameLevelDstOp(op, dstOp);
-      opBegin = max(opBegin, getTiming(sameLevelDstOp).getEnd());
-    }
+    // Loop shouldn't overlap with any other scheduled operations. The rationale
+    // here is in Vivado HLS, a loop will always be blocked by other operations
+    // before it, even if no actual dependency exists between them.
+    if (isa<mlir::AffineForOp>(op))
+      opBegin = max(opBegin, blockEnd);
 
     // Check memory dependencies of the operation and update schedule level.
     for (auto operand : op->getOperands()) {
@@ -707,12 +660,13 @@ TimingAttr ScaleHLSEstimator::estimateTiming(Block &block, int64_t begin) {
         for (auto depOp : operand.getUsers()) {
           // If the depOp has not been scheduled or its schedule level will not
           // impact the current operation's scheduling, stop and continue.
-          auto depOpTiming = getTiming(depOp);
+          auto sameLevelDstOp = getSameLevelDstOp(op, depOp);
+          auto depOpTiming = getTiming(sameLevelDstOp);
           if (!depOpTiming)
             continue;
 
           auto depOpEnd = depOpTiming.getEnd();
-          if (depOpEnd <= opBegin)
+          if (depOpEnd <= opBegin || !DT.properlyDominates(op, depOp))
             continue;
 
           // If either the depOp or the current operation is a function call,
@@ -797,12 +751,11 @@ TimingAttr ScaleHLSEstimator::estimateTiming(Block &block, int64_t begin) {
 static Operation *getSurroundingOp(Operation *op) {
   auto currentOp = op;
   while (true) {
-    if (auto parentIfOp = currentOp->getParentOfType<AffineIfOp>())
-      currentOp = parentIfOp;
-    else if (auto parentForOp = currentOp->getParentOfType<AffineForOp>())
-      return parentForOp;
-    else if (auto parentFuncOp = currentOp->getParentOfType<FuncOp>())
-      return parentFuncOp;
+    auto parentOp = currentOp->getParentOp();
+    if (isa<AffineIfOp, scf::IfOp>(parentOp))
+      currentOp = parentOp;
+    else if (isa<AffineForOp, FuncOp>(parentOp))
+      return parentOp;
     else
       return nullptr;
   }
@@ -844,43 +797,81 @@ void ScaleHLSEstimator::reverseTiming(Block &block) {
 }
 
 void ScaleHLSEstimator::initEstimator(Block &block) {
-  // Clear global maps and scheduling information. Walk through all loops and
-  // establish dependencies. The rationale here is in Vivado HLS, a loop will
-  // always be blocked by other loops before it, even if no actual dependency
-  // exists between them.
-  dependsMap.clear();
+  // Clear global maps and scheduling information.
   memPortInfosMap.clear();
+  numOperatorMap.clear();
 
-  SmallVector<Operation *, 16> loops;
   block.walk([&](Operation *op) {
     if (!isNoTouch(op)) {
       op->removeAttr("resource");
       op->removeAttr("timing");
       op->removeAttr("loop_info");
     }
+  });
+}
 
-    if (isa<AffineForOp>(op))
-      loops.push_back(op);
+ResourceAttr ScaleHLSEstimator::calculateResource(Operation *funcOrLoop) {
+  // Calculate the static DSP and BRAM utilization.
+  int64_t dspNum = 0;
+  int64_t bramNum = 0;
+  funcOrLoop->walk([&](Operation *op) {
+    if (isa<CallOp>(op) || isNoTouch(op)) {
+      // TODO: For now, we consider the resource utilization of sub-fuctions are
+      // static and not shareable. But actually this is not the truth. The
+      // resource can be shared between different sub-functions to some extent,
+      // whose shareing scheme has not been characterized by the estimator.
+      if (auto resource = getResource(op))
+        dspNum += resource.getDsp();
+
+    } else if (isa<memref::AllocaOp, memref::AllocOp>(op)) {
+      auto memrefType = op->getResult(0).getType().cast<MemRefType>();
+      if (memrefType.getNumElements() > 1) {
+        auto partitionNum = getPartitionFactors(memrefType);
+        auto storageType = MemoryKind(memrefType.getMemorySpaceAsInt());
+
+        // TODO: Support URAM and interface BRAMs?
+        if (storageType == MemoryKind::BRAM_1P ||
+            storageType == MemoryKind::BRAM_S2P ||
+            storageType == MemoryKind::BRAM_T2P) {
+          // Multiply bit width of type.
+          // TODO: handle index types.
+          int64_t memrefSize = memrefType.getElementTypeBitWidth() *
+                               memrefType.getNumElements() / partitionNum;
+          bramNum += ((memrefSize + 18000 - 1) / 18000) * partitionNum;
+        }
+      }
+    }
   });
 
-  unsigned idx = 1;
-  for (auto srcLoop : loops) {
-    for (auto dstLoop : llvm::drop_begin(loops, idx))
-      if (checkSameLevel(srcLoop, dstLoop))
-        dependsMap[srcLoop].push_back(dstLoop);
-    ++idx;
+  auto timing = getTiming(funcOrLoop);
+  assert(timing && "timing has not been estimated");
+
+  llvm::StringMap<int64_t> operatorNums;
+  for (auto level : numOperatorMap) {
+    if (level.first < timing.getBegin() || level.first >= timing.getEnd())
+      continue;
+
+    for (auto &nameAndNum : level.second) {
+      auto &num = operatorNums[nameAndNum.first()];
+      num = max(num, nameAndNum.second);
+    }
   }
+  for (auto &nameAndNum : operatorNums)
+    dspNum += dspUsageMap[nameAndNum.first()] * nameAndNum.second;
+
+  return ResourceAttr::get(funcOrLoop->getContext(), 0, dspNum, bramNum);
 }
 
 void ScaleHLSEstimator::estimateFunc(FuncOp func) {
   initEstimator(func.front());
+  DT = DominanceInfo(func);
 
   // Collect all memory access operations for later use.
   MemAccessesMap map;
   getMemAccessesMap(func.front(), map);
 
   // Recursively estimate blocks in the function.
-  auto timing = estimateTiming(func.front());
+  auto timing = estimateBlock(func.front());
   if (!timing)
     return;
 
@@ -904,42 +895,26 @@ void ScaleHLSEstimator::estimateFunc(FuncOp func) {
       auto depInterval =
           getDepMinII(max(targetInterval, resInterval), func, map);
       interval = max({targetInterval, resInterval, depInterval});
+      // TODO: Tune numOperatorMap like visitOp(AffineForOp op);
     }
   }
 
   // Estimate and set timing and resource attributes.
   setTiming(func, 0, latency, latency, interval);
-  setResource(func, estimateResource(func.front(), interval));
+  setResource(func, calculateResource(func));
 
   // Scheduled levels of all operations are reversed in this method, because
   // we have done the ALAP scheduling in a reverse order. Note that after
   // the reverse, the annotated scheduling level of each operation is a
   // relative level of the nearest surrounding AffineForOp or FuncOp.
   reverseTiming(func.front());
-
-  // // Calculate the function memrefs BRAM utilization.
-  // int64_t numBram = 0;
-  // for (auto &pair : map) {
-  //   auto memrefType = pair.first.getType().cast<MemRefType>();
-  //   auto partitionNum = getPartitionFactors(memrefType);
-  //   auto storageType = MemoryKind(memrefType.getMemorySpaceAsInt());
-
-  //   if (storageType == MemoryKind::BRAM_1P ||
-  //       storageType == MemoryKind::BRAM_S2P ||
-  //       storageType == MemoryKind::BRAM_T2P) {
-  //     // Multiply bit width of type.
-  //     // TODO: handle index types.
-  //     int64_t memrefSize =
-  //         memrefType.getElementTypeBitWidth() * memrefType.getNumElements();
-  //     numBram += ((memrefSize + 18000 - 1) / 18000) * partitionNum;
-  //   }
-  // }
-  // resource.bram += numBram;
 }
 
 void ScaleHLSEstimator::estimateLoop(AffineForOp loop, FuncOp func) {
   initEstimator(func.getBody().front());
-  dispatchVisitor(loop, 0);
+  DT = DominanceInfo(loop);
+  visitOp(loop, 0);
+  setResource(loop, calculateResource(loop));
 }
 
 //===----------------------------------------------------------------------===//
@@ -947,7 +922,7 @@ void ScaleHLSEstimator::estimateLoop(AffineForOp loop, FuncOp func) {
 //===----------------------------------------------------------------------===//
 
 void scalehls::getLatencyMap(llvm::json::Object *config,
-                             LatencyMap &latencyMap) {
+                             llvm::StringMap<int64_t> &latencyMap) {
   auto frequency =
       config->getObject(config->getString("frequency").getValueOr("100MHz"));
 
@@ -955,6 +930,18 @@ void scalehls::getLatencyMap(llvm::json::Object *config,
   latencyMap["fmul"] = frequency->getInteger("fmul").getValueOr(3);
   latencyMap["fdiv"] = frequency->getInteger("fdiv").getValueOr(15);
   latencyMap["fcmp"] = frequency->getInteger("fcmp").getValueOr(1);
+  latencyMap["fexp"] = frequency->getInteger("fexp").getValueOr(8);
+}
+
+void scalehls::getDspUsageMap(llvm::json::Object *config,
+                              llvm::StringMap<int64_t> &dspUsageMap) {
+  auto dspUsage = config->getObject("dsp_usage");
+
+  dspUsageMap["fadd"] = dspUsage->getInteger("fadd").getValueOr(2);
+  dspUsageMap["fmul"] = dspUsage->getInteger("fmul").getValueOr(3);
+  dspUsageMap["fdiv"] = dspUsage->getInteger("fdiv").getValueOr(0);
+  dspUsageMap["fcmp"] = dspUsage->getInteger("fcmp").getValueOr(0);
+  dspUsageMap["fexp"] = dspUsage->getInteger("fexp").getValueOr(7);
 }
 
 namespace {
@@ -983,10 +970,12 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
       return signalPassFailure();
     }
 
-    // Collect profiling latency data, where default values are based on Xilinx
-    // PYNQ-Z1 board.
-    LatencyMap latencyMap;
+    // Collect profiling latency and DSP usage data, where default values are
+    // based on Xilinx PYNQ-Z1 board.
+    llvm::StringMap<int64_t> latencyMap;
     getLatencyMap(configObj, latencyMap);
+    llvm::StringMap<int64_t> dspUsageMap;
+    getDspUsageMap(configObj, dspUsageMap);
 
     // Estimate performance and resource utilization. If any other functions are
     // called by the top function, it will be estimated in the procedure of
@@ -994,7 +983,8 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     for (auto func : module.getOps<FuncOp>())
       if (auto funcDirect = getFuncDirective(func))
         if (funcDirect.getTopFunc())
-          ScaleHLSEstimator(latencyMap, depAnalysis).estimateFunc(func);
+          ScaleHLSEstimator(latencyMap, dspUsageMap, depAnalysis)
+              .estimateFunc(func);
   }
 };
 } // namespace

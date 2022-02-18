@@ -15,15 +15,14 @@ def Resource : HLSCppAttr<"Resource"> {
   let summary = "Resource utilization information";
   let description = [{
     This attribute includes the utilization of several important on-chip
-    resources, such as LUT, DSP, BRAM, URAM, and non-sharing DSP.
+    resources, such as LUT, DSP, BRAM, and URAM.
   }];
   let mnemonic = "r";
 
   let parameters = (ins
     "int64_t" : $lut,
     "int64_t" : $dsp,
-    "int64_t" : $bram,
-    "int64_t" : $nonShareDsp
+    "int64_t" : $bram
   );
 }
 
