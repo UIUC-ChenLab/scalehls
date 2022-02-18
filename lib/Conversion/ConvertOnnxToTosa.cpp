@@ -109,7 +109,7 @@ void ConvertOnnxToTosa::runOnOperation() {
           pad = op.getAttrOfType<ArrayAttr>("pads");
         }
         else {
-          pad = builder.getArrayAttr(ArrayRef<Attribute>({0, 0, 0, 0}));
+          pad = builder.getI64ArrayAttr({0, 0, 0, 0});
         }
         auto stride = op.getAttrOfType<ArrayAttr>("strides");
         ArrayAttr dilation;
@@ -117,8 +117,7 @@ void ConvertOnnxToTosa::runOnOperation() {
           dilation = op.getAttrOfType<ArrayAttr>("dilations");
         }
         else {
-          auto i64_1 = builder.getI64IntegerAttr(1);
-          dilation = builder.getArrayAttr(ArrayRef<Attribute>({i64_1, i64_1}));
+          dilation = builder.getI64ArrayAttr({1, 1});
         }
 
         // Create the tosa conv2d op and replace all use.
@@ -273,15 +272,11 @@ void ConvertOnnxToTosa::runOnOperation() {
         auto input = op.getOperand(0);
         auto inputShape = input.getType().cast<RankedTensorType>().getShape();
 
-        auto i64_0 = builder.getI64IntegerAttr(0);
-        auto i64_1 = builder.getI64IntegerAttr(1);
-        auto stride = builder.getArrayAttr(ArrayRef<Attribute>({i64_1, i64_1}));
-
-        auto pad = builder.getArrayAttr(ArrayRef<Attribute>({i64_0, i64_0, i64_0, i64_0}));
-
-        auto kernelH = builder.getI64IntegerAttr(inputShape[1] / outputShape[1]);
-        auto kernelW = builder.getI64IntegerAttr(inputShape[2] / outputShape[2]);
-        auto kernel = builder.getArrayAttr(ArrayRef<Attribute>({kernelH, kernelW}));
+        auto stride = builder.getI64ArrayAttr({1, 1});
+        auto pad = builder.getI64ArrayAttr({0, 0, 0, 0});
+        auto kernelH = inputShape[1] / outputShape[1];
+        auto kernelW = inputShape[2] / outputShape[2];
+        auto kernel = builder.getI64ArrayAttr({kernelH, kernelW});
 
         // Create tosa avgpool2d op and replace all use.
         auto newOp = builder.create<tosa::AvgPool2dOp>(op.getLoc(), outputType,
