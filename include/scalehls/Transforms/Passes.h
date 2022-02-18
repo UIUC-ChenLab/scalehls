@@ -22,21 +22,21 @@ struct ScaleHLSOptions : public PassPipelineOptions<ScaleHLSOptions> {
       *this, "top-func", llvm::cl::init("main"),
       llvm::cl::desc("Specify the top function of the design")};
 
-  Option<unsigned> dataflowMinGran{
-      *this, "min-gran", llvm::cl::init(1),
-      llvm::cl::desc("Positive number: the minimum granularity of dataflow")};
+  Option<unsigned> optLevel{
+      *this, "opt-level", llvm::cl::init(1),
+      llvm::cl::desc("Optimization level from 0 to 7. Default is 1.")};
+
+  Option<unsigned> dataflowGran{
+      *this, "dataflow-gran",
+      llvm::cl::desc("The granularity of dataflow. 0 indicates disabled.")};
 
   Option<unsigned> loopTileSize{
-      *this, "tile-size", llvm::cl::init(1),
-      llvm::cl::desc("Positive number: the size of tiling")};
+      *this, "loop-tile-size",
+      llvm::cl::desc("The size of tiling. 0 indicates disabled.")};
 
-  Option<bool> loopOrderOpt{
-      *this, "order-opt", llvm::cl::init(false),
-      llvm::cl::desc("Whether apply loop order optimization after tiling")};
-
-  Option<unsigned> vecSize{
-      *this, "vec-size", llvm::cl::init(1),
-      llvm::cl::desc("Positive number: the size of vectorization")};
+  Option<unsigned> vectorSize{
+      *this, "vector-size",
+      llvm::cl::desc("The size of vectorization. 0 indicates disabled.")};
 };
 
 /// QoR estimation pass.
@@ -47,7 +47,7 @@ std::unique_ptr<Pass> createMultipleLevelDSEPass();
 
 /// Dataflow optimization passes.
 std::unique_ptr<Pass> createLegalizeDataflowPass();
-std::unique_ptr<Pass> createLegalizeDataflowPass(const ScaleHLSOptions &opts);
+std::unique_ptr<Pass> createLegalizeDataflowPass(unsigned dataflowGran);
 std::unique_ptr<Pass> createSplitFunctionPass();
 
 /// Loop optimization passes.
@@ -56,8 +56,7 @@ std::unique_ptr<Pass> createAffineLoopPerfectionPass();
 std::unique_ptr<Pass> createRemoveVariableBoundPass();
 std::unique_ptr<Pass> createAffineLoopOrderOptPass();
 std::unique_ptr<Pass> createPartialAffineLoopTilePass();
-std::unique_ptr<Pass>
-createPartialAffineLoopTilePass(const ScaleHLSOptions &opts);
+std::unique_ptr<Pass> createPartialAffineLoopTilePass(unsigned loopTileSize);
 
 /// Directive optimization passes.
 std::unique_ptr<Pass> createLegalizeToHLSCppPass();

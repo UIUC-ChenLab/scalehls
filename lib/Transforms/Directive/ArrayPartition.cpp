@@ -420,11 +420,15 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
 namespace {
 struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
   void runOnOperation() override {
-    for (auto func : getOperation().getOps<FuncOp>()) {
+    auto module = getOperation();
+    for (auto func : module.getOps<FuncOp>())
       if (auto funcDirect = getFuncDirective(func))
-        if (funcDirect.getTopFunc())
+        if (funcDirect.getTopFunc()) {
           applyAutoArrayPartition(func);
-    }
+          return;
+        }
+    emitError(module.getLoc(), "top function is not found");
+    signalPassFailure();
   }
 };
 } // namespace

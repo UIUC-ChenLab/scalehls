@@ -24,26 +24,46 @@ void scalehls::registerScaleHLSPassPipeline() {
   PassPipelineRegistration<ScaleHLSOptions>(
       "scalehls-pipeline", "Compile to HLS C++",
       [](OpPassManager &pm, const ScaleHLSOptions &opts) {
+        unsigned dataflowGran = 0;
+        unsigned loopTileSize = 0;
+        unsigned vectorSize = 0;
+
+        if (opts.optLevel > 0 && opts.optLevel < 8) {
+          dataflowGran = 9 - opts.optLevel;
+          loopTileSize = 1 << opts.optLevel;
+        }
+
+        if (opts.dataflowGran.hasValue())
+          dataflowGran = opts.dataflowGran;
+        if (opts.loopTileSize.hasValue())
+          loopTileSize = opts.loopTileSize;
+        if (opts.vectorSize.hasValue())
+          vectorSize = opts.vectorSize;
+
         pm.addPass(scalehls::createLegalizeOnnxPass());
         pm.addPass(mlir::createAffineLoopNormalizePass());
         pm.addPass(mlir::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
         // Graph-level optimizations.
-        pm.addPass(scalehls::createLegalizeDataflowPass(opts));
-        pm.addPass(scalehls::createSplitFunctionPass());
-        pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
-        pm.addPass(mlir::createCanonicalizerPass());
+        if (dataflowGran) {
+          pm.addPass(scalehls::createLegalizeDataflowPass(dataflowGran));
+          pm.addPass(scalehls::createSplitFunctionPass());
+          pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
+          pm.addPass(mlir::createCanonicalizerPass());
+        }
 
         // Loop-level optimizations. Loop pipelining is included.
-        if (opts.vecSize != 1)
-          pm.addPass(mlir::createSuperVectorizePass({opts.vecSize}));
+        if (vectorSize)
+          pm.addPass(mlir::createSuperVectorizePass({vectorSize}));
         pm.addPass(scalehls::createLegalizeToHLSCppPass(opts));
         pm.addPass(scalehls::createMaterializeReductionPass());
-        pm.addPass(scalehls::createAffineLoopPerfectionPass());
-        pm.addPass(scalehls::createRemoveVariableBoundPass());
-        pm.addPass(scalehls::createPartialAffineLoopTilePass(opts));
-        pm.addPass(mlir::createCanonicalizerPass());
+        if (loopTileSize) {
+          pm.addPass(scalehls::createAffineLoopPerfectionPass());
+          pm.addPass(scalehls::createRemoveVariableBoundPass());
+          pm.addPass(scalehls::createPartialAffineLoopTilePass(loopTileSize));
+          pm.addPass(mlir::createCanonicalizerPass());
+        }
 
         // Simplifications.
         pm.addPass(scalehls::createSimplifyAffineIfPass());
