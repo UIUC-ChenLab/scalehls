@@ -105,9 +105,10 @@ static bool applyAffineStoreForward(FuncOp func) {
             opsToErase.insert(chainLoadOp.getOperation());
           }
         } else {
-          auto ifOp = cast<AffineIfOp>(storeSurroundingOp);
+          auto ifOp = dyn_cast<AffineIfOp>(storeSurroundingOp);
           // TODO: support AffineIfOp nests and AffineIfOp with else block.
-          if (ifOp.hasElse() || ifOp.getThenBlock() != domStoreOp->getBlock())
+          if (!ifOp || ifOp.hasElse() ||
+              ifOp.getThenBlock() != domStoreOp->getBlock())
             return true;
 
           // Create a new if operation before the loadOp.
