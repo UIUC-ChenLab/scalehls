@@ -117,10 +117,7 @@ namespace {
 struct PartialAffineLoopTile
     : public PartialAffineLoopTileBase<PartialAffineLoopTile> {
   PartialAffineLoopTile() = default;
-  PartialAffineLoopTile(const ScaleHLSOptions &opts) {
-    tileSize = opts.loopTileSize;
-    applyOrderOpt = opts.loopOrderOpt;
-  }
+  PartialAffineLoopTile(unsigned loopTileSize) { tileSize = loopTileSize; }
 
   void runOnOperation() override {
     AffineLoopBands targetBands;
@@ -171,6 +168,6 @@ std::unique_ptr<Pass> scalehls::createPartialAffineLoopTilePass() {
   return std::make_unique<PartialAffineLoopTile>();
 }
 std::unique_ptr<Pass>
-scalehls::createPartialAffineLoopTilePass(const ScaleHLSOptions &opts) {
-  return std::make_unique<PartialAffineLoopTile>(opts);
+scalehls::createPartialAffineLoopTilePass(unsigned loopTileSize) {
+  return std::make_unique<PartialAffineLoopTile>(loopTileSize);
 }
