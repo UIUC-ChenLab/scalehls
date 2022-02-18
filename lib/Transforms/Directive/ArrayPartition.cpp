@@ -125,7 +125,7 @@ static AffineMap getIdentityAffineMap(const SmallVectorImpl<Value> &operands,
   return AffineMap::get(dimCount, symbolCount, exprs, context);
 }
 
-static AffineValueMap getAccessMap(Operation *op) {
+static AffineValueMap getAffineValueMap(Operation *op) {
   // Get affine map from AffineLoad/Store.
   AffineMap map;
   SmallVector<Value, 4> operands;
@@ -152,6 +152,46 @@ static AffineValueMap getAccessMap(Operation *op) {
   map = simplifyAffineMap(map);
   canonicalizeMapAndOperands(&map, &operands);
   return AffineValueMap(map, operands);
+}
+
+static SmallVector<AffineMap, 4>
+getDimAccessMaps(Operation *op, AffineValueMap valueMap, int64_t dim) {
+  // Only keep the mapping result of the target dimension.
+  auto baseMap = AffineMap::get(valueMap.getNumDims(), valueMap.getNumSymbols(),
+                                valueMap.getResult(dim));
+
+  // Get the permuation map from the transfer read/write op.
+  AffineMap permuteMap;
+  ArrayRef<int64_t> vectorShape;
+  if (auto readOp = dyn_cast<vector::TransferReadOp>(op)) {
+    permuteMap = readOp.permutation_map();
+    vectorShape = readOp.getVectorType().getShape();
+  } else if (auto writeOp = dyn_cast<vector::TransferWriteOp>(op)) {
+    permuteMap = writeOp.permutation_map();
+    vectorShape = writeOp.getVectorType().getShape();
+  }
+
+  SmallVector<AffineMap, 4> maps({baseMap});
+  if (!permuteMap)
+    return maps;
+
+  // Traverse each dimension of the transfered vector.
+  for (unsigned i = 0, e = permuteMap.getNumResults(); i < e; ++i) {
+    auto dimExpr = permuteMap.getResult(i).dyn_cast<AffineDimExpr>();
+
+    // If the permutation result of the current dimension is equal to the target
+    // dimension, we push back the access map of each element of the vector into
+    // the "maps" to be returned.
+    if (dimExpr && dimExpr.getPosition() == dim) {
+      for (int64_t offset = 0, size = vectorShape[i]; offset < size; ++offset) {
+        auto map = AffineMap::get(baseMap.getNumDims(), baseMap.getNumSymbols(),
+                                  baseMap.getResult(0) + offset);
+        maps.push_back(map);
+      }
+      break;
+    }
+  }
+  return maps;
 }
 
 bool scalehls::applyAutoArrayPartition(FuncOp func) {
@@ -209,23 +249,23 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
         SmallVector<AffineValueMap, 4> indices;
 
         for (auto accessOp : loadStores) {
-          auto accessMap = getAccessMap(accessOp);
-          if (accessMap.getAffineMap().isEmpty())
+          auto valueMap = getAffineValueMap(accessOp);
+          if (valueMap.getAffineMap().isEmpty())
             continue;
 
-          // Only keep the index of the current dimension.
-          auto newMap =
-              AffineMap::get(accessMap.getNumDims(), accessMap.getNumSymbols(),
-                             accessMap.getResult(dim));
-          accessMap.reset(newMap, accessMap.getOperands());
-          (void)accessMap.canonicalize();
+          auto dimMaps = getDimAccessMaps(accessOp, valueMap, dim);
+          for (auto dimMap : dimMaps) {
+            // Construct the new valueMap.
+            AffineValueMap dimValueMap(dimMap, valueMap.getOperands());
+            (void)dimValueMap.canonicalize();
 
-          // Only add unique index.
-          if (find_if(indices, [&](auto index) {
-                return index.getAffineMap() == accessMap.getAffineMap() &&
-                       index.getOperands() == accessMap.getOperands();
-              }) == indices.end())
-            indices.push_back(accessMap);
+            // Only add unique index.
+            if (find_if(indices, [&](auto index) {
+                  return index.getAffineMap() == dimValueMap.getAffineMap() &&
+                         index.getOperands() == dimValueMap.getOperands();
+                }) == indices.end())
+              indices.push_back(dimValueMap);
+          }
         }
         auto accessNum = indices.size();
 
