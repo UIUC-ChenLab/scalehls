@@ -74,7 +74,7 @@ def scalehls_dse(source_file, inputtop):
     if not(os.path.exists(sdse_dir)):
         os.makedirs(sdse_dir)
 
-    targetspec = 'target-spec=target-spec.ini'
+    targetspec = 'target-spec=scalehls_dse_config.json'
 
     p1 = subprocess.Popen(['mlir-clang', source_file, '-function=' + inputtop, '-memref-fullrank', '-raise-scf-to-affine', '-S'],
                             stdout=subprocess.PIPE)                           

@@ -1,5 +1,8 @@
-target_source_file_location = ../../samples/AutoScaleHLS_tests/resnet18.cpp
+target_source_file_location = ../../samples/AutoScaleHLS_tests/resnet18_shls.cpp
 top_function = main_graph
+
+#target_source_file_location = test.c
+#top_function = dataflow7
 
 #target_source_file_location = ../../samples/AutoScaleHLS_tests/test_syr2k.c
 #top_function = test_syr2k

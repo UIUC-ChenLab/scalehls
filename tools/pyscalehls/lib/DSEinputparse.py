@@ -85,6 +85,7 @@ def process_source_file(inputfile, sdse=False):
     arraynum = 0
     brace_cout = 0
     for_brace_cout = 0
+    loopband_hotness = 0
     scope = None
     newfile = open ("generated_files/ML_in.cpp", 'w')
     with open(inputfile, 'r') as file:
@@ -112,14 +113,16 @@ def process_source_file(inputfile, sdse=False):
                     filebuf.clear() #clear buf when brackets are matched
                     scope = None
                     var_forlist.append("")
-                    var_arraylist_raw.append("")
+                    var_arraylist_sized.append("")
+                    var_forlist_scoped.append("")
                     brace_cout -= 1
                 else:
                     brace_cout -= 1
                 
                 #for band
                 if for_brace_cout == 1:
-                    var_forlist_scoped.append((var_forlist_scoped_start, loopnum - 1))
+                    var_forlist_scoped.append((scope, var_forlist_scoped_start, loopnum - 1, loopband_hotness))
+                    loopband_hotness = 0
                     for_brace_cout -= 1
                 elif for_brace_cout > 1:
                     for_brace_cout -= 1
@@ -174,17 +177,46 @@ def process_source_file(inputfile, sdse=False):
                 line_array_list = re.findall(r'\s([A-Za-z_]+[A-Za-z_\d]*)\s?\[', line)
                 if var_arraylist_sized and line_array_list:
                     for item_list_array in var_arraylist_sized :
-                        for item_line_array in line_array_list:
-                            if item_list_array[2] == item_line_array:
-                                #ignore if already in list    
-                                dep_state = re.findall(r'(\d)array', item_list_array[0])
-                                if(type(item_list_array[-1]) ==  str): # if first entry
-                                    item_list_array.append("dependencies")
-                                    item_list_array.append(var_forlist_scoped_start)
-                                elif var_forlist_scoped_start == item_list_array[-1]: #check for conflicts
-                                    None
-                                else:
-                                    item_list_array.append(var_forlist_scoped_start)
+                        if item_list_array == "":
+                            None
+                        else:
+                            for item_line_array in line_array_list:
+                                if item_list_array[2] == item_line_array:
+                                    #ignore if already in list    
+                                    dep_state = re.findall(r'(\d)array', item_list_array[0])
+                                    if(type(item_list_array[-1]) ==  str): # if first entry
+                                        item_list_array.append("dependencies")
+                                        item_list_array.append(var_forlist_scoped_start)
+                                    elif var_forlist_scoped_start == item_list_array[-1]: #check for conflicts
+                                        None
+                                    else:
+                                        item_list_array.append(var_forlist_scoped_start)
+
+            #hotloop counter
+            if for_brace_cout > 0:
+                num_mul = 0
+                num_add = 0
+                if not(re.findall('for', line)):
+                    #do not count address calculations as calculations
+                    remove_address_cal = re.findall(r'([^[\]]+)(?:$|\[)', line)
+                    clean_line = " ".join(remove_address_cal)
+
+                    nub_mul_raw = re.findall(r'\*', clean_line)
+                    nub_add_raw = re.findall(r'\+', clean_line)
+                    num_mul = len(nub_mul_raw)
+                    num_add = len(nub_add_raw)
+
+                last_index = -1
+                line_trip_count = 1
+                if(num_mul + num_add) > 0:
+                    while True:
+                        line_trip_count *= int(var_forlist[last_index][-1])
+                        loc_loopnum = re.findall(r'\d+', var_forlist[last_index][0])
+                        if int(loc_loopnum[0]) == var_forlist_scoped_start: #break if at start of loop band
+                            break
+                        last_index -= 1
+
+                loopband_hotness += line_trip_count * (4 * num_mul + num_add) #weight for mul and addition
 
     file.close()
     newfile.close()

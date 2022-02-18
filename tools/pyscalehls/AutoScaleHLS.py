@@ -4,6 +4,7 @@ import os
 import shutil
 import pandas as pd
 import argparse
+import copy
 
 #AutoHLS dependencies
 from lib import RandInit as RT
@@ -22,7 +23,30 @@ def print_variables(var_forlist, var_arraylist_sized):
     
     print("Arrays")
     for item in var_arraylist_sized :
-        print(item)      
+        print(item)    
+
+def sortbyhotness(inputarray):  #insertion sort
+    
+    sortedarray = copy.deepcopy(inputarray)
+
+    try:
+        while True:
+            sortedarray.remove("")
+    except ValueError:
+        pass
+    
+    for i in range(1, len(sortedarray)):
+ 
+        key = sortedarray[i]
+        print(key)
+
+        j = i-1
+        while j >= 0 and key[-1] > sortedarray[j][-1] :
+                sortedarray[j + 1] = sortedarray[j]
+                j -= 1
+        sortedarray[j + 1] = key
+
+    return sortedarray
 
 def main():
     #temp files store location
@@ -115,6 +139,12 @@ def main():
     
     print("\nScope")
     for i in var_forlist_scoped:
+        print(i)
+
+    sortedarray = sortbyhotness(var_forlist_scoped)
+
+    print("\nSorted Scope")
+    for i in sortedarray:
         print(i)
 
     #create paramfile
