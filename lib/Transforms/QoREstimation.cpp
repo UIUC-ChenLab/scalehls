@@ -535,6 +535,30 @@ bool ScaleHLSEstimator::visitOp(AffineIfOp op, int64_t begin) {
   return true;
 }
 
+bool ScaleHLSEstimator::visitOp(scf::IfOp op, int64_t begin) {
+  auto end = begin;
+  auto thenBlock = op.thenBlock();
+
+  // Estimate then block.
+  if (auto timing = estimateBlock(*thenBlock, begin))
+    end = max(end, timing.getEnd());
+  else
+    return false;
+
+  // Handle else block if required.
+  if (auto elseBlock = op.elseBlock()) {
+    if (auto timing = estimateBlock(*elseBlock, begin))
+      end = max(end, timing.getEnd());
+    else
+      return false;
+  }
+
+  // In our assumption, scf::IfOp is completely transparent. Therefore, we
+  // set a dummy schedule begin here.
+  setTiming(op, begin, end, end - begin, 0);
+  return true;
+}
+
 bool ScaleHLSEstimator::visitOp(CallOp op, int64_t begin) {
   auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCalleeAttr());
   auto subFunc = dyn_cast<FuncOp>(callee);
@@ -570,10 +594,11 @@ static Operation *getSameLevelDstOp(Operation *srcOp, Operation *dstOp) {
         nests.push_back(op);
         auto currentOp = op;
         while (true) {
-          if (auto parentOp = currentOp->getParentOfType<AffineForOp>()) {
+          auto parentOp = currentOp->getParentOp();
+          if (isa<AffineForOp>(parentOp)) {
             nests.push_back(parentOp);
             currentOp = parentOp;
-          } else if (auto parentOp = currentOp->getParentOfType<AffineIfOp>())
+          } else if (isa<AffineIfOp, scf::IfOp>(parentOp))
             currentOp = parentOp;
           else
             break;
@@ -599,7 +624,7 @@ static Operation *getSameLevelDstOp(Operation *srcOp, Operation *dstOp) {
 /// Estimate the latency of a block with ALAP scheduling strategy, return the
 /// estimated timing attribute.
 TimingAttr ScaleHLSEstimator::estimateBlock(Block &block, int64_t begin) {
-  if (!isa<AffineIfOp>(block.getParentOp()))
+  if (!isa<AffineIfOp, scf::IfOp>(block.getParentOp()))
     totalNumOperatorMap.clear();
 
   auto blockBegin = begin;
@@ -726,12 +751,11 @@ TimingAttr ScaleHLSEstimator::estimateBlock(Block &block, int64_t begin) {
 static Operation *getSurroundingOp(Operation *op) {
   auto currentOp = op;
   while (true) {
-    if (auto parentIfOp = currentOp->getParentOfType<AffineIfOp>())
-      currentOp = parentIfOp;
-    else if (auto parentForOp = currentOp->getParentOfType<AffineForOp>())
-      return parentForOp;
-    else if (auto parentFuncOp = currentOp->getParentOfType<FuncOp>())
-      return parentFuncOp;
+    auto parentOp = currentOp->getParentOp();
+    if (isa<AffineIfOp, scf::IfOp>(parentOp))
+      currentOp = parentOp;
+    else if (isa<AffineForOp, FuncOp>(parentOp))
+      return parentOp;
     else
       return nullptr;
   }

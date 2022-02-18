@@ -9,6 +9,7 @@
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/Vector/VectorOps.h"
 
 using namespace mlir;
@@ -103,7 +104,8 @@ scalehls::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
         nests.push_back(op);
         auto currentOp = op;
         while (true) {
-          if (auto parentOp = currentOp->getParentOfType<AffineIfOp>()) {
+          auto parentOp = currentOp->getParentOp();
+          if (isa<AffineIfOp, scf::IfOp>(parentOp)) {
             nests.push_back(parentOp);
             currentOp = parentOp;
           } else
