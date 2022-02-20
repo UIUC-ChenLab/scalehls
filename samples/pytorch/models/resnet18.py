@@ -1,9 +1,5 @@
 '''ResNet18 in PyTorch.
-
 Modified based on (https://github.com/kuangliu/pytorch-cifar/blob/master/models/resnet.py)
-
-See README.md for instruction.
-
 '''
 
 import torch
@@ -72,7 +68,3 @@ class ResNet(nn.Module):
 
 def ResNet18():
     return ResNet(BasicBlock, [2, 2, 2, 2])
-
-
-input_random = torch.randn((1, 3, 32, 32))
-torch.onnx.export(ResNet18(), input_random, 'resnet18.onnx', opset_version=7)

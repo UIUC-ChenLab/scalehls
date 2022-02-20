@@ -1,16 +1,10 @@
 '''LeNet in PyTorch.
-
 Modified based on (https://github.com/kuangliu/pytorch-cifar/blob/master/models/lenet.py)
-
-See README.md for instruction.
-
 '''
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-input_size = 32
 
 
 class LeNet(nn.Module):
@@ -34,7 +28,3 @@ class LeNet(nn.Module):
         out = F.relu(self.fc2(out))
         out = self.fc3(out)
         return out
-
-
-input_random = torch.randn((1, 3, 32, 32))
-torch.onnx.export(LeNet(), input_random, 'lenet.onnx', opset_version=7)

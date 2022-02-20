@@ -3,8 +3,8 @@ If you have installed [Torch-MLIR](https://github.com/llvm/torch-mlir), you shou
 ```sh
 $ cd resnet18
 
-$ # Parse PyTorch model to Linalg dialect.
-$ python3 torchscript_resnet18_e2e.py | torch-mlir-opt \
+$ # Parse PyTorch model to Linalg dialect (with mlir_venv activated).
+$ python3 export_resnet18_mlir.py | torch-mlir-opt \
     -torchscript-module-to-torch-backend-pipeline="optimize=true" \
     -torch-backend-to-linalg-on-tensors-backend-pipeline="optimize=true" \
     -canonicalize > resnet18.mlir

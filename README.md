@@ -59,8 +59,8 @@ $ pyscalehls.py samples/polybench/syrk/test_syrk.c -f test_syrk
 ```
 
 ## Compiling PyTorch model
-- [Using Torch-MLIR front-end](/samples/torch-mlir)
-- [Using ONNX-MLIR front-end](/samples/onnx-mlir)
+- [Using Torch-MLIR front-end](/samples/pytorch/torch-mlir)
+- [Using ONNX-MLIR front-end](/samples/pytorch/onnx-mlir)
 
 ## Repository Layout
 The project follows the conventions of typical MLIR-based projects:
