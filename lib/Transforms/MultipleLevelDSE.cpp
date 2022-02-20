@@ -794,8 +794,8 @@ bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, bool directiveOnly,
         targetIIs.push_back(targetII);
       }
 
-      // if (!applyOptStrategy(func, tileLists, targetIIs))
-      //   return false;
+      if (!applyOptStrategy(func, tileLists, targetIIs))
+        return false;
       break;
     }
   }
