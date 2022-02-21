@@ -10,7 +10,7 @@ $ # Parse ONNX model to MLIR.
 $ onnx-mlir -EmitMLIRIR resnet18.onnx
 
 $ # Legalize the output of ONNX-MLIR, optimize and emit C++ code.
-$ scalehls-opt resnet18.onnx.mlir -allow-unregistered-dialect
-    -scalehls-pipeline="top-func=main_graph opt-level=2" \
+$ scalehls-opt resnet18.onnx.mlir -allow-unregistered-dialect \
+    -scalehls-pipeline="top-func=main_graph opt-level=2 frontend=onnx" \
     | scalehls-translate -emit-hlscpp > resnet18.cpp
 ```
