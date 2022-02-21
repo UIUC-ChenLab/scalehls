@@ -46,7 +46,8 @@ using AffineLoopBands = std::vector<AffineLoopBand>;
 using MemAccessesMap = DenseMap<Value, SmallVector<Operation *, 16>>;
 
 /// Collect all load and store operations in the block and return them in "map".
-void getMemAccessesMap(Block &block, MemAccessesMap &map);
+void getMemAccessesMap(Block &block, MemAccessesMap &map,
+                       bool includeVectorTransfer = false);
 
 /// Check if the lhsOp and rhsOp are in the same block. If so, return their
 /// ancestors that are located at the same block. Note that in this check,

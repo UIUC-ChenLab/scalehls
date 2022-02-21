@@ -9,6 +9,8 @@
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/SCF/SCF.h"
+#include "mlir/Dialect/Vector/VectorOps.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -61,12 +63,24 @@ SmallVector<int64_t, 8> scalehls::getIntArrayAttrValue(Operation *op,
 //===----------------------------------------------------------------------===//
 
 /// Collect all load and store operations in the block and return them in "map".
-void scalehls::getMemAccessesMap(Block &block, MemAccessesMap &map) {
+void scalehls::getMemAccessesMap(Block &block, MemAccessesMap &map,
+                                 bool includeVectorTransfer) {
   for (auto &op : block) {
-    if (isa<AffineReadOpInterface, AffineWriteOpInterface>(op))
-      map[MemRefAccess(&op).memref].push_back(&op);
+    if (auto load = dyn_cast<AffineReadOpInterface>(op))
+      map[load.getMemRef()].push_back(&op);
 
-    else if (op.getNumRegions()) {
+    else if (auto store = dyn_cast<AffineWriteOpInterface>(op))
+      map[store.getMemRef()].push_back(&op);
+
+    else if (auto read = dyn_cast<vector::TransferReadOp>(op)) {
+      if (includeVectorTransfer)
+        map[read.source()].push_back(&op);
+
+    } else if (auto write = dyn_cast<vector::TransferWriteOp>(op)) {
+      if (includeVectorTransfer)
+        map[write.source()].push_back(&op);
+
+    } else if (op.getNumRegions()) {
       // Recursively collect memory access operations in each block.
       for (auto &region : op.getRegions())
         for (auto &block : region)
@@ -90,7 +104,8 @@ scalehls::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
         nests.push_back(op);
         auto currentOp = op;
         while (true) {
-          if (auto parentOp = currentOp->getParentOfType<AffineIfOp>()) {
+          auto parentOp = currentOp->getParentOp();
+          if (isa<AffineIfOp, scf::IfOp>(parentOp)) {
             nests.push_back(parentOp);
             currentOp = parentOp;
           } else

@@ -1,12 +1,20 @@
 # ScaleHLS Project
 
-ScaleHLS is a High-level Synthesis (HLS) framework on [MLIR](https://mlir.llvm.org). ScaleHLS can compile HLS C/C++ or ONNX model to optimized HLS C/C++ in order to generate high-efficiency RTL design using downstream tools, such as Vivado HLS.
+ScaleHLS is a High-level Synthesis (HLS) framework on [MLIR](https://mlir.llvm.org). ScaleHLS can compile HLS C/C++ or PyTorch model to optimized HLS C/C++ in order to generate high-efficiency RTL design using downstream tools, such as Vivado HLS.
 
 By using the MLIR framework that can be better tuned to particular algorithms at different representation levels, ScaleHLS is more scalable and customizable towards various applications coming with intrinsic structural or functional hierarchies. ScaleHLS represents HLS designs at multiple levels of abstraction and provides an HLS-dedicated analysis and transform library (in both C++ and Python) to solve the optimization problems at the suitable representation levels. Using this library, we've developed a design space exploration engine to generate optimized HLS designs automatically.
 
-For more details, please see our [HPCA'22 paper](https://arxiv.org/abs/2107.11673).
+For more details, please see our [HPCA'22 paper](https://arxiv.org/abs/2107.11673):
+```bibtex
+@article{ye2021scalehls,
+  title={ScaleHLS: A New Scalable High-Level Synthesis Framework on Multi-Level Intermediate Representation},
+  author={Ye, Hanchen and Hao, Cong and Cheng, Jianyi and Jeong, Hyunmin and Huang, Jack and Neuendorffer, Stephen and Chen, Deming},
+  journal={arXiv preprint arXiv:2107.11673},
+  year={2021}
+}
+```
 
-## Quick Start
+## Setting this up
 
 ### Prerequisites
 - cmake
@@ -15,14 +23,14 @@ For more details, please see our [HPCA'22 paper](https://arxiv.org/abs/2107.1167
 - pybind11
 - python3 with numpy
 
-### Build ScaleHLS
-First, make sure this repository has been cloned recursively.
+### Clone ScaleHLS
 ```sh
 $ git clone --recursive git@github.com:hanchenye/scalehls.git
 $ cd scalehls
 ```
 
-Then, run the following script to build ScaleHLS. Note that you can use `-j xx` to specify the number of parallel linking jobs.
+### Build ScaleHLS
+Run the following script to build ScaleHLS. Note that you can use `-j xx` to specify the number of parallel linking jobs.
 ```sh
 $ ./build-scalehls.sh
 ```
@@ -33,16 +41,16 @@ $ export PATH=$PATH:$PWD/build/bin:$PWD/polygeist/build/bin
 $ export PYTHONPATH=$PYTHONPATH:$PWD/build/tools/scalehls/python_packages/scalehls_core
 ```
 
-### Try ScaleHLS
+## Compiling HLS C/C++ 
 To launch the automatic kernel-level design space exploration, run:
 ```sh
 $ mlir-clang samples/polybench/gemm/test_gemm.c -function=test_gemm -memref-fullrank -raise-scf-to-affine -S \
-    | scalehls-opt -dse="top-func=test_gemm target-spec=samples/polybench/config.json" -debug-only=scalehls > /dev/null \
-    && scalehls-translate -emit-hlscpp test_gemm_pareto_0.mlir > test_gemm_pareto_0.cpp
+    | scalehls-opt -dse="top-func=test_gemm target-spec=samples/polybench/config.json" -debug-only=scalehls \
+    | scalehls-translate -emit-hlscpp > test_gemm_dse.cpp
 
 $ mlir-clang samples/rosetta/spam-filter/sgd_sw.c -function=SgdLR_sw -memref-fullrank -raise-scf-to-affine -S \
-    | scalehls-opt -materialize-reduction -dse="top-func=SgdLR_sw target-spec=samples/rosetta/config.json" -debug-only=scalehls > /dev/null \
-    && scalehls-translate -emit-hlscpp SgdLR_sw_pareto_0.mlir > Sgd_sw_pareto_0.cpp
+    | scalehls-opt -materialize-reduction -dse="top-func=SgdLR_sw target-spec=samples/rosetta/config.json" -debug-only=scalehls \
+    | scalehls-translate -emit-hlscpp > sgd_sw_dse.cpp
 ```
 
 Meanwhile, we provide a `pyscalehls` tool to showcase the `scalehls` Python library:
@@ -50,24 +58,14 @@ Meanwhile, we provide a `pyscalehls` tool to showcase the `scalehls` Python libr
 $ pyscalehls.py samples/polybench/syrk/test_syrk.c -f test_syrk
 ```
 
-## Integration with ONNX-MLIR
-If you have installed [ONNX-MLIR](https://github.com/onnx/onnx-mlir) or established ONNX-MLIR docker to `$ONNXMLIR_DIR`, you should be able to run the following integration test:
-```sh
-$ cd samples/onnx-mlir/resnet18
+## Compiling PyTorch model
+- [Using Torch-MLIR front-end](/samples/pytorch/torch-mlir)
+- [Using ONNX-MLIR front-end](/samples/pytorch/onnx-mlir)
 
-$ # Export PyTorch model to ONNX.
-$ python3 export_resnet18.py
-
-$ # Parse ONNX model to MLIR.
-$ $ONNXMLIR_DIR/build/bin/onnx-mlir -EmitMLIRIR resnet18.onnx
-
-$ # Legalize the output of ONNX-MLIR, optimize and emit C++ code.
-$ scalehls-opt resnet18.onnx.mlir -allow-unregistered-dialect -scalehls-pipeline="top-func=main_graph" \
-    | scalehls-translate -emit-hlscpp > resnet18.cpp
-```
-
-Please refer to the `samples/onnx-mlir` folder for more test cases.
-
-## References
-- [CIRCT](https://github.com/llvm/circt): Circuit IR Compilers and Tools
-- [CIRCT-HLS](https://github.com/circt-hls/circt-hls): A HLS flow around CIRCT project
+## Repository Layout
+The project follows the conventions of typical MLIR-based projects:
+- `include/scalehls` and `lib` for C++ MLIR compiler dialects/passes.
+- `polygeist` for the HLS C/C++ front-end.
+- `samples` for example test cases.
+- `test` for holding regression tests.
+- `tools` for command line tools, such as `scalehls-opt` and `pyscalehls`.

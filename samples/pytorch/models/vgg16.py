@@ -1,9 +1,5 @@
 '''VGG16 in PyTorch.
-
 Modified based on (https://github.com/kuangliu/pytorch-cifar/blob/master/models/vgg.py)
-
-See README.md for instruction.
-
 '''
 
 import torch
@@ -53,7 +49,3 @@ class VGG(nn.Module):
 
 def VGG16():
     return VGG('VGG16')
-
-
-input_random = torch.randn((1, 3, 32, 32))
-torch.onnx.export(VGG16(), input_random, 'vgg16.onnx', opset_version=7)

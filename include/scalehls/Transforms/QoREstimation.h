@@ -49,6 +49,7 @@ public:
 
   bool visitOp(AffineForOp op, int64_t begin);
   bool visitOp(AffineIfOp op, int64_t begin);
+  bool visitOp(scf::IfOp op, int64_t begin);
   bool visitOp(CallOp op, int64_t begin);
   bool visitOp(AffineLoadOp op, int64_t begin) {
     return estimateLoadStoreTiming(op, begin), true;

@@ -161,14 +161,14 @@ def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "FuncOp"> {
   let description = [{
     This partial-affine-loop-tile pass will try to tile all affine nested loops.
     The difference with the official affine-loop-tile pass is this pass will
-    only tile the first "tileLevel" outermost loop levels rather than all loops
-    levels.
+    tile the outermost loop until the overall tiling size is equal to or larfer
+    than "tileSize".
   }];
 
   let constructor = "mlir::scalehls::createPartialAffineLoopTilePass()";
 
   let options = [
-    Option<"tileSize", "tile-size", "unsigned", /*default=*/"2",
+    Option<"tileSize", "tile-size", "unsigned", /*default=*/"1",
            "Positive number: the size of tiling">,
     Option<"applyOrderOpt", "apply-order-opt", "bool", /*default=*/"true",
            "Whether apply loop order optimization after tiling">,

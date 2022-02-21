@@ -1,9 +1,5 @@
 '''MobileNet in PyTorch.
-
 Modified based on (https://github.com/kuangliu/pytorch-cifar/blob/master/models/mobilenet.py)
-
-See README.md for instruction.
-
 '''
 
 import torch
@@ -56,8 +52,3 @@ class MobileNet(nn.Module):
         out = torch.flatten(out, 1)  # out.view(out.size(0), -1)
         out = self.linear(out)
         return out
-
-
-input_random = torch.randn((1, 3, 32, 32))
-torch.onnx.export(MobileNet(), input_random,
-                  'mobilenet.onnx', opset_version=7)

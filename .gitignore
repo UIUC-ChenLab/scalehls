@@ -9,6 +9,7 @@ build
 **/hls_proj
 **/dump_csv
 **/.ipynb_checkpoints
+**/__pycache__
 
 *.onnx*
 *.tmp
