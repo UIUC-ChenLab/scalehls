@@ -50,6 +50,7 @@ std::unique_ptr<Pass> createQoREstimationPass();
 std::unique_ptr<Pass> createMultipleLevelDSEPass();
 
 /// Dataflow optimization passes.
+std::unique_ptr<Pass> createSimplifyGraphPass();
 std::unique_ptr<Pass> createLegalizeDataflowPass();
 std::unique_ptr<Pass> createLegalizeDataflowPass(unsigned dataflowGran);
 std::unique_ptr<Pass> createSplitFunctionPass();

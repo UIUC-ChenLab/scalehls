@@ -57,6 +57,7 @@ void scalehls::registerScaleHLSPassPipeline() {
 
         // Graph-level optimizations.
         if (dataflowGran) {
+          pm.addPass(scalehls::createSimplifyGraphPass());
           pm.addPass(scalehls::createLegalizeDataflowPass(dataflowGran));
           pm.addPass(scalehls::createSplitFunctionPass());
           pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
