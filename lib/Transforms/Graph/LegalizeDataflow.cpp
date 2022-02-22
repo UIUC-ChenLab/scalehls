@@ -7,6 +7,7 @@
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/Dominance.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -63,22 +64,22 @@ DataflowGraph::DataflowGraph(FuncOp func) {
   for (auto &op : func.front()) {
     // Handle Linalg dialect operations.
     if (isa<linalg::LinalgDialect>(op.getDialect())) {
-      if (auto copy = dyn_cast<linalg::CopyOp>(op)) {
-        resultsMap[&op].insert(copy.getTarget());
-        updatersMap[copy.getTarget()].insert(&op);
-
-      } else {
-        auto generic = dyn_cast<linalg::GenericOp>(op);
-        if (!generic || !generic.hasBufferSemantics()) {
-          op.emitOpError("found ungeneralized or unbufferized linalg ops");
-          return;
-        }
-        for (auto result : generic.getOutputOperands()) {
-          resultsMap[&op].insert(result->get());
-          updatersMap[result->get()].insert(&op);
-        }
+      auto generic = dyn_cast<linalg::GenericOp>(op);
+      if (!generic || !generic.hasBufferSemantics()) {
+        op.emitOpError("found ungeneralized or unbufferized linalg ops");
+        return;
+      }
+      for (auto result : generic.getOutputOperands()) {
+        resultsMap[&op].insert(result->get());
+        updatersMap[result->get()].insert(&op);
       }
       continue;
+    }
+
+    // Handle copy operations.
+    if (auto copy = dyn_cast<memref::CopyOp>(op)) {
+      resultsMap[&op].insert(copy.getTarget());
+      updatersMap[copy.getTarget()].insert(&op);
     }
 
     // Handle memory stores. Child regions are recursively traversed, such that
@@ -193,7 +194,7 @@ static bool applyLegalizeDataflow(FuncOp func, int64_t minGran,
                                 "or bufferized Linalg IR as input");
             auto newValue =
                 builder.create<memref::AllocOp>(op->getLoc(), valueType);
-            auto copyOp = builder.create<linalg::CopyOp>(
+            auto copyOp = builder.create<memref::CopyOp>(
                 op->getLoc(), values.back(), newValue);
 
             // Set CopyOp dataflow level.

@@ -22,9 +22,9 @@ struct AllocOpRewritePattern : public OpRewritePattern<memref::AllocOp> {
   LogicalResult matchAndRewrite(memref::AllocOp alloc,
                                 PatternRewriter &rewriter) const override {
     // Check whether the alloc is the target memory of a copy op.
-    linalg::CopyOp copy;
+    memref::CopyOp copy;
     for (auto user : alloc->getUsers())
-      if (auto copyUser = dyn_cast<linalg::CopyOp>(user))
+      if (auto copyUser = dyn_cast<memref::CopyOp>(user))
         if (alloc.memref() == copyUser.getTarget()) {
           copy = copyUser;
           break;

@@ -5,7 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Transforms/QoREstimation.h"
-#include "mlir/Analysis/Utils.h"
+#include "mlir/Dialect/Affine/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/Support/FileUtilities.h"
 #include "scalehls/Transforms/Passes.h"
@@ -395,7 +395,7 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
 
             // We will only consider intra-dependencies with positive distance.
             if (distance > 0) {
-              int64_t minII = ceil((float)delay / distance);
+              int64_t minII = std::ceil((float)delay / distance);
               II = max(II, minII);
             }
           }

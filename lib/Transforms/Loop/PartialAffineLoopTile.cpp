@@ -4,12 +4,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Analysis/LoopAnalysis.h"
-#include "mlir/Analysis/Utils.h"
+#include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
+#include "mlir/Dialect/Affine/Analysis/Utils.h"
+#include "mlir/Dialect/Affine/LoopUtils.h"
 #include "mlir/Dialect/Affine/Utils.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "mlir/Transforms/LoopUtils.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
@@ -98,7 +98,7 @@ Optional<unsigned> scalehls::applyLoopTiling(AffineLoopBand &band,
     unsigned simplifiedBandSize = 0;
     for (unsigned i = 0, e = tiledBand.size(); i < e; ++i) {
       auto loop = tiledBand[i];
-      normalizeAffineFor(loop);
+      (void)normalizeAffineFor(loop);
       if (loop && !loop.getLoopBody().empty()) {
         band.push_back(loop);
         if (i < bandSize)

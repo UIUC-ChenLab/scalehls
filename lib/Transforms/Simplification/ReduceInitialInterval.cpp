@@ -4,7 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Analysis/AffineAnalysis.h"
+#include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/Dominance.h"

@@ -237,7 +237,7 @@ public:
   template <typename OpType> void emitMaxMin(OpType op, const char *syntax);
 
   /// Special expression emitters.
-  void emitSelect(SelectOp op);
+  void emitSelect(arith::SelectOp op);
   void emitConstant(arith::ConstantOp op);
 
   /// Top-level MLIR module emitter.
@@ -494,7 +494,7 @@ public:
   }
 
   /// Special expressions.
-  bool visitOp(SelectOp op) { return emitter.emitSelect(op), true; }
+  bool visitOp(arith::SelectOp op) { return emitter.emitSelect(op), true; }
   bool visitOp(arith::ConstantOp op) { return emitter.emitConstant(op), true; }
   bool visitOp(arith::IndexCastOp op) { return emitter.emitAssign(op), true; }
   bool visitOp(arith::UIToFPOp op) { return emitter.emitAssign(op), true; }
@@ -1394,7 +1394,7 @@ void ModuleEmitter::emitMaxMin(OpType op, const char *syntax) {
 }
 
 /// Special expression emitters.
-void ModuleEmitter::emitSelect(SelectOp op) {
+void ModuleEmitter::emitSelect(arith::SelectOp op) {
   unsigned rank = emitNestedLoopHeader(op.getResult());
   unsigned conditionRank = rank;
   if (!op.getCondition().getType().isa<ShapedType>())

@@ -10,8 +10,8 @@
 
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/../../lib/Bindings/Python/IRModule.h"
-#include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/CAPI/IR.h"
+#include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
 #include "scalehls-c/EmitHLSCpp.h"
 #include "scalehls-c/HLSCpp.h"
 #include "scalehls/Transforms/Utils.h"

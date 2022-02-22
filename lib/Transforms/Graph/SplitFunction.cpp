@@ -8,6 +8,7 @@
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
@@ -120,7 +121,7 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
   // target memory is contained in the sub-function, the copy operation and
   // the target memory are redundant.
   SmallVector<Operation *, 4> opsToErase;
-  for (auto copyOp : subFunc.front().getOps<linalg::CopyOp>())
+  for (auto copyOp : subFunc.front().getOps<memref::CopyOp>())
     if (auto defOp = copyOp.getTarget().getDefiningOp()) {
       copyOp.getTarget().replaceAllUsesWith(copyOp.getSource());
       opsToErase.push_back(copyOp);
@@ -134,7 +135,7 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
   if (splitSubFunc) {
     SmallVector<Operation *, 4> loops;
     for (auto &op : subFunc.front().getOperations()) {
-      if (isa<AffineForOp, linalg::CopyOp>(op))
+      if (isa<AffineForOp, memref::CopyOp>(op))
         loops.push_back(&op);
     }
 
