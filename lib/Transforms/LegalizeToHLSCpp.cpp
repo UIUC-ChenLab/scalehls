@@ -57,9 +57,11 @@ struct MemrefStoreRewritePattern : public OpRewritePattern<memref::StoreOp> {
 bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
   auto builder = OpBuilder(func);
 
-  // We constain functions to only contain one block.
-  if (func.getBlocks().size() != 1)
+  // We constrain functions to only contain one block.
+  if (!llvm::hasSingleElement(func))
     func.emitError("has zero or more than one basic blocks.");
+
+  // TODO: Make sure there's no memref store/load or scf operations?
 
   // Set function pragma attributes.
   if (auto fd = getFuncDirective(func))

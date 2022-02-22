@@ -581,7 +581,7 @@ bool ScaleHLSEstimator::visitOp(CallOp op, int64_t begin) {
 // Block Scheduler and Estimator
 //===----------------------------------------------------------------------===//
 
-// Get the pointer of the scrOp's parent loop, which should locat at the same
+// Get the pointer of the scrOp's parent loop, which should locate at the same
 // level with dstOp's any parent loop.
 static Operation *getSameLevelDstOp(Operation *srcOp, Operation *dstOp) {
   // If srcOp and dstOp are already at the same level, return the srcOp.

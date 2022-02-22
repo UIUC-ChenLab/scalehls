@@ -7,6 +7,7 @@ $ # Parse PyTorch model to Linalg dialect (with mlir_venv activated).
 $ python3 export_resnet18_mlir.py | torch-mlir-opt \
     -torchscript-module-to-torch-backend-pipeline="optimize=true" \
     -torch-backend-to-linalg-on-tensors-backend-pipeline="optimize=true" \
+    -linalg-comprehensive-module-bufferize="allow-return-memref allow-unknown-ops create-deallocs=false" \
     -canonicalize > resnet18.mlir
 
 $ # Optimize the model and emit C++ code (not working, will be fixed soon).

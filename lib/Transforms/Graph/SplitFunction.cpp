@@ -35,7 +35,6 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
   for (auto op : ops)
     for (auto result : op->getResults()) {
       internalValues.insert(result);
-
       if (isLiveOut(result)) {
         outputTypes.push_back(result.getType());
         outputValues.push_back(result);
@@ -52,9 +51,13 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
   for (auto op : ops) {
     // Push back all operands and liveins as candidates.
     SmallVector<Value, 8> inputCandidates(op->getOperands());
-    if (auto loop = dyn_cast<AffineForOp>(op)) {
-      auto liveIns = liveness.getLiveIn(loop.getBody());
-      inputCandidates.append(liveIns.begin(), liveIns.end());
+    for (auto &region : op->getRegions()) {
+      auto entryBlock = &region.front();
+      auto args = entryBlock->getArguments();
+
+      for (auto liveIn : liveness.getLiveIn(entryBlock))
+        if (llvm::find(args, liveIn) == args.end())
+          inputCandidates.push_back(liveIn);
     }
 
     for (auto input : inputCandidates) {

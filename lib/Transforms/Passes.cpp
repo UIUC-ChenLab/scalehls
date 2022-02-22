@@ -43,9 +43,8 @@ void scalehls::registerScaleHLSPassPipeline() {
 
         // Adapt the model from torch-mlir or onnx-mlir front-end.
         if (opts.frontend == "torch") {
-          pm.addPass(mlir::createLinalgGeneralizationPass());
           pm.addPass(mlir::createLinalgBufferizePass());
-          pm.addPass(mlir::createFuncBufferizePass());
+          pm.addPass(mlir::createLinalgGeneralizationPass());
           pm.addPass(mlir::createCanonicalizerPass());
         } else if (opts.frontend == "onnx") {
           pm.addPass(scalehls::createLegalizeOnnxPass());
@@ -57,9 +56,9 @@ void scalehls::registerScaleHLSPassPipeline() {
 
         // Graph-level optimizations.
         if (dataflowGran) {
-          pm.addPass(scalehls::createSimplifyGraphPass());
           pm.addPass(scalehls::createLegalizeDataflowPass(dataflowGran));
           pm.addPass(scalehls::createSplitFunctionPass());
+          pm.addPass(scalehls::createSimplifyGraphPass());
           pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
           pm.addPass(mlir::createCanonicalizerPass());
         }
