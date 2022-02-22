@@ -19,24 +19,28 @@ namespace scalehls {
 
 struct ScaleHLSOptions : public PassPipelineOptions<ScaleHLSOptions> {
   Option<std::string> hlscppTopFunc{
-      *this, "top-func", llvm::cl::init("main"),
+      *this, "top-func", llvm::cl::init("forward"),
       llvm::cl::desc("Specify the top function of the design")};
+
+  Option<std::string> frontend{
+      *this, "frontend", llvm::cl::init("torch"),
+      llvm::cl::desc("Specify the front-end (torch/onnx)")};
 
   Option<unsigned> optLevel{
       *this, "opt-level", llvm::cl::init(1),
-      llvm::cl::desc("Optimization level from 0 to 7. Default is 1.")};
+      llvm::cl::desc("Optimization level from 0 to 7 (default level is 1)")};
 
   Option<unsigned> dataflowGran{
       *this, "dataflow-gran",
-      llvm::cl::desc("The granularity of dataflow. 0 indicates disabled.")};
+      llvm::cl::desc("The granularity of dataflow (set 0 to disable)")};
 
   Option<unsigned> loopTileSize{
       *this, "loop-tile-size",
-      llvm::cl::desc("The size of tiling. 0 indicates disabled.")};
+      llvm::cl::desc("The size of tiling (set 0 to disable)")};
 
   Option<unsigned> vectorSize{
       *this, "vector-size",
-      llvm::cl::desc("The size of vectorization. 0 indicates disabled.")};
+      llvm::cl::desc("The size of vectorization (set 0 to disable)")};
 };
 
 /// QoR estimation pass.
@@ -46,6 +50,7 @@ std::unique_ptr<Pass> createQoREstimationPass();
 std::unique_ptr<Pass> createMultipleLevelDSEPass();
 
 /// Dataflow optimization passes.
+std::unique_ptr<Pass> createSimplifyGraphPass();
 std::unique_ptr<Pass> createLegalizeDataflowPass();
 std::unique_ptr<Pass> createLegalizeDataflowPass(unsigned dataflowGran);
 std::unique_ptr<Pass> createSplitFunctionPass();

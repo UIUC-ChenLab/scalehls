@@ -8,6 +8,7 @@
 #include "mlir/Conversion/Passes.h"
 #include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/Dialect/Linalg/Passes.h"
+#include "mlir/Dialect/StandardOps/Transforms/Passes.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
 #include "scalehls/Conversion/Passes.h"
@@ -40,15 +41,24 @@ void scalehls::registerScaleHLSPassPipeline() {
         if (opts.vectorSize.hasValue())
           vectorSize = opts.vectorSize;
 
-        pm.addPass(scalehls::createLegalizeOnnxPass());
-        pm.addPass(mlir::createAffineLoopNormalizePass());
-        pm.addPass(mlir::createSimplifyAffineStructuresPass());
-        pm.addPass(mlir::createCanonicalizerPass());
+        // Adapt the model from torch-mlir or onnx-mlir front-end.
+        if (opts.frontend == "torch") {
+          pm.addPass(mlir::createLinalgBufferizePass());
+          pm.addPass(mlir::createLinalgGeneralizationPass());
+          pm.addPass(mlir::createCanonicalizerPass());
+        } else if (opts.frontend == "onnx") {
+          pm.addPass(scalehls::createLegalizeOnnxPass());
+          pm.addPass(mlir::createAffineLoopNormalizePass());
+          pm.addPass(mlir::createSimplifyAffineStructuresPass());
+          pm.addPass(mlir::createCanonicalizerPass());
+        } else
+          llvm_unreachable("please use supported front-end: torch or onnx.");
 
         // Graph-level optimizations.
         if (dataflowGran) {
           pm.addPass(scalehls::createLegalizeDataflowPass(dataflowGran));
           pm.addPass(scalehls::createSplitFunctionPass());
+          pm.addPass(scalehls::createSimplifyGraphPass());
           pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
           pm.addPass(mlir::createCanonicalizerPass());
         }

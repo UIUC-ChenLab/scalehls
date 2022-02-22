@@ -8,6 +8,7 @@
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
@@ -35,7 +36,6 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
   for (auto op : ops)
     for (auto result : op->getResults()) {
       internalValues.insert(result);
-
       if (isLiveOut(result)) {
         outputTypes.push_back(result.getType());
         outputValues.push_back(result);
@@ -52,9 +52,13 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
   for (auto op : ops) {
     // Push back all operands and liveins as candidates.
     SmallVector<Value, 8> inputCandidates(op->getOperands());
-    if (auto loop = dyn_cast<AffineForOp>(op)) {
-      auto liveIns = liveness.getLiveIn(loop.getBody());
-      inputCandidates.append(liveIns.begin(), liveIns.end());
+    for (auto &region : op->getRegions()) {
+      auto entryBlock = &region.front();
+      auto args = entryBlock->getArguments();
+
+      for (auto liveIn : liveness.getLiveIn(entryBlock))
+        if (llvm::find(args, liveIn) == args.end())
+          inputCandidates.push_back(liveIn);
     }
 
     for (auto input : inputCandidates) {
@@ -117,7 +121,7 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
   // target memory is contained in the sub-function, the copy operation and
   // the target memory are redundant.
   SmallVector<Operation *, 4> opsToErase;
-  for (auto copyOp : subFunc.front().getOps<linalg::CopyOp>())
+  for (auto copyOp : subFunc.front().getOps<memref::CopyOp>())
     if (auto defOp = copyOp.getTarget().getDefiningOp()) {
       copyOp.getTarget().replaceAllUsesWith(copyOp.getSource());
       opsToErase.push_back(copyOp);
@@ -131,7 +135,7 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
   if (splitSubFunc) {
     SmallVector<Operation *, 4> loops;
     for (auto &op : subFunc.front().getOperations()) {
-      if (isa<AffineForOp, linalg::CopyOp>(op))
+      if (isa<AffineForOp, memref::CopyOp>(op))
         loops.push_back(&op);
     }
 

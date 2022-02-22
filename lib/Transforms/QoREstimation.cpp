@@ -5,7 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Transforms/QoREstimation.h"
-#include "mlir/Analysis/Utils.h"
+#include "mlir/Dialect/Affine/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/Support/FileUtilities.h"
 #include "scalehls/Transforms/Passes.h"
@@ -395,7 +395,7 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
 
             // We will only consider intra-dependencies with positive distance.
             if (distance > 0) {
-              int64_t minII = ceil((float)delay / distance);
+              int64_t minII = std::ceil((float)delay / distance);
               II = max(II, minII);
             }
           }
@@ -581,7 +581,7 @@ bool ScaleHLSEstimator::visitOp(CallOp op, int64_t begin) {
 // Block Scheduler and Estimator
 //===----------------------------------------------------------------------===//
 
-// Get the pointer of the scrOp's parent loop, which should locat at the same
+// Get the pointer of the scrOp's parent loop, which should locate at the same
 // level with dstOp's any parent loop.
 static Operation *getSameLevelDstOp(Operation *srcOp, Operation *dstOp) {
   // If srcOp and dstOp are already at the same level, return the srcOp.

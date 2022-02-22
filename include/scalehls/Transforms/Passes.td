@@ -73,6 +73,12 @@ def MultipleLevelDSE : Pass<"dse", "ModuleOp"> {
 // Dataflow Optimization Passes
 //===----------------------------------------------------------------------===//
 
+def SimplifyGraph : Pass<"simplify-graph", "ModuleOp"> {
+  let summary = "Remove redundant linalg copy and cast operations";
+
+  let constructor = "mlir::scalehls::createSimplifyGraphPass()";
+}
+
 def LegalizeDataflow : Pass<"legalize-dataflow", "FuncOp"> {
   let summary = "Legalize the dataflow scheduling";
   let description = [{

@@ -184,7 +184,8 @@ void LegalizeOnnx::runOnOperation() {
     }
 
     // Construct new function type.
-    SmallVector<Type, 16> inputTypes(func.getArgumentTypes());
+    SmallVector<Type, 16> inputTypes(func.getArgumentTypes().begin(),
+                                     func.getArgumentTypes().end());
     inputTypes.append(weightTypes.begin(), weightTypes.end());
     auto newType =
         builder.getFunctionType(inputTypes, func.getType().getResults());
@@ -196,7 +197,9 @@ void LegalizeOnnx::runOnOperation() {
     func.setType(newType);
 
     // Add new arguments to the entry block.
-    func.front().addArguments(weightTypes);
+    auto locs =
+        SmallVector<Location, 16>(weightTypes.size(), builder.getUnknownLoc());
+    func.front().addArguments(weightTypes, locs);
 
     // Replace all uses of the kernel global operation with corresponding entry
     // block argument.

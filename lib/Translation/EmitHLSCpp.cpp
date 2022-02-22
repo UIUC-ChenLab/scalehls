@@ -219,9 +219,10 @@ public:
   void emitLoad(memref::LoadOp op);
   void emitStore(memref::StoreOp op);
   void emitTensorStore(memref::TensorStoreOp op);
+  void emitReinterpretCast(memref::ReinterpretCastOp op);
+  void emitCollapseShape(memref::CollapseShapeOp op);
   void emitTensorToMemref(bufferization::ToMemrefOp op);
   void emitMemrefToTensor(bufferization::ToTensorOp op);
-  void emitReinterpretCast(memref::ReinterpretCastOp op);
 
   /// HLSCpp primitive operation emitters.
   void emitMulPrim(MulPrimOp op);
@@ -236,7 +237,7 @@ public:
   template <typename OpType> void emitMaxMin(OpType op, const char *syntax);
 
   /// Special expression emitters.
-  void emitSelect(SelectOp op);
+  void emitSelect(arith::SelectOp op);
   void emitConstant(arith::ConstantOp op);
 
   /// Top-level MLIR module emitter.
@@ -403,16 +404,18 @@ public:
   bool visitOp(memref::TensorStoreOp op) {
     return emitter.emitTensorStore(op), true;
   }
+  bool visitOp(memref::ReinterpretCastOp op) {
+    return emitter.emitReinterpretCast(op), true;
+  }
+  bool visitOp(memref::CollapseShapeOp op) {
+    return emitter.emitCollapseShape(op), true;
+  }
   bool visitOp(bufferization::ToMemrefOp op) {
     return emitter.emitTensorToMemref(op), true;
   }
   bool visitOp(bufferization::ToTensorOp op) {
     return emitter.emitMemrefToTensor(op), true;
   }
-  bool visitOp(memref::ReinterpretCastOp op) {
-    return emitter.emitReinterpretCast(op), true;
-  }
-
   /// HLSCpp primitive operations.
   bool visitOp(MulPrimOp op) { return emitter.emitMulPrim(op), true; }
   bool visitOp(CastPrimOp op) { return emitter.emitAssign(op), true; }
@@ -491,7 +494,7 @@ public:
   }
 
   /// Special expressions.
-  bool visitOp(SelectOp op) { return emitter.emitSelect(op), true; }
+  bool visitOp(arith::SelectOp op) { return emitter.emitSelect(op), true; }
   bool visitOp(arith::ConstantOp op) { return emitter.emitConstant(op), true; }
   bool visitOp(arith::IndexCastOp op) { return emitter.emitAssign(op), true; }
   bool visitOp(arith::UIToFPOp op) { return emitter.emitAssign(op), true; }
@@ -1178,6 +1181,56 @@ void ModuleEmitter::emitTensorStore(memref::TensorStoreOp op) {
   emitNestedLoopFooter(rank);
 }
 
+void ModuleEmitter::emitReinterpretCast(memref::ReinterpretCastOp op) {
+  auto array = op.getResult();
+  assert(!isDeclared(array) && "has been declared before.");
+
+  auto arrayType = array.getType().cast<ShapedType>();
+  indent();
+  os << getTypeName(array) << " (*";
+
+  // Add the new value to nameTable and emit its name.
+  os << addName(array, false);
+  os << ")";
+
+  for (auto &shape : llvm::drop_begin(arrayType.getShape(), 1))
+    os << "[" << shape << "]";
+
+  os << " = (" << getTypeName(array) << "(*)";
+  for (auto &shape : llvm::drop_begin(arrayType.getShape(), 1))
+    os << "[" << shape << "]";
+  os << ") ";
+
+  emitValue(op.getOperand(0));
+  os << ";";
+  emitInfoAndNewLine(op);
+}
+
+void ModuleEmitter::emitCollapseShape(memref::CollapseShapeOp op) {
+  auto array = op.getResult();
+  assert(!isDeclared(array) && "has been declared before.");
+
+  auto arrayType = array.getType().cast<ShapedType>();
+  indent();
+  os << getTypeName(array) << " (*";
+
+  // Add the new value to nameTable and emit its name.
+  os << addName(array, false);
+  os << ")";
+
+  for (auto &shape : llvm::drop_begin(arrayType.getShape(), 1))
+    os << "[" << shape << "]";
+
+  os << " = (" << getTypeName(array) << "(*)";
+  for (auto &shape : llvm::drop_begin(arrayType.getShape(), 1))
+    os << "[" << shape << "]";
+  os << ") ";
+
+  emitValue(op.getOperand());
+  os << ";";
+  emitInfoAndNewLine(op);
+}
+
 void ModuleEmitter::emitTensorToMemref(bufferization::ToMemrefOp op) {
   // A declared result indicates that the memref is output of the function, and
   // has been declared in the function signature.
@@ -1205,31 +1258,6 @@ void ModuleEmitter::emitMemrefToTensor(bufferization::ToTensorOp op) {
   os << ";";
   emitInfoAndNewLine(op);
   emitNestedLoopFooter(rank);
-}
-
-void ModuleEmitter::emitReinterpretCast(memref::ReinterpretCastOp op) {
-  auto array = op.getResult();
-  assert(!isDeclared(array) && "has been declared before.");
-
-  auto arrayType = array.getType().cast<ShapedType>();
-  indent();
-  os << getTypeName(array) << " (*";
-
-  // Add the new value to nameTable and emit its name.
-  os << addName(array, false);
-  os << ")";
-
-  for (auto &shape : llvm::drop_begin(arrayType.getShape(), 1))
-    os << "[" << shape << "]";
-
-  os << " = (" << getTypeName(array) << "(*)";
-  for (auto &shape : llvm::drop_begin(arrayType.getShape(), 1))
-    os << "[" << shape << "]";
-  os << ") ";
-
-  emitValue(op.getOperand(0));
-  os << ";";
-  emitInfoAndNewLine(op);
 }
 
 /// HLSCpp primitive operation emitters.
@@ -1366,7 +1394,7 @@ void ModuleEmitter::emitMaxMin(OpType op, const char *syntax) {
 }
 
 /// Special expression emitters.
-void ModuleEmitter::emitSelect(SelectOp op) {
+void ModuleEmitter::emitSelect(arith::SelectOp op) {
   unsigned rank = emitNestedLoopHeader(op.getResult());
   unsigned conditionRank = rank;
   if (!op.getCondition().getType().isa<ShapedType>())

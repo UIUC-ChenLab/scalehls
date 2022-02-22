@@ -4,10 +4,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Analysis/AffineAnalysis.h"
+#include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/Vector/VectorOps.h"
+#include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -57,9 +57,11 @@ struct MemrefStoreRewritePattern : public OpRewritePattern<memref::StoreOp> {
 bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
   auto builder = OpBuilder(func);
 
-  // We constain functions to only contain one block.
-  if (func.getBlocks().size() != 1)
+  // We constrain functions to only contain one block.
+  if (!llvm::hasSingleElement(func))
     func.emitError("has zero or more than one basic blocks.");
+
+  // TODO: Make sure there's no memref store/load or scf operations?
 
   // Set function pragma attributes.
   if (auto fd = getFuncDirective(func))
@@ -95,6 +97,15 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
           MemRefType::get(type.getShape(), type.getElementType(),
                           type.getLayout().getAffineMap(), (unsigned)kind);
       memref.setType(newType);
+
+      // FIXME: This is a very very bad practice...
+      // TODO: How to represent different memory resource?
+      if (auto getGlobal = memref.getDefiningOp<memref::GetGlobalOp>()) {
+        auto module = getGlobal->getParentOfType<ModuleOp>();
+        auto global =
+            module.lookupSymbol<memref::GlobalOp>(getGlobal.nameAttr());
+        global->setAttr(global.typeAttrName(), TypeAttr::get(newType));
+      }
     }
   }
 
