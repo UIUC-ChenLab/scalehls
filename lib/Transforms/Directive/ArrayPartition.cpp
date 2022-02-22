@@ -6,6 +6,7 @@
 
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Vector/VectorOps.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -90,6 +91,14 @@ bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
 
   // Set new type.
   array.setType(newType);
+
+  // FIXME: This is a very very bad practice...
+  // TODO: How to represent different memory resource?
+  if (auto getGlobal = array.getDefiningOp<memref::GetGlobalOp>()) {
+    auto module = getGlobal->getParentOfType<ModuleOp>();
+    auto global = module.lookupSymbol<memref::GlobalOp>(getGlobal.nameAttr());
+    global->setAttr(global.typeAttrName(), TypeAttr::get(newType));
+  }
 
   if (updateFuncSignature)
     if (auto func = dyn_cast<FuncOp>(array.getParentBlock()->getParentOp())) {

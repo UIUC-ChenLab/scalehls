@@ -97,6 +97,15 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
           MemRefType::get(type.getShape(), type.getElementType(),
                           type.getLayout().getAffineMap(), (unsigned)kind);
       memref.setType(newType);
+
+      // FIXME: This is a very very bad practice...
+      // TODO: How to represent different memory resource?
+      if (auto getGlobal = memref.getDefiningOp<memref::GetGlobalOp>()) {
+        auto module = getGlobal->getParentOfType<ModuleOp>();
+        auto global =
+            module.lookupSymbol<memref::GlobalOp>(getGlobal.nameAttr());
+        global->setAttr(global.typeAttrName(), TypeAttr::get(newType));
+      }
     }
   }
 

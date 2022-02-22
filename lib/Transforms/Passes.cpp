@@ -52,7 +52,7 @@ void scalehls::registerScaleHLSPassPipeline() {
           pm.addPass(mlir::createSimplifyAffineStructuresPass());
           pm.addPass(mlir::createCanonicalizerPass());
         } else
-          llvm_unreachable("please use support front-end: torch or onnx.");
+          llvm_unreachable("please use supported front-end: torch or onnx.");
 
         // Graph-level optimizations.
         if (dataflowGran) {
