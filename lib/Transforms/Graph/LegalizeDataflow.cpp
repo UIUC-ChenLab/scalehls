@@ -8,6 +8,7 @@
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/IR/Dominance.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -18,30 +19,19 @@ using namespace scalehls;
 // A dataflow use includes the intermediate value and the user operation, which
 // is similar to the concept of OpOperand in the SSA graph.
 using DataflowUse = std::pair<Value, Operation *>;
-using DataflowUseRange = llvm::iterator_range<const DataflowUse *>;
+using DataflowUses = SmallVector<DataflowUse, 4>;
 
 // A mapping from an operation to all its dataflow uses.
-using DataflowUsesMap =
-    llvm::SmallDenseMap<Operation *, SmallVector<DataflowUse, 4>, 64>;
+using DataflowUsesMap = llvm::SmallDenseMap<Operation *, DataflowUses, 64>;
 
 namespace {
 struct DataflowGraph {
   DataflowGraph(FuncOp func);
 
-  const DataflowUseRange getUses(Operation *node) const {
-    const auto &uses = usesMap.lookup(node);
-    return llvm::make_range(uses.begin(), uses.end());
-  }
-
-  llvm::SmallDenseSet<Operation *, 4> getBundledNodes(Operation *node) const {
-    llvm::SmallDenseSet<Operation *, 4> bundledNodes;
-    for (auto use : getUses(node))
-      for (auto updater : updatersMap.lookup(use.first))
-        bundledNodes.insert(updater);
-    return bundledNodes;
-  }
-
   bool hasNode(Operation *node) const { return nodes.count(node); }
+  DataflowUses getNodeUses(Operation *node) const {
+    return usesMap.lookup(node);
+  }
 
 private:
   // Hold all nodes in the dataflow graph.
@@ -49,11 +39,6 @@ private:
 
   // Hold the uses mapping.
   DataflowUsesMap usesMap;
-
-  // Hold the mapping from an intermediate value to all its updaters. Because in
-  // the context of coarse-grained dataflow, intermediate value such as memory
-  // can be written by more than one operations.
-  llvm::SmallDenseMap<Value, llvm::SmallDenseSet<Operation *, 2>> updatersMap;
 };
 } // namespace
 
@@ -69,18 +54,14 @@ DataflowGraph::DataflowGraph(FuncOp func) {
         op.emitOpError("found ungeneralized or unbufferized linalg ops");
         return;
       }
-      for (auto result : generic.getOutputOperands()) {
+      for (auto result : generic.getOutputOperands())
         resultsMap[&op].insert(result->get());
-        updatersMap[result->get()].insert(&op);
-      }
       continue;
     }
 
     // Handle copy operations.
-    if (auto copy = dyn_cast<memref::CopyOp>(op)) {
+    if (auto copy = dyn_cast<memref::CopyOp>(op))
       resultsMap[&op].insert(copy.getTarget());
-      updatersMap[copy.getTarget()].insert(&op);
-    }
 
     // Handle memory stores. Child regions are recursively traversed, such that
     // for and if operations are considered as a node of the dataflow.
@@ -88,20 +69,14 @@ DataflowGraph::DataflowGraph(FuncOp func) {
       // TODO: Support transfer write?
       if (auto affineStore = dyn_cast<mlir::AffineWriteOpInterface>(child)) {
         resultsMap[&op].insert(affineStore.getMemRef());
-        updatersMap[affineStore.getMemRef()].insert(&op);
 
-      } else if (auto store = dyn_cast<memref::StoreOp>(child)) {
+      } else if (auto store = dyn_cast<memref::StoreOp>(child))
         resultsMap[&op].insert(store.getMemRef());
-        updatersMap[store.getMemRef()].insert(&op);
-      }
     });
 
     // Handle normal SSA results.
-    for (auto result : op.getResults()) {
+    for (auto result : op.getResults())
       resultsMap[&op].insert(result);
-      if (result.getType().isa<MemRefType>())
-        updatersMap[result].insert(&op);
-    }
   }
 
   // Get the dominace tree for later use.
@@ -112,7 +87,8 @@ DataflowGraph::DataflowGraph(FuncOp func) {
     // TODO: Some operations are dataflow source/sink node, which will not be
     // scheduled. Any other operations should appear here?
     if (isa<memref::GetGlobalOp, memref::AllocOp, memref::AllocaOp,
-            bufferization::ToMemrefOp, arith::ConstantOp, ReturnOp>(op))
+            bufferization::ToMemrefOp, tosa::ConstOp, arith::ConstantOp,
+            linalg::InitTensorOp, ReturnOp>(op))
       continue;
     nodes.insert(&op);
 
@@ -122,8 +98,7 @@ DataflowGraph::DataflowGraph(FuncOp func) {
         // or is also an updater of the result, continue.
         auto sameBlockUser = func.front().findAncestorOpInBlock(*user);
         if (!sameBlockUser || isa<ReturnOp>(sameBlockUser) ||
-            !DT.properlyDominates(&op, sameBlockUser) ||
-            updatersMap.lookup(result).count(sameBlockUser))
+            !DT.properlyDominates(&op, sameBlockUser))
           continue;
 
         // Only push back non-exist uses.
@@ -142,92 +117,82 @@ static bool applyLegalizeDataflow(FuncOp func, int64_t minGran,
   auto builder = OpBuilder(func);
   DataflowGraph graph(func);
 
+  llvm::SmallDenseMap<Operation *, int64_t, 32> map;
   llvm::SmallDenseMap<int64_t, int64_t, 16> dataflowToMerge;
 
   // Walk through all dataflow operations in a reversed order for establishing
   // a ALAP scheduling.
-  for (auto i = func.front().rbegin(); i != func.front().rend(); ++i) {
-    auto op = &*i;
+  for (auto it = func.front().rbegin(); it != func.front().rend(); ++it) {
+    auto op = &*it;
     if (!graph.hasNode(op))
       continue;
 
-    // Walk through all successor ops.
+    // Walk through all uses and schedule the dataflow level.
     int64_t dataflowLevel = 0;
-    for (auto bundledNode : graph.getBundledNodes(op))
-      for (const auto &use : graph.getUses(bundledNode))
-        if (auto a = use.second->getAttrOfType<IntegerAttr>("dataflow_level"))
-          dataflowLevel = std::max(dataflowLevel, a.getInt());
-        else {
-          op->emitError("has unexpected successor, legalization failed");
-          return false;
-        }
-
-    // Set an attribute for indicating the scheduled dataflow level.
-    op->setAttr("dataflow_level", builder.getIntegerAttr(builder.getI64Type(),
-                                                         dataflowLevel + 1));
+    for (auto use : graph.getNodeUses(op)) {
+      if (!map.count(use.second))
+        return op->emitOpError("has unexpected use, legalize failed"), false;
+      dataflowLevel = std::max(dataflowLevel, map.lookup(use.second));
+    }
+    map[op] = dataflowLevel + 1;
 
     // Eliminate bypass paths if detected.
-    for (auto bundledNode : graph.getBundledNodes(op))
-      for (auto use : graph.getUses(bundledNode)) {
-        auto value = use.first;
-        auto successor = use.second;
+    for (auto use : graph.getNodeUses(op)) {
+      auto value = use.first;
+      auto successor = use.second;
 
-        auto successorDataflowLevel =
-            successor->getAttrOfType<IntegerAttr>("dataflow_level").getInt();
+      // Continue if bypass path does not exist.
+      auto successorDataflowLevel = map.lookup(successor);
+      if (dataflowLevel == successorDataflowLevel)
+        continue;
 
-        // Bypass path does not exist.
-        if (dataflowLevel == successorDataflowLevel)
-          continue;
+      // If insert-copy is set, insert CopyOp to the bypass path. Otherwise,
+      // record all the bypass paths in dataflowToMerge.
+      if (insertCopy) {
+        // Insert CopyOps if required.
+        SmallVector<Value, 4> values;
+        values.push_back(value);
 
-        // If insert-copy is set, insert CopyOp to the bypass path. Otherwise,
-        // record all the bypass paths in dataflowToMerge.
-        if (insertCopy) {
-          // Insert CopyOps if required.
-          SmallVector<Value, 4> values;
-          values.push_back(value);
-
-          builder.setInsertionPoint(successor);
-          for (auto i = dataflowLevel; i > successorDataflowLevel; --i) {
-            // Create CopyOp.
-            auto valueType = value.getType().dyn_cast<MemRefType>();
-            assert(valueType && "only support memref type, please pass Affine "
-                                "or bufferized Linalg IR as input");
-            auto newValue =
-                builder.create<memref::AllocOp>(op->getLoc(), valueType);
-            auto copyOp = builder.create<memref::CopyOp>(
-                op->getLoc(), values.back(), newValue);
-
-            // Set CopyOp dataflow level.
-            copyOp->setAttr("dataflow_level",
-                            builder.getIntegerAttr(builder.getI64Type(), i));
-
-            // Chain created CopyOps.
-            if (i == successorDataflowLevel + 1)
-              value.replaceUsesWithIf(newValue, [&](OpOperand &use) {
-                return successor->isAncestor(use.getOwner());
-              });
-            else
-              values.push_back(newValue);
+        builder.setInsertionPoint(successor);
+        for (auto i = dataflowLevel; i > successorDataflowLevel; --i) {
+          // Create and set the dataflow level of CopyOp.
+          Value newValue;
+          Operation *copyOp;
+          if (auto type = value.getType().dyn_cast<MemRefType>()) {
+            newValue = builder.create<memref::AllocOp>(op->getLoc(), type);
+            copyOp = builder.create<memref::CopyOp>(op->getLoc(), values.back(),
+                                                    newValue);
+          } else {
+            copyOp = builder.create<hlscpp::AssignOp>(
+                op->getLoc(), value.getType(), values.back());
+            newValue = copyOp->getResult(0);
           }
-        } else {
-          // Always retain the longest merge path.
-          if (auto dst = dataflowToMerge.lookup(successorDataflowLevel))
-            dataflowToMerge[successorDataflowLevel] =
-                std::max(dst, dataflowLevel);
-          else
-            dataflowToMerge[successorDataflowLevel] = dataflowLevel;
-        }
-      }
-  }
+          map[copyOp] = i;
 
-  // Collect all operations in each dataflow level.
-  DenseMap<int64_t, SmallVector<Operation *, 8>> dataflowOps;
-  for (auto &op : func.front().getOperations())
-    if (auto attr = op.getAttrOfType<IntegerAttr>("dataflow_level"))
-      dataflowOps[attr.getInt()].push_back(&op);
+          // Chain created CopyOps.
+          if (i == successorDataflowLevel + 1)
+            value.replaceUsesWithIf(newValue, [&](OpOperand &use) {
+              return successor->isAncestor(use.getOwner());
+            });
+          else
+            values.push_back(newValue);
+        }
+      } else {
+        // Always retain the longest merge path.
+        auto dst = dataflowToMerge.lookup(successorDataflowLevel);
+        dataflowToMerge[successorDataflowLevel] = std::max(dst, dataflowLevel);
+      }
+    }
+  }
 
   // Merge dataflow levels according to the bypasses and minimum granularity.
   if (minGran != 1 || !insertCopy) {
+    // Collect all operations in each dataflow level.
+    DenseMap<int64_t, SmallVector<Operation *, 8>> dataflowOps;
+    for (auto &op : func.front().getOperations())
+      if (map.count(&op))
+        dataflowOps[map.lookup(&op)].push_back(&op);
+
     unsigned newLevel = 1;
     unsigned toMerge = minGran;
     for (unsigned i = 1, e = dataflowOps.size(); i <= e; ++i) {
@@ -249,6 +214,11 @@ static bool applyLegalizeDataflow(FuncOp func, int64_t minGran,
         ++newLevel;
       }
     }
+  } else {
+    for (auto pair : map)
+      pair.first->setAttr(
+          "dataflow_level",
+          builder.getIntegerAttr(builder.getI64Type(), pair.second));
   }
 
   // Set dataflow attribute.

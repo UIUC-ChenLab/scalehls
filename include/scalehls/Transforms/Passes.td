@@ -73,10 +73,10 @@ def MultipleLevelDSE : Pass<"dse", "ModuleOp"> {
 // Dataflow Optimization Passes
 //===----------------------------------------------------------------------===//
 
-def SimplifyGraph : Pass<"simplify-graph", "ModuleOp"> {
-  let summary = "Remove redundant linalg copy and cast operations";
+def SimplifyTosaGraph : Pass<"simplify-tosa-graph", "FuncOp"> {
+  let summary = "Remove redundant TOSA operations";
 
-  let constructor = "mlir::scalehls::createSimplifyGraphPass()";
+  let constructor = "mlir::scalehls::createSimplifyTosaGraphPass()";
 }
 
 def LegalizeDataflow : Pass<"legalize-dataflow", "FuncOp"> {
@@ -106,12 +106,6 @@ def SplitFunction : Pass<"split-function", "ModuleOp"> {
   }];
 
   let constructor = "mlir::scalehls::createSplitFunctionPass()";
-
-  let options = [
-    Option<"splitSubFunc", "split-sub-func", "bool", /*default=*/"false",
-           "Whether to further split the sub-functions so that each generated"
-           "function only contains one loop band">
-  ];
 }
 
 //===----------------------------------------------------------------------===//

@@ -9,13 +9,16 @@
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/Tosa/IR/TosaOps.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "scalehls/Dialect/HLSCpp/HLSCpp.h"
 #include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
 using namespace scalehls;
 
 static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
-                               StringRef name, bool splitSubFunc) {
+                               StringRef name) {
   Liveness liveness(func);
   auto builder = OpBuilder(func);
 
@@ -47,7 +50,7 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
   SmallVector<Value, 8> inputValues;
 
   // Local buffers of the sub-function.
-  llvm::SmallDenseSet<Operation *, 8> localBufs;
+  llvm::SmallDenseSet<Operation *, 8> localOps;
 
   for (auto op : ops) {
     // Push back all operands and liveins as candidates.
@@ -67,13 +70,24 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
       if (isForInductionVar(input) || internalValues.count(input))
         continue;
 
-      // If the current input is not a liveout and it's defined by an memref
-      // alloc op, it is a local buffer and can be localized later.
-      if (!isLiveOut(input))
-        if (auto alloc = input.getDefiningOp<memref::AllocOp>()) {
-          localBufs.insert(alloc);
+      if (auto defOp = input.getDefiningOp()) {
+        // If the current input is not a liveout and it's defined by an memref
+        // alloc/alloca/get_global or tensor_init op, it is a local buffer and
+        // can be localized later.
+        if (!isLiveOut(input) &&
+            isa<memref::GetGlobalOp, memref::AllocOp, memref::AllocaOp,
+                linalg::InitTensorOp>(defOp)) {
+          localOps.insert(defOp);
           continue;
         }
+
+        // Since we have localized all tosa constant operations, we can safely
+        // insert a constant as a local op here.
+        if (isa<tosa::ConstOp>(defOp)) {
+          localOps.insert(defOp);
+          continue;
+        }
+      }
 
       // Only unique inputs will be added.
       if (llvm::find(inputValues, input) != inputValues.end())
@@ -102,8 +116,8 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
   auto returnOp = builder.create<ReturnOp>(subFunc.getLoc(), outputValues);
 
   // Move local buffers into the new created function.
-  for (auto alloc : localBufs)
-    alloc->moveBefore(&subFunc.front().front());
+  for (auto localOp : localOps)
+    localOp->moveBefore(&subFunc.front().front());
 
   // Move same level operations into the new created function.
   for (auto op : ops) {
@@ -117,51 +131,58 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
         entry->getArgument(i),
         [&](OpOperand &use) { return subFunc->isAncestor(use.getOwner()); });
 
-  // Remove redundant copy nodes. As long as the defining operation of the
-  // target memory is contained in the sub-function, the copy operation and
-  // the target memory are redundant.
-  SmallVector<Operation *, 4> opsToErase;
-  for (auto copyOp : subFunc.front().getOps<memref::CopyOp>())
-    if (auto defOp = copyOp.getTarget().getDefiningOp()) {
-      copyOp.getTarget().replaceAllUsesWith(copyOp.getSource());
-      opsToErase.push_back(copyOp);
-      opsToErase.push_back(defOp);
-    }
-
-  for (auto op : opsToErase)
-    op->erase();
-
-  // Further split each loop band into a function if required.
-  if (splitSubFunc) {
-    SmallVector<Operation *, 4> loops;
-    for (auto &op : subFunc.front().getOperations()) {
-      if (isa<AffineForOp, memref::CopyOp>(op))
-        loops.push_back(&op);
-    }
-
-    if (loops.size() > 1) {
-      unsigned index = 0;
-      for (auto loop : loops) {
-        auto loopName = std::string(name) + "_loop" + std::to_string(index);
-        applySplitFunction(subFunc, {loop}, loopName, splitSubFunc);
-        ++index;
-      }
-    }
-  }
-
   return true;
 }
+
+namespace {
+struct CopyOpRewritePattern : public OpRewritePattern<memref::CopyOp> {
+  using OpRewritePattern<memref::CopyOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(memref::CopyOp copy,
+                                PatternRewriter &rewriter) const override {
+    // Remove redundant copy nodes. As long as the defining operation of the
+    // target memory is contained in the sub-function, the copy operation and
+    // the target memory are redundant.
+    if (auto defOp = copy.getTarget().getDefiningOp()) {
+      rewriter.replaceOp(defOp, copy.getSource());
+      rewriter.eraseOp(copy);
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
 
 namespace {
 struct SplitFunction : public SplitFunctionBase<SplitFunction> {
   void runOnOperation() override {
     auto module = getOperation();
+    auto context = module.getContext();
+    auto builder = OpBuilder(module);
 
+    // Collect functions to be split.
     SmallVector<FuncOp, 4> funcs;
     for (auto func : module.getOps<FuncOp>())
       funcs.push_back(func);
 
     for (auto func : funcs) {
+      // Collect all constans that have more than one use.
+      SmallVector<tosa::ConstOp, 16> constants;
+      func.walk([&](tosa::ConstOp constant) {
+        if (!constant->hasOneUse())
+          constants.push_back(constant);
+      });
+      // Localize constants to each of its use.
+      for (auto constant : constants) {
+        for (auto &use : llvm::make_early_inc_range(constant->getUses())) {
+          auto cloneConstant = constant->clone();
+          builder.setInsertionPoint(use.getOwner());
+          builder.insert(cloneConstant);
+          use.set(cloneConstant->getResult(0));
+        }
+      }
+
+      // Split sub-functions.
       DenseMap<int64_t, SmallVector<Operation *, 8>> dataflowOps;
       for (auto &op : func.front().getOperations())
         if (auto attr = op.getAttrOfType<IntegerAttr>("dataflow_level"))
@@ -169,9 +190,15 @@ struct SplitFunction : public SplitFunctionBase<SplitFunction> {
 
       for (auto pair : dataflowOps) {
         auto name = "dataflow" + std::to_string(pair.first);
-        applySplitFunction(func, pair.second, name, splitSubFunc);
+        applySplitFunction(func, pair.second, name);
       }
     }
+
+    // Simplify copy and assign operations generated by LegalizeDataflow.
+    mlir::RewritePatternSet patterns(context);
+    patterns.add<CopyOpRewritePattern>(context);
+    hlscpp::AssignOp::getCanonicalizationPatterns(patterns, context);
+    (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
   }
 };
 } // namespace

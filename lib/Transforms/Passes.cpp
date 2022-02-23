@@ -43,8 +43,6 @@ void scalehls::registerScaleHLSPassPipeline() {
 
         // Adapt the model from torch-mlir or onnx-mlir front-end.
         if (opts.frontend == "torch") {
-          pm.addPass(mlir::createLinalgBufferizePass());
-          pm.addPass(mlir::createLinalgGeneralizationPass());
           pm.addPass(mlir::createCanonicalizerPass());
         } else if (opts.frontend == "onnx") {
           pm.addPass(scalehls::createLegalizeOnnxPass());
@@ -56,37 +54,45 @@ void scalehls::registerScaleHLSPassPipeline() {
 
         // Graph-level optimizations.
         if (dataflowGran) {
+          pm.addPass(scalehls::createSimplifyTosaGraphPass());
           pm.addPass(scalehls::createLegalizeDataflowPass(dataflowGran));
           pm.addPass(scalehls::createSplitFunctionPass());
-          pm.addPass(scalehls::createSimplifyGraphPass());
-          pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
           pm.addPass(mlir::createCanonicalizerPass());
         }
 
-        // Loop-level optimizations. Loop pipelining is included.
-        if (vectorSize)
-          pm.addPass(mlir::createSuperVectorizePass({vectorSize}));
-        pm.addPass(scalehls::createLegalizeToHLSCppPass(opts));
-        pm.addPass(scalehls::createMaterializeReductionPass());
-        if (loopTileSize) {
-          pm.addPass(scalehls::createAffineLoopPerfectionPass());
-          pm.addPass(scalehls::createRemoveVariableBoundPass());
-          pm.addPass(scalehls::createPartialAffineLoopTilePass(loopTileSize));
-          pm.addPass(mlir::createCanonicalizerPass());
-        }
-
-        // Simplifications.
-        pm.addPass(scalehls::createSimplifyAffineIfPass());
-        pm.addPass(scalehls::createAffineStoreForwardPass());
-        pm.addPass(scalehls::createSimplifyMemrefAccessPass());
-        pm.addPass(scalehls::createReduceInitialIntervalPass());
+        // Lower graph to affine.
+        pm.addPass(tosa::createTosaToLinalgNamed());
+        pm.addPass(tosa::createTosaToLinalg());
+        pm.addPass(mlir::createLinalgGeneralizationPass());
+        pm.addPass(mlir::createLinalgBufferizePass());
+        pm.addPass(mlir::createFuncBufferizePass());
+        pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
-        // Directive-level optimizations.
-        pm.addPass(scalehls::createArrayPartitionPass());
-        pm.addPass(scalehls::createCreateHLSCppPrimitivePass());
-        pm.addPass(mlir::createCSEPass());
-        pm.addPass(mlir::createCanonicalizerPass());
+        // // Loop-level optimizations. Loop pipelining is included.
+        // if (vectorSize)
+        //   pm.addPass(mlir::createSuperVectorizePass({vectorSize}));
+        // pm.addPass(scalehls::createLegalizeToHLSCppPass(opts));
+        // pm.addPass(scalehls::createMaterializeReductionPass());
+        // if (loopTileSize) {
+        //   pm.addPass(scalehls::createAffineLoopPerfectionPass());
+        //   pm.addPass(scalehls::createRemoveVariableBoundPass());
+        //   pm.addPass(scalehls::createPartialAffineLoopTilePass(loopTileSize));
+        //   pm.addPass(mlir::createCanonicalizerPass());
+        // }
+
+        // // Simplifications.
+        // pm.addPass(scalehls::createSimplifyAffineIfPass());
+        // pm.addPass(scalehls::createAffineStoreForwardPass());
+        // pm.addPass(scalehls::createSimplifyMemrefAccessPass());
+        // pm.addPass(scalehls::createReduceInitialIntervalPass());
+        // pm.addPass(mlir::createCanonicalizerPass());
+
+        // // Directive-level optimizations.
+        // pm.addPass(scalehls::createArrayPartitionPass());
+        // pm.addPass(scalehls::createCreateHLSCppPrimitivePass());
+        // pm.addPass(mlir::createCSEPass());
+        // pm.addPass(mlir::createCanonicalizerPass());
       });
 }
 

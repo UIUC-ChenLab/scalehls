@@ -15,6 +15,7 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/IR/Dialect.h"
 #include "scalehls/Dialect/HLSCpp/HLSCpp.h"
@@ -26,16 +27,17 @@ namespace scalehls {
 inline void registerAllDialects(mlir::DialectRegistry &registry) {
   // clang-format off
   registry.insert<
-    mlir::scalehls::hlscpp::HLSCppDialect,
+    mlir::tosa::TosaDialect,
+    mlir::linalg::LinalgDialect,
+    mlir::memref::MemRefDialect,
+    mlir::bufferization::BufferizationDialect,
     mlir::StandardOpsDialect,
     mlir::AffineDialect,
-    mlir::memref::MemRefDialect,
     mlir::math::MathDialect,
     mlir::arith::ArithmeticDialect,
-    mlir::scf::SCFDialect,
-    mlir::bufferization::BufferizationDialect,
-    mlir::linalg::LinalgDialect,
     mlir::vector::VectorDialect,
+    mlir::scf::SCFDialect,
+    mlir::scalehls::hlscpp::HLSCppDialect,
     mlir::LLVM::LLVMDialect
   >();
   // clang-format on
