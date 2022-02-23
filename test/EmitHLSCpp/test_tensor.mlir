@@ -23,13 +23,6 @@ func @test_tensor_expr(%arg0: tensor<16x8xi1>, %arg1: i1, %arg2: tensor<16x8xf32
 }
 
 func @test_tensor_load_store(%arg0: memref<16x8xi32>) {
-
-  // CHECK: int32_t [[VAL_0:.*]][16][8];
-  // CHECK: for (int iv0 = 0; iv0 < 16; ++iv0) {
-  // CHECK:   for (int iv1 = 0; iv1 < 8; ++iv1) {
-  // CHECK:     [[VAL_0:.*]][iv0][iv1] = [[ARG_0:.*]][iv0][iv1];
-  // CHECK:   }
-  // CHECK: }
   %0 = bufferization.to_tensor %arg0 : memref<16x8xi32>
 
   // CHECK: for (int iv0 = 0; iv0 < 16; ++iv0) {

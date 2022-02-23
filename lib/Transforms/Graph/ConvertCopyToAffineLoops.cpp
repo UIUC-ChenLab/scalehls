@@ -96,7 +96,7 @@ struct AssignOpRewritePattern : public OpRewritePattern<AssignOp> {
 } // namespace
 
 namespace {
-struct CopyOpRewritePattern : public OpRewritePattern<memref::CopyOp> {
+struct CopyOpLoweringPattern : public OpRewritePattern<memref::CopyOp> {
   using OpRewritePattern<memref::CopyOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(memref::CopyOp copy,
@@ -139,7 +139,7 @@ struct ConvertCopyToAffineLoops
 
     // Lower copy and assign operation.
     patterns.clear();
-    patterns.add<CopyOpRewritePattern>(context);
+    patterns.add<CopyOpLoweringPattern>(context);
     (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
   }
 };

@@ -14,6 +14,7 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "scalehls/Dialect/HLSCpp/HLSCpp.h"
 #include "llvm/ADT/TypeSwitch.h"
@@ -46,8 +47,9 @@ public:
 
             // Memref-related statements.
             memref::AllocOp, memref::AllocaOp, memref::LoadOp, memref::StoreOp,
-            memref::DeallocOp, memref::TensorStoreOp, memref::ReinterpretCastOp,
-            memref::CollapseShapeOp, bufferization::ToMemrefOp,
+            memref::DeallocOp, memref::TensorStoreOp, tensor::ReshapeOp,
+            memref::ReshapeOp, memref::CollapseShapeOp, memref::ExpandShapeOp,
+            memref::ReinterpretCastOp, bufferization::ToMemrefOp,
             bufferization::ToTensorOp,
 
             // HLSCpp primitive operations.
@@ -134,8 +136,11 @@ public:
   HANDLE(memref::StoreOp);
   HANDLE(memref::DeallocOp);
   HANDLE(memref::TensorStoreOp);
-  HANDLE(memref::ReinterpretCastOp);
+  HANDLE(tensor::ReshapeOp);
+  HANDLE(memref::ReshapeOp);
   HANDLE(memref::CollapseShapeOp);
+  HANDLE(memref::ExpandShapeOp);
+  HANDLE(memref::ReinterpretCastOp);
   HANDLE(bufferization::ToMemrefOp);
   HANDLE(bufferization::ToTensorOp);
 

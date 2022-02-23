@@ -64,13 +64,14 @@ If you have installed [Torch-MLIR](https://github.com/llvm/torch-mlir), you shou
 $ cd resnet18
 
 $ # Parse PyTorch model to TOSA dialect (with mlir_venv activated).
-$ # This may take several minutes to compile.
+$ # This may take several minutes to compile due to the large amount of weights.
 $ python3 export_resnet18_mlir.py | torch-mlir-opt \
     -torchscript-module-to-torch-backend-pipeline="optimize=true" \
     -torch-backend-to-tosa-backend-pipeline="optimize=true" \
     -canonicalize > resnet18.mlir
 
-$ # Optimize the model and emit C++ code (not working, will be fixed soon).
+$ # Optimize the model and emit C++ code.
+$ # This may take several minutes to compile due to the large amount of weights.
 $ scalehls-opt resnet18.mlir \
     -scalehls-pipeline="top-func=forward opt-level=2 frontend=torch" \
     | scalehls-translate -emit-hlscpp > resnet18.cpp
