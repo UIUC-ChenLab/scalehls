@@ -11,7 +11,6 @@
 #include "mlir/Dialect/StandardOps/Transforms/Passes.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
-#include "scalehls/Conversion/Passes.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -45,7 +44,6 @@ void scalehls::registerScaleHLSPassPipeline() {
         if (opts.frontend == "torch") {
           pm.addPass(mlir::createCanonicalizerPass());
         } else if (opts.frontend == "onnx") {
-          pm.addPass(scalehls::createLegalizeOnnxPass());
           pm.addPass(mlir::createAffineLoopNormalizePass());
           pm.addPass(mlir::createSimplifyAffineStructuresPass());
           pm.addPass(mlir::createCanonicalizerPass());
