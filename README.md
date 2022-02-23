@@ -59,8 +59,22 @@ $ pyscalehls.py samples/polybench/syrk/test_syrk.c -f test_syrk
 ```
 
 ## Compiling PyTorch model
-- [Using Torch-MLIR front-end](/samples/pytorch/torch-mlir)
-- [Using ONNX-MLIR front-end](/samples/pytorch/onnx-mlir)
+If you have installed [Torch-MLIR](https://github.com/llvm/torch-mlir), you should be able to run the following test:
+```sh
+$ cd resnet18
+
+$ # Parse PyTorch model to TOSA dialect (with mlir_venv activated).
+$ # This may take several minutes to compile.
+$ python3 export_resnet18_mlir.py | torch-mlir-opt \
+    -torchscript-module-to-torch-backend-pipeline="optimize=true" \
+    -torch-backend-to-tosa-backend-pipeline="optimize=true" \
+    -canonicalize > resnet18.mlir
+
+$ # Optimize the model and emit C++ code (not working, will be fixed soon).
+$ scalehls-opt resnet18.mlir \
+    -scalehls-pipeline="top-func=forward opt-level=2 frontend=torch" \
+    | scalehls-translate -emit-hlscpp > resnet18.cpp
+```
 
 ## Repository Layout
 The project follows the conventions of typical MLIR-based projects:

@@ -1,4 +1,4 @@
-## Using ONNX-MLIR front-end
+## Using ONNX-MLIR front-end (deprecated, will be removed soon)
 If you have installed [ONNX-MLIR](https://github.com/onnx/onnx-mlir) or established ONNX-MLIR docker, you should be able to run the following test:
 ```sh
 $ cd resnet18

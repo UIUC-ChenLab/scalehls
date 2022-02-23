@@ -22,10 +22,6 @@ struct ScaleHLSOptions : public PassPipelineOptions<ScaleHLSOptions> {
       *this, "top-func", llvm::cl::init("forward"),
       llvm::cl::desc("Specify the top function of the design")};
 
-  Option<std::string> frontend{
-      *this, "frontend", llvm::cl::init("torch"),
-      llvm::cl::desc("Specify the front-end (torch/onnx)")};
-
   Option<unsigned> optLevel{
       *this, "opt-level", llvm::cl::init(1),
       llvm::cl::desc("Optimization level from 0 to 7 (default level is 1)")};

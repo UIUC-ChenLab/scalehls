@@ -40,16 +40,6 @@ void scalehls::registerScaleHLSPassPipeline() {
         if (opts.vectorSize.hasValue())
           vectorSize = opts.vectorSize;
 
-        // Adapt the model from torch-mlir or onnx-mlir front-end.
-        if (opts.frontend == "torch") {
-          pm.addPass(mlir::createCanonicalizerPass());
-        } else if (opts.frontend == "onnx") {
-          pm.addPass(mlir::createAffineLoopNormalizePass());
-          pm.addPass(mlir::createSimplifyAffineStructuresPass());
-          pm.addPass(mlir::createCanonicalizerPass());
-        } else
-          llvm_unreachable("please use supported front-end: torch or onnx.");
-
         // Graph-level optimizations.
         if (dataflowGran) {
           pm.addPass(scalehls::createSimplifyTosaGraphPass());
