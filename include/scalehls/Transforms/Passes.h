@@ -50,6 +50,7 @@ std::unique_ptr<Pass> createSimplifyTosaGraphPass();
 std::unique_ptr<Pass> createLegalizeDataflowPass();
 std::unique_ptr<Pass> createLegalizeDataflowPass(unsigned dataflowGran);
 std::unique_ptr<Pass> createSplitFunctionPass();
+std::unique_ptr<Pass> createConvertCopyToAffineLoopsPass();
 
 /// Loop optimization passes.
 std::unique_ptr<Pass> createMaterializeReductionPass();

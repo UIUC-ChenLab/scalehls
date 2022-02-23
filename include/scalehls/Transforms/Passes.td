@@ -108,6 +108,12 @@ def SplitFunction : Pass<"split-function", "ModuleOp"> {
   let constructor = "mlir::scalehls::createSplitFunctionPass()";
 }
 
+def ConvertCopyToAffineLoops : Pass<"convert-copy-to-affine-loops", "FuncOp"> {
+  let summary = "Convert copy and assign to affine loops";
+
+  let constructor = "mlir::scalehls::createConvertCopyToAffineLoopsPass()";
+}
+
 //===----------------------------------------------------------------------===//
 // Loop Optimization Passes
 //===----------------------------------------------------------------------===//
