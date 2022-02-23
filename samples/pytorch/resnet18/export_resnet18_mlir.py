@@ -2,10 +2,7 @@ import sys
 import torch.nn.functional as F
 import torch.nn as nn
 import torch
-
 from torch_mlir.dialects.torch.importer.jit_ir import ClassAnnotator, ModuleBuilder
-
-sys.path.append("../../models")
 from resnet18 import ResNet18
 
 
