@@ -4,17 +4,15 @@ top_function = main_graph
 #target_source_file_location = test.c
 #top_function = dataflow7
 
-#target_source_file_location = ../../samples/AutoScaleHLS_tests/test_syr2k.c
-#top_function = test_syr2k
-
-#target_source_file_location = ../../samples/AutoScaleHLS_tests/2mm.c
+#target_source_file_location = ../../samples/polybench2/2mm.c
 #top_function = kernel_2mm
 
-#target_source_file_location = ../../samples/AutoScaleHLS_tests/3mm.c
+#target_source_file_location = ../../samples/polybench2/3mm.c
 #top_function = kernel_3mm
 
-#target_source_file_location = dev_3mm.c
-#top_function = kernel_3mm
+#target_source_file_location = ../../samples/polybench2/atax.c
+#top_function = kernel_atax
+
 
 part = xc7k70tfbv676-1
 

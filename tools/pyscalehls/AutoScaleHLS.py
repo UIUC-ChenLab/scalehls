@@ -38,7 +38,6 @@ def sortbyhotness(inputarray):  #insertion sort
     for i in range(1, len(sortedarray)):
  
         key = sortedarray[i]
-        print(key)
 
         j = i-1
         while j >= 0 and key[-1] > sortedarray[j][-1] :
@@ -122,7 +121,7 @@ def main():
             PYSHLS.scalehls_dse(source_file, inputtop)
 
             var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file('generated_files/ScaleHLS_DSE_out.cpp', sdse=True)
-            var_forlist = []
+            #var_forlist = []
             print_variables(var_forlist, var_arraylist_sized)
         elif((val == "Manual") or (val == "M") or (val == "m")):
             opt_knobs, opt_knob_names = PYSHLS.ScaleHLSopt(source_file, inputtop, "generated_files/ScaleHLS_opted.c")   
@@ -141,11 +140,11 @@ def main():
     for i in var_forlist_scoped:
         print(i)
 
-    sortedarray = sortbyhotness(var_forlist_scoped)
+    # sortedarray = sortbyhotness(var_forlist_scoped)
 
-    print("\nSorted Scope")
-    for i in sortedarray:
-        print(i)
+    # print("\nSorted Scope")
+    # for i in sortedarray:
+    #     print(i)
 
     #create paramfile
     INPAR.create_params(var_forlist, var_arraylist_sized)

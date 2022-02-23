@@ -75,42 +75,44 @@ def create_template(sourcefile, inputfiles, template):
     return 0
 
 def process_source_file(inputfile, sdse=False):
-    var_forlist = []
-    var_forlist_scoped_start = 0
-    var_forlist_scoped = []
-    var_arraylist_raw = []
-    var_arraylist_sized = []
-    filebuf = []
+    
+    var_forlist_tree = []
+    var_forlist_tree_popped = []
     loopnum = 0
     arraynum = 0
     brace_cout = 0
-    for_brace_cout = 0
     loopband_hotness = 0
+    popped = False
+    is_brace = False
     scope = None
+
+    var_forlist = []
+    var_arraylist_sized = []
+    var_forlist_scoped = []
+
     newfile = open ("generated_files/ML_in.cpp", 'w')
-    with open(inputfile, 'r') as file:
+    with open(inputfile, 'r') as file:        
         for line in file:
+            is_brace = False
             #scope finder
             if brace_cout == 0: 
-                #filebuf.append(line) # store file in buffer
                 raw_scope = re.findall(r'((void|int|float))\s([A-Za-z_]+[A-Za-z_\d]*)(\s)?(\()', line)
                 if raw_scope:
                     scope = raw_scope[0][2]
             if(re.findall('{', line)):
+                is_brace = True
                 if brace_cout == 0:
-                    #scope = find_scope(filebuf)
                     brace_cout += 1
                 else:
                     brace_cout += 1
                 
                 #for band
-                if for_brace_cout > 0:
-                    for_brace_cout += 1
+                if len(var_forlist_tree) > 0 and var_forlist_tree[-1][1] == None:
+                    var_forlist_tree[-1][1] = brace_cout
 
             if(re.findall('}', line)):
                 #function scope
                 if brace_cout == 1:
-                    filebuf.clear() #clear buf when brackets are matched
                     scope = None
                     var_forlist.append("")
                     var_arraylist_sized.append("")
@@ -118,14 +120,17 @@ def process_source_file(inputfile, sdse=False):
                     brace_cout -= 1
                 else:
                     brace_cout -= 1
+
+                if len(var_forlist_tree) > 0 and var_forlist_tree[-1][1] == brace_cout:
+                    var_forlist_tree_popped.append(var_forlist_tree.pop())
+                    popped = True
                 
-                #for band
-                if for_brace_cout == 1:
-                    var_forlist_scoped.append((scope, var_forlist_scoped_start, loopnum - 1, loopband_hotness))
+                if len(var_forlist_tree) == 0 and len(var_forlist_tree_popped) > 0:
+                    var_forlist_scoped.append((scope, var_forlist_tree_popped[-1][0], var_forlist_tree_popped[0][0], loopband_hotness))
+                    var_forlist_tree = []
+                    var_forlist_tree_popped = []
                     loopband_hotness = 0
-                    for_brace_cout -= 1
-                elif for_brace_cout > 1:
-                    for_brace_cout -= 1
+                    popped = False
 
             # temp measure
             if(re.findall(r'^(\s)*#include', line)): #ignore #include
@@ -140,10 +145,17 @@ def process_source_file(inputfile, sdse=False):
             # todo: temp measure -> implement using MLIR IR
             elif(re.findall('for', line)): #find loops // only supports one forloop per line
                 if not(re.findall(r'(.)*(//)(.)*(for)(.)*', line)): # ignore for in comment
-                    #for band counter
-                    if for_brace_cout == 0:
-                        var_forlist_scoped_start = loopnum
-                        for_brace_cout += 1
+                    #save scoped list if start new for loop band
+                    if popped:
+                        var_forlist_scoped.append((scope, var_forlist_tree[0][0], var_forlist_tree_popped[0][0], loopband_hotness))
+                        var_forlist_tree_popped = []
+                        loopband_hotness = 0
+                        popped = False
+
+                    if is_brace:
+                        var_forlist_tree.append((loopnum, brace_cout - 1))
+                    else:
+                        var_forlist_tree.append(loopnum, brace_cout)
 
                     findbound = re.findall(r'(<|>|<=|>=)(.+?);', line) #find bound
                     testint = findbound[0][1].strip().isnumeric()
@@ -169,11 +181,12 @@ def process_source_file(inputfile, sdse=False):
                     list_buffer = list(("array"+str(arraynum), current_array, item[1], scope, array_dim))
                     for cdim in array_sizeofdim:
                         list_buffer.append(cdim[1])
+                    list_buffer.append("dependencies")
                     var_arraylist_sized.append(list_buffer)
                     arraynum += 1
 
             #dependency search
-            if (for_brace_cout > 0): 
+            if len(var_forlist_tree) > 0: 
                 line_array_list = re.findall(r'\s([A-Za-z_]+[A-Za-z_\d]*)\s?\[', line)
                 if var_arraylist_sized and line_array_list:
                     for item_list_array in var_arraylist_sized :
@@ -183,17 +196,16 @@ def process_source_file(inputfile, sdse=False):
                             for item_line_array in line_array_list:
                                 if item_list_array[2] == item_line_array:
                                     #ignore if already in list    
-                                    dep_state = re.findall(r'(\d)array', item_list_array[0])
-                                    if(type(item_list_array[-1]) ==  str): # if first entry
-                                        item_list_array.append("dependencies")
-                                        item_list_array.append(var_forlist_scoped_start)
-                                    elif var_forlist_scoped_start == item_list_array[-1]: #check for conflicts
+                                    # dep_state = re.findall(r'(\d)array', item_list_array[0])
+                                    if(type(item_list_array[-1]) ==  "dependencies"): # if first entry
+                                        item_list_array.append(var_forlist_tree[0][0])
+                                    elif item_list_array[-1] == var_forlist_tree[0][0]: #check for conflicts
                                         None
                                     else:
-                                        item_list_array.append(var_forlist_scoped_start)
+                                        item_list_array.append(var_forlist_tree[0][0])
 
             #hotloop counter
-            if for_brace_cout > 0:
+            if len(var_forlist_tree) > 0:
                 num_mul = 0
                 num_add = 0
                 if not(re.findall('for', line)):
@@ -206,18 +218,22 @@ def process_source_file(inputfile, sdse=False):
                     num_mul = len(nub_mul_raw)
                     num_add = len(nub_add_raw)
 
-                last_index = -1
                 line_trip_count = 1
                 if(num_mul + num_add) > 0:
-                    while True:
-                        line_trip_count *= int(var_forlist[last_index][-1])
-                        loc_loopnum = re.findall(r'\d+', var_forlist[last_index][0])
-                        if int(loc_loopnum[0]) == var_forlist_scoped_start: #break if at start of loop band
-                            break
-                        last_index -= 1
+                    for asso_loop in var_forlist_tree:
+                        for loopdirectory in var_forlist:
+                            if loopdirectory == "":
+                                None
+                            else:
+                                if loopdirectory[-1] == 'Variable':
+                                    line_trip_count = 0
+                                    break
+                                else:
+                                    loc_loopnum = re.findall(r'\d+', loopdirectory[0])
+                                    if int(loc_loopnum[0]) == asso_loop[0]:
+                                        line_trip_count *= int(loopdirectory[-1])
 
-                loopband_hotness += line_trip_count * (4 * num_mul + num_add) #weight for mul and addition
-
+                    loopband_hotness += line_trip_count * (4 * num_mul + num_add) #weight for mul and addition
     file.close()
     newfile.close()
     
