@@ -888,7 +888,7 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
       maxDspNum = UINT_MAX;
 
     // Initialize an performance and resource estimator.
-    auto estimator = ScaleHLSEstimator(latencyMap, dspUsageMap, depAnalysis);
+    auto estimator = ScaleHLSEstimator(latencyMap, dspUsageMap, true);
     auto optimizer = ScaleHLSOptimizer(
         estimator, outputNum, maxDspNum, maxInitParallel, maxExplParallel,
         maxLoopParallel, maxIterNum, maxDistance);

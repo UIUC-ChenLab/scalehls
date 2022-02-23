@@ -75,7 +75,7 @@ std::unique_ptr<Pass> createLoopPipeliningPass();
 std::unique_ptr<Pass> createArrayPartitionPass();
 std::unique_ptr<Pass> createCreateHLSCppPrimitivePass();
 
-void registerScaleHLSPassPipeline();
+void registerScaleHLSPyTorchPipeline();
 void registerTransformsPasses();
 
 #define GEN_PASS_CLASSES

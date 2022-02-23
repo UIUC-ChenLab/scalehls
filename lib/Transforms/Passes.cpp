@@ -22,9 +22,9 @@ namespace {
 #include "scalehls/Transforms/Passes.h.inc"
 } // namespace
 
-void scalehls::registerScaleHLSPassPipeline() {
+void scalehls::registerScaleHLSPyTorchPipeline() {
   PassPipelineRegistration<ScaleHLSOptions>(
-      "scalehls-pipeline", "Compile to HLS C++",
+      "scalehls-pytorch-pipeline", "Compile TOSA (from Torch-MLIR) to HLS C++",
       [](OpPassManager &pm, const ScaleHLSOptions &opts) {
         unsigned dataflowGran = 0;
         unsigned loopUnrollSize = 0;

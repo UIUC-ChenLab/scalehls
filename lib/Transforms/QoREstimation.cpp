@@ -983,8 +983,7 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     for (auto func : module.getOps<FuncOp>())
       if (auto funcDirect = getFuncDirective(func))
         if (funcDirect.getTopFunc())
-          ScaleHLSEstimator(latencyMap, dspUsageMap, depAnalysis)
-              .estimateFunc(func);
+          ScaleHLSEstimator(latencyMap, dspUsageMap, true).estimateFunc(func);
   }
 };
 } // namespace

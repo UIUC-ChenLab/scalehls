@@ -27,10 +27,7 @@ def QoREstimation : Pass<"qor-estimation", "ModuleOp"> {
   let options = [
     Option<"targetSpec", "target-spec", "std::string",
            /*default=*/"\"./target-spec.ini\"",
-           "File path: target backend specifications and configurations">,
-
-    Option<"depAnalysis", "dep-analysis", "bool", /*default=*/"true",
-           "Whether a comprehensive dependency analysis is conducted">
+           "File path: target backend specifications and configurations">
   ];
 }
 
@@ -58,10 +55,7 @@ def MultipleLevelDSE : Pass<"dse", "ModuleOp"> {
 
     Option<"targetSpec", "target-spec", "std::string",
            /*default=*/"\"./target-spec.ini\"",
-           "File path: target backend specifications and configurations">,
-
-    Option<"depAnalysis", "dep-analysis", "bool", /*default=*/"true",
-           "Whether a comprehensive dependency analysis is conducted">
+           "File path: target backend specifications and configurations">
   ];
 }
 
