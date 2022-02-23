@@ -26,18 +26,18 @@ void scalehls::registerScaleHLSPassPipeline() {
       "scalehls-pipeline", "Compile to HLS C++",
       [](OpPassManager &pm, const ScaleHLSOptions &opts) {
         unsigned dataflowGran = 0;
-        unsigned loopTileSize = 0;
+        unsigned loopUnrollSize = 0;
         unsigned vectorSize = 0;
 
         if (opts.optLevel > 0 && opts.optLevel < 8) {
           dataflowGran = 9 - opts.optLevel;
-          loopTileSize = 1 << opts.optLevel;
+          loopUnrollSize = 1 << opts.optLevel;
         }
 
         if (opts.dataflowGran.hasValue())
           dataflowGran = opts.dataflowGran;
-        if (opts.loopTileSize.hasValue())
-          loopTileSize = opts.loopTileSize;
+        if (opts.loopUnrollSize.hasValue())
+          loopUnrollSize = opts.loopUnrollSize;
         if (opts.vectorSize.hasValue())
           vectorSize = opts.vectorSize;
 
@@ -46,8 +46,8 @@ void scalehls::registerScaleHLSPassPipeline() {
           pm.addPass(scalehls::createSimplifyTosaGraphPass());
           pm.addPass(scalehls::createLegalizeDataflowPass(dataflowGran));
           pm.addPass(scalehls::createSplitFunctionPass());
-          pm.addPass(mlir::createCanonicalizerPass());
         }
+        pm.addPass(mlir::createCanonicalizerPass());
 
         // Lower graph to affine.
         pm.addPass(tosa::createTosaToLinalgNamed());
@@ -66,10 +66,11 @@ void scalehls::registerScaleHLSPassPipeline() {
           pm.addPass(mlir::createSuperVectorizePass({vectorSize}));
         pm.addPass(scalehls::createLegalizeToHLSCppPass(opts));
         pm.addPass(scalehls::createMaterializeReductionPass());
-        if (loopTileSize) {
+        if (loopUnrollSize) {
           pm.addPass(scalehls::createAffineLoopPerfectionPass());
           pm.addPass(scalehls::createRemoveVariableBoundPass());
-          pm.addPass(scalehls::createPartialAffineLoopTilePass(loopTileSize));
+          pm.addPass(
+              scalehls::createAffineLoopUnrollAndPipelinePass(loopUnrollSize));
           pm.addPass(mlir::createCanonicalizerPass());
         }
 

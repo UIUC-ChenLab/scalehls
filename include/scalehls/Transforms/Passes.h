@@ -30,49 +30,50 @@ struct ScaleHLSOptions : public PassPipelineOptions<ScaleHLSOptions> {
       *this, "dataflow-gran",
       llvm::cl::desc("The granularity of dataflow (set 0 to disable)")};
 
-  Option<unsigned> loopTileSize{
-      *this, "loop-tile-size",
-      llvm::cl::desc("The size of tiling (set 0 to disable)")};
+  Option<unsigned> loopUnrollSize{
+      *this, "loop-unroll-size",
+      llvm::cl::desc("The size of unrolling (set 0 to disable)")};
 
   Option<unsigned> vectorSize{
       *this, "vector-size",
       llvm::cl::desc("The size of vectorization (set 0 to disable)")};
 };
 
-/// QoR estimation pass.
+/// QoR estimation and DSE passes.
 std::unique_ptr<Pass> createQoREstimationPass();
-
-/// Design space exploration pass.
 std::unique_ptr<Pass> createMultipleLevelDSEPass();
 
-/// Dataflow optimization passes.
+/// Graph optimization passes.
 std::unique_ptr<Pass> createSimplifyTosaGraphPass();
 std::unique_ptr<Pass> createLegalizeDataflowPass();
 std::unique_ptr<Pass> createLegalizeDataflowPass(unsigned dataflowGran);
 std::unique_ptr<Pass> createSplitFunctionPass();
 std::unique_ptr<Pass> createConvertCopyToAffineLoopsPass();
 
+/// HLSCpp legalization pass.
+std::unique_ptr<Pass> createLegalizeToHLSCppPass();
+std::unique_ptr<Pass> createLegalizeToHLSCppPass(const ScaleHLSOptions &opts);
+
 /// Loop optimization passes.
 std::unique_ptr<Pass> createMaterializeReductionPass();
 std::unique_ptr<Pass> createAffineLoopPerfectionPass();
 std::unique_ptr<Pass> createRemoveVariableBoundPass();
 std::unique_ptr<Pass> createAffineLoopOrderOptPass();
-std::unique_ptr<Pass> createPartialAffineLoopTilePass();
-std::unique_ptr<Pass> createPartialAffineLoopTilePass(unsigned loopTileSize);
-
-/// Directive optimization passes.
-std::unique_ptr<Pass> createLegalizeToHLSCppPass();
-std::unique_ptr<Pass> createLegalizeToHLSCppPass(const ScaleHLSOptions &opts);
-std::unique_ptr<Pass> createFuncPipeliningPass();
-std::unique_ptr<Pass> createLoopPipeliningPass();
-std::unique_ptr<Pass> createArrayPartitionPass();
-std::unique_ptr<Pass> createCreateHLSCppPrimitivePass();
+std::unique_ptr<Pass> createAffineLoopUnrollAndPipelinePass();
+std::unique_ptr<Pass>
+createAffineLoopUnrollAndPipelinePass(unsigned loopUnrollSize);
 
 /// Simplification passes.
 std::unique_ptr<Pass> createSimplifyAffineIfPass();
 std::unique_ptr<Pass> createAffineStoreForwardPass();
 std::unique_ptr<Pass> createSimplifyMemrefAccessPass();
 std::unique_ptr<Pass> createReduceInitialIntervalPass();
+
+/// Directive optimization passes.
+std::unique_ptr<Pass> createFuncPipeliningPass();
+std::unique_ptr<Pass> createLoopPipeliningPass();
+std::unique_ptr<Pass> createArrayPartitionPass();
+std::unique_ptr<Pass> createCreateHLSCppPrimitivePass();
 
 void registerScaleHLSPassPipeline();
 void registerTransformsPasses();

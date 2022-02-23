@@ -114,10 +114,12 @@ Optional<unsigned> scalehls::applyLoopTiling(AffineLoopBand &band,
 }
 
 namespace {
-struct PartialAffineLoopTile
-    : public PartialAffineLoopTileBase<PartialAffineLoopTile> {
-  PartialAffineLoopTile() = default;
-  PartialAffineLoopTile(unsigned loopTileSize) { tileSize = loopTileSize; }
+struct AffineLoopUnrollAndPipeline
+    : public AffineLoopUnrollAndPipelineBase<AffineLoopUnrollAndPipeline> {
+  AffineLoopUnrollAndPipeline() = default;
+  AffineLoopUnrollAndPipeline(unsigned loopUnrollSize) {
+    unrollSize = loopUnrollSize;
+  }
 
   void runOnOperation() override {
     AffineLoopBands targetBands;
@@ -125,7 +127,7 @@ struct PartialAffineLoopTile
 
     for (auto &band : targetBands) {
       TileList sizes;
-      unsigned remainTileSize = tileSize;
+      unsigned remainTileSize = unrollSize;
 
       // Calculate the tiling size of each loop level.
       for (auto loop : band) {
@@ -152,22 +154,19 @@ struct PartialAffineLoopTile
       auto tileLoc = applyLoopTiling(band, sizes).getValue();
       band.resize(tileLoc + 1);
 
-      // TODO: canonicalize here to eliminate affine.apply ops.
-
-      if (applyOrderOpt)
+      // TODO: canonicalize here to eliminate affine.apply ops?
+      if (loopOrderOpt)
         applyAffineLoopOrderOpt(band);
-
-      if (applyPipeline)
-        applyLoopPipelining(band, tileLoc, (unsigned)1);
+      applyLoopPipelining(band, tileLoc, (unsigned)1);
     }
   }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createPartialAffineLoopTilePass() {
-  return std::make_unique<PartialAffineLoopTile>();
+std::unique_ptr<Pass> scalehls::createAffineLoopUnrollAndPipelinePass() {
+  return std::make_unique<AffineLoopUnrollAndPipeline>();
 }
 std::unique_ptr<Pass>
-scalehls::createPartialAffineLoopTilePass(unsigned loopTileSize) {
-  return std::make_unique<PartialAffineLoopTile>(loopTileSize);
+scalehls::createAffineLoopUnrollAndPipelinePass(unsigned loopUnrollSize) {
+  return std::make_unique<AffineLoopUnrollAndPipeline>(loopUnrollSize);
 }
