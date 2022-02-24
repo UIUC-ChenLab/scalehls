@@ -5,12 +5,12 @@
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Support/Utils.h"
-#include "mlir/Analysis/AffineAnalysis.h"
-#include "mlir/Analysis/LoopAnalysis.h"
-#include "mlir/Analysis/Utils.h"
+#include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
+#include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
+#include "mlir/Dialect/Affine/Analysis/Utils.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
-#include "mlir/Dialect/Vector/VectorOps.h"
+#include "mlir/Dialect/Vector/IR/VectorOps.h"
 
 using namespace mlir;
 using namespace scalehls;

@@ -196,11 +196,11 @@ void FuncDirectiveAttr::print(AsmPrinter &p) const {
 }
 
 //===----------------------------------------------------------------------===//
-// HLSCpp operation pattern rewritters
+// HLSCpp operation canonicalizers
 //===----------------------------------------------------------------------===//
 
 namespace {
-struct SimplifyCastOp : public OpRewritePattern<CastPrimOp> {
+struct SimplifyCastPrimOp : public OpRewritePattern<CastPrimOp> {
   using OpRewritePattern<CastPrimOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(CastPrimOp cast,
@@ -226,9 +226,28 @@ struct SimplifyCastOp : public OpRewritePattern<CastPrimOp> {
 
 void CastPrimOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                              MLIRContext *context) {
-  results.add<SimplifyCastOp>(context);
+  results.add<SimplifyCastPrimOp>(context);
 }
 
+namespace {
+struct SimplifyAssignOp : public OpRewritePattern<AssignOp> {
+  using OpRewritePattern<AssignOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(AssignOp assign,
+                                PatternRewriter &rewriter) const override {
+    if (auto defOp = assign.input().getDefiningOp<AssignOp>()) {
+      assign.inputMutable().assign(defOp.input());
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+void AssignOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                           MLIRContext *context) {
+  results.add<SimplifyAssignOp>(context);
+}
 //===----------------------------------------------------------------------===//
 // Include tablegen classes
 //===----------------------------------------------------------------------===//

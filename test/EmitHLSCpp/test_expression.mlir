@@ -88,7 +88,7 @@ func @test_float_binary_unary(%arg0: f32, %arg1: f32) -> f32 {
 func @test_special_expr(%arg0: i1, %arg1: index, %arg2: index) -> index {
 
   // CHECK: int [[VAL_0:.*]] = [[ARG_0:.*]] ? [[ARG_1:.*]] : [[ARG_2:.*]];
-  %0 = select %arg0, %arg1, %arg2 : i1, index
+  %0 = arith.select %arg0, %arg1, %arg2 : i1, index
 
   // CHECK: int32_t [[VAL_1:.*]] = [[VAL_0:.*]];
   %1 = arith.index_cast %0 : index to i32

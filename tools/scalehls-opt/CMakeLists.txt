@@ -15,7 +15,6 @@ target_link_libraries(scalehls-opt
 
   MLIRHLSCpp
   MLIRScaleHLSSupport
-  MLIRScaleHLSConversion
   MLIRScaleHLSTransforms
 
   # Threads::Threads

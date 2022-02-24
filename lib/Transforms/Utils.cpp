@@ -5,10 +5,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Transforms/Utils.h"
+#include "mlir/Dialect/Affine/LoopUtils.h"
 #include "mlir/Pass/PassManager.h"
-#include "mlir/Transforms/LoopUtils.h"
 #include "mlir/Transforms/Passes.h"
-#include "scalehls/Conversion/Passes.h"
 #include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;

@@ -22,7 +22,7 @@ def HLSCppDialect : Dialect {
   let cppNamespace = "::mlir::scalehls::hlscpp";
 }
 
-class HLSCppOp<string mnemonic, list<OpTrait> traits = []> :
+class HLSCppOp<string mnemonic, list<Trait> traits = []> :
     Op<HLSCppDialect, mnemonic, traits>;
 
 include "scalehls/Dialect/HLSCpp/Ops.td"

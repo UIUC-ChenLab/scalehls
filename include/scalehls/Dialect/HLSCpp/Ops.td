@@ -54,10 +54,10 @@ def AssignOp : HLSCppOp<"assign",
   let description = [{
     This hlscpp.assign operation assigns the input value to the output, and can
     be inserted anywhere without changing the original semantics. This is useful
-    for EmitHLSCpp to handle some corner cases (e.g., the operand of return
-    operation is function argument, etc.).
+    for EmitHLSCpp to handle some corner cases and for tensor copy.
   }];
 
+  let hasCanonicalizer = 1;
   let arguments = (ins AnyType : $input);
   let results = (outs AnyType : $output);
 }

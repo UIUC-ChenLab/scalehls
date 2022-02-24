@@ -20,7 +20,6 @@ declare_mlir_python_extension(ScaleHLSBindingsPythonExtension.Core
     MLIRScaleHLSCAPIEmitHLSCpp
   PRIVATE_LINK_LIBS
     LLVMSupport
-    MLIRScaleHLSConversion
     MLIRScaleHLSTransforms
 )
 

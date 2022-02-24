@@ -44,13 +44,11 @@ $ export PYTHONPATH=$PYTHONPATH:$PWD/build/tools/scalehls/python_packages/scaleh
 ## Compiling HLS C/C++ 
 To launch the automatic kernel-level design space exploration, run:
 ```sh
-$ mlir-clang samples/polybench/gemm/test_gemm.c -function=test_gemm -memref-fullrank -raise-scf-to-affine -S \
-    | scalehls-opt -dse="top-func=test_gemm target-spec=samples/polybench/config.json" -debug-only=scalehls \
-    | scalehls-translate -emit-hlscpp > test_gemm_dse.cpp
+$ cd samples/polybench/gemm
 
-$ mlir-clang samples/rosetta/spam-filter/sgd_sw.c -function=SgdLR_sw -memref-fullrank -raise-scf-to-affine -S \
-    | scalehls-opt -materialize-reduction -dse="top-func=SgdLR_sw target-spec=samples/rosetta/config.json" -debug-only=scalehls \
-    | scalehls-translate -emit-hlscpp > sgd_sw_dse.cpp
+$ mlir-clang test_gemm.c -function=test_gemm -memref-fullrank -raise-scf-to-affine -S \
+    | scalehls-opt -dse="top-func=test_gemm target-spec=../config.json" -debug-only=scalehls \
+    | scalehls-translate -emit-hlscpp > test_gemm_dse.cpp
 ```
 
 Meanwhile, we provide a `pyscalehls` tool to showcase the `scalehls` Python library:
@@ -59,8 +57,22 @@ $ pyscalehls.py samples/polybench/syrk/test_syrk.c -f test_syrk
 ```
 
 ## Compiling PyTorch model
-- [Using Torch-MLIR front-end](/samples/pytorch/torch-mlir)
-- [Using ONNX-MLIR front-end](/samples/pytorch/onnx-mlir)
+If you have installed [Torch-MLIR](https://github.com/llvm/torch-mlir), you should be able to run the following test:
+```sh
+$ cd samples/pytorch/lenet
+
+$ # Parse PyTorch model to TOSA dialect (with mlir_venv activated).
+$ # This may take several minutes to compile due to the large amount of weights.
+$ python3 export_lenet_mlir.py | torch-mlir-opt \
+    -torchscript-module-to-torch-backend-pipeline="optimize=true" \
+    -torch-backend-to-tosa-backend-pipeline="optimize=true" \
+    -canonicalize > lenet.mlir
+
+$ # Optimize the model and emit C++ code.
+$ scalehls-opt lenet.mlir \
+    -scalehls-pytorch-pipeline="top-func=forward opt-level=2 dataflow-gran=2" \
+    | scalehls-translate -emit-hlscpp > lenet.cpp
+```
 
 ## Repository Layout
 The project follows the conventions of typical MLIR-based projects:

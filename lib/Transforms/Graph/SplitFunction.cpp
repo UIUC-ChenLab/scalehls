@@ -5,16 +5,21 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Analysis/Liveness.h"
+#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/Tosa/IR/TosaOps.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "scalehls/Dialect/HLSCpp/HLSCpp.h"
 #include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
 using namespace scalehls;
 
 static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
-                               StringRef name, bool splitSubFunc) {
+                               StringRef name) {
   Liveness liveness(func);
   auto builder = OpBuilder(func);
 
@@ -35,7 +40,6 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
   for (auto op : ops)
     for (auto result : op->getResults()) {
       internalValues.insert(result);
-
       if (isLiveOut(result)) {
         outputTypes.push_back(result.getType());
         outputValues.push_back(result);
@@ -47,14 +51,18 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
   SmallVector<Value, 8> inputValues;
 
   // Local buffers of the sub-function.
-  llvm::SmallDenseSet<Operation *, 8> localBufs;
+  llvm::SmallDenseSet<Operation *, 8> localOps;
 
   for (auto op : ops) {
     // Push back all operands and liveins as candidates.
     SmallVector<Value, 8> inputCandidates(op->getOperands());
-    if (auto loop = dyn_cast<AffineForOp>(op)) {
-      auto liveIns = liveness.getLiveIn(loop.getBody());
-      inputCandidates.append(liveIns.begin(), liveIns.end());
+    for (auto &region : op->getRegions()) {
+      auto entryBlock = &region.front();
+      auto args = entryBlock->getArguments();
+
+      for (auto liveIn : liveness.getLiveIn(entryBlock))
+        if (llvm::find(args, liveIn) == args.end())
+          inputCandidates.push_back(liveIn);
     }
 
     for (auto input : inputCandidates) {
@@ -63,13 +71,24 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
       if (isForInductionVar(input) || internalValues.count(input))
         continue;
 
-      // If the current input is not a liveout and it's defined by an memref
-      // alloc op, it is a local buffer and can be localized later.
-      if (!isLiveOut(input))
-        if (auto alloc = input.getDefiningOp<memref::AllocOp>()) {
-          localBufs.insert(alloc);
+      if (auto defOp = input.getDefiningOp()) {
+        // If the current input is not a liveout and it's defined by an memref
+        // alloc/alloca/get_global or tensor_init op, it is a local buffer and
+        // can be localized later.
+        if (!isLiveOut(input) &&
+            isa<memref::GetGlobalOp, memref::AllocOp, memref::AllocaOp,
+                linalg::InitTensorOp>(defOp)) {
+          localOps.insert(defOp);
           continue;
         }
+
+        // Since we have localized all tosa constant operations, we can safely
+        // insert a constant as a local op here.
+        if (isa<tosa::ConstOp>(defOp)) {
+          localOps.insert(defOp);
+          continue;
+        }
+      }
 
       // Only unique inputs will be added.
       if (llvm::find(inputValues, input) != inputValues.end())
@@ -98,8 +117,8 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
   auto returnOp = builder.create<ReturnOp>(subFunc.getLoc(), outputValues);
 
   // Move local buffers into the new created function.
-  for (auto alloc : localBufs)
-    alloc->moveBefore(&subFunc.front().front());
+  for (auto localOp : localOps)
+    localOp->moveBefore(&subFunc.front().front());
 
   // Move same level operations into the new created function.
   for (auto op : ops) {
@@ -113,51 +132,68 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
         entry->getArgument(i),
         [&](OpOperand &use) { return subFunc->isAncestor(use.getOwner()); });
 
-  // Remove redundant copy nodes. As long as the defining operation of the
-  // target memory is contained in the sub-function, the copy operation and
-  // the target memory are redundant.
-  SmallVector<Operation *, 4> opsToErase;
-  for (auto copyOp : subFunc.front().getOps<linalg::CopyOp>())
-    if (auto defOp = copyOp.getTarget().getDefiningOp()) {
-      copyOp.getTarget().replaceAllUsesWith(copyOp.getSource());
-      opsToErase.push_back(copyOp);
-      opsToErase.push_back(defOp);
-    }
-
-  for (auto op : opsToErase)
-    op->erase();
-
-  // Further split each loop band into a function if required.
-  if (splitSubFunc) {
-    SmallVector<Operation *, 4> loops;
-    for (auto &op : subFunc.front().getOperations()) {
-      if (isa<AffineForOp, linalg::CopyOp>(op))
-        loops.push_back(&op);
-    }
-
-    if (loops.size() > 1) {
-      unsigned index = 0;
-      for (auto loop : loops) {
-        auto loopName = std::string(name) + "_loop" + std::to_string(index);
-        applySplitFunction(subFunc, {loop}, loopName, splitSubFunc);
-        ++index;
-      }
-    }
-  }
-
   return true;
 }
+
+namespace {
+/// The tosa-to-tensor reshape conversion.
+/// TODO: This should be factored out! Also, the tensor reshape SHOULD be
+/// lowered to affine loops, such that the it's semantics can be fully undertood
+/// by the subsequent passes. For now, as a temporary solution, we directly
+/// support the emission of reshape in the emit-hlscpp translator.
+struct ReshapeOpRewritePattern : public OpRewritePattern<tosa::ReshapeOp> {
+  using OpRewritePattern<tosa::ReshapeOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(tosa::ReshapeOp reshape,
+                                PatternRewriter &rewriter) const override {
+    rewriter.setInsertionPoint(reshape);
+    auto newShapeType = RankedTensorType::get(
+        {(int64_t)reshape.new_shape().size()}, rewriter.getI32Type());
+    auto newShapeArray = llvm::to_vector<8>(
+        llvm::map_range(reshape.new_shape(), [&](Attribute attr) {
+          return APInt(32, attr.cast<IntegerAttr>().getInt());
+        }));
+    auto newShapeAttr = DenseIntElementsAttr::get(newShapeType, newShapeArray);
+
+    auto newShape =
+        rewriter.create<arith::ConstantOp>(reshape.getLoc(), newShapeAttr);
+    rewriter.replaceOpWithNewOp<tensor::ReshapeOp>(reshape, reshape.getType(),
+                                                   reshape.input1(), newShape);
+    return success();
+  }
+};
+} // namespace
 
 namespace {
 struct SplitFunction : public SplitFunctionBase<SplitFunction> {
   void runOnOperation() override {
     auto module = getOperation();
+    auto context = module.getContext();
+    auto builder = OpBuilder(module);
 
+    // Collect functions to be split.
     SmallVector<FuncOp, 4> funcs;
     for (auto func : module.getOps<FuncOp>())
       funcs.push_back(func);
 
     for (auto func : funcs) {
+      // Collect all constans that have more than one use.
+      SmallVector<tosa::ConstOp, 16> constants;
+      func.walk([&](tosa::ConstOp constant) {
+        if (!constant->hasOneUse())
+          constants.push_back(constant);
+      });
+      // Localize constants to each of its use.
+      for (auto constant : constants) {
+        for (auto &use : llvm::make_early_inc_range(constant->getUses())) {
+          auto cloneConstant = constant->clone();
+          builder.setInsertionPoint(use.getOwner());
+          builder.insert(cloneConstant);
+          use.set(cloneConstant->getResult(0));
+        }
+      }
+
+      // Split sub-functions.
       DenseMap<int64_t, SmallVector<Operation *, 8>> dataflowOps;
       for (auto &op : func.front().getOperations())
         if (auto attr = op.getAttrOfType<IntegerAttr>("dataflow_level"))
@@ -165,9 +201,15 @@ struct SplitFunction : public SplitFunctionBase<SplitFunction> {
 
       for (auto pair : dataflowOps) {
         auto name = "dataflow" + std::to_string(pair.first);
-        applySplitFunction(func, pair.second, name, splitSubFunc);
+        applySplitFunction(func, pair.second, name);
       }
     }
+
+    // Simplify copy and assign operations generated by LegalizeDataflow.
+    mlir::RewritePatternSet patterns(context);
+    patterns.add<ReshapeOpRewritePattern>(context);
+    hlscpp::AssignOp::getCanonicalizationPatterns(patterns, context);
+    (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
   }
 };
 } // namespace

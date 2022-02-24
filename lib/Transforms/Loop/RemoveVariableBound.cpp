@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Dialect/Affine/LoopUtils.h"
 #include "mlir/IR/IntegerSet.h"
-#include "mlir/Transforms/LoopUtils.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 

@@ -10,7 +10,7 @@
 include "mlir/Pass/PassBase.td"
 
 //===----------------------------------------------------------------------===//
-// QoR Estimation Pass
+// QoR Estimation and Design Space Exploration Pass
 //===----------------------------------------------------------------------===//
 
 def QoREstimation : Pass<"qor-estimation", "ModuleOp"> {
@@ -27,16 +27,9 @@ def QoREstimation : Pass<"qor-estimation", "ModuleOp"> {
   let options = [
     Option<"targetSpec", "target-spec", "std::string",
            /*default=*/"\"./target-spec.ini\"",
-           "File path: target backend specifications and configurations">,
-
-    Option<"depAnalysis", "dep-analysis", "bool", /*default=*/"true",
-           "Whether a comprehensive dependency analysis is conducted">
+           "File path: target backend specifications and configurations">
   ];
 }
-
-//===----------------------------------------------------------------------===//
-// Design Space Exploration Pass
-//===----------------------------------------------------------------------===//
 
 def MultipleLevelDSE : Pass<"dse", "ModuleOp"> {
   let summary = "Optimize HLS design at multiple abstraction level";
@@ -62,16 +55,19 @@ def MultipleLevelDSE : Pass<"dse", "ModuleOp"> {
 
     Option<"targetSpec", "target-spec", "std::string",
            /*default=*/"\"./target-spec.ini\"",
-           "File path: target backend specifications and configurations">,
-
-    Option<"depAnalysis", "dep-analysis", "bool", /*default=*/"true",
-           "Whether a comprehensive dependency analysis is conducted">
+           "File path: target backend specifications and configurations">
   ];
 }
 
 //===----------------------------------------------------------------------===//
-// Dataflow Optimization Passes
+// Graph Optimization Passes
 //===----------------------------------------------------------------------===//
+
+def SimplifyTosaGraph : Pass<"simplify-tosa-graph", "FuncOp"> {
+  let summary = "Remove redundant TOSA operations";
+
+  let constructor = "mlir::scalehls::createSimplifyTosaGraphPass()";
+}
 
 def LegalizeDataflow : Pass<"legalize-dataflow", "FuncOp"> {
   let summary = "Legalize the dataflow scheduling";
@@ -100,11 +96,31 @@ def SplitFunction : Pass<"split-function", "ModuleOp"> {
   }];
 
   let constructor = "mlir::scalehls::createSplitFunctionPass()";
+}
+
+def ConvertCopyToAffineLoops : Pass<"convert-copy-to-affine-loops", "FuncOp"> {
+  let summary = "Convert copy and assign to affine loops";
+
+  let constructor = "mlir::scalehls::createConvertCopyToAffineLoopsPass()";
+}
+
+//===----------------------------------------------------------------------===//
+// HLSCpp Legalization Passes
+//===----------------------------------------------------------------------===//
+
+def LegalizeToHLSCpp : Pass<"legalize-to-hlscpp", "FuncOp"> {
+  let summary = "Convert to emittable MLIR code";
+  let description = [{
+    This legalize-to-hlscpp pass will legalize the input IR to make it
+    emittable. Meanwhile, this pass will set some default pragmas for the
+    convenience of the subsequent transforms and analysis.
+  }];
+
+  let constructor = "mlir::scalehls::createLegalizeToHLSCppPass()";
 
   let options = [
-    Option<"splitSubFunc", "split-sub-func", "bool", /*default=*/"false",
-           "Whether to further split the sub-functions so that each generated"
-           "function only contains one loop band">
+    Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
+           "The top function for HLS synthesis">
   ];
 }
 
@@ -156,56 +172,27 @@ def AffineLoopOrderOpt : Pass<"affine-loop-order-opt", "FuncOp"> {
   let constructor = "mlir::scalehls::createAffineLoopOrderOptPass()";
 }
 
-def PartialAffineLoopTile : Pass<"partial-affine-loop-tile", "FuncOp"> {
-  let summary = "Partially tile affine nested loops";
+def AffineLoopUnrollAndPipeline :
+      Pass<"affine-loop-unroll-and-pipeline", "FuncOp"> {
+  let summary = "Unroll and pipeline affine loops";
   let description = [{
-    This partial-affine-loop-tile pass will try to tile all affine nested loops.
-    The difference with the official affine-loop-tile pass is this pass will
-    tile the outermost loop until the overall tiling size is equal to or larfer
-    than "tileSize".
+    This affine-loop-unroll-and-pipeline pass will try to unroll affine loops
+    with the specified size and pipeline the innermost loop level.
   }];
 
-  let constructor = "mlir::scalehls::createPartialAffineLoopTilePass()";
+  let constructor = "mlir::scalehls::createAffineLoopUnrollAndPipelinePass()";
 
   let options = [
-    Option<"tileSize", "tile-size", "unsigned", /*default=*/"1",
-           "Positive number: the size of tiling">,
-    Option<"applyOrderOpt", "apply-order-opt", "bool", /*default=*/"true",
-           "Whether apply loop order optimization after tiling">,
-    Option<"applyPipeline", "apply-pipeline", "bool", /*default=*/"true",
-           "Whether apply loop pipeline after tiling">
+    Option<"unrollSize", "unroll-size", "unsigned", /*default=*/"1",
+           "Positive number: the size of unrolling">,
+    Option<"loopOrderOpt", "loop-order-opt", "bool", /*default=*/"true",
+           "Whether loop order optimization after unrolling">
   ];
 }
 
 //===----------------------------------------------------------------------===//
 // Directive Optimization Passes
 //===----------------------------------------------------------------------===//
-
-def LegalizeToHLSCpp : Pass<"legalize-to-hlscpp", "FuncOp"> {
-  let summary = "Convert to emittable MLIR code";
-  let description = [{
-    This legalize-to-hlscpp pass will legalize the input IR to make it
-    emittable. Meanwhile, this pass will set some default pragmas for the
-    convenience of the subsequent transforms and analysis.
-  }];
-
-  let constructor = "mlir::scalehls::createLegalizeToHLSCppPass()";
-
-  let options = [
-    Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
-           "The top function for HLS synthesis">
-  ];
-}
-
-def CreateHLSCppPrimitive : Pass<"create-hlscpp-primitive", "FuncOp"> {
-  let summary = "Create HLS C++ multiplification primitives";
-  let description = [{
-    This create-hlscpp-primitive pass will convert 8-bits multiplifications to
-    HLS C++ primitives in order to utilize DSP instances in FPGA.
-  }];
-
-  let constructor = "mlir::scalehls::createCreateHLSCppPrimitivePass()";
-}
 
 def FuncPipelining : Pass<"func-pipelining", "FuncOp"> {
   let summary = "Apply function pipelining";
@@ -250,6 +237,16 @@ def ArrayPartition : Pass<"array-partition", "ModuleOp"> {
   }];
 
   let constructor = "mlir::scalehls::createArrayPartitionPass()";
+}
+
+def CreateHLSCppPrimitive : Pass<"create-hlscpp-primitive", "FuncOp"> {
+  let summary = "Create HLS C++ multiplification primitives";
+  let description = [{
+    This create-hlscpp-primitive pass will convert 8-bits multiplifications to
+    HLS C++ primitives in order to utilize DSP instances in FPGA.
+  }];
+
+  let constructor = "mlir::scalehls::createCreateHLSCppPrimitivePass()";
 }
 
 //===----------------------------------------------------------------------===//

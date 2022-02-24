@@ -5,8 +5,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Transforms/MultipleLevelDSE.h"
-#include "mlir/Analysis/LoopAnalysis.h"
-#include "mlir/Analysis/Utils.h"
+#include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
+#include "mlir/Dialect/Affine/Analysis/Utils.h"
 #include "mlir/Support/FileUtilities.h"
 #include "scalehls/Transforms/Passes.h"
 #include "llvm/Support/Debug.h"
@@ -357,7 +357,7 @@ LoopDesignSpace::getRandomClosestNeighbor(LoopDesignPoint point,
   }
 
   // Randomly pick one as the return point.
-  std::srand(std::time(0));
+  std::srand(time(0));
   llvm::shuffle(closestConfigs.begin(), closestConfigs.end(),
                 []() { return std::rand(); });
 
@@ -370,7 +370,7 @@ void LoopDesignSpace::exploreLoopDesignSpace(unsigned maxIterNum,
 
   // Exploration loop of the dse.
   for (unsigned i = 0; i < maxIterNum; ++i) {
-    std::srand(std::time(0));
+    std::srand(time(0));
     llvm::shuffle(paretoPoints.begin(), paretoPoints.end(),
                   []() { return std::rand(); });
 
@@ -888,7 +888,7 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
       maxDspNum = UINT_MAX;
 
     // Initialize an performance and resource estimator.
-    auto estimator = ScaleHLSEstimator(latencyMap, dspUsageMap, depAnalysis);
+    auto estimator = ScaleHLSEstimator(latencyMap, dspUsageMap, true);
     auto optimizer = ScaleHLSOptimizer(
         estimator, outputNum, maxDspNum, maxInitParallel, maxExplParallel,
         maxLoopParallel, maxIterNum, maxDistance);

@@ -44,7 +44,7 @@ module {
         affine.for %arg10 = 0 to 14 {
           %11 = affine.load %9[0, %arg8, %arg9, %arg10] : memref<1x6x14x14xf32>
           %12 = arith.cmpf olt, %11, %cst_0 : f32
-          %13 = select %12, %cst_0, %11 : f32
+          %13 = arith.select %12, %cst_0, %11 : f32
           affine.store %13, %8[0, %arg8, %arg9, %arg10] : memref<1x6x14x14xf32>
         }
       }
@@ -77,7 +77,7 @@ module {
         affine.for %arg10 = 0 to 5 {
           %11 = affine.load %7[0, %arg8, %arg9, %arg10] : memref<1x16x5x5xf32>
           %12 = arith.cmpf olt, %11, %cst_0 : f32
-          %13 = select %12, %cst_0, %11 : f32
+          %13 = arith.select %12, %cst_0, %11 : f32
           affine.store %13, %6[0, %arg8, %arg9, %arg10] : memref<1x16x5x5xf32>
         }
       }
@@ -116,7 +116,7 @@ module {
     affine.for %arg8 = 0 to 120 {
       %11 = affine.load %4[0, %arg8] : memref<1x120xf32>
       %12 = arith.cmpf olt, %11, %cst_0 : f32
-      %13 = select %12, %cst_0, %11 : f32
+      %13 = arith.select %12, %cst_0, %11 : f32
       affine.store %13, %3[0, %arg8] : memref<1x120xf32>
     }
 
@@ -143,7 +143,7 @@ module {
     affine.for %arg8 = 0 to 84 {
       %11 = affine.load %2[0, %arg8] : memref<1x84xf32>
       %12 = arith.cmpf olt, %11, %cst_0 : f32
-      %13 = select %12, %cst_0, %11 : f32
+      %13 = arith.select %12, %cst_0, %11 : f32
       affine.store %13, %1[0, %arg8] : memref<1x84xf32>
     }
     %10 = bufferization.to_memref %cst : memref<10xf32>
