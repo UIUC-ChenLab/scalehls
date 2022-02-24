@@ -5,7 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Translation/EmitHLSCpp.h"
-#include "mlir/Analysis/LoopAnalysis.h"
+#include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/IR/AffineExprVisitor.h"
 #include "mlir/IR/IntegerSet.h"
@@ -243,7 +243,7 @@ public:
   void emitIP(IPOp op);
 
   /// Special operation emitters.
-  void emitSelect(SelectOp op);
+  void emitSelect(arith::SelectOp op);
   void emitConstant(arith::ConstantOp op);
 
   /// Top-level MLIR module emitter.
