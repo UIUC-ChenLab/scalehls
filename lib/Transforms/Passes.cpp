@@ -96,6 +96,6 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
 }
 
 void scalehls::registerTransformsPasses() {
-  registerScaleHLSPassPipeline();
+  registerScaleHLSPyTorchPipeline();
   registerPasses();
 }
