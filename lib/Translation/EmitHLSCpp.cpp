@@ -1815,9 +1815,10 @@ void pack_mul(int8_t A[2], int8_t B, int16_t C[2]) {
 )XXX";
 
   for (auto &op : *module.getBody()) {
-    if (auto func = dyn_cast<FuncOp>(op))
-      emitFunction(func);
-    else
+    if (auto func = dyn_cast<FuncOp>(op)) {
+      if (func.getName() != "main")
+        emitFunction(func);
+    } else
       emitError(&op, "is unsupported operation.");
   }
 }
