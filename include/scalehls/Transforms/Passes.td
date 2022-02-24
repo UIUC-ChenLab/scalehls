@@ -253,6 +253,21 @@ def ArrayPartition : Pass<"array-partition", "ModuleOp"> {
 }
 
 //===----------------------------------------------------------------------===//
+// Tensor Optimization Passes
+//===----------------------------------------------------------------------===//
+
+def ShareTensorOperation : Pass<"share-tensor-operation", "ModuleOp"> {
+  let summary = "Share kernels for repetitive tensor operations";
+  let description = [{
+    This share-tensor-operation pass will analyze all tensor operations to see 
+    if there are any operations with exact same computation, and make them call 
+    a single function so that the operation is only instantiated once. 
+  }];
+
+  let constructor = "mlir::scalehls::createShareTensorOperationPass()";
+}
+
+//===----------------------------------------------------------------------===//
 // Simplification Passes
 //===----------------------------------------------------------------------===//
 

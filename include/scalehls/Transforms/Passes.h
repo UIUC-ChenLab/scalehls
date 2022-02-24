@@ -66,6 +66,9 @@ std::unique_ptr<Pass> createLoopPipeliningPass();
 std::unique_ptr<Pass> createArrayPartitionPass();
 std::unique_ptr<Pass> createCreateHLSCppPrimitivePass();
 
+/// Tensor optimization passes. 
+std::unique_ptr<Pass> createShareTensorOperationPass();
+
 /// Simplification passes.
 std::unique_ptr<Pass> createSimplifyAffineIfPass();
 std::unique_ptr<Pass> createAffineStoreForwardPass();

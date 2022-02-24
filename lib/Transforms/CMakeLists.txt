@@ -14,6 +14,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Simplification/ReduceInitialInterval.cpp
   Simplification/SimplifyAffineIf.cpp
   Simplification/SimplifyMemrefAccess.cpp
+  Tensor/ShareTensorOperation.cpp
   LegalizeToHLSCpp.cpp
   MultipleLevelDSE.cpp
   Passes.cpp
