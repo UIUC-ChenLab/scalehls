@@ -34,11 +34,11 @@ def QoREstimation : Pass<"qor-estimation", "ModuleOp"> {
 def MultipleLevelDSE : Pass<"dse", "ModuleOp"> {
   let summary = "Optimize HLS design at multiple abstraction level";
   let description = [{
-    This multiple-level-dse pass will automatically conduct the design space
-    exploration (DSE) across multiple abstraction levels. By calling methods
-    provided by qor-estimation, this pass is able to rapidly obtain the QoR
-    estimation of the current design point, and feed it back to the DSE engine
-    for an efficient optimization convergence.
+    This dse pass will automatically conduct the design space exploration (DSE)
+    across multiple abstraction levels. By calling methods provided by
+    qor-estimation, this pass is able to rapidly obtain the QoR estimation of
+    the current design point, and feed it back to the DSE engine for an
+    efficient optimization convergence.
   }];
 
   let constructor = "mlir::scalehls::createMultipleLevelDSEPass()";
@@ -63,8 +63,29 @@ def MultipleLevelDSE : Pass<"dse", "ModuleOp"> {
 // Graph Optimization Passes
 //===----------------------------------------------------------------------===//
 
+def CreateRuntimeMain : Pass<"create-runtime-main", "ModuleOp"> {
+  let summary = "Create the main function of runtime";
+  let description = [{
+    This create-runtime-main pass will create a new "main" function calling the
+    original top function. All constant tensors are instantiated in the new
+    "main" function and passed into the original top function as arguments after
+    the transform.
+  }];
+
+  let constructor = "mlir::scalehls::createCreateRuntimeMainPass()";
+
+  let options = [
+    Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
+           "The top function for HLS synthesis">
+  ];
+}
+
 def SimplifyTosaGraph : Pass<"simplify-tosa-graph", "FuncOp"> {
   let summary = "Remove redundant TOSA operations";
+  let description = [{
+    This simplify-tosa-graph pass will try to remove redundant transpose ops
+    through pattern matching.
+  }];
 
   let constructor = "mlir::scalehls::createSimplifyTosaGraphPass()";
 }
@@ -100,6 +121,10 @@ def SplitFunction : Pass<"split-function", "ModuleOp"> {
 
 def ConvertCopyToAffineLoops : Pass<"convert-copy-to-affine-loops", "FuncOp"> {
   let summary = "Convert copy and assign to affine loops";
+  let description = [{
+    This convert-copy-to-affine-loops pass will first remove redundant copies
+    and lower assigns to copies, and then convert copies to affine loops.
+  }];
 
   let constructor = "mlir::scalehls::createConvertCopyToAffineLoopsPass()";
 }
@@ -132,7 +157,8 @@ def MaterializeReduction : Pass<"materialize-reduction", "FuncOp"> {
   let summary = "Materialize loop reductions";
   let description = [{
     This materialize-reduction pass will materialize loop reductions with local
-    buffer read/writes in order to expose more optimizations targeting HLS.
+    buffer read/writes in order to expose more optimization opportunities
+    targeting HLS.
   }];
 
   let constructor = "mlir::scalehls::createMaterializeReductionPass()";
@@ -143,7 +169,7 @@ def AffineLoopPerfection : Pass<"affine-loop-perfection", "FuncOp"> {
   let description = [{
     This affine-loop-perfection pass will try to perfect all affine loops.
     Specifically, this pass will move operations under non-innermost loops into
-    innermost loop and create AffineIf regions to ensure the correctness of the
+    innermost loop and create if statements to ensure the correctness of the
     transformation.
   }];
 
@@ -166,7 +192,8 @@ def AffineLoopOrderOpt : Pass<"affine-loop-order-opt", "FuncOp"> {
   let summary = "Optimize the order of affine loop nests";
   let description = [{
     This affine-loop-order-opt pass will optimize the order of perfect affine
-    loop nests through polyhedral-based dependency analysis.
+    loop nests through polyhedral-based dependency analysis. The objective of
+    this pass is to maximize the distance of loop-carried dependencies.
   }];
 
   let constructor = "mlir::scalehls::createAffineLoopOrderOptPass()";
@@ -177,7 +204,8 @@ def AffineLoopUnrollAndPipeline :
   let summary = "Unroll and pipeline affine loops";
   let description = [{
     This affine-loop-unroll-and-pipeline pass will try to unroll affine loops
-    with the specified size and pipeline the innermost loop level.
+    with the specified size and pipeline the innermost loop. Optionally, this
+    pass can also optimize the loop order after unrolling.
   }];
 
   let constructor = "mlir::scalehls::createAffineLoopUnrollAndPipelinePass()";
@@ -233,7 +261,7 @@ def ArrayPartition : Pass<"array-partition", "ModuleOp"> {
   let description = [{
     This array-partition pass will automatically search for the best array
     partition solution for each on-chip memory instance and apply the solution
-    through changing the layout AffineMap of the corresponding MemRefType.
+    through changing the layout of the corresponding memref.
   }];
 
   let constructor = "mlir::scalehls::createArrayPartitionPass()";
@@ -267,8 +295,8 @@ def SimplifyAffineIf : Pass<"simplify-affine-if", "FuncOp"> {
 def AffineStoreForward : Pass<"affine-store-forward", "FuncOp"> {
   let summary = "Forward store to load, including conditional stores";
   let description = [{
-    This affine-store-forward pass is similar to memref-dataflow-opt, but
-    supports to forward stores located in AffineIfOp regions.
+    This affine-store-forward pass is similar to scal-repl, but supports to
+    forward stores located in if statements.
   }];
 
   let constructor = "mlir::scalehls::createAffineStoreForwardPass()";

@@ -17,7 +17,8 @@ class Pass;
 namespace mlir {
 namespace scalehls {
 
-struct ScaleHLSOptions : public PassPipelineOptions<ScaleHLSOptions> {
+struct ScaleHLSPyTorchPipelineOptions
+    : public PassPipelineOptions<ScaleHLSPyTorchPipelineOptions> {
   Option<std::string> hlscppTopFunc{
       *this, "top-func", llvm::cl::init("forward"),
       llvm::cl::desc("Specify the top function of the design")};
@@ -44,6 +45,9 @@ std::unique_ptr<Pass> createQoREstimationPass();
 std::unique_ptr<Pass> createMultipleLevelDSEPass();
 
 /// Graph optimization passes.
+std::unique_ptr<Pass> createCreateRuntimeMainPass();
+std::unique_ptr<Pass>
+createCreateRuntimeMainPass(const ScaleHLSPyTorchPipelineOptions &opts);
 std::unique_ptr<Pass> createSimplifyTosaGraphPass();
 std::unique_ptr<Pass> createLegalizeDataflowPass();
 std::unique_ptr<Pass> createLegalizeDataflowPass(unsigned dataflowGran);
@@ -52,7 +56,8 @@ std::unique_ptr<Pass> createConvertCopyToAffineLoopsPass();
 
 /// HLSCpp legalization pass.
 std::unique_ptr<Pass> createLegalizeToHLSCppPass();
-std::unique_ptr<Pass> createLegalizeToHLSCppPass(const ScaleHLSOptions &opts);
+std::unique_ptr<Pass>
+createLegalizeToHLSCppPass(const ScaleHLSPyTorchPipelineOptions &opts);
 
 /// Loop optimization passes.
 std::unique_ptr<Pass> createMaterializeReductionPass();

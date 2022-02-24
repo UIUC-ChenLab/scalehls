@@ -53,10 +53,10 @@ $ mlir-clang test_gemm.c -function=test_gemm -memref-fullrank -raise-scf-to-affi
 
 Meanwhile, we provide a `pyscalehls` tool to showcase the `scalehls` Python library:
 ```sh
-$ pyscalehls.py samples/polybench/syrk/test_syrk.c -f test_syrk
+$ pyscalehls.py test_gemm.c -f test_gemm > test_gemm_pyscalehls.cpp
 ```
 
-## Compiling PyTorch model
+## Compiling PyTorch Model
 If you have installed [Torch-MLIR](https://github.com/llvm/torch-mlir), you should be able to run the following test:
 ```sh
 $ cd samples/pytorch/lenet
@@ -65,12 +65,11 @@ $ # Parse PyTorch model to TOSA dialect (with mlir_venv activated).
 $ # This may take several minutes to compile due to the large amount of weights.
 $ python3 export_lenet_mlir.py | torch-mlir-opt \
     -torchscript-module-to-torch-backend-pipeline="optimize=true" \
-    -torch-backend-to-tosa-backend-pipeline="optimize=true" \
-    -canonicalize > lenet.mlir
+    -torch-backend-to-tosa-backend-pipeline="optimize=true" > lenet.mlir
 
 $ # Optimize the model and emit C++ code.
 $ scalehls-opt lenet.mlir \
-    -scalehls-pytorch-pipeline="top-func=forward opt-level=2 dataflow-gran=2" \
+    -scalehls-pytorch-pipeline="top-func=forward dataflow-gran=2 loop-unroll-size=4" \
     | scalehls-translate -emit-hlscpp > lenet.cpp
 ```
 

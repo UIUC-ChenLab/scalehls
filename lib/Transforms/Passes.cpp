@@ -23,9 +23,9 @@ namespace {
 } // namespace
 
 void scalehls::registerScaleHLSPyTorchPipeline() {
-  PassPipelineRegistration<ScaleHLSOptions>(
+  PassPipelineRegistration<ScaleHLSPyTorchPipelineOptions>(
       "scalehls-pytorch-pipeline", "Compile TOSA (from Torch-MLIR) to HLS C++",
-      [](OpPassManager &pm, const ScaleHLSOptions &opts) {
+      [](OpPassManager &pm, const ScaleHLSPyTorchPipelineOptions &opts) {
         unsigned dataflowGran = 0;
         unsigned loopUnrollSize = 0;
         unsigned vectorSize = 0;
@@ -43,6 +43,7 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
           vectorSize = opts.vectorSize;
 
         // Graph-level optimizations.
+        pm.addPass(mlir::createCanonicalizerPass());
         if (dataflowGran) {
           pm.addPass(scalehls::createSimplifyTosaGraphPass());
           pm.addPass(scalehls::createLegalizeDataflowPass(dataflowGran));

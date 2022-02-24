@@ -4,6 +4,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Directive/FuncPipelining.cpp
   Directive/LoopPipelining.cpp
   Graph/ConvertCopyToAffineLoops.cpp
+  Graph/CreateRuntimeMain.cpp
   Graph/LegalizeDataflow.cpp
   Graph/SimplifyTosaGraph.cpp
   Graph/SplitFunction.cpp
