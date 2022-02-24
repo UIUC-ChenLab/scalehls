@@ -3,11 +3,9 @@
 
 from pycparser import parse_file, c_generator
 from pycparser import c_ast
-import sys
 import pandas as pd
 import numpy as np
 import random
-import re
 
 class DirectiveGenerator():
     def __init__(self, in_file_path):
@@ -104,7 +102,49 @@ class RandomDirectiveGenerator(DirectiveGenerator):
             
             # Step 6: if choose to not have the pragma ('none') then empty the directives_list
             if (scheme == 'none'):
-                directives_list = [] 
+                directives_list = []
+
+        elif (knob.type == 'loopU'):
+            # Step 1: check the loop boundary -- if it is fixed or not
+            boundary = knob['range']
+            if (boundary != 'Variable'):
+                boundary = int(boundary)
+                if (boundary > 256): # if the boundary > 256, we treat it as variable loops
+                                     # because unrolling is likely to cause big problems
+                    boundary = 'Variable'
+                
+            # Step 2: pick a loop pragma scheme, depending on the boundary type
+            if (boundary == 'Variable'): # for vairable boundary we do not consider the unrolling
+                scheme = random.choice(['none'])
+            else: # for fixed boundary, all options are available
+                scheme = random.choice(['unroll','none'])
+            
+            # Step 3: generate the first part of the pragma, and add to the list of parameters
+            pragma = 'set_directive_'+scheme
+            directives_list.append(pragma)
+            parameters_dict['loop_'+knob['name']+'_type'] = scheme
+            
+            # Step 4: generate the loop factor for the unrolling factor if needed
+            factor = 2 # default case, fail safe
+            if (scheme == 'unroll'):
+                factor = random.randrange(2, min(boundary+1, 256)) # unrolling with factor 1 effectively is 'none'
+                # pick a divisible unrolling factor
+                # this is not required by HLS, but good practice in general
+                # also reduces the possible options
+                while (boundary % factor != 0): # limit the factor to 256, larger factor is useless in most cases anyway
+                    factor = random.randrange(2, min(boundary+1, 256))
+                directives_list.append('-factor '+str(factor))
+                parameters_dict['loop_'+knob['name']+'_factor'] = factor
+            else: # if not unroll then we set this factor to 0 for safety and debugging purpose
+                parameters_dict['loop_'+knob['name']+'_factor'] = 0
+
+            # Step 5: add the loop label to the pragma
+            loop_label = '{0}/{1}'.format(knob['scope'], knob['name'])
+            directives_list.append(loop_label)
+            
+            # Step 6: if choose to not have the pragma ('none') then empty the directives_list
+            if (scheme == 'none'):
+                directives_list = []
             
         elif (knob.type == 'array'): # if the type of the tunable knob (directive) is an array
             boundary = int(knob['range'])
@@ -145,6 +185,7 @@ class RandomDirectiveGenerator(DirectiveGenerator):
                     # the size of this dimension must be divisible by the unrolling factor
                     # this is required by HLS
                     while (boundary % factor != 0):
+                        print("finding factor")
                         factor = random.randrange(2, min(boundary+1, 256)) # +1 because the upper bound is not inclusive
 
                     # dimensions start with 1 if we want to control the dimensions separately
@@ -175,7 +216,7 @@ class DirectiveCrossover(DirectiveGenerator):
         directives_list = [] # list of components of a directive, to be combined to a string and export to a tcl file
         parameters_dict = {} # dictionary of parameters for this directive, to be converted to a pandas dataframe
         
-        if (knob.type == 'loop'): # if the type of the tunable knob (directive) is a loop
+        if (knob.type == 'loop' or knob.type == 'loopU'): # if the type of the tunable knob (directive) is a loop
             # Step 1: check the loop boundary -- if it is fixed or not
             # skip, since both parents of the current set will be legal
                 
@@ -204,7 +245,7 @@ class DirectiveCrossover(DirectiveGenerator):
             
             # Step 6: if choose to not have the pragma ('none') then empty the directives_list
             if (scheme == 'none'):
-                directives_list = [] 
+                directives_list = []
             
         elif (knob.type == 'array'): # if the type of the tunable knob (directive) is an array
             boundary = int(knob['range'])
@@ -289,7 +330,7 @@ class DirectiveMutator(DirectiveGenerator):
         directives_list = [] # list of components of a directive
         parameters_dict = {} # dictionary of parameters for this directive, to be converted to a pandas dataframe
         
-        if (knob.type == 'loop'): # if the type of the tunable knob (directive) is a loop
+        if (knob.type == 'loop' or knob.type == 'loopU'): # if the type of the tunable knob (directive) is a loop
             importance_type = importances['loop_'+knob['name']+'_type']
             importance_factor = importances['loop_'+knob['name']+'_factor']
                     
@@ -447,7 +488,7 @@ class DirectiveWriter():
         directives_list = [] # list of components of a directive, to be combined to a string and export to a tcl file
         parameters_dict = {} # dictionary of parameters for this directive, to be converted to a pandas dataframe
         
-        if (knob.type == 'loop'): # if the type of the tunable knob (directive) is a loop
+        if (knob.type == 'loop' or knob.type == 'loopU'): # if the type of the tunable knob (directive) is a loop
             #boundary = int(knob['range'])
             scheme = context['loop_'+knob['name']+'_type']
             pragma = 'set_directive_'+scheme

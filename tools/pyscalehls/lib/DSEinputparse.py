@@ -1,5 +1,6 @@
 from pickle import FALSE
 import re
+import copy
 
 def read_user_input():
     default_file_flag = False
@@ -47,7 +48,11 @@ def create_params(var_forlist, var_arraylist_sized):
     paramfile = open ("generated_files/ML_params.csv", 'w')
     paramfile.write("type,name,scope,range,dim\n")
     for item in var_forlist :
-        if item:
+        if item == "":
+            None
+        elif re.findall(r'U+', item[0]):
+            paramfile.write("loopU,"+str(item[0])+','+str(item[2])+','+str(item[3])+"\n")
+        else:
             paramfile.write("loop,"+str(item[0])+','+str(item[2])+','+str(item[3])+"\n")
     #array
     for item in var_arraylist_sized :
@@ -126,7 +131,15 @@ def process_source_file(inputfile, sdse=False):
                     popped = True
                 
                 if len(var_forlist_tree) == 0 and len(var_forlist_tree_popped) > 0:
-                    var_forlist_scoped.append((scope, var_forlist_tree_popped[-1][0], var_forlist_tree_popped[0][0], loopband_hotness))
+                    subtree = ""
+                    if len(var_forlist_tree_popped) == 1:
+                        subtree = var_forlist_tree_popped[0][0]
+                    else:
+                        for i in range(len(var_forlist_tree_popped) - 2, -1, -1):
+                            subtree = subtree + "-" + str(var_forlist_tree_popped[i][0])
+
+                    var_forlist_scoped.append((scope, var_forlist_tree_popped[-1][0], subtree, loopband_hotness))
+                    # var_forlist_scoped.append((scope, var_forlist_tree_popped[-1][0], var_forlist_tree_popped[0][0], loopband_hotness))
                     var_forlist_tree = []
                     var_forlist_tree_popped = []
                     loopband_hotness = 0
@@ -135,19 +148,30 @@ def process_source_file(inputfile, sdse=False):
             # temp measure
             if(re.findall(r'^(\s)*#include', line)): #ignore #include
                 None
+                newfile.write(line)
             elif(re.findall(r'^(\s)*#pragma', line)): #ignore #pragma
                 if ((re.findall(r'^(\s)*#pragma HLS pipeline II', line)) and (sdse)):
-                    newfile.write(line)
+                    newfile.write("#pragma HLS pipeline\n")
                 else: 
                     None
             elif(re.findall(r'using namespace std;', line)): #ignore #pragma
                 None
             # todo: temp measure -> implement using MLIR IR
+            # change int32_t to int
+            elif(re.findall('int32_t', line)):
+                newfile.write(re.sub('int32_t', 'int', line))
             elif(re.findall('for', line)): #find loops // only supports one forloop per line
                 if not(re.findall(r'(.)*(//)(.)*(for)(.)*', line)): # ignore for in comment
                     #save scoped list if start new for loop band
                     if popped:
-                        var_forlist_scoped.append((scope, var_forlist_tree[0][0], var_forlist_tree_popped[0][0], loopband_hotness))
+                        subtree = ""
+                        for i in range(len(var_forlist_tree) - 1, 0, -1):
+                            var_forlist_tree_popped.append(var_forlist_tree[i])
+                        for i in range(len(var_forlist_tree_popped) - 1, -1, -1):
+                            subtree = subtree + "-" + str(var_forlist_tree_popped[i][0])
+
+                        var_forlist_scoped.append((scope, var_forlist_tree[0][0], subtree, loopband_hotness))
+                        # var_forlist_scoped.append((scope, var_forlist_tree[0][0], var_forlist_tree_popped[0][0], loopband_hotness))                        
                         var_forlist_tree_popped = []
                         loopband_hotness = 0
                         popped = False
@@ -236,5 +260,38 @@ def process_source_file(inputfile, sdse=False):
                     loopband_hotness += line_trip_count * (4 * num_mul + num_add) #weight for mul and addition
     file.close()
     newfile.close()
+
+    #add outer most loop for loops with more than one nested loop band
+    if sdse:
+        var_forlist_buffer = []
+        for i in range(len(var_forlist_scoped) - 2):
+            if var_forlist_scoped[i][1] == var_forlist_scoped[i+1][1]:
+                imm_parent = var_forlist_scoped[i][1]
+                #find immidiate parent
+                a = re.findall(r'\d+', var_forlist_scoped[i][2])
+                b = re.findall(r'\d+', var_forlist_scoped[i+1][2])
+                try:
+                    for i in range(len(a) - 2, -1, -1):
+                        for j in range(len(b) - 2, -1, -1):
+                            if int(a[i]) == int(b[j]):
+                                imm_parent = int(b[j])
+                                raise StopIteration
+                except StopIteration: 
+                    pass
+                
+                #find parent loop in for list
+                for loopdirectory in var_forlist:
+                    if loopdirectory != "":
+                        loc_loopnum = re.findall(r'\d+', loopdirectory[0])
+                        if int(loc_loopnum[0]) == int(imm_parent):
+                            if len(var_forlist_buffer) > 0:
+                                if var_forlist_buffer[-1][0] != loopdirectory[0]:
+                                    var_forlist_buffer.append(loopdirectory)
+                            else:
+                                var_forlist_buffer.append(loopdirectory)
+        var_forlist = copy.deepcopy(var_forlist_buffer)
+        # mark loop
+        # for item in var_forlist:
+        #     item[0] = item[0] + "U"
     
     return var_forlist, var_arraylist_sized, var_forlist_scoped

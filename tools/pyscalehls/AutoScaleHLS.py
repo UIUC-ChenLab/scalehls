@@ -26,25 +26,20 @@ def print_variables(var_forlist, var_arraylist_sized):
         print(item)    
 
 def sortbyhotness(inputarray):  #insertion sort
-    
     sortedarray = copy.deepcopy(inputarray)
-
     try:
         while True:
             sortedarray.remove("")
     except ValueError:
         pass
     
-    for i in range(1, len(sortedarray)):
- 
+    for i in range(1, len(sortedarray)): 
         key = sortedarray[i]
-
         j = i-1
         while j >= 0 and key[-1] > sortedarray[j][-1] :
                 sortedarray[j + 1] = sortedarray[j]
                 j -= 1
         sortedarray[j + 1] = key
-
     return sortedarray
 
 def main():

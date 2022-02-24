@@ -1,5 +1,5 @@
-target_source_file_location = ../../samples/AutoScaleHLS_tests/resnet18_shls.cpp
-top_function = main_graph
+#target_source_file_location = ../../samples/AutoScaleHLS_tests/resnet18_shls.cpp
+#top_function = main_graph
 
 #target_source_file_location = test.c
 #top_function = dataflow7
@@ -13,6 +13,8 @@ top_function = main_graph
 #target_source_file_location = ../../samples/polybench2/atax.c
 #top_function = kernel_atax
 
+target_source_file_location = ../../samples/rosetta/spam-filter/sgd_sw.c
+top_function = SgdLR_sw
 
 part = xc7k70tfbv676-1
 

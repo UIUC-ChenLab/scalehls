@@ -43,7 +43,7 @@ def dataframe_create(parafile, no_partitioning = False):
             knob.at['dim']=int(0)
         
         # parse the file and find the column names, the naming MUST be consistent with generate_directives.py
-        if(knob['type'] == 'loop'):
+        if(knob['type'] == 'loop' or knob['type'] == 'loopU'):
             list_columns.append('loop_'+name+'_type')
             list_columns.append('loop_'+name+'_factor')
         elif(knob['type'] == 'array'):
@@ -95,6 +95,7 @@ def threaded_generate_random_training_set(parameter_file, directives_path, templ
         # generate a new design point
         
         _, parameters = dir_gen.generate_directives(out_file_path=directive_project_ident, no_partitioning=False)
+        print("running")
 
         # check if the design point is valid
         if (get_row(dataset, parameters).empty): 
@@ -108,7 +109,7 @@ def threaded_generate_random_training_set(parameter_file, directives_path, templ
     except OSError as e:
         print("Error: %s : %s" % (os.file_path, e.strerror))
 
-    # print("Finishing point "+project_ident)
+    print("Finishing point "+project_ident)
 
     return new_design_point
 
