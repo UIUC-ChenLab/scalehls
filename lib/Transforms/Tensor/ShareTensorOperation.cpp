@@ -85,13 +85,15 @@ static bool applyShareTensorOperation(ModuleOp module) {
   for (auto operand : maxInfo.op.getOperands()) {
     inputTypes.push_back(operand.getType());
   }
+  auto functionName = "shared_convolution";
   auto resultType = maxInfo.op.getResult().getType();
   auto newType = builder.getFunctionType(inputTypes, resultType);
   builder.setInsertionPointToStart(module.getBody());
-  auto newFuncOp = builder.create<FuncOp>(builder.getUnknownLoc(), "shared_convolution", newType);
+  auto newFuncOp = builder.create<FuncOp>(builder.getUnknownLoc(), functionName, newType);
   auto entryBlock = newFuncOp.addEntryBlock();
   builder.setInsertionPointToStart(entryBlock);
 
+  // Create Conv2DOp inside the created function/
   auto input = entryBlock->getArgument(0);
   auto weight = entryBlock->getArgument(1);
   auto bias = entryBlock->getArgument(2);
@@ -101,23 +103,31 @@ static bool applyShareTensorOperation(ModuleOp module) {
   auto dilation = maxInfo.op.dilation();
   auto newConvOp = builder.create<tosa::Conv2DOp>(builder.getUnknownLoc(), outputType, input, weight, bias, pad, stride, dilation);
 
-  auto newReturnOp = builder.create<ReturnOp>(builder.getUnknownLoc(), newConvOp.output());
+  // Create ReturnOp inside the created function/
+  builder.create<ReturnOp>(builder.getUnknownLoc(), newConvOp.output());
 
   // Record ops to be erased.
   SmallVector<Operation *, 32> opToErase;
 
-  // Convert those convolutions into a shared function.
-  /*for (auto func : module.getOps<FuncOp>()) {
+  // Convert matching convolutions into CallOp to shared function.
+  for (auto func : module.getOps<FuncOp>()) {
     func.walk([&](Operation *op) {
       if (auto Conv2DOp = dyn_cast<tosa::Conv2DOp>(op)) {
         ConvInfo info;
         info.op = Conv2DOp;
         if (maxInfo == info) {
-          //Conv2DOp.dump();
+          opToErase.push_back(Conv2DOp);
+          builder.setInsertionPoint(Conv2DOp);
+          auto newCallOp = builder.create<CallOp>(builder.getUnknownLoc(), functionName, Conv2DOp->getResultTypes(), Conv2DOp->getOperands());
+          Conv2DOp.replaceAllUsesWith(newCallOp);
         }
       }
     });
-  }*/
+  }
+
+  // Erase all ops on the list.
+  for (auto op : opToErase)
+    op->erase();
 
   return true;
 }
