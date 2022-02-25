@@ -55,7 +55,8 @@ static bool applyShareTensorOperation(ModuleOp module) {
   std::map<ConvInfo, unsigned> countMap;
 
   // Traverse the entire module and count all the convolutions.
-  for (auto func : module.getOps<FuncOp>()) {
+  auto funcs = module.getOps<FuncOp>();
+  for (auto func : funcs) {
     func.walk([&](Operation *op) {
       if (auto Conv2DOp = dyn_cast<tosa::Conv2DOp>(op)) {
         ConvInfo info;
@@ -110,7 +111,7 @@ static bool applyShareTensorOperation(ModuleOp module) {
   SmallVector<Operation *, 32> opToErase;
 
   // Convert matching convolutions into CallOp to shared function.
-  for (auto func : module.getOps<FuncOp>()) {
+  for (auto func : funcs) {
     func.walk([&](Operation *op) {
       if (auto Conv2DOp = dyn_cast<tosa::Conv2DOp>(op)) {
         ConvInfo info;
