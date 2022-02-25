@@ -354,8 +354,15 @@ def normalize_importance(importances):
     return adjusted_importances
 
 
-def DSE_searching(dataset, models, total_steps, top_function, part, parameter_file, directives_path, template_path, \
+def DSE_searching(proj_name, dataset, models, total_steps, top_function, part, parameter_file, directives_path, template_path, \
                                                                 dir_gen, crossover, mutator, writer, feature_columns):
+
+    outfile = '../../DSE_out.csv'
+    outfilep ='../../DSE_out_pareto.csv'
+
+    if proj_name != "":
+        outfile = '../../' + proj_name + '_DSE_out.csv'
+        outfilep ='../../' + proj_name + '_DSE_out_pareto.csv'
 
     no_partitioning = False    
     [regr_lat, regr_dsp, regr_ff, regr_lut, regr_bram, clss_timeout] = models
@@ -498,10 +505,9 @@ def DSE_searching(dataset, models, total_steps, top_function, part, parameter_fi
         print(pareto_frontier)
 
         # save data instantly for easier test running
-        dataset.to_csv('../../DSE_out.csv')
-        pareto_frontier.to_csv('../../DSE_out_pareto.csv')
+        dataset.to_csv(outfile)
+        pareto_frontier.to_csv(outfilep)
         
-
         # increment the global step
         step = step + 1
 
@@ -516,10 +522,10 @@ def DSE_searching(dataset, models, total_steps, top_function, part, parameter_fi
 
 
 
-def DSE_start(dataset, total_steps, top_function, part, feature_columns):
+def DSE_start(dir, proj_name, dataset, total_steps, top_function, part, feature_columns):
 
     #run hls in temp folder
-    vhls_dir = "generated_files/vhls_dse_temp"
+    vhls_dir = dir + "/vhls_dse_temp"
     if not(os.path.exists(vhls_dir)):
         os.makedirs(vhls_dir)
     os.chdir(vhls_dir)
@@ -543,7 +549,7 @@ def DSE_start(dataset, total_steps, top_function, part, feature_columns):
 
     update_models(models, dataset)
 
-    DSE_searching(dataset, models, total_steps, top_function, part, parameter_file, directives_path, template_path, dir_gen, crossover, mutator, writer, feature_columns)
+    DSE_searching(proj_name, dataset, models, total_steps, top_function, part, parameter_file, directives_path, template_path, dir_gen, crossover, mutator, writer, feature_columns)
 
     #return to main working directory
     os.chdir("../..")

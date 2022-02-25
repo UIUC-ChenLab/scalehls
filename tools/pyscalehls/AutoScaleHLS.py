@@ -44,6 +44,7 @@ def sortbyhotness(inputarray):  #insertion sort
 
 def main():
     #temp files store location
+    proj_name = ""
     tar_dir = "generated_files"
 
     parser = argparse.ArgumentParser(prog='Cfor_lex')
@@ -59,11 +60,42 @@ def main():
     parser.add_argument('-p', dest='part',
                     metavar="part",
                     help='SoC part')
-    parser.add_argument('-c', '--clean_temp', action='store_true',
-                help='clean tempfiles')
-    parser.add_argument('-cf', '--clean_all', action='store_true',
-                help='clean all generated files')                
+    parser.add_argument('-m', dest='tracker',
+                    metavar="tracker",
+                    help='for multiple instances')
+    parser.add_argument('-c', '--clean_temptemp', action='store_true',
+                help='clean temptemp files')
+    parser.add_argument('-cf', '--clean_temp', action='store_true',
+                help='clean all temp files')
+    parser.add_argument('-cff', '--clean_all', action='store_true',
+                help='clean all generated files')               
     opts = parser.parse_args()
+
+    if opts.tracker:
+        tar_dir = tar_dir + "_" + opts.tracker
+        proj_name = opts.tracker
+
+    if opts.clean_temptemp:
+        try:
+            shutil.rmtree(tar_dir + "/scalehls_dse_temp")
+        except OSError as e:
+            print("Did not find \"scalehls_dse_temp\"")
+            # print("Error: %s : %s" % (os.file_path, e.strerror))
+        try:
+            shutil.rmtree(tar_dir + "/vhls_dse_temp")
+        except OSError as e:
+            print("Did not find \"vhls_dse_temp\"")
+            # print("Error: %s : %s" % (os.file_path, e.strerror))
+        return 0
+
+    if opts.clean_temp:
+        #remove generated files
+        try:
+            shutil.rmtree(tar_dir)
+        except OSError as e:
+            print("Did not find \"directory\"")
+            # print("Error: %s : %s" % (os.file_path, e.strerror))
+        return 0
 
     if opts.clean_all:
         #remove dse output
@@ -77,20 +109,7 @@ def main():
         try:
             shutil.rmtree(tar_dir)
         except OSError as e:
-            print("Did not find \"generated_files\"")
-            # print("Error: %s : %s" % (os.file_path, e.strerror))
-        return 0
-
-    if opts.clean_temp:
-        try:
-            shutil.rmtree(tar_dir + "/scalehls_dse_temp")
-        except OSError as e:
-            print("Did not find \"scalehls_dse_temp\"")
-            # print("Error: %s : %s" % (os.file_path, e.strerror))
-        try:
-            shutil.rmtree(tar_dir + "/vhls_dse_temp")
-        except OSError as e:
-            print("Did not find \"vhls_dse_temp\"")
+            print("Did not find \"directory\"")
             # print("Error: %s : %s" % (os.file_path, e.strerror))
         return 0
 
@@ -113,19 +132,19 @@ def main():
     while val == "":
         val = input("What ScaleHLS optimizations? (Manual / DSE / None)\n")
         if((val == "DSE") or (val == "D") or (val == "d")):
-            PYSHLS.scalehls_dse(source_file, inputtop)
+            PYSHLS.scalehls_dse(tar_dir, source_file, inputtop)
 
-            var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file('generated_files/ScaleHLS_DSE_out.cpp', sdse=True)
+            var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_DSE_out.cpp", sdse=True)
             #var_forlist = []
             print_variables(var_forlist, var_arraylist_sized)
         elif((val == "Manual") or (val == "M") or (val == "m")):
-            opt_knobs, opt_knob_names = PYSHLS.ScaleHLSopt(source_file, inputtop, "generated_files/ScaleHLS_opted.c")   
+            opt_knobs, opt_knob_names = PYSHLS.ScaleHLSopt(source_file, inputtop, tar_dir + "/ScaleHLS_opted.c")   
             print_optknobs(opt_knobs, opt_knob_names)
 
-            var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file("generated_files/ScaleHLS_opted.c")
+            var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_opted.c")
             print_variables(var_forlist, var_arraylist_sized)
         elif((val == "None") or (val == "N") or (val == "n")):
-            var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file(source_file)
+            var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file(tar_dir, source_file)
 
             #var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file_array('generated_files/ScaleHLS_DSE_out.cpp')
             
@@ -142,10 +161,10 @@ def main():
     #     print(i)
 
     #create paramfile
-    INPAR.create_params(var_forlist, var_arraylist_sized)
+    INPAR.create_params(tar_dir, var_forlist, var_arraylist_sized)
 
     #create template
-    INPAR.create_template(source_file, inputfiles, template)
+    INPAR.create_template(tar_dir, source_file, inputfiles, template)
 
     #Create Random Training Set
     val = ""
@@ -153,17 +172,17 @@ def main():
         val = input("Generate Random Training Set? (Y / N)\n")
         # val = "n"
         if((val == "Y") or (val == "y") or (val == "yes")):
-            dataset, feature_columns = RT.random_train_RFML(inputtop, inputpart, nub_of_init = 20)
+            dataset, feature_columns = RT.random_train_RFML(tar_dir, inputtop, inputpart, nub_of_init = 20)
             print(dataset)
         elif((val == "N") or (val == "n") or (val == "no")):
-            parameter_file = 'generated_files/ML_params.csv'
+            parameter_file = tar_dir + '/ML_params.csv'
             dataset, feature_columns, label_columns = RT.dataframe_create(parameter_file)
-            dataset = pd.read_csv('generated_files/ML_train.csv', index_col=0)
+            dataset = pd.read_csv(tar_dir + '/ML_train.csv', index_col=0)
             # dataset = pd.read_csv('generated_files/ML_train(2mm).csv', index_col=0)
             print(dataset)
 
 
-    DMain.DSE_start(dataset, 150, inputtop, inputpart, feature_columns)
+    DMain.DSE_start(tar_dir, proj_name, dataset, 150, inputtop, inputpart, feature_columns)
     
 
 

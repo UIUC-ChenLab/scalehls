@@ -65,11 +65,11 @@ def do_run(command):
     ret = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
     return ret.stdout
 
-def scalehls_dse(source_file, inputtop):
+def scalehls_dse(dir, source_file, inputtop):
     print("Starting ScaleHLS DSE")
 
     #scalehls dse temp directory
-    sdse_dir = "generated_files/scalehls_dse_temp/"
+    sdse_dir = dir + "/scalehls_dse_temp/"
 
     if not(os.path.exists(sdse_dir)):
         os.makedirs(sdse_dir)
@@ -81,7 +81,7 @@ def scalehls_dse(source_file, inputtop):
     process = subprocess.run(['scalehls-opt', '-materialize-reduction', '-dse=top-func='+ inputtop + ' output-path=./' + sdse_dir + ' csv-path=./' + sdse_dir + ' ' + targetspec, '-debug-only=scalehls'], 
                             stdin=p1.stdout, stdout=subprocess.DEVNULL)
 
-    fout = open('generated_files/'+ 'ScaleHLS_DSE_out.cpp', 'wb')
+    fout = open(dir + '/ScaleHLS_DSE_out.cpp', 'wb')
     subprocess.run(['scalehls-translate', '-emit-hlscpp', sdse_dir + inputtop + '_pareto_0.mlir'], stdout=fout)
 
     print("Finished ScaleHLS DSE")

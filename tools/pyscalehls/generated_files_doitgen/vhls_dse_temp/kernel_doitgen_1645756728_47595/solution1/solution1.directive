@@ -1,0 +1,42 @@
+<AutoPilot:ProjectResources xmlns:AutoPilot="com.autoesl.autopilot.ui.directiveView">
+    <sourceFile name="">
+        <directive functionName="kernel_doitgen" label="loop1" functionLabel="">
+            <pragma name="UNROLL">
+                <option name="factor" value="5"/>
+            </pragma>
+        </directive>
+        <directive functionName="kernel_doitgen" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="v3" positionalBoolean="4"/>
+                <option name="block" value="" positionalBoolean="type"/>
+                <option name="factor" value="10"/>
+                <option name="dim" value="2"/>
+            </pragma>
+        </directive>
+        <directive functionName="kernel_doitgen" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="v4" positionalBoolean="4"/>
+                <option name="cyclic" value="" positionalBoolean="type"/>
+                <option name="factor" value="6"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+        <directive functionName="kernel_doitgen" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="v4" positionalBoolean="4"/>
+                <option name="cyclic" value="" positionalBoolean="type"/>
+                <option name="factor" value="6"/>
+                <option name="dim" value="2"/>
+            </pragma>
+        </directive>
+        <directive functionName="kernel_doitgen" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="v5" positionalBoolean="4"/>
+                <option name="cyclic" value="" positionalBoolean="type"/>
+                <option name="factor" value="15"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+    </sourceFile>
+</AutoPilot:ProjectResources>
+

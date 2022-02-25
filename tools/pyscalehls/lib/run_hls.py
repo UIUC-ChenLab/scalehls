@@ -117,7 +117,7 @@ def execute_hls(script_path, verbose=False, timelimit=300):
         return False
 
 def get_perf (template_path, directives_path, top_function, part, parameters, project_ident, verbose=False, timelimit=500):
-    print("Hey Vivado")
+    # print("Hey Vivado")
     
     project_name = top_function+'_'+project_ident
     script_path = os.path.join(project_name+'.tcl')

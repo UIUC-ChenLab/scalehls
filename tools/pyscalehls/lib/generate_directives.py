@@ -185,7 +185,7 @@ class RandomDirectiveGenerator(DirectiveGenerator):
                     # the size of this dimension must be divisible by the unrolling factor
                     # this is required by HLS
                     while (boundary % factor != 0):
-                        print("finding factor")
+                        # print("finding factor")
                         factor = random.randrange(2, min(boundary+1, 256)) # +1 because the upper bound is not inclusive
 
                     # dimensions start with 1 if we want to control the dimensions separately

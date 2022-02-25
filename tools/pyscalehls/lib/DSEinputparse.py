@@ -44,8 +44,8 @@ def read_template():
     file.close()
     return template
 
-def create_params(var_forlist, var_arraylist_sized):
-    paramfile = open ("generated_files/ML_params.csv", 'w')
+def create_params(dir, var_forlist, var_arraylist_sized):
+    paramfile = open (dir + "/ML_params.csv", 'w')
     paramfile.write("type,name,scope,range,dim\n")
     for item in var_forlist :
         if item == "":
@@ -66,8 +66,8 @@ def create_params(var_forlist, var_arraylist_sized):
     paramfile.close()
     return 0
 
-def create_template(sourcefile, inputfiles, template):
-    templatefile = open ("generated_files/ML_template.txt", 'w')
+def create_template(dir, sourcefile, inputfiles, template):
+    templatefile = open (dir + "/ML_template.txt", 'w')
     templatefile.write("open_project {{ project_name }}\n")
     templatefile.write("set_top {{ top_function }}\n")
     if inputfiles:
@@ -79,7 +79,7 @@ def create_template(sourcefile, inputfiles, template):
         templatefile.write(item)
     return 0
 
-def process_source_file(inputfile, sdse=False):
+def process_source_file(dir, inputfile, sdse=False):
     
     var_forlist_tree = []
     var_forlist_tree_popped = []
@@ -95,7 +95,7 @@ def process_source_file(inputfile, sdse=False):
     var_arraylist_sized = []
     var_forlist_scoped = []
 
-    newfile = open ("generated_files/ML_in.cpp", 'w')
+    newfile = open (dir + "/ML_in.cpp", 'w')
     with open(inputfile, 'r') as file:        
         for line in file:
             is_brace = False

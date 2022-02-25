@@ -95,7 +95,7 @@ def threaded_generate_random_training_set(parameter_file, directives_path, templ
         # generate a new design point
         
         _, parameters = dir_gen.generate_directives(out_file_path=directive_project_ident, no_partitioning=False)
-        print("running")
+        # print("running")
 
         # check if the design point is valid
         if (get_row(dataset, parameters).empty): 
@@ -109,7 +109,7 @@ def threaded_generate_random_training_set(parameter_file, directives_path, templ
     except OSError as e:
         print("Error: %s : %s" % (os.file_path, e.strerror))
 
-    print("Finishing point "+project_ident)
+    # print("Finishing point "+project_ident)
 
     return new_design_point
 
@@ -125,7 +125,7 @@ def record_dataframe(result):
     dataset.is_error = dataset.is_error.astype('bool')
 
 
-def random_train_RFML(top_function, part, nub_of_init):
+def random_train_RFML(dir, top_function, part, nub_of_init):
     global dataset
 
     parameter_file = '../ML_params.csv'
@@ -133,7 +133,7 @@ def random_train_RFML(top_function, part, nub_of_init):
     template_path = '../ML_template.txt'
 
     #run hls in temp folder
-    vhls_dir = "generated_files/vhls_dse_temp"
+    vhls_dir = dir + "/vhls_dse_temp"
     if not(os.path.exists(vhls_dir)):
         os.makedirs(vhls_dir)    
     os.chdir(vhls_dir)

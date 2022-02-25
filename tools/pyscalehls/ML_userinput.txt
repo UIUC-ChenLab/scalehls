@@ -4,6 +4,10 @@
 #target_source_file_location = test.c
 #top_function = dataflow7
 
+###################################################################################
+##############################Polybench############################################
+###################################################################################
+
 #target_source_file_location = ../../samples/polybench2/2mm.c
 #top_function = kernel_2mm
 
@@ -13,8 +17,19 @@
 #target_source_file_location = ../../samples/polybench2/atax.c
 #top_function = kernel_atax
 
-target_source_file_location = ../../samples/rosetta/spam-filter/sgd_sw.c
-top_function = SgdLR_sw
+target_source_file_location = ../../samples/polybench2/doitgen.c
+top_function = kernel_doitgen
+
+###################################################################################
+##############################rosetta##############################################
+###################################################################################
+
+#target_source_file_location = ../../samples/rosetta/spam-filter/sgd_sw.c
+#top_function = SgdLR_sw
+
+###################################################################################
+##############################hardware-constraints#################################
+###################################################################################
 
 part = xc7k70tfbv676-1
 
