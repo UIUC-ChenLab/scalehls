@@ -11,6 +11,33 @@
 using namespace mlir;
 using namespace scalehls;
 
+static SmallVector<arith::ConstantOp, 8>
+collectConstantsAndUpdateFuncionType(FuncOp func) {
+  SmallVector<arith::ConstantOp, 8> constants;
+  SmallVector<Type, 8> newInputTypes(func.getType().getInputs().begin(),
+                                     func.getType().getInputs().end());
+
+  // Traverse all constants in the function.
+  for (auto constant : func.getOps<arith::ConstantOp>()) {
+    // TODO: Now we just set a simple threshold to determine whether the
+    // constant tensor should be stored locally on chip.
+    auto tensorType = constant.getType().dyn_cast<TensorType>();
+    if (!tensorType || tensorType.getNumElements() < 256)
+      continue;
+
+    // Construct the constants list and input types list.
+    constants.push_back(constant);
+    newInputTypes.push_back(constant.getType());
+    auto arg = func.front().addArgument(constant.getType(), constant.getLoc());
+    constant.replaceAllUsesWith(arg);
+  }
+
+  // Set the new type of the function.
+  func.setType(FunctionType::get(func.getContext(), newInputTypes,
+                                 func.getResultTypes()));
+  return constants;
+}
+
 namespace {
 struct CreateRuntimeMain : public CreateRuntimeMainBase<CreateRuntimeMain> {
   CreateRuntimeMain() = default;
@@ -22,18 +49,35 @@ struct CreateRuntimeMain : public CreateRuntimeMainBase<CreateRuntimeMain> {
     auto module = getOperation();
     OpBuilder builder(module);
 
+    // Get the top function of the module.
     auto getTopFunc = [&]() {
       for (auto func : module.getOps<FuncOp>())
         if (func.getName() == topFunc)
           return func;
       return FuncOp();
     };
-
-    // Get the top function of the module.
     auto func = getTopFunc();
     if (!func) {
       emitError(module.getLoc(), "fail to find the top function");
       return signalPassFailure();
+    }
+
+    // Hoist local constants to the top function.
+    for (auto call : llvm::make_early_inc_range(func.getOps<CallOp>())) {
+      auto subFunc = module.lookupSymbol<FuncOp>(call.getCallee());
+      auto constants = collectConstantsAndUpdateFuncionType(subFunc);
+
+      // Replace the original call with a new call.
+      SmallVector<Value, 8> inputs(call.getOperands());
+      inputs.append(constants.begin(), constants.end());
+      builder.setInsertionPoint(call);
+      auto newCall = builder.create<CallOp>(call.getLoc(), subFunc, inputs);
+      call.replaceAllUsesWith(newCall);
+      call.erase();
+
+      // Move all selected constants to the front of the call.
+      for (auto constant : constants)
+        constant->moveBefore(newCall);
     }
 
     // Create the main function of runtime.
@@ -43,26 +87,7 @@ struct CreateRuntimeMain : public CreateRuntimeMainBase<CreateRuntimeMain> {
         builder.create<FuncOp>(builder.getUnknownLoc(), "main", func.getType());
     auto entry = mainFunc.addEntryBlock();
 
-    // Collect all constants the need to be moved.
-    SmallVector<Type, 32> newInputTypes(func.getType().getInputs().begin(),
-                                        func.getType().getInputs().end());
-    SmallVector<tosa::ConstOp, 32> constants;
-    for (auto constant : func.getOps<tosa::ConstOp>()) {
-      // TODO: Now we just set a simple threshold to determine whether the
-      // constant tensor should be stored on chip.
-      if (constant.getType().getNumElements() > 256) {
-        constants.push_back(constant);
-        newInputTypes.push_back(constant.getType());
-        auto arg =
-            func.front().addArgument(constant.getType(), constant.getLoc());
-        constant.replaceAllUsesWith(arg);
-      }
-    }
-
-    // Set the new type of the original top function.
-    auto newFuncType =
-        builder.getFunctionType(newInputTypes, func.getResultTypes());
-    func.setType(newFuncType);
+    auto constants = collectConstantsAndUpdateFuncionType(func);
 
     // Create a call to the original top function.
     SmallVector<Value, 32> inputs(entry->getArguments().begin(),
