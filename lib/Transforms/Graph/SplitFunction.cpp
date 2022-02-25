@@ -136,11 +136,9 @@ static bool applySplitFunction(FuncOp func, ArrayRef<Operation *> ops,
 }
 
 namespace {
-/// The tosa-to-tensor reshape conversion.
-/// TODO: This should be factored out! Also, the tensor reshape SHOULD be
-/// lowered to affine loops, such that the it's semantics can be fully undertood
-/// by the subsequent passes. For now, as a temporary solution, we directly
-/// support the emission of reshape in the emit-hlscpp translator.
+/// The tosa reshape to tensor reshape conversion.
+/// TODO: This should be factored out! It's quite weird to see this lowering as
+/// a part of SplitFunction.
 struct ReshapeOpRewritePattern : public OpRewritePattern<tosa::ReshapeOp> {
   using OpRewritePattern<tosa::ReshapeOp>::OpRewritePattern;
 
