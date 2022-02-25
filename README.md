@@ -53,31 +53,30 @@ $ mlir-clang test_gemm.c -function=test_gemm -memref-fullrank -raise-scf-to-affi
 
 Meanwhile, we provide a `pyscalehls` tool to showcase the `scalehls` Python library:
 ```sh
-$ pyscalehls.py samples/polybench/syrk/test_syrk.c -f test_syrk
+$ pyscalehls.py test_gemm.c -f test_gemm > test_gemm_pyscalehls.cpp
 ```
 
-## Compiling PyTorch model
+## Compiling PyTorch Model
 If you have installed [Torch-MLIR](https://github.com/llvm/torch-mlir), you should be able to run the following test:
 ```sh
-$ cd samples/pytorch/lenet
+$ cd samples/pytorch/resnet18
 
 $ # Parse PyTorch model to TOSA dialect (with mlir_venv activated).
 $ # This may take several minutes to compile due to the large amount of weights.
-$ python3 export_lenet_mlir.py | torch-mlir-opt \
+$ python3 export_resnet18_mlir.py | torch-mlir-opt \
     -torchscript-module-to-torch-backend-pipeline="optimize=true" \
-    -torch-backend-to-tosa-backend-pipeline="optimize=true" \
-    -canonicalize > lenet.mlir
+    -torch-backend-to-tosa-backend-pipeline="optimize=true" > resnet18.mlir
 
 $ # Optimize the model and emit C++ code.
-$ scalehls-opt lenet.mlir \
-    -scalehls-pytorch-pipeline="top-func=forward opt-level=2 dataflow-gran=2" \
-    | scalehls-translate -emit-hlscpp > lenet.cpp
+$ scalehls-opt resnet18.mlir \
+    -scalehls-pytorch-pipeline="top-func=forward opt-level=1" \
+    | scalehls-translate -emit-hlscpp > resnet18.cpp
 ```
 
 ## Repository Layout
 The project follows the conventions of typical MLIR-based projects:
 - `include/scalehls` and `lib` for C++ MLIR compiler dialects/passes.
 - `polygeist` for the HLS C/C++ front-end.
-- `samples` for example test cases.
+- `samples` for C/C++ and PyTorch examples.
 - `test` for holding regression tests.
 - `tools` for command line tools, such as `scalehls-opt` and `pyscalehls`.

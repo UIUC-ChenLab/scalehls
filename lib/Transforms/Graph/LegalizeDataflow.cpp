@@ -84,11 +84,11 @@ DataflowGraph::DataflowGraph(FuncOp func) {
 
   // Find successors of all operations.
   for (auto &op : func.front()) {
-    // TODO: Some operations are dataflow source/sink node, which will not be
-    // scheduled. Any other operations should appear here?
+    // TODO: Some operations are dataflow source/sink/call node, which will not
+    // be scheduled. Any other operations should appear here?
     if (isa<memref::GetGlobalOp, memref::AllocOp, memref::AllocaOp,
             bufferization::ToMemrefOp, tosa::ConstOp, arith::ConstantOp,
-            linalg::InitTensorOp, ReturnOp>(op))
+            linalg::InitTensorOp, CallOp, ReturnOp>(op))
       continue;
     nodes.insert(&op);
 

@@ -144,7 +144,7 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
 namespace {
 struct LegalizeToHLSCpp : public LegalizeToHLSCppBase<LegalizeToHLSCpp> {
   LegalizeToHLSCpp() = default;
-  LegalizeToHLSCpp(const ScaleHLSOptions &opts) {
+  LegalizeToHLSCpp(const ScaleHLSPyTorchPipelineOptions &opts) {
     topFunc = opts.hlscppTopFunc;
   }
 
@@ -158,7 +158,7 @@ struct LegalizeToHLSCpp : public LegalizeToHLSCppBase<LegalizeToHLSCpp> {
 std::unique_ptr<Pass> scalehls::createLegalizeToHLSCppPass() {
   return std::make_unique<LegalizeToHLSCpp>();
 }
-std::unique_ptr<Pass>
-scalehls::createLegalizeToHLSCppPass(const ScaleHLSOptions &opts) {
+std::unique_ptr<Pass> scalehls::createLegalizeToHLSCppPass(
+    const ScaleHLSPyTorchPipelineOptions &opts) {
   return std::make_unique<LegalizeToHLSCpp>(opts);
 }

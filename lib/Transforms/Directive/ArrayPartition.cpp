@@ -430,14 +430,25 @@ namespace {
 struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
   void runOnOperation() override {
     auto module = getOperation();
-    for (auto func : module.getOps<FuncOp>())
-      if (auto funcDirect = getFuncDirective(func))
-        if (funcDirect.getTopFunc()) {
-          applyAutoArrayPartition(func);
-          return;
-        }
-    emitError(module.getLoc(), "top function is not found");
-    signalPassFailure();
+
+    // Get the top function.
+    // FIXME: A better solution to handle the runtime main function.
+    FuncOp topFunc;
+    for (auto func : module.getOps<FuncOp>()) {
+      if (func.getName() == "main") {
+        topFunc = func;
+        break;
+      } else if (auto funcDirect = getFuncDirective(func)) {
+        if (funcDirect.getTopFunc())
+          topFunc = func;
+      }
+    }
+
+    if (!topFunc) {
+      emitError(module.getLoc(), "top function is not found");
+      return signalPassFailure();
+    }
+    applyAutoArrayPartition(topFunc);
   }
 };
 } // namespace
