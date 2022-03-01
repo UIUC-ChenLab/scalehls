@@ -16,6 +16,8 @@ using namespace scalehls;
 /// Apply loop perfection. Try to sink all operations between loop statements
 /// into the innermost loop of the input loop band.
 bool scalehls::applyAffineLoopPerfection(AffineLoopBand &band) {
+  assert(!band.empty() && "no loops provided");
+
   auto innermostLoop = band.back();
   auto builder = OpBuilder(innermostLoop);
 

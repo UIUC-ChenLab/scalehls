@@ -63,6 +63,12 @@ def MultipleLevelDSE : Pass<"dse", "ModuleOp"> {
 // Graph Optimization Passes
 //===----------------------------------------------------------------------===//
 
+def FakeQuantize : Pass<"fake-quantize", "ModuleOp"> {
+  let summary = "Convert to 8-bits quantized model (only for testing use)";
+
+  let constructor = "mlir::scalehls::createFakeQuantizePass()";
+}
+
 def CreateRuntimeMain : Pass<"create-runtime-main", "ModuleOp"> {
   let summary = "Create the main function of runtime";
   let description = [{

@@ -83,34 +83,42 @@ static void simplifyAffineStructures(Block &block) {
 /// innermost tile-space loop.
 Optional<unsigned> scalehls::applyLoopTiling(AffineLoopBand &band,
                                              TileList tileList, bool simplify) {
+  assert(!band.empty() && "no loops provided");
 
   if (!isPerfectlyNested(band))
     return Optional<unsigned>();
 
   // Loop tiling.
-  auto bandSize = band.size();
+  auto originalBandSize = band.size();
   AffineLoopBand tiledBand;
   if (failed(tilePerfectlyNested(band, tileList, &tiledBand)))
     return Optional<unsigned>();
 
+  // Simplify the tiled loop band if required.
   if (simplify) {
     band.clear();
     unsigned simplifiedBandSize = 0;
     for (unsigned i = 0, e = tiledBand.size(); i < e; ++i) {
       auto loop = tiledBand[i];
-      (void)normalizeAffineFor(loop);
+
+      Optional<uint64_t> tripCount = getConstantTripCount(loop);
+      if (i < originalBandSize - 1 || simplifiedBandSize > 0 || !tripCount ||
+          tripCount.getValue() != 1)
+        (void)normalizeAffineFor(loop);
+
       if (loop && !loop.getLoopBody().empty()) {
         band.push_back(loop);
-        if (i < bandSize)
+        if (i < originalBandSize)
           ++simplifiedBandSize;
       }
     }
     simplifyAffineStructures(*band.front().getBody());
     return simplifiedBandSize - 1;
-  } else {
-    band = tiledBand;
-    return bandSize - 1;
   }
+
+  // Otherwise, directly return the tiled loop band.
+  band = tiledBand;
+  return originalBandSize - 1;
 }
 
 namespace {
@@ -151,13 +159,14 @@ struct AffineLoopUnrollAndPipeline
           sizes.push_back(1);
       }
 
-      auto tileLoc = applyLoopTiling(band, sizes).getValue();
-      band.resize(tileLoc + 1);
+      // Apply loop tiling and extract the tile loops if applicable.
+      if (auto tileLoc = applyLoopTiling(band, sizes))
+        band.resize(tileLoc.getValue() + 1);
 
-      // TODO: canonicalize here to eliminate affine.apply ops?
+      // Apply loop order optimization and pipelining.
       if (loopOrderOpt)
         applyAffineLoopOrderOpt(band);
-      applyLoopPipelining(band, tileLoc, (unsigned)1);
+      applyLoopPipelining(band, band.size() - 1, (unsigned)1);
     }
   }
 };

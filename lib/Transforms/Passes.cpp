@@ -42,6 +42,9 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         if (opts.vectorSize.hasValue())
           vectorSize = opts.vectorSize;
 
+        if (opts.fakeQuantize)
+          pm.addPass(scalehls::createFakeQuantizePass());
+
         // Graph-level optimizations.
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(scalehls::createSimplifyTosaGraphPass());
@@ -63,12 +66,14 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
 
         // Loop-level optimizations.
-        if (vectorSize)
-          pm.addPass(mlir::createSuperVectorizePass({vectorSize}));
         pm.addPass(memref::createFoldSubViewOpsPass());
         pm.addPass(mlir::createAffineLoopNormalizePass());
         pm.addPass(mlir::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
+        if (vectorSize) {
+          pm.addPass(mlir::createSuperVectorizePass({vectorSize}));
+          pm.addPass(mlir::createCanonicalizerPass());
+        }
         pm.addPass(scalehls::createLegalizeToHLSCppPass(opts));
         pm.addPass(scalehls::createMaterializeReductionPass());
         if (loopUnrollSize) {
