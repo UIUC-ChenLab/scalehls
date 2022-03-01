@@ -6,6 +6,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Graph/ConvertCopyToAffineLoops.cpp
   Graph/CreateRuntimeMain.cpp
   Graph/LegalizeDataflow.cpp
+  Graph/ShareTensorOperation.cpp
   Graph/SimplifyTosaGraph.cpp
   Graph/SplitFunction.cpp
   Loop/AffineLoopOrderOpt.cpp
@@ -17,7 +18,6 @@ add_mlir_library(MLIRScaleHLSTransforms
   Simplification/ReduceInitialInterval.cpp
   Simplification/SimplifyAffineIf.cpp
   Simplification/SimplifyMemrefAccess.cpp
-  Tensor/ShareTensorOperation.cpp
   LegalizeToHLSCpp.cpp
   MultipleLevelDSE.cpp
   Passes.cpp
