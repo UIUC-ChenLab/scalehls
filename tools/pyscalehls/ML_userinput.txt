@@ -8,6 +8,9 @@
 ##############################Polybench############################################
 ###################################################################################
 
+target_source_file_location = ../../samples/polybench/gemm/test_gemm.c
+top_function = test_gemm
+
 #target_source_file_location = ../../samples/polybench2/2mm.c
 #top_function = kernel_2mm
 
@@ -17,8 +20,14 @@
 #target_source_file_location = ../../samples/polybench2/atax.c
 #top_function = kernel_atax
 
-target_source_file_location = ../../samples/polybench2/doitgen.c
-top_function = kernel_doitgen
+#target_source_file_location = ../../samples/polybench2/bicg.c
+#top_function = kernel_bicg
+
+#target_source_file_location = ../../samples/polybench2/doitgen.c
+#top_function = kernel_doitgen
+
+#target_source_file_location = ../../samples/polybench2/mvt.c
+#top_function = kernel_mvt
 
 ###################################################################################
 ##############################rosetta##############################################
@@ -26,6 +35,9 @@ top_function = kernel_doitgen
 
 #target_source_file_location = ../../samples/rosetta/spam-filter/sgd_sw.c
 #top_function = SgdLR_sw
+
+#target_source_file_location = ../../samples/rosetta/digit-recognition/digitrec_sw.c
+#top_function = DigitRec_sw
 
 ###################################################################################
 ##############################hardware-constraints#################################

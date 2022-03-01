@@ -125,7 +125,7 @@ def record_dataframe(result):
     dataset.is_error = dataset.is_error.astype('bool')
 
 
-def random_train_RFML(dir, top_function, part, nub_of_init):
+def random_train_RFML(dir, top_function, part, multiprocess = 2, nub_of_init = 20):
     global dataset
 
     parameter_file = '../ML_params.csv'
@@ -141,7 +141,7 @@ def random_train_RFML(dir, top_function, part, nub_of_init):
     # print("randomtranin start")
     # print(os.getcwd())
     
-    nub_pro = multiprocessing.cpu_count() - 2
+    nub_pro = multiprocessing.cpu_count() - multiprocess
 
     dataset, feature_columns, label_columns = dataframe_create(parameter_file)
 

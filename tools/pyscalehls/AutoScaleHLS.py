@@ -60,7 +60,7 @@ def main():
     parser.add_argument('-p', dest='part',
                     metavar="part",
                     help='SoC part')
-    parser.add_argument('-m', dest='tracker',
+    parser.add_argument('-tag', dest='tracker',
                     metavar="tracker",
                     help='for multiple instances')
     parser.add_argument('-c', '--clean_temptemp', action='store_true',
@@ -134,17 +134,17 @@ def main():
         if((val == "DSE") or (val == "D") or (val == "d")):
             PYSHLS.scalehls_dse(tar_dir, source_file, inputtop)
 
-            var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_DSE_out.cpp", sdse=True)
+            var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_DSE_out.cpp", sdse=True)
             #var_forlist = []
             print_variables(var_forlist, var_arraylist_sized)
         elif((val == "Manual") or (val == "M") or (val == "m")):
             opt_knobs, opt_knob_names = PYSHLS.ScaleHLSopt(source_file, inputtop, tar_dir + "/ScaleHLS_opted.c")   
             print_optknobs(opt_knobs, opt_knob_names)
 
-            var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_opted.c")
+            var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_opted.c")
             print_variables(var_forlist, var_arraylist_sized)
         elif((val == "None") or (val == "N") or (val == "n")):
-            var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file(tar_dir, source_file)
+            var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, source_file)
 
             #var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file_array('generated_files/ScaleHLS_DSE_out.cpp')
             
@@ -153,6 +153,10 @@ def main():
     print("\nScope")
     for i in var_forlist_scoped:
         print(i)
+
+    print("\nTree")
+    for item in tree_list:
+        item.show()   
 
     # sortedarray = sortbyhotness(var_forlist_scoped)
 
@@ -172,7 +176,7 @@ def main():
         val = input("Generate Random Training Set? (Y / N)\n")
         # val = "n"
         if((val == "Y") or (val == "y") or (val == "yes")):
-            dataset, feature_columns = RT.random_train_RFML(tar_dir, inputtop, inputpart, nub_of_init = 20)
+            dataset, feature_columns = RT.random_train_RFML(tar_dir, inputtop, inputpart, multiprocess = 4, nub_of_init = 20)
             print(dataset)
         elif((val == "N") or (val == "n") or (val == "no")):
             parameter_file = tar_dir + '/ML_params.csv'

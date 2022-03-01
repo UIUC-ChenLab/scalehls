@@ -1,6 +1,0 @@
-set_directive_unroll -factor 5 kernel_doitgen/loop1
-
-set_directive_array_partition -type block -factor 10 -dim 2 kernel_doitgen v3
-set_directive_array_partition -type cyclic -factor 6 -dim 1 kernel_doitgen v4
-set_directive_array_partition -type cyclic -factor 6 -dim 2 kernel_doitgen v4
-set_directive_array_partition -type cyclic -factor 15 -dim 1 kernel_doitgen v5

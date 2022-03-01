@@ -1,6 +1,26 @@
 from pickle import FALSE
 import re
 import copy
+import treelib
+
+def add_node(tree, input):
+    try:
+        tree.create_node("Loop" + str(input[1]), int(input[1]), parent=input[0])
+    except:
+        pass
+
+    sub_l0 = re.findall(r'\d+', str(input[2]))
+    # test for single loop
+    if int(sub_l0[0]) != int(input[1]):
+        try:
+            tree.create_node("Loop" + str(sub_l0[0]), int(sub_l0[0]), parent=int(input[1]))
+        except:
+            pass
+        for i in range(1, len(sub_l0)):
+            try:
+                tree.create_node("Loop" + str(sub_l0[i]), int(sub_l0[i]), parent=int(sub_l0[i-1]))
+            except:
+                pass
 
 def read_user_input():
     default_file_flag = False
@@ -133,7 +153,7 @@ def process_source_file(dir, inputfile, sdse=False):
                 if len(var_forlist_tree) == 0 and len(var_forlist_tree_popped) > 0:
                     subtree = ""
                     if len(var_forlist_tree_popped) == 1:
-                        subtree = var_forlist_tree_popped[0][0]
+                        subtree = "-" + str(var_forlist_tree_popped[0][0])
                     else:
                         for i in range(len(var_forlist_tree_popped) - 2, -1, -1):
                             subtree = subtree + "-" + str(var_forlist_tree_popped[i][0])
@@ -179,7 +199,7 @@ def process_source_file(dir, inputfile, sdse=False):
                     if is_brace:
                         var_forlist_tree.append((loopnum, brace_cout - 1))
                     else:
-                        var_forlist_tree.append(loopnum, brace_cout)
+                        var_forlist_tree.append((loopnum, brace_cout))
 
                     findbound = re.findall(r'(<|>|<=|>=)(.+?);', line) #find bound
                     testint = findbound[0][1].strip().isnumeric()
@@ -293,5 +313,23 @@ def process_source_file(dir, inputfile, sdse=False):
         # mark loop
         # for item in var_forlist:
         #     item[0] = item[0] + "U"
+
+    # create tree
+    tree_list = []
+    if len(var_forlist_scoped) > 1: 
+        StartofTree = True
+        tree = None
+        for i in range(len(var_forlist_scoped)):
+            if var_forlist_scoped[i] == "":
+                StartofTree = True
+                tree_list.append(tree)
+            else:
+                if StartofTree:
+                    tree = treelib.Tree()                    
+                    tree.create_node(str(var_forlist_scoped[i][0]), str(var_forlist_scoped[i][0]))  # root node
+                    add_node(tree, var_forlist_scoped[i])
+                    StartofTree = False
+                else:
+                    add_node(tree, var_forlist_scoped[i])        
     
-    return var_forlist, var_arraylist_sized, var_forlist_scoped
+    return var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list
