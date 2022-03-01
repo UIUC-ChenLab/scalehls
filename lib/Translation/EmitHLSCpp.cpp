@@ -506,6 +506,12 @@ public:
   bool visitOp(arith::FPToUIOp op) { return emitter.emitAssign(op), true; }
   bool visitOp(arith::FPToSIOp op) { return emitter.emitAssign(op), true; }
 
+  /// TODO: Figure out whether these ops need to be separately handled.
+  bool visitOp(arith::TruncIOp op) { return emitter.emitAssign(op), true; }
+  bool visitOp(arith::TruncFOp op) { return emitter.emitAssign(op), true; }
+  bool visitOp(arith::ExtUIOp op) { return emitter.emitAssign(op), true; }
+  bool visitOp(arith::ExtSIOp op) { return emitter.emitAssign(op), true; }
+
 private:
   ModuleEmitter &emitter;
 };

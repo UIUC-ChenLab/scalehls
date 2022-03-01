@@ -28,7 +28,7 @@ struct AddOpRewritePattern : public OpRewritePattern<arith::AddIOp> {
                                 PatternRewriter &rewriter) const override {
     // Figure out whether the add op can be rewritten.
     auto dataType = getIntDataType(add.getType());
-    if (!dataType || dataType.getWidth() == 32 || dataType.isSigned())
+    if (!dataType || dataType.getWidth() != 8 || dataType.isSigned())
       return failure();
 
     // Generate new type.

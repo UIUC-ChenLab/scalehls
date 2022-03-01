@@ -63,6 +63,18 @@ struct FakeQuantize : public FakeQuantizeBase<FakeQuantize> {
                 builder.getI32IntegerAttr(0), builder.getI32IntegerAttr(0),
                 conv2d.getContext());
             conv2d->setAttr(conv2d.quantization_infoAttrName(), quantInfoAttr);
+
+          } else if (auto matMul = dyn_cast<tosa::MatMulOp>(op)) {
+            auto quantInfoAttr = tosa::MatMulOpQuantizationAttr::get(
+                builder.getI32IntegerAttr(0), builder.getI32IntegerAttr(0),
+                matMul.getContext());
+            matMul->setAttr(matMul.quantization_infoAttrName(), quantInfoAttr);
+
+          } else if (auto pool2d = dyn_cast<tosa::AvgPool2dOp>(op)) {
+            auto quantInfoAttr = tosa::UnaryOpQuantizationAttr::get(
+                builder.getI32IntegerAttr(0), builder.getI32IntegerAttr(0),
+                pool2d.getContext());
+            pool2d->setAttr(pool2d.quantization_infoAttrName(), quantInfoAttr);
           }
         }
 
