@@ -66,12 +66,8 @@ bool applyAffineLoopOrderOpt(AffineLoopBand &band,
 bool applyRemoveVariableBound(AffineLoopBand &band);
 
 /// Apply loop tiling to the input loop band and sink all intra-tile loops to
-/// the innermost loop with the original loop order. If "tileOrderOpt" is true,
-/// the order of all tile-space loops are optimizaed after tiling. If
-/// "unrollPointLoops" is true, all intra-tile loops (also called point loops)
-/// are fully unrolled after tiling.
-bool applyLoopTiling(AffineLoopBand &band, TileList tileList,
-                     bool tileOrderOpt = true, bool unrollPointLoops = true);
+/// the innermost loop with the original loop order.
+bool applyLoopTiling(AffineLoopBand &band, TileList tileList);
 
 bool applyLegalizeToHLSCpp(FuncOp func, bool topFunc);
 

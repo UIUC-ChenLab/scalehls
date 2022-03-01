@@ -169,14 +169,11 @@ static bool loopVarBoundRemoval(PyAffineLoopBand band) {
   return applyRemoveVariableBound(band.get());
 }
 
-/// If succeeded, return the location of the innermost tile-space loop.
-/// Otherwise, return -1.
-static bool loopTiling(PyAffineLoopBand band, py::object factorsObject,
-                       bool tileOrderOpt, bool unrollPointLoops) {
+static bool loopTiling(PyAffineLoopBand band, py::object factorsObject) {
   py::gil_scoped_release();
   llvm::SmallVector<unsigned, 8> factors;
   getVectorFromUnsignedNpArray(factorsObject.ptr(), factors);
-  return applyLoopTiling(band.get(), factors, tileOrderOpt, unrollPointLoops);
+  return applyLoopTiling(band.get(), factors);
 }
 
 static bool loopPipelining(PyAffineLoopBand band, int64_t pipelineLoc,
@@ -272,7 +269,7 @@ PYBIND11_MODULE(_scalehls, m) {
 
   // Function transform APIs.
   m.def("legalize_to_hlscpp", &legalizeToHLSCpp);
-  m.def("memory_access_opt", &simplificationOpts);
+  m.def("simplification_opts", &simplificationOpts);
   m.def("auto_array_partition", &autoArrayPartition);
 
   // Array transform APIs.

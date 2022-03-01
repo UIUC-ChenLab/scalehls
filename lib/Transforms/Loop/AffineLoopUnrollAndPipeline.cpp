@@ -15,12 +15,8 @@ using namespace mlir;
 using namespace scalehls;
 
 /// Apply loop tiling to the input loop band and sink all intra-tile loops to
-/// the innermost loop with the original loop order. If "tileOrderOpt" is true,
-/// the order of all tile-space loops are optimizaed after tiling. If
-/// "unrollPointLoops" is true, all intra-tile loops (also called point loops)
-/// are fully unrolled after tiling.
-bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList,
-                               bool tileOrderOpt, bool unrollPointLoops) {
+/// the innermost loop with the original loop order.
+bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList) {
   assert(!band.empty() && "no loops provided");
 
   if (!isPerfectlyNested(band))
@@ -44,11 +40,6 @@ bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList,
     if (std::get<1>(zip))
       setParallel(std::get<0>(zip));
 
-  // Apply loop order optimization and point loops unrolling if required.
-  if (tileOrderOpt)
-    applyAffineLoopOrderOpt(band);
-  if (unrollPointLoops)
-    applyFullyLoopUnrolling(*band.back().getBody());
   return true;
 }
 
@@ -90,9 +81,14 @@ struct AffineLoopUnrollAndPipeline
           sizes.push_back(1);
       }
 
-      // Apply loop unrolling and pipelining.
-      applyLoopTiling(band, sizes, /*tileOrderOpt=*/loopOrderOpt.getValue(),
-                      /*unrollPointLoops=*/true);
+      // Apply loop tiling.
+      applyLoopTiling(band, sizes);
+
+      // Apply loop order optimization if required.
+      if (loopOrderOpt.getValue())
+        applyAffineLoopOrderOpt(band);
+
+      // Apply loop pipelining. All point loops will be fully unrolled.
       applyLoopPipelining(band, band.size() - 1, (unsigned)1);
     }
   }
