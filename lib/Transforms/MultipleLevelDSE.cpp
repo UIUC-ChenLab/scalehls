@@ -676,7 +676,9 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
       // unrolling to it.
       tmpFunc.walk([&](AffineForOp loop) {
         if (loop->getAttrOfType<BoolAttr>("opt_flag")) {
-          applyFullyUnrollAndPartition(*loop.getBody(), tmpFunc);
+          applyFullyLoopUnrolling(*loop.getBody());
+          applySimplificationOpts(tmpFunc);
+          applyAutoArrayPartition(tmpFunc);
           return;
         }
       });
@@ -685,9 +687,11 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
       estimator.estimateFunc(tmpFunc);
 
       // Fully unroll the candidate loop or delve into child loops.
-      if (getResource(tmpFunc).getDsp() <= maxDspNum)
-        applyFullyUnrollAndPartition(*candidate.getBody(), func);
-      else {
+      if (getResource(tmpFunc).getDsp() <= maxDspNum) {
+        applyFullyLoopUnrolling(*candidate.getBody());
+        applySimplificationOpts(func);
+        applyAutoArrayPartition(func);
+      } else {
         auto childForOps = candidate.getOps<AffineForOp>();
         targetLoops.append(childForOps.begin(), childForOps.end());
       }

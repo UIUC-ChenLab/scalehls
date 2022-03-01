@@ -45,6 +45,7 @@ static void updateSubFuncs(FuncOp func, Builder builder) {
   });
 }
 
+/// Apply the specified array partition factors and kinds.
 bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
                                    ArrayRef<hlscpp::PartitionKind> kinds,
                                    bool updateFuncSignature) {
@@ -203,6 +204,8 @@ getDimAccessMaps(Operation *op, AffineValueMap valueMap, int64_t dim) {
   return maps;
 }
 
+/// Find the suitable array partition factors and kinds for all arrays in the
+/// targeted function.
 bool scalehls::applyAutoArrayPartition(FuncOp func) {
   // Check whether the input function is pipelined.
   bool funcPipeline = false;

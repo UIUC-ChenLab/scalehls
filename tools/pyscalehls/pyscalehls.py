@@ -71,10 +71,11 @@ def main():
             # Note: We use the trip count to generate this example "factors".
             factors = np.ones(band.depth, dtype=int)
             factors[-1] = band.get_trip_count(band.depth - 1) / 4
-            loc = scalehls.loop_tiling(band, factors, True) # simplify = True
+            # tileOrderOpt = False, unrollPointLoops = True
+            scalehls.loop_tiling(band, factors, False, True)
 
             # Apply loop pipelining. All loops inside of the pipelined loop are fully unrolled.
-            scalehls.loop_pipelining(band, loc, 3)  # targetII = 3
+            scalehls.loop_pipelining(band, band.depth - 1, 3)  # targetII = 3
 
         # Traverse all arrays in the function.
         arrays = scalehls.ArrayList(func)
@@ -93,7 +94,7 @@ def main():
         scalehls.legalize_to_hlscpp(
             func, func.sym_name.value == opts.function)
 
-        # Optimize memory accesses through store forwarding, etc.
+        # Apply simplifications.
         scalehls.memory_access_opt(func)
 
         # Apply suitable array partition strategies through analyzing the array access pattern.

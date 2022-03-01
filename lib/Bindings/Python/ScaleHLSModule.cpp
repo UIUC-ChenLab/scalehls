@@ -171,13 +171,12 @@ static bool loopVarBoundRemoval(PyAffineLoopBand band) {
 
 /// If succeeded, return the location of the innermost tile-space loop.
 /// Otherwise, return -1.
-static int64_t loopTiling(PyAffineLoopBand band, py::object factorsObject,
-                          bool simplify) {
+static bool loopTiling(PyAffineLoopBand band, py::object factorsObject,
+                       bool tileOrderOpt, bool unrollPointLoops) {
   py::gil_scoped_release();
   llvm::SmallVector<unsigned, 8> factors;
   getVectorFromUnsignedNpArray(factorsObject.ptr(), factors);
-  auto loc = applyLoopTiling(band.get(), factors, simplify);
-  return loc.hasValue() ? loc.getValue() : -1;
+  return applyLoopTiling(band.get(), factors, tileOrderOpt, unrollPointLoops);
 }
 
 static bool loopPipelining(PyAffineLoopBand band, int64_t pipelineLoc,
@@ -200,12 +199,12 @@ static bool legalizeToHLSCpp(MlirOperation op, bool topFunc) {
   return applyLegalizeToHLSCpp(func, topFunc);
 }
 
-static bool memoryAccessOpt(MlirOperation op) {
+static bool simplificationOpts(MlirOperation op) {
   py::gil_scoped_release();
   auto func = dyn_cast<FuncOp>(unwrap(op));
   if (!func)
     throw SetPyError(PyExc_ValueError, "targeted operation not a function");
-  return applyMemoryAccessOpt(func);
+  return applySimplificationOpts(func);
 }
 
 static bool autoArrayPartition(MlirOperation op) {
@@ -273,7 +272,7 @@ PYBIND11_MODULE(_scalehls, m) {
 
   // Function transform APIs.
   m.def("legalize_to_hlscpp", &legalizeToHLSCpp);
-  m.def("memory_access_opt", &memoryAccessOpt);
+  m.def("memory_access_opt", &simplificationOpts);
   m.def("auto_array_partition", &autoArrayPartition);
 
   // Array transform APIs.

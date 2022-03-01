@@ -83,7 +83,9 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
               scalehls::createAffineLoopUnrollAndPipelinePass(loopUnrollSize));
         }
 
-        // Memory accessing simplifications.
+        // Apply simplifications.
+        pm.addPass(mlir::createAffineLoopNormalizePass());
+        pm.addPass(mlir::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(scalehls::createSimplifyAffineIfPass());
         pm.addPass(scalehls::createAffineStoreForwardPass());

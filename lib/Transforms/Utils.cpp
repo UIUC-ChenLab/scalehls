@@ -6,6 +6,7 @@
 
 #include "scalehls/Transforms/Utils.h"
 #include "mlir/Dialect/Affine/LoopUtils.h"
+#include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
 #include "scalehls/Transforms/Passes.h"
@@ -84,10 +85,36 @@ void scalehls::setFuncDirective(Operation *op, bool pipeline,
 // Loop transform utils
 //===----------------------------------------------------------------------===//
 
+static void addSimplificationPipeline(PassManager &pm) {
+  // To factor out the redundant affine operations.
+  pm.addPass(createAffineLoopNormalizePass());
+  pm.addPass(createSimplifyAffineStructuresPass());
+  pm.addPass(createCanonicalizerPass());
+  pm.addPass(createSimplifyAffineIfPass());
+
+  // To simplify the memory accessing. Note that the store forwarding is
+  // non-trivial and has a worst case complexity of O(n^2).
+  pm.addPass(createAffineStoreForwardPass());
+  pm.addPass(createSimplifyMemrefAccessPass());
+
+  // Generic common sub expression elimination.
+  pm.addPass(createCSEPass());
+  pm.addPass(createReduceInitialIntervalPass());
+}
+
+/// Apply simplification optimizations.
+bool scalehls::applySimplificationOpts(FuncOp func) {
+  // Apply general optimizations.
+  PassManager optPM(func.getContext(), "builtin.func");
+  addSimplificationPipeline(optPM);
+  if (failed(optPM.run(func)))
+    return false;
+  return true;
+}
+
 /// Fully unroll all loops insides of a block.
-bool scalehls::applyFullyLoopUnrolling(Block &block) {
-  // Try 8 iterations before exiting.
-  for (auto i = 0; i < 8; ++i) {
+bool scalehls::applyFullyLoopUnrolling(Block &block, unsigned maxIterNum) {
+  for (unsigned i = 0; i < maxIterNum; ++i) {
     bool hasFullyUnrolled = true;
     block.walk([&](AffineForOp loop) {
       if (failed(loopUnrollFull(loop)))
@@ -103,46 +130,6 @@ bool scalehls::applyFullyLoopUnrolling(Block &block) {
   return true;
 }
 
-static void addPassPipeline(PassManager &pm) {
-  // To factor out the redundant AffineApply/AffineIf operations.
-  pm.addPass(createCanonicalizerPass());
-  pm.addPass(createSimplifyAffineIfPass());
-
-  // To simplify the memory accessing. Note that the store forwarding is
-  // non-trivial and has a worst case complexity of O(n^2).
-  pm.addPass(createAffineStoreForwardPass());
-  pm.addPass(createSimplifyMemrefAccessPass());
-
-  // Generic common sub expression elimination.
-  pm.addPass(createCSEPass());
-  pm.addPass(createReduceInitialIntervalPass());
-}
-
-bool scalehls::applyMemoryAccessOpt(FuncOp func) {
-  // Apply general optimizations.
-  PassManager optPM(func.getContext(), "builtin.func");
-  addPassPipeline(optPM);
-  if (failed(optPM.run(func)))
-    return false;
-
-  return true;
-}
-
-bool scalehls::applyFullyUnrollAndPartition(Block &block, FuncOp func) {
-  applyFullyLoopUnrolling(block);
-
-  // Apply general optimizations.
-  PassManager optPM(func.getContext(), "builtin.func");
-  addPassPipeline(optPM);
-  if (failed(optPM.run(func)))
-    return false;
-
-  // Apply the best suitable array partition strategy to the function.
-  applyAutoArrayPartition(func);
-
-  return true;
-}
-
 /// Apply optimization strategy to a loop band. The ancestor function is also
 /// passed in because the post-tiling optimizations have to take function as
 /// target, e.g. canonicalizer and array partition.
@@ -152,27 +139,22 @@ bool scalehls::applyOptStrategy(AffineLoopBand &band, FuncOp func,
   if (!func->isProperAncestor(band.front()))
     return false;
 
-  // Apply loop tiling.
-  auto pipelineLoopLoc = applyLoopTiling(band, tileList);
-  if (!pipelineLoopLoc)
-    return false;
-
   // Apply LegalizeToHLSCpp conversion.
   applyLegalizeToHLSCpp(func, /*isTopFunc=*/true);
 
+  // Apply loop tiling.
+  if (!applyLoopTiling(band, tileList, /*tileOrderOpt=*/false,
+                       /*unrollPointLoops=*/true))
+    return false;
+
   // Apply loop pipelining.
-  if (!applyLoopPipelining(band, pipelineLoopLoc.getValue(), targetII))
+  if (!applyLoopPipelining(band, band.size() - 1, targetII))
     return false;
 
-  // Apply generic optimizations.
-  PassManager optPM(func.getContext(), "builtin.func");
-  addPassPipeline(optPM);
-  if (failed(optPM.run(func)))
-    return false;
-
-  // Apply the best suitable array partition strategy to the function.
+  // Apply memory access optimizations and the best suitable array partition
+  // strategy to the function.
+  applySimplificationOpts(func);
   applyAutoArrayPartition(func);
-
   return true;
 }
 
@@ -181,32 +163,24 @@ bool scalehls::applyOptStrategy(FuncOp func, ArrayRef<TileList> tileLists,
                                 ArrayRef<unsigned> targetIIs) {
   AffineLoopBands bands;
   getLoopBands(func.front(), bands);
-
-  // Apply loop tiling and pipelining to all loop bands.
-  SmallVector<unsigned, 4> pipelineLoopLocs;
-  for (unsigned i = 0, e = bands.size(); i < e; ++i) {
-    auto pipelineLoopLoc = applyLoopTiling(bands[i], tileLists[i]);
-    if (!pipelineLoopLoc)
-      return false;
-    pipelineLoopLocs.push_back(pipelineLoopLoc.getValue());
-  }
+  assert(bands.size() == tileLists.size() && bands.size() == targetIIs.size() &&
+         "unexpected size of tile lists or target IIs");
 
   // Apply LegalizeToHLSCpp conversion.
   applyLegalizeToHLSCpp(func, /*isTopFunc=*/true);
 
-  for (unsigned i = 0, e = bands.size(); i < e; ++i) {
-    if (!applyLoopPipelining(bands[i], pipelineLoopLocs[i], targetIIs[i]))
+  // Apply loop tiling to all loop bands.
+  for (unsigned i = 0, e = bands.size(); i < e; ++i)
+    if (!applyLoopTiling(bands[i], tileLists[i]))
       return false;
-  }
 
-  // Apply generic optimizations.
-  PassManager optPM(func.getContext(), "builtin.func");
-  addPassPipeline(optPM);
-  if (failed(optPM.run(func)))
-    return false;
+  for (unsigned i = 0, e = bands.size(); i < e; ++i)
+    if (!applyLoopPipelining(bands[i], bands[i].size() - 1, targetIIs[i]))
+      return false;
 
-  // Apply the best suitable array partition strategy to the function.
+  // Apply memory access optimizations and the best suitable array partition
+  // strategy to the function.
+  applySimplificationOpts(func);
   applyAutoArrayPartition(func);
-
   return true;
 }
