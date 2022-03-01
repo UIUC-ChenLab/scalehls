@@ -38,12 +38,20 @@ LoopDirectiveAttr scalehls::getLoopDirective(Operation *op) {
   return op->getAttrOfType<LoopDirectiveAttr>("loop_directive");
 }
 
+bool scalehls::isParallel(AffineForOp loop) {
+  return loop->hasAttrOfType<UnitAttr>("parallel");
+}
+
 /// Parse function directives.
 FuncDirectiveAttr scalehls::getFuncDirective(Operation *op) {
   return op->getAttrOfType<FuncDirectiveAttr>("func_directive");
 }
 
-/// Parse other attributes.
+bool scalehls::isTopFunc(FuncOp func) {
+  return func->hasAttrOfType<UnitAttr>("top_func");
+}
+
+/// Parse array attributes.
 SmallVector<int64_t, 8> scalehls::getIntArrayAttrValue(Operation *op,
                                                        StringRef name) {
   SmallVector<int64_t, 8> array;
@@ -367,9 +375,8 @@ bool scalehls::checkDependence(Operation *A, Operation *B) {
   // Traverse each loop level to find dependencies.
   for (unsigned depth = numCommonLoops; depth > 0; depth--) {
     // Skip all parallel loop level.
-    if (auto loopAttr = getLoopDirective(commonLoops[depth - 1]))
-      if (loopAttr.getParallel())
-        continue;
+    if (isParallel(commonLoops[depth - 1]))
+      continue;
 
     FlatAffineValueConstraints depConstrs;
     DependenceResult result = checkMemrefAccessDependence(

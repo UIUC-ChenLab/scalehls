@@ -36,12 +36,14 @@ void setLoopInfo(Operation *op, int64_t flattenTripCount, int64_t iterLatency,
 /// Set loop directives.
 void setLoopDirective(Operation *op, LoopDirectiveAttr loopDirective);
 void setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
-                      bool dataflow, bool flatten, bool parallel);
+                      bool dataflow, bool flatten);
+void setParallel(AffineForOp loop);
 
 /// Set function directives.
 void setFuncDirective(Operation *op, FuncDirectiveAttr FuncDirective);
 void setFuncDirective(Operation *op, bool pipeline, int64_t targetInterval,
-                      bool dataflow, bool topFunc);
+                      bool dataflow);
+void setTopFunc(FuncOp func);
 
 //===----------------------------------------------------------------------===//
 // Loop transform utils

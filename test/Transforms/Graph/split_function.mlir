@@ -11,7 +11,7 @@ module {
   // CHECK-LABEL:   call @dataflow3
   // CHECK-LABEL:   call @dataflow2
   // CHECK-LABEL:   call @dataflow1
-  func @main_graph(%arg0: memref<1x3x32x32xf32>, %arg1: memref<6x3x5x5xf32>, %arg2: memref<16x6x5x5xf32>, %arg3: memref<120x400xf32>, %arg4: memref<120xf32>, %arg5: memref<84x120xf32>, %arg6: memref<84xf32>, %arg7: memref<10x84xf32>) -> memref<1x10xf32> attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=true, topFunc=false>, input_names = ["input.1"], inputs_num = 1 : i64, output_names = ["18"], outputs_num = 1 : i64, weight_file_name = "/tmp/packed_const-b6b002.tmp", weight_index = [1, 2, 3, 4, 5, 6, 7], weight_offsets = [0, 1800, 11400, 203400, 203880, 244200, 244536], weight_size_in_bytes = 247896 : i64} {
+  func @main_graph(%arg0: memref<1x3x32x32xf32>, %arg1: memref<6x3x5x5xf32>, %arg2: memref<16x6x5x5xf32>, %arg3: memref<120x400xf32>, %arg4: memref<120xf32>, %arg5: memref<84x120xf32>, %arg6: memref<84xf32>, %arg7: memref<10x84xf32>) -> memref<1x10xf32> attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=true>, input_names = ["input.1"], inputs_num = 1 : i64, output_names = ["18"], outputs_num = 1 : i64, weight_file_name = "/tmp/packed_const-b6b002.tmp", weight_index = [1, 2, 3, 4, 5, 6, 7], weight_offsets = [0, 1800, 11400, 203400, 203880, 244200, 244536], weight_size_in_bytes = 247896 : i64} {
     %cst = arith.constant dense<[0.0802067816, 0.0380531251, -0.0453170575, 0.0238099229, -0.0322267264, 0.0956416651, -0.0513828322, -0.00329447933, 0.0870032906, -0.100006074]> : tensor<10xf32>
     %cst_0 = arith.constant 0.000000e+00 : f32
     %cst_1 = arith.constant 1.000000e+00 : f32

@@ -131,8 +131,8 @@ void LoopInfoAttr::print(AsmPrinter &p) const {
 //===----------------------------------------------------------------------===//
 
 Attribute LoopDirectiveAttr::parse(AsmParser &p, Type type) {
-  StringRef pipelineKw, targetIIKw, dataflowKw, flattenKw, parallelKw;
-  StringRef pipeline, dataflow, flatten, parallel;
+  StringRef pipelineKw, targetIIKw, dataflowKw, flattenKw;
+  StringRef pipeline, dataflow, flatten;
   int64_t targetII;
   if (p.parseLess() || p.parseKeyword(&pipelineKw) || p.parseEqual() ||
       p.parseKeyword(&pipeline) || p.parseComma() ||
@@ -141,25 +141,20 @@ Attribute LoopDirectiveAttr::parse(AsmParser &p, Type type) {
       p.parseKeyword(&dataflowKw) || p.parseEqual() ||
       p.parseKeyword(&dataflow) || p.parseComma() ||
       p.parseKeyword(&flattenKw) || p.parseEqual() ||
-      p.parseKeyword(&flatten) || p.parseComma() ||
-      p.parseKeyword(&parallelKw) || p.parseEqual() ||
-      p.parseKeyword(&parallel) || p.parseGreater())
+      p.parseKeyword(&flatten) || p.parseGreater())
     return Attribute();
 
   if (pipelineKw != "pipeline" || targetIIKw != "targetII" ||
-      dataflowKw != "dataflow" || flattenKw != "flatten" ||
-      parallelKw != "parallel")
+      dataflowKw != "dataflow" || flattenKw != "flatten")
     return Attribute();
 
   return LoopDirectiveAttr::get(p.getContext(), pipeline == "true", targetII,
-                                dataflow == "true", flatten == "true",
-                                parallel == "true");
+                                dataflow == "true", flatten == "true");
 }
 
 void LoopDirectiveAttr::print(AsmPrinter &p) const {
   p << "<pipeline=" << getPipeline() << ", targetII=" << getTargetII()
-    << ", dataflow=" << getDataflow() << ", flatten=" << getFlatten()
-    << ", parallel=" << getParallel() << ">";
+    << ", dataflow=" << getDataflow() << ", flatten=" << getFlatten() << ">";
 }
 
 //===----------------------------------------------------------------------===//
@@ -167,32 +162,29 @@ void LoopDirectiveAttr::print(AsmPrinter &p) const {
 //===----------------------------------------------------------------------===//
 
 Attribute FuncDirectiveAttr::parse(AsmParser &p, Type type) {
-  StringRef pipelineKw, targetIntervalKw, dataflowKw, topFuncKw;
-  StringRef pipeline, dataflow, topFunc;
+  StringRef pipelineKw, targetIntervalKw, dataflowKw;
+  StringRef pipeline, dataflow;
   int64_t targetInterval;
   if (p.parseLess() || p.parseKeyword(&pipelineKw) || p.parseEqual() ||
       p.parseKeyword(&pipeline) || p.parseComma() ||
       p.parseKeyword(&targetIntervalKw) || p.parseEqual() ||
       p.parseInteger(targetInterval) || p.parseComma() ||
       p.parseKeyword(&dataflowKw) || p.parseEqual() ||
-      p.parseKeyword(&dataflow) || p.parseComma() ||
-      p.parseKeyword(&topFuncKw) || p.parseEqual() ||
-      p.parseKeyword(&topFunc) || p.parseGreater())
+      p.parseKeyword(&dataflow) || p.parseGreater())
     return Attribute();
 
   if (pipelineKw != "pipeline" || targetIntervalKw != "targetInterval" ||
-      dataflowKw != "dataflow" || topFuncKw != "topFunc")
+      dataflowKw != "dataflow")
     return Attribute();
 
   return FuncDirectiveAttr::get(p.getContext(), pipeline == "true",
-                                targetInterval, dataflow == "true",
-                                topFunc == "true");
+                                targetInterval, dataflow == "true");
 }
 
 void FuncDirectiveAttr::print(AsmPrinter &p) const {
   p << "<pipeline=" << getPipeline()
     << ", targetInterval=" << getTargetInterval()
-    << ", dataflow=" << getDataflow() << ", topFunc=" << getTopFunc() << ">";
+    << ", dataflow=" << getDataflow() << ">";
 }
 
 //===----------------------------------------------------------------------===//

@@ -61,10 +61,14 @@ void scalehls::setLoopDirective(Operation *op,
 }
 
 void scalehls::setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
-                                bool dataflow, bool flatten, bool parallel) {
-  auto loopDirective = LoopDirectiveAttr::get(
-      op->getContext(), pipeline, targetII, dataflow, flatten, parallel);
+                                bool dataflow, bool flatten) {
+  auto loopDirective = LoopDirectiveAttr::get(op->getContext(), pipeline,
+                                              targetII, dataflow, flatten);
   setLoopDirective(op, loopDirective);
+}
+
+void scalehls::setParallel(AffineForOp loop) {
+  loop->setAttr("parallel", UnitAttr::get(loop.getContext()));
 }
 
 /// Set func directives.
@@ -74,11 +78,14 @@ void scalehls::setFuncDirective(Operation *op,
 }
 
 void scalehls::setFuncDirective(Operation *op, bool pipeline,
-                                int64_t targetInterval, bool dataflow,
-                                bool topFunc) {
-  auto funcDirective = FuncDirectiveAttr::get(
-      op->getContext(), pipeline, targetInterval, dataflow, topFunc);
+                                int64_t targetInterval, bool dataflow) {
+  auto funcDirective = FuncDirectiveAttr::get(op->getContext(), pipeline,
+                                              targetInterval, dataflow);
   setFuncDirective(op, funcDirective);
+}
+
+void scalehls::setTopFunc(FuncOp func) {
+  func->setAttr("top_func", UnitAttr::get(func.getContext()));
 }
 
 //===----------------------------------------------------------------------===//

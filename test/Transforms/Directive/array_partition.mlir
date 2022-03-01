@@ -7,8 +7,8 @@
 module  {
 
   // CHECK-LABEL: func @test_syrk(
-  // CHECK-SAME:  %arg0: f32, %arg1: f32, %arg2: memref<16x16xf32, #map0, 1>, %arg3: memref<16x16xf32, #map1, 1>) attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=false, topFunc=true>} {
-  func @test_syrk(%arg0: f32, %arg1: f32, %arg2: memref<16x16xf32, 1>, %arg3: memref<16x16xf32, 1>) attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=false, topFunc=true>} {
+  // CHECK-SAME:  %arg0: f32, %arg1: f32, %arg2: memref<16x16xf32, #map0, 1>, %arg3: memref<16x16xf32, #map1, 1>) attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=false>, top_func} {
+  func @test_syrk(%arg0: f32, %arg1: f32, %arg2: memref<16x16xf32, 1>, %arg3: memref<16x16xf32, 1>) attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=false>, top_func} {
     affine.for %arg4 = 0 to 16 step 2 {
       affine.for %arg5 = 0 to 16 {
         affine.for %arg6 = 0 to 16 {
@@ -38,9 +38,9 @@ module  {
             // CHECK: affine.store %12, %arg3[%arg5, %arg6] : memref<16x16xf32, #map1, 1>
             affine.store %12, %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
           }
-        } {loop_directive = #hlscpp.ld<pipeline=true, targetII=2, dataflow=false, flatten=false, parallel=true>}
-      } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true, parallel=true>}
-    } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true, parallel=false>}
+        } {loop_directive = #hlscpp.ld<pipeline=true, targetII=2, dataflow=false, flatten=false>, parallel}
+      } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+    } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
     return
   }
 }

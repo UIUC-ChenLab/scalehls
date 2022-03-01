@@ -222,11 +222,7 @@ static bool applyLegalizeDataflow(FuncOp func, int64_t minGran,
   }
 
   // Set dataflow attribute.
-  auto topFunc = false;
-  if (auto funcDirect = getFuncDirective(func))
-    topFunc = funcDirect.getTopFunc();
-
-  setFuncDirective(func, false, 1, true, topFunc);
+  setFuncDirective(func, false, 1, true);
   return true;
 }
 

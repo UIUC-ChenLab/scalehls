@@ -28,9 +28,9 @@ bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList,
 
   // Record the original band size and attributes to make use of later.
   auto originalBandSize = band.size();
-  SmallVector<LoopDirectiveAttr, 6> bandAttrs;
+  SmallVector<bool, 6> parallelFlags;
   for (auto loop : band)
-    bandAttrs.push_back(getLoopDirective(loop));
+    parallelFlags.push_back(isParallel(loop));
 
   // Apply loop tiling.
   AffineLoopBand tiledBand;
@@ -40,9 +40,9 @@ bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList,
   // Get all tile-space loops and reannotate the attributes.
   band = tiledBand;
   band.resize(originalBandSize);
-  for (auto zip : llvm::zip(band, bandAttrs))
+  for (auto zip : llvm::zip(band, parallelFlags))
     if (std::get<1>(zip))
-      setLoopDirective(std::get<0>(zip), std::get<1>(zip));
+      setParallel(std::get<0>(zip));
 
   // Apply loop order optimization and point loops unrolling if required.
   if (tileOrderOpt)

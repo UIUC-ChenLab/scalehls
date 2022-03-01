@@ -1636,26 +1636,8 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
 
 void ModuleEmitter::emitFunctionDirectives(FuncOp func,
                                            ArrayRef<Value> portList) {
-  auto funcDirect = getFuncDirective(func);
-  if (!funcDirect)
-    return;
-
-  if (funcDirect.getPipeline()) {
-    indent();
-    os << "#pragma HLS pipeline II=" << funcDirect.getTargetInterval() << "\n";
-
-    // An empty line.
-    os << "\n";
-  } else if (funcDirect.getDataflow()) {
-    indent();
-    os << "#pragma HLS dataflow\n";
-
-    // An empty line.
-    os << "\n";
-  }
-
   // Only top function should emit interface pragmas.
-  if (funcDirect.getTopFunc()) {
+  if (isTopFunc(func)) {
     indent();
     os << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
 
@@ -1699,15 +1681,32 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
       if (port.getType().isa<MemRefType>())
         emitArrayDirectives(port);
   }
+
+  auto funcDirect = getFuncDirective(func);
+  if (!funcDirect)
+    return;
+
+  if (funcDirect.getPipeline()) {
+    indent();
+    os << "#pragma HLS pipeline II=" << funcDirect.getTargetInterval() << "\n";
+
+    // An empty line.
+    os << "\n";
+  } else if (funcDirect.getDataflow()) {
+    indent();
+    os << "#pragma HLS dataflow\n";
+
+    // An empty line.
+    os << "\n";
+  }
 }
 
 void ModuleEmitter::emitFunction(FuncOp func) {
   if (func.getBlocks().size() != 1)
     emitError(func, "has zero or more than one basic blocks.");
 
-  if (auto funcDirect = getFuncDirective(func))
-    if (funcDirect.getTopFunc())
-      os << "/// This is top function.\n";
+  if (isTopFunc(func))
+    os << "/// This is top function.\n";
 
   if (auto timing = getTiming(func)) {
     os << "/// Latency=" << timing.getLatency();

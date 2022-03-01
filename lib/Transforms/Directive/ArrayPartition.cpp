@@ -93,14 +93,6 @@ bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
   // Set new type.
   array.setType(newType);
 
-  // FIXME: This is a very very bad practice...
-  // TODO: How to represent different memory resource?
-  if (auto getGlobal = array.getDefiningOp<memref::GetGlobalOp>()) {
-    auto module = getGlobal->getParentOfType<ModuleOp>();
-    auto global = module.lookupSymbol<memref::GlobalOp>(getGlobal.nameAttr());
-    global->setAttr(global.typeAttrName(), TypeAttr::get(newType));
-  }
-
   if (updateFuncSignature)
     if (auto func = dyn_cast<FuncOp>(array.getParentBlock()->getParentOp())) {
       // Align function type with entry block argument types only if the array
@@ -441,10 +433,8 @@ struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
       if (func.getName() == "main") {
         topFunc = func;
         break;
-      } else if (auto funcDirect = getFuncDirective(func)) {
-        if (funcDirect.getTopFunc())
-          topFunc = func;
-      }
+      } else if (isTopFunc(func))
+        topFunc = func;
     }
 
     if (!topFunc) {

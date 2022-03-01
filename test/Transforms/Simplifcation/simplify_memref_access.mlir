@@ -4,7 +4,7 @@
 #set0 = affine_set<(d0, d1) : (d0 - d1 >= 0)>
 #set1 = affine_set<(d0) : (d0 == 0)>
 module  {
-  func @test_syrk(%arg0: f32, %arg1: f32, %arg2: memref<16x16xf32, 1>, %arg3: memref<16x16xf32, 1>) attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=false, topFunc=true>} {
+  func @test_syrk(%arg0: f32, %arg1: f32, %arg2: memref<16x16xf32, 1>, %arg3: memref<16x16xf32, 1>) attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=false>, top_func} {
     affine.for %arg4 = 0 to 16 step 2 {
       affine.for %arg5 = 0 to 16 {
         affine.for %arg6 = 0 to 16 {
@@ -43,9 +43,9 @@ module  {
             // CHECK: affine.store %[[VAL_15:.*]], %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
             affine.store %15, %arg3[%arg5, %arg6] : memref<16x16xf32, 1>
           }
-        } {loop_directive = #hlscpp.ld<pipeline=true, targetII=2, dataflow=false, flatten=false, parallel=true>}
-      } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true, parallel=true>}
-    } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true, parallel=false>}
+        } {loop_directive = #hlscpp.ld<pipeline=true, targetII=2, dataflow=false, flatten=false>, parallel}
+      } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+    } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
     return
   }
 }

@@ -265,17 +265,6 @@ bool LoopDesignSpace::evaluateTileConfig(TileConfig config) {
 void LoopDesignSpace::initializeLoopDesignSpace(unsigned maxInitParallel) {
   LLVM_DEBUG(llvm::dbgs() << "Initialize the loop design space...\n";);
 
-  // A fully parallizable loop band will be easy and fast to be explored, thus
-  // we always evaluate the minimum fully parallel tile config.
-  // TileList parallelTileList;
-  // for (unsigned i = 0, e = band.size(); i < e; ++i) {
-  //   if (!isLoopParallel(band[i]))
-  //     parallelTileList.push_back(tripCountList[i]);
-  //   else
-  //     parallelTileList.push_back(1);
-  // }
-  // auto parallelConfig = getTileConfig(parallelTileList);
-
   for (TileConfig config = 0; config < validTileConfigNum; ++config) {
     auto tileList = getTileList(config);
 
