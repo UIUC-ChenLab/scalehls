@@ -55,6 +55,8 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(tosa::createTosaToLinalg());
         pm.addPass(tosa::createTosaToStandard());
+
+        // Create runtime main function.
         pm.addPass(scalehls::createCreateRuntimeMainPass(opts));
 
         // Lower graph to affine.
