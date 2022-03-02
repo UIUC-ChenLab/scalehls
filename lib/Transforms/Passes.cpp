@@ -99,6 +99,7 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(scalehls::createArrayPartitionPass());
         pm.addPass(scalehls::createCreateHLSCppPrimitivePass());
+        pm.addPass(mlir::createCanonicalizerPass());
       });
 }
 

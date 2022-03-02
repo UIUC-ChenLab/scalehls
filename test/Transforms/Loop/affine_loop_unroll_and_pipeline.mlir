@@ -7,6 +7,7 @@
 #set1 = affine_set<(d0) : (d0 == 0)>
 module  {
   func @test_syrk(%arg0: f32, %arg1: f32, %arg2: memref<16x16xf32>, %arg3: memref<16x16xf32>) {
+
     // CHECK: affine.for %arg4 = 0 to 16 step 2 {
     // CHECK:   affine.for %arg5 = 0 to 16 {
     // CHECK:     affine.for %arg6 = 0 to 16 {
@@ -28,7 +29,12 @@ module  {
             %7 = arith.addf %6, %4 : f32
             affine.store %7, %arg3[%arg5, %arg6] : memref<16x16xf32>
           }
+
           // CHECK: %0 = affine.apply #map(%arg4)
+
+    //     CHECK: } {loop_directive = #hlscpp.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>}
+    //   CHECK: } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
+    // CHECK: } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
         }
       }
     }
