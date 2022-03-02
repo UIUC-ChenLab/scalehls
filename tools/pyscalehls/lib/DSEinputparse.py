@@ -113,6 +113,7 @@ def process_source_file(dir, inputfile, sdse=False):
 
     var_forlist = []
     var_arraylist_sized = []
+    var_list = []
     var_forlist_scoped = []
 
     newfile = open (dir + "/ML_in.cpp", 'w')
@@ -216,7 +217,8 @@ def process_source_file(dir, inputfile, sdse=False):
                 newfile.write(line)
 
             #find array
-            arr2part = re.findall(r'(int|float)\s([A-Za-z_]+[A-Za-z_\d]*)\s?(\[[\d]+\])*\s?(\[[\d]+\])+(,|;|\)|' ')', line)
+            #only upto six dimentions
+            arr2part = re.findall(r'(int|float)\s([A-Za-z_]+[A-Za-z_\d]*)\s?(\[[\dA-Z]+\])?\s?(\[[\dA-Z]+\])?\s?(\[[\dA-Z]+\])?\s?(\[[\dA-Z]+\])?\s?(\[[\dA-Z]+\])?\s?(\[[\dA-Z]+\])+(,|;|\)|' ')', line)
             if(arr2part):
                 for item in arr2part:
                     current_array = "".join(item[1:-1])
@@ -332,4 +334,4 @@ def process_source_file(dir, inputfile, sdse=False):
                 else:
                     add_node(tree, var_forlist_scoped[i])        
     
-    return var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list
+    return var_forlist, var_arraylist_sized, var_list, var_forlist_scoped, tree_list

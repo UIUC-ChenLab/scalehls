@@ -5,12 +5,14 @@ import shutil
 import pandas as pd
 import argparse
 import copy
+import treelib
 
 #AutoHLS dependencies
 from lib import RandInit as RT
 from lib import DSEinputparse as INPAR
 from lib import pyScaleHLS as PYSHLS
 from lib import DSE_main as DMain
+from lib import dsepattern as DPAT
 
 def print_optknobs(opt_knobs, opt_knob_names):
     for i in range(len(opt_knobs) - 1):
@@ -134,17 +136,17 @@ def main():
         if((val == "DSE") or (val == "D") or (val == "d")):
             PYSHLS.scalehls_dse(tar_dir, source_file, inputtop)
 
-            var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_DSE_out.cpp", sdse=True)
+            var_forlist, var_arraylist_sized, var_list, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_DSE_out.cpp", sdse=True)
             #var_forlist = []
             print_variables(var_forlist, var_arraylist_sized)
         elif((val == "Manual") or (val == "M") or (val == "m")):
             opt_knobs, opt_knob_names = PYSHLS.ScaleHLSopt(source_file, inputtop, tar_dir + "/ScaleHLS_opted.c")   
             print_optknobs(opt_knobs, opt_knob_names)
 
-            var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_opted.c")
+            var_forlist, var_arraylist_sized, var_list, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_opted.c")
             print_variables(var_forlist, var_arraylist_sized)
         elif((val == "None") or (val == "N") or (val == "n")):
-            var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, source_file)
+            var_forlist, var_arraylist_sized, var_list, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, source_file)
 
             #var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file_array('generated_files/ScaleHLS_DSE_out.cpp')
             
@@ -156,7 +158,17 @@ def main():
 
     print("\nTree")
     for item in tree_list:
-        item.show()   
+        item.show()
+
+    tree_list[0].remove_node(4)
+
+    print("\nCulledTree")
+    for item in tree_list:
+        item.show()
+
+    DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", "1", tree_list[0])
+
+    
 
     # sortedarray = sortbyhotness(var_forlist_scoped)
 
