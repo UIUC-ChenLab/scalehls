@@ -265,17 +265,6 @@ bool LoopDesignSpace::evaluateTileConfig(TileConfig config) {
 void LoopDesignSpace::initializeLoopDesignSpace(unsigned maxInitParallel) {
   LLVM_DEBUG(llvm::dbgs() << "Initialize the loop design space...\n";);
 
-  // A fully parallizable loop band will be easy and fast to be explored, thus
-  // we always evaluate the minimum fully parallel tile config.
-  // TileList parallelTileList;
-  // for (unsigned i = 0, e = band.size(); i < e; ++i) {
-  //   if (!isLoopParallel(band[i]))
-  //     parallelTileList.push_back(tripCountList[i]);
-  //   else
-  //     parallelTileList.push_back(1);
-  // }
-  // auto parallelConfig = getTileConfig(parallelTileList);
-
   for (TileConfig config = 0; config < validTileConfigNum; ++config) {
     auto tileList = getTileList(config);
 
@@ -676,7 +665,9 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
       // unrolling to it.
       tmpFunc.walk([&](AffineForOp loop) {
         if (loop->getAttrOfType<BoolAttr>("opt_flag")) {
-          applyFullyUnrollAndPartition(*loop.getBody(), tmpFunc);
+          applyFullyLoopUnrolling(*loop.getBody());
+          applySimplificationOpts(tmpFunc);
+          applyAutoArrayPartition(tmpFunc);
           return;
         }
       });
@@ -685,9 +676,11 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
       estimator.estimateFunc(tmpFunc);
 
       // Fully unroll the candidate loop or delve into child loops.
-      if (getResource(tmpFunc).getDsp() <= maxDspNum)
-        applyFullyUnrollAndPartition(*candidate.getBody(), func);
-      else {
+      if (getResource(tmpFunc).getDsp() <= maxDspNum) {
+        applyFullyLoopUnrolling(*candidate.getBody());
+        applySimplificationOpts(func);
+        applyAutoArrayPartition(func);
+      } else {
         auto childForOps = candidate.getOps<AffineForOp>();
         targetLoops.append(childForOps.begin(), childForOps.end());
       }

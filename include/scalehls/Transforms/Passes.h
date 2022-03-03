@@ -38,6 +38,10 @@ struct ScaleHLSPyTorchPipelineOptions
   Option<unsigned> vectorSize{
       *this, "vector-size",
       llvm::cl::desc("The size of vectorization (set 0 to disable)")};
+
+  Option<bool> fakeQuantize{
+      *this, "fake-quantize", llvm::cl::init(false),
+      llvm::cl::desc("Trigger the fake quantization (just for testing use)")};
 };
 
 /// QoR estimation and DSE passes.
@@ -45,14 +49,17 @@ std::unique_ptr<Pass> createQoREstimationPass();
 std::unique_ptr<Pass> createMultipleLevelDSEPass();
 
 /// Graph optimization passes.
-std::unique_ptr<Pass> createCreateRuntimeMainPass();
-std::unique_ptr<Pass>
-createCreateRuntimeMainPass(const ScaleHLSPyTorchPipelineOptions &opts);
+std::unique_ptr<Pass> createFakeQuantizePass();
 std::unique_ptr<Pass> createSimplifyTosaGraphPass();
 std::unique_ptr<Pass> createLegalizeDataflowPass();
 std::unique_ptr<Pass> createLegalizeDataflowPass(unsigned dataflowGran);
 std::unique_ptr<Pass> createSplitFunctionPass();
 std::unique_ptr<Pass> createConvertCopyToAffineLoopsPass();
+
+/// Runtime-related passes.
+std::unique_ptr<Pass> createCreateRuntimeMainPass();
+std::unique_ptr<Pass>
+createCreateRuntimeMainPass(const ScaleHLSPyTorchPipelineOptions &opts);
 
 /// HLSCpp legalization pass.
 std::unique_ptr<Pass> createLegalizeToHLSCppPass();

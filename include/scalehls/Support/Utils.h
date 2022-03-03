@@ -9,6 +9,7 @@
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
+#include "mlir/IR/BuiltinOps.h"
 #include "scalehls/Dialect/HLSCpp/HLSCpp.h"
 
 namespace mlir {
@@ -27,11 +28,13 @@ LoopInfoAttr getLoopInfo(Operation *op);
 
 /// Parse loop directives.
 LoopDirectiveAttr getLoopDirective(Operation *op);
+bool isParallel(AffineForOp loop);
 
 /// Parse function directives.
 FuncDirectiveAttr getFuncDirective(Operation *op);
+bool isTopFunc(FuncOp func);
 
-/// Parse other attributes.
+/// Parse array attributes.
 SmallVector<int64_t, 8> getIntArrayAttrValue(Operation *op, StringRef name);
 
 //===----------------------------------------------------------------------===//

@@ -36,12 +36,14 @@ void setLoopInfo(Operation *op, int64_t flattenTripCount, int64_t iterLatency,
 /// Set loop directives.
 void setLoopDirective(Operation *op, LoopDirectiveAttr loopDirective);
 void setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
-                      bool dataflow, bool flatten, bool parallel);
+                      bool dataflow, bool flatten);
+void setParallel(AffineForOp loop);
 
 /// Set function directives.
 void setFuncDirective(Operation *op, FuncDirectiveAttr FuncDirective);
 void setFuncDirective(Operation *op, bool pipeline, int64_t targetInterval,
-                      bool dataflow, bool topFunc);
+                      bool dataflow);
+void setTopFunc(FuncOp func);
 
 //===----------------------------------------------------------------------===//
 // Loop transform utils
@@ -64,10 +66,8 @@ bool applyAffineLoopOrderOpt(AffineLoopBand &band,
 bool applyRemoveVariableBound(AffineLoopBand &band);
 
 /// Apply loop tiling to the input loop band and sink all intra-tile loops to
-/// the innermost loop with the original loop order. Return the location of the
-/// innermost tile-space loop.
-Optional<unsigned> applyLoopTiling(AffineLoopBand &band, TileList tileList,
-                                   bool simplify = true);
+/// the innermost loop with the original loop order.
+bool applyLoopTiling(AffineLoopBand &band, TileList tileList);
 
 bool applyLegalizeToHLSCpp(FuncOp func, bool topFunc);
 
@@ -76,22 +76,24 @@ bool applyLegalizeToHLSCpp(FuncOp func, bool topFunc);
 bool applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
                          unsigned targetII);
 
+/// Apply simplification optimizations.
+bool applySimplificationOpts(FuncOp func);
+
 /// Fully unroll all loops insides of a loop block.
-bool applyFullyLoopUnrolling(Block &block);
+bool applyFullyLoopUnrolling(Block &block, unsigned maxIterNum = 10);
 
-bool applyFullyUnrollAndPartition(Block &block, FuncOp func);
-
-bool applyMemoryAccessOpt(FuncOp func);
-
+/// Apply the specified array partition factors and kinds.
 bool applyArrayPartition(Value array, ArrayRef<unsigned> factors,
                          ArrayRef<hlscpp::PartitionKind> kinds,
                          bool updateFuncSignature = true);
 
+/// Find the suitable array partition factors and kinds for all arrays in the
+/// targeted function.
 bool applyAutoArrayPartition(FuncOp func);
 
-/// Apply optimization strategy to a loop band. The ancestor function is
-/// also passed in because the post-tiling optimizations have to take
-/// function as target, e.g. canonicalizer and array partition.
+/// Apply optimization strategy to a loop band. The ancestor function is also
+/// passed in because the post-tiling optimizations have to take function as
+/// target, e.g. canonicalizer and array partition.
 bool applyOptStrategy(AffineLoopBand &band, FuncOp func, TileList tileList,
                       unsigned targetII);
 

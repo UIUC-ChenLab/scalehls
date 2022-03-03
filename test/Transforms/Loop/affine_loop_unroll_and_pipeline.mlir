@@ -1,22 +1,20 @@
 // RUN: scalehls-opt -affine-loop-unroll-and-pipeline="unroll-size=2 loop-order-opt=false" %s | FileCheck %s
 
-// CHECK: #map0 = affine_map<(d0, d1) -> (d0 + d1 * 2)>
-// CHECK: #map1 = affine_map<(d0) -> (d0 + 1)>
+// CHECK: #map = affine_map<(d0) -> (d0 + 1)>
 // CHECK: #set0 = affine_set<(d0, d1) : (d0 - d1 >= 0)>
 // CHECK: #set1 = affine_set<(d0) : (d0 == 0)>
 #set0 = affine_set<(d0, d1) : (d0 - d1 >= 0)>
 #set1 = affine_set<(d0) : (d0 == 0)>
 module  {
   func @test_syrk(%arg0: f32, %arg1: f32, %arg2: memref<16x16xf32>, %arg3: memref<16x16xf32>) {
-    // CHECK: affine.for %arg4 = 0 to 8 {
+
+    // CHECK: affine.for %arg4 = 0 to 16 step 2 {
     // CHECK:   affine.for %arg5 = 0 to 16 {
     // CHECK:     affine.for %arg6 = 0 to 16 {
     // CHECK-NOT:   affine.for %arg7 = 0 to 2 {
     affine.for %arg4 = 0 to 16 {
       affine.for %arg5 = 0 to 16 {
         affine.for %arg6 = 0 to 16 {
-          // CHECK: %0 = affine.apply #map0(%c0, %arg4)
-          // CHECK: affine.if #set0(%arg5, %arg6) {
           affine.if #set0(%arg5, %arg6) {
             %0 = affine.load %arg3[%arg5, %arg6] : memref<16x16xf32>
             %1 = arith.mulf %arg1, %0 : f32
@@ -31,9 +29,12 @@ module  {
             %7 = arith.addf %6, %4 : f32
             affine.store %7, %arg3[%arg5, %arg6] : memref<16x16xf32>
           }
-          // CHECK: %1 = affine.apply #map1(%c0)
-          // CHECK: %2 = affine.apply #map0(%1, %arg4)
-          // CHECK: affine.if #set0(%arg5, %arg6) {
+
+          // CHECK: %0 = affine.apply #map(%arg4)
+
+    //     CHECK: } {loop_directive = #hlscpp.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>}
+    //   CHECK: } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
+    // CHECK: } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
         }
       }
     }

@@ -16,13 +16,7 @@ using namespace scalehls;
 static bool applyFuncPipelining(FuncOp func, int64_t targetII) {
   if (!applyFullyLoopUnrolling(func.front()))
     return false;
-
-  auto topFunc = false;
-  if (auto funcDirect = getFuncDirective(func))
-    topFunc = funcDirect.getTopFunc();
-
-  setFuncDirective(func, true, targetII, false, topFunc);
-
+  setFuncDirective(func, true, targetII, false);
   return true;
 }
 

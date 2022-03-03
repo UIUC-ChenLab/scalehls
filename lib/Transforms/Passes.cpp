@@ -42,6 +42,9 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         if (opts.vectorSize.hasValue())
           vectorSize = opts.vectorSize;
 
+        if (opts.fakeQuantize)
+          pm.addPass(scalehls::createFakeQuantizePass());
+
         // Graph-level optimizations.
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(scalehls::createSimplifyTosaGraphPass());
@@ -52,6 +55,8 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(tosa::createTosaToLinalg());
         pm.addPass(tosa::createTosaToStandard());
+
+        // Create runtime main function.
         pm.addPass(scalehls::createCreateRuntimeMainPass(opts));
 
         // Lower graph to affine.
@@ -63,12 +68,14 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
 
         // Loop-level optimizations.
-        if (vectorSize)
-          pm.addPass(mlir::createSuperVectorizePass({vectorSize}));
         pm.addPass(memref::createFoldSubViewOpsPass());
         pm.addPass(mlir::createAffineLoopNormalizePass());
         pm.addPass(mlir::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
+        if (vectorSize) {
+          pm.addPass(mlir::createSuperVectorizePass({vectorSize}));
+          pm.addPass(mlir::createCanonicalizerPass());
+        }
         pm.addPass(scalehls::createLegalizeToHLSCppPass(opts));
         pm.addPass(scalehls::createMaterializeReductionPass());
         if (loopUnrollSize) {
@@ -78,7 +85,9 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
               scalehls::createAffineLoopUnrollAndPipelinePass(loopUnrollSize));
         }
 
-        // Memory accessing simplifications.
+        // Apply simplifications.
+        pm.addPass(mlir::createAffineLoopNormalizePass());
+        pm.addPass(mlir::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(scalehls::createSimplifyAffineIfPass());
         pm.addPass(scalehls::createAffineStoreForwardPass());
@@ -90,6 +99,7 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(scalehls::createArrayPartitionPass());
         pm.addPass(scalehls::createCreateHLSCppPrimitivePass());
+        pm.addPass(mlir::createCanonicalizerPass());
       });
 }
 

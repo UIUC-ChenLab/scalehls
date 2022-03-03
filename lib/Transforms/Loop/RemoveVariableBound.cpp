@@ -14,6 +14,8 @@ using namespace scalehls;
 
 /// Apply remove variable bound to all inner loops of the input loop.
 bool scalehls::applyRemoveVariableBound(AffineLoopBand &band) {
+  assert(!band.empty() && "no loops provided");
+
   auto innermostLoop = band.back();
   auto builder = OpBuilder(innermostLoop);
 

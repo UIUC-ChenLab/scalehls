@@ -45,6 +45,7 @@ static void updateSubFuncs(FuncOp func, Builder builder) {
   });
 }
 
+/// Apply the specified array partition factors and kinds.
 bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
                                    ArrayRef<hlscpp::PartitionKind> kinds,
                                    bool updateFuncSignature) {
@@ -91,14 +92,6 @@ bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
 
   // Set new type.
   array.setType(newType);
-
-  // FIXME: This is a very very bad practice...
-  // TODO: How to represent different memory resource?
-  if (auto getGlobal = array.getDefiningOp<memref::GetGlobalOp>()) {
-    auto module = getGlobal->getParentOfType<ModuleOp>();
-    auto global = module.lookupSymbol<memref::GlobalOp>(getGlobal.nameAttr());
-    global->setAttr(global.typeAttrName(), TypeAttr::get(newType));
-  }
 
   if (updateFuncSignature)
     if (auto func = dyn_cast<FuncOp>(array.getParentBlock()->getParentOp())) {
@@ -203,6 +196,8 @@ getDimAccessMaps(Operation *op, AffineValueMap valueMap, int64_t dim) {
   return maps;
 }
 
+/// Find the suitable array partition factors and kinds for all arrays in the
+/// targeted function.
 bool scalehls::applyAutoArrayPartition(FuncOp func) {
   // Check whether the input function is pipelined.
   bool funcPipeline = false;
@@ -438,10 +433,8 @@ struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
       if (func.getName() == "main") {
         topFunc = func;
         break;
-      } else if (auto funcDirect = getFuncDirective(func)) {
-        if (funcDirect.getTopFunc())
-          topFunc = func;
-      }
+      } else if (isTopFunc(func))
+        topFunc = func;
     }
 
     if (!topFunc) {

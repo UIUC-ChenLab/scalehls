@@ -5,10 +5,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
-#include "mlir/Dialect/Affine/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/LoopUtils.h"
 #include "mlir/Dialect/Affine/Utils.h"
-#include "mlir/IR/IntegerSet.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -16,101 +14,33 @@
 using namespace mlir;
 using namespace scalehls;
 
-static IntegerSet simplify(IntegerSet set) { return simplifyIntegerSet(set); }
-
-/// Performs basic affine map simplifications.
-static AffineMap simplify(AffineMap map) {
-  MutableAffineMap mMap(map);
-  mMap.simplify();
-  return mMap.getAffineMap();
-}
-
-/// Utility to simplify an affine attribute and update its entry in the parent
-/// operation if necessary.
-template <typename AttrT>
-static void
-simplifyAndUpdateAttr(Operation *op, StringAttr name, AttrT attr,
-                      DenseMap<Attribute, Attribute> &simplifiedAttrs) {
-  auto &simplified = simplifiedAttrs[attr];
-  if (simplified == attr)
-    return;
-
-  // This is a newly encountered attribute.
-  if (!simplified) {
-    // Try to simplify the value of the attribute.
-    auto value = attr.getValue();
-    auto simplifiedValue = simplify(value);
-    if (simplifiedValue == value) {
-      simplified = attr;
-      return;
-    }
-    simplified = AttrT::get(simplifiedValue);
-  }
-
-  // Simplification was successful, so update the attribute.
-  op->setAttr(name, simplified);
-}
-
-static void simplifyAffineStructures(Block &block) {
-  auto context = block.front().getContext();
-  DenseMap<Attribute, Attribute> simplifiedAttrs;
-
-  RewritePatternSet patterns(context);
-  AffineApplyOp::getCanonicalizationPatterns(patterns, context);
-  AffineForOp::getCanonicalizationPatterns(patterns, context);
-  AffineIfOp::getCanonicalizationPatterns(patterns, context);
-  FrozenRewritePatternSet frozenPatterns(std::move(patterns));
-
-  // The simplification of affine attributes will likely simplify the op. Try to
-  // fold/apply canonicalization patterns when we have affine dialect ops.
-  SmallVector<Operation *> opsToSimplify;
-  block.walk([&](Operation *op) {
-    for (auto attr : op->getAttrs()) {
-      if (auto mapAttr = attr.getValue().dyn_cast<AffineMapAttr>())
-        simplifyAndUpdateAttr(op, attr.getName(), mapAttr, simplifiedAttrs);
-      else if (auto setAttr = attr.getValue().dyn_cast<IntegerSetAttr>())
-        simplifyAndUpdateAttr(op, attr.getName(), setAttr, simplifiedAttrs);
-    }
-
-    if (isa<AffineForOp, AffineIfOp, AffineApplyOp>(op))
-      opsToSimplify.push_back(op);
-  });
-  applyOpPatternsAndFold(opsToSimplify, frozenPatterns, /*strict=*/true);
-}
-
 /// Apply loop tiling to the input loop band and sink all intra-tile loops to
-/// the innermost loop with the original loop order. Return the location of the
-/// innermost tile-space loop.
-Optional<unsigned> scalehls::applyLoopTiling(AffineLoopBand &band,
-                                             TileList tileList, bool simplify) {
+/// the innermost loop with the original loop order.
+bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList) {
+  assert(!band.empty() && "no loops provided");
 
   if (!isPerfectlyNested(band))
-    return Optional<unsigned>();
+    return false;
 
-  // Loop tiling.
-  auto bandSize = band.size();
+  // Record the original band size and attributes to make use of later.
+  auto originalBandSize = band.size();
+  SmallVector<bool, 6> parallelFlags;
+  for (auto loop : band)
+    parallelFlags.push_back(isParallel(loop));
+
+  // Apply loop tiling.
   AffineLoopBand tiledBand;
   if (failed(tilePerfectlyNested(band, tileList, &tiledBand)))
-    return Optional<unsigned>();
+    return false;
 
-  if (simplify) {
-    band.clear();
-    unsigned simplifiedBandSize = 0;
-    for (unsigned i = 0, e = tiledBand.size(); i < e; ++i) {
-      auto loop = tiledBand[i];
-      (void)normalizeAffineFor(loop);
-      if (loop && !loop.getLoopBody().empty()) {
-        band.push_back(loop);
-        if (i < bandSize)
-          ++simplifiedBandSize;
-      }
-    }
-    simplifyAffineStructures(*band.front().getBody());
-    return simplifiedBandSize - 1;
-  } else {
-    band = tiledBand;
-    return bandSize - 1;
-  }
+  // Get all tile-space loops and reannotate the attributes.
+  band = tiledBand;
+  band.resize(originalBandSize);
+  for (auto zip : llvm::zip(band, parallelFlags))
+    if (std::get<1>(zip))
+      setParallel(std::get<0>(zip));
+
+  return true;
 }
 
 namespace {
@@ -151,13 +81,15 @@ struct AffineLoopUnrollAndPipeline
           sizes.push_back(1);
       }
 
-      auto tileLoc = applyLoopTiling(band, sizes).getValue();
-      band.resize(tileLoc + 1);
+      // Apply loop tiling.
+      applyLoopTiling(band, sizes);
 
-      // TODO: canonicalize here to eliminate affine.apply ops?
-      if (loopOrderOpt)
+      // Apply loop order optimization if required.
+      if (loopOrderOpt.getValue())
         applyAffineLoopOrderOpt(band);
-      applyLoopPipelining(band, tileLoc, (unsigned)1);
+
+      // Apply loop pipelining. All point loops will be fully unrolled.
+      applyLoopPipelining(band, band.size() - 1, (unsigned)1);
     }
   }
 };

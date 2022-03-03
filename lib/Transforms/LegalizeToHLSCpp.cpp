@@ -58,61 +58,19 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
   auto builder = OpBuilder(func);
 
   // We constrain functions to only contain one block.
+  // TODO: Make sure there's no memref store/load or scf operations?
   if (!llvm::hasSingleElement(func))
     func.emitError("has zero or more than one basic blocks.");
 
-  // TODO: Make sure there's no memref store/load or scf operations?
+  // Set top function attribute.
+  if (isTopFunc)
+    setTopFunc(func);
 
-  // Set function pragma attributes.
-  if (auto fd = getFuncDirective(func))
-    setFuncDirective(func, fd.getPipeline(), fd.getTargetInterval(),
-                     fd.getDataflow(), isTopFunc);
-  else
-    setFuncDirective(func, false, 1, false, isTopFunc);
-
-  // Walk through all operations in the function.
-  SmallPtrSet<Value, 16> memrefs;
-  func.walk([&](Operation *op) {
-    // Collect all memrefs.
-    for (auto operand : op->getOperands())
-      if (operand.getType().isa<MemRefType>())
-        memrefs.insert(operand);
-
-    // Set loop directive attributes.
-    if (auto forOp = dyn_cast<AffineForOp>(op)) {
-      if (!getLoopDirective(forOp))
-        setLoopDirective(forOp, false, 1, false, false, isLoopParallel(forOp));
-    }
+  // Set parallel attribute to each loop that is applicable.
+  func.walk([&](AffineForOp loop) {
+    if (isLoopParallel(loop))
+      setParallel(loop);
   });
-
-  // Set array directives.
-  for (auto memref : memrefs) {
-    auto type = memref.getType().cast<MemRefType>();
-
-    if (type.getMemorySpace() == 0) {
-      // TODO: determine memory kind according to data type.
-      MemoryKind kind = MemoryKind::BRAM_S2P;
-
-      auto newType =
-          MemRefType::get(type.getShape(), type.getElementType(),
-                          type.getLayout().getAffineMap(), (unsigned)kind);
-      memref.setType(newType);
-
-      // FIXME: This is a very very bad practice...
-      // TODO: How to represent different memory resource?
-      if (auto getGlobal = memref.getDefiningOp<memref::GetGlobalOp>()) {
-        auto module = getGlobal->getParentOfType<ModuleOp>();
-        auto global =
-            module.lookupSymbol<memref::GlobalOp>(getGlobal.nameAttr());
-        global->setAttr(global.typeAttrName(), TypeAttr::get(newType));
-      }
-    }
-  }
-
-  // Align function type with entry block argument types.
-  auto resultTypes = func.front().getTerminator()->getOperandTypes();
-  auto inputTypes = func.front().getArgumentTypes();
-  func.setType(builder.getFunctionType(inputTypes, resultTypes));
 
   // Insert AssignOp when an arguments or result of ConstantOp are directly
   // connected to ReturnOp.

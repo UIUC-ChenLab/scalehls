@@ -62,7 +62,7 @@ def LoopDirective : HLSCppAttr<"LoopDirective"> {
   let summary = "Aggregation of loop directives";
   let description = [{
     This attribute includes all loop directives, including loop pipelining,
-    target initial interval (II), dataflow, flattening, and whether is parallel.
+    target initial interval (II), dataflow, and flattening.
   }];
   let mnemonic = "ld";
 
@@ -70,8 +70,7 @@ def LoopDirective : HLSCppAttr<"LoopDirective"> {
     "bool" : $pipeline,
     "int64_t" : $targetII,
     "bool" : $dataflow,
-    "bool" : $flatten,
-    "bool" : $parallel
+    "bool" : $flatten
   );
 }
 
@@ -79,15 +78,14 @@ def FuncDirective : HLSCppAttr<"FuncDirective"> {
   let summary = "Aggregation of function directives";
   let description = [{
     This attribute includes all function directives, including function
-    pipelining, target interval, dataflow, and whether is top function.
+    pipelining, target interval, and dataflow.
   }];
   let mnemonic = "fd";
 
   let parameters = (ins
     "bool" : $pipeline,
     "int64_t" : $targetInterval,
-    "bool" : $dataflow,
-    "bool" : $topFunc
+    "bool" : $dataflow
   );
 }
 

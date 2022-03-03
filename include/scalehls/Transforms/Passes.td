@@ -63,21 +63,10 @@ def MultipleLevelDSE : Pass<"dse", "ModuleOp"> {
 // Graph Optimization Passes
 //===----------------------------------------------------------------------===//
 
-def CreateRuntimeMain : Pass<"create-runtime-main", "ModuleOp"> {
-  let summary = "Create the main function of runtime";
-  let description = [{
-    This create-runtime-main pass will create a new "main" function calling the
-    original top function. All constant tensors are instantiated in the new
-    "main" function and passed into the original top function as arguments after
-    the transform.
-  }];
+def FakeQuantize : Pass<"fake-quantize", "ModuleOp"> {
+  let summary = "Convert to 8-bits quantized model (only for testing use)";
 
-  let constructor = "mlir::scalehls::createCreateRuntimeMainPass()";
-
-  let options = [
-    Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
-           "The top function for HLS synthesis">
-  ];
+  let constructor = "mlir::scalehls::createFakeQuantizePass()";
 }
 
 def SimplifyTosaGraph : Pass<"simplify-tosa-graph", "FuncOp"> {
@@ -127,6 +116,27 @@ def ConvertCopyToAffineLoops : Pass<"convert-copy-to-affine-loops", "FuncOp"> {
   }];
 
   let constructor = "mlir::scalehls::createConvertCopyToAffineLoopsPass()";
+}
+
+//===----------------------------------------------------------------------===//
+// Runtime-related Passes
+//===----------------------------------------------------------------------===//
+
+def CreateRuntimeMain : Pass<"create-runtime-main", "ModuleOp"> {
+  let summary = "Create the main function of runtime";
+  let description = [{
+    This create-runtime-main pass will create a new "main" function calling the
+    original top function. All constant tensors are instantiated in the new
+    "main" function and passed into the original top function as arguments after
+    the transform.
+  }];
+
+  let constructor = "mlir::scalehls::createCreateRuntimeMainPass()";
+
+  let options = [
+    Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
+           "The top function for HLS synthesis">
+  ];
 }
 
 //===----------------------------------------------------------------------===//

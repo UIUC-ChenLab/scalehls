@@ -309,11 +309,8 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
   for (unsigned i = 1, e = band.size(); i <= e; ++i) {
     auto loop = band[i - 1];
     auto loopDirect = getLoopDirective(loop);
-    if (!loopDirect)
-      loop.emitError("loop directives missing on for loops");
-
-    if (loopDirect.getFlatten() || loopDirect.getPipeline())
-      if (!loopDirect.getParallel())
+    if (!isParallel(forOp) && loopDirect)
+      if (loopDirect.getFlatten() || loopDirect.getPipeline())
         loopDepths.push_back(i);
   }
 
@@ -704,14 +701,10 @@ TimingAttr ScaleHLSEstimator::estimateBlock(Block &block, int64_t begin) {
 
           for (unsigned depth = 1; depth <= loopDepth + 1; ++depth) {
             // Skip all parallel loop level.
-            if (depth != loopDepth + 1) {
-              if (auto loopDirect = getLoopDirective(commonLoops[depth - 1]))
-                if (loopDirect.getParallel())
-                  continue;
-            }
+            if (depth != loopDepth + 1 && isParallel(commonLoops[depth - 1]))
+              continue;
 
             FlatAffineValueConstraints dependConstrs;
-
             DependenceResult result = checkMemrefAccessDependence(
                 opAccess, depOpAccess, depth, &dependConstrs,
                 /*dependenceComponents=*/nullptr, /*allowRAR=*/true);
@@ -981,9 +974,8 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     // called by the top function, it will be estimated in the procedure of
     // estimating the top function.
     for (auto func : module.getOps<FuncOp>())
-      if (auto funcDirect = getFuncDirective(func))
-        if (funcDirect.getTopFunc())
-          ScaleHLSEstimator(latencyMap, dspUsageMap, true).estimateFunc(func);
+      if (isTopFunc(func))
+        ScaleHLSEstimator(latencyMap, dspUsageMap, true).estimateFunc(func);
   }
 };
 } // namespace

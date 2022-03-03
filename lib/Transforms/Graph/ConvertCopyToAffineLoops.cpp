@@ -205,11 +205,11 @@ struct ConvertCopyToAffineLoops
     mlir::RewritePatternSet patterns(context);
     patterns.add<AllocOpRewritePattern>(context, DT);
     patterns.add<AssignOpRewritePattern>(context);
+    patterns.add<ReshapeOpLoweringPattern>(context);
     (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
 
     // Lower copy and assign operation.
     patterns.clear();
-    patterns.add<ReshapeOpLoweringPattern>(context);
     patterns.add<CopyOpLoweringPattern>(context);
     (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
   }

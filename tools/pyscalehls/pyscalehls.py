@@ -50,6 +50,10 @@ def main():
             pass
         func.__class__ = builtin.FuncOp
 
+        # Legalize the IR.
+        scalehls.legalize_to_hlscpp(
+            func, func.sym_name.value == opts.function)
+
         # Traverse all suitable loop bands in the function.
         bands = scalehls.LoopBandList(func)
         for band in bands:
@@ -71,10 +75,10 @@ def main():
             # Note: We use the trip count to generate this example "factors".
             factors = np.ones(band.depth, dtype=int)
             factors[-1] = band.get_trip_count(band.depth - 1) / 4
-            loc = scalehls.loop_tiling(band, factors, True) # simplify = True
+            scalehls.loop_tiling(band, factors)
 
             # Apply loop pipelining. All loops inside of the pipelined loop are fully unrolled.
-            scalehls.loop_pipelining(band, loc, 3)  # targetII = 3
+            scalehls.loop_pipelining(band, band.depth - 1, 3)  # targetII = 3
 
         # Traverse all arrays in the function.
         arrays = scalehls.ArrayList(func)
@@ -89,12 +93,8 @@ def main():
             factors[-1] = type.get_dim_size(type.rank - 1) / 4
             scalehls.array_partition(array, factors, "cyclic")
 
-        # Legalize the IR to make it emittable.
-        scalehls.legalize_to_hlscpp(
-            func, func.sym_name.value == opts.function)
-
-        # Optimize memory accesses through store forwarding, etc.
-        scalehls.memory_access_opt(func)
+        # Apply simplifications.
+        scalehls.simplification_opts(func)
 
         # Apply suitable array partition strategies through analyzing the array access pattern.
         # scalehls.auto_array_partition(func)

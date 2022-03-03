@@ -25,6 +25,7 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band,
                                        ArrayRef<unsigned> permMap,
                                        bool reverse) {
   LLVM_DEBUG(llvm::dbgs() << "Loop order opt ";);
+  assert(!band.empty() && "no loops provided");
 
   if (!isPerfectlyNested(band))
     return false;
