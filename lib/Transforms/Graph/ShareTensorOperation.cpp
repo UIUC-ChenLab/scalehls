@@ -30,6 +30,21 @@ struct ConvInfo {
     return weight.getType().cast<RankedTensorType>().getShape();
   }
 
+  int64_t numOutputChannels() {
+    auto shape = this->getWeightShape();
+    return shape[0];
+  }
+
+  int64_t numInputChannels() {
+    auto shape = this->getWeightShape();
+    return shape[3];
+  }
+
+  int64_t kernelSize() {
+    auto shape = this->getWeightShape();
+    return shape[1];
+  }
+
   bool operator==(ConvInfo& rhs) {
     return (this->getInputShape() == rhs.getInputShape()) &&
            (this->getOutputShape() == rhs.getOutputShape()) &&
@@ -73,21 +88,21 @@ static bool applyShareTensorOperation(ModuleOp module) {
 
   // Find the shape of convolution that happens most frequently.
   unsigned maxCount = 0;
-  ConvInfo maxInfo;
+  ConvInfo sharedKernel;
   for (auto item : countMap) {
     if (item.second > maxCount) {
       maxCount = item.second;
-      maxInfo = item.first;
+      sharedKernel = item.first;
     }
   }
 
   // Create a function that contains the most frequent convolution.
   SmallVector<Type, 16> inputTypes;
-  for (auto operand : maxInfo.op.getOperands()) {
+  for (auto operand : sharedKernel.op.getOperands()) {
     inputTypes.push_back(operand.getType());
   }
   auto functionName = "shared_convolution";
-  auto resultType = maxInfo.op.getResult().getType();
+  auto resultType = sharedKernel.op.getResult().getType();
   auto newType = builder.getFunctionType(inputTypes, resultType);
   builder.setInsertionPointToStart(module.getBody());
   auto newFuncOp = builder.create<FuncOp>(builder.getUnknownLoc(), functionName, newType);
@@ -99,9 +114,9 @@ static bool applyShareTensorOperation(ModuleOp module) {
   auto weight = entryBlock->getArgument(1);
   auto bias = entryBlock->getArgument(2);
   auto outputType = newFuncOp.getType().getResults()[0];
-  auto pad = maxInfo.op.pad();
-  auto stride = maxInfo.op.stride();
-  auto dilation = maxInfo.op.dilation();
+  auto pad = sharedKernel.op.pad();
+  auto stride = sharedKernel.op.stride();
+  auto dilation = sharedKernel.op.dilation();
   auto newConvOp = builder.create<tosa::Conv2DOp>(builder.getUnknownLoc(), outputType, input, weight, bias, pad, stride, dilation);
 
   // Create ReturnOp inside the created function/
@@ -116,11 +131,35 @@ static bool applyShareTensorOperation(ModuleOp module) {
       if (auto Conv2DOp = dyn_cast<tosa::Conv2DOp>(op)) {
         ConvInfo info;
         info.op = Conv2DOp;
-        if (maxInfo == info) {
+        if (sharedKernel == info) {
           opToErase.push_back(Conv2DOp);
           builder.setInsertionPoint(Conv2DOp);
-          auto newCallOp = builder.create<CallOp>(builder.getUnknownLoc(), functionName, Conv2DOp->getResultTypes(), Conv2DOp->getOperands());
+          auto newCallOp = builder.create<CallOp>(Conv2DOp.getLoc(), functionName, Conv2DOp->getResultTypes(), Conv2DOp->getOperands());
           Conv2DOp.replaceAllUsesWith(newCallOp);
+        }
+        else if (info.numOutputChannels() % sharedKernel.numOutputChannels() == 0) {
+          opToErase.push_back(Conv2DOp);
+          builder.setInsertionPoint(Conv2DOp);
+          int64_t numIterations = info.numOutputChannels() / sharedKernel.numOutputChannels();
+
+          SmallVector<Value, 16> slicedOutputs;
+          for (int iteration = 0; iteration < numIterations; iteration++) {
+            auto start = builder.getI64ArrayAttr({iteration * sharedKernel.numOutputChannels(), 0, 0, 0});
+            auto size = builder.getI64ArrayAttr({sharedKernel.numOutputChannels(), sharedKernel.kernelSize(), sharedKernel.kernelSize(), sharedKernel.numInputChannels()});
+            auto outputType = sharedKernel.op.getOperand(1).getType();
+            auto slicedWeight = builder.create<tosa::SliceOp>(Conv2DOp.getLoc(), outputType, Conv2DOp->getOperand(1), start, size).output();
+            
+            start = builder.getI64ArrayAttr({iteration * sharedKernel.numOutputChannels()});
+            size = builder.getI64ArrayAttr({sharedKernel.numOutputChannels()});
+            outputType = sharedKernel.op.getOperand(2).getType();
+            auto slicedBias = builder.create<tosa::SliceOp>(Conv2DOp.getLoc(), outputType, Conv2DOp->getOperand(2), start, size).output();
+            auto operands = {Conv2DOp.getOperand(0), slicedWeight, slicedBias};
+
+            slicedOutputs.push_back(builder.create<CallOp>(Conv2DOp.getLoc(), functionName, sharedKernel.op->getResultTypes(), operands).getODSResults(0)[0]);
+          }
+
+          Operation* newConcatOp = builder.create<tosa::ConcatOp>(Conv2DOp.getLoc(), Conv2DOp->getResultTypes(), slicedOutputs, 3);
+          Conv2DOp.replaceAllUsesWith(newConcatOp);
         }
       }
     });
