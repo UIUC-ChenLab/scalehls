@@ -822,6 +822,9 @@ void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func, bool directiveOnly,
 
 namespace {
 struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
+  MultipleLevelDSE() = default;
+  MultipleLevelDSE(std::string dseTargetSpec) { targetSpec = dseTargetSpec; }
+
   void runOnOperation() override {
     auto module = getOperation();
 
@@ -887,11 +890,9 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
         maxLoopParallel, maxIterNum, maxDistance);
 
     // Optimize the top function.
-    // TODO: Handle sub-functions and dataflowed or pipelined functions.
+    // TODO: Support to contain sub-functions.
     for (auto func : module.getOps<FuncOp>()) {
-      auto isTop = func.getName() == topFunc;
-      applyLegalizeToHLSCpp(func, isTop, isTop && axiInterf);
-      if (isTop)
+      if (isTopFunc(func))
         optimizer.applyMultipleLevelDSE(func, directiveOnly, outputPath,
                                         csvPath);
     }
@@ -901,4 +902,8 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
 
 std::unique_ptr<Pass> scalehls::createMultipleLevelDSEPass() {
   return std::make_unique<MultipleLevelDSE>();
+}
+std::unique_ptr<Pass>
+scalehls::createMultipleLevelDSEPass(std::string dseTargetSpec) {
+  return std::make_unique<MultipleLevelDSE>(dseTargetSpec);
 }

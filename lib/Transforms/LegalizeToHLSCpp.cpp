@@ -87,15 +87,20 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc,
         builder.setInsertionPointToStart(&func.front());
         auto buf = builder.create<memref::AllocOp>(loc, type);
         arg.replaceAllUsesWith(buf);
-        builder.create<memref::CopyOp>(loc, arg, buf);
+        auto argCopy = builder.create<memref::CopyOp>(loc, arg, buf);
 
         // If the buffer's state is written in the function, create a copy from
         // the buffer to DRAM.
         if (llvm::any_of(buf->getUsers(), [](Operation *op) {
               return isa<AffineWriteOpInterface, memref::StoreOp>(op);
             })) {
+          // Create another result buffer to prepare for the dataflowing.
+          auto resultBuf = builder.create<memref::AllocOp>(loc, type);
+          buf.memref().replaceAllUsesExcept(resultBuf, argCopy);
+          builder.create<memref::CopyOp>(loc, buf, resultBuf);
+
           builder.setInsertionPoint(func.back().getTerminator());
-          builder.create<memref::CopyOp>(loc, buf, arg);
+          builder.create<memref::CopyOp>(loc, resultBuf, arg);
         }
       }
     }
@@ -135,8 +140,9 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc,
 namespace {
 struct LegalizeToHLSCpp : public LegalizeToHLSCppBase<LegalizeToHLSCpp> {
   LegalizeToHLSCpp() = default;
-  LegalizeToHLSCpp(const ScaleHLSPyTorchPipelineOptions &opts) {
-    topFunc = opts.hlscppTopFunc;
+  LegalizeToHLSCpp(std::string hlsTopFunc, bool hlsAxiInterf) {
+    topFunc = hlsTopFunc;
+    axiInterf = hlsAxiInterf;
   }
 
   void runOnOperation() override {
@@ -150,7 +156,8 @@ struct LegalizeToHLSCpp : public LegalizeToHLSCppBase<LegalizeToHLSCpp> {
 std::unique_ptr<Pass> scalehls::createLegalizeToHLSCppPass() {
   return std::make_unique<LegalizeToHLSCpp>();
 }
-std::unique_ptr<Pass> scalehls::createLegalizeToHLSCppPass(
-    const ScaleHLSPyTorchPipelineOptions &opts) {
-  return std::make_unique<LegalizeToHLSCpp>(opts);
+std::unique_ptr<Pass>
+scalehls::createLegalizeToHLSCppPass(std::string hlsTopFunc,
+                                     bool hlsAxiInterf) {
+  return std::make_unique<LegalizeToHLSCpp>(hlsTopFunc, hlsAxiInterf);
 }

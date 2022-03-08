@@ -46,12 +46,17 @@ $ export PYTHONPATH=$PYTHONPATH:$PWD/build/tools/scalehls/python_packages/scaleh
 ```
 
 ## Compiling HLS C/C++ 
-To launch the automatic kernel-level design space exploration, run:
+To optimize C/C++ kernels with the design space exploration (DSE) engine, run:
 ```sh
 $ cd samples/polybench/gemm
 
-$ mlir-clang test_gemm.c -function=test_gemm -memref-fullrank -raise-scf-to-affine -S \
-    | scalehls-opt -dse="top-func=test_gemm target-spec=../config.json" -debug-only=scalehls \
+$ # Parse C/C++ kernel into MLIR.
+$ mlir-clang test_gemm.c -function=test_gemm -S \
+    -memref-fullrank -raise-scf-to-affine > test_gemm.mlir
+
+$ # Launch the DSE and emit the optimized design as C++ code.
+$ scalehls-opt test_gemm.mlir -debug-only=scalehls \
+    -scalehls-dse-pipeline="top-func=test_gemm target-spec=../config.json" \
     | scalehls-translate -emit-hlscpp > test_gemm_dse.cpp
 ```
 
@@ -65,7 +70,7 @@ If you have installed [Torch-MLIR](https://github.com/llvm/torch-mlir), you shou
 ```sh
 $ cd samples/pytorch/resnet18
 
-$ # Parse PyTorch model to TOSA dialect (with mlir_venv activated).
+$ # Parse PyTorch model to TOSA dialect (with Torch-MLIR mlir_venv activated).
 $ # This may take several minutes to compile due to the large amount of weights.
 $ python3 export_resnet18_mlir.py | torch-mlir-opt \
     -torchscript-module-to-torch-backend-pipeline="optimize=true" \

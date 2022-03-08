@@ -43,6 +43,9 @@ struct AllocOpRewritePattern : public OpRewritePattern<memref::AllocOp> {
     if (auto anotherAlloc = anotherMemref.getDefiningOp())
       if (DT.dominates(alloc.getOperation(), anotherAlloc))
         return failure();
+    if (alloc.getType().getMemorySpaceAsInt() !=
+        anotherMemref.getType().cast<MemRefType>().getMemorySpaceAsInt())
+      return failure();
 
     // If the source memory is used after the copy op, we cannot eliminate the
     // target memory. This is conservative?
@@ -171,6 +174,14 @@ struct CopyOpLoweringPattern : public OpRewritePattern<memref::CopyOp> {
 
   LogicalResult matchAndRewrite(memref::CopyOp copy,
                                 PatternRewriter &rewriter) const override {
+    // If the source or target of the copy is DRAM, then it can be directly
+    // emitted into "memcpy" by the emitter.
+    if (copy.source().getType().cast<MemRefType>().getMemorySpaceAsInt() ==
+            (unsigned)MemoryKind::DRAM ||
+        copy.target().getType().cast<MemRefType>().getMemorySpaceAsInt() ==
+            (unsigned)MemoryKind::DRAM)
+      return failure();
+
     rewriter.setInsertionPoint(copy);
     auto loc = copy.getLoc();
     auto memrefType = copy.source().getType().cast<MemRefType>();

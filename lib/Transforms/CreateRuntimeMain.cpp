@@ -41,9 +41,7 @@ collectConstantsAndUpdateFuncionType(FuncOp func) {
 namespace {
 struct CreateRuntimeMain : public CreateRuntimeMainBase<CreateRuntimeMain> {
   CreateRuntimeMain() = default;
-  CreateRuntimeMain(const ScaleHLSPyTorchPipelineOptions &opts) {
-    topFunc = opts.hlscppTopFunc;
-  }
+  CreateRuntimeMain(std::string hlsTopFunc) { topFunc = hlsTopFunc; }
 
   void runOnOperation() override {
     auto module = getOperation();
@@ -107,7 +105,7 @@ struct CreateRuntimeMain : public CreateRuntimeMainBase<CreateRuntimeMain> {
 std::unique_ptr<Pass> scalehls::createCreateRuntimeMainPass() {
   return std::make_unique<CreateRuntimeMain>();
 }
-std::unique_ptr<Pass> scalehls::createCreateRuntimeMainPass(
-    const ScaleHLSPyTorchPipelineOptions &opts) {
-  return std::make_unique<CreateRuntimeMain>(opts);
+std::unique_ptr<Pass>
+scalehls::createCreateRuntimeMainPass(std::string hlsTopFunc) {
+  return std::make_unique<CreateRuntimeMain>(hlsTopFunc);
 }

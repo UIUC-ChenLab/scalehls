@@ -940,6 +940,9 @@ void scalehls::getDspUsageMap(llvm::json::Object *config,
 
 namespace {
 struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
+  QoREstimation() = default;
+  QoREstimation(std::string qorTargetSpec) { targetSpec = qorTargetSpec; }
+
   void runOnOperation() override {
     auto module = getOperation();
 
@@ -983,4 +986,8 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
 
 std::unique_ptr<Pass> scalehls::createQoREstimationPass() {
   return std::make_unique<QoREstimation>();
+}
+std::unique_ptr<Pass>
+scalehls::createQoREstimationPass(std::string qorTargetSpec) {
+  return std::make_unique<QoREstimation>(qorTargetSpec);
 }
