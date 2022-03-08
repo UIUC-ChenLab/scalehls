@@ -46,6 +46,9 @@ def MultipleLevelDSE : Pass<"dse", "ModuleOp"> {
   let options = [
     Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
            "The top function for HLS synthesis">,
+    Option<"axiInterf", "axi-interf", "bool", /*default=*/"false",
+           "Whether to create AXI interfaces for the top function">,
+
     Option<"outputPath", "output-path", "std::string",
            /*default=*/"\"./\"",
            "File path: the path for dumping the MLIR of pareto design points">,
@@ -155,7 +158,9 @@ def LegalizeToHLSCpp : Pass<"legalize-to-hlscpp", "FuncOp"> {
 
   let options = [
     Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
-           "The top function for HLS synthesis">
+           "The top function for HLS synthesis">,
+    Option<"axiInterf", "axi-interf", "bool", /*default=*/"false",
+           "Whether to create AXI interfaces for the top function">
   ];
 }
 

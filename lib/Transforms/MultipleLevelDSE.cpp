@@ -889,7 +889,9 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
     // Optimize the top function.
     // TODO: Handle sub-functions and dataflowed or pipelined functions.
     for (auto func : module.getOps<FuncOp>()) {
-      if (func.getName() == topFunc)
+      auto isTop = func.getName() == topFunc;
+      applyLegalizeToHLSCpp(func, isTop, isTop && axiInterf);
+      if (isTop)
         optimizer.applyMultipleLevelDSE(func, directiveOnly, outputPath,
                                         csvPath);
     }

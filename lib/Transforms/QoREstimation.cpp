@@ -668,7 +668,8 @@ TimingAttr ScaleHLSEstimator::estimateBlock(Block &block, int64_t begin) {
 
           // If either the depOp or the current operation is a function call,
           // dependency exists and the schedule level should be updated.
-          if (isa<CallOp>(op) || isa<CallOp>(depOp)) {
+          if (isa<CallOp, memref::CopyOp>(op) ||
+              isa<CallOp, memref::CopyOp>(depOp)) {
             opBegin = max(opBegin, depOpEnd);
             continue;
           }

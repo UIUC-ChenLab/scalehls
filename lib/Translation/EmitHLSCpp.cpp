@@ -218,6 +218,7 @@ public:
   template <typename OpType> void emitAlloc(OpType op);
   void emitLoad(memref::LoadOp op);
   void emitStore(memref::StoreOp op);
+  void emitMemCpy(memref::CopyOp op);
   void emitTensorStore(memref::TensorStoreOp op);
   template <typename OpType> void emitReshape(OpType op);
   void emitTensorToMemref(bufferization::ToMemrefOp op);
@@ -400,6 +401,7 @@ public:
   bool visitOp(memref::LoadOp op) { return emitter.emitLoad(op), true; }
   bool visitOp(memref::StoreOp op) { return emitter.emitStore(op), true; }
   bool visitOp(memref::DeallocOp op) { return true; }
+  bool visitOp(memref::CopyOp op) { return emitter.emitMemCpy(op), true; }
   bool visitOp(memref::TensorStoreOp op) {
     return emitter.emitTensorStore(op), true;
   }
@@ -1180,6 +1182,20 @@ void ModuleEmitter::emitStore(memref::StoreOp op) {
   emitInfoAndNewLine(op);
 }
 
+void ModuleEmitter::emitMemCpy(memref::CopyOp op) {
+  indent() << "memcpy(";
+  emitValue(op.target());
+  os << ", ";
+  emitValue(op.source());
+  os << ", ";
+
+  auto type = op.target().getType().cast<MemRefType>();
+  os << type.getNumElements() << " * sizeof(" << getTypeName(op.target())
+     << "));";
+  emitInfoAndNewLine(op);
+  os << "\n";
+}
+
 void ModuleEmitter::emitTensorStore(memref::TensorStoreOp op) {
   auto rank = emitNestedLoopHeader(op.getOperand(0));
   indent();
@@ -1656,9 +1672,11 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
           indent();
           os << "#pragma HLS interface";
           // For now, we set the offset of all m_axi interfaces as slave.
-          if (MemoryKind(memrefType.getMemorySpaceAsInt()) == MemoryKind::DRAM)
-            os << " m_axi offset=slave";
-          else
+          if (MemoryKind(memrefType.getMemorySpaceAsInt()) ==
+              MemoryKind::DRAM) {
+            os << " m_axi offset=slave bundle=";
+            emitValue(port);
+          } else
             os << " bram";
 
           os << " port=";
@@ -1722,7 +1740,7 @@ void ModuleEmitter::emitFunction(FuncOp func) {
 
   if (auto resource = getResource(func)) {
     os << "/// DSP=" << resource.getDsp();
-    // os << ", BRAM=" << resource.getBram();
+    os << ", BRAM=" << resource.getBram();
     // os << ", LUT=" << resource.getLut();
     os << "\n";
   }
@@ -1799,6 +1817,7 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 #include <hls_stream.h>
 #include <math.h>
 #include <stdint.h>
+#include <string.h>
 
 using namespace std;
 

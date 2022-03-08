@@ -54,7 +54,8 @@ struct MemrefStoreRewritePattern : public OpRewritePattern<memref::StoreOp> {
 };
 } // namespace
 
-bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
+bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc,
+                                     bool axiInterf) {
   auto builder = OpBuilder(func);
 
   // We constrain functions to only contain one block.
@@ -71,6 +72,38 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
     if (isLoopParallel(loop))
       setParallel(loop);
   });
+
+  if (axiInterf) {
+    auto loc = builder.getUnknownLoc();
+
+    // Convert each argument memory kind to DRAM and buffer each of them.
+    for (auto arg : func.getArguments()) {
+      if (auto type = arg.getType().dyn_cast<MemRefType>()) {
+        arg.setType(MemRefType::get(type.getShape(), type.getElementType(),
+                                    type.getLayout().getAffineMap(),
+                                    (unsigned)MemoryKind::DRAM));
+
+        // Allocate an on-chip buffer and create a copy from DRAM to the buffer.
+        builder.setInsertionPointToStart(&func.front());
+        auto buf = builder.create<memref::AllocOp>(loc, type);
+        arg.replaceAllUsesWith(buf);
+        builder.create<memref::CopyOp>(loc, arg, buf);
+
+        // If the buffer's state is written in the function, create a copy from
+        // the buffer to DRAM.
+        if (llvm::any_of(buf->getUsers(), [](Operation *op) {
+              return isa<AffineWriteOpInterface, memref::StoreOp>(op);
+            })) {
+          builder.setInsertionPoint(func.back().getTerminator());
+          builder.create<memref::CopyOp>(loc, buf, arg);
+        }
+      }
+    }
+
+    // Finally, update the type of the function.
+    func.setType(builder.getFunctionType(func.front().getArgumentTypes(),
+                                         func.getResultTypes()));
+  }
 
   // Insert AssignOp when an arguments or result of ConstantOp are directly
   // connected to ReturnOp.
@@ -108,7 +141,8 @@ struct LegalizeToHLSCpp : public LegalizeToHLSCppBase<LegalizeToHLSCpp> {
 
   void runOnOperation() override {
     auto func = getOperation();
-    applyLegalizeToHLSCpp(func, func.getName() == topFunc);
+    auto isTop = func.getName() == topFunc;
+    applyLegalizeToHLSCpp(func, isTop, isTop && axiInterf);
   }
 };
 } // namespace

@@ -63,6 +63,10 @@ public:
   bool visitOp(memref::StoreOp op, int64_t begin) {
     return setTiming(op, begin, begin + 1, 1, 1), true;
   }
+  bool visitOp(memref::CopyOp op, int64_t begin) {
+    auto type = op.target().getType().cast<MemRefType>();
+    return setTiming(op, begin, begin + type.getNumElements(), 1, 1), true;
+  }
 
   /// Handle operations with profiled latency.
 #define HANDLE(OPTYPE, KEYNAME)                                                \
