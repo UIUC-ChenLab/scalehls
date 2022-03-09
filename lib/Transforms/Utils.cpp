@@ -67,11 +67,11 @@ void scalehls::setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
   setLoopDirective(op, loopDirective);
 }
 
-void scalehls::setParallel(AffineForOp loop) {
+void scalehls::setParallelAttr(AffineForOp loop) {
   loop->setAttr("parallel", UnitAttr::get(loop.getContext()));
 }
 
-void scalehls::setPoint(AffineForOp loop) {
+void scalehls::setPointAttr(AffineForOp loop) {
   loop->setAttr("point", UnitAttr::get(loop.getContext()));
 }
 
@@ -88,7 +88,7 @@ void scalehls::setFuncDirective(Operation *op, bool pipeline,
   setFuncDirective(op, funcDirective);
 }
 
-void scalehls::setTopFunc(FuncOp func) {
+void scalehls::setTopFuncAttr(FuncOp func) {
   func->setAttr("top_func", UnitAttr::get(func.getContext()));
 }
 

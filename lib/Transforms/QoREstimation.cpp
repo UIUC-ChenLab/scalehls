@@ -309,7 +309,7 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
   for (unsigned i = 1, e = band.size(); i <= e; ++i) {
     auto loop = band[i - 1];
     auto loopDirect = getLoopDirective(loop);
-    if (!isParallel(forOp) && loopDirect)
+    if (!hasParallelAttr(forOp) && loopDirect)
       if (loopDirect.getFlatten() || loopDirect.getPipeline())
         loopDepths.push_back(i);
   }
@@ -702,7 +702,8 @@ TimingAttr ScaleHLSEstimator::estimateBlock(Block &block, int64_t begin) {
 
           for (unsigned depth = 1; depth <= loopDepth + 1; ++depth) {
             // Skip all parallel loop level.
-            if (depth != loopDepth + 1 && isParallel(commonLoops[depth - 1]))
+            if (depth != loopDepth + 1 &&
+                hasParallelAttr(commonLoops[depth - 1]))
               continue;
 
             FlatAffineValueConstraints dependConstrs;
@@ -978,7 +979,7 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     // called by the top function, it will be estimated in the procedure of
     // estimating the top function.
     for (auto func : module.getOps<FuncOp>())
-      if (isTopFunc(func))
+      if (hasTopFuncAttr(func))
         ScaleHLSEstimator(latencyMap, dspUsageMap, true).estimateFunc(func);
   }
 };

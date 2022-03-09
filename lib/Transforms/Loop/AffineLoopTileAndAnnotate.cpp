@@ -26,7 +26,7 @@ bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList) {
   auto originalBandSize = band.size();
   SmallVector<bool, 6> parallelFlags;
   for (auto loop : band)
-    parallelFlags.push_back(isParallel(loop));
+    parallelFlags.push_back(hasParallelAttr(loop));
 
   // Apply loop tiling.
   AffineLoopBand tiledBand;
@@ -38,7 +38,7 @@ bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList) {
   band.resize(originalBandSize);
   for (auto zip : llvm::zip(band, parallelFlags))
     if (std::get<1>(zip))
-      setParallel(std::get<0>(zip));
+      setParallelAttr(std::get<0>(zip));
 
   return true;
 }
@@ -95,7 +95,7 @@ struct AffineLoopTileAndAnnotate
 
       // Annotate point loops.
       for (auto loop : llvm::drop_begin(tiledNest, band.size()))
-        setPoint(loop);
+        setPointAttr(loop);
     }
   }
 

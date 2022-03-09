@@ -1659,7 +1659,7 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
 void ModuleEmitter::emitFunctionDirectives(FuncOp func,
                                            ArrayRef<Value> portList) {
   // Only top function should emit interface pragmas.
-  if (isTopFunc(func)) {
+  if (hasTopFuncAttr(func)) {
     indent();
     os << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
 
@@ -1729,7 +1729,7 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   if (func.getBlocks().size() != 1)
     emitError(func, "has zero or more than one basic blocks.");
 
-  if (isTopFunc(func))
+  if (hasTopFuncAttr(func))
     os << "/// This is top function.\n";
 
   if (auto timing = getTiming(func)) {

@@ -433,7 +433,7 @@ struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
       if (func.getName() == "main") {
         topFunc = func;
         break;
-      } else if (isTopFunc(func))
+      } else if (hasTopFuncAttr(func))
         topFunc = func;
     }
 

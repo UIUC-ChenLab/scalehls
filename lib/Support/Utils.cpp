@@ -38,11 +38,11 @@ LoopDirectiveAttr scalehls::getLoopDirective(Operation *op) {
   return op->getAttrOfType<LoopDirectiveAttr>("loop_directive");
 }
 
-bool scalehls::isParallel(AffineForOp loop) {
+bool scalehls::hasParallelAttr(AffineForOp loop) {
   return loop->hasAttrOfType<UnitAttr>("parallel");
 }
 
-bool scalehls::isPoint(AffineForOp loop) {
+bool scalehls::hasPointAttr(AffineForOp loop) {
   return loop->hasAttrOfType<UnitAttr>("point");
 }
 
@@ -51,7 +51,7 @@ FuncDirectiveAttr scalehls::getFuncDirective(Operation *op) {
   return op->getAttrOfType<FuncDirectiveAttr>("func_directive");
 }
 
-bool scalehls::isTopFunc(FuncOp func) {
+bool scalehls::hasTopFuncAttr(FuncOp func) {
   return func->hasAttrOfType<UnitAttr>("top_func");
 }
 
@@ -379,7 +379,7 @@ bool scalehls::checkDependence(Operation *A, Operation *B) {
   // Traverse each loop level to find dependencies.
   for (unsigned depth = numCommonLoops; depth > 0; depth--) {
     // Skip all parallel loop level.
-    if (isParallel(commonLoops[depth - 1]))
+    if (hasParallelAttr(commonLoops[depth - 1]))
       continue;
 
     FlatAffineValueConstraints depConstrs;

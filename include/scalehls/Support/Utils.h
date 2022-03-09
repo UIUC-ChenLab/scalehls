@@ -28,12 +28,12 @@ LoopInfoAttr getLoopInfo(Operation *op);
 
 /// Parse loop directives.
 LoopDirectiveAttr getLoopDirective(Operation *op);
-bool isParallel(AffineForOp loop);
-bool isPoint(AffineForOp loop);
+bool hasParallelAttr(AffineForOp loop);
+bool hasPointAttr(AffineForOp loop);
 
 /// Parse function directives.
 FuncDirectiveAttr getFuncDirective(Operation *op);
-bool isTopFunc(FuncOp func);
+bool hasTopFuncAttr(FuncOp func);
 
 /// Parse array attributes.
 SmallVector<int64_t, 8> getIntArrayAttrValue(Operation *op, StringRef name);

@@ -65,12 +65,12 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc,
 
   // Set top function attribute.
   if (isTopFunc)
-    setTopFunc(func);
+    setTopFuncAttr(func);
 
   // Set parallel attribute to each loop that is applicable.
   func.walk([&](AffineForOp loop) {
     if (isLoopParallel(loop))
-      setParallel(loop);
+      setParallelAttr(loop);
   });
 
   if (axiInterf) {

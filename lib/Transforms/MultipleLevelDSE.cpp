@@ -892,7 +892,7 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
     // Optimize the top function.
     // TODO: Support to contain sub-functions.
     for (auto func : module.getOps<FuncOp>()) {
-      if (isTopFunc(func))
+      if (hasTopFuncAttr(func))
         optimizer.applyMultipleLevelDSE(func, directiveOnly, outputPath,
                                         csvPath);
     }
