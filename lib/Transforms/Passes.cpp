@@ -61,7 +61,8 @@ void scalehls::registerScaleHLSDSEPipeline() {
         // If AXI interfaces are created, we need to dataflow the program to
         // hide the latency of data load/store from/to external memories.
         if (opts.hlsAxiInterf) {
-          pm.addPass(scalehls::createLegalizeDataflowPass());
+          pm.addPass(scalehls::createLegalizeDataflowPass(
+              /*dataflowGran=*/(unsigned)1, /*dataflowInsertCopy=*/false));
           pm.addPass(scalehls::createSplitFunctionPass());
           pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
         }

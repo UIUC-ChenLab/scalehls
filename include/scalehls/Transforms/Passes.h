@@ -31,7 +31,9 @@ std::unique_ptr<Pass> createMultipleLevelDSEPass(std::string dseTargetSpec);
 std::unique_ptr<Pass> createFakeQuantizePass();
 std::unique_ptr<Pass> createSimplifyTosaGraphPass();
 std::unique_ptr<Pass> createLegalizeDataflowPass();
-std::unique_ptr<Pass> createLegalizeDataflowPass(unsigned dataflowGran);
+std::unique_ptr<Pass>
+createLegalizeDataflowPass(unsigned dataflowGran,
+                           bool dataflowInsertCopy = true);
 std::unique_ptr<Pass> createSplitFunctionPass();
 std::unique_ptr<Pass> createConvertCopyToAffineLoopsPass();
 
