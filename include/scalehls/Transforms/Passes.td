@@ -209,6 +209,17 @@ def AffineLoopOrderOpt : Pass<"affine-loop-order-opt", "FuncOp"> {
   let constructor = "mlir::scalehls::createAffineLoopOrderOptPass()";
 }
 
+def AffineLoopTileAndAnnotate :
+      Pass<"affine-loop-tile-and-annotate", "FuncOp"> {
+  let summary = "Tile affine loop nests and annotate point loops";
+  let constructor = "mlir::scalehls::createAffineLoopTileAndAnnotatePass()";
+
+  let options = [
+    Option<"tileSize", "tile-size", "unsigned", /*default=*/"4",
+           "Use this tile size for all loops">
+  ];
+}
+
 def AffineLoopUnrollAndPipeline :
       Pass<"affine-loop-unroll-and-pipeline", "FuncOp"> {
   let summary = "Unroll and pipeline affine loops";

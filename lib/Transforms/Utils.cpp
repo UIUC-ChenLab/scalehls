@@ -71,6 +71,10 @@ void scalehls::setParallel(AffineForOp loop) {
   loop->setAttr("parallel", UnitAttr::get(loop.getContext()));
 }
 
+void scalehls::setPoint(AffineForOp loop) {
+  loop->setAttr("point", UnitAttr::get(loop.getContext()));
+}
+
 /// Set func directives.
 void scalehls::setFuncDirective(Operation *op,
                                 FuncDirectiveAttr funcDirective) {

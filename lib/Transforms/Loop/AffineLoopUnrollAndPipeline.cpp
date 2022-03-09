@@ -14,35 +14,6 @@
 using namespace mlir;
 using namespace scalehls;
 
-/// Apply loop tiling to the input loop band and sink all intra-tile loops to
-/// the innermost loop with the original loop order.
-bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList) {
-  assert(!band.empty() && "no loops provided");
-
-  if (!isPerfectlyNested(band))
-    return false;
-
-  // Record the original band size and attributes to make use of later.
-  auto originalBandSize = band.size();
-  SmallVector<bool, 6> parallelFlags;
-  for (auto loop : band)
-    parallelFlags.push_back(isParallel(loop));
-
-  // Apply loop tiling.
-  AffineLoopBand tiledBand;
-  if (failed(tilePerfectlyNested(band, tileList, &tiledBand)))
-    return false;
-
-  // Get all tile-space loops and reannotate the attributes.
-  band = tiledBand;
-  band.resize(originalBandSize);
-  for (auto zip : llvm::zip(band, parallelFlags))
-    if (std::get<1>(zip))
-      setParallel(std::get<0>(zip));
-
-  return true;
-}
-
 namespace {
 struct AffineLoopUnrollAndPipeline
     : public AffineLoopUnrollAndPipelineBase<AffineLoopUnrollAndPipeline> {

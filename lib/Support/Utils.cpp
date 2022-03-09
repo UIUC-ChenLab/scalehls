@@ -42,6 +42,10 @@ bool scalehls::isParallel(AffineForOp loop) {
   return loop->hasAttrOfType<UnitAttr>("parallel");
 }
 
+bool scalehls::isPoint(AffineForOp loop) {
+  return loop->hasAttrOfType<UnitAttr>("point");
+}
+
 /// Parse function directives.
 FuncDirectiveAttr scalehls::getFuncDirective(Operation *op) {
   return op->getAttrOfType<FuncDirectiveAttr>("func_directive");

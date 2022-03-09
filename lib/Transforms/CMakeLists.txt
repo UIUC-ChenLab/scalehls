@@ -10,6 +10,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Graph/SplitFunction.cpp
   Loop/AffineLoopOrderOpt.cpp
   Loop/AffineLoopPerfection.cpp
+  Loop/AffineLoopTileAndAnnotate.cpp
   Loop/AffineLoopUnrollAndPipeline.cpp
   Loop/MaterializeReduction.cpp
   Loop/RemoveVariableBound.cpp

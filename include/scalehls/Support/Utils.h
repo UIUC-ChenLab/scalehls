@@ -29,6 +29,7 @@ LoopInfoAttr getLoopInfo(Operation *op);
 /// Parse loop directives.
 LoopDirectiveAttr getLoopDirective(Operation *op);
 bool isParallel(AffineForOp loop);
+bool isPoint(AffineForOp loop);
 
 /// Parse function directives.
 FuncDirectiveAttr getFuncDirective(Operation *op);

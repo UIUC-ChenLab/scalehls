@@ -38,6 +38,7 @@ void setLoopDirective(Operation *op, LoopDirectiveAttr loopDirective);
 void setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
                       bool dataflow, bool flatten);
 void setParallel(AffineForOp loop);
+void setPoint(AffineForOp loop);
 
 /// Set function directives.
 void setFuncDirective(Operation *op, FuncDirectiveAttr FuncDirective);
