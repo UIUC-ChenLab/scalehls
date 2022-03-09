@@ -21,11 +21,14 @@ For more details, please see our [HPCA'22 paper](https://arxiv.org/abs/2107.1167
 ## Setting this up
 
 ### Prerequisites
+- python3
 - cmake
 - ninja
-- clang and lld (recommended)
+- clang and lld
+
+Optionally, the following packages are required for the Python binding.
 - pybind11
-- python3 with numpy
+- numpy
 
 ### Clone ScaleHLS
 ```sh
@@ -34,7 +37,7 @@ $ cd scalehls
 ```
 
 ### Build ScaleHLS
-Run the following script to build ScaleHLS. Note that you can use `-j xx` to specify the number of parallel linking jobs.
+Run the following script to build ScaleHLS. Optionally, add `-p ON` to enable the Python binding and `-j xx` to specify the number of parallel linking jobs.
 ```sh
 $ ./build-scalehls.sh
 ```
@@ -60,7 +63,7 @@ $ scalehls-opt test_gemm.mlir -debug-only=scalehls \
     | scalehls-translate -emit-hlscpp > test_gemm_dse.cpp
 ```
 
-Meanwhile, we provide a `pyscalehls` tool to showcase the `scalehls` Python library:
+If Python binding is enabled, we provide a `pyscalehls` tool to showcase the `scalehls` Python library:
 ```sh
 $ pyscalehls.py test_gemm.c -f test_gemm > test_gemm_pyscalehls.cpp
 ```
