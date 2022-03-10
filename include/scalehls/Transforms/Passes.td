@@ -213,6 +213,17 @@ def AffineLoopTile : Pass<"scalehls-affine-loop-tile", "FuncOp"> {
   ];
 }
 
+def CreateMemrefSubview : Pass<"scalehls-create-memref-subview", "FuncOp"> {
+  let summary = "Create subviews based on loop analysis";
+  let description = [{
+    Through loop analysis, this pass can identify the memory partition that each
+    sub-function is accessing. Then, by creating subview operations, the program
+    in each sub-function can access the memory subview rather than the original
+    memory.
+  }];
+  let constructor = "mlir::scalehls::createCreateMemrefSubviewPass()";
+}
+
 def AffineLoopOrderOpt : Pass<"scalehls-affine-loop-order-opt", "FuncOp"> {
   let summary = "Optimize the order of affine loop nests";
   let description = [{

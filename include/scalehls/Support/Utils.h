@@ -62,8 +62,9 @@ Optional<std::pair<Operation *, Operation *>> checkSameLevel(Operation *lhsOp,
 unsigned getCommonSurroundingLoops(Operation *A, Operation *B,
                                    AffineLoopBand *band);
 
-/// Calculate the upper and lower bound of "bound" if possible.
-Optional<std::pair<int64_t, int64_t>> getBoundOfAffineBound(AffineBound bound);
+/// Calculate the upper and lower bound of the affine map if possible.
+Optional<std::pair<int64_t, int64_t>> getBoundOfAffineMap(AffineMap map,
+                                                          ValueRange operands);
 
 /// Calculate partition factors through analyzing the "memrefType" and return
 /// them in "factors". Meanwhile, the overall partition number is calculated and
