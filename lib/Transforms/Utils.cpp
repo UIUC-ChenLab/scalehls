@@ -146,9 +146,6 @@ bool scalehls::applyOptStrategy(AffineLoopBand &band, FuncOp func,
   if (!func->isProperAncestor(band.front()))
     return false;
 
-  // Apply legalization. TODO: Only support top-function for now.
-  applyLegalizeToHLSCpp(func, /*isTopFunc=*/true);
-
   // Apply loop tiling.
   if (!applyLoopTiling(band, tileList))
     return false;
@@ -171,9 +168,6 @@ bool scalehls::applyOptStrategy(FuncOp func, ArrayRef<TileList> tileLists,
   getLoopBands(func.front(), bands);
   assert(bands.size() == tileLists.size() && bands.size() == targetIIs.size() &&
          "unexpected size of tile lists or target IIs");
-
-  // Apply legalization. TODO: Only support top-function for now.
-  applyLegalizeToHLSCpp(func, /*isTopFunc=*/true);
 
   // Apply loop tiling to all loop bands.
   for (unsigned i = 0, e = bands.size(); i < e; ++i)

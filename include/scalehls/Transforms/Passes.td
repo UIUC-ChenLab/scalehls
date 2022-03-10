@@ -26,7 +26,7 @@ def QoREstimation : Pass<"qor-estimation", "ModuleOp"> {
 
   let options = [
     Option<"targetSpec", "target-spec", "std::string",
-           /*default=*/"\"./target-spec.ini\"",
+           /*default=*/"\"./config.json\"",
            "File path: target backend specifications and configurations">
   ];
 }
@@ -44,8 +44,6 @@ def MultipleLevelDSE : Pass<"dse", "ModuleOp"> {
   let constructor = "mlir::scalehls::createMultipleLevelDSEPass()";
 
   let options = [
-    Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
-           "The top function for HLS synthesis">,
     Option<"outputPath", "output-path", "std::string",
            /*default=*/"\"./\"",
            "File path: the path for dumping the MLIR of pareto design points">,
@@ -54,7 +52,7 @@ def MultipleLevelDSE : Pass<"dse", "ModuleOp"> {
            "File path: the path for dumping the CSV of design spaces">,
 
     Option<"targetSpec", "target-spec", "std::string",
-           /*default=*/"\"./target-spec.ini\"",
+           /*default=*/"\"./config.json\"",
            "File path: target backend specifications and configurations">
   ];
 }
@@ -155,7 +153,9 @@ def LegalizeToHLSCpp : Pass<"legalize-to-hlscpp", "FuncOp"> {
 
   let options = [
     Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
-           "The top function for HLS synthesis">
+           "The top function for HLS synthesis">,
+    Option<"axiInterf", "axi-interf", "bool", /*default=*/"false",
+           "Whether to create AXI interfaces for the top function">
   ];
 }
 

@@ -229,7 +229,10 @@ static bool applyLegalizeDataflow(FuncOp func, int64_t minGran,
 namespace {
 struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
   LegalizeDataflow() = default;
-  LegalizeDataflow(unsigned dataflowGran) { minGran = dataflowGran; }
+  LegalizeDataflow(unsigned dataflowGran, bool dataflowInsertCopy) {
+    minGran = dataflowGran;
+    insertCopy = dataflowInsertCopy;
+  }
 
   void runOnOperation() override {
     applyLegalizeDataflow(getOperation(), minGran, insertCopy);
@@ -241,6 +244,7 @@ std::unique_ptr<Pass> scalehls::createLegalizeDataflowPass() {
   return std::make_unique<LegalizeDataflow>();
 }
 std::unique_ptr<Pass>
-scalehls::createLegalizeDataflowPass(unsigned dataflowGran) {
-  return std::make_unique<LegalizeDataflow>(dataflowGran);
+scalehls::createLegalizeDataflowPass(unsigned dataflowGran,
+                                     bool dataflowInsertCopy) {
+  return std::make_unique<LegalizeDataflow>(dataflowGran, dataflowInsertCopy);
 }

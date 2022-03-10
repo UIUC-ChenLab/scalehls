@@ -5,10 +5,11 @@ set -o pipefail
 set -o nounset
 
 # Script options.
-while getopts 'j:' opt
+while getopts 'j:p:' opt
 do
   case $opt in
     j) JOBS="${OPTARG}";;
+    p) PYBIND="${OPTARG}";;
   esac
 done
 
@@ -44,8 +45,8 @@ if [ ! -f "CMakeCache.txt" ]; then
     -DLLVM_TARGETS_TO_BUILD="host" \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=DEBUG \
-    -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
-    -DSCALEHLS_ENABLE_BINDINGS_PYTHON=ON \
+    -DMLIR_ENABLE_BINDINGS_PYTHON="${PYBIND:=OFF}" \
+    -DSCALEHLS_ENABLE_BINDINGS_PYTHON="${PYBIND:=OFF}" \
     -DLLVM_PARALLEL_LINK_JOBS="${JOBS:=}" \
     -DLLVM_USE_LINKER=lld \
     -DCMAKE_C_COMPILER=clang \

@@ -69,7 +69,7 @@ bool applyRemoveVariableBound(AffineLoopBand &band);
 /// the innermost loop with the original loop order.
 bool applyLoopTiling(AffineLoopBand &band, TileList tileList);
 
-bool applyLegalizeToHLSCpp(FuncOp func, bool topFunc);
+bool applyLegalizeToHLSCpp(FuncOp func, bool topFunc, bool axiInterf = false);
 
 /// Apply loop pipelining to the pipelineLoc of the input loop band, all inner
 /// loops are automatically fully unrolled.

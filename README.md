@@ -1,6 +1,6 @@
 # ScaleHLS Project
 
-ScaleHLS is a High-level Synthesis (HLS) framework on [MLIR](https://mlir.llvm.org). ScaleHLS can compile HLS C/C++ or PyTorch model to optimized HLS C/C++ in order to generate high-efficiency RTL design using downstream tools, such as Vivado HLS.
+ScaleHLS is a High-level Synthesis (HLS) framework on [MLIR](https://mlir.llvm.org). ScaleHLS can compile HLS C/C++ or PyTorch model to optimized HLS C/C++ in order to generate high-efficiency RTL design using downstream tools, such as Xilinx Vivado HLS.
 
 By using the MLIR framework that can be better tuned to particular algorithms at different representation levels, ScaleHLS is more scalable and customizable towards various applications coming with intrinsic structural or functional hierarchies. ScaleHLS represents HLS designs at multiple levels of abstraction and provides an HLS-dedicated analysis and transform library (in both C++ and Python) to solve the optimization problems at the suitable representation levels. Using this library, we've developed a design space exploration engine to generate optimized HLS designs automatically.
 
@@ -14,14 +14,21 @@ For more details, please see our [HPCA'22 paper](https://arxiv.org/abs/2107.1167
 }
 ```
 
+## Framework Architecture
+
+<p align="center"><img src="docs/ScaleHLS.svg"/></p>
+
 ## Setting this up
 
 ### Prerequisites
+- python3
 - cmake
 - ninja
-- clang and lld (recommended)
+- clang and lld
+
+Optionally, the following packages are required for the Python binding.
 - pybind11
-- python3 with numpy
+- numpy
 
 ### Clone ScaleHLS
 ```sh
@@ -30,7 +37,7 @@ $ cd scalehls
 ```
 
 ### Build ScaleHLS
-Run the following script to build ScaleHLS. Note that you can use `-j xx` to specify the number of parallel linking jobs.
+Run the following script to build ScaleHLS. Optionally, add `-p ON` to enable the Python binding and `-j xx` to specify the number of parallel linking jobs.
 ```sh
 $ ./build-scalehls.sh
 ```
@@ -42,16 +49,21 @@ $ export PYTHONPATH=$PYTHONPATH:$PWD/build/tools/scalehls/python_packages/scaleh
 ```
 
 ## Compiling HLS C/C++ 
-To launch the automatic kernel-level design space exploration, run:
+To optimize C/C++ kernels with the design space exploration (DSE) engine, run:
 ```sh
 $ cd samples/polybench/gemm
 
-$ mlir-clang test_gemm.c -function=test_gemm -memref-fullrank -raise-scf-to-affine -S \
-    | scalehls-opt -dse="top-func=test_gemm target-spec=../config.json" -debug-only=scalehls \
+$ # Parse C/C++ kernel into MLIR.
+$ mlir-clang test_gemm.c -function=test_gemm -S \
+    -memref-fullrank -raise-scf-to-affine > test_gemm.mlir
+
+$ # Launch the DSE and emit the optimized design as C++ code.
+$ scalehls-opt test_gemm.mlir -debug-only=scalehls \
+    -scalehls-dse-pipeline="top-func=test_gemm target-spec=../config.json" \
     | scalehls-translate -emit-hlscpp > test_gemm_dse.cpp
 ```
 
-Meanwhile, we provide a `pyscalehls` tool to showcase the `scalehls` Python library:
+If Python binding is enabled, we provide a `pyscalehls` tool to showcase the `scalehls` Python library:
 ```sh
 $ pyscalehls.py test_gemm.c -f test_gemm > test_gemm_pyscalehls.cpp
 ```
@@ -61,7 +73,7 @@ If you have installed [Torch-MLIR](https://github.com/llvm/torch-mlir), you shou
 ```sh
 $ cd samples/pytorch/resnet18
 
-$ # Parse PyTorch model to TOSA dialect (with mlir_venv activated).
+$ # Parse PyTorch model to TOSA dialect (with Torch-MLIR mlir_venv activated).
 $ # This may take several minutes to compile due to the large amount of weights.
 $ python3 export_resnet18_mlir.py | torch-mlir-opt \
     -torchscript-module-to-torch-backend-pipeline="optimize=true" \
@@ -75,8 +87,8 @@ $ scalehls-opt resnet18.mlir \
 
 ## Repository Layout
 The project follows the conventions of typical MLIR-based projects:
-- `include/scalehls` and `lib` for C++ MLIR compiler dialects/passes.
-- `polygeist` for the HLS C/C++ front-end.
+- `include/scalehls` and `lib` for C++ MLIR dialects/passes.
+- `polygeist` for the C/C++ front-end.
 - `samples` for C/C++ and PyTorch examples.
 - `test` for holding regression tests.
-- `tools` for command line tools, such as `scalehls-opt` and `pyscalehls`.
+- `tools` for command line tools.
