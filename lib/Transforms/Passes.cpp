@@ -50,6 +50,7 @@ void scalehls::registerScaleHLSDSEPipeline() {
                                                         opts.hlsAxiInterf));
 
         // We first run several passes to simplify the input program.
+        pm.addPass(scalehls::createPromoteBufferPass());
         pm.addPass(scalehls::createMaterializeReductionPass());
         pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
         pm.addPass(mlir::createLoopFusionPass());

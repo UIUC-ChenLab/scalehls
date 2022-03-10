@@ -224,6 +224,12 @@ def CreateMemrefSubview : Pass<"scalehls-create-memref-subview", "FuncOp"> {
   let constructor = "mlir::scalehls::createCreateMemrefSubviewPass()";
 }
 
+def PromoteBuffer : Pass<"scalehls-promote-buffer", "FuncOp"> {
+  let summary = "Promote external buffer to on-chip buffer";
+
+  let constructor = "mlir::scalehls::createPromoteBufferPass()";
+}
+
 def AffineLoopOrderOpt : Pass<"scalehls-affine-loop-order-opt", "FuncOp"> {
   let summary = "Optimize the order of affine loop nests";
   let description = [{

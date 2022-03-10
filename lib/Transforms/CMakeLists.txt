@@ -14,6 +14,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Loop/AffineLoopUnrollJam.cpp
   Loop/CreateMemrefSubview.cpp
   Loop/MaterializeReduction.cpp
+  Loop/PromoteBuffer.cpp
   Loop/RemoveVariableBound.cpp
   Simplification/AffineStoreForward.cpp
   Simplification/ReduceInitialInterval.cpp
