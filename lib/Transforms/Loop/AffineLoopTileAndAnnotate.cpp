@@ -17,29 +17,49 @@ using namespace scalehls;
 
 /// Apply loop tiling to the input loop band and sink all intra-tile loops to
 /// the innermost loop with the original loop order.
-bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList) {
+bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList,
+                               bool annotatePointLoop) {
   assert(!band.empty() && "no loops provided");
   if (!isPerfectlyNested(band))
     return false;
 
   // Record the original band size and attributes to make use of later.
   auto originalBandSize = band.size();
-  SmallVector<bool, 6> parallelFlags;
+  SmallVector<std::pair<bool, bool>, 6> flags;
   for (auto loop : band)
-    parallelFlags.push_back(hasParallelAttr(loop));
+    flags.push_back({hasParallelAttr(loop), hasPointAttr(loop)});
 
   // Apply loop tiling.
   AffineLoopBand tiledBand;
   if (failed(tilePerfectlyNested(band, tileList, &tiledBand)))
     return false;
 
-  // Get all tile-space loops and reannotate the attributes.
+  // Get the tile loop band and point loop band.
   band = tiledBand;
   band.resize(originalBandSize);
-  for (auto zip : llvm::zip(band, parallelFlags))
-    if (std::get<1>(zip))
-      setParallelAttr(std::get<0>(zip));
+  auto pointLoopBand = llvm::drop_begin(tiledBand, originalBandSize);
 
+  // Annotate the required attributes.
+  for (auto zip : llvm::zip(band, pointLoopBand, flags)) {
+    auto tileLoop = std::get<0>(zip);
+    auto pointLoop = std::get<1>(zip);
+    auto flag = std::get<2>(zip);
+
+    // If a tile loop is parallel, the corresponding point loop should also be
+    // a parallel loop.
+    if (flag.first) {
+      setParallelAttr(tileLoop);
+      setParallelAttr(pointLoop);
+    }
+
+    // Re-annotate the point attribute to the tile loop if required.
+    if (flag.second)
+      setPointAttr(tileLoop);
+
+    // Annotate the point attribute to the point loop.
+    if (annotatePointLoop)
+      setPointAttr(pointLoop);
+  }
   return true;
 }
 
@@ -80,22 +100,11 @@ struct AffineLoopTileAndAnnotate
 
     // Tile each band.
     for (auto &band : bands) {
-      // Set up tile sizes; fill missing tile sizes at the end with default tile
-      // size or tileSize if one was provided.
-      SmallVector<unsigned, 6> tileSizes(band.size(), tileSize);
+      SmallVector<unsigned, 8> tileSizes(band.size(), tileSize);
       if (avoidMaxMinBounds)
         adjustToDivisorsOfTripCounts(band, &tileSizes);
 
-      SmallVector<AffineForOp, 6> tiledNest;
-      if (failed(tilePerfectlyNested(band, tileSizes, &tiledNest))) {
-        // An empty band always succeeds.
-        assert(!band.empty() && "guaranteed to succeed on empty bands");
-        continue;
-      }
-
-      // Annotate point loops.
-      for (auto loop : llvm::drop_begin(tiledNest, band.size()))
-        setPointAttr(loop);
+      applyLoopTiling(band, tileSizes, /*annotatePointLoop=*/true);
     }
   }
 

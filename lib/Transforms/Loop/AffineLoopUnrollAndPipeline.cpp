@@ -40,9 +40,8 @@ struct AffineLoopUnrollAndPipeline
             remainTileSize = (remainTileSize + tripCount - 1) / tripCount;
           else if (remainTileSize > 1) {
             size = 1;
-            while (size < remainTileSize || tripCount % size != 0) {
+            while (size < remainTileSize || tripCount % size != 0)
               ++size;
-            }
             remainTileSize = 1;
           } else
             size = 1;
