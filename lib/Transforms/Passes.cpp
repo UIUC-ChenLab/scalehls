@@ -160,8 +160,7 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         if (loopUnrollSize) {
           pm.addPass(scalehls::createAffineLoopPerfectionPass());
           pm.addPass(scalehls::createRemoveVariableBoundPass());
-          pm.addPass(
-              scalehls::createAffineLoopUnrollAndPipelinePass(loopUnrollSize));
+          pm.addPass(scalehls::createAffineLoopUnrollJamPass(loopUnrollSize));
         }
 
         // Apply simplifications.
@@ -176,6 +175,7 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         // Directive-level optimizations.
         pm.addPass(mlir::createCSEPass());
         pm.addPass(mlir::createCanonicalizerPass());
+        pm.addPass(scalehls::createLoopPipeliningPass());
         pm.addPass(scalehls::createArrayPartitionPass());
         pm.addPass(scalehls::createCreateHLSCppPrimitivePass());
         pm.addPass(mlir::createCanonicalizerPass());

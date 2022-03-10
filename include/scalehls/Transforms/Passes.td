@@ -199,6 +199,20 @@ def RemoveVariableBound : Pass<"scalehls-remove-variable-bound", "FuncOp"> {
   let constructor = "mlir::scalehls::createRemoveVariableBoundPass()";
 }
 
+def AffineLoopTile : Pass<"scalehls-affine-loop-tile", "FuncOp"> {
+  let summary = "Tile affine loop nests and annotate point loops";
+  let description = [{
+    Apply the same "tile-size" to each affine loop in the nests.
+  }];
+
+  let constructor = "mlir::scalehls::createAffineLoopTilePass()";
+
+  let options = [
+    Option<"tileSize", "tile-size", "unsigned", /*default=*/"4",
+           "Use this tile size for all loops">
+  ];
+}
+
 def AffineLoopOrderOpt : Pass<"scalehls-affine-loop-order-opt", "FuncOp"> {
   let summary = "Optimize the order of affine loop nests";
   let description = [{
@@ -210,26 +224,15 @@ def AffineLoopOrderOpt : Pass<"scalehls-affine-loop-order-opt", "FuncOp"> {
   let constructor = "mlir::scalehls::createAffineLoopOrderOptPass()";
 }
 
-def AffineLoopTile : Pass<"scalehls-affine-loop-tile", "FuncOp"> {
-  let summary = "Tile affine loop nests and annotate point loops";
-  let constructor = "mlir::scalehls::createAffineLoopTilePass()";
-
-  let options = [
-    Option<"tileSize", "tile-size", "unsigned", /*default=*/"4",
-           "Use this tile size for all loops">
-  ];
-}
-
-def AffineLoopUnrollAndPipeline :
-      Pass<"scalehls-affine-loop-unroll-and-pipeline", "FuncOp"> {
-  let summary = "Unroll and pipeline affine loops";
+def AffineLoopUnrollJam : Pass<"scalehls-affine-loop-unroll-jam", "FuncOp"> {
+  let summary = "Unroll and jam affine loop nests";
   let description = [{
-    This affine-loop-unroll-and-pipeline pass will try to unroll affine loops
-    with the specified size and pipeline the innermost loop. Optionally, this
-    pass can also optimize the loop order after unrolling.
+    Unroll and jam from the outermost loop until the overall unroll factor
+    reaches the specified "unroll-size". Optionally, optimize the loop order
+    after the unrolling.
   }];
 
-  let constructor = "mlir::scalehls::createAffineLoopUnrollAndPipelinePass()";
+  let constructor = "mlir::scalehls::createAffineLoopUnrollJamPass()";
 
   let options = [
     Option<"unrollSize", "unroll-size", "unsigned", /*default=*/"1",

@@ -73,6 +73,12 @@ int64_t getPartitionFactors(MemRefType memrefType,
 
 bool isFullyPartitioned(MemRefType memrefType);
 
+/// Given a tiled loop band, return true and get the tile (tile-space) loop band
+/// and the point (intra-tile) loop band. If failed, return false.
+bool getTileAndPointLoopBand(const AffineLoopBand &band,
+                             AffineLoopBand &tileBand,
+                             AffineLoopBand &pointBand);
+
 /// Get the whole loop band given the outermost loop and return it in "band".
 /// Meanwhile, the return value is the innermost loop of this loop band.
 AffineForOp getLoopBandFromOutermost(AffineForOp forOp, AffineLoopBand &band);

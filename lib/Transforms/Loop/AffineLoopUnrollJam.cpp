@@ -7,7 +7,6 @@
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
 #include "mlir/Dialect/Affine/LoopUtils.h"
 #include "mlir/Dialect/Affine/Utils.h"
-#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
@@ -15,12 +14,10 @@ using namespace mlir;
 using namespace scalehls;
 
 namespace {
-struct AffineLoopUnrollAndPipeline
-    : public AffineLoopUnrollAndPipelineBase<AffineLoopUnrollAndPipeline> {
-  AffineLoopUnrollAndPipeline() = default;
-  AffineLoopUnrollAndPipeline(unsigned loopUnrollSize) {
-    unrollSize = loopUnrollSize;
-  }
+struct AffineLoopUnrollJam
+    : public AffineLoopUnrollJamBase<AffineLoopUnrollJam> {
+  AffineLoopUnrollJam() = default;
+  AffineLoopUnrollJam(unsigned loopUnrollSize) { unrollSize = loopUnrollSize; }
 
   void runOnOperation() override {
     AffineLoopBands targetBands;
@@ -51,24 +48,20 @@ struct AffineLoopUnrollAndPipeline
           sizes.push_back(1);
       }
 
-      // Apply loop tiling.
+      // Apply loop tiling and then unroll all point loops.
       applyLoopTiling(band, sizes);
-
-      // Apply loop order optimization if required.
       if (loopOrderOpt.getValue())
         applyAffineLoopOrderOpt(band);
-
-      // Apply loop pipelining. All point loops will be fully unrolled.
-      applyLoopPipelining(band, band.size() - 1, (unsigned)1);
+      applyFullyLoopUnrolling(*band.back().getBody());
     }
   }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createAffineLoopUnrollAndPipelinePass() {
-  return std::make_unique<AffineLoopUnrollAndPipeline>();
+std::unique_ptr<Pass> scalehls::createAffineLoopUnrollJamPass() {
+  return std::make_unique<AffineLoopUnrollJam>();
 }
 std::unique_ptr<Pass>
-scalehls::createAffineLoopUnrollAndPipelinePass(unsigned loopUnrollSize) {
-  return std::make_unique<AffineLoopUnrollAndPipeline>(loopUnrollSize);
+scalehls::createAffineLoopUnrollJamPass(unsigned loopUnrollSize) {
+  return std::make_unique<AffineLoopUnrollJam>(loopUnrollSize);
 }

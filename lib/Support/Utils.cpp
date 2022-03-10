@@ -300,6 +300,35 @@ static void getLoopBandFromInnermost(AffineForOp forOp, AffineLoopBand &band) {
   band.append(reverseBand.rbegin(), reverseBand.rend());
 }
 
+/// Given a tiled loop band, return true and get the tile (tile-space) loop band
+/// and the point (intra-tile) loop band. If failed, return false.
+bool scalehls::getTileAndPointLoopBand(const AffineLoopBand &band,
+                                       AffineLoopBand &tileBand,
+                                       AffineLoopBand &pointBand) {
+  tileBand.clear();
+  pointBand.clear();
+  bool isPointLoop = false;
+
+  for (auto loop : band) {
+    if (!isPointLoop && !hasPointAttr(loop))
+      tileBand.push_back(loop);
+
+    else if (isPointLoop && hasPointAttr(loop))
+      pointBand.push_back(loop);
+
+    else if (!isPointLoop && hasPointAttr(loop)) {
+      isPointLoop = true;
+      pointBand.push_back(loop);
+
+    } else {
+      tileBand.clear();
+      pointBand.clear();
+      return false;
+    }
+  }
+  return true;
+}
+
 /// Get the whole loop band given the outermost loop and return it in "band".
 /// Meanwhile, the return value is the innermost loop of this loop band.
 AffineForOp scalehls::getLoopBandFromOutermost(AffineForOp forOp,
