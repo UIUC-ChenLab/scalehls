@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -simplify-tosa-graph %s | FileCheck %s
+// RUN: scalehls-opt -scalehls-simplify-tosa-graph %s | FileCheck %s
 
 module {
   // CHECK: func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> {

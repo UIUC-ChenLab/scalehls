@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -convert-copy-to-affine-loops %s | FileCheck %s
+// RUN: scalehls-opt -scalehls-convert-copy-to-affine-loops %s | FileCheck %s
 
 #map1 = affine_map<(d0, d1, d2, d3) -> (d0 * 73984 + d1 * 2176 + d2 * 64 + d3 + 2240)>
 #map2 = affine_map<(d0, d1) -> (d0 + d1)>

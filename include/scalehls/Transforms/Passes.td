@@ -13,7 +13,7 @@ include "mlir/Pass/PassBase.td"
 // QoR Estimation and Design Space Exploration Pass
 //===----------------------------------------------------------------------===//
 
-def QoREstimation : Pass<"qor-estimation", "ModuleOp"> {
+def QoREstimation : Pass<"scalehls-qor-estimation", "ModuleOp"> {
   let summary = "Estimate the performance and resource utilization";
   let description = [{
     This qor-estimation pass will analyze the input IR and estimate the latency
@@ -31,7 +31,7 @@ def QoREstimation : Pass<"qor-estimation", "ModuleOp"> {
   ];
 }
 
-def MultipleLevelDSE : Pass<"dse", "ModuleOp"> {
+def MultipleLevelDSE : Pass<"scalehls-dse", "ModuleOp"> {
   let summary = "Optimize HLS design at multiple abstraction level";
   let description = [{
     This dse pass will automatically conduct the design space exploration (DSE)
@@ -61,13 +61,13 @@ def MultipleLevelDSE : Pass<"dse", "ModuleOp"> {
 // Graph Optimization Passes
 //===----------------------------------------------------------------------===//
 
-def FakeQuantize : Pass<"fake-quantize", "ModuleOp"> {
+def FakeQuantize : Pass<"scalehls-fake-quantize", "ModuleOp"> {
   let summary = "Convert to 8-bits quantized model (only for testing use)";
 
   let constructor = "mlir::scalehls::createFakeQuantizePass()";
 }
 
-def SimplifyTosaGraph : Pass<"simplify-tosa-graph", "FuncOp"> {
+def SimplifyTosaGraph : Pass<"scalehls-simplify-tosa-graph", "FuncOp"> {
   let summary = "Remove redundant TOSA operations";
   let description = [{
     This simplify-tosa-graph pass will try to remove redundant transpose ops
@@ -77,7 +77,7 @@ def SimplifyTosaGraph : Pass<"simplify-tosa-graph", "FuncOp"> {
   let constructor = "mlir::scalehls::createSimplifyTosaGraphPass()";
 }
 
-def LegalizeDataflow : Pass<"legalize-dataflow", "FuncOp"> {
+def LegalizeDataflow : Pass<"scalehls-legalize-dataflow", "FuncOp"> {
   let summary = "Legalize the dataflow scheduling";
   let description = [{
     This legalize-dataflow pass will legalize the dataflow scheduling to meet
@@ -95,7 +95,7 @@ def LegalizeDataflow : Pass<"legalize-dataflow", "FuncOp"> {
   ];
 }
 
-def SplitFunction : Pass<"split-function", "ModuleOp"> {
+def SplitFunction : Pass<"scalehls-split-function", "ModuleOp"> {
   let summary = "Split function for enabling the dataflow pragma";
   let description = [{
     This split-function pass will split operations/loops scheduled at the same
@@ -106,7 +106,8 @@ def SplitFunction : Pass<"split-function", "ModuleOp"> {
   let constructor = "mlir::scalehls::createSplitFunctionPass()";
 }
 
-def ConvertCopyToAffineLoops : Pass<"convert-copy-to-affine-loops", "FuncOp"> {
+def ConvertCopyToAffineLoops :
+      Pass<"scalehls-convert-copy-to-affine-loops", "FuncOp"> {
   let summary = "Convert copy and assign to affine loops";
   let description = [{
     This convert-copy-to-affine-loops pass will first remove redundant copies
@@ -120,7 +121,7 @@ def ConvertCopyToAffineLoops : Pass<"convert-copy-to-affine-loops", "FuncOp"> {
 // Runtime-related Passes
 //===----------------------------------------------------------------------===//
 
-def CreateRuntimeMain : Pass<"create-runtime-main", "ModuleOp"> {
+def CreateRuntimeMain : Pass<"scalehls-create-runtime-main", "ModuleOp"> {
   let summary = "Create the main function of runtime";
   let description = [{
     This create-runtime-main pass will create a new "main" function calling the
@@ -141,7 +142,7 @@ def CreateRuntimeMain : Pass<"create-runtime-main", "ModuleOp"> {
 // HLSCpp Legalization Passes
 //===----------------------------------------------------------------------===//
 
-def LegalizeToHLSCpp : Pass<"legalize-to-hlscpp", "FuncOp"> {
+def LegalizeToHLSCpp : Pass<"scalehls-legalize-to-hlscpp", "FuncOp"> {
   let summary = "Convert to emittable MLIR code";
   let description = [{
     This legalize-to-hlscpp pass will legalize the input IR to make it
@@ -163,7 +164,7 @@ def LegalizeToHLSCpp : Pass<"legalize-to-hlscpp", "FuncOp"> {
 // Loop Optimization Passes
 //===----------------------------------------------------------------------===//
 
-def MaterializeReduction : Pass<"materialize-reduction", "FuncOp"> {
+def MaterializeReduction : Pass<"scalehls-materialize-reduction", "FuncOp"> {
   let summary = "Materialize loop reductions";
   let description = [{
     This materialize-reduction pass will materialize loop reductions with local
@@ -174,7 +175,7 @@ def MaterializeReduction : Pass<"materialize-reduction", "FuncOp"> {
   let constructor = "mlir::scalehls::createMaterializeReductionPass()";
 }
 
-def AffineLoopPerfection : Pass<"affine-loop-perfection", "FuncOp"> {
+def AffineLoopPerfection : Pass<"scalehls-affine-loop-perfection", "FuncOp"> {
   let summary = "Try to perfect a nested loop";
   let description = [{
     This affine-loop-perfection pass will try to perfect all affine loops.
@@ -186,7 +187,7 @@ def AffineLoopPerfection : Pass<"affine-loop-perfection", "FuncOp"> {
   let constructor = "mlir::scalehls::createAffineLoopPerfectionPass()";
 }
 
-def RemoveVariableBound : Pass<"remove-variable-bound", "FuncOp"> {
+def RemoveVariableBound : Pass<"scalehls-remove-variable-bound", "FuncOp"> {
   let summary = "Try to remove variable loop bounds";
   let description = [{
     This remove-variable-bound pass will try to remove the variable loop bounds.
@@ -198,7 +199,7 @@ def RemoveVariableBound : Pass<"remove-variable-bound", "FuncOp"> {
   let constructor = "mlir::scalehls::createRemoveVariableBoundPass()";
 }
 
-def AffineLoopOrderOpt : Pass<"affine-loop-order-opt", "FuncOp"> {
+def AffineLoopOrderOpt : Pass<"scalehls-affine-loop-order-opt", "FuncOp"> {
   let summary = "Optimize the order of affine loop nests";
   let description = [{
     This affine-loop-order-opt pass will optimize the order of perfect affine
@@ -209,10 +210,9 @@ def AffineLoopOrderOpt : Pass<"affine-loop-order-opt", "FuncOp"> {
   let constructor = "mlir::scalehls::createAffineLoopOrderOptPass()";
 }
 
-def AffineLoopTileAndAnnotate :
-      Pass<"affine-loop-tile-and-annotate", "FuncOp"> {
+def AffineLoopTile : Pass<"scalehls-affine-loop-tile", "FuncOp"> {
   let summary = "Tile affine loop nests and annotate point loops";
-  let constructor = "mlir::scalehls::createAffineLoopTileAndAnnotatePass()";
+  let constructor = "mlir::scalehls::createAffineLoopTilePass()";
 
   let options = [
     Option<"tileSize", "tile-size", "unsigned", /*default=*/"4",
@@ -221,7 +221,7 @@ def AffineLoopTileAndAnnotate :
 }
 
 def AffineLoopUnrollAndPipeline :
-      Pass<"affine-loop-unroll-and-pipeline", "FuncOp"> {
+      Pass<"scalehls-affine-loop-unroll-and-pipeline", "FuncOp"> {
   let summary = "Unroll and pipeline affine loops";
   let description = [{
     This affine-loop-unroll-and-pipeline pass will try to unroll affine loops
@@ -243,7 +243,7 @@ def AffineLoopUnrollAndPipeline :
 // Directive Optimization Passes
 //===----------------------------------------------------------------------===//
 
-def FuncPipelining : Pass<"func-pipelining", "FuncOp"> {
+def FuncPipelining : Pass<"scalehls-func-pipelining", "FuncOp"> {
   let summary = "Apply function pipelining";
   let description = [{
     This func-pipelining pass will insert pipeline pragma to the specified
@@ -260,7 +260,7 @@ def FuncPipelining : Pass<"func-pipelining", "FuncOp"> {
   ];
 }
 
-def LoopPipelining : Pass<"loop-pipelining", "FuncOp"> {
+def LoopPipelining : Pass<"scalehls-loop-pipelining", "FuncOp"> {
   let summary = "Apply loop pipelining";
   let description = [{
     This loop-pipelining pass will insert pipeline pragma to the target loop
@@ -277,7 +277,7 @@ def LoopPipelining : Pass<"loop-pipelining", "FuncOp"> {
   ];
 }
 
-def ArrayPartition : Pass<"array-partition", "ModuleOp"> {
+def ArrayPartition : Pass<"scalehls-array-partition", "ModuleOp"> {
   let summary = "Apply optimized array partition strategy";
   let description = [{
     This array-partition pass will automatically search for the best array
@@ -288,7 +288,7 @@ def ArrayPartition : Pass<"array-partition", "ModuleOp"> {
   let constructor = "mlir::scalehls::createArrayPartitionPass()";
 }
 
-def CreateHLSCppPrimitive : Pass<"create-hlscpp-primitive", "FuncOp"> {
+def CreateHLSCppPrimitive : Pass<"scalehls-create-hlscpp-primitive", "FuncOp"> {
   let summary = "Create HLS C++ multiplification primitives";
   let description = [{
     This create-hlscpp-primitive pass will convert 8-bits multiplifications to
@@ -302,7 +302,7 @@ def CreateHLSCppPrimitive : Pass<"create-hlscpp-primitive", "FuncOp"> {
 // Simplification Passes
 //===----------------------------------------------------------------------===//
 
-def SimplifyAffineIf : Pass<"simplify-affine-if", "FuncOp"> {
+def SimplifyAffineIf : Pass<"scalehls-simplify-affine-if", "FuncOp"> {
   let summary = "Simplify affine if operations";
   let description = [{
     This simplify-affine-if pass will eliminate all redundant affine if
@@ -313,7 +313,7 @@ def SimplifyAffineIf : Pass<"simplify-affine-if", "FuncOp"> {
   let constructor = "mlir::scalehls::createSimplifyAffineIfPass()";
 }
 
-def AffineStoreForward : Pass<"affine-store-forward", "FuncOp"> {
+def AffineStoreForward : Pass<"scalehls-affine-store-forward", "FuncOp"> {
   let summary = "Forward store to load, including conditional stores";
   let description = [{
     This affine-store-forward pass is similar to scal-repl, but supports to
@@ -323,7 +323,7 @@ def AffineStoreForward : Pass<"affine-store-forward", "FuncOp"> {
   let constructor = "mlir::scalehls::createAffineStoreForwardPass()";
 }
 
-def SimplifyMemrefAccess : Pass<"simplify-memref-access", "FuncOp"> {
+def SimplifyMemrefAccess : Pass<"scalehls-simplify-memref-access", "FuncOp"> {
   let summary = "Remove redundant load and store operations";
   let description = [{
     This simplify-memref-access pass will eliminate the known redundant load and
@@ -333,7 +333,7 @@ def SimplifyMemrefAccess : Pass<"simplify-memref-access", "FuncOp"> {
   let constructor = "mlir::scalehls::createSimplifyMemrefAccessPass()";
 }
 
-def ReduceInitialInterval : Pass<"reduce-initial-interval", "FuncOp"> {
+def ReduceInitialInterval : Pass<"scalehls-reduce-initial-interval", "FuncOp"> {
   let summary = "Try to reduce the intiail interval";
   let description = [{
     This reduce-initial-interval pass try to reduce the II by optimizing the

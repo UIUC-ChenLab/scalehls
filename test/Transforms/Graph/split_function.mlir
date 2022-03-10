@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -split-function %s | FileCheck %s
+// RUN: scalehls-opt -scalehls-split-function %s | FileCheck %s
 
 module {
   // CHECK: func @dataflow2(%arg0: tensor<1x32x32x64xi8>) -> tensor<1x1x64xi8> {

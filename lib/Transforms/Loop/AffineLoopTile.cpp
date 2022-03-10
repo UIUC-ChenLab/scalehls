@@ -86,12 +86,9 @@ static void adjustToDivisorsOfTripCounts(ArrayRef<AffineForOp> band,
 
 namespace {
 /// A pass to perform loop tiling on all suitable loop nests of a Function.
-struct AffineLoopTileAndAnnotate
-    : public AffineLoopTileAndAnnotateBase<AffineLoopTileAndAnnotate> {
-  AffineLoopTileAndAnnotate() = default;
-  explicit AffineLoopTileAndAnnotate(unsigned loopTileSize) {
-    tileSize = loopTileSize;
-  }
+struct AffineLoopTile : public AffineLoopTileBase<AffineLoopTile> {
+  AffineLoopTile() = default;
+  explicit AffineLoopTile(unsigned loopTileSize) { tileSize = loopTileSize; }
 
   void runOnOperation() override {
     // Bands of loops to tile.
@@ -115,10 +112,10 @@ struct AffineLoopTileAndAnnotate
 
 /// Creates a pass to perform loop tiling on all suitable loop nests of a
 /// Function.
-std::unique_ptr<Pass> scalehls::createAffineLoopTileAndAnnotatePass() {
-  return std::make_unique<AffineLoopTileAndAnnotate>();
+std::unique_ptr<Pass> scalehls::createAffineLoopTilePass() {
+  return std::make_unique<AffineLoopTile>();
 }
 std::unique_ptr<Pass>
-scalehls::createAffineLoopTileAndAnnotatePass(unsigned loopTileSize) {
-  return std::make_unique<AffineLoopTileAndAnnotate>(loopTileSize);
+scalehls::createAffineLoopTilePass(unsigned loopTileSize) {
+  return std::make_unique<AffineLoopTile>(loopTileSize);
 }

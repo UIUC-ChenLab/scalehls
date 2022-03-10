@@ -51,9 +51,8 @@ std::unique_ptr<Pass> createMaterializeReductionPass();
 std::unique_ptr<Pass> createAffineLoopPerfectionPass();
 std::unique_ptr<Pass> createRemoveVariableBoundPass();
 std::unique_ptr<Pass> createAffineLoopOrderOptPass();
-std::unique_ptr<Pass> createAffineLoopTileAndAnnotatePass();
-std::unique_ptr<Pass>
-createAffineLoopTileAndAnnotatePass(unsigned loopTileSize);
+std::unique_ptr<Pass> createAffineLoopTilePass();
+std::unique_ptr<Pass> createAffineLoopTilePass(unsigned loopTileSize);
 std::unique_ptr<Pass> createAffineLoopUnrollAndPipelinePass();
 std::unique_ptr<Pass>
 createAffineLoopUnrollAndPipelinePass(unsigned loopUnrollSize);

@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -legalize-dataflow="min-gran=3 insert-copy=true" %s | FileCheck %s
+// RUN: scalehls-opt -scalehls-legalize-dataflow="min-gran=3 insert-copy=true" %s | FileCheck %s
 
 module {
   // CHECK: func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=true>} {

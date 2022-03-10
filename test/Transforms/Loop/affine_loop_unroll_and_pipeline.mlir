@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -affine-loop-unroll-and-pipeline="unroll-size=2 loop-order-opt=false" %s | FileCheck %s
+// RUN: scalehls-opt -scalehls-affine-loop-unroll-and-pipeline="unroll-size=2 loop-order-opt=false" %s | FileCheck %s
 
 // CHECK: #map = affine_map<(d0) -> (d0 + 1)>
 // CHECK: #set0 = affine_set<(d0, d1) : (d0 - d1 >= 0)>

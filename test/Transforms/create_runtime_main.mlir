@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -create-runtime-main="top-func=forward" %s | FileCheck %s
+// RUN: scalehls-opt -scalehls-create-runtime-main="top-func=forward" %s | FileCheck %s
 
 module {
   func @dataflow2(%arg0: tensor<1x32x32x64xi8>) -> tensor<1x1x64xi8> {
