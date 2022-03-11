@@ -36,6 +36,7 @@ createLegalizeDataflowPass(unsigned dataflowGran,
                            bool dataflowInsertCopy = true);
 std::unique_ptr<Pass> createSplitFunctionPass();
 std::unique_ptr<Pass> createConvertCopyToAffineLoopsPass();
+std::unique_ptr<Pass> createShareTensorOperationPass();
 
 /// Runtime-related passes.
 std::unique_ptr<Pass> createCreateRuntimeMainPass();
@@ -54,9 +55,6 @@ std::unique_ptr<Pass> createAffineLoopOrderOptPass();
 std::unique_ptr<Pass> createAffineLoopUnrollAndPipelinePass();
 std::unique_ptr<Pass>
 createAffineLoopUnrollAndPipelinePass(unsigned loopUnrollSize);
-
-/// Tensor optimization passes. 
-std::unique_ptr<Pass> createShareTensorOperationPass();
 
 /// Simplification passes.
 std::unique_ptr<Pass> createSimplifyAffineIfPass();
