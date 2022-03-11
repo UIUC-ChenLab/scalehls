@@ -19,6 +19,7 @@ namespace scalehls {
 
 void registerScaleHLSDSEPipeline();
 void registerScaleHLSPyTorchPipeline();
+void registerScaleHLSTestPipeline();
 void registerTransformsPasses();
 
 /// QoR estimation and DSE passes.
