@@ -21,9 +21,19 @@ struct AffineLoopUnrollJam
 
   void runOnOperation() override {
     AffineLoopBands targetBands;
-    getTileableBands(getOperation(), &targetBands);
+    getLoopBands(getOperation().front(), targetBands);
+    // getTileableBands(getOperation(), &targetBands);
 
     for (auto &band : targetBands) {
+      if (pointLoop) {
+        AffineLoopBand tileBand;
+        AffineLoopBand pointBand;
+        if (!getTileAndPointLoopBand(band, tileBand, pointBand) ||
+            pointBand.empty())
+          continue;
+        band = pointBand;
+      }
+
       TileList sizes;
       unsigned remainTileSize = unrollSize;
 
