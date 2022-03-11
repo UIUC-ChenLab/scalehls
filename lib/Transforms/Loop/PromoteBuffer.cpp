@@ -47,7 +47,8 @@ struct PromoteBufferPattern : public OpRewritePattern<memref::SubViewOp> {
 
   LogicalResult matchAndRewrite(memref::SubViewOp subview,
                                 PatternRewriter &rewriter) const override {
-    if (!subview.source().isa<BlockArgument>())
+    if (subview.source().getType().cast<MemRefType>().getMemorySpaceAsInt() !=
+        (unsigned)MemoryKind::DRAM)
       return failure();
 
     rewriter.setInsertionPointAfter(subview);
@@ -66,7 +67,8 @@ struct PromoteBuffer : public scalehls::PromoteBufferBase<PromoteBuffer> {
     // Promote function arguments that are not only used by subviews.
     for (auto arg : func.getArguments()) {
       auto type = arg.getType().dyn_cast<MemRefType>();
-      if (!type || llvm::all_of(arg.getUsers(), [&](Operation *op) {
+      if (!type || type.getMemorySpaceAsInt() != (unsigned)MemoryKind::DRAM ||
+          llvm::all_of(arg.getUsers(), [&](Operation *op) {
             return isa<memref::SubViewOp>(op);
           }))
         continue;

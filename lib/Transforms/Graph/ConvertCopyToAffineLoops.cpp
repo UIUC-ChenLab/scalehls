@@ -170,16 +170,22 @@ struct ReshapeOpLoweringPattern : public OpRewritePattern<tensor::ReshapeOp> {
 
 namespace {
 struct CopyOpLoweringPattern : public OpRewritePattern<memref::CopyOp> {
+  CopyOpLoweringPattern(MLIRContext *context, bool lowerAxiInterfCopy = false)
+      : OpRewritePattern(context), lowerAxiInterfCopy(lowerAxiInterfCopy) {}
+
   using OpRewritePattern<memref::CopyOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(memref::CopyOp copy,
                                 PatternRewriter &rewriter) const override {
-    // If the source or target of the copy is DRAM, then it can be directly
-    // emitted into "memcpy" by the emitter.
-    if (copy.source().getType().cast<MemRefType>().getMemorySpaceAsInt() ==
+    // Check whether the copy op communicates with an AXI interface.
+    auto isAxiInterf =
+        copy.source().getType().cast<MemRefType>().getMemorySpaceAsInt() ==
             (unsigned)MemoryKind::DRAM ||
         copy.target().getType().cast<MemRefType>().getMemorySpaceAsInt() ==
-            (unsigned)MemoryKind::DRAM)
+            (unsigned)MemoryKind::DRAM;
+
+    // Return failure if we don't need to lower copy op with AXI interfaces.
+    if (!lowerAxiInterfCopy && isAxiInterf)
       return failure();
 
     rewriter.setInsertionPoint(copy);
@@ -190,6 +196,10 @@ struct CopyOpLoweringPattern : public OpRewritePattern<memref::CopyOp> {
     SmallVector<Value, 4> ivs;
     for (auto dimSize : memrefType.getShape()) {
       auto loop = rewriter.create<mlir::AffineForOp>(loc, 0, dimSize);
+      // If the copy op is not with  an AXI interface, we consider the loop as
+      // point loop that needs to be optimized later.
+      if (!isAxiInterf)
+        setPointAttr(loop);
       rewriter.setInsertionPointToStart(loop.getBody());
       ivs.push_back(loop.getInductionVar());
     }
@@ -201,6 +211,9 @@ struct CopyOpLoweringPattern : public OpRewritePattern<memref::CopyOp> {
     rewriter.eraseOp(copy);
     return success();
   }
+
+private:
+  bool lowerAxiInterfCopy = false;
 };
 } // namespace
 

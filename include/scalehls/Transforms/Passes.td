@@ -254,7 +254,7 @@ def AffineLoopUnrollJam : Pass<"scalehls-affine-loop-unroll-jam", "FuncOp"> {
   let options = [
     Option<"unrollSize", "unroll-size", "unsigned", /*default=*/"1",
            "Positive number: the size of unrolling">,
-    Option<"pointLoop", "point-loop", "bool", /*default=*/"false",
+    Option<"pointLoopOnly", "point-loop-only", "bool", /*default=*/"false",
            "Only apply unroll and jam to point loop band">,
     Option<"loopOrderOpt", "loop-order-opt", "bool", /*default=*/"true",
            "Whether loop order optimization after unrolling">

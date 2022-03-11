@@ -224,12 +224,15 @@ void scalehls::registerScaleHLSTestPipeline() {
         pm.addPass(mlir::createCanonicalizerPass());
 
         pm.addPass(scalehls::createPromoteBufferPass());
-        pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
         pm.addPass(bufferization::createBufferLoopHoistingPass());
+        pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
+        pm.addPass(memref::createFoldSubViewOpsPass());
+        pm.addPass(mlir::createAffineLoopNormalizePass());
+        pm.addPass(mlir::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
-        pm.addPass(
-            scalehls::createAffineLoopUnrollJamPass(opts.loopUnrollFactor));
+        pm.addPass(scalehls::createAffineLoopUnrollJamPass(
+            opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true));
         pm.addPass(mlir::createAffineLoopNormalizePass());
         pm.addPass(mlir::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());

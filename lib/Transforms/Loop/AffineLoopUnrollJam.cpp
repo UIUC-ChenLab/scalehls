@@ -17,7 +17,10 @@ namespace {
 struct AffineLoopUnrollJam
     : public AffineLoopUnrollJamBase<AffineLoopUnrollJam> {
   AffineLoopUnrollJam() = default;
-  AffineLoopUnrollJam(unsigned loopUnrollSize) { unrollSize = loopUnrollSize; }
+  AffineLoopUnrollJam(unsigned loopUnrollSize, bool unrollPointLoopOnly) {
+    unrollSize = loopUnrollSize;
+    pointLoopOnly = unrollPointLoopOnly;
+  }
 
   void runOnOperation() override {
     AffineLoopBands targetBands;
@@ -25,7 +28,7 @@ struct AffineLoopUnrollJam
     // getTileableBands(getOperation(), &targetBands);
 
     for (auto &band : targetBands) {
-      if (pointLoop) {
+      if (pointLoopOnly) {
         AffineLoopBand tileBand;
         AffineLoopBand pointBand;
         if (!getTileAndPointLoopBand(band, tileBand, pointBand) ||
@@ -72,6 +75,8 @@ std::unique_ptr<Pass> scalehls::createAffineLoopUnrollJamPass() {
   return std::make_unique<AffineLoopUnrollJam>();
 }
 std::unique_ptr<Pass>
-scalehls::createAffineLoopUnrollJamPass(unsigned loopUnrollSize) {
-  return std::make_unique<AffineLoopUnrollJam>(loopUnrollSize);
+scalehls::createAffineLoopUnrollJamPass(unsigned loopUnrollSize,
+                                        bool unrollPointLoopOnly) {
+  return std::make_unique<AffineLoopUnrollJam>(loopUnrollSize,
+                                               unrollPointLoopOnly);
 }

@@ -57,7 +57,9 @@ std::unique_ptr<Pass> createAffineLoopTilePass(unsigned loopTileSize);
 std::unique_ptr<Pass> createCreateMemrefSubviewPass();
 std::unique_ptr<Pass> createPromoteBufferPass();
 std::unique_ptr<Pass> createAffineLoopUnrollJamPass();
-std::unique_ptr<Pass> createAffineLoopUnrollJamPass(unsigned loopUnrollSize);
+std::unique_ptr<Pass>
+createAffineLoopUnrollJamPass(unsigned loopUnrollSize,
+                              bool unrollPointLoopOnly = false);
 
 /// Simplification passes.
 std::unique_ptr<Pass> createSimplifyAffineIfPass();
