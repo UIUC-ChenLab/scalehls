@@ -26,7 +26,7 @@ using DataflowUsesMap = llvm::SmallDenseMap<Operation *, DataflowUses, 64>;
 
 namespace {
 struct DataflowGraph {
-  DataflowGraph(FuncOp func);
+  DataflowGraph(Block &block);
 
   bool hasNode(Operation *node) const { return nodes.count(node); }
   DataflowUses getNodeUses(Operation *node) const {
@@ -42,11 +42,11 @@ private:
 };
 } // namespace
 
-DataflowGraph::DataflowGraph(FuncOp func) {
+DataflowGraph::DataflowGraph(Block &block) {
   // Results map of each operation.
   DenseMap<Operation *, llvm::SmallDenseSet<Value, 2>> resultsMap;
 
-  for (auto &op : func.front()) {
+  for (auto &op : block) {
     // Handle Linalg dialect operations.
     if (isa<linalg::LinalgDialect>(op.getDialect())) {
       auto generic = dyn_cast<linalg::GenericOp>(op);
@@ -80,10 +80,10 @@ DataflowGraph::DataflowGraph(FuncOp func) {
   }
 
   // Get the dominace tree for later use.
-  DominanceInfo DT(func);
+  DominanceInfo DT(block.getParentOp());
 
   // Find successors of all operations.
-  for (auto &op : func.front()) {
+  for (auto &op : block) {
     // TODO: Some operations are dataflow source/sink/call node, which will not
     // be scheduled. Any other operations should appear here?
     if (isa<memref::GetGlobalOp, memref::AllocOp, memref::AllocaOp,
@@ -96,7 +96,7 @@ DataflowGraph::DataflowGraph(FuncOp func) {
       for (auto user : result.getUsers()) {
         // If the same block user doesn't exist, or is not properly dominated,
         // or is also an updater of the result, continue.
-        auto sameBlockUser = func.front().findAncestorOpInBlock(*user);
+        auto sameBlockUser = block.findAncestorOpInBlock(*user);
         if (!sameBlockUser || isa<ReturnOp>(sameBlockUser) ||
             !DT.properlyDominates(&op, sameBlockUser))
           continue;
@@ -112,17 +112,20 @@ DataflowGraph::DataflowGraph(FuncOp func) {
   }
 }
 
-static bool applyLegalizeDataflow(FuncOp func, int64_t minGran,
-                                  bool insertCopy) {
-  auto builder = OpBuilder(func);
-  DataflowGraph graph(func);
+/// Legalize the dataflow of "block", whose parent operation must be a function
+/// or affine loop. Return false if the legalization failed, for example, the
+/// dataflow has cycles.
+bool scalehls::applyLegalizeDataflow(Block &block, int64_t minGran,
+                                     bool insertCopy) {
+  auto builder = OpBuilder(block.getParentOp());
+  DataflowGraph graph(block);
 
   llvm::SmallDenseMap<Operation *, int64_t, 32> map;
   llvm::SmallDenseMap<int64_t, int64_t, 16> dataflowToMerge;
 
   // Walk through all dataflow operations in a reversed order for establishing
   // a ALAP scheduling.
-  for (auto it = func.front().rbegin(); it != func.front().rend(); ++it) {
+  for (auto it = block.rbegin(); it != block.rend(); ++it) {
     auto op = &*it;
     if (!graph.hasNode(op))
       continue;
@@ -189,7 +192,7 @@ static bool applyLegalizeDataflow(FuncOp func, int64_t minGran,
   if (minGran != 1 || !insertCopy) {
     // Collect all operations in each dataflow level.
     DenseMap<int64_t, SmallVector<Operation *, 8>> dataflowOps;
-    for (auto &op : func.front().getOperations())
+    for (auto &op : block.getOperations())
       if (map.count(&op))
         dataflowOps[map.lookup(&op)].push_back(&op);
 
@@ -220,9 +223,6 @@ static bool applyLegalizeDataflow(FuncOp func, int64_t minGran,
           "dataflow_level",
           builder.getIntegerAttr(builder.getI64Type(), pair.second));
   }
-
-  // Set dataflow attribute.
-  setFuncDirective(func, false, 1, true);
   return true;
 }
 
@@ -235,7 +235,9 @@ struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
   }
 
   void runOnOperation() override {
-    applyLegalizeDataflow(getOperation(), minGran, insertCopy);
+    auto func = getOperation();
+    applyLegalizeDataflow(func.front(), minGran, insertCopy);
+    setFuncDirective(func, false, 1, true);
   }
 };
 } // namespace

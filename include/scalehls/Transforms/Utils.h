@@ -52,6 +52,14 @@ void setTopFuncAttr(FuncOp func);
 
 using TileList = SmallVector<unsigned, 8>;
 
+/// Legalize the dataflow of "block", whose parent operation must be a function
+/// or affine loop. Return false if the legalization failed, for example, the
+/// dataflow has cycles.
+bool applyLegalizeDataflow(Block &block, int64_t minGran, bool insertCopy);
+
+/// Split each dataflow stage of "block" into a separate sub-function.
+bool applySplitFunction(Block &block);
+
 /// Apply loop perfection. Try to sink all operations between loop statements
 /// into the innermost loop of the input loop band.
 bool applyAffineLoopPerfection(AffineLoopBand &band);
