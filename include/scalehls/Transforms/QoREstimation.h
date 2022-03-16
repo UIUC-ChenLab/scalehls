@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_ANALYSIS_QORESTIMATION_H
-#define SCALEHLS_ANALYSIS_QORESTIMATION_H
+#ifndef SCALEHLS_TRANSFORMS_QORESTIMATION_H
+#define SCALEHLS_TRANSFORMS_QORESTIMATION_H
 
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -133,4 +133,4 @@ private:
 } // namespace scalehls
 } // namespace mlir
 
-#endif // SCALEHLS_ANALYSIS_QORESTIMATION_H
+#endif // SCALEHLS_TRANSFORMS_QORESTIMATION_H

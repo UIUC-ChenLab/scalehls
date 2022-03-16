@@ -14,7 +14,7 @@ namespace mlir {
 namespace scalehls {
 
 //===----------------------------------------------------------------------===//
-// HLSCpp transform utils
+// HLSCpp attribute transform utils
 //===----------------------------------------------------------------------===//
 
 using namespace hlscpp;
@@ -50,16 +50,6 @@ void setTopFuncAttr(FuncOp func);
 // Loop transform utils
 //===----------------------------------------------------------------------===//
 
-using TileList = SmallVector<unsigned, 8>;
-
-/// Legalize the dataflow of "block", whose parent operation must be a function
-/// or affine loop. Return false if the legalization failed, for example, the
-/// dataflow has cycles.
-bool applyLegalizeDataflow(Block &block, int64_t minGran, bool insertCopy);
-
-/// Split each dataflow stage of "block" into a separate sub-function.
-bool applySplitFunction(Block &block);
-
 /// Apply loop perfection. Try to sink all operations between loop statements
 /// into the innermost loop of the input loop band.
 bool applyAffineLoopPerfection(AffineLoopBand &band);
@@ -76,18 +66,14 @@ bool applyRemoveVariableBound(AffineLoopBand &band);
 
 /// Apply loop tiling to the input loop band and sink all intra-tile loops to
 /// the innermost loop with the original loop order.
+using TileList = SmallVector<unsigned, 8>;
 bool applyLoopTiling(AffineLoopBand &band, TileList tileList,
                      bool annotatePointLoop = false);
-
-bool applyLegalizeToHLSCpp(FuncOp func, bool topFunc, bool axiInterf = false);
 
 /// Apply loop pipelining to the pipelineLoc of the input loop band, all inner
 /// loops are automatically fully unrolled.
 bool applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
                          unsigned targetII);
-
-/// Apply simplification optimizations.
-bool applySimplificationOpts(FuncOp func);
 
 /// Fully unroll all loops insides of a loop block.
 bool applyFullyLoopUnrolling(Block &block, unsigned maxIterNum = 10);
@@ -97,9 +83,26 @@ bool applyArrayPartition(Value array, ArrayRef<unsigned> factors,
                          ArrayRef<hlscpp::PartitionKind> kinds,
                          bool updateFuncSignature = true);
 
+/// Apply simplification optimizations.
+bool applySimplificationOpts(FuncOp func);
+
 /// Find the suitable array partition factors and kinds for all arrays in the
 /// targeted function.
 bool applyAutoArrayPartition(FuncOp func);
+
+bool applyLegalizeToHLSCpp(FuncOp func, bool topFunc, bool axiInterf = false);
+
+//===----------------------------------------------------------------------===//
+// Graph transform utils
+//===----------------------------------------------------------------------===//
+
+/// Legalize the dataflow of "block", whose parent operation must be a function
+/// or affine loop. Return false if the legalization failed, for example, the
+/// dataflow has cycles.
+bool applyLegalizeDataflow(Block &block, int64_t minGran, bool insertCopy);
+
+/// Split each dataflow stage of "block" into a separate sub-function.
+bool applySplitFunction(Block &block);
 
 /// Apply optimization strategy to a loop band. The ancestor function is also
 /// passed in because the post-tiling optimizations have to take function as

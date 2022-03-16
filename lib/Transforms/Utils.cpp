@@ -123,24 +123,6 @@ bool scalehls::applySimplificationOpts(FuncOp func) {
   return true;
 }
 
-/// Fully unroll all loops insides of a block.
-bool scalehls::applyFullyLoopUnrolling(Block &block, unsigned maxIterNum) {
-  for (unsigned i = 0; i < maxIterNum; ++i) {
-    bool hasFullyUnrolled = true;
-    block.walk([&](AffineForOp loop) {
-      if (failed(loopUnrollFull(loop)))
-        hasFullyUnrolled = false;
-    });
-
-    if (hasFullyUnrolled)
-      break;
-
-    if (i == 7)
-      return false;
-  }
-  return true;
-}
-
 /// Apply optimization strategy to a loop band. The ancestor function is also
 /// passed in because the post-tiling optimizations have to take function as
 /// target, e.g. canonicalizer and array partition.

@@ -13,6 +13,24 @@
 using namespace mlir;
 using namespace scalehls;
 
+/// Fully unroll all loops insides of a block.
+bool scalehls::applyFullyLoopUnrolling(Block &block, unsigned maxIterNum) {
+  for (unsigned i = 0; i < maxIterNum; ++i) {
+    bool hasFullyUnrolled = true;
+    block.walk([&](AffineForOp loop) {
+      if (failed(loopUnrollFull(loop)))
+        hasFullyUnrolled = false;
+    });
+
+    if (hasFullyUnrolled)
+      break;
+
+    if (i == 7)
+      return false;
+  }
+  return true;
+}
+
 namespace {
 struct AffineLoopUnrollJam
     : public AffineLoopUnrollJamBase<AffineLoopUnrollJam> {

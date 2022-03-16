@@ -106,17 +106,6 @@ def SplitFunction : Pass<"scalehls-split-function", "ModuleOp"> {
   let constructor = "mlir::scalehls::createSplitFunctionPass()";
 }
 
-def ConvertCopyToAffineLoops :
-      Pass<"scalehls-convert-copy-to-affine-loops", "FuncOp"> {
-  let summary = "Convert copy and assign to affine loops";
-  let description = [{
-    This convert-copy-to-affine-loops pass will first remove redundant copies
-    and lower assigns to copies, and then convert copies to affine loops.
-  }];
-
-  let constructor = "mlir::scalehls::createConvertCopyToAffineLoopsPass()";
-}
-
 //===----------------------------------------------------------------------===//
 // Runtime-related Passes
 //===----------------------------------------------------------------------===//
@@ -163,6 +152,17 @@ def LegalizeToHLSCpp : Pass<"scalehls-legalize-to-hlscpp", "FuncOp"> {
 //===----------------------------------------------------------------------===//
 // Loop Optimization Passes
 //===----------------------------------------------------------------------===//
+
+def ConvertCopyToAffineLoops :
+      Pass<"scalehls-convert-copy-to-affine-loops", "FuncOp"> {
+  let summary = "Convert copy and assign to affine loops";
+  let description = [{
+    This convert-copy-to-affine-loops pass will first remove redundant copies
+    and lower assigns to copies, and then convert copies to affine loops.
+  }];
+
+  let constructor = "mlir::scalehls::createConvertCopyToAffineLoopsPass()";
+}
 
 def MaterializeReduction : Pass<"scalehls-materialize-reduction", "FuncOp"> {
   let summary = "Materialize loop reductions";
@@ -213,23 +213,6 @@ def AffineLoopTile : Pass<"scalehls-affine-loop-tile", "FuncOp"> {
   ];
 }
 
-def CreateMemrefSubview : Pass<"scalehls-create-memref-subview", "FuncOp"> {
-  let summary = "Create subviews based on loop analysis";
-  let description = [{
-    Through loop analysis, this pass can identify the memory partition that each
-    sub-function is accessing. Then, by creating subview operations, the program
-    in each sub-function can access the memory subview rather than the original
-    memory.
-  }];
-  let constructor = "mlir::scalehls::createCreateMemrefSubviewPass()";
-}
-
-def PromoteBuffer : Pass<"scalehls-promote-buffer", "FuncOp"> {
-  let summary = "Promote external buffer to on-chip buffer";
-
-  let constructor = "mlir::scalehls::createPromoteBufferPass()";
-}
-
 def AffineLoopOrderOpt : Pass<"scalehls-affine-loop-order-opt", "FuncOp"> {
   let summary = "Optimize the order of affine loop nests";
   let description = [{
@@ -259,6 +242,17 @@ def AffineLoopUnrollJam : Pass<"scalehls-affine-loop-unroll-jam", "FuncOp"> {
     Option<"loopOrderOpt", "loop-order-opt", "bool", /*default=*/"true",
            "Whether loop order optimization after unrolling">
   ];
+}
+
+def SimplifyAffineIf : Pass<"scalehls-simplify-affine-if", "FuncOp"> {
+  let summary = "Simplify affine if operations";
+  let description = [{
+    This simplify-affine-if pass will eliminate all redundant affine if
+    operations which will always take then or else branch, and merge all affine
+    if operations that having the same statement.
+  }];
+
+  let constructor = "mlir::scalehls::createSimplifyAffineIfPass()";
 }
 
 //===----------------------------------------------------------------------===//
@@ -321,18 +315,24 @@ def CreateHLSCppPrimitive : Pass<"scalehls-create-hlscpp-primitive", "FuncOp"> {
 }
 
 //===----------------------------------------------------------------------===//
-// Simplification Passes
+// Memory Optimization Passes
 //===----------------------------------------------------------------------===//
 
-def SimplifyAffineIf : Pass<"scalehls-simplify-affine-if", "FuncOp"> {
-  let summary = "Simplify affine if operations";
+def CreateMemrefSubview : Pass<"scalehls-create-memref-subview", "FuncOp"> {
+  let summary = "Create subviews based on loop analysis";
   let description = [{
-    This simplify-affine-if pass will eliminate all redundant affine if
-    operations which will always take then or else branch, and merge all affine
-    if operations that having the same statement.
+    Through loop analysis, this pass can identify the memory partition that each
+    sub-function is accessing. Then, by creating subview operations, the program
+    in each sub-function can access the memory subview rather than the original
+    memory.
   }];
+  let constructor = "mlir::scalehls::createCreateMemrefSubviewPass()";
+}
 
-  let constructor = "mlir::scalehls::createSimplifyAffineIfPass()";
+def PromoteBuffer : Pass<"scalehls-promote-buffer", "FuncOp"> {
+  let summary = "Promote external buffer to on-chip buffer";
+
+  let constructor = "mlir::scalehls::createPromoteBufferPass()";
 }
 
 def AffineStoreForward : Pass<"scalehls-affine-store-forward", "FuncOp"> {
