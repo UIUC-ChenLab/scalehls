@@ -96,7 +96,7 @@ void scalehls::setTopFuncAttr(FuncOp func) {
 // Loop transform utils
 //===----------------------------------------------------------------------===//
 
-static void addSimplificationPipeline(PassManager &pm) {
+static void addMemoryOptsPipeline(PassManager &pm) {
   // To factor out the redundant affine operations.
   pm.addPass(createAffineLoopNormalizePass());
   pm.addPass(createSimplifyAffineStructuresPass());
@@ -113,11 +113,10 @@ static void addSimplificationPipeline(PassManager &pm) {
   pm.addPass(createReduceInitialIntervalPass());
 }
 
-/// Apply simplification optimizations.
-bool scalehls::applySimplificationOpts(FuncOp func) {
-  // Apply general optimizations.
+/// Apply memory optimizations.
+bool scalehls::applyMemoryOpts(FuncOp func) {
   PassManager optPM(func.getContext(), "builtin.func");
-  addSimplificationPipeline(optPM);
+  addMemoryOptsPipeline(optPM);
   if (failed(optPM.run(func)))
     return false;
   return true;
@@ -142,7 +141,7 @@ bool scalehls::applyOptStrategy(AffineLoopBand &band, FuncOp func,
 
   // Apply memory access optimizations and the best suitable array partition
   // strategy to the function.
-  applySimplificationOpts(func);
+  applyMemoryOpts(func);
   applyAutoArrayPartition(func);
   return true;
 }
@@ -166,7 +165,7 @@ bool scalehls::applyOptStrategy(FuncOp func, ArrayRef<TileList> tileLists,
 
   // Apply memory access optimizations and the best suitable array partition
   // strategy to the function.
-  applySimplificationOpts(func);
+  applyMemoryOpts(func);
   applyAutoArrayPartition(func);
   return true;
 }

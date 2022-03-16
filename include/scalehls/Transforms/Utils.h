@@ -47,7 +47,7 @@ void setFuncDirective(Operation *op, bool pipeline, int64_t targetInterval,
 void setTopFuncAttr(FuncOp func);
 
 //===----------------------------------------------------------------------===//
-// Loop transform utils
+// Optimization utils
 //===----------------------------------------------------------------------===//
 
 /// Apply loop perfection. Try to sink all operations between loop statements
@@ -78,13 +78,13 @@ bool applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
 /// Fully unroll all loops insides of a loop block.
 bool applyFullyLoopUnrolling(Block &block, unsigned maxIterNum = 10);
 
+/// Apply dataflow (coarse-grained pipeline) to the block.
+bool applyDataflow(Block &block, unsigned minGran, bool insertCopy);
+
 /// Apply the specified array partition factors and kinds.
 bool applyArrayPartition(Value array, ArrayRef<unsigned> factors,
                          ArrayRef<hlscpp::PartitionKind> kinds,
                          bool updateFuncSignature = true);
-
-/// Apply simplification optimizations.
-bool applySimplificationOpts(FuncOp func);
 
 /// Find the suitable array partition factors and kinds for all arrays in the
 /// targeted function.
@@ -92,12 +92,12 @@ bool applyAutoArrayPartition(FuncOp func);
 
 bool applyLegalizeToHLSCpp(FuncOp func, bool topFunc, bool axiInterf = false);
 
-//===----------------------------------------------------------------------===//
-// Graph transform utils
-//===----------------------------------------------------------------------===//
+/// Apply memory optimizations.
+bool applyMemoryOpts(FuncOp func);
 
-/// Apply dataflow (coarse-grained pipeline) to the block.
-bool applyDataflow(Block &block, unsigned minGran, bool insertCopy);
+//===----------------------------------------------------------------------===//
+// Compound optimization utils
+//===----------------------------------------------------------------------===//
 
 /// Apply optimization strategy to a loop band. The ancestor function is also
 /// passed in because the post-tiling optimizations have to take function as

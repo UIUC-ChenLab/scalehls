@@ -196,12 +196,12 @@ static bool legalizeToHLSCpp(MlirOperation op, bool topFunc) {
   return applyLegalizeToHLSCpp(func, topFunc);
 }
 
-static bool simplificationOpts(MlirOperation op) {
+static bool memoryOpts(MlirOperation op) {
   py::gil_scoped_release();
   auto func = dyn_cast<FuncOp>(unwrap(op));
   if (!func)
     throw SetPyError(PyExc_ValueError, "targeted operation not a function");
-  return applySimplificationOpts(func);
+  return applyMemoryOpts(func);
 }
 
 static bool autoArrayPartition(MlirOperation op) {
@@ -269,7 +269,7 @@ PYBIND11_MODULE(_scalehls, m) {
 
   // Function transform APIs.
   m.def("legalize_to_hlscpp", &legalizeToHLSCpp);
-  m.def("simplification_opts", &simplificationOpts);
+  m.def("memory_opts", &memoryOpts);
   m.def("auto_array_partition", &autoArrayPartition);
 
   // Array transform APIs.

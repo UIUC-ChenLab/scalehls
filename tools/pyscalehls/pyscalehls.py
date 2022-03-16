@@ -93,8 +93,8 @@ def main():
             factors[-1] = type.get_dim_size(type.rank - 1) / 4
             scalehls.array_partition(array, factors, "cyclic")
 
-        # Apply simplifications.
-        scalehls.simplification_opts(func)
+        # Apply memory optimizations.
+        scalehls.memory_opts(func)
 
         # Apply suitable array partition strategies through analyzing the array access pattern.
         # scalehls.auto_array_partition(func)
