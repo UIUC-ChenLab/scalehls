@@ -22,6 +22,31 @@ def add_node(tree, input):
             except:
                 pass
 
+def recur_add_subtree(mastertree, toptree, treelist, function_depend):
+    DFS_list = [toptree[node] for node in toptree.expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
+    for DFS_node in DFS_list: #DFS search
+        for depend_node in function_depend: #find children tress
+            if str(DFS_node.tag) == str(depend_node[1]):
+                for treeinlist in treelist: #find subtree
+                    if treeinlist[treeinlist.root].tag == depend_node[0]:
+                        UID_count = 1
+                        duplicate_list = [mastertree[node].tag for node in mastertree.expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
+                        for dnode in duplicate_list:
+                            if dnode == depend_node[0]:
+                                UID_count += 1
+
+                        #rebuild tree / change UID
+                        addtree = treelib.Tree()
+                        for node in treeinlist.expand_tree(mode=treelib.Tree.DEPTH, sorting=False):
+                            if treeinlist[node].is_root():
+                                addtree.create_node(treeinlist[node].tag, str(treeinlist[node].identifier) + "-" + str(UID_count))
+                            else:
+                                parent_uid = str(treeinlist.parent(treeinlist[node].identifier).identifier)
+                                addtree.create_node(treeinlist[node].tag, str(treeinlist[node].identifier) +  "-" + str(UID_count), parent=(parent_uid +  "-" + str(UID_count)))
+
+                        mastertree.paste(DFS_node.identifier, addtree, deep=False)              
+                        recur_add_subtree(mastertree, addtree, treelist, function_depend)
+
 def read_user_input():
     default_file_flag = False
     inputfiles = []
@@ -296,17 +321,6 @@ def process_source_file(dir, inputfile, topfun, sdse=False):
                                     loc_loopnum = re.findall(r'\d+', loopdirectory[0])
                                     if int(loc_loopnum[0]) == asso_loop[0]:
                                         line_trip_count *= int(loopdirectory[-1])
-
-                                    if scope == "matrix_vector_product_with_bias_input_layer":
-                                        print("test")
-                                        print(line)
-                                        print(var_forlist_tree)
-                                        print(nub_mul_raw)
-                                        print(loopband_hotness)
-                                        print(var_forlist)
-                                        print(line_trip_count)
-                                        print(loopdirectory[0], asso_loop[0])
-
                     loopband_hotness += line_trip_count * (4 * num_mul + num_add) #weight for mul and addition
     file.close()
     newfile.close()
@@ -379,8 +393,6 @@ def process_source_file(dir, inputfile, topfun, sdse=False):
                 tree.create_node(var_func_names[i], var_func_names[i])
                 tree_list.append(tree)
 
-        print(function_depend)
-
         #create master tree
         #todo: not capable of adding more that one funtion to tree
         for tree in tree_list:
@@ -390,32 +402,5 @@ def process_source_file(dir, inputfile, topfun, sdse=False):
 
         tree_list.append(mastertree)
     
-    return var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list
-
-def recur_add_subtree(mastertree, toptree, treelist, function_depend):
-    DFS_list = [toptree[node] for node in toptree.expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
-    for DFS_node in DFS_list: #DFS search
-        for depend_node in function_depend: #find children tress
-            if str(DFS_node.tag) == str(depend_node[1]):
-                for treeinlist in treelist: #find subtree
-                    if treeinlist[treeinlist.root].tag == depend_node[0]:
-                        UID_count = 1
-                        duplicate_list = [mastertree[node].tag for node in mastertree.expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
-                        for dnode in duplicate_list:
-                            if dnode == depend_node[0]:
-                                UID_count += 1
-
-                        #rebuild tree / change UID
-                        addtree = treelib.Tree()
-                        for node in treeinlist.expand_tree(mode=treelib.Tree.DEPTH, sorting=False):
-                            if treeinlist[node].is_root():
-                                addtree.create_node(treeinlist[node].tag, str(treeinlist[node].identifier) + "-" + str(UID_count))
-                            else:
-                                parent_uid = str(treeinlist.parent(treeinlist[node].identifier).identifier)
-                                addtree.create_node(treeinlist[node].tag, str(treeinlist[node].identifier) +  "-" + str(UID_count), parent=(parent_uid +  "-" + str(UID_count)))
-
-                        mastertree.paste(DFS_node.identifier, addtree, deep=False)              
-                        recur_add_subtree(mastertree, addtree, treelist, function_depend)
-
-                        
+    return var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list         
                         

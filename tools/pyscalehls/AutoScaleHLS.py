@@ -161,18 +161,18 @@ def main():
     for i in var_forlist_scoped:
         print(i)
 
-    # sortedarray = sortbyhotness(var_forlist_scoped)
-    # print("\nSorted Scope")
-    # for i in sortedarray:
-    #     print(i)
+    sortedarray = sortbyhotness(var_forlist_scoped)
+    print("\nSorted Scope")
+    for i in sortedarray:
+        print(i)
 
-    # print("\nTree")
-    # for item in tree_list:
-    #     item.show()
+    print("\nTree")
+    for item in tree_list:
+        item.show(idhidden=False)
 
-    # target1 = treelib.Tree(tree_list[0].subtree("computeGradient"), deep=True)
-    # target1.show()
-    # DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", dse_target, 0.30, "cg", target1)
+    target1 = treelib.Tree(tree_list[3].subtree("matrix_vector_product_with_bias_input_layer"), deep=True)
+    target1.show(idhidden=False)
+    DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", dse_target, 0.30, "cg", target1)
 
     # target2 = treelib.Tree(tree_list[0].subtree("dotProduct"), deep=True)
     # target2.show()
@@ -186,11 +186,13 @@ def main():
 
 
 
+
+
     #create paramfile
-    INPAR.create_params(tar_dir, var_forlist, var_arraylist_sized)
+    # INPAR.create_params(tar_dir, var_forlist, var_arraylist_sized)
 
     #create template
-    INPAR.create_template(tar_dir, source_file, inputfiles, template)
+    # INPAR.create_template(tar_dir, source_file, inputfiles, template)
 
     #Create Random Training Set
     val = ""

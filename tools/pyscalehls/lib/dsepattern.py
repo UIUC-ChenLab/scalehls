@@ -36,26 +36,39 @@ def sdse_target(new_dir, dsespec, resource, tag, inputfile, inputtop):
 
 def cull_function_by_pattern(dir, inputfile, dsespec, resource, tag, pattern):
     
-    new_dir = dir + "/snip_" + tag
+    new_dir = dir + "/snips/snip_" + tag
     snipfile = "snip_" + tag + ".c"
 
     if not(os.path.exists(new_dir)):
         os.makedirs(new_dir)
 
-    root = pattern.root
+    root = pattern[pattern.root].tag
+    print(root)
 
-    in_pattern = False
+    
 
     brace_count = 0
     brace_count_cut = math.inf
 
+    in_pattern = False
+    bracefound = False
     is_brace = False
+    functioncall = False
     scope = None
 
     newfile = open (new_dir + "/" + snipfile, 'w')
     with open(inputfile, 'r') as file:        
         for line in file:
+            bracefound = False
             is_brace = False
+            functioncall = False
+
+            #find function calls
+            if brace_count >= 1:
+                functioncall = re.findall(r'\s([A-Za-z_]+[A-Za-z_\d]*)\s?\(', line)
+                if functioncall:
+                    functioncall = True
+
             #scope finder
             if brace_count == 0: 
                 raw_scope = re.findall(r'(void|int|float)\s([A-Za-z_]+[A-Za-z_\d]*)(\s)?(\()', line)
@@ -63,6 +76,8 @@ def cull_function_by_pattern(dir, inputfile, dsespec, resource, tag, pattern):
                     scope = raw_scope[0][1]
                     if scope == root:
                         in_pattern = True
+                    if re.findall('{', line): #multiline function
+                        bracefound = True
 
             if(re.findall('{', line)):
                 is_brace = True
@@ -70,7 +85,7 @@ def cull_function_by_pattern(dir, inputfile, dsespec, resource, tag, pattern):
 
             if(re.findall('for', line)): #find loops // only supports one forloop per line
                 if not(re.findall(r'(.)*(//)(.)*(for)(.)*', line)): # ignore for in comment
-                    loopnum = re.findall('loop(\d):', line)
+                    loopnum = re.findall('loop(\d+):', line)
                     if pattern.get_node(int(loopnum[0])) != None:
                         if in_pattern:
                             newfile.write(re.sub('loop'+ str(loopnum[0]) + ': ', '', line))
@@ -79,9 +94,9 @@ def cull_function_by_pattern(dir, inputfile, dsespec, resource, tag, pattern):
                             brace_count_cut = brace_count
                         else:
                             brace_count_cut = brace_count + 1
-            elif brace_count == 0:
+            elif brace_count == 0 and bracefound:
                 newfile.write(line)
-            elif in_pattern:
+            elif in_pattern and not(functioncall):
                 if brace_count < brace_count_cut:
                     newfile.write(line)
 
@@ -98,7 +113,7 @@ def cull_function_by_pattern(dir, inputfile, dsespec, resource, tag, pattern):
     file.close()
     newfile.close()
 
-    sdse_target(new_dir, dsespec, resource, tag, snipfile, pattern.root)
+    sdse_target(new_dir, dsespec, resource, tag, snipfile, root)
     
     return 0
 
