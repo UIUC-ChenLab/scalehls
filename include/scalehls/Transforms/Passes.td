@@ -90,9 +90,9 @@ def FuncDataflow : Pass<"scalehls-func-dataflow", "ModuleOp"> {
   let constructor = "mlir::scalehls::createFuncDataflowPass()";
 
   let options = [
-    Option<"insertCopy", "insert-copy", "bool", /*default=*/"true",
-           "Whether insert copy operations to break bypass paths">,
-    Option<"minGran", "min-gran", "unsigned", /*default=*/"1",
+    Option<"balance", "balance", "bool", /*default=*/"true",
+           "Whether insert copies to balance the dataflow">,
+    Option<"gran", "gran", "unsigned", /*default=*/"1",
            "Positive number: the minimum granularity of dataflow">
   ];
 }
@@ -232,6 +232,26 @@ def AffineLoopUnrollJam : Pass<"scalehls-affine-loop-unroll-jam", "FuncOp"> {
            "Only apply unroll and jam to point loop band">,
     Option<"loopOrderOpt", "loop-order-opt", "bool", /*default=*/"true",
            "Whether loop order optimization after unrolling">
+  ];
+}
+
+def AffineLoopDataflow : Pass<"scalehls-affine-loop-dataflow", "ModuleOp"> {
+  let summary = "Apply dataflow to affine loops";
+  let description = [{
+    This affine-loop-dataflow pass will first legalize the dataflow scheduling
+    to meet the requirements of the dataflow pragma: 1) single-producer
+    single-consumer; 2) no bypass paths. Then, it will split operations/loops
+    scheduled at the same dataflow level into a separate sub-function and apply
+    the dataflow directive to the top function.
+  }];
+
+  let constructor = "mlir::scalehls::createAffineLoopDataflowPass()";
+
+  let options = [
+    Option<"balance", "balance", "bool", /*default=*/"true",
+           "Whether insert copies to balance the dataflow">,
+    Option<"gran", "gran", "unsigned", /*default=*/"1",
+           "Positive number: the minimum granularity of dataflow">
   ];
 }
 

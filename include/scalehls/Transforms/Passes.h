@@ -33,7 +33,7 @@ std::unique_ptr<Pass> createFakeQuantizePass();
 std::unique_ptr<Pass> createSimplifyTosaGraphPass();
 std::unique_ptr<Pass> createFuncDataflowPass();
 std::unique_ptr<Pass> createFuncDataflowPass(unsigned dataflowGran,
-                                             bool dataflowInsertCopy = true);
+                                             bool dataflowBalance = true);
 std::unique_ptr<Pass> createConvertCopyToAffineLoopsPass();
 
 /// Runtime-related passes.
@@ -58,6 +58,9 @@ std::unique_ptr<Pass> createAffineLoopUnrollJamPass();
 std::unique_ptr<Pass>
 createAffineLoopUnrollJamPass(unsigned loopUnrollSize,
                               bool unrollPointLoopOnly = false);
+std::unique_ptr<Pass> createAffineLoopDataflowPass();
+std::unique_ptr<Pass> createAffineLoopDataflowPass(unsigned dataflowGran,
+                                                   bool dataflowBalance = true);
 
 /// Simplification passes.
 std::unique_ptr<Pass> createSimplifyAffineIfPass();

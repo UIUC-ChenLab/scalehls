@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -scalehls-func-dataflow="min-gran=3 insert-copy=true" %s | FileCheck %s
+// RUN: scalehls-opt -scalehls-func-dataflow="gran=3 balance=true" %s | FileCheck %s
 
 module {
   // CHECK: func @dataflow2(%arg0: tensor<1x32x32x64xi8>) -> tensor<1x1x64xi8> {
