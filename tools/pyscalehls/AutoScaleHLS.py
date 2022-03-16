@@ -160,13 +160,13 @@ def main():
     for item in tree_list:
         item.show()
 
-    tree_list[0].remove_node(4)
+    # tree_list[0].remove_node(4)
 
-    print("\nCulledTree")
-    for item in tree_list:
-        item.show()
+    # print("\nCulledTree")
+    # for item in tree_list:
+    #     item.show()
 
-    DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", "1", tree_list[0])
+    # DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", "1", tree_list[0])
 
     
 

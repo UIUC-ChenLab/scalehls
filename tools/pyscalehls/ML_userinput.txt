@@ -1,6 +1,9 @@
 #target_source_file_location = ../../samples/AutoScaleHLS_tests/resnet18_shls.cpp
 #top_function = main_graph
 
+target_source_file_location = ../../samples/AutoScaleHLS_tests/lenet_mine/lenet_top.c
+top_function = lenet_accelerator
+
 #target_source_file_location = test.c
 #top_function = dataflow7
 
@@ -23,8 +26,8 @@
 #target_source_file_location = ../../samples/polybench2/bicg.c
 #top_function = kernel_bicg
 
-target_source_file_location = ../../samples/polybench2/doitgen.c
-top_function = kernel_doitgen
+#target_source_file_location = ../../samples/polybench2/doitgen.c
+#top_function = kernel_doitgen
 
 #target_source_file_location = ../../samples/polybench2/mvt.c
 #top_function = kernel_mvt
