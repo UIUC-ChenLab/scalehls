@@ -6,6 +6,7 @@ import pandas as pd
 import argparse
 import copy
 import treelib
+import json
 
 #AutoHLS dependencies
 from lib import RandInit as RT
@@ -19,11 +20,11 @@ def print_optknobs(opt_knobs, opt_knob_names):
         print("{0}: {1}".format(opt_knob_names[i+1], opt_knobs[i+1]))
 
 def print_variables(var_forlist, var_arraylist_sized):
-    print("Loops")
+    print("\nLoops")
     for item in var_forlist :
         print(item)
     
-    print("Arrays")
+    print("\nArrays")
     for item in var_arraylist_sized :
         print(item)    
 
@@ -129,52 +130,61 @@ def main():
     if not(os.path.exists(tar_dir)):
         os.makedirs(tar_dir)
 
+    ###############json
+    f = open('scalehls_dse_config.json')
+    dse_target = json.load(f)
+    f.close()
+    # print(data)
+    # data['dsp'] = int(data['dsp'] * 0.5)
+    # print(data)
+    # with open('data.json', 'w') as f:
+    #     json.dump(data, f)    
+    ###############json
+
     #scaleHLS manual optimization
     val = ""
     while val == "":
         val = input("What ScaleHLS optimizations? (Manual / DSE / None)\n")
         if((val == "DSE") or (val == "D") or (val == "d")):
             PYSHLS.scalehls_dse(tar_dir, source_file, inputtop)
-
-            var_forlist, var_arraylist_sized, var_list, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_DSE_out.cpp", sdse=True)
-            #var_forlist = []
-            print_variables(var_forlist, var_arraylist_sized)
+            var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_DSE_out.cpp", inputtop, sdse=True)
         elif((val == "Manual") or (val == "M") or (val == "m")):
             opt_knobs, opt_knob_names = PYSHLS.ScaleHLSopt(source_file, inputtop, tar_dir + "/ScaleHLS_opted.c")   
             print_optknobs(opt_knobs, opt_knob_names)
-
-            var_forlist, var_arraylist_sized, var_list, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_opted.c")
-            print_variables(var_forlist, var_arraylist_sized)
+            var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_opted.c", inputtop)
         elif((val == "None") or (val == "N") or (val == "n")):
-            var_forlist, var_arraylist_sized, var_list, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, source_file)
-
-            #var_forlist, var_arraylist_sized, var_forlist_scoped = INPAR.process_source_file_array('generated_files/ScaleHLS_DSE_out.cpp')
+            var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, source_file, inputtop)            
             
-            print_variables(var_forlist, var_arraylist_sized)
+    print_variables(var_forlist, var_arraylist_sized)
     
     print("\nScope")
     for i in var_forlist_scoped:
         print(i)
 
-    print("\nTree")
-    for item in tree_list:
-        item.show()
-
-    # tree_list[0].remove_node(4)
-
-    # print("\nCulledTree")
-    # for item in tree_list:
-    #     item.show()
-
-    # DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", "1", tree_list[0])
-
-    
-
     # sortedarray = sortbyhotness(var_forlist_scoped)
-
     # print("\nSorted Scope")
     # for i in sortedarray:
     #     print(i)
+
+    # print("\nTree")
+    # for item in tree_list:
+    #     item.show()
+
+    # target1 = treelib.Tree(tree_list[0].subtree("computeGradient"), deep=True)
+    # target1.show()
+    # DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", dse_target, 0.30, "cg", target1)
+
+    # target2 = treelib.Tree(tree_list[0].subtree("dotProduct"), deep=True)
+    # target2.show()
+    # DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", dse_target, 0.35, "dp", target2)
+
+    # target3 = treelib.Tree(tree_list[0].subtree("updateParameter"), deep=True)
+    # target3.show()
+    # DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", dse_target, 0.35, "up", target3)
+
+    # DPAT.cull_function_by_pattern(inputtop, tar_dir, tar_dir + "/ML_in.cpp", "1", target)    
+
+
 
     #create paramfile
     INPAR.create_params(tar_dir, var_forlist, var_arraylist_sized)

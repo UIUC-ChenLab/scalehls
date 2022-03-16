@@ -1,11 +1,3 @@
-/*===============================================================*/
-/*                                                               */
-/*                        digitrec_sw.cpp                        */
-/*                                                               */
-/*              Software version for digit recognition           */
-/*                                                               */
-/*===============================================================*/
-
 #include "digitrec_sw.h"
 
 // types and constants used in the functions below

@@ -1,8 +1,8 @@
 #target_source_file_location = ../../samples/AutoScaleHLS_tests/resnet18_shls.cpp
 #top_function = main_graph
 
-target_source_file_location = ../../samples/AutoScaleHLS_tests/lenet_mine/lenet_top.c
-top_function = lenet_accelerator
+#target_source_file_location = ../../samples/AutoScaleHLS_tests/lenet_mine/lenet_top.c
+#top_function = lenet_accelerator
 
 #target_source_file_location = test.c
 #top_function = dataflow7
@@ -36,11 +36,18 @@ top_function = lenet_accelerator
 ##############################rosetta##############################################
 ###################################################################################
 
-#target_source_file_location = ../../samples/rosetta/spam-filter/sgd_sw.c
+#target_source_file_location = ../../samples/rosetta/spam-filter/sgd_sw_raw.c
 #top_function = SgdLR_sw
 
-#target_source_file_location = ../../samples/rosetta/digit-recognition/digitrec_sw.c
+#target_source_file_location = ../../samples/rosetta/digit-recognition/digitrec_sw_raw.c
 #top_function = DigitRec_sw
+
+###################################################################################
+##############################MachSuit#############################################
+###################################################################################
+
+target_source_file_location = ../../samples/MachSuit/backprop.c
+top_function = backprop
 
 ###################################################################################
 ##############################hardware-constraints#################################

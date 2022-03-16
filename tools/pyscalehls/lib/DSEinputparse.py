@@ -99,10 +99,12 @@ def create_template(dir, sourcefile, inputfiles, template):
         templatefile.write(item)
     return 0
 
-def process_source_file(dir, inputfile, sdse=False):
+def process_source_file(dir, inputfile, topfun, sdse=False):
     
     var_forlist_tree = []
     var_forlist_tree_popped = []
+    var_func_names = []
+    function_depend = []
     loopnum = 0
     arraynum = 0
     brace_cout = 0
@@ -111,20 +113,34 @@ def process_source_file(dir, inputfile, sdse=False):
     is_brace = False
     scope = None
 
+
     var_forlist = []
     var_arraylist_sized = []
-    var_list = []
     var_forlist_scoped = []
 
     newfile = open (dir + "/ML_in.cpp", 'w')
     with open(inputfile, 'r') as file:        
         for line in file:
             is_brace = False
+
+            #find function calls
+            if brace_cout >= 1:
+                functioncall = re.findall(r'\s([A-Za-z_]+[A-Za-z_\d]*)\s?\(', line)
+                if functioncall:
+                    for item in functioncall:
+                        if item in var_func_names:
+                            if len(var_forlist_tree) > 0:
+                                function_depend.append((item, "Loop" + str(var_forlist_tree[-1][0])))
+                            else:
+                                function_depend.append((item, scope))
+
             #scope finder
             if brace_cout == 0: 
                 raw_scope = re.findall(r'((void|int|float))\s([A-Za-z_]+[A-Za-z_\d]*)(\s)?(\()', line)
                 if raw_scope:
                     scope = raw_scope[0][2]
+                    var_func_names.append(scope)
+
             if(re.findall('{', line)):
                 is_brace = True
                 if brace_cout == 0:
@@ -218,7 +234,7 @@ def process_source_file(dir, inputfile, sdse=False):
 
             #find array
             #only upto six dimentions
-            arr2part = re.findall(r'(int|float)\s([A-Za-z_]+[A-Za-z_\d]*)\s?(\[[\dA-Z]+\])?\s?(\[[\dA-Z]+\])?\s?(\[[\dA-Z]+\])?\s?(\[[\dA-Z]+\])?\s?(\[[\dA-Z]+\])?\s?(\[[\dA-Z]+\])+(,|;|\)|' ')', line)
+            arr2part = re.findall(r'(int|float|double)\s([A-Za-z_]+[A-Za-z_\d]*)\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])+(,|;|\)|' ')', line)
             if(arr2part):
                 for item in arr2part:
                     current_array = "".join(item[1:-1])
@@ -252,6 +268,7 @@ def process_source_file(dir, inputfile, sdse=False):
 
             #hotloop counter
             if len(var_forlist_tree) > 0:
+
                 num_mul = 0
                 num_add = 0
                 if not(re.findall('for', line)):
@@ -272,12 +289,23 @@ def process_source_file(dir, inputfile, sdse=False):
                                 None
                             else:
                                 if loopdirectory[-1] == 'Variable':
-                                    line_trip_count = 0
-                                    break
+                                    # line_trip_count = 0
+                                    # should be break but is none due to breaking when variable loops exist in list
+                                    None
                                 else:
                                     loc_loopnum = re.findall(r'\d+', loopdirectory[0])
                                     if int(loc_loopnum[0]) == asso_loop[0]:
                                         line_trip_count *= int(loopdirectory[-1])
+
+                                    if scope == "matrix_vector_product_with_bias_input_layer":
+                                        print("test")
+                                        print(line)
+                                        print(var_forlist_tree)
+                                        print(nub_mul_raw)
+                                        print(loopband_hotness)
+                                        print(var_forlist)
+                                        print(line_trip_count)
+                                        print(loopdirectory[0], asso_loop[0])
 
                     loopband_hotness += line_trip_count * (4 * num_mul + num_add) #weight for mul and addition
     file.close()
@@ -324,14 +352,70 @@ def process_source_file(dir, inputfile, sdse=False):
         for i in range(len(var_forlist_scoped)):
             if var_forlist_scoped[i] == "":
                 StartofTree = True
-                tree_list.append(tree)
             else:
                 if StartofTree:
                     tree = treelib.Tree()                    
+                    tree_list.append(tree)
                     tree.create_node(str(var_forlist_scoped[i][0]), str(var_forlist_scoped[i][0]))  # root node
                     add_node(tree, var_forlist_scoped[i])
                     StartofTree = False
                 else:
-                    add_node(tree, var_forlist_scoped[i])        
+                    add_node(tree, var_forlist_scoped[i])
+
+        #check if top fucntion in tree
+        is_in_tree_list = []
+        for func in var_func_names:
+            is_in = False
+            for tree in tree_list:    
+                if tree.root == func:
+                    is_in = True
+            is_in_tree_list.append(is_in)
+
+        for i in range(len(is_in_tree_list)):
+            if is_in_tree_list[i]:
+                None
+            else:
+                tree = treelib.Tree()
+                tree.create_node(var_func_names[i], var_func_names[i])
+                tree_list.append(tree)
+
+        print(function_depend)
+
+        #create master tree
+        #todo: not capable of adding more that one funtion to tree
+        for tree in tree_list:
+            if tree.root == topfun:
+                mastertree = treelib.Tree(tree.subtree(topfun), deep=True)
+                recur_add_subtree(mastertree, mastertree, tree_list, function_depend)
+
+        tree_list.append(mastertree)
     
-    return var_forlist, var_arraylist_sized, var_list, var_forlist_scoped, tree_list
+    return var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list
+
+def recur_add_subtree(mastertree, toptree, treelist, function_depend):
+    DFS_list = [toptree[node] for node in toptree.expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
+    for DFS_node in DFS_list: #DFS search
+        for depend_node in function_depend: #find children tress
+            if str(DFS_node.tag) == str(depend_node[1]):
+                for treeinlist in treelist: #find subtree
+                    if treeinlist[treeinlist.root].tag == depend_node[0]:
+                        UID_count = 1
+                        duplicate_list = [mastertree[node].tag for node in mastertree.expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
+                        for dnode in duplicate_list:
+                            if dnode == depend_node[0]:
+                                UID_count += 1
+
+                        #rebuild tree / change UID
+                        addtree = treelib.Tree()
+                        for node in treeinlist.expand_tree(mode=treelib.Tree.DEPTH, sorting=False):
+                            if treeinlist[node].is_root():
+                                addtree.create_node(treeinlist[node].tag, str(treeinlist[node].identifier) + "-" + str(UID_count))
+                            else:
+                                parent_uid = str(treeinlist.parent(treeinlist[node].identifier).identifier)
+                                addtree.create_node(treeinlist[node].tag, str(treeinlist[node].identifier) +  "-" + str(UID_count), parent=(parent_uid +  "-" + str(UID_count)))
+
+                        mastertree.paste(DFS_node.identifier, addtree, deep=False)              
+                        recur_add_subtree(mastertree, addtree, treelist, function_depend)
+
+                        
+                        
