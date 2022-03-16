@@ -77,15 +77,17 @@ def SimplifyTosaGraph : Pass<"scalehls-simplify-tosa-graph", "FuncOp"> {
   let constructor = "mlir::scalehls::createSimplifyTosaGraphPass()";
 }
 
-def LegalizeDataflow : Pass<"scalehls-legalize-dataflow", "FuncOp"> {
-  let summary = "Legalize the dataflow scheduling";
+def FuncDataflow : Pass<"scalehls-func-dataflow", "ModuleOp"> {
+  let summary = "Apply dataflow to functions";
   let description = [{
-    This legalize-dataflow pass will legalize the dataflow scheduling to meet
+    This func-dataflow pass will first legalize the dataflow scheduling to meet
     the requirements of the dataflow pragma: 1) single-producer single-consumer;
-    2) no bypass paths.
+    2) no bypass paths. Then, it will split operations/loops scheduled at the
+    same dataflow level into a separate sub-function and apply the dataflow
+    directive to the top function.
   }];
 
-  let constructor = "mlir::scalehls::createLegalizeDataflowPass()";
+  let constructor = "mlir::scalehls::createFuncDataflowPass()";
 
   let options = [
     Option<"insertCopy", "insert-copy", "bool", /*default=*/"true",
@@ -93,17 +95,6 @@ def LegalizeDataflow : Pass<"scalehls-legalize-dataflow", "FuncOp"> {
     Option<"minGran", "min-gran", "unsigned", /*default=*/"1",
            "Positive number: the minimum granularity of dataflow">
   ];
-}
-
-def SplitFunction : Pass<"scalehls-split-function", "ModuleOp"> {
-  let summary = "Split function for enabling the dataflow pragma";
-  let description = [{
-    This split-function pass will split operations/loops scheduled at the same
-    dataflow level into a separate sub-function for applying the dataflow pragma
-    to the top function.
-  }];
-
-  let constructor = "mlir::scalehls::createSplitFunctionPass()";
 }
 
 //===----------------------------------------------------------------------===//

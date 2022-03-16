@@ -62,9 +62,8 @@ void scalehls::registerScaleHLSDSEPipeline() {
         // If AXI interfaces are created, we need to dataflow the program to
         // hide the latency of data load/store from/to external memories.
         if (opts.hlsAxiInterf) {
-          pm.addPass(scalehls::createLegalizeDataflowPass(
+          pm.addPass(scalehls::createFuncDataflowPass(
               /*dataflowGran=*/(unsigned)1, /*dataflowInsertCopy=*/false));
-          pm.addPass(scalehls::createSplitFunctionPass());
           pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
         }
 
@@ -129,8 +128,7 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(scalehls::createSimplifyTosaGraphPass());
         if (dataflowGran)
-          pm.addPass(scalehls::createLegalizeDataflowPass(dataflowGran));
-        pm.addPass(scalehls::createSplitFunctionPass());
+          pm.addPass(scalehls::createFuncDataflowPass(dataflowGran));
         pm.addPass(tosa::createTosaToLinalgNamed());
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(tosa::createTosaToLinalg());

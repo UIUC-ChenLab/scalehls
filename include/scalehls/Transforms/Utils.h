@@ -96,13 +96,8 @@ bool applyLegalizeToHLSCpp(FuncOp func, bool topFunc, bool axiInterf = false);
 // Graph transform utils
 //===----------------------------------------------------------------------===//
 
-/// Legalize the dataflow of "block", whose parent operation must be a function
-/// or affine loop. Return false if the legalization failed, for example, the
-/// dataflow has cycles.
-bool applyLegalizeDataflow(Block &block, int64_t minGran, bool insertCopy);
-
-/// Split each dataflow stage of "block" into a separate sub-function.
-bool applySplitFunction(Block &block);
+/// Apply dataflow (coarse-grained pipeline) to the block.
+bool applyDataflow(Block &block, unsigned minGran, bool insertCopy);
 
 /// Apply optimization strategy to a loop band. The ancestor function is also
 /// passed in because the post-tiling optimizations have to take function as

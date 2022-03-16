@@ -31,11 +31,9 @@ std::unique_ptr<Pass> createMultipleLevelDSEPass(std::string dseTargetSpec);
 /// Graph optimization passes.
 std::unique_ptr<Pass> createFakeQuantizePass();
 std::unique_ptr<Pass> createSimplifyTosaGraphPass();
-std::unique_ptr<Pass> createLegalizeDataflowPass();
-std::unique_ptr<Pass>
-createLegalizeDataflowPass(unsigned dataflowGran,
-                           bool dataflowInsertCopy = true);
-std::unique_ptr<Pass> createSplitFunctionPass();
+std::unique_ptr<Pass> createFuncDataflowPass();
+std::unique_ptr<Pass> createFuncDataflowPass(unsigned dataflowGran,
+                                             bool dataflowInsertCopy = true);
 std::unique_ptr<Pass> createConvertCopyToAffineLoopsPass();
 
 /// Runtime-related passes.
