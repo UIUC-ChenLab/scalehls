@@ -97,6 +97,12 @@ def FuncDataflow : Pass<"scalehls-func-dataflow", "ModuleOp"> {
   ];
 }
 
+def TosaToLinalgCleanup : Pass<"scalehls-tosa-to-linalg-cleanup", "FuncOp"> {
+  let summary = "Lower tosa::ReshapeOp and tensor::PadOp";
+
+  let constructor = "mlir::scalehls::createTosaToLinalgCleanupPass()";
+}
+
 //===----------------------------------------------------------------------===//
 // Runtime-related Passes
 //===----------------------------------------------------------------------===//

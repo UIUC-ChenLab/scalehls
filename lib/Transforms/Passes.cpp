@@ -129,8 +129,10 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         pm.addPass(scalehls::createSimplifyTosaGraphPass());
         if (dataflowGran)
           pm.addPass(scalehls::createFuncDataflowPass(dataflowGran));
+        pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(tosa::createTosaToLinalgNamed());
         pm.addPass(mlir::createCanonicalizerPass());
+        pm.addPass(scalehls::createTosaToLinalgCleanupPass());
         pm.addPass(tosa::createTosaToLinalg());
         pm.addPass(tosa::createTosaToStandard());
 
@@ -162,7 +164,7 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
           pm.addPass(scalehls::createAffineLoopUnrollJamPass(loopUnrollSize));
         }
 
-        // Apply simplifications.
+        // Apply memory optimizations.
         pm.addPass(mlir::createAffineLoopNormalizePass());
         pm.addPass(mlir::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
