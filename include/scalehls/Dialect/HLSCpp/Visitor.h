@@ -10,10 +10,10 @@
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "scalehls/Dialect/HLSCpp/HLSCpp.h"
@@ -56,7 +56,7 @@ public:
             MulPrimOp, CastPrimOp, AssignOp,
 
             // Control flow operations.
-            CallOp, ReturnOp,
+            func::CallOp, func::ReturnOp,
 
             // Unary expressions.
             math::AbsOp, math::CeilOp, math::CosOp, math::SinOp, math::TanhOp,
@@ -151,8 +151,8 @@ public:
   HANDLE(AssignOp);
 
   // Control flow operations.
-  HANDLE(CallOp);
-  HANDLE(ReturnOp);
+  HANDLE(func::CallOp);
+  HANDLE(func::ReturnOp);
 
   // Unary expressions.
   HANDLE(math::AbsOp);

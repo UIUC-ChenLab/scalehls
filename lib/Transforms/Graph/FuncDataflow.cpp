@@ -87,8 +87,8 @@ DataflowGraph::DataflowGraph(Block &block) {
   for (auto &op : block) {
     // TODO: Some operations are dataflow source/sink/call node, which will not
     // be scheduled. Any other operations should appear here?
-    if (isa<tosa::ConstOp, arith::ConstantOp, CallOp, ReturnOp, AffineYieldOp,
-            scf::YieldOp>(op) ||
+    if (isa<tosa::ConstOp, arith::ConstantOp, func::CallOp, func::ReturnOp,
+            AffineYieldOp, scf::YieldOp>(op) ||
         (op.getNumResults() == 1 &&
          op.getResult(0).getType().isa<MemRefType>()))
       continue;
@@ -102,7 +102,7 @@ DataflowGraph::DataflowGraph(Block &block) {
         // to make sure all the updaters of a memory are scheduled into the same
         // dataflow level.
         auto sameBlockUser = block.findAncestorOpInBlock(*user);
-        if (!sameBlockUser || isa<ReturnOp>(sameBlockUser) ||
+        if (!sameBlockUser || isa<func::ReturnOp>(sameBlockUser) ||
             !DT.properlyDominates(&op, sameBlockUser) ||
             resultsMap.lookup(sameBlockUser).count(result))
           continue;
@@ -321,7 +321,7 @@ static bool createSubFunction(Block &block, ArrayRef<Operation *> ops,
 
   // Create a function call and reconnect all inputs and outputs.
   builder.setInsertionPointAfter(ops.back());
-  auto call = builder.create<CallOp>(loc, subFunc, inputValues);
+  auto call = builder.create<func::CallOp>(loc, subFunc, inputValues);
   unsigned outputIdx = 0;
   for (auto result : call.getResults())
     outputValues[outputIdx++].replaceAllUsesWith(result);
@@ -329,7 +329,7 @@ static bool createSubFunction(Block &block, ArrayRef<Operation *> ops,
   // Create new return operation in the new created function.
   auto entry = subFunc.addEntryBlock();
   builder.setInsertionPointToEnd(entry);
-  auto returnOp = builder.create<ReturnOp>(loc, outputValues);
+  auto returnOp = builder.create<func::ReturnOp>(loc, outputValues);
 
   // Move local buffers into the new created function.
   for (auto localOp : localOps)

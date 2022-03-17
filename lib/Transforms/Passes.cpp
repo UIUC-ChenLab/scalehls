@@ -8,9 +8,9 @@
 #include "mlir/Conversion/Passes.h"
 #include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/Dialect/Bufferization/Transforms/Passes.h"
+#include "mlir/Dialect/Func/Transforms/Passes.h"
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
-#include "mlir/Dialect/StandardOps/Transforms/Passes.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
 
@@ -140,7 +140,7 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         // Lower graph to affine.
         pm.addPass(mlir::createLinalgGeneralizationPass());
         pm.addPass(mlir::createLinalgBufferizePass());
-        pm.addPass(mlir::createFuncBufferizePass());
+        pm.addPass(func::createFuncBufferizePass());
         pm.addPass(bufferization::createBufferResultsToOutParamsPass());
         pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
         pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
