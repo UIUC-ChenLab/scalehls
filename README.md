@@ -92,3 +92,13 @@ The project follows the conventions of typical MLIR-based projects:
 - `samples` for C/C++ and PyTorch examples.
 - `test` for holding regression tests.
 - `tools` for command line tools.
+
+cmake -G Ninja \
+  .. \
+  -DMLIR_DIR="$PWD/../../build/lib/cmake/mlir" \
+  -DLLVM_DIR="$PWD/../../build/lib/cmake/llvm" \
+  -DLLVM_ENABLE_ASSERTIONS=ON \
+  -DCMAKE_BUILD_TYPE=DEBUG \
+  -DLLVM_USE_LINKER=lld \
+  -DCMAKE_C_COMPILER=clang \
+  -DCMAKE_CXX_COMPILER=clang++

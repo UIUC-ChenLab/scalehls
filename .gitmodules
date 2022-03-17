@@ -1,3 +1,8 @@
 [submodule "polygeist"]
 	path = polygeist
 	url = git@github.com:hanchenye/Polygeist.git
+
+[submodule "polymer"]
+	path = polymer
+	url = git@github.com:hanchenye/polymer.git
+
