@@ -153,6 +153,11 @@ def ConvertCopyToAffineLoops :
   }];
 
   let constructor = "mlir::scalehls::createConvertCopyToAffineLoopsPass()";
+
+  let options = [
+    Option<"internCopyOnly", "intern-copy-only", "bool", /*default=*/"true",
+           "only convert copy between internal memories">
+  ];
 }
 
 def MaterializeReduction : Pass<"scalehls-materialize-reduction", "FuncOp"> {
@@ -238,11 +243,9 @@ def AffineLoopUnrollJam : Pass<"scalehls-affine-loop-unroll-jam", "FuncOp"> {
 def AffineLoopDataflow : Pass<"scalehls-affine-loop-dataflow", "ModuleOp"> {
   let summary = "Apply dataflow to affine loops";
   let description = [{
-    This affine-loop-dataflow pass will first legalize the dataflow scheduling
-    to meet the requirements of the dataflow pragma: 1) single-producer
-    single-consumer; 2) no bypass paths. Then, it will split operations/loops
-    scheduled at the same dataflow level into a separate sub-function and apply
-    the dataflow directive to the top function.
+    This affine-loop-dataflow pass will apply dataflow pipeline to the innermost
+    loop that have more than one child loops, such that the loads, computation,
+    and stores in the loop body can work in a pipeline manner.
   }];
 
   let constructor = "mlir::scalehls::createAffineLoopDataflowPass()";

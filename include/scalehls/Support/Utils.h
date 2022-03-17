@@ -74,8 +74,12 @@ int64_t getPartitionFactors(MemRefType memrefType,
 
 bool isFullyPartitioned(MemRefType memrefType);
 
-/// Given a tiled loop band, return true and get the tile (tile-space) loop band
-/// and the point (intra-tile) loop band. If failed, return false.
+/// This is method for finding the number of child loops which immediatedly
+/// contained by the input operation.
+unsigned getChildLoopNum(Operation *op);
+
+/// Given a tiled loop band, return true and get the tile (tile-space) loop
+/// band and the point (intra-tile) loop band. If failed, return false.
 bool getTileAndPointLoopBand(const AffineLoopBand &band,
                              AffineLoopBand &tileBand,
                              AffineLoopBand &pointBand);

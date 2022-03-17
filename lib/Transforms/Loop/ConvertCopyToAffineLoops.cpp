@@ -170,8 +170,8 @@ struct ReshapeOpLoweringPattern : public OpRewritePattern<tensor::ReshapeOp> {
 
 namespace {
 struct CopyOpLoweringPattern : public OpRewritePattern<memref::CopyOp> {
-  CopyOpLoweringPattern(MLIRContext *context, bool lowerAxiInterfCopy = false)
-      : OpRewritePattern(context), lowerAxiInterfCopy(lowerAxiInterfCopy) {}
+  CopyOpLoweringPattern(MLIRContext *context, bool internCopyOnly = true)
+      : OpRewritePattern(context), internCopyOnly(internCopyOnly) {}
 
   using OpRewritePattern<memref::CopyOp>::OpRewritePattern;
 
@@ -185,7 +185,7 @@ struct CopyOpLoweringPattern : public OpRewritePattern<memref::CopyOp> {
             (unsigned)MemoryKind::DRAM;
 
     // Return failure if we don't need to lower copy op with AXI interfaces.
-    if (!lowerAxiInterfCopy && isAxiInterf)
+    if (internCopyOnly && isAxiInterf)
       return failure();
 
     rewriter.setInsertionPoint(copy);
@@ -213,13 +213,18 @@ struct CopyOpLoweringPattern : public OpRewritePattern<memref::CopyOp> {
   }
 
 private:
-  bool lowerAxiInterfCopy = false;
+  bool internCopyOnly = true;
 };
 } // namespace
 
 namespace {
 struct ConvertCopyToAffineLoops
     : public ConvertCopyToAffineLoopsBase<ConvertCopyToAffineLoops> {
+  ConvertCopyToAffineLoops() = default;
+  ConvertCopyToAffineLoops(bool convertInternCopyOnly) {
+    internCopyOnly = convertInternCopyOnly;
+  }
+
   void runOnOperation() override {
     auto module = getOperation();
     auto context = module.getContext();
@@ -234,12 +239,13 @@ struct ConvertCopyToAffineLoops
 
     // Lower copy and assign operation.
     patterns.clear();
-    patterns.add<CopyOpLoweringPattern>(context);
+    patterns.add<CopyOpLoweringPattern>(context, internCopyOnly);
     (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
   }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createConvertCopyToAffineLoopsPass() {
-  return std::make_unique<ConvertCopyToAffineLoops>();
+std::unique_ptr<Pass>
+scalehls::createConvertCopyToAffineLoopsPass(bool convertInternCopyOnly) {
+  return std::make_unique<ConvertCopyToAffineLoops>(convertInternCopyOnly);
 }

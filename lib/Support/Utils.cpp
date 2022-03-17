@@ -265,7 +265,7 @@ int64_t scalehls::getPartitionFactors(MemRefType memrefType,
 
 /// This is method for finding the number of child loops which immediatedly
 /// contained by the input operation.
-static unsigned getChildLoopNum(Operation *op) {
+unsigned scalehls::getChildLoopNum(Operation *op) {
   unsigned childNum = 0;
   for (auto &region : op->getRegions())
     for (auto &block : region)

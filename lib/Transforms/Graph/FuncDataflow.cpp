@@ -6,7 +6,6 @@
 
 #include "mlir/Analysis/Liveness.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
-#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
@@ -50,17 +49,17 @@ DataflowGraph::DataflowGraph(Block &block) {
   DenseMap<Operation *, llvm::SmallDenseSet<Value, 2>> resultsMap;
 
   for (auto &op : block) {
-    // Handle Linalg dialect operations.
-    if (isa<linalg::LinalgDialect>(op.getDialect())) {
-      auto generic = dyn_cast<linalg::GenericOp>(op);
-      if (!generic || !generic.hasBufferSemantics()) {
-        op.emitOpError("found ungeneralized or unbufferized linalg ops");
-        return;
-      }
-      for (auto result : generic.getOutputOperands())
-        resultsMap[&op].insert(result->get());
-      continue;
-    }
+    // // Handle Linalg dialect operations.
+    // if (isa<linalg::LinalgDialect>(op.getDialect())) {
+    //   auto generic = dyn_cast<linalg::GenericOp>(op);
+    //   if (!generic || !generic.hasBufferSemantics()) {
+    //     op.emitOpError("found ungeneralized or unbufferized linalg ops");
+    //     return;
+    //   }
+    //   for (auto result : generic.getOutputOperands())
+    //     resultsMap[&op].insert(result->get());
+    //   continue;
+    // }
 
     // Handle copy operations.
     if (auto copy = dyn_cast<memref::CopyOp>(op))
@@ -72,7 +71,6 @@ DataflowGraph::DataflowGraph(Block &block) {
       // TODO: Support transfer write?
       if (auto affineStore = dyn_cast<mlir::AffineWriteOpInterface>(child)) {
         resultsMap[&op].insert(affineStore.getMemRef());
-
       } else if (auto store = dyn_cast<memref::StoreOp>(child))
         resultsMap[&op].insert(store.getMemRef());
     });
@@ -89,19 +87,24 @@ DataflowGraph::DataflowGraph(Block &block) {
   for (auto &op : block) {
     // TODO: Some operations are dataflow source/sink/call node, which will not
     // be scheduled. Any other operations should appear here?
-    if (isa<memref::GetGlobalOp, memref::AllocOp, memref::AllocaOp,
-            bufferization::ToMemrefOp, tosa::ConstOp, arith::ConstantOp,
-            linalg::InitTensorOp, CallOp, ReturnOp>(op))
+    if (isa<tosa::ConstOp, arith::ConstantOp, CallOp, ReturnOp, AffineYieldOp,
+            scf::YieldOp>(op) ||
+        (op.getNumResults() == 1 &&
+         op.getResult(0).getType().isa<MemRefType>()))
       continue;
     nodes.insert(&op);
 
     for (auto result : resultsMap.lookup(&op)) {
       for (auto user : result.getUsers()) {
-        // If the same block user doesn't exist, or is not properly dominated,
-        // or is also an updater of the result, continue.
+        // If the same block user doesn't exist, or is a return operation, or is
+        // not properly dominated, continue. Meanwhile, if the same block user
+        // is another updater of the result, continue. The rationale is we want
+        // to make sure all the updaters of a memory are scheduled into the same
+        // dataflow level.
         auto sameBlockUser = block.findAncestorOpInBlock(*user);
         if (!sameBlockUser || isa<ReturnOp>(sameBlockUser) ||
-            !DT.properlyDominates(&op, sameBlockUser))
+            !DT.properlyDominates(&op, sameBlockUser) ||
+            resultsMap.lookup(sameBlockUser).count(result))
           continue;
 
         // Only push back non-exist uses.
@@ -246,7 +249,7 @@ static bool createSubFunction(Block &block, ArrayRef<Operation *> ops,
   // Internal values of the sub-function.
   llvm::SmallDenseSet<Value, 16> internalValues;
 
-  for (auto op : ops)
+  for (auto op : ops) {
     for (auto result : op->getResults()) {
       internalValues.insert(result);
       if (isLiveOut(result)) {
@@ -254,6 +257,10 @@ static bool createSubFunction(Block &block, ArrayRef<Operation *> ops,
         outputValues.push_back(result);
       }
     }
+    op->walk([&](AffineForOp loop) {
+      internalValues.insert(loop.getInductionVar());
+    });
+  }
 
   // Input types and values of the sub-function.
   SmallVector<Type, 8> inputTypes;
@@ -275,15 +282,14 @@ static bool createSubFunction(Block &block, ArrayRef<Operation *> ops,
     }
 
     for (auto input : inputCandidates) {
-      // If the current input is a induction variable or internal value, it
-      // doesn't needs to be passed in as argument.
-      if (isForInductionVar(input) || internalValues.count(input))
+      // If the current input is an internal value, it doesn't needs to be
+      // passed in as argument.
+      if (internalValues.count(input))
         continue;
 
       if (auto defOp = input.getDefiningOp()) {
         // If the current input is not a liveout and it's defined by an memref
-        // alloc/alloca/get_global or tensor_init op, it is a local buffer and
-        // can be localized later.
+        // alloc/alloca op, it is a local buffer and can be localized later.
         if (!isLiveOut(input) &&
             isa<memref::AllocOp, memref::AllocaOp>(defOp)) {
           localOps.insert(defOp);
@@ -432,11 +438,11 @@ struct FuncDataflow : public FuncDataflowBase<FuncDataflow> {
   void runOnOperation() override {
     auto module = getOperation();
 
-    // Split each functions in the module.
+    // Dataflow each functions in the module.
     for (auto func : llvm::make_early_inc_range(module.getOps<FuncOp>()))
       applyDataflow(func.front(), gran, balance);
 
-    // Simplify copy and assign operations generated by LegalizeDataflow.
+    // Simplify copy and assign operations generated by dataflowing.
     auto context = module.getContext();
     mlir::RewritePatternSet patterns(context);
     patterns.add<ReshapeOpRewritePattern>(context);

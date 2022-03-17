@@ -45,7 +45,8 @@ std::unique_ptr<Pass> createLegalizeToHLSCppPass(std::string hlsTopFunc,
                                                  bool hlsAxiInterf = false);
 
 /// Loop optimization passes.
-std::unique_ptr<Pass> createConvertCopyToAffineLoopsPass();
+std::unique_ptr<Pass>
+createConvertCopyToAffineLoopsPass(bool convertInternCopyOnly = true);
 std::unique_ptr<Pass> createMaterializeReductionPass();
 std::unique_ptr<Pass> createAffineLoopPerfectionPass();
 std::unique_ptr<Pass> createRemoveVariableBoundPass();

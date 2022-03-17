@@ -216,6 +216,7 @@ void scalehls::registerScaleHLSTestPipeline() {
         pm.addPass(mlir::createAffineLoopNormalizePass());
         pm.addPass(mlir::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
+        pm.addPass(scalehls::createAffineLoopOrderOptPass());
 
         pm.addPass(scalehls::createCreateMemrefSubviewPass());
         pm.addPass(mlir::createCSEPass());
@@ -223,7 +224,8 @@ void scalehls::registerScaleHLSTestPipeline() {
 
         pm.addPass(scalehls::createPromoteBufferPass());
         pm.addPass(bufferization::createBufferLoopHoistingPass());
-        pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
+        pm.addPass(scalehls::createConvertCopyToAffineLoopsPass(
+            /*convertInternCopyOnly=*/false));
         pm.addPass(memref::createFoldSubViewOpsPass());
         pm.addPass(mlir::createAffineLoopNormalizePass());
         pm.addPass(mlir::createSimplifyAffineStructuresPass());
@@ -242,6 +244,8 @@ void scalehls::registerScaleHLSTestPipeline() {
 
         pm.addPass(scalehls::createLoopPipeliningPass());
         pm.addPass(scalehls::createArrayPartitionPass());
+        pm.addPass(scalehls::createAffineLoopDataflowPass(
+            /*dataflowGran=*/1, /*dataflowBalance=*/false));
       });
 }
 

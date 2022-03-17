@@ -22,15 +22,17 @@ struct AffineLoopDataflow : public AffineLoopDataflowBase<AffineLoopDataflow> {
   void runOnOperation() override {
     auto module = getOperation();
 
-    // Split each functions in the module.
+    // Dataflow each function in the module.
     for (auto func : llvm::make_early_inc_range(module.getOps<FuncOp>())) {
       // Collect all target loop bands.
       AffineLoopBands targetBands;
-      getLoopBands(func.front(), targetBands);
+      getLoopBands(func.front(), targetBands, /*allowHavingChilds=*/true);
 
-      // Apply loop pipelining to corresponding level of each innermost loop.
+      // Apply loop dataflow to each innermost loop that has more than one
+      // child loops.
       for (auto &band : targetBands)
-        applyDataflow(*band.back().getBody(), gran, balance);
+        if (getChildLoopNum(band.back()) > 1)
+          applyDataflow(*band.back().getBody(), gran, balance);
     }
   }
 };
