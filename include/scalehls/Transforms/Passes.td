@@ -77,6 +77,12 @@ def SimplifyTosaGraph : Pass<"scalehls-simplify-tosa-graph", "FuncOp"> {
   let constructor = "mlir::scalehls::createSimplifyTosaGraphPass()";
 }
 
+def HeuristicNodeFusion : Pass<"scalehls-heuristic-node-fusion", "ModuleOp"> {
+  let summary = "Heuristic node fusion on TOSA operations";
+
+  let constructor = "mlir::scalehls::createHeuristicNodeFusionPass()";
+}
+
 def FuncDataflow : Pass<"scalehls-func-dataflow", "ModuleOp"> {
   let summary = "Apply dataflow to functions";
   let description = [{
