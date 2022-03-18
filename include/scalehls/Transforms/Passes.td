@@ -381,6 +381,16 @@ def SimplifyMemrefAccess : Pass<"scalehls-simplify-memref-access", "FuncOp"> {
   let constructor = "mlir::scalehls::createSimplifyMemrefAccessPass()";
 }
 
+def RaiseImplicitCopy : Pass<"scalehls-raise-implicit-copy", "FuncOp"> {
+  let summary = "Raise copy in affine loops to memref.copy";
+  let description = [{
+    This raise-implicit-copy pass will detect implicit copy in affine loops and
+    raise to memref.copy in order to eliminate redundant copies.
+  }];
+
+  let constructor = "mlir::scalehls::createRaiseImplicitCopyPass()";
+}
+
 def ReduceInitialInterval : Pass<"scalehls-reduce-initial-interval", "FuncOp"> {
   let summary = "Try to reduce the intiail interval";
   let description = [{

@@ -69,6 +69,7 @@ std::unique_ptr<Pass> createCreateMemrefSubviewPass();
 std::unique_ptr<Pass> createPromoteBufferPass();
 std::unique_ptr<Pass> createAffineStoreForwardPass();
 std::unique_ptr<Pass> createSimplifyMemrefAccessPass();
+std::unique_ptr<Pass> createRaiseImplicitCopyPass();
 std::unique_ptr<Pass> createReduceInitialIntervalPass();
 
 /// Directive optimization passes.
