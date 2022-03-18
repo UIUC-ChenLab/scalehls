@@ -353,22 +353,7 @@ static bool createSubFunction(Block &block, ArrayRef<Operation *> ops,
 /// Split each dataflow stage of "block" into a separate sub-function.
 static bool applySplitFunction(Block &block) {
   auto builder = OpBuilder(block.getParentOp());
-
-  // Collect all constants that have more than one use.
-  SmallVector<tosa::ConstOp, 16> constants;
-  block.walk([&](tosa::ConstOp constant) {
-    if (!constant->hasOneUse())
-      constants.push_back(constant);
-  });
-  // Localize constants to each of its use.
-  for (auto constant : constants) {
-    for (auto &use : llvm::make_early_inc_range(constant->getUses())) {
-      auto cloneConstant = constant->clone();
-      builder.setInsertionPoint(use.getOwner());
-      builder.insert(cloneConstant);
-      use.set(cloneConstant->getResult(0));
-    }
-  }
+  localizeConstants(block);
 
   // Split sub-functions.
   DenseMap<int64_t, SmallVector<Operation *, 8>> dataflowOps;

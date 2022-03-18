@@ -41,7 +41,7 @@ struct FakeQuantize : public FakeQuantizeBase<FakeQuantize> {
 
     // Convert the type of operation results. Also, handle function, constant,
     // conv2d, and matmul operations.
-    int8_t fakeIdx = 0;
+    int8_t fakeIdx = 1;
     module.walk([&](Operation *op) {
       for (auto result : op->getResults())
         if (auto quantType = getQuantizeType(result.getType())) {

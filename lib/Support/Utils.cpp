@@ -10,6 +10,7 @@
 #include "mlir/Dialect/Affine/Analysis/Utils.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
+#include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 
 using namespace mlir;
@@ -420,6 +421,28 @@ bool scalehls::checkDependence(Operation *A, Operation *B) {
   }
 
   return false;
+}
+
+/// Localize each tosa/arith constant to right before its each use.
+void scalehls::localizeConstants(Block &block) {
+  auto builder = OpBuilder(block.getParentOp());
+
+  // Collect all constants that have more than one use.
+  SmallVector<Operation *, 16> constants;
+  block.walk([&](Operation *constant) {
+    if (isa<tosa::ConstOp, arith::ConstantOp>(constant) &&
+        !constant->hasOneUse())
+      constants.push_back(constant);
+  });
+  // Localize constants to each of its use.
+  for (auto constant : constants) {
+    for (auto &use : llvm::make_early_inc_range(constant->getUses())) {
+      auto cloneConstant = constant->clone();
+      builder.setInsertionPoint(use.getOwner());
+      builder.insert(cloneConstant);
+      use.set(cloneConstant->getResult(0));
+    }
+  }
 }
 
 //===----------------------------------------------------------------------===//

@@ -102,6 +102,9 @@ Optional<unsigned> getAverageTripCount(AffineForOp forOp);
 
 bool checkDependence(Operation *A, Operation *B);
 
+/// Localize each tosa/arith constant to right before its each use.
+void localizeConstants(Block &block);
+
 //===----------------------------------------------------------------------===//
 // PtrLikeMemRefAccess Struct Declaration
 //===----------------------------------------------------------------------===//
