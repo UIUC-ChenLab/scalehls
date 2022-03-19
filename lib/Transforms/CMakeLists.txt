@@ -3,9 +3,11 @@ add_mlir_library(MLIRScaleHLSTransforms
   Directive/CreateHLSCppPrimitive.cpp
   Directive/FuncPipelining.cpp
   Directive/LoopPipelining.cpp
+  Graph/CreateTokenFlow.cpp
   Graph/FakeQuantize.cpp
   Graph/FuncDataflow.cpp
   Graph/HeuristicNodeFusion.cpp
+  Graph/HoistStreamChannel.cpp
   Graph/SimplifyTosaGraph.cpp
   Graph/TosaToLinalgCleanup.cpp
   Loop/AffineLoopDataflow.cpp

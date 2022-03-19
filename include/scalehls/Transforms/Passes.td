@@ -83,6 +83,16 @@ def HeuristicNodeFusion : Pass<"scalehls-heuristic-node-fusion", "ModuleOp"> {
   let constructor = "mlir::scalehls::createHeuristicNodeFusionPass()";
 }
 
+def CreateTokenFlow : Pass<"scalehls-create-token-flow", "ModuleOp"> {
+  let summary = "Create a token flow based on the dataflow";
+  let description = [{
+    This create-token-flow pass will create a token flow to represent the
+    dependency graph of the original dataflow.
+  }];
+
+  let constructor = "mlir::scalehls::createCreateTokenFlowPass()";
+}
+
 def FuncDataflow : Pass<"scalehls-func-dataflow", "ModuleOp"> {
   let summary = "Apply dataflow to functions";
   let description = [{
@@ -107,6 +117,16 @@ def TosaToLinalgCleanup : Pass<"scalehls-tosa-to-linalg-cleanup", "FuncOp"> {
   let summary = "Lower tosa::ReshapeOp and tensor::PadOp";
 
   let constructor = "mlir::scalehls::createTosaToLinalgCleanupPass()";
+}
+
+def HoistStreamChannel : Pass<"scalehls-hoist-stream-channel", "ModuleOp"> {
+  let summary = "Hoist stream channel from sub-function to top-function";
+  let description = [{
+    This is similar to what buffer-result-to-out-param pass has done to memrefs
+    in sub-functions.
+  }];
+
+  let constructor = "mlir::scalehls::createHoistStreamChannelPass()";
 }
 
 //===----------------------------------------------------------------------===//

@@ -32,10 +32,12 @@ std::unique_ptr<Pass> createMultipleLevelDSEPass(std::string dseTargetSpec);
 std::unique_ptr<Pass> createFakeQuantizePass();
 std::unique_ptr<Pass> createSimplifyTosaGraphPass();
 std::unique_ptr<Pass> createHeuristicNodeFusionPass();
+std::unique_ptr<Pass> createCreateTokenFlowPass();
 std::unique_ptr<Pass> createFuncDataflowPass();
 std::unique_ptr<Pass> createFuncDataflowPass(unsigned dataflowGran,
                                              bool dataflowBalance = true);
 std::unique_ptr<Pass> createTosaToLinalgCleanupPass();
+std::unique_ptr<Pass> createHoistStreamChannelPass();
 
 /// Runtime-related passes.
 std::unique_ptr<Pass> createCreateRuntimeMainPass();
