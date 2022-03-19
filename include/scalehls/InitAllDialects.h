@@ -9,6 +9,7 @@
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/Dialect/DLTI/DLTI.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
@@ -38,7 +39,8 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
     mlir::vector::VectorDialect,
     mlir::scf::SCFDialect,
     mlir::scalehls::hlscpp::HLSCppDialect,
-    mlir::LLVM::LLVMDialect
+    mlir::LLVM::LLVMDialect,
+    mlir::DLTIDialect
   >();
   // clang-format on
 }
