@@ -7,10 +7,6 @@
 #ifndef SCALEHLS_DIALECT_HLSCPP_ATTRIBUTES_TD
 #define SCALEHLS_DIALECT_HLSCPP_ATTRIBUTES_TD
 
-class HLSCppAttr<string name, list<Trait> traits = [],
-                 string baseCppClass = "::mlir::Attribute">
-    : AttrDef<HLSCppDialect, name, traits, baseCppClass>;
-
 def Resource : HLSCppAttr<"Resource"> {
   let summary = "Resource utilization information";
   let description = [{

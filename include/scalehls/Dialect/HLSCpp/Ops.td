@@ -4,10 +4,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_DIALECT_HLSCPP_STRUCTUREOPS_TD
-#define SCALEHLS_DIALECT_HLSCPP_STRUCTUREOPS_TD
+#ifndef SCALEHLS_DIALECT_HLSCPP_OPS_TD
+#define SCALEHLS_DIALECT_HLSCPP_OPS_TD
 
 include "mlir/Interfaces/SideEffectInterfaces.td"
+
+//===----------------------------------------------------------------------===//
+// Primitive Operations
+//===----------------------------------------------------------------------===//
 
 def MulPrimOp : HLSCppOp<"mul_prim", [NoSideEffect]> {
   let summary = "Multiplication primitive operation";
@@ -62,4 +66,4 @@ def AssignOp : HLSCppOp<"assign",
   let results = (outs AnyType : $output);
 }
 
-#endif // SCALEHLS_DIALECT_HLSCPP_STRUCTUREOPS_TD
+#endif // SCALEHLS_DIALECT_HLSCPP_OPS_TD

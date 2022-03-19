@@ -18,19 +18,21 @@ using namespace hlscpp;
 //===----------------------------------------------------------------------===//
 
 void HLSCppDialect::initialize() {
-  addOperations<
-#define GET_OP_LIST
-#include "scalehls/Dialect/HLSCpp/HLSCpp.cpp.inc"
+  addTypes<
+#define GET_TYPEDEF_LIST
+#include "scalehls/Dialect/HLSCpp/HLSCppTypes.cpp.inc"
       >();
 
   addAttributes<
 #define GET_ATTRDEF_LIST
 #include "scalehls/Dialect/HLSCpp/HLSCppAttributes.cpp.inc"
       >();
-}
 
-#define GET_ATTRDEF_CLASSES
-#include "scalehls/Dialect/HLSCpp/HLSCppAttributes.cpp.inc"
+  addOperations<
+#define GET_OP_LIST
+#include "scalehls/Dialect/HLSCpp/HLSCpp.cpp.inc"
+      >();
+}
 
 //===----------------------------------------------------------------------===//
 // MulPrimOp
@@ -244,10 +246,14 @@ void AssignOp::getCanonicalizationPatterns(RewritePatternSet &results,
 // Include tablegen classes
 //===----------------------------------------------------------------------===//
 
+#include "scalehls/Dialect/HLSCpp/HLSCppDialect.cpp.inc"
 #include "scalehls/Dialect/HLSCpp/HLSCppEnums.cpp.inc"
+
+#define GET_TYPEDEF_CLASSES
+#include "scalehls/Dialect/HLSCpp/HLSCppTypes.cpp.inc"
+
+#define GET_ATTRDEF_CLASSES
+#include "scalehls/Dialect/HLSCpp/HLSCppAttributes.cpp.inc"
 
 #define GET_OP_CLASSES
 #include "scalehls/Dialect/HLSCpp/HLSCpp.cpp.inc"
-#undef GET_OP_CLASSES
-
-#include "scalehls/Dialect/HLSCpp/HLSCppDialect.cpp.inc"
