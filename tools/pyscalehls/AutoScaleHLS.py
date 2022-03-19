@@ -5,8 +5,12 @@ import shutil
 import pandas as pd
 import argparse
 import copy
+
+from sklearn import tree
 import treelib
 import json
+
+import re
 
 #AutoHLS dependencies
 from lib import RandInit as RT
@@ -170,47 +174,60 @@ def main():
     for item in tree_list:
         item.show(idhidden=False)
 
-    target1 = treelib.Tree(tree_list[3].subtree("matrix_vector_product_with_bias_input_layer"), deep=True)
-    target1.show(idhidden=False)
-    DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", dse_target, 0.30, "cg", target1)
+    # isbreak = input("\n\nBreak\n")
+    
+    # target = treelib.Tree(tree_list[0].subtree("kernel_atax"), deep=True)
+    # target.show()
+    # DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", dse_target, 1, target)   
 
-    # target2 = treelib.Tree(tree_list[0].subtree("dotProduct"), deep=True)
-    # target2.show()
-    # DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", dse_target, 0.35, "dp", target2)
+    pareto_space_list = []
+    for i in range(len(tree_list) - 2):
+        target = treelib.Tree(tree_list[i].subtree(tree_list[i][tree_list[i].root].identifier), deep=True)
+        DFS_list = [target[node] for node in target.expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
+        do_SDSE = True
+        has_loops = False
+        for DFS_node in DFS_list: 
+            if re.findall(r'(Loop)', DFS_node.tag):
+                has_loops = True
+            for item in var_forlist:
+                if (item != ''): 
+                    #check if variable loops are at top level of loop band
+                    if (target.level(DFS_node.identifier) == 1) and (DFS_node.tag == item[0]) and (item[-1] == "Variable"):
+                        do_SDSE = False
+        if do_SDSE and has_loops:
+            suc_fail, buffer = DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", dse_target, 0.30, target)
+            if suc_fail:
+                pareto_space_list = pareto_space_list + buffer
 
-    # target3 = treelib.Tree(tree_list[0].subtree("updateParameter"), deep=True)
-    # target3.show()
-    # DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", dse_target, 0.35, "up", target3)
+    for item in pareto_space_list:
+        print(item[0])
 
-    # DPAT.cull_function_by_pattern(inputtop, tar_dir, tar_dir + "/ML_in.cpp", "1", target)    
+    combined_list = []
+    DPAT.combine_two_spaces(pareto_space_list, combined_list, "Loop0", "Loop1")
 
-
-
-
-
-    #create paramfile
+    # #create paramfile
     # INPAR.create_params(tar_dir, var_forlist, var_arraylist_sized)
 
-    #create template
+    # #create template
     # INPAR.create_template(tar_dir, source_file, inputfiles, template)
 
-    #Create Random Training Set
-    val = ""
-    while val == "":
-        val = input("Generate Random Training Set? (Y / N)\n")
-        # val = "n"
-        if((val == "Y") or (val == "y") or (val == "yes")):
-            dataset, feature_columns = RT.random_train_RFML(tar_dir, inputtop, inputpart, multiprocess = 4, nub_of_init = 20)
-            print(dataset)
-        elif((val == "N") or (val == "n") or (val == "no")):
-            parameter_file = tar_dir + '/ML_params.csv'
-            dataset, feature_columns, label_columns = RT.dataframe_create(parameter_file)
-            dataset = pd.read_csv(tar_dir + '/ML_train.csv', index_col=0)
-            # dataset = pd.read_csv('generated_files/ML_train(2mm).csv', index_col=0)
-            print(dataset)
+    # #Create Random Training Set
+    # val = ""
+    # while val == "":
+    #     val = input("Generate Random Training Set? (Y / N)\n")
+    #     # val = "n"
+    #     if((val == "Y") or (val == "y") or (val == "yes")):
+    #         dataset, feature_columns = RT.random_train_RFML(tar_dir, inputtop, inputpart, multiprocess = 4, nub_of_init = 20)
+    #         print(dataset)
+    #     elif((val == "N") or (val == "n") or (val == "no")):
+    #         parameter_file = tar_dir + '/ML_params.csv'
+    #         dataset, feature_columns, label_columns = RT.dataframe_create(parameter_file)
+    #         dataset = pd.read_csv(tar_dir + '/ML_train.csv', index_col=0)
+    #         # dataset = pd.read_csv('generated_files/ML_train(2mm).csv', index_col=0)
+    #         print(dataset)
 
 
-    DMain.DSE_start(tar_dir, proj_name, dataset, 150, inputtop, inputpart, feature_columns)
+    # DMain.DSE_start(tar_dir, proj_name, dataset, 150, inputtop, inputpart, feature_columns)
     
 
 

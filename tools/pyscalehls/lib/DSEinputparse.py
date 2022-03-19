@@ -1,7 +1,20 @@
+from os import dup
 from pickle import FALSE
 import re
 import copy
 import treelib
+
+def int_to_alpha(input):
+    output = ''
+    alphabet = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z']
+    while True:
+        if input - 26 < 0:
+            output = output + alphabet[input]
+            break
+        else:
+            output = output + 'z'
+            input = input - 26
+    return output
 
 def add_node(tree, input):
     try:
@@ -23,14 +36,25 @@ def add_node(tree, input):
                 pass
 
 def recur_add_subtree(mastertree, toptree, treelist, function_depend):
+    functioncall_order = 0
     DFS_list = [toptree[node] for node in toptree.expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
     for DFS_node in DFS_list: #DFS search
         for depend_node in function_depend: #find children tress
-            if str(DFS_node.tag) == str(depend_node[1]):
+            isordered = re.findall(r'(.+)-', DFS_node.tag)
+            if isordered: #to match with renamed tags
+                functionname = re.findall(r'-(.+)', DFS_node.tag)
+            else:
+                functionname = [DFS_node.tag]
+            if functionname[0] == str(depend_node[1]):
                 for treeinlist in treelist: #find subtree
                     if treeinlist[treeinlist.root].tag == depend_node[0]:
                         UID_count = 1
                         duplicate_list = [mastertree[node].tag for node in mastertree.expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
+                        for i in range(len(duplicate_list)):
+                            isordered = re.findall(r'(.+-)', duplicate_list[i])
+                            if isordered: #to match with renamed tags
+                                re_buffer = re.findall(r'-(.+)', duplicate_list[i])
+                                duplicate_list[i] = re_buffer[0]
                         for dnode in duplicate_list:
                             if dnode == depend_node[0]:
                                 UID_count += 1
@@ -39,12 +63,13 @@ def recur_add_subtree(mastertree, toptree, treelist, function_depend):
                         addtree = treelib.Tree()
                         for node in treeinlist.expand_tree(mode=treelib.Tree.DEPTH, sorting=False):
                             if treeinlist[node].is_root():
-                                addtree.create_node(treeinlist[node].tag, str(treeinlist[node].identifier) + "-" + str(UID_count))
+                                addtree.create_node(int_to_alpha(functioncall_order) + "-" + treeinlist[node].tag, str(treeinlist[node].identifier) + "-" + str(UID_count))
+                                functioncall_order += 1
                             else:
                                 parent_uid = str(treeinlist.parent(treeinlist[node].identifier).identifier)
                                 addtree.create_node(treeinlist[node].tag, str(treeinlist[node].identifier) +  "-" + str(UID_count), parent=(parent_uid +  "-" + str(UID_count)))
 
-                        mastertree.paste(DFS_node.identifier, addtree, deep=False)              
+                        mastertree.paste(DFS_node.identifier, addtree, deep=False) 
                         recur_add_subtree(mastertree, addtree, treelist, function_depend)
 
 def read_user_input():
@@ -96,18 +121,18 @@ def create_params(dir, var_forlist, var_arraylist_sized):
         if item == "":
             None
         elif re.findall(r'U+', item[0]):
-            paramfile.write("loopU,"+str(item[0])+','+str(item[2])+','+str(item[3])+"\n")
+            paramfile.write("LoopU,"+str(item[0])+','+str(item[2])+','+str(item[3])+"\n")
         else:
-            paramfile.write("loop,"+str(item[0])+','+str(item[2])+','+str(item[3])+"\n")
+            paramfile.write("Loop,"+str(item[0])+','+str(item[2])+','+str(item[3])+"\n")
     #array
     for item in var_arraylist_sized :
         if item:
             name0 = re.findall(r'(.+?)\[', item[1])
             if item[4] > 1:
                 for i in range(int(item[4])):
-                    paramfile.write("array,"+str(item[2])+','+str(item[3])+','+str(item[5+i])+','+str(1+i)+"\n")
+                    paramfile.write("Array,"+str(item[2])+','+str(item[3])+','+str(item[5+i])+','+str(1+i)+"\n")
             else:
-                paramfile.write("array,"+str(item[2])+','+str(item[3])+','+str(item[5])+','+str(item[4])+"\n")
+                paramfile.write("Array,"+str(item[2])+','+str(item[3])+','+str(item[5])+','+str(item[4])+"\n")
     paramfile.close()
     return 0
 
@@ -249,8 +274,8 @@ def process_source_file(dir, inputfile, topfun, sdse=False):
                         forbound = findbound[0][1].strip()
                     else:                        
                         forbound = 'Variable'
-                    var_forlist.append(list(("loop"+str(loopnum), line.strip(), scope, forbound)))
-                    newfile.write(line.replace("for", "loop" + str(loopnum)  + ": " + "for"))
+                    var_forlist.append(list(("Loop"+str(loopnum), line.strip(), scope, forbound)))
+                    newfile.write(line.replace("for", "Loop" + str(loopnum)  + ": " + "for"))
                     loopnum += 1
                 else: # copy other
                     newfile.write(line)
@@ -265,7 +290,7 @@ def process_source_file(dir, inputfile, topfun, sdse=False):
                     current_array = "".join(item[1:-1])
                     array_sizeofdim = re.findall(r'(\[)(.+?)(\])', current_array)
                     array_dim = len(array_sizeofdim)
-                    list_buffer = list(("array"+str(arraynum), current_array, item[1], scope, array_dim))
+                    list_buffer = list(("Array"+str(arraynum), current_array, item[1], scope, array_dim))
                     for cdim in array_sizeofdim:
                         list_buffer.append(cdim[1])
                     list_buffer.append("dependencies")
@@ -391,7 +416,7 @@ def process_source_file(dir, inputfile, topfun, sdse=False):
             else:
                 tree = treelib.Tree()
                 tree.create_node(var_func_names[i], var_func_names[i])
-                tree_list.append(tree)
+                tree_list.insert(i, tree)
 
         #create master tree
         #todo: not capable of adding more that one funtion to tree
@@ -403,4 +428,4 @@ def process_source_file(dir, inputfile, topfun, sdse=False):
         tree_list.append(mastertree)
     
     return var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list         
-                        
+    

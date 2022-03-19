@@ -45,59 +45,66 @@ def main():
     mod = mlir.ir.Module.parse(fin, ctx)
 
     # Traverse all functions in the MLIR module.
-    for func in mod.body:
-        if not isinstance(func, builtin.FuncOp):
-            pass
-        func.__class__ = builtin.FuncOp
+    # for func in mod.body:
+    #     if not isinstance(func, builtin.FuncOp):
+    #         pass
+    #     func.__class__ = builtin.FuncOp
 
-        # Traverse all suitable loop bands in the function.
-        bands = scalehls.LoopBandList(func)
-        for band in bands:
-            # Attempt to perfectize the loop band.
-            scalehls.loop_perfectization(band)
+    #     # Traverse all suitable loop bands in the function.
+    #     bands = scalehls.LoopBandList(func)
+    #     for band in bands:
 
-            # Maximize the distance of loop-carried dependencies through loop permutation.
-            scalehls.loop_order_opt(band)
+    #         print(band)
 
-            # Apply loop permutation based on the provided map.
-            # Note: This example "permMap" keeps the loop order unchanged.
-            permMap = np.arange(band.depth)
-            scalehls.loop_permutation(band, permMap)
+    #         # Attempt to perfectize the loop band.
+    #         scalehls.loop_perfectization(band)
 
-            # Attempt to remove variable loop bounds if possible.
-            scalehls.loop_var_bound_removal(band)
+    #         # Maximize the distance of loop-carried dependencies through loop permutation.
+    #         scalehls.loop_order_opt(band)
 
-            # Apply loop tiling. Tile sizes are defined from the outermost loop to the innermost.
-            # Note: We use the trip count to generate this example "factors".
-            factors = np.ones(band.depth, dtype=int)
-            factors[-1] = band.get_trip_count(band.depth - 1) / 4
-            loc = scalehls.loop_tiling(band, factors, True) # simplify = True
+    #         # Apply loop permutation based on the provided map.
+    #         # Note: This example "permMap" keeps the loop order unchanged.
+    #         permMap = np.arange(band.depth)
+    #         scalehls.loop_permutation(band, permMap)
 
-            # Apply loop pipelining. All loops inside of the pipelined loop are fully unrolled.
-            scalehls.loop_pipelining(band, loc, 3)  # targetII = 3
+    #         # Attempt to remove variable loop bounds if possible.
+    #         scalehls.loop_var_bound_removal(band)
 
-        # Traverse all arrays in the function.
-        arrays = scalehls.ArrayList(func)
-        for array in arrays:
-            type = array.type
-            type.__class__ = mlir.ir.MemRefType
-            if not type.has_rank:
-                pass
-            # Apply specified factors and partition kind to the array.
-            # Note: We use the dimension size to generate this example "factors".
-            factors = np.ones(type.rank, dtype=int)
-            factors[-1] = type.get_dim_size(type.rank - 1) / 4
-            scalehls.array_partition(array, factors, "cyclic")
+    #         # Apply loop tiling. Tile sizes are defined from the outermost loop to the innermost.
+    #         # Note: We use the trip count to generate this example "factors".
+    #         print("test")
+    #         factors = np.ones(band.depth, dtype=int)
+    #         print(factors)
+    #         factors[-1] = band.get_trip_count(band.depth - 1) / 4
+    #         print(factors)
+    #         loc = scalehls.loop_tiling(band, factors, True) # simplify = True
+    #         print(loc)
 
-        # Legalize the IR to make it emittable.
-        scalehls.legalize_to_hlscpp(
-            func, func.sym_name.value == opts.function)
+    #         # Apply loop pipelining. All loops inside of the pipelined loop are fully unrolled.
+    #         scalehls.loop_pipelining(band, 0, 3)  # targetII = 3
 
-        # Optimize memory accesses through store forwarding, etc.
-        scalehls.memory_access_opt(func)
+    #     # Traverse all arrays in the function.
+    #     arrays = scalehls.ArrayList(func)
+    #     for array in arrays:
+    #         type = array.type
+    #         type.__class__ = mlir.ir.MemRefType
+    #         if not type.has_rank:
+    #             pass
+    #         # Apply specified factors and partition kind to the array.
+    #         # Note: We use the dimension size to generate this example "factors".
+    #         factors = np.ones(type.rank, dtype=int)
+    #         factors[-1] = type.get_dim_size(type.rank - 1) / 4
+    #         scalehls.array_partition(array, factors, "cyclic")
 
-        # Apply suitable array partition strategies through analyzing the array access pattern.
-        # scalehls.auto_array_partition(func)
+    #     # Legalize the IR to make it emittable.
+    #     scalehls.legalize_to_hlscpp(
+    #         func, func.sym_name.value == opts.function)
+
+    #     # Optimize memory accesses through store forwarding, etc.
+    #     scalehls.memory_access_opt(func)
+
+    #     # Apply suitable array partition strategies through analyzing the array access pattern.
+    #     # scalehls.auto_array_partition(func)
 
     # Emit optimized MLIR to HLS C++.
     buf = io.StringIO()

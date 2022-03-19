@@ -1,3 +1,8 @@
+#include "math.h"
+
+
+
+
 void matrix_vector_product_with_bias_input_layer(double biases[64],
                                                  double weights[13*64],
                                                  double activations[64],
@@ -10,3 +15,13 @@ void matrix_vector_product_with_bias_input_layer(double biases[64],
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
