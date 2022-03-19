@@ -171,7 +171,7 @@ static bool applyLegalizeDataflow(Block &block, int64_t gran, bool balance) {
             copyOp = builder.create<memref::CopyOp>(op->getLoc(), values.back(),
                                                     newValue);
           } else {
-            copyOp = builder.create<hlscpp::AssignOp>(
+            copyOp = builder.create<hlscpp::BufferOp>(
                 op->getLoc(), value.getType(), values.back());
             newValue = copyOp->getResult(0);
           }

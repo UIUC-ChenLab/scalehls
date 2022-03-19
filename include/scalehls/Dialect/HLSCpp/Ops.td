@@ -10,10 +10,48 @@
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
 //===----------------------------------------------------------------------===//
+// Stream Operations
+//===----------------------------------------------------------------------===//
+
+class StreamOf<list<Type> allowedTypes> :
+    Type<And<[CPred<"$_self.isa<::mlir::scalehls::hlscpp::StreamType>()">,
+              Concat<"[](::mlir::Type elementType) { return ",
+                     SubstLeaves<"$_self", "elementType",
+                                 AnyTypeOf<allowedTypes>.predicate>,
+                     "; }($_self.cast<::mlir::scalehls::hlscpp::StreamType>()"
+                         ".getElementType())">]>>;
+
+def StreamChannelOp : HLSCppOp<"stream.channel"> {
+  let summary = "Stream channel declaration operation";
+
+  let results = (outs StreamOf<[AnyType]>:$channel);
+}
+
+def StreamReadOp : HLSCppOp<"stream.read"> {
+  let summary = "Stream channel read operation";
+
+  let arguments = (ins StreamOf<[AnyType]>:$channel);
+  let results = (outs Optional<AnyType>:$result);
+}
+
+def StreamWriteOp : HLSCppOp<"stream.write"> {
+  let summary = "Stream channel write operation";
+
+  let arguments = (ins StreamOf<[AnyType]>:$channel, Optional<AnyType>:$value);
+}
+
+def StreamBufferOp : HLSCppOp<"stream.buffer"> {
+  let summary = "Stream channel buffer operation";
+
+  let arguments = (ins StreamOf<[AnyType]>:$input);
+  let results = (outs StreamOf<[AnyType]>:$output);
+}
+
+//===----------------------------------------------------------------------===//
 // Primitive Operations
 //===----------------------------------------------------------------------===//
 
-def MulPrimOp : HLSCppOp<"mul_prim", [NoSideEffect]> {
+def PrimMulOp : HLSCppOp<"prim.mul", [NoSideEffect]> {
   let summary = "Multiplication primitive operation";
   let description = [{
     This primitive performs C = A * B, where A and B are 8-bits integers, while
@@ -39,31 +77,28 @@ def MulPrimOp : HLSCppOp<"mul_prim", [NoSideEffect]> {
   let extraClassDeclaration = [{ bool isPackMul(); }];
 }
 
-def CastPrimOp : HLSCppOp<"cast_prim",
+def PrimCastOp : HLSCppOp<"prim.cast",
     [SameOperandsAndResultShape, NoSideEffect]> {
   let summary = "Cast primitive operation";
 
   let hasCanonicalizer = 1;
   let arguments = (ins 
-    AnyTypeOf<[I8, I16, I32, VectorOfLengthAndType<[2], [I8, I16, I32]>]>:$in
+    AnyTypeOf<[I8, I16, I32,
+               VectorOfLengthAndType<[2], [I8, I16, I32]>]>:$input
   );
   let results = (outs
-    AnyTypeOf<[I8, I16, I32, VectorOfLengthAndType<[2], [I8, I16, I32]>]>:$out
+    AnyTypeOf<[I8, I16, I32,
+               VectorOfLengthAndType<[2], [I8, I16, I32]>]>:$output
   );
 }
 
-def AssignOp : HLSCppOp<"assign",
+def BufferOp : HLSCppOp<"buffer",
     [SameOperandsAndResultElementType, NoSideEffect]> {
-  let summary = "Assign the input value to the output";
-  let description = [{
-    This hlscpp.assign operation assigns the input value to the output, and can
-    be inserted anywhere without changing the original semantics. This is useful
-    for EmitHLSCpp to handle some corner cases and for tensor copy.
-  }];
+  let summary = "Buffer the input value";
 
   let hasCanonicalizer = 1;
-  let arguments = (ins AnyType : $input);
-  let results = (outs AnyType : $output);
+  let arguments = (ins AnyType:$input);
+  let results = (outs AnyType:$output);
 }
 
 #endif // SCALEHLS_DIALECT_HLSCPP_OPS_TD

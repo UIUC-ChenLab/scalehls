@@ -53,7 +53,7 @@ public:
             bufferization::ToMemrefOp, bufferization::ToTensorOp,
 
             // HLSCpp primitive operations.
-            MulPrimOp, CastPrimOp, AssignOp,
+            PrimMulOp, PrimCastOp, BufferOp,
 
             // Control flow operations.
             func::CallOp, func::ReturnOp,
@@ -146,9 +146,9 @@ public:
   HANDLE(bufferization::ToTensorOp);
 
   // HLSCpp primitive operations.
-  HANDLE(MulPrimOp);
-  HANDLE(CastPrimOp);
-  HANDLE(AssignOp);
+  HANDLE(PrimMulOp);
+  HANDLE(PrimCastOp);
+  HANDLE(BufferOp);
 
   // Control flow operations.
   HANDLE(func::CallOp);

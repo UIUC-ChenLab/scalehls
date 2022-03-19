@@ -73,10 +73,10 @@ private:
 } // namespace
 
 namespace {
-struct AssignOpRewritePattern : public OpRewritePattern<AssignOp> {
-  using OpRewritePattern<AssignOp>::OpRewritePattern;
+struct BufferOpRewritePattern : public OpRewritePattern<BufferOp> {
+  using OpRewritePattern<BufferOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(AssignOp assign,
+  LogicalResult matchAndRewrite(BufferOp assign,
                                 PatternRewriter &rewriter) const override {
     if (!assign->hasOneUse())
       return failure();
@@ -233,7 +233,7 @@ struct ConvertCopyToAffineLoops
     // Simplify alloc and copy ops.
     mlir::RewritePatternSet patterns(context);
     patterns.add<AllocOpRewritePattern>(context, DT);
-    patterns.add<AssignOpRewritePattern>(context);
+    patterns.add<BufferOpRewritePattern>(context);
     patterns.add<ReshapeOpLoweringPattern>(context);
     (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
 

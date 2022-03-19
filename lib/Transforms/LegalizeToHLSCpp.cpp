@@ -88,18 +88,18 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc,
                                          func.getResultTypes()));
   }
 
-  // Insert AssignOp when an arguments or result of ConstantOp are directly
+  // Insert BufferOp when an arguments or result of ConstantOp are directly
   // connected to ReturnOp.
   auto returnOp = func.front().getTerminator();
   builder.setInsertionPoint(returnOp);
   unsigned idx = 0;
   for (auto operand : returnOp->getOperands()) {
     if (operand.dyn_cast<BlockArgument>()) {
-      auto value = builder.create<AssignOp>(returnOp->getLoc(),
+      auto value = builder.create<BufferOp>(returnOp->getLoc(),
                                             operand.getType(), operand);
       returnOp->setOperand(idx, value);
     } else if (isa<arith::ConstantOp>(operand.getDefiningOp())) {
-      auto value = builder.create<AssignOp>(returnOp->getLoc(),
+      auto value = builder.create<BufferOp>(returnOp->getLoc(),
                                             operand.getType(), operand);
       returnOp->setOperand(idx, value);
     }

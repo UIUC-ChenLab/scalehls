@@ -225,7 +225,7 @@ public:
   void emitMemrefToTensor(bufferization::ToTensorOp op);
 
   /// HLSCpp primitive operation emitters.
-  void emitMulPrim(MulPrimOp op);
+  void emitPrimMul(PrimMulOp op);
   template <typename AssignOpType> void emitAssign(AssignOpType op);
 
   /// Control flow operation emitters.
@@ -423,9 +423,9 @@ public:
     return emitter.emitMemrefToTensor(op), true;
   }
   /// HLSCpp primitive operations.
-  bool visitOp(MulPrimOp op) { return emitter.emitMulPrim(op), true; }
-  bool visitOp(CastPrimOp op) { return emitter.emitAssign(op), true; }
-  bool visitOp(AssignOp op) { return emitter.emitAssign(op), true; }
+  bool visitOp(PrimMulOp op) { return emitter.emitPrimMul(op), true; }
+  bool visitOp(PrimCastOp op) { return emitter.emitAssign(op), true; }
+  bool visitOp(BufferOp op) { return emitter.emitAssign(op), true; }
 
   /// Control flow operations.
   bool visitOp(func::CallOp op) { return emitter.emitCall(op), true; }
@@ -1268,7 +1268,7 @@ void ModuleEmitter::emitMemrefToTensor(bufferization::ToTensorOp op) {
 }
 
 /// HLSCpp primitive operation emitters.
-void ModuleEmitter::emitMulPrim(MulPrimOp op) {
+void ModuleEmitter::emitPrimMul(PrimMulOp op) {
   if (op.isPackMul()) {
     // Declare the result C array.
     if (!isDeclared(op.C())) {
@@ -1825,7 +1825,7 @@ using namespace std;
 )XXX";
 
   // Emit the multiplication primitive if required.
-  if (module.walk([](MulPrimOp op) {
+  if (module.walk([](PrimMulOp op) {
         return op.isPackMul() ? WalkResult::interrupt() : WalkResult::advance();
       }) == WalkResult::interrupt())
     os << R"XXX(

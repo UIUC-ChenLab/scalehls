@@ -15,9 +15,12 @@ def StreamType : HLSCppType<"Stream"> {
   }];
 
   let mnemonic = "stream";
-  let parameters = (ins "::mlir::Type":$elementType);
+  let parameters = (ins
+    "::mlir::Type":$elementType,
+    "int64_t":$depth
+  );
 
-  let assemblyFormat = "`<` qualified($elementType) `>`";
+  let assemblyFormat = "`<` qualified($elementType) `,` $depth `>`";
 }
 
 #endif // SCALEHLS_DIALECT_HLSCPP_TYPES_TD

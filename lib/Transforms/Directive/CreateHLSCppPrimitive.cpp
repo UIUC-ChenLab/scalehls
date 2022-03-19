@@ -39,15 +39,15 @@ struct AddOpRewritePattern : public OpRewritePattern<arith::AddIOp> {
     // Cast add op operand from the new type.
     auto loc = add.getLoc();
     rewriter.setInsertionPoint(add);
-    auto newLhs = rewriter.create<CastPrimOp>(loc, newType, add.getLhs());
-    auto newRhs = rewriter.create<CastPrimOp>(loc, newType, add.getRhs());
+    auto newLhs = rewriter.create<PrimCastOp>(loc, newType, add.getLhs());
+    auto newRhs = rewriter.create<PrimCastOp>(loc, newType, add.getRhs());
     add.getLhsMutable().assign(newLhs);
     add.getRhsMutable().assign(newRhs);
 
     // Cast add op result to the new type.
     rewriter.setInsertionPointAfter(add);
     auto cast =
-        rewriter.create<CastPrimOp>(loc, add.getType(), add.getResult());
+        rewriter.create<PrimCastOp>(loc, add.getType(), add.getResult());
     add.getResult().replaceAllUsesExcept(cast.getResult(), cast);
     add.getResult().setType(newType);
 
@@ -87,8 +87,8 @@ struct MulOpRewritePattern : public OpRewritePattern<arith::MulIOp> {
     // Replace the original op with multiplication primitive op.
     auto loc = mul.getLoc();
     rewriter.setInsertionPoint(mul);
-    auto mulResult = rewriter.create<MulPrimOp>(loc, newType, lhs, rhs);
-    auto cast = rewriter.create<CastPrimOp>(loc, mul.getType(), mulResult);
+    auto mulResult = rewriter.create<PrimMulOp>(loc, newType, lhs, rhs);
+    auto cast = rewriter.create<PrimCastOp>(loc, mul.getType(), mulResult);
     rewriter.replaceOp(mul, cast.getResult());
 
     return success();

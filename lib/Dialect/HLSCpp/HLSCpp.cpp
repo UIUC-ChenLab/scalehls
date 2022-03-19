@@ -35,10 +35,10 @@ void HLSCppDialect::initialize() {
 }
 
 //===----------------------------------------------------------------------===//
-// MulPrimOp
+// PrimMulOp
 //===----------------------------------------------------------------------===//
 
-static LogicalResult verify(MulPrimOp op) {
+static LogicalResult verify(PrimMulOp op) {
   auto AIsVector = op.A().getType().isa<VectorType>();
   auto BIsVector = op.B().getType().isa<VectorType>();
   auto CIsVector = op.C().getType().isa<VectorType>();
@@ -50,7 +50,7 @@ static LogicalResult verify(MulPrimOp op) {
   return failure();
 }
 
-bool MulPrimOp::isPackMul() {
+bool PrimMulOp::isPackMul() {
   auto AIsVector = A().getType().isa<VectorType>();
   auto BIsVector = B().getType().isa<VectorType>();
   return (AIsVector && !BIsVector) || (!AIsVector && BIsVector);
@@ -194,22 +194,22 @@ void FuncDirectiveAttr::print(AsmPrinter &p) const {
 //===----------------------------------------------------------------------===//
 
 namespace {
-struct SimplifyCastPrimOp : public OpRewritePattern<CastPrimOp> {
-  using OpRewritePattern<CastPrimOp>::OpRewritePattern;
+struct SimplifyPrimCastOp : public OpRewritePattern<PrimCastOp> {
+  using OpRewritePattern<PrimCastOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(CastPrimOp cast,
+  LogicalResult matchAndRewrite(PrimCastOp cast,
                                 PatternRewriter &rewriter) const override {
-    if (cast.in().getType() == cast.out().getType()) {
-      rewriter.replaceOp(cast, cast.in());
+    if (cast.input().getType() == cast.output().getType()) {
+      rewriter.replaceOp(cast, cast.input());
       return success();
     }
 
     // If the input of the cast is defined by another cast, then the two casts
     // can be merged into one.
-    if (cast.in().hasOneUse())
-      if (auto defCast = cast.in().getDefiningOp<CastPrimOp>()) {
-        rewriter.replaceOpWithNewOp<CastPrimOp>(cast, cast.getType(),
-                                                defCast.in());
+    if (cast.input().hasOneUse())
+      if (auto defCast = cast.input().getDefiningOp<PrimCastOp>()) {
+        rewriter.replaceOpWithNewOp<PrimCastOp>(cast, cast.getType(),
+                                                defCast.input());
         return success();
       }
 
@@ -218,19 +218,19 @@ struct SimplifyCastPrimOp : public OpRewritePattern<CastPrimOp> {
 };
 } // namespace
 
-void CastPrimOp::getCanonicalizationPatterns(RewritePatternSet &results,
+void PrimCastOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                              MLIRContext *context) {
-  results.add<SimplifyCastPrimOp>(context);
+  results.add<SimplifyPrimCastOp>(context);
 }
 
 namespace {
-struct SimplifyAssignOp : public OpRewritePattern<AssignOp> {
-  using OpRewritePattern<AssignOp>::OpRewritePattern;
+struct SimplifyBufferOp : public OpRewritePattern<BufferOp> {
+  using OpRewritePattern<BufferOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(AssignOp assign,
+  LogicalResult matchAndRewrite(BufferOp buffer,
                                 PatternRewriter &rewriter) const override {
-    if (auto defOp = assign.input().getDefiningOp<AssignOp>()) {
-      assign.inputMutable().assign(defOp.input());
+    if (auto defOp = buffer.input().getDefiningOp<BufferOp>()) {
+      buffer.inputMutable().assign(defOp.input());
       return success();
     }
     return failure();
@@ -238,9 +238,9 @@ struct SimplifyAssignOp : public OpRewritePattern<AssignOp> {
 };
 } // namespace
 
-void AssignOp::getCanonicalizationPatterns(RewritePatternSet &results,
+void BufferOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                            MLIRContext *context) {
-  results.add<SimplifyAssignOp>(context);
+  results.add<SimplifyBufferOp>(context);
 }
 //===----------------------------------------------------------------------===//
 // Include tablegen classes

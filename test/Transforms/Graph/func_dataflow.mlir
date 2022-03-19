@@ -12,8 +12,8 @@ module {
   // CHECK:   %2 = "tosa.clamp"
   // CHECK:   %3 = "tosa.conv2d"
   // CHECK:   %4 = "tosa.clamp"
-  // CHECK:   %5 = "hlscpp.assign"
-  // CHECK:   %6 = "hlscpp.assign"
+  // CHECK:   %5 = "hlscpp.buffer"
+  // CHECK:   %6 = "hlscpp.buffer"
   // CHECK:   return %4, %6
   // CHECK: }
 
@@ -26,7 +26,7 @@ module {
 
   // CHECK: func @dataflow3(%arg0: tensor<1x32x32x64xi8>, %arg1: tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8> {
   // CHECK:   %2 = "tosa.conv2d"
-  // CHECK:   %3 = "hlscpp.assign"
+  // CHECK:   %3 = "hlscpp.buffer"
   // CHECK:   %4 = "tosa.add"
   // CHECK:   %5 = "tosa.clamp"
   // CHECK:   return %5

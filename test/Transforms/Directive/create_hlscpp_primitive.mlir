@@ -21,14 +21,14 @@ module {
                   %2 = vector.transfer_read %arg1[%arg7, %arg8, %arg9, %arg6], %c0_i8 : memref<3x3x64x64xi8, #map1>, vector<2xi8>
                   %3 = vector.transfer_read %arg2[%arg3, %arg4, %arg5, %arg6], %c0_i8 : memref<1x32x32x64xi8, #map2>, vector<2xi8>
                   
-                  // CHECK: %3 = "hlscpp.mul_prim"(%0, %1) : (i8, vector<2xi8>) -> vector<2xi16>
-                  // CHECK: %4 = "hlscpp.cast_prim"(%3) : (vector<2xi16>) -> vector<2xi8>
+                  // CHECK: %3 = "hlscpp.prim.mul"(%0, %1) : (i8, vector<2xi8>) -> vector<2xi16>
+                  // CHECK: %4 = "hlscpp.prim.cast"(%3) : (vector<2xi16>) -> vector<2xi8>
                   %4 = arith.muli %1, %2 : vector<2xi8>
 
-                  // CHECK: %5 = "hlscpp.cast_prim"(%2) : (vector<2xi8>) -> vector<2xi32>
-                  // CHECK: %6 = "hlscpp.cast_prim"(%4) : (vector<2xi8>) -> vector<2xi32>
+                  // CHECK: %5 = "hlscpp.prim.cast"(%2) : (vector<2xi8>) -> vector<2xi32>
+                  // CHECK: %6 = "hlscpp.prim.cast"(%4) : (vector<2xi8>) -> vector<2xi32>
                   // CHECK: %7 = arith.addi %5, %6 : vector<2xi32>
-                  // CHECK: %8 = "hlscpp.cast_prim"(%7) : (vector<2xi32>) -> vector<2xi8>
+                  // CHECK: %8 = "hlscpp.prim.cast"(%7) : (vector<2xi32>) -> vector<2xi8>
                   %5 = arith.addi %3, %4 : vector<2xi8>
                   vector.transfer_write %5, %arg2[%arg3, %arg4, %arg5, %arg6] : vector<2xi8>, memref<1x32x32x64xi8, #map2>
                   %6 = affine.apply #map3(%arg4)
