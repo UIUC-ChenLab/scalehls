@@ -106,6 +106,8 @@ def FuncDataflow : Pass<"scalehls-func-dataflow", "ModuleOp"> {
   let constructor = "mlir::scalehls::createFuncDataflowPass()";
 
   let options = [
+    Option<"targetFunc", "target-func", "std::string",
+           /*default=*/"\"main\"", "The target function to be dataflowed">,
     Option<"balance", "balance", "bool", /*default=*/"true",
            "Whether insert copies to balance the dataflow">,
     Option<"gran", "gran", "unsigned", /*default=*/"1",

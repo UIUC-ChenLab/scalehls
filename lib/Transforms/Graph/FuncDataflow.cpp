@@ -49,18 +49,6 @@ DataflowGraph::DataflowGraph(Block &block) {
   DenseMap<Operation *, llvm::SmallDenseSet<Value, 2>> resultsMap;
 
   for (auto &op : block) {
-    // // Handle Linalg dialect operations.
-    // if (isa<linalg::LinalgDialect>(op.getDialect())) {
-    //   auto generic = dyn_cast<linalg::GenericOp>(op);
-    //   if (!generic || !generic.hasBufferSemantics()) {
-    //     op.emitOpError("found ungeneralized or unbufferized linalg ops");
-    //     return;
-    //   }
-    //   for (auto result : generic.getOutputOperands())
-    //     resultsMap[&op].insert(result->get());
-    //   continue;
-    // }
-
     // Handle copy operations.
     if (auto copy = dyn_cast<memref::CopyOp>(op))
       resultsMap[&op].insert(copy.getTarget());
@@ -85,10 +73,10 @@ DataflowGraph::DataflowGraph(Block &block) {
 
   // Find successors of all operations.
   for (auto &op : block) {
-    // TODO: Some operations are dataflow source/sink/call node, which will not
-    // be scheduled. Any other operations should appear here?
-    if (isa<tosa::ConstOp, arith::ConstantOp, func::CallOp, func::ReturnOp,
-            AffineYieldOp, scf::YieldOp>(op) ||
+    // Some operations are dataflow source/sink nodes, which will not be
+    // scheduled. TODO: Any other operations should appear here?
+    if (isa<tosa::ConstOp, arith::ConstantOp, func::ReturnOp, AffineYieldOp,
+            scf::YieldOp>(op) ||
         (op.getNumResults() == 1 &&
          op.getResult(0).getType().isa<MemRefType>()))
       continue;
@@ -170,6 +158,10 @@ static bool applyLegalizeDataflow(Block &block, int64_t gran, bool balance) {
             newValue = builder.create<memref::AllocOp>(op->getLoc(), type);
             copyOp = builder.create<memref::CopyOp>(op->getLoc(), values.back(),
                                                     newValue);
+          } else if (auto type = value.getType().dyn_cast<StreamType>()) {
+            copyOp = builder.create<hlscpp::StreamBufferOp>(
+                op->getLoc(), value.getType(), values.back());
+            newValue = copyOp->getResult(0);
           } else {
             copyOp = builder.create<hlscpp::BufferOp>(
                 op->getLoc(), value.getType(), values.back());
@@ -229,6 +221,33 @@ static bool applyLegalizeDataflow(Block &block, int64_t gran, bool balance) {
           builder.getIntegerAttr(builder.getI64Type(), pair.second));
   }
   return true;
+}
+
+/// Inline all sub-functions in the given "func". TODO: This simple inliner
+/// doesn't consider SCCs in the call graph. Should somehow use the built-in
+/// inlining API, which is not exposed for now.
+static void inlineFunction(FuncOp func) {
+  auto module = func->getParentOfType<ModuleOp>();
+  for (auto call : func.getOps<func::CallOp>()) {
+    auto subFunc = module.lookupSymbol<FuncOp>(call.getCallee());
+    assert(subFunc && "sub-function is not found");
+    inlineFunction(subFunc);
+
+    auto returnOp = subFunc.front().getTerminator();
+    for (auto zip : llvm::zip(call.getResults(), returnOp->getOperands()))
+      std::get<0>(zip).replaceAllUsesWith(std::get<1>(zip));
+    for (auto zip : llvm::zip(subFunc.getArguments(), call.getOperands()))
+      std::get<0>(zip).replaceAllUsesWith(std::get<1>(zip));
+
+    auto &blockOps = call->getBlock()->getOperations();
+    assert(llvm::hasSingleElement(subFunc) && "must only have one block");
+    auto &subFuncOps = subFunc.front().getOperations();
+
+    blockOps.splice(call->getIterator(), subFuncOps, subFuncOps.begin(),
+                    std::prev(subFuncOps.end()));
+    call.erase();
+    subFunc.erase();
+  }
 }
 
 static bool createSubFunction(Block &block, ArrayRef<Operation *> ops,
@@ -298,7 +317,7 @@ static bool createSubFunction(Block &block, ArrayRef<Operation *> ops,
 
         // Since we have localized all tosa constant operations, we can safely
         // insert a constant as a local op here.
-        if (isa<tosa::ConstOp>(defOp)) {
+        if (isa<tosa::ConstOp, arith::ConstantOp>(defOp)) {
           localOps.insert(defOp);
           continue;
         }
@@ -347,6 +366,7 @@ static bool createSubFunction(Block &block, ArrayRef<Operation *> ops,
         entry->getArgument(i),
         [&](OpOperand &use) { return subFunc->isAncestor(use.getOwner()); });
 
+  inlineFunction(subFunc);
   return true;
 }
 
@@ -400,7 +420,8 @@ struct FuncDataflow : public FuncDataflowBase<FuncDataflow> {
 
     // Dataflow each functions in the module.
     for (auto func : llvm::make_early_inc_range(module.getOps<FuncOp>()))
-      applyDataflow(func.front(), gran, balance);
+      if (func.getName() == targetFunc)
+        applyDataflow(func.front(), gran, balance);
   }
 };
 } // namespace
