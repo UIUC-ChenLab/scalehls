@@ -1,14 +1,14 @@
 // RUN: scalehls-opt -scalehls-func-dataflow="gran=3 balance=true target-func=forward" %s | FileCheck %s
 
 module {
-  // CHECK: func @dataflow2(%arg0: tensor<1x32x32x64xi8>) -> tensor<1x1x64xi8> {
+  // CHECK: func @dataflow2(%arg0: tensor<1x32x32x64xi8>) -> tensor<1x1x64xi8> attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=true>} {
   // CHECK:   %1 = "tosa.avg_pool2d"
   // CHECK:   %2 = "tosa.transpose"
   // CHECK:   %3 = "tosa.reshape"
   // CHECK:   return %3 : tensor<1x1x64xi8>
   // CHECK: }
 
-  // CHECK: func @dataflow4(%arg0: tensor<1x32x32x64xi8>) -> (tensor<1x32x32x64xi8>, tensor<1x32x32x64xi8>) {
+  // CHECK: func @dataflow4(%arg0: tensor<1x32x32x64xi8>) -> (tensor<1x32x32x64xi8>, tensor<1x32x32x64xi8>) attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=true>} {
   // CHECK:   %2 = "tosa.clamp"
   // CHECK:   %3 = "tosa.conv2d"
   // CHECK:   %4 = "tosa.clamp"
@@ -17,14 +17,14 @@ module {
   // CHECK:   return %4, %6
   // CHECK: }
 
-  // CHECK: func @dataflow1(%arg0: tensor<1x1x64xi8>) -> tensor<1x10xi8> {
+  // CHECK: func @dataflow1(%arg0: tensor<1x1x64xi8>) -> tensor<1x10xi8> attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=true>} {
   // CHECK:   %2 = "tosa.matmul"
   // CHECK:   %3 = "tosa.reshape"
   // CHECK:   %4 = "tosa.add"
   // CHECK:   return %4
   // CHECK: }
 
-  // CHECK: func @dataflow3(%arg0: tensor<1x32x32x64xi8>, %arg1: tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8> {
+  // CHECK: func @dataflow3(%arg0: tensor<1x32x32x64xi8>, %arg1: tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8> attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=true>} {
   // CHECK:   %2 = "tosa.conv2d"
   // CHECK:   %3 = "hlscpp.buffer"
   // CHECK:   %4 = "tosa.add"
@@ -32,7 +32,7 @@ module {
   // CHECK:   return %5
   // CHECK: }
 
-  // CHECK: func @dataflow5(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x32x32x64xi8> {
+  // CHECK: func @dataflow5(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x32x32x64xi8> attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=true>} {
   // CHECK:   %3 = "tosa.transpose"
   // CHECK:   %4 = "tosa.conv2d"
   // CHECK:   return %4

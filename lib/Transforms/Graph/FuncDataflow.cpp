@@ -228,7 +228,7 @@ static bool applyLegalizeDataflow(Block &block, int64_t gran, bool balance) {
 /// inlining API, which is not exposed for now.
 static void inlineFunction(FuncOp func) {
   auto module = func->getParentOfType<ModuleOp>();
-  for (auto call : func.getOps<func::CallOp>()) {
+  for (auto call : llvm::make_early_inc_range(func.getOps<func::CallOp>())) {
     auto subFunc = module.lookupSymbol<FuncOp>(call.getCallee());
     assert(subFunc && "sub-function is not found");
     inlineFunction(subFunc);
@@ -367,6 +367,7 @@ static bool createSubFunction(Block &block, ArrayRef<Operation *> ops,
         [&](OpOperand &use) { return subFunc->isAncestor(use.getOwner()); });
 
   inlineFunction(subFunc);
+  setFuncDirective(subFunc, false, 1, true);
   return true;
 }
 

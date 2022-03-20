@@ -4,11 +4,20 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
+
+// A helper to get corresponding DRAM memref type from normal memref type.
+static MemRefType getDramType(MemRefType type) {
+  return MemRefType::get(type.getShape(), type.getElementType(),
+                         type.getLayout().getAffineMap(),
+                         (unsigned)MemoryKind::DRAM);
+}
 
 namespace {
 struct CreateAxiInterface
@@ -17,25 +26,66 @@ struct CreateAxiInterface
     auto module = getOperation();
     OpBuilder builder(module);
 
-    // Get the top function of the module.
+    // Get the top and runtime function of the module.
     auto func = getTopFunc(module);
-    if (!func) {
-      emitError(module.getLoc(), "fail to find the top function");
+    auto runtime = getRuntimeFunc(module);
+    if (!func || !runtime ||
+        !llvm::hasSingleElement(runtime.getOps<func::CallOp>())) {
+      emitError(module.getLoc(), "fail to find legal top/runtime function");
       return signalPassFailure();
     }
 
-    // Convert each argument memory kind to DRAM and buffer each of them.
-    for (auto arg : func.getArguments()) {
-      if (auto type = arg.getType().dyn_cast<MemRefType>()) {
-        arg.setType(MemRefType::get(type.getShape(), type.getElementType(),
-                                    type.getLayout().getAffineMap(),
-                                    (unsigned)MemoryKind::DRAM));
-      }
+    // Get the top function call.
+    auto call = *runtime.getOps<func::CallOp>().begin();
+    if (call.getCallee() != func.getName()) {
+      call.emitOpError("must reference the top function");
+      return signalPassFailure();
+    };
+
+    // First, convert the type of the runtime function.
+    for (auto arg : runtime.getArguments())
+      if (auto type = arg.getType().dyn_cast<MemRefType>())
+        arg.setType(getDramType(type));
+    runtime.setType(builder.getFunctionType(runtime.front().getArgumentTypes(),
+                                            runtime.getResultTypes()));
+
+    // Then, convert each constant to DRAM type.
+    for (auto toMemref : runtime.getOps<bufferization::ToMemrefOp>())
+      toMemref.memref().setType(
+          getDramType(toMemref.getType().cast<MemRefType>()));
+
+    // Third, move each allocated memory in the top function to the runtime
+    // function, and convert it to DRAM type.
+    SmallVector<Value, 32> buffers(call.getOperands());
+    for (auto alloc :
+         llvm::make_early_inc_range(func.getOps<memref::AllocOp>())) {
+      alloc.memref().setType(getDramType(alloc.getType()));
+      buffers.push_back(alloc);
+      alloc->moveBefore(call);
+      auto arg = func.front().addArgument(alloc.getType(), alloc.getLoc());
+      alloc.replaceAllUsesWith(arg);
     }
 
-    // Finally, update the type of the function.
-    func.setType(builder.getFunctionType(func.front().getArgumentTypes(),
-                                         func.getResultTypes()));
+    // Forth, update the top function call.
+    builder.setInsertionPoint(call);
+    auto newCall = builder.create<func::CallOp>(call.getLoc(), func.getName(),
+                                                func.getResultTypes(), buffers);
+    call.replaceAllUsesWith(newCall);
+    call.erase();
+
+    // Fifth, convert the type of top function.
+    for (auto zip : llvm::zip(func.getArguments(), newCall.getOperandTypes()))
+      std::get<0>(zip).setType(std::get<1>(zip));
+    func.setType(newCall.getCalleeType());
+
+    // Finally, convert the type of each sub-function.
+    for (auto subCall : func.getOps<func::CallOp>()) {
+      auto subFunc = module.lookupSymbol<FuncOp>(subCall.getCallee());
+      for (auto zip :
+           llvm::zip(subFunc.getArguments(), subCall.getOperandTypes()))
+        std::get<0>(zip).setType(std::get<1>(zip));
+      subFunc.setType(subCall.getCalleeType());
+    }
   }
 };
 } // namespace

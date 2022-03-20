@@ -121,8 +121,8 @@ struct LowerStreamBufferOpRewritePattern
     auto block = buffer->getBlock();
 
     rewriter.setInsertionPointToStart(block);
-    if (llvm::all_of(buffer.input().getUsers(), [](Operation *op) {
-          return isa<hlscpp::StreamWriteOp>(op);
+    if (!llvm::any_of(buffer.input().getUsers(), [](Operation *op) {
+          return isa<hlscpp::StreamReadOp>(op);
         }))
       rewriter.create<hlscpp::StreamReadOp>(loc, Type(), buffer.input());
     auto channel = rewriter.replaceOpWithNewOp<hlscpp::StreamChannelOp>(
@@ -146,17 +146,13 @@ struct HoistStreamChannel : HoistStreamChannelBase<HoistStreamChannel> {
     patterns.add<LowerStreamBufferOpRewritePattern>(context);
     (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
 
-    // Get the top function of the module.
-    auto func = getTopFunc(module);
-    if (!func) {
-      emitError(module.getLoc(), "fail to find the top function");
-      return signalPassFailure();
-    }
-
     // Hoist stream channels to the top-function.
-    SmallVector<BlockArgument, 6> appendedEntryArgs;
-    updateFuncOp(func, appendedEntryArgs);
-    updateReturnOps(func, appendedEntryArgs);
+    for (auto func : module.getOps<FuncOp>())
+      if (!hasTopFuncAttr(func)) {
+        SmallVector<BlockArgument, 6> appendedEntryArgs;
+        updateFuncOp(func, appendedEntryArgs);
+        updateReturnOps(func, appendedEntryArgs);
+      }
     updateCalls(module);
   }
 };
