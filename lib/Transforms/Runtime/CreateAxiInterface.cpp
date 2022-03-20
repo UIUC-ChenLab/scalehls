@@ -20,6 +20,39 @@ static MemRefType getDramType(MemRefType type) {
 }
 
 namespace {
+enum class InterfaceKind {
+  UNUSED = 0,
+  READ_ONLY = 1,
+  WRITE_ONLY = 2,
+  READ_WRITE = 3
+};
+} // namespace
+
+static InterfaceKind getInterfaceKind(FuncOp func, unsigned argIdx) {
+  auto arg = func.getArgument(argIdx);
+  assert(arg.getType().isa<MemRefType>() && "must be memref type");
+  bool hasRead = false;
+  bool hasWrite = false;
+  for (auto user : arg.getUsers()) {
+    if (isa<mlir::AffineReadOpInterface>(user))
+      hasRead = true;
+    else if (isa<mlir::AffineWriteOpInterface>(user))
+      hasWrite = true;
+    else
+      llvm_unreachable("used by neither load nor store");
+  }
+
+  if (hasRead && !hasWrite)
+    return InterfaceKind::READ_ONLY;
+  else if (!hasRead && hasWrite)
+    return InterfaceKind::WRITE_ONLY;
+  else if (hasRead && hasWrite)
+    return InterfaceKind::READ_WRITE;
+
+  return InterfaceKind::UNUSED;
+}
+
+namespace {
 struct CreateAxiInterface
     : public scalehls::CreateAxiInterfaceBase<CreateAxiInterface> {
   void runOnOperation() override {
@@ -56,20 +89,55 @@ struct CreateAxiInterface
 
     // Third, move each allocated memory in the top function to the runtime
     // function, and convert it to DRAM type.
-    SmallVector<Value, 32> buffers(call.getOperands());
+    SmallVector<Value, 32> inputs(call.getOperands());
     for (auto alloc :
          llvm::make_early_inc_range(func.getOps<memref::AllocOp>())) {
       alloc.memref().setType(getDramType(alloc.getType()));
-      buffers.push_back(alloc);
       alloc->moveBefore(call);
+
+      // Create a new interface
+      inputs.push_back(alloc);
       auto arg = func.front().addArgument(alloc.getType(), alloc.getLoc());
-      alloc.replaceAllUsesWith(arg);
+      bool hasWriteChannel = true;
+      bool hasReadChannel = true;
+
+      for (auto &use : llvm::make_early_inc_range(alloc->getUses())) {
+        if (auto subCall = dyn_cast<func::CallOp>(use.getOwner())) {
+          auto subFunc = module.lookupSymbol<FuncOp>(subCall.getCallee());
+          auto kind = getInterfaceKind(subFunc, use.getOperandNumber());
+
+          // If the read/write is already occupied, create a new interface.
+          if (((kind == InterfaceKind::READ_ONLY) && !hasReadChannel) ||
+              ((kind == InterfaceKind::WRITE_ONLY) && !hasWriteChannel) ||
+              ((kind == InterfaceKind::READ_WRITE) &&
+               (!hasReadChannel || !hasWriteChannel))) {
+            inputs.push_back(alloc);
+            arg = func.front().addArgument(alloc.getType(), alloc.getLoc());
+            hasReadChannel = true;
+            hasWriteChannel = true;
+          }
+
+          // Occupy read/write channel according to the interface kind.
+          if (kind == InterfaceKind::READ_ONLY)
+            hasReadChannel = false;
+          else if (kind == InterfaceKind::WRITE_ONLY)
+            hasWriteChannel = false;
+          else if (kind == InterfaceKind::READ_WRITE) {
+            hasReadChannel = false;
+            hasWriteChannel = false;
+          }
+        } else
+          llvm_unreachable("memref must be used by call op");
+
+        // Set the current use to the current interface argument.
+        use.set(arg);
+      }
     }
 
     // Forth, update the top function call.
     builder.setInsertionPoint(call);
     auto newCall = builder.create<func::CallOp>(call.getLoc(), func.getName(),
-                                                func.getResultTypes(), buffers);
+                                                func.getResultTypes(), inputs);
     call.replaceAllUsesWith(newCall);
     call.erase();
 

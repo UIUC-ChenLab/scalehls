@@ -1673,16 +1673,6 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
     os << "\n";
   }
 
-  // Emit DRAM variable as stable.
-  if (kind == MemoryKind::DRAM) {
-    emitPragmaFlag = true;
-
-    indent() << "#pragma HLS stable";
-    os << " variable=";
-    emitValue(memref);
-    os << "\n";
-  }
-
   // Emit an empty line.
   if (emitPragmaFlag)
     os << "\n";
@@ -1702,8 +1692,8 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
         if (!isFullyPartitioned(memrefType)) {
           indent() << "#pragma HLS interface";
           // For now, we set the offset of all m_axi interfaces as slave.
-          if (MemoryKind(memrefType.getMemorySpaceAsInt()) ==
-              MemoryKind::DRAM) {
+          auto kind = MemoryKind(memrefType.getMemorySpaceAsInt());
+          if (kind == MemoryKind::DRAM) {
             os << " m_axi offset=slave bundle=";
             emitValue(port);
           } else
@@ -1712,6 +1702,14 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
           os << " port=";
           emitValue(port);
           os << "\n";
+
+          // Emit DRAM variable as stable.
+          if (kind == MemoryKind::DRAM) {
+            indent() << "#pragma HLS stable";
+            os << " variable=";
+            emitValue(port);
+            os << "\n";
+          }
         }
       } else {
         indent() << "#pragma HLS interface s_axilite";
