@@ -89,9 +89,6 @@ struct AffineLoopUnrollJam
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createAffineLoopUnrollJamPass() {
-  return std::make_unique<AffineLoopUnrollJam>();
-}
 std::unique_ptr<Pass>
 scalehls::createAffineLoopUnrollJamPass(unsigned loopUnrollSize,
                                         bool unrollPointLoopOnly) {

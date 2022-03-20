@@ -34,6 +34,7 @@ bool hasPointAttr(AffineForOp loop);
 /// Parse function directives.
 FuncDirectiveAttr getFuncDirective(Operation *op);
 bool hasTopFuncAttr(FuncOp func);
+bool hasRuntimeAttr(FuncOp func);
 
 /// Parse array attributes.
 SmallVector<int64_t, 8> getIntArrayAttrValue(Operation *op, StringRef name);
@@ -104,6 +105,10 @@ bool checkDependence(Operation *A, Operation *B);
 
 /// Localize each tosa/arith constant to right before its each use.
 void localizeConstants(Block &block);
+
+FuncOp getTopFunc(ModuleOp module, std::string topFuncName = "");
+
+FuncOp getRuntimeFunc(ModuleOp module, std::string runtimeFuncName = "");
 
 //===----------------------------------------------------------------------===//
 // PtrLikeMemRefAccess Struct Declaration

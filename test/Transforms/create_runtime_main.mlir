@@ -57,7 +57,7 @@ module {
     return %1 : tensor<1x32x32x64xi8>
   }
 
-  // CHECK: func @forward(%arg0: tensor<1x3x32x32xi8>, %arg1: tensor<64x3x3x3xi8>, %arg2: tensor<64x3x3x64xi8>, %arg3: tensor<64x3x3x64xi8>, %arg4: tensor<1x64x10xi8>) -> tensor<1x10xi8> attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=true>} {
+  // CHECK: func @forward(%arg0: tensor<1x3x32x32xi8>, %arg1: tensor<64x3x3x3xi8>, %arg2: tensor<64x3x3x64xi8>, %arg3: tensor<64x3x3x64xi8>, %arg4: tensor<1x64x10xi8>) -> tensor<1x10xi8> attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=true>, top_func} {
   // CHECK:   %0 = call @dataflow5(%arg0, %arg1) : (tensor<1x3x32x32xi8>, tensor<64x3x3x3xi8>) -> tensor<1x32x32x64xi8>
   // CHECK:   %1:2 = call @dataflow4(%0, %arg2) : (tensor<1x32x32x64xi8>, tensor<64x3x3x64xi8>) -> (tensor<1x32x32x64xi8>, tensor<1x32x32x64xi8>)
   // CHECK:   %2 = call @dataflow3(%1#0, %1#1, %arg3) : (tensor<1x32x32x64xi8>, tensor<1x32x32x64xi8>, tensor<64x3x3x64xi8>) -> tensor<1x32x32x64xi8>
@@ -74,7 +74,7 @@ module {
     return %4 : tensor<1x10xi8>
   }
 
-  // CHECK: func @main(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> {
+  // CHECK: func @main(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> attributes {runtime} {
   // CHECK:   %cst = arith.constant dense<4> : tensor<64x3x3x3xi8>
   // CHECK:   %cst_0 = arith.constant dense<3> : tensor<64x3x3x64xi8>
   // CHECK:   %cst_1 = arith.constant dense<2> : tensor<64x3x3x64xi8>

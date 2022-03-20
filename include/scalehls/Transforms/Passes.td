@@ -129,11 +129,6 @@ def HoistStreamChannel : Pass<"scalehls-hoist-stream-channel", "ModuleOp"> {
   }];
 
   let constructor = "mlir::scalehls::createHoistStreamChannelPass()";
-
-  let options = [
-    Option<"topFunc", "top-func", "std::string",
-           /*default=*/"\"main\"", "The top function to be transformed">
-  ];
 }
 
 //===----------------------------------------------------------------------===//
@@ -157,6 +152,12 @@ def CreateRuntimeMain : Pass<"scalehls-create-runtime-main", "ModuleOp"> {
   ];
 }
 
+def CreateAxiInterface : Pass<"scalehls-create-axi-interface", "ModuleOp"> {
+  let summary = "Create AXI interfaces for the top function";
+
+  let constructor = "mlir::scalehls::createCreateAxiInterfacePass()";
+}
+
 //===----------------------------------------------------------------------===//
 // HLSCpp Legalization Passes
 //===----------------------------------------------------------------------===//
@@ -173,9 +174,7 @@ def LegalizeToHLSCpp : Pass<"scalehls-legalize-to-hlscpp", "FuncOp"> {
 
   let options = [
     Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
-           "The top function for HLS synthesis">,
-    Option<"axiInterf", "axi-interf", "bool", /*default=*/"false",
-           "Whether to create AXI interfaces for the top function">
+           "The top function for HLS synthesis">
   ];
 }
 

@@ -92,6 +92,10 @@ void scalehls::setTopFuncAttr(FuncOp func) {
   func->setAttr("top_func", UnitAttr::get(func.getContext()));
 }
 
+void scalehls::setRuntimeAttr(FuncOp func) {
+  func->setAttr("runtime", UnitAttr::get(func.getContext()));
+}
+
 //===----------------------------------------------------------------------===//
 // Loop transform utils
 //===----------------------------------------------------------------------===//

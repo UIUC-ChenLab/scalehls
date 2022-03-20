@@ -426,9 +426,6 @@ struct FuncDataflow : public FuncDataflowBase<FuncDataflow> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createFuncDataflowPass() {
-  return std::make_unique<FuncDataflow>();
-}
 std::unique_ptr<Pass> scalehls::createFuncDataflowPass(unsigned dataflowGran,
                                                        bool dataflowBalance) {
   return std::make_unique<FuncDataflow>(dataflowGran, dataflowBalance);

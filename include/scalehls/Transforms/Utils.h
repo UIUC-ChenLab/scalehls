@@ -45,6 +45,7 @@ void setFuncDirective(Operation *op, FuncDirectiveAttr FuncDirective);
 void setFuncDirective(Operation *op, bool pipeline, int64_t targetInterval,
                       bool dataflow);
 void setTopFuncAttr(FuncOp func);
+void setRuntimeAttr(FuncOp func);
 
 //===----------------------------------------------------------------------===//
 // Optimization utils
@@ -90,7 +91,7 @@ bool applyArrayPartition(Value array, ArrayRef<unsigned> factors,
 /// targeted function.
 bool applyAutoArrayPartition(FuncOp func);
 
-bool applyLegalizeToHLSCpp(FuncOp func, bool topFunc, bool axiInterf = false);
+bool applyLegalizeToHLSCpp(FuncOp func, bool topFunc);
 
 /// Apply memory optimizations.
 bool applyMemoryOpts(FuncOp func);

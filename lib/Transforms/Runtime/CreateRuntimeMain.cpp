@@ -48,17 +48,12 @@ struct CreateRuntimeMain : public CreateRuntimeMainBase<CreateRuntimeMain> {
     OpBuilder builder(module);
 
     // Get the top function of the module.
-    auto getTopFunc = [&]() {
-      for (auto func : module.getOps<FuncOp>())
-        if (func.getName() == topFunc)
-          return func;
-      return FuncOp();
-    };
-    auto func = getTopFunc();
+    auto func = getTopFunc(module, topFunc);
     if (!func) {
       emitError(module.getLoc(), "fail to find the top function");
       return signalPassFailure();
     }
+    setTopFuncAttr(func);
 
     // Hoist local constants to the top function.
     for (auto call : llvm::make_early_inc_range(func.getOps<func::CallOp>())) {
@@ -84,6 +79,7 @@ struct CreateRuntimeMain : public CreateRuntimeMainBase<CreateRuntimeMain> {
     builder.setInsertionPointAfter(func);
     auto mainFunc =
         builder.create<FuncOp>(builder.getUnknownLoc(), "main", func.getType());
+    setRuntimeAttr(mainFunc);
     auto entry = mainFunc.addEntryBlock();
 
     auto constants = collectConstantsAndUpdateFuncionType(func);
@@ -104,9 +100,6 @@ struct CreateRuntimeMain : public CreateRuntimeMainBase<CreateRuntimeMain> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createCreateRuntimeMainPass() {
-  return std::make_unique<CreateRuntimeMain>();
-}
 std::unique_ptr<Pass>
 scalehls::createCreateRuntimeMainPass(std::string hlsTopFunc) {
   return std::make_unique<CreateRuntimeMain>(hlsTopFunc);

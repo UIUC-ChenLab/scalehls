@@ -112,9 +112,6 @@ struct AffineLoopTile : public AffineLoopTileBase<AffineLoopTile> {
 
 /// Creates a pass to perform loop tiling on all suitable loop nests of a
 /// Function.
-std::unique_ptr<Pass> scalehls::createAffineLoopTilePass() {
-  return std::make_unique<AffineLoopTile>();
-}
 std::unique_ptr<Pass>
 scalehls::createAffineLoopTilePass(unsigned loopTileSize) {
   return std::make_unique<AffineLoopTile>(loopTileSize);

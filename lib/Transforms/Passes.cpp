@@ -46,8 +46,9 @@ void scalehls::registerScaleHLSDSEPipeline() {
       "Launch design space exploration for C/C++ kernel",
       [](OpPassManager &pm, const ScaleHLSDSEPipelineOptions &opts) {
         // Legalize the input program.
-        pm.addPass(scalehls::createLegalizeToHLSCppPass(opts.hlsTopFunc,
-                                                        opts.hlsAxiInterf));
+        pm.addPass(scalehls::createLegalizeToHLSCppPass(opts.hlsTopFunc));
+        if (opts.hlsAxiInterf)
+          pm.addPass(scalehls::createCreateAxiInterfacePass());
 
         // We first run several passes to simplify the input program.
         pm.addPass(scalehls::createPromoteBufferPass());
@@ -208,8 +209,9 @@ void scalehls::registerScaleHLSTestPipeline() {
       "scalehls-test-pipeline",
       "Launch design space exploration for C/C++ kernel",
       [](OpPassManager &pm, const ScaleHLSTestPipelineOptions &opts) {
-        pm.addPass(scalehls::createLegalizeToHLSCppPass(opts.hlsTopFunc,
-                                                        opts.hlsAxiInterf));
+        pm.addPass(scalehls::createLegalizeToHLSCppPass(opts.hlsTopFunc));
+        if (opts.hlsAxiInterf)
+          pm.addPass(scalehls::createCreateAxiInterfacePass());
         pm.addPass(scalehls::createMaterializeReductionPass());
         pm.addPass(scalehls::createAffineLoopPerfectionPass());
         pm.addPass(scalehls::createRemoveVariableBoundPass());

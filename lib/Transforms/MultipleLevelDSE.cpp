@@ -900,9 +900,6 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createMultipleLevelDSEPass() {
-  return std::make_unique<MultipleLevelDSE>();
-}
 std::unique_ptr<Pass>
 scalehls::createMultipleLevelDSEPass(std::string dseTargetSpec) {
   return std::make_unique<MultipleLevelDSE>(dseTargetSpec);

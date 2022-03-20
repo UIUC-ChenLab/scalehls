@@ -54,8 +54,7 @@ struct MemrefStoreRewritePattern : public OpRewritePattern<memref::StoreOp> {
 };
 } // namespace
 
-bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc,
-                                     bool axiInterf) {
+bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
   auto builder = OpBuilder(func);
 
   // We constrain functions to only contain one block.
@@ -72,21 +71,6 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc,
     if (isLoopParallel(loop))
       setParallelAttr(loop);
   });
-
-  if (axiInterf) {
-    // Convert each argument memory kind to DRAM and buffer each of them.
-    for (auto arg : func.getArguments()) {
-      if (auto type = arg.getType().dyn_cast<MemRefType>()) {
-        arg.setType(MemRefType::get(type.getShape(), type.getElementType(),
-                                    type.getLayout().getAffineMap(),
-                                    (unsigned)MemoryKind::DRAM));
-      }
-    }
-
-    // Finally, update the type of the function.
-    func.setType(builder.getFunctionType(func.front().getArgumentTypes(),
-                                         func.getResultTypes()));
-  }
 
   // Insert BufferOp when an arguments or result of ConstantOp are directly
   // connected to ReturnOp.
@@ -118,24 +102,17 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc,
 namespace {
 struct LegalizeToHLSCpp : public LegalizeToHLSCppBase<LegalizeToHLSCpp> {
   LegalizeToHLSCpp() = default;
-  LegalizeToHLSCpp(std::string hlsTopFunc, bool hlsAxiInterf) {
-    topFunc = hlsTopFunc;
-    axiInterf = hlsAxiInterf;
-  }
+  LegalizeToHLSCpp(std::string hlsTopFunc) { topFunc = hlsTopFunc; }
 
   void runOnOperation() override {
     auto func = getOperation();
     auto isTop = func.getName() == topFunc;
-    applyLegalizeToHLSCpp(func, isTop, isTop && axiInterf);
+    applyLegalizeToHLSCpp(func, isTop);
   }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createLegalizeToHLSCppPass() {
-  return std::make_unique<LegalizeToHLSCpp>();
-}
 std::unique_ptr<Pass>
-scalehls::createLegalizeToHLSCppPass(std::string hlsTopFunc,
-                                     bool hlsAxiInterf) {
-  return std::make_unique<LegalizeToHLSCpp>(hlsTopFunc, hlsAxiInterf);
+scalehls::createLegalizeToHLSCppPass(std::string hlsTopFunc) {
+  return std::make_unique<LegalizeToHLSCpp>(hlsTopFunc);
 }

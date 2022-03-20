@@ -79,8 +79,7 @@ static void updateReturnOps(FuncOp func,
 
 // Updates all CallOps in the scope of the given ModuleOp by allocating
 // temporary buffers for newly introduced out params.
-static LogicalResult updateCalls(ModuleOp module) {
-  bool didFail = false;
+static void updateCalls(ModuleOp module) {
   module.walk([&](func::CallOp op) {
     SmallVector<Value, 6> replaceWithNewCallResults;
     SmallVector<Value, 6> replaceWithOutParams;
@@ -109,8 +108,6 @@ static LogicalResult updateCalls(ModuleOp module) {
       std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
     op.erase();
   });
-
-  return failure(didFail);
 }
 
 namespace {
@@ -149,15 +146,18 @@ struct HoistStreamChannel : HoistStreamChannelBase<HoistStreamChannel> {
     patterns.add<LowerStreamBufferOpRewritePattern>(context);
     (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
 
-    for (auto func : module.getOps<FuncOp>()) {
-      SmallVector<BlockArgument, 6> appendedEntryArgs;
-      updateFuncOp(func, appendedEntryArgs);
-      if (func.isExternal())
-        continue;
-      updateReturnOps(func, appendedEntryArgs);
-    }
-    if (failed(updateCalls(module)))
+    // Get the top function of the module.
+    auto func = getTopFunc(module);
+    if (!func) {
+      emitError(module.getLoc(), "fail to find the top function");
       return signalPassFailure();
+    }
+
+    // Hoist stream channels to the top-function.
+    SmallVector<BlockArgument, 6> appendedEntryArgs;
+    updateFuncOp(func, appendedEntryArgs);
+    updateReturnOps(func, appendedEntryArgs);
+    updateCalls(module);
   }
 };
 } // namespace

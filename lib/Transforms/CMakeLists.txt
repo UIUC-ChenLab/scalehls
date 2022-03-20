@@ -25,7 +25,8 @@ add_mlir_library(MLIRScaleHLSTransforms
   Memory/RaiseImplicitCopy.cpp
   Memory/ReduceInitialInterval.cpp
   Memory/SimplifyMemrefAccess.cpp
-  CreateRuntimeMain.cpp
+  Runtime/CreateAxiInterface.cpp
+  Runtime/CreateRuntimeMain.cpp
   LegalizeToHLSCpp.cpp
   MultipleLevelDSE.cpp
   Passes.cpp

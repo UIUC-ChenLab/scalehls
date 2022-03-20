@@ -430,7 +430,7 @@ struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
     // FIXME: A better solution to handle the runtime main function.
     FuncOp topFunc;
     for (auto func : module.getOps<FuncOp>()) {
-      if (func.getName() == "main") {
+      if (hasRuntimeAttr(func)) {
         topFunc = func;
         break;
       } else if (hasTopFuncAttr(func))
@@ -438,7 +438,7 @@ struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
     }
 
     if (!topFunc) {
-      emitError(module.getLoc(), "top function is not found");
+      emitError(module.getLoc(), "fail to find the top function");
       return signalPassFailure();
     }
     applyAutoArrayPartition(topFunc);

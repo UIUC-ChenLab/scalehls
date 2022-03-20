@@ -38,9 +38,6 @@ struct AffineLoopDataflow : public AffineLoopDataflowBase<AffineLoopDataflow> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createAffineLoopDataflowPass() {
-  return std::make_unique<AffineLoopDataflow>();
-}
 std::unique_ptr<Pass>
 scalehls::createAffineLoopDataflowPass(unsigned dataflowGran,
                                        bool dataflowBalance) {
