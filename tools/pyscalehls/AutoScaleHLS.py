@@ -9,6 +9,7 @@ import copy
 from sklearn import tree
 import treelib
 import json
+import pandas
 
 import re
 
@@ -195,15 +196,18 @@ def main():
                     if (target.level(DFS_node.identifier) == 1) and (DFS_node.tag == item[0]) and (item[-1] == "Variable"):
                         do_SDSE = False
         if do_SDSE and has_loops:
-            suc_fail, buffer = DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", dse_target, 0.30, target)
+            suc_fail, buffer = DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", dse_target, 1, target)
             if suc_fail:
                 pareto_space_list = pareto_space_list + buffer
 
     for item in pareto_space_list:
         print(item[0])
 
-    combined_list = []
-    DPAT.combine_two_spaces(pareto_space_list, combined_list, "Loop0", "Loop1")
+    pandas.set_option('display.max_rows', None)
+    buffer = DPAT.combine_two_spaces(pareto_space_list, "Loop0", "Loop1")
+    print(buffer)
+    final = DPAT.combine_two_spaces(pareto_space_list, buffer, "Loop2")
+    print(final)
 
     # #create paramfile
     # INPAR.create_params(tar_dir, var_forlist, var_arraylist_sized)

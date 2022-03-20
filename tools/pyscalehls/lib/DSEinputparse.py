@@ -427,5 +427,5 @@ def process_source_file(dir, inputfile, topfun, sdse=False):
 
         tree_list.append(mastertree)
     
-    return var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list         
+    return var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list
     

@@ -179,28 +179,83 @@ def cull_function_by_pattern(dir, inputfile, dsespec, resource, pattern):
     return True, loopparetospace_list
 
 
-def combine_two_spaces(pareto_space_list, combined_list, input1, input2):
-
-    print("combinespace")
-
+def combine_two_spaces(pareto_space_list, input1, input2):
 
     space1 = None
     space2 = None
 
+    if not(isinstance(input1, str)):
+        space1 = input1
+    if not(isinstance(input2, str)):
+        space1 = input2
+
     for loop_space in pareto_space_list:
-        if loop_space[0] == input1:
+        if isinstance(input1, str) and loop_space[0] == input1:
             space1 = loop_space[1]
-        if loop_space[0] == input2:
+        if isinstance(input2, str) and loop_space[0] == input2:
             space2 = loop_space[1]
 
-    print(space1)
-    print(space1.columns)
-    print(space2.columns)
-    print(space1.columns[1])
-    print(space1["l0"][0])
+    space1_looplables = re.findall(r'(l\d+|b\d+l\d+)', "--".join(space1.columns))
+    space2_looplables = re.findall(r'(l\d+|b\d+l\d+)', "--".join(space2.columns))
 
+    combined_columns = []
+    for loopvariable in space1_looplables:
+        if re.findall(r'(b\d+l\d+)', loopvariable):
+            combined_columns.append(loopvariable)
+        elif re.findall(r'(l\d+)', loopvariable):
+            loopbandnumb = re.findall(r'Loop(\d+)', input1)
+            combined_columns.append('b' + loopbandnumb[0] + loopvariable)
+    for loopvariable in space2_looplables:
+        if re.findall(r'(b\d+l\d+)', loopvariable):
+            combined_columns.append(loopvariable)
+        elif re.findall(r'(l\d+)', loopvariable):
+            loopbandnumb = re.findall(r'Loop(\d+)', input2)
+            combined_columns.append('b' + loopbandnumb[0] + loopvariable)
+    combined_columns.append("cycle")
+    combined_columns.append("dsp")
+    combined_columns.append("type")
 
+    combinedbuffer = []
+    for i in range(len(space1)):
+        buffer_space1 = []
+        # only combine pareto points
+        if space1.iloc[i]['type'] == 'pareto':
+            for s1l in space1_looplables: #extract data from space 1
+                buffer_space1.append(space1.iloc[i][s1l])
+            buffer_cycle = space1.iloc[i]["cycle"]
+            buffer_dsp = space1.iloc[i]["dsp"]
 
+            for j in range(len(space2)):
+                row_buffer = []
+                if space2.iloc[j]['type'] == 'pareto':
+                    row_buffer = copy.deepcopy(buffer_space1) 
+                    for s2l in space2_looplables: #extract data from space 1
+                        row_buffer.append(space2.iloc[j][s2l])
+                    #copy combined cycle
+                    row_buffer.append(buffer_cycle + space2.iloc[j]["cycle"])
+                    row_buffer.append(buffer_dsp + space2.iloc[j]["dsp"])
+                    row_buffer.append("Null")
+                    row_deepcopy = copy.deepcopy(row_buffer)
+                    combinedbuffer.append(row_deepcopy)
 
+    raw_combineddataspace = pd.DataFrame(combinedbuffer, columns=combined_columns)
+    
+    #mark pareto points
+    sorted_dataset = raw_combineddataspace.sort_values(by=['cycle','dsp'])
+    sorted_dataset = sorted_dataset.reset_index(drop=True) #reset index after sorting
+    cost = float('inf') # initialize with cost=1, which is the maximum possible value
+    cycle = 0 # initialize latency to 0 for safety
+    for i in range(len(sorted_dataset)):
+        # check if the cost is in a descending order
+        if (sorted_dataset.iloc[i]['dsp'] >= cost):
+            sorted_dataset.at[i,'type'] = "unnecessary"
+        else:
+            cost = sorted_dataset.iloc[i]['dsp']
+            sorted_dataset.at[i,'type'] = "pareto"    
+    # bring pareto points to top of list
+    pareto_combinedspace = sorted_dataset.sort_values(by=['type', 'cycle'])
+    pareto_combinedspace = pareto_combinedspace.reset_index(drop=True)
 
+    # pareto_combinedspace = pareto_combinedspace.loc[pareto_combinedspace['type'] == 'pareto']
 
+    return pareto_combinedspace
