@@ -17,14 +17,12 @@ void test(double weights1[13*64],
     norm = 0.0;
     bias_norm = 0.0;
 
-/////////1
     Loop21: for(i=0; i < 13; i++){
         Loop22: for(j = 0; j < 64; j++){
             weights1[i*64 + j] -= (d_weights1[i*64 + j] * 0.01);
             norm += weights1[i*64 + j]*weights1[i*64 + j];
         }
     }
-/////////2    
     Loop23: for(i=0; i < 64; i++){
         biases1[i] -= (d_biases1[i]*0.01);
         bias_norm += biases1[i]*biases1[i];
@@ -33,13 +31,11 @@ void test(double weights1[13*64],
     norm = sqrt(norm);
     bias_norm = sqrt(bias_norm);
 
-/////////3
     Loop24: for(i=0; i < 13; i++){
         Loop25: for(j = 0; j < 64; j++){
             weights1[i*64 + j] = (weights1[i*64 + j]/norm);
         }
     }
-/////////4
     Loop26: for(i=0; i < 64; i++){
         biases1[i] = (biases1[i]/bias_norm);
     }
@@ -47,14 +43,12 @@ void test(double weights1[13*64],
     norm = (double)0.0;
     bias_norm = (double)0.0;
 
-/////////5
     Loop27: for(i=0; i < 64; i++){
         Loop28: for(j = 0; j < 64; j++){
             weights2[i*64 + j] -= (d_weights2[i*64 + j] * 0.01);
             norm += weights2[i*64 + j]*weights2[i*64 + j];
         }
     }
-/////////6
     Loop29: for(i=0; i < 64; i++){
         biases2[i] -= (d_biases2[i]*0.01);
         bias_norm += biases2[i]*biases2[i];
@@ -63,7 +57,6 @@ void test(double weights1[13*64],
     norm = sqrt(norm);
     bias_norm = sqrt(bias_norm);
 
-/////////7
     Loop30: for(i=0; i < 64; i++){
         Loop31: for(j = 0; j < 64; j++){
             weights2[i*64 + j] = (weights2[i*64 + j]/norm);
@@ -72,19 +65,17 @@ void test(double weights1[13*64],
     Loop32: for(i=0; i < 64; i++){
         biases2[i] = (biases2[i]/bias_norm);
     }
-//////////////////////////////////////////////////////
+
     norm = (double)0.0;
     bias_norm = (double)0.0;
 
-/////////8
     Loop33: for(i=0; i < 64; i++){
-        Loop34: for(j = 0; j < 16; j++){
+        Loop34: for(j = 0; j < 3; j++){
             weights3[i*3 + j] -= (d_weights3[i*3 + j] * 0.01);
             norm += weights3[i*3 + j]*weights3[i*3 + j];
         }
     }
-/////////9    
-    Loop35: for(i=0; i<16;i++){
+    Loop35: for(i=0; i<3;i++){
         biases3[i] -= d_biases3[i]*0.01;
         bias_norm += biases3[i]*biases3[i];
     }
@@ -93,11 +84,11 @@ void test(double weights1[13*64],
     bias_norm = sqrt(bias_norm);
 
     Loop36: for(i=0; i < 64; i++){
-        Loop37: for(j = 0; j < 16; j++){
+        Loop37: for(j = 0; j < 3; j++){
             weights3[i*3 + j] = (weights3[i*3 + j]/norm);
         }
     }
-    Loop38: for(i=0; i < 16; i++){
+    Loop38: for(i=0; i < 3; i++){
         biases3[i] = (biases3[i]/bias_norm);
     }
 }

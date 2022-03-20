@@ -17,7 +17,7 @@
 #target_source_file_location = ../../samples/polybench2/2mm.c
 #top_function = kernel_2mm
 
-#target_source_file_location = ../../samples/polybench2/3mm.c
+#target_source_file_location = ../../samples/polybench2/3mm_test.c
 #top_function = kernel_3mm
 
 #target_source_file_location = ../../samples/polybench2/atax.c

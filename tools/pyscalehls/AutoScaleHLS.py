@@ -5,7 +5,7 @@ import shutil
 import pandas as pd
 import argparse
 import copy
-
+import numpy as np
 from sklearn import tree
 import treelib
 import json
@@ -182,7 +182,7 @@ def main():
     # DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", dse_target, 1, target)   
 
     pareto_space_list = []
-    for i in range(len(tree_list) - 2):
+    for i in range(len(tree_list) - 1):
         target = treelib.Tree(tree_list[i].subtree(tree_list[i][tree_list[i].root].identifier), deep=True)
         DFS_list = [target[node] for node in target.expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
         do_SDSE = True
@@ -203,11 +203,15 @@ def main():
     for item in pareto_space_list:
         print(item[0])
 
-    pandas.set_option('display.max_rows', None)
-    buffer = DPAT.combine_two_spaces(pareto_space_list, "Loop0", "Loop1")
-    print(buffer)
-    final = DPAT.combine_two_spaces(pareto_space_list, buffer, "Loop2")
-    print(final)
+    isbreak = input("\n\nBreak\n")
+
+    DPAT.apply_loop_ops(tar_dir, tree_list[0], np.array([[64]]))
+
+    # pandas.set_option('display.max_rows', None)
+    # buffer = DPAT.combine_two_spaces(pareto_space_list, "Loop0", "Loop1")
+    # # print(buffer)
+    # final = DPAT.combine_two_spaces(pareto_space_list, buffer, "Loop2")
+    # # print(final)
 
     # #create paramfile
     # INPAR.create_params(tar_dir, var_forlist, var_arraylist_sized)

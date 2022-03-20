@@ -6,6 +6,14 @@ import subprocess
 import json
 import copy
 import pandas as pd
+import subprocess
+import numpy as np
+import io
+import shutil
+
+import scalehls
+import mlir.ir
+from mlir.dialects import builtin
 
 def sdse_target(new_dir, dsespec, resource, tag, inputfile, inputtop):
 
@@ -122,7 +130,8 @@ def cull_function_by_pattern(dir, inputfile, dsespec, resource, pattern):
                     loopnum = re.findall('Loop(\d+):', line)
                     if pattern.get_node(int(loopnum[0])) != None:
                         if in_pattern:
-                            newfile.write(re.sub('Loop'+ str(loopnum[0]) + ': ', '', line))
+                            # newfile.write(re.sub('Loop'+ str(loopnum[0]) + ': ', '', line))
+                            newfile.write(line)
                     else:
                         if is_brace:
                             brace_count_cut = brace_count
@@ -148,7 +157,7 @@ def cull_function_by_pattern(dir, inputfile, dsespec, resource, pattern):
     file.close()
     newfile.close()
 
-    sdse_target(None, dsespec, resource, root, snipfile, root)
+    # sdse_target(None, dsespec, resource, root, snipfile, root)
 
     #load pareto space
     #mark csv files with individual loop pareto spaces
@@ -256,6 +265,150 @@ def combine_two_spaces(pareto_space_list, input1, input2):
     pareto_combinedspace = sorted_dataset.sort_values(by=['type', 'cycle'])
     pareto_combinedspace = pareto_combinedspace.reset_index(drop=True)
 
-    # pareto_combinedspace = pareto_combinedspace.loc[pareto_combinedspace['type'] == 'pareto']
+    #remove unwanted points
+    pareto_combinedspace = pareto_combinedspace.loc[pareto_combinedspace['type'] == 'pareto']
 
     return pareto_combinedspace
+
+def apply_loop_ops(dir, pattern, loop_tile_array):
+    
+    topfunction = pattern[pattern.root].tag
+    input_dir = dir + "/snips/snip_" + topfunction
+    inputfile = "snip_" + topfunction + ".c"
+    outputfile = input_dir + "/snip_" + topfunction + "_adse.cpp"
+
+    ML_in_main = dir + "/ML_in.cpp"
+    
+    p1 = subprocess.Popen(['mlir-clang', input_dir + "/" + inputfile, '-function=' + topfunction, '-memref-fullrank', '-raise-scf-to-affine', '-S'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)                          
+    p2 = subprocess.run(['scalehls-opt', '-allow-unregistered-dialect', '-materialize-reduction'], stdin=p1.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)                  
+    fin = p2.stdout
+
+    ctx = mlir.ir.Context()
+    scalehls.register_dialects(ctx)
+    mod = mlir.ir.Module.parse(fin, ctx)
+
+    for func in mod.body:
+        if not isinstance(func, builtin.FuncOp):
+            pass
+        func.__class__ = builtin.FuncOp
+
+        # index so that corrent loop tiling can be applied
+        loopband_count = 0
+        # Traverse all suitable loop bands in the function.
+        bands = scalehls.LoopBandList(func)
+        for band in bands:
+            # Attempt to perfectize the loop band.
+            scalehls.loop_perfectization(band)
+
+            # Maximize the distance of loop-carried dependencies through loop permutation.
+            scalehls.loop_order_opt(band)
+
+            # Apply loop permutation based on the provided map.
+            # Note: This example "permMap" keeps the loop order unchanged.
+            permMap = np.arange(band.depth)
+            scalehls.loop_permutation(band, permMap)
+
+            # Attempt to remove variable loop bounds if possible.
+            scalehls.loop_var_bound_removal(band)
+
+            # Apply loop tiling. Tile sizes are defined from the outermost loop to the innermost.
+            # Note: We use the trip count to generate this example "factors".
+            loc = scalehls.loop_tiling(band, loop_tile_array[loopband_count], True) # simplify = True
+            print(loc)
+            
+            loopband_count += 1
+    
+        # Legalize the IR to make it emittable.
+        scalehls.legalize_to_hlscpp(
+            func, func.sym_name.value == topfunction)
+
+        # Optimize memory accesses through store forwarding, etc.
+        # scalehls.memory_access_opt(func)
+    
+    buf = io.StringIO()
+    scalehls.emit_hlscpp(mod, buf)
+    buf.seek(0)
+    # print(buf.read())
+
+    fout = open(outputfile, 'w+')
+    shutil.copyfileobj(buf, fout)
+    fout.close()
+
+    brace_count = 0
+    infunction = False
+    in_pattern = False
+    functioncall = False
+    done_copy = False
+    scope = None
+
+    newfile = open ("buffer.c", 'w')
+    with open(ML_in_main, 'r') as file:        
+        for line in file:
+            is_brace = False
+            functioncall = False
+
+            #find function calls
+            if brace_count >= 1:
+                functioncall = re.findall(r'\s([A-Za-z_]+[A-Za-z_\d]*)\s?\(', line)
+                if functioncall:
+                    functioncall = True
+
+            #scope finder
+            if brace_count == 0: 
+                raw_scope = re.findall(r'(void|int|float)\s([A-Za-z_]+[A-Za-z_\d]*)(\s)?(\()', line)
+                if raw_scope:
+                    scope = raw_scope[0][1]
+                    infunction = True
+                    if scope == topfunction:
+                        in_pattern = True
+
+            #open brackets
+            if(re.findall('{', line)):
+                brace_count += 1
+
+            if in_pattern: #copy subfunction to buffer
+                if not(done_copy):
+                    insubfunction = False
+                    subfunc_brace_count = 0
+                    with open(outputfile, 'r') as adse:
+                        for subline in adse:
+                            #detect function
+                            if subfunc_brace_count == 0:
+                                if re.findall(r'(void|int|float)\s([A-Za-z_]+[A-Za-z_\d]*)(\s)?(\()', subline):
+                                    insubfunction = True
+                            #write subfuntion to buffer
+                            if insubfunction:
+                                if re.findall(r'#pragma', subline): #remove pragma
+                                    None
+                                else:
+                                    newfile.write(subline)
+                            # open brackets
+                            if(re.findall('{', subline)):
+                                subfunc_brace_count += 1
+                            # close brackets
+                            if(re.findall('}', subline)):
+                                if subfunc_brace_count == 1:
+                                    subfunc_brace_count -= 1
+                                    insubfunction = False           
+                                else:
+                                    subfunc_brace_count -= 1
+                    adse.close()
+                    done_copy = True
+            elif brace_count == 0 and not(infunction):
+                newfile.write(line)
+            else:
+                newfile.write(line)
+
+            #close brackets
+            if(re.findall('}', line)):
+                if brace_count == 1:
+                    brace_count -= 1
+                    scope = None
+                    in_pattern = False
+                    infunction = False           
+                else:
+                    brace_count -= 1
+    file.close()
+    newfile.close()
+
+
