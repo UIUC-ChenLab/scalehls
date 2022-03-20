@@ -129,6 +129,11 @@ def HoistStreamChannel : Pass<"scalehls-hoist-stream-channel", "ModuleOp"> {
   }];
 
   let constructor = "mlir::scalehls::createHoistStreamChannelPass()";
+
+  let options = [
+    Option<"topFunc", "top-func", "std::string",
+           /*default=*/"\"main\"", "The top function to be transformed">
+  ];
 }
 
 //===----------------------------------------------------------------------===//
