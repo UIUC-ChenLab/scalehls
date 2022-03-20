@@ -129,7 +129,10 @@ struct LowerStreamBufferOpRewritePattern
         buffer, buffer.getType());
 
     rewriter.setInsertionPoint(block->getTerminator());
-    rewriter.create<hlscpp::StreamWriteOp>(loc, channel, Value());
+    auto tokenType = channel.getType().cast<StreamType>().getElementType();
+    auto tokenValue = rewriter.create<arith::ConstantOp>(
+        loc, rewriter.getZeroAttr(tokenType));
+    rewriter.create<hlscpp::StreamWriteOp>(loc, channel, tokenValue);
     return success();
   }
 };

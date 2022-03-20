@@ -52,8 +52,9 @@ public:
             memref::ExpandShapeOp, memref::ReinterpretCastOp,
             bufferization::ToMemrefOp, bufferization::ToTensorOp,
 
-            // HLSCpp primitive operations.
-            PrimMulOp, PrimCastOp, BufferOp,
+            // HLSCpp dialect operations.
+            StreamChannelOp, StreamReadOp, StreamWriteOp, PrimMulOp, PrimCastOp,
+            BufferOp,
 
             // Control flow operations.
             func::CallOp, func::ReturnOp,
@@ -145,7 +146,10 @@ public:
   HANDLE(bufferization::ToMemrefOp);
   HANDLE(bufferization::ToTensorOp);
 
-  // HLSCpp primitive operations.
+  // HLSCpp dialect operations.
+  HANDLE(StreamChannelOp);
+  HANDLE(StreamReadOp);
+  HANDLE(StreamWriteOp);
   HANDLE(PrimMulOp);
   HANDLE(PrimCastOp);
   HANDLE(BufferOp);

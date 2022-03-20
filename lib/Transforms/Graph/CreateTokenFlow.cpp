@@ -51,7 +51,9 @@ struct CreateTokenFlow : public CreateTokenFlowBase<CreateTokenFlow> {
         // Create a new token stream channel.
         builder.setInsertionPoint(returnOp);
         auto channel = builder.create<hlscpp::StreamChannelOp>(loc, tokenType);
-        builder.create<hlscpp::StreamWriteOp>(loc, channel, Value());
+        auto tokenValue =
+            builder.create<arith::ConstantOp>(loc, builder.getBoolAttr(false));
+        builder.create<hlscpp::StreamWriteOp>(loc, channel, tokenValue);
 
         // Collect the users of the stream channel.
         for (auto user : result.getUsers()) {

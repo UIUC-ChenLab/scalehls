@@ -37,7 +37,7 @@ def StreamReadOp : HLSCppOp<"stream.read"> {
 def StreamWriteOp : HLSCppOp<"stream.write"> {
   let summary = "Stream channel write operation";
 
-  let arguments = (ins StreamOf<[AnyType]>:$channel, Optional<AnyType>:$value);
+  let arguments = (ins StreamOf<[AnyType]>:$channel, AnyType:$value);
 }
 
 def StreamBufferOp : HLSCppOp<"stream.buffer"> {
