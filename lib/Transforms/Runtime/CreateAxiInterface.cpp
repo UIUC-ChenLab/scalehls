@@ -20,39 +20,6 @@ static MemRefType getDramType(MemRefType type) {
 }
 
 namespace {
-enum class InterfaceKind {
-  UNUSED = 0,
-  READ_ONLY = 1,
-  WRITE_ONLY = 2,
-  READ_WRITE = 3
-};
-} // namespace
-
-static InterfaceKind getInterfaceKind(FuncOp func, unsigned argIdx) {
-  auto arg = func.getArgument(argIdx);
-  assert(arg.getType().isa<MemRefType>() && "must be memref type");
-  bool hasRead = false;
-  bool hasWrite = false;
-  for (auto user : arg.getUsers()) {
-    if (isa<mlir::AffineReadOpInterface>(user))
-      hasRead = true;
-    else if (isa<mlir::AffineWriteOpInterface>(user))
-      hasWrite = true;
-    else
-      llvm_unreachable("used by neither load nor store");
-  }
-
-  if (hasRead && !hasWrite)
-    return InterfaceKind::READ_ONLY;
-  else if (!hasRead && hasWrite)
-    return InterfaceKind::WRITE_ONLY;
-  else if (hasRead && hasWrite)
-    return InterfaceKind::READ_WRITE;
-
-  return InterfaceKind::UNUSED;
-}
-
-namespace {
 struct CreateAxiInterface
     : public scalehls::CreateAxiInterfaceBase<CreateAxiInterface> {
   void runOnOperation() override {
@@ -104,28 +71,31 @@ struct CreateAxiInterface
       for (auto &use : llvm::make_early_inc_range(alloc->getUses())) {
         if (auto subCall = dyn_cast<func::CallOp>(use.getOwner())) {
           auto subFunc = module.lookupSymbol<FuncOp>(subCall.getCallee());
-          auto kind = getInterfaceKind(subFunc, use.getOperandNumber());
+          auto memref = subFunc.getArgument(use.getOperandNumber());
+
+          auto readFlag = llvm::any_of(memref.getUsers(), [](Operation *op) {
+            return isa<mlir::AffineReadOpInterface, memref::LoadOp,
+                       func::CallOp>(op);
+          });
+          auto writeFlag = llvm::any_of(memref.getUsers(), [](Operation *op) {
+            return isa<mlir::AffineWriteOpInterface, memref::StoreOp,
+                       func::CallOp>(op);
+          });
 
           // If the read/write is already occupied, create a new interface.
-          if (((kind == InterfaceKind::READ_ONLY) && !hasReadChannel) ||
-              ((kind == InterfaceKind::WRITE_ONLY) && !hasWriteChannel) ||
-              ((kind == InterfaceKind::READ_WRITE) &&
-               (!hasReadChannel || !hasWriteChannel))) {
+          if ((readFlag && !hasReadChannel) ||
+              (writeFlag && !hasWriteChannel)) {
             inputs.push_back(alloc);
             arg = func.front().addArgument(alloc.getType(), alloc.getLoc());
             hasReadChannel = true;
             hasWriteChannel = true;
           }
 
-          // Occupy read/write channel according to the interface kind.
-          if (kind == InterfaceKind::READ_ONLY)
+          // Occupy read/write channel if applicable.
+          if (readFlag)
             hasReadChannel = false;
-          else if (kind == InterfaceKind::WRITE_ONLY)
+          if (writeFlag)
             hasWriteChannel = false;
-          else if (kind == InterfaceKind::READ_WRITE) {
-            hasReadChannel = false;
-            hasWriteChannel = false;
-          }
         } else
           llvm_unreachable("memref must be used by call op");
 

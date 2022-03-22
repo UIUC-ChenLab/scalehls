@@ -31,12 +31,13 @@ void CreateMemrefSubview::runOnOperation() {
 
   // Collect all target loop bands.
   AffineLoopBands targetBands;
-  getLoopBands(func.front(), targetBands);
+  getLoopBands(func.front(), targetBands, /*allowHavingChilds=*/true);
 
   for (auto &band : targetBands) {
     AffineLoopBand tileBand;
     AffineLoopBand pointBand;
-    if (!getTileAndPointLoopBand(band, tileBand, pointBand))
+    if (!getTileAndPointLoopBand(band, tileBand, pointBand) ||
+        pointBand.empty())
       continue;
 
     b.setInsertionPoint(pointBand.front());
@@ -54,6 +55,12 @@ void CreateMemrefSubview::runOnOperation() {
         map = storeOp.getAffineMap();
         memref = storeOp.getMemRef();
       } else
+        return WalkResult::advance();
+
+      // No need to create subview for on-chip buffers. TODO: Should we make
+      // this an option?
+      if (memref.getType().cast<MemRefType>().getMemorySpaceAsInt() !=
+          (unsigned)MemoryKind::DRAM)
         return WalkResult::advance();
 
       // Construct the dimensions set whose corresponding operand is point loop
