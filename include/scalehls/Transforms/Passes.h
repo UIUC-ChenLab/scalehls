@@ -19,7 +19,7 @@ namespace scalehls {
 
 void registerScaleHLSDSEPipeline();
 void registerScaleHLSPyTorchPipeline();
-void registerScaleHLSTestPipeline();
+void registerScaleHLSPyTorchPipelineV2();
 void registerTransformsPasses();
 
 /// QoR estimation and DSE passes.
@@ -33,8 +33,9 @@ std::unique_ptr<Pass> createFakeQuantizePass();
 std::unique_ptr<Pass> createSimplifyTosaGraphPass();
 std::unique_ptr<Pass> createHeuristicNodeFusionPass();
 std::unique_ptr<Pass> createCreateTokenFlowPass();
-std::unique_ptr<Pass> createFuncDataflowPass(unsigned dataflowGran = 1,
-                                             bool dataflowBalance = true);
+std::unique_ptr<Pass>
+createFuncDataflowPass(std::string dataflowTargetFunc = "forward",
+                       unsigned dataflowGran = 1, bool dataflowBalance = true);
 std::unique_ptr<Pass> createTosaToLinalgCleanupPass();
 std::unique_ptr<Pass> createHoistStreamChannelPass();
 

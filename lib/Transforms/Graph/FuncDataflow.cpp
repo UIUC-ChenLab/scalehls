@@ -429,7 +429,9 @@ bool scalehls::applyDataflow(Block &block, StringRef prefix, unsigned gran,
 namespace {
 struct FuncDataflow : public FuncDataflowBase<FuncDataflow> {
   FuncDataflow() = default;
-  FuncDataflow(unsigned dataflowGran, bool dataflowBalance) {
+  FuncDataflow(std::string dataflowTargetFunc, unsigned dataflowGran,
+               bool dataflowBalance) {
+    targetFunc = dataflowTargetFunc;
     gran = dataflowGran;
     balance = dataflowBalance;
   }
@@ -445,7 +447,9 @@ struct FuncDataflow : public FuncDataflowBase<FuncDataflow> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createFuncDataflowPass(unsigned dataflowGran,
-                                                       bool dataflowBalance) {
-  return std::make_unique<FuncDataflow>(dataflowGran, dataflowBalance);
+std::unique_ptr<Pass>
+scalehls::createFuncDataflowPass(std::string dataflowTargetFunc,
+                                 unsigned dataflowGran, bool dataflowBalance) {
+  return std::make_unique<FuncDataflow>(dataflowTargetFunc, dataflowGran,
+                                        dataflowBalance);
 }
