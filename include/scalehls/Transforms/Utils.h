@@ -79,8 +79,10 @@ bool applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
 /// Fully unroll all loops insides of a loop block.
 bool applyFullyLoopUnrolling(Block &block, unsigned maxIterNum = 10);
 
-/// Apply dataflow (coarse-grained pipeline) to the block.
-bool applyDataflow(Block &block, unsigned minGran, bool insertCopy);
+/// Apply dataflow (coarse-grained pipeline) to the block. "gran" determines the
+/// minimum granularity of dataflowing while "balance" indicates whether buffers
+/// are inserted to balance the dataflow pipeline.
+bool applyDataflow(Block &block, StringRef prefix, unsigned gran, bool balance);
 
 /// Apply the specified array partition factors and kinds.
 bool applyArrayPartition(Value array, ArrayRef<unsigned> factors,

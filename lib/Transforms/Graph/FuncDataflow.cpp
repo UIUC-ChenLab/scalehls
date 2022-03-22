@@ -18,17 +18,17 @@
 using namespace mlir;
 using namespace scalehls;
 
-/// A dataflow use includes the intermediate value and the user operation, which
-/// is similar to the concept of OpOperand in the SSA graph.
-using DataflowUse = std::pair<Value, Operation *>;
-using DataflowUses = SmallVector<DataflowUse, 4>;
-
-/// A mapping from an operation to all its dataflow uses.
-using DataflowUsesMap = llvm::SmallDenseMap<Operation *, DataflowUses, 64>;
-
 namespace {
 struct DataflowGraph {
   DataflowGraph(Block &block);
+
+  /// A dataflow use includes the intermediate value and the user operation,
+  /// which is similar to the concept of OpOperand in the SSA graph.
+  using DataflowUse = std::pair<Value, Operation *>;
+  using DataflowUses = SmallVector<DataflowUse, 4>;
+
+  /// A mapping from an operation to all its dataflow uses.
+  using DataflowUsesMap = llvm::SmallDenseMap<Operation *, DataflowUses, 64>;
 
   bool hasNode(Operation *node) const { return nodes.count(node); }
   DataflowUses getNodeUses(Operation *node) const {
@@ -106,12 +106,31 @@ DataflowGraph::DataflowGraph(Block &block) {
   }
 }
 
+namespace {
+struct Dataflower {
+  Dataflower(Block &block, StringRef prefix)
+      : block(block), graph(block), prefix(prefix) {}
+
+  /// Legalize the dataflow of "block", whose parent operation must be a
+  /// function or affine loop. Return false if the legalization failed, for
+  /// example, the dataflow has cycles.
+  bool applyLegalizeDataflow(int64_t gran, bool balance);
+
+  /// Split each dataflow stage of "block" into a separate sub-function.
+  bool applySplitFunction();
+
+private:
+  Block &block;
+  DataflowGraph graph;
+  StringRef prefix;
+};
+} // namespace
+
 /// Legalize the dataflow of "block", whose parent operation must be a function
 /// or affine loop. Return false if the legalization failed, for example, the
 /// dataflow has cycles.
-static bool applyLegalizeDataflow(Block &block, int64_t gran, bool balance) {
+bool Dataflower::applyLegalizeDataflow(int64_t gran, bool balance) {
   auto builder = OpBuilder(block.getParentOp());
-  DataflowGraph graph(block);
 
   llvm::SmallDenseMap<Operation *, int64_t, 32> map;
   llvm::SmallDenseMap<int64_t, int64_t, 16> dataflowToMerge;
@@ -250,129 +269,8 @@ static void inlineFunction(FuncOp func) {
   }
 }
 
-static bool createSubFunction(Block &block, ArrayRef<Operation *> ops,
-                              StringRef name, OpBuilder &builder) {
-  Liveness liveness(block.getParentOp());
-
-  // A helper that checks whether a value is a liveout value.
-  auto isLiveOut = [&](Value value) {
-    return any_of(value.getUsers(), [&](auto user) {
-      return all_of(ops, [&](auto op) { return !op->isAncestor(user); });
-    });
-  };
-
-  // Output types and values of the sub-function.
-  SmallVector<Type, 8> outputTypes;
-  SmallVector<Value, 8> outputValues;
-
-  // Internal values of the sub-function.
-  llvm::SmallDenseSet<Value, 16> internalValues;
-
-  for (auto op : ops) {
-    for (auto result : op->getResults()) {
-      internalValues.insert(result);
-      if (isLiveOut(result)) {
-        outputTypes.push_back(result.getType());
-        outputValues.push_back(result);
-      }
-    }
-    op->walk([&](AffineForOp loop) {
-      internalValues.insert(loop.getInductionVar());
-    });
-  }
-
-  // Input types and values of the sub-function.
-  SmallVector<Type, 8> inputTypes;
-  SmallVector<Value, 8> inputValues;
-
-  // Local buffers of the sub-function.
-  llvm::SmallDenseSet<Operation *, 8> localOps;
-
-  for (auto op : ops) {
-    // Push back all operands and liveins as candidates.
-    SmallVector<Value, 8> inputCandidates(op->getOperands());
-    for (auto &region : op->getRegions()) {
-      auto entryBlock = &region.front();
-      auto args = entryBlock->getArguments();
-
-      for (auto liveIn : liveness.getLiveIn(entryBlock))
-        if (llvm::find(args, liveIn) == args.end())
-          inputCandidates.push_back(liveIn);
-    }
-
-    for (auto input : inputCandidates) {
-      // If the current input is an internal value, it doesn't needs to be
-      // passed in as argument.
-      if (internalValues.count(input))
-        continue;
-
-      if (auto defOp = input.getDefiningOp()) {
-        // If the current input is not a liveout and it's defined by an memref
-        // alloc/alloca op, it is a local buffer and can be localized later.
-        if (!isLiveOut(input) &&
-            isa<memref::AllocOp, memref::AllocaOp>(defOp)) {
-          localOps.insert(defOp);
-          continue;
-        }
-
-        // Since we have localized all tosa constant operations, we can safely
-        // insert a constant as a local op here.
-        if (isa<tosa::ConstOp, arith::ConstantOp>(defOp)) {
-          localOps.insert(defOp);
-          continue;
-        }
-      }
-
-      // Only unique inputs will be added.
-      if (llvm::find(inputValues, input) != inputValues.end())
-        continue;
-
-      inputTypes.push_back(input.getType());
-      inputValues.push_back(input);
-    }
-  }
-
-  // Create a new function for the current dataflow level.
-  auto loc = builder.getUnknownLoc();
-  builder.setInsertionPoint(block.getParent()->getParentOfType<FuncOp>());
-  auto subFunc = builder.create<FuncOp>(
-      loc, name, builder.getFunctionType(inputTypes, outputTypes));
-
-  // Create a function call and reconnect all inputs and outputs.
-  builder.setInsertionPointAfter(ops.back());
-  auto call = builder.create<func::CallOp>(loc, subFunc, inputValues);
-  unsigned outputIdx = 0;
-  for (auto result : call.getResults())
-    outputValues[outputIdx++].replaceAllUsesWith(result);
-
-  // Create new return operation in the new created function.
-  auto entry = subFunc.addEntryBlock();
-  builder.setInsertionPointToEnd(entry);
-  auto returnOp = builder.create<func::ReturnOp>(loc, outputValues);
-
-  // Move local buffers into the new created function.
-  for (auto localOp : localOps)
-    localOp->moveBefore(&subFunc.front().front());
-
-  // Move same level operations into the new created function.
-  for (auto op : ops) {
-    op->moveBefore(returnOp);
-    op->removeAttr("dataflow_level");
-  }
-
-  // Connect operands to the arguments of the new created function.
-  for (unsigned i = 0, e = inputValues.size(); i < e; ++i)
-    inputValues[i].replaceUsesWithIf(
-        entry->getArgument(i),
-        [&](OpOperand &use) { return subFunc->isAncestor(use.getOwner()); });
-
-  inlineFunction(subFunc);
-  setFuncDirective(subFunc, false, 1, true);
-  return true;
-}
-
 /// Split each dataflow stage of "block" into a separate sub-function.
-static bool applySplitFunction(Block &block) {
+bool Dataflower::applySplitFunction() {
   auto builder = OpBuilder(block.getParentOp());
   localizeConstants(block);
 
@@ -383,18 +281,138 @@ static bool applySplitFunction(Block &block) {
       dataflowOps[attr.getInt()].push_back(&op);
 
   for (auto pair : dataflowOps) {
-    auto name = "dataflow" + std::to_string(pair.first);
-    if (!createSubFunction(block, pair.second, name, builder))
-      return false;
+    auto &ops = pair.second;
+    // TODO: It seems we need to perform a liveness analysis each iteration?
+    Liveness liveness(block.getParentOp());
+
+    // A helper that checks whether a value is a liveout value.
+    auto isLiveOut = [&](Value value) {
+      return any_of(value.getUsers(), [&](auto user) {
+        return all_of(ops, [&](auto op) { return !op->isAncestor(user); });
+      });
+    };
+
+    // Output types and values of the sub-function.
+    SmallVector<Type, 8> outputTypes;
+    SmallVector<Value, 8> outputValues;
+
+    // Internal values of the sub-function.
+    llvm::SmallDenseSet<Value, 16> internalValues;
+
+    for (auto op : ops) {
+      for (auto result : op->getResults()) {
+        internalValues.insert(result);
+        if (isLiveOut(result)) {
+          outputTypes.push_back(result.getType());
+          outputValues.push_back(result);
+        }
+      }
+      op->walk([&](AffineForOp loop) {
+        internalValues.insert(loop.getInductionVar());
+      });
+    }
+
+    // Input types and values of the sub-function.
+    SmallVector<Type, 8> inputTypes;
+    SmallVector<Value, 8> inputValues;
+
+    // Local buffers of the sub-function.
+    llvm::SmallDenseSet<Operation *, 8> localOps;
+
+    for (auto op : ops) {
+      // Push back all operands and liveins as candidates.
+      SmallVector<Value, 8> inputCandidates(op->getOperands());
+      for (auto &region : op->getRegions()) {
+        auto entryBlock = &region.front();
+        auto args = entryBlock->getArguments();
+
+        for (auto liveIn : liveness.getLiveIn(entryBlock))
+          if (llvm::find(args, liveIn) == args.end())
+            inputCandidates.push_back(liveIn);
+      }
+
+      for (auto input : inputCandidates) {
+        // If the current input is an internal value, it doesn't needs to be
+        // passed in as argument.
+        if (internalValues.count(input))
+          continue;
+
+        if (auto defOp = input.getDefiningOp()) {
+          // If the current input is not a liveout and it's defined by an memref
+          // alloc/alloca op, it is a local buffer and can be localized later.
+          if (!isLiveOut(input) &&
+              isa<memref::AllocOp, memref::AllocaOp>(defOp)) {
+            localOps.insert(defOp);
+            continue;
+          }
+
+          // Since we have localized all tosa constant operations, we can safely
+          // insert a constant as a local op here.
+          if (isa<tosa::ConstOp, arith::ConstantOp>(defOp)) {
+            localOps.insert(defOp);
+            continue;
+          }
+        }
+
+        // Only unique inputs will be added.
+        if (llvm::find(inputValues, input) != inputValues.end())
+          continue;
+
+        inputTypes.push_back(input.getType());
+        inputValues.push_back(input);
+      }
+    }
+
+    // Create a new function for the current dataflow level.
+    auto loc = builder.getUnknownLoc();
+    builder.setInsertionPoint(block.getParent()->getParentOfType<FuncOp>());
+    auto name = prefix.str() + "_dataflow" + std::to_string(pair.first);
+    auto subFunc = builder.create<FuncOp>(
+        loc, name, builder.getFunctionType(inputTypes, outputTypes));
+
+    // Create a function call and reconnect all inputs and outputs.
+    builder.setInsertionPointAfter(ops.back());
+    auto call = builder.create<func::CallOp>(loc, subFunc, inputValues);
+    unsigned outputIdx = 0;
+    for (auto result : call.getResults())
+      outputValues[outputIdx++].replaceAllUsesWith(result);
+
+    // Create new return operation in the new created function.
+    auto entry = subFunc.addEntryBlock();
+    builder.setInsertionPointToEnd(entry);
+    auto returnOp = builder.create<func::ReturnOp>(loc, outputValues);
+
+    // Move local buffers into the new created function.
+    for (auto localOp : localOps)
+      localOp->moveBefore(&subFunc.front().front());
+
+    // Move same level operations into the new created function.
+    for (auto op : ops) {
+      op->moveBefore(returnOp);
+      op->removeAttr("dataflow_level");
+    }
+
+    // Connect operands to the arguments of the new created function.
+    for (unsigned i = 0, e = inputValues.size(); i < e; ++i)
+      inputValues[i].replaceUsesWithIf(
+          entry->getArgument(i),
+          [&](OpOperand &use) { return subFunc->isAncestor(use.getOwner()); });
+
+    // Inline all calls in the sub-function.
+    inlineFunction(subFunc);
+    setFuncDirective(subFunc, false, 1, true);
   }
   return true;
 }
 
-/// Apply dataflow (coarse-grained pipeline) to the block.
-bool scalehls::applyDataflow(Block &block, unsigned gran, bool balance) {
-  if (!applyLegalizeDataflow(block, gran, balance))
-    return false;
-  if (!applySplitFunction(block))
+/// Apply dataflow (coarse-grained pipeline) to the block. "gran" determines the
+/// minimum granularity of dataflowing while "balance" indicates whether buffers
+/// are inserted to balance the dataflow pipeline.
+bool scalehls::applyDataflow(Block &block, StringRef prefix, unsigned gran,
+                             bool balance) {
+  Dataflower dataflower(block, prefix);
+  if (!dataflower.applyLegalizeDataflow(gran, balance) ||
+      !dataflower.applySplitFunction())
     return false;
 
   auto parentOp = block.getParentOp();
@@ -422,7 +440,7 @@ struct FuncDataflow : public FuncDataflowBase<FuncDataflow> {
     // Dataflow each functions in the module.
     for (auto func : llvm::make_early_inc_range(module.getOps<FuncOp>()))
       if (func.getName() == targetFunc)
-        applyDataflow(func.front(), gran, balance);
+        applyDataflow(func.front(), func.getName(), gran, balance);
   }
 };
 } // namespace
