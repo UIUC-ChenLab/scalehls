@@ -35,8 +35,8 @@ namespace {
 struct AffineLoopUnrollJam
     : public AffineLoopUnrollJamBase<AffineLoopUnrollJam> {
   AffineLoopUnrollJam() = default;
-  AffineLoopUnrollJam(unsigned loopUnrollSize, bool unrollPointLoopOnly) {
-    unrollSize = loopUnrollSize;
+  AffineLoopUnrollJam(unsigned loopUnrollFactor, bool unrollPointLoopOnly) {
+    unrollFactor = loopUnrollFactor;
     pointLoopOnly = unrollPointLoopOnly;
   }
 
@@ -56,11 +56,11 @@ struct AffineLoopUnrollJam
       }
 
       TileList sizes;
-      unsigned remainTileSize = unrollSize;
+      unsigned remainTileSize = unrollFactor;
 
       // Calculate the tiling size of each loop level.
-      for (auto loop : band) {
-        if (auto optionalTripCount = getConstantTripCount(loop)) {
+      for (auto it = band.rbegin(), e = band.rend(); it != e; ++it) {
+        if (auto optionalTripCount = getConstantTripCount(*it)) {
           auto tripCount = optionalTripCount.getValue();
           auto size = tripCount;
 
@@ -78,8 +78,9 @@ struct AffineLoopUnrollJam
         } else
           sizes.push_back(1);
       }
+      std::reverse(sizes.begin(), sizes.end());
 
-      // Apply loop tiling and then unroll all point loops.
+      // Apply loop tiling and then unroll all point loops
       applyLoopTiling(band, sizes);
       if (loopOrderOpt.getValue())
         applyAffineLoopOrderOpt(band);
@@ -90,8 +91,8 @@ struct AffineLoopUnrollJam
 } // namespace
 
 std::unique_ptr<Pass>
-scalehls::createAffineLoopUnrollJamPass(unsigned loopUnrollSize,
+scalehls::createAffineLoopUnrollJamPass(unsigned loopUnrollFactor,
                                         bool unrollPointLoopOnly) {
-  return std::make_unique<AffineLoopUnrollJam>(loopUnrollSize,
+  return std::make_unique<AffineLoopUnrollJam>(loopUnrollFactor,
                                                unrollPointLoopOnly);
 }

@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -scalehls-affine-loop-unroll-jam="unroll-size=2" %s | FileCheck %s
+// RUN: scalehls-opt -scalehls-affine-loop-unroll-jam="unroll-factor=2" %s | FileCheck %s
 
 // CHECK: #map = affine_map<(d0) -> (d0 + 1)>
 // CHECK: #set0 = affine_set<(d0, d1) : (d0 - d1 >= 0)>
@@ -8,9 +8,9 @@
 module  {
   func @test_syrk(%arg0: f32, %arg1: f32, %arg2: memref<16x16xf32>, %arg3: memref<16x16xf32>) {
 
-    // CHECK: affine.for %arg4 = 0 to 16 step 2 {
+    // CHECK: affine.for %arg4 = 0 to 16 {
     // CHECK:   affine.for %arg5 = 0 to 16 {
-    // CHECK:     affine.for %arg6 = 0 to 16 {
+    // CHECK:     affine.for %arg6 = 0 to 16 step 2 {
     // CHECK-NOT:   affine.for %arg7 = 0 to 2 {
     affine.for %arg4 = 0 to 16 {
       affine.for %arg5 = 0 to 16 {
@@ -30,7 +30,7 @@ module  {
             affine.store %7, %arg3[%arg5, %arg6] : memref<16x16xf32>
           }
 
-          // CHECK: %0 = affine.apply #map(%arg4)
+          // CHECK: %0 = affine.apply #map(%arg6)
         }
       }
     }
