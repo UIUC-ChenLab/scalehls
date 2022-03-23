@@ -3,13 +3,14 @@ add_mlir_library(MLIRScaleHLSTransforms
   Directive/CreateHLSCppPrimitive.cpp
   Directive/FuncPipelining.cpp
   Directive/LoopPipelining.cpp
+  Directive/QoREstimation.cpp
   Graph/CreateTokenFlow.cpp
   Graph/FakeQuantize.cpp
   Graph/FuncDataflow.cpp
   Graph/HeuristicNodeFusion.cpp
   Graph/HoistStreamChannel.cpp
   Graph/SimplifyTosaGraph.cpp
-  Graph/TosaToLinalgCleanup.cpp
+  Graph/TosaAndLinalgCleanup.cpp
   Loop/AffineLoopDataflow.cpp
   Loop/AffineLoopOrderOpt.cpp
   Loop/AffineLoopPerfection.cpp
@@ -30,7 +31,6 @@ add_mlir_library(MLIRScaleHLSTransforms
   LegalizeToHLSCpp.cpp
   MultipleLevelDSE.cpp
   Passes.cpp
-  QoREstimation.cpp
   Utils.cpp
 
   DEPENDS

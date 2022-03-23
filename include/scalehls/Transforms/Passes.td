@@ -115,10 +115,10 @@ def FuncDataflow : Pass<"scalehls-func-dataflow", "ModuleOp"> {
   ];
 }
 
-def TosaToLinalgCleanup : Pass<"scalehls-tosa-to-linalg-cleanup", "FuncOp"> {
+def TosaAndLinalgCleanup : Pass<"scalehls-tosa-to-linalg-cleanup", "FuncOp"> {
   let summary = "Lower tosa::ReshapeOp and tensor::PadOp";
 
-  let constructor = "mlir::scalehls::createTosaToLinalgCleanupPass()";
+  let constructor = "mlir::scalehls::createTosaAndLinalgCleanupPass()";
 }
 
 def HoistStreamChannel : Pass<"scalehls-hoist-stream-channel", "ModuleOp"> {

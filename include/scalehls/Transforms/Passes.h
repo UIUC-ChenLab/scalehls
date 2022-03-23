@@ -36,7 +36,7 @@ std::unique_ptr<Pass> createCreateTokenFlowPass();
 std::unique_ptr<Pass>
 createFuncDataflowPass(std::string dataflowTargetFunc = "forward",
                        unsigned dataflowGran = 1, bool dataflowBalance = true);
-std::unique_ptr<Pass> createTosaToLinalgCleanupPass();
+std::unique_ptr<Pass> createTosaAndLinalgCleanupPass();
 std::unique_ptr<Pass> createHoistStreamChannelPass();
 
 /// Runtime-related passes.

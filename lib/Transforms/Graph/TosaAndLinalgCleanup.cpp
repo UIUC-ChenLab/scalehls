@@ -39,8 +39,8 @@ struct ReshapeOpRewritePattern : public OpRewritePattern<tosa::ReshapeOp> {
 } // namespace
 
 namespace {
-struct TosaToLinalgCleanup
-    : public TosaToLinalgCleanupBase<TosaToLinalgCleanup> {
+struct TosaAndLinalgCleanup
+    : public TosaAndLinalgCleanupBase<TosaAndLinalgCleanup> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -53,6 +53,6 @@ struct TosaToLinalgCleanup
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createTosaToLinalgCleanupPass() {
-  return std::make_unique<TosaToLinalgCleanup>();
+std::unique_ptr<Pass> scalehls::createTosaAndLinalgCleanupPass() {
+  return std::make_unique<TosaAndLinalgCleanup>();
 }
