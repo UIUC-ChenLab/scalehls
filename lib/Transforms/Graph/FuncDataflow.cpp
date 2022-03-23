@@ -250,6 +250,8 @@ static void inlineFunction(FuncOp func) {
   for (auto call : llvm::make_early_inc_range(func.getOps<func::CallOp>())) {
     auto subFunc = module.lookupSymbol<FuncOp>(call.getCallee());
     assert(subFunc && "sub-function is not found");
+    if (subFunc.isPrivate())
+      continue;
     inlineFunction(subFunc);
 
     auto returnOp = subFunc.front().getTerminator();
