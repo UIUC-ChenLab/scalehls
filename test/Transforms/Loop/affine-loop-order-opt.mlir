@@ -6,8 +6,8 @@ module  {
   func @test_syrk(%arg0: f32, %arg1: f32, %arg2: memref<16x16xf32>, %arg3: memref<16x16xf32>) {
 
     // CHECK: affine.for %arg4 = 0 to 16 {
-    // CHECK:   affine.for %arg5 = 0 to 16 {
-    // CHECK:     affine.for %arg6 = 0 to #map(%arg5) {
+    // CHECK-NEXT: affine.for %arg5 = 0 to 16 {
+    // CHECK-NEXT: affine.for %arg6 = 0 to #map(%arg5) {
     affine.for %arg4 = 0 to 16 {
       affine.for %arg5 = 0 to #map(%arg4) {
         affine.for %arg6 = 0 to 16 {
