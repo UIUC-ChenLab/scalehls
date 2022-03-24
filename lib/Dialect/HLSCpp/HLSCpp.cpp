@@ -182,7 +182,7 @@ template <typename OpType> static LogicalResult verifyChannelUsers(OpType op) {
       return user->emitOpError("unsupported user of a stream channel");
   }
   if (numWrite > 1)
-    return op->emitOpError("stream channel is written multiple times");
+    return op->emitOpError("stream channel is written by multiple ops");
   return success();
 }
 
@@ -389,7 +389,6 @@ struct SimplifyPrimCastOp : public OpRewritePattern<PrimCastOp> {
                                                 defCast.input());
         return success();
       }
-
     return failure();
   }
 };
