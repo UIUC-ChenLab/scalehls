@@ -13,44 +13,6 @@
 namespace mlir {
 namespace scalehls {
 
-//===----------------------------------------------------------------------===//
-// HLSCpp attribute transform utils
-//===----------------------------------------------------------------------===//
-
-using namespace hlscpp;
-
-/// Set timing attribute.
-void setTiming(Operation *op, TimingAttr timing);
-void setTiming(Operation *op, int64_t begin, int64_t end, int64_t latency,
-               int64_t interval);
-
-/// Set resource attribute.
-void setResource(Operation *op, ResourceAttr resource);
-void setResource(Operation *op, int64_t lut, int64_t dsp, int64_t bram);
-
-/// Set loop information attribute.
-void setLoopInfo(Operation *op, LoopInfoAttr loopInfo);
-void setLoopInfo(Operation *op, int64_t flattenTripCount, int64_t iterLatency,
-                 int64_t minII);
-
-/// Set loop directives.
-void setLoopDirective(Operation *op, LoopDirectiveAttr loopDirective);
-void setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
-                      bool dataflow, bool flatten);
-void setParallelAttr(AffineForOp loop);
-void setPointAttr(AffineForOp loop);
-
-/// Set function directives.
-void setFuncDirective(Operation *op, FuncDirectiveAttr FuncDirective);
-void setFuncDirective(Operation *op, bool pipeline, int64_t targetInterval,
-                      bool dataflow);
-void setTopFuncAttr(FuncOp func);
-void setRuntimeAttr(FuncOp func);
-
-//===----------------------------------------------------------------------===//
-// Optimization utils
-//===----------------------------------------------------------------------===//
-
 /// Apply loop perfection. Try to sink all operations between loop statements
 /// into the innermost loop of the input loop band.
 bool applyAffineLoopPerfection(AffineLoopBand &band);
@@ -97,10 +59,6 @@ bool applyLegalizeToHLSCpp(FuncOp func, bool topFunc);
 
 /// Apply memory optimizations.
 bool applyMemoryOpts(FuncOp func);
-
-//===----------------------------------------------------------------------===//
-// Compound optimization utils
-//===----------------------------------------------------------------------===//
 
 /// Apply optimization strategy to a loop band. The ancestor function is also
 /// passed in because the post-tiling optimizations have to take function as

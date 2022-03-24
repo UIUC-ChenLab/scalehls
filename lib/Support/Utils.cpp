@@ -18,47 +18,8 @@ using namespace scalehls;
 using namespace hlscpp;
 
 //===----------------------------------------------------------------------===//
-// HLSCpp attribute utils
+// Memory and loop analysis utils
 //===----------------------------------------------------------------------===//
-
-/// Parse attributes.
-TimingAttr scalehls::getTiming(Operation *op) {
-  return op->getAttrOfType<TimingAttr>("timing");
-}
-
-ResourceAttr scalehls::getResource(Operation *op) {
-  return op->getAttrOfType<ResourceAttr>("resource");
-}
-
-LoopInfoAttr scalehls::getLoopInfo(Operation *op) {
-  return op->getAttrOfType<LoopInfoAttr>("loop_info");
-}
-
-/// Parse loop directives.
-LoopDirectiveAttr scalehls::getLoopDirective(Operation *op) {
-  return op->getAttrOfType<LoopDirectiveAttr>("loop_directive");
-}
-
-bool scalehls::hasParallelAttr(AffineForOp loop) {
-  return loop->hasAttrOfType<UnitAttr>("parallel");
-}
-
-bool scalehls::hasPointAttr(AffineForOp loop) {
-  return loop->hasAttrOfType<UnitAttr>("point");
-}
-
-/// Parse function directives.
-FuncDirectiveAttr scalehls::getFuncDirective(Operation *op) {
-  return op->getAttrOfType<FuncDirectiveAttr>("func_directive");
-}
-
-bool scalehls::hasTopFuncAttr(FuncOp func) {
-  return func->hasAttrOfType<UnitAttr>("top_func");
-}
-
-bool scalehls::hasRuntimeAttr(FuncOp func) {
-  return func->hasAttrOfType<UnitAttr>("runtime");
-}
 
 /// Parse array attributes.
 SmallVector<int64_t, 8> scalehls::getIntArrayAttrValue(Operation *op,
@@ -74,10 +35,6 @@ SmallVector<int64_t, 8> scalehls::getIntArrayAttrValue(Operation *op,
   } else
     return SmallVector<int64_t, 8>();
 }
-
-//===----------------------------------------------------------------------===//
-// Memory and loop analysis utils
-//===----------------------------------------------------------------------===//
 
 /// Collect all load and store operations in the block and return them in "map".
 void scalehls::getMemAccessesMap(Block &block, MemAccessesMap &map,

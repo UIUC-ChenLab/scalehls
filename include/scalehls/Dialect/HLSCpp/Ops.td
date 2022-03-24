@@ -13,6 +13,8 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 // Stream Operations
 //===----------------------------------------------------------------------===//
 
+def DeclaresStreamChannel : NativeOpTrait<"DeclaresStreamChannel">;
+
 class StreamOf<list<Type> allowedTypes> :
     Type<And<[CPred<"$_self.isa<::mlir::scalehls::hlscpp::StreamType>()">,
               Concat<"[](::mlir::Type elementType) { return ",
@@ -21,30 +23,46 @@ class StreamOf<list<Type> allowedTypes> :
                      "; }($_self.cast<::mlir::scalehls::hlscpp::StreamType>()"
                          ".getElementType())">]>>;
 
-def StreamChannelOp : HLSCppOp<"stream.channel"> {
+def StreamChannelOp : HLSCppOp<"stream.channel", [DeclaresStreamChannel]> {
   let summary = "Stream channel declaration operation";
 
   let results = (outs StreamOf<[AnyType]>:$channel);
+
+  let verifier = "return ::verify(*this);";
 }
 
 def StreamReadOp : HLSCppOp<"stream.read"> {
   let summary = "Stream channel read operation";
+  let description = [{
+    Read/pop a value from a stream channel. The absence of the result indicates
+    the popped value is dropped. Each stream channel can be read multiple times.
+  }];
 
   let arguments = (ins StreamOf<[AnyType]>:$channel);
   let results = (outs Optional<AnyType>:$result);
+
+  let verifier = "return ::verify(*this);";
 }
 
 def StreamWriteOp : HLSCppOp<"stream.write"> {
   let summary = "Stream channel write operation";
+  let description = [{
+    Write/push a value to a stream channel. Each stream channel can only be
+    written once.
+  }];
 
   let arguments = (ins StreamOf<[AnyType]>:$channel, AnyType:$value);
+
+  let verifier = "return ::verify(*this);";
 }
 
-def StreamBufferOp : HLSCppOp<"stream.buffer"> {
+def StreamBufferOp : HLSCppOp<"stream.buffer", [DeclaresStreamChannel]> {
   let summary = "Stream channel buffer operation";
 
   let arguments = (ins StreamOf<[AnyType]>:$input);
   let results = (outs StreamOf<[AnyType]>:$output);
+
+  let verifier = "return ::verify(*this);";
 }
 
 //===----------------------------------------------------------------------===//

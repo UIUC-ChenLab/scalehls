@@ -16,6 +16,7 @@
 
 using namespace mlir;
 using namespace scalehls;
+using namespace hlscpp;
 
 namespace {
 struct AllocOpRewritePattern : public OpRewritePattern<memref::AllocOp> {

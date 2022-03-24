@@ -11,6 +11,7 @@
 
 using namespace mlir;
 using namespace scalehls;
+using namespace hlscpp;
 
 // A helper to get corresponding DRAM memref type from normal memref type.
 static MemRefType getDramType(MemRefType type) {

@@ -10,6 +10,7 @@
 
 using namespace mlir;
 using namespace scalehls;
+using namespace hlscpp;
 
 // Updates the func op and entry block. Any args appended to the entry block are
 // added to `appendedEntryArgs`.

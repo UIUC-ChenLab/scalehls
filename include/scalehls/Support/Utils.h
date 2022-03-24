@@ -16,32 +16,11 @@ namespace mlir {
 namespace scalehls {
 
 //===----------------------------------------------------------------------===//
-// HLSCpp attribute parsing utils
+// Memory and loop analysis utils
 //===----------------------------------------------------------------------===//
-
-using namespace hlscpp;
-
-/// Parse attributes.
-TimingAttr getTiming(Operation *op);
-ResourceAttr getResource(Operation *op);
-LoopInfoAttr getLoopInfo(Operation *op);
-
-/// Parse loop directives.
-LoopDirectiveAttr getLoopDirective(Operation *op);
-bool hasParallelAttr(AffineForOp loop);
-bool hasPointAttr(AffineForOp loop);
-
-/// Parse function directives.
-FuncDirectiveAttr getFuncDirective(Operation *op);
-bool hasTopFuncAttr(FuncOp func);
-bool hasRuntimeAttr(FuncOp func);
 
 /// Parse array attributes.
 SmallVector<int64_t, 8> getIntArrayAttrValue(Operation *op, StringRef name);
-
-//===----------------------------------------------------------------------===//
-// Memory and loop analysis utils
-//===----------------------------------------------------------------------===//
 
 using AffineLoopBand = SmallVector<AffineForOp, 6>;
 using AffineLoopBands = std::vector<AffineLoopBand>;

@@ -12,6 +12,7 @@
 
 using namespace mlir;
 using namespace scalehls;
+using namespace hlscpp;
 
 static IntegerType getIntDataType(Type type) {
   auto dataType = type.dyn_cast<IntegerType>();
