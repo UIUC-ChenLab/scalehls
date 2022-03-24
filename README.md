@@ -69,7 +69,7 @@ $ pyscalehls.py test_gemm.c -f test_gemm > test_gemm_pyscalehls.cpp
 ```
 
 ## Compiling PyTorch Model
-If you have installed [Torch-MLIR](https://github.com/llvm/torch-mlir), you should be able to run the following test:
+If you have installed [Torch-MLIR](https://github.com/llvm/torch-mlir) with SHA [ea371a9](https://github.com/llvm/torch-mlir/tree/ea371a9bf2860cf5f0741b28b0bf68e9a9c3d08b), you should be able to run the following test:
 ```sh
 $ cd samples/pytorch/resnet18
 
