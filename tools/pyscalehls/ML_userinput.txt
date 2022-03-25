@@ -36,8 +36,8 @@
 ##############################rosetta##############################################
 ###################################################################################
 
-target_source_file_location = ../../samples/rosetta/spam-filter/sgd_sw_raw.c
-top_function = SgdLR_sw
+#target_source_file_location = ../../samples/rosetta/spam-filter/sgd_sw_raw.c
+#top_function = SgdLR_sw
 
 #target_source_file_location = ../../samples/rosetta/digit-recognition/digitrec_sw_raw.c
 #top_function = DigitRec_sw
@@ -46,8 +46,8 @@ top_function = SgdLR_sw
 ##############################MachSuit#############################################
 ###################################################################################
 
-#target_source_file_location = ../../samples/MachSuit/backprop.c
-#top_function = backprop
+target_source_file_location = ../../samples/MachSuit/backprop.c
+top_function = backprop
 
 ###################################################################################
 ##############################hardware-constraints#################################

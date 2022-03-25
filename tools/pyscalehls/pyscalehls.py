@@ -43,8 +43,6 @@ def main():
     scalehls.register_dialects(ctx)
     mod = mlir.ir.Module.parse(fin, ctx)
 
-    print(mod)
-
     # Traverse all functions in the MLIR module.
     for func in mod.body:
         if not isinstance(func, builtin.FuncOp):
@@ -53,9 +51,8 @@ def main():
 
         # Traverse all suitable loop bands in the function.
         bands = scalehls.LoopBandList(func)
+        band_count = 0
         for band in bands:
-
-            print(band)
 
             # Attempt to perfectize the loop band.
             scalehls.loop_perfectization(band)
@@ -75,33 +72,33 @@ def main():
             # Note: We use the trip count to generate this example "factors".
             print("test")
             factors = np.ones(band.depth, dtype=int)
+            factors = np.array([[1,5,25]])
             print(factors)
-            factors[-1] = band.get_trip_count(band.depth - 1) / 4
-            print(factors)
-            loc = scalehls.loop_tiling(band, factors, True) # simplify = True
-            print(loc)
+            loc = scalehls.loop_tiling(band, factors[band_count], True) # simplify = True
+
+            band_count += 1
 
             # Apply loop pipelining. All loops inside of the pipelined loop are fully unrolled.
-            scalehls.loop_pipelining(band, 0, 3)  # targetII = 3
+            # scalehls.loop_pipelining(band, loc, 3)  # targetII = 3
 
         # Traverse all arrays in the function.
-        arrays = scalehls.ArrayList(func)
-        for array in arrays:
-            type = array.type
-            type.__class__ = mlir.ir.MemRefType
-            if not type.has_rank:
-                pass
-            # Apply specified factors and partition kind to the array.
-            # Note: We use the dimension size to generate this example "factors".
-            factors = np.ones(type.rank, dtype=int)
-            factors[-1] = type.get_dim_size(type.rank - 1) / 4
-            scalehls.array_partition(array, factors, "cyclic")
+        # arrays = scalehls.ArrayList(func)
+        # for array in arrays:
+        #     type = array.type
+        #     type.__class__ = mlir.ir.MemRefType
+        #     if not type.has_rank:
+        #         pass
+        #     # Apply specified factors and partition kind to the array.
+        #     # Note: We use the dimension size to generate this example "factors".
+        #     factors = np.ones(type.rank, dtype=int)
+        #     factors[-1] = type.get_dim_size(type.rank - 1) / 4
+        #     scalehls.array_partition(array, factors, "cyclic")
 
         # Legalize the IR to make it emittable.
         scalehls.legalize_to_hlscpp(
             func, func.sym_name.value == opts.function)
 
-        # Optimize memory accesses through store forwarding, etc.
+        # # Optimize memory accesses through store forwarding, etc.
         scalehls.memory_access_opt(func)
 
         # Apply suitable array partition strategies through analyzing the array access pattern.

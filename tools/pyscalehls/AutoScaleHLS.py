@@ -173,9 +173,9 @@ def main():
 
     print("\nTree")
     for item in tree_list:
-        item.show(idhidden=False)
+        item.show(idhidden=True)
 
-    # isbreak = input("\n\nBreak\n")
+    isbreak = input("\n\nBreak\n")
     
     # target = treelib.Tree(tree_list[0].subtree("kernel_atax"), deep=True)
     # target.show()
@@ -200,12 +200,34 @@ def main():
             if suc_fail:
                 pareto_space_list = pareto_space_list + buffer
 
-    for item in pareto_space_list:
-        print(item[0])
+    print("space")
+    for i in range(0, len(pareto_space_list)):
+        print(pareto_space_list[i][0])
 
-    isbreak = input("\n\nBreak\n")
+    # print("comb")
+    # #combine whole space
+    # buffer = DPAT.combine_two_spaces(pareto_space_list, "Loop4", "Loop6")
+    # for i in range(2, len(pareto_space_list)):
+    #     print(pareto_space_list[i][0])
+    #     buffer = DPAT.combine_two_spaces(pareto_space_list, buffer, pareto_space_list[i][0])
+    #     buffer.to_csv('./test_space.csv')
 
-    DPAT.apply_loop_ops(tar_dir, tree_list[0], np.array([[64]]))
+    pspace = pd.read_csv('./test_space.csv', index_col=0)
+    print(pspace)
+    print(pspace.iloc[0]['b4l0'])
+
+    shutil.copy2(tar_dir + "/ML_in.cpp", tar_dir + "/DSE_in.c")
+
+    DPAT.apply_loop_ops(tar_dir, tree_list[3], np.array([[13, 8]]))
+    DPAT.apply_loop_ops(tar_dir, tree_list[4], np.array([[8, 1]]))
+    DPAT.apply_loop_ops(tar_dir, tree_list[5], np.array([[8, 3]]))
+    DPAT.apply_loop_ops(tar_dir, tree_list[6], np.array([[1]]))
+    DPAT.apply_loop_ops(tar_dir, tree_list[7], np.array([[8, 3]]))
+    DPAT.apply_loop_ops(tar_dir, tree_list[8], np.array([[3, 8]]))
+    DPAT.apply_loop_ops(tar_dir, tree_list[9], np.array([[1, 16]]))
+    DPAT.apply_loop_ops(tar_dir, tree_list[10], np.array([[16, 1]]))
+    DPAT.apply_loop_ops(tar_dir, tree_list[11], np.array([[1, 16]]))
+    DPAT.apply_loop_ops(tar_dir, tree_list[12], [[1, 16], [8], [1, 16], [8], [8, 16], [8], [1, 16], [8], [4, 3], [1], [8, 3], [1]])
 
     # pandas.set_option('display.max_rows', None)
     # buffer = DPAT.combine_two_spaces(pareto_space_list, "Loop0", "Loop1")

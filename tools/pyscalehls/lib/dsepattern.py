@@ -157,7 +157,9 @@ def cull_function_by_pattern(dir, inputfile, dsespec, resource, pattern):
     file.close()
     newfile.close()
 
+#########################################################################################################
     # sdse_target(None, dsespec, resource, root, snipfile, root)
+#########################################################################################################    
 
     #load pareto space
     #mark csv files with individual loop pareto spaces
@@ -271,13 +273,15 @@ def combine_two_spaces(pareto_space_list, input1, input2):
     return pareto_combinedspace
 
 def apply_loop_ops(dir, pattern, loop_tile_array):
+
+    pattern.show()
     
     topfunction = pattern[pattern.root].tag
     input_dir = dir + "/snips/snip_" + topfunction
     inputfile = "snip_" + topfunction + ".c"
     outputfile = input_dir + "/snip_" + topfunction + "_adse.cpp"
 
-    ML_in_main = dir + "/ML_in.cpp"
+    ML_in_main = dir + "/DSE_in.c"
     
     p1 = subprocess.Popen(['mlir-clang', input_dir + "/" + inputfile, '-function=' + topfunction, '-memref-fullrank', '-raise-scf-to-affine', '-S'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)                          
     p2 = subprocess.run(['scalehls-opt', '-allow-unregistered-dialect', '-materialize-reduction'], stdin=p1.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)                  
@@ -287,6 +291,7 @@ def apply_loop_ops(dir, pattern, loop_tile_array):
     scalehls.register_dialects(ctx)
     mod = mlir.ir.Module.parse(fin, ctx)
 
+    pipeline_loc = []
     for func in mod.body:
         if not isinstance(func, builtin.FuncOp):
             pass
@@ -313,8 +318,10 @@ def apply_loop_ops(dir, pattern, loop_tile_array):
 
             # Apply loop tiling. Tile sizes are defined from the outermost loop to the innermost.
             # Note: We use the trip count to generate this example "factors".
-            loc = scalehls.loop_tiling(band, loop_tile_array[loopband_count], True) # simplify = True
-            print(loc)
+            
+            np_array = np.array(loop_tile_array[loopband_count])
+            loc = scalehls.loop_tiling(band, np_array, True) # simplify = True
+            pipeline_loc.append(loc)
             
             loopband_count += 1
     
@@ -341,7 +348,7 @@ def apply_loop_ops(dir, pattern, loop_tile_array):
     done_copy = False
     scope = None
 
-    newfile = open ("buffer.c", 'w')
+    newfile = open (dir + "/buffer.c", 'w')
     with open(ML_in_main, 'r') as file:        
         for line in file:
             is_brace = False
@@ -410,5 +417,7 @@ def apply_loop_ops(dir, pattern, loop_tile_array):
                     brace_count -= 1
     file.close()
     newfile.close()
+
+    shutil.copy2(dir + "/buffer.c", ML_in_main)
 
 
