@@ -10,6 +10,13 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Clang Format
+        uses: DoozyX/clang-format-lint-action@v0.13
+        with:
+          exclude: './polygeist ./samples ./test'
+          clangFormatVersion: 11
+          style: llvm
+
       - name: Get LLVM Hash
         id: get-llvm-hash
         run: echo "::set-output name=hash::$(git -C ./polygeist rev-parse @:./llvm-project)"
