@@ -211,6 +211,13 @@ static LogicalResult verify(StreamBufferOp op) {
   return verifyChannelUsers(op);
 }
 
+static LogicalResult verify(StreamOutputOp op) {
+  if (op.getOperandTypes() !=
+      op->getParentOfType<StreamNodeOp>().getResultTypes())
+    return failure();
+  return success();
+}
+
 //===----------------------------------------------------------------------===//
 // PrimMulOp
 //===----------------------------------------------------------------------===//

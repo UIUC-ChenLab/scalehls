@@ -27,7 +27,6 @@ def StreamChannelOp : HLSCppOp<"stream.channel", [DeclaresStreamChannel]> {
   let summary = "Stream channel declaration operation";
 
   let results = (outs StreamOf<[AnyType]>:$channel);
-
   let verifier = "return ::verify(*this);";
 }
 
@@ -40,7 +39,6 @@ def StreamReadOp : HLSCppOp<"stream.read"> {
 
   let arguments = (ins StreamOf<[AnyType]>:$channel);
   let results = (outs Optional<AnyType>:$result);
-
   let verifier = "return ::verify(*this);";
 }
 
@@ -52,7 +50,6 @@ def StreamWriteOp : HLSCppOp<"stream.write"> {
   }];
 
   let arguments = (ins StreamOf<[AnyType]>:$channel, AnyType:$value);
-
   let verifier = "return ::verify(*this);";
 }
 
@@ -61,7 +58,31 @@ def StreamBufferOp : HLSCppOp<"stream.buffer", [DeclaresStreamChannel]> {
 
   let arguments = (ins StreamOf<[AnyType]>:$input);
   let results = (outs StreamOf<[AnyType]>:$output);
+  let verifier = "return ::verify(*this);";
+}
 
+def StreamNodeOp : HLSCppOp<"stream.node",
+      [SingleBlockImplicitTerminator<"StreamOutputOp">]> {
+  let summary = "Stream node operation";
+  let description = [{
+    This operation represents a node of a streaming dataflow. It has a region,
+    which is not isolated from above, to represent the operations contained by
+    the node. The node can return variadic number of stream channels as results.
+  }];
+
+  let results = (outs Variadic<AnyType>:$outputs);
+  let regions = (region SizedRegion<1>:$body);
+}
+
+def StreamOutputOp : HLSCppOp<"stream.output",
+      [Terminator, HasParent<"StreamNodeOp">]> {
+  let summary = "Output operation of a stream node";
+  let description = [{
+    The operation terminates a stream node region and outputs internal stream
+    channels to the outside.
+  }];
+
+  let arguments = (ins Variadic<AnyType>:$outputs);
   let verifier = "return ::verify(*this);";
 }
 
