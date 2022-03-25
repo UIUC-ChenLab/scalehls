@@ -148,21 +148,20 @@ static bool applyShareTensorOperation(ModuleOp module) {
           int64_t numIterations = info.numOutputChannels() / sharedKernel.numOutputChannels();
 
           SmallVector<Value, 16> slicedOutputs;
-          for (int iteration = 0; iteration < numIterations; iteration++) {
-            auto start = builder.getI64ArrayAttr({iteration * sharedKernel.numOutputChannels(), 0, 0, 0});
+          for (int outIter = 0; outIter < numIterations; outIter++) {
+            auto start = builder.getI64ArrayAttr({outIter * sharedKernel.numOutputChannels(), 0, 0, 0});
             auto size = builder.getI64ArrayAttr({sharedKernel.numOutputChannels(), sharedKernel.kernelSize(), sharedKernel.kernelSize(), sharedKernel.numInputChannels()});
-            auto outputType = sharedKernel.op.getOperand(1).getType();
-            auto slicedWeight = builder.create<tosa::SliceOp>(Conv2DOp.getLoc(), outputType, Conv2DOp->getOperand(1), start, size).output();
+            auto weightType = sharedKernel.op.getOperand(1).getType();
+            auto slicedWeight = builder.create<tosa::SliceOp>(Conv2DOp.getLoc(), weightType, Conv2DOp->getOperand(1), start, size).output();
             
-            start = builder.getI64ArrayAttr({iteration * sharedKernel.numOutputChannels()});
+            start = builder.getI64ArrayAttr({outIter * sharedKernel.numOutputChannels()});
             size = builder.getI64ArrayAttr({sharedKernel.numOutputChannels()});
-            outputType = sharedKernel.op.getOperand(2).getType();
-            auto slicedBias = builder.create<tosa::SliceOp>(Conv2DOp.getLoc(), outputType, Conv2DOp->getOperand(2), start, size).output();
+            auto biasType = sharedKernel.op.getOperand(2).getType();
+            auto slicedBias = builder.create<tosa::SliceOp>(Conv2DOp.getLoc(), biasType, Conv2DOp->getOperand(2), start, size).output();
             auto operands = {Conv2DOp.getOperand(0), slicedWeight, slicedBias};
 
             slicedOutputs.push_back(builder.create<CallOp>(Conv2DOp.getLoc(), functionName, sharedKernel.op->getResultTypes(), operands).getODSResults(0)[0]);
           }
-
           Operation* newConcatOp = builder.create<tosa::ConcatOp>(Conv2DOp.getLoc(), Conv2DOp->getResultTypes(), slicedOutputs, 3);
           Conv2DOp.replaceAllUsesWith(newConcatOp);
         }
@@ -172,23 +171,23 @@ static bool applyShareTensorOperation(ModuleOp module) {
           int64_t numIterations = info.numInputChannels() / sharedKernel.numInputChannels();
 
           SmallVector<Value, 16> slicedOutputs;
-          for (int iteration = 0; iteration < numIterations; iteration++) {
-            auto start = builder.getI64ArrayAttr({0, 0, 0, iteration * sharedKernel.numInputChannels()});
+          for (int inIter = 0; inIter < numIterations; inIter++) {
+            auto start = builder.getI64ArrayAttr({0, 0, 0, inIter * sharedKernel.numInputChannels()});
             auto size = builder.getI64ArrayAttr({sharedKernel.numOutputChannels(), sharedKernel.kernelSize(), sharedKernel.kernelSize(), sharedKernel.numInputChannels()});
-            auto outputType = sharedKernel.op.getOperand(1).getType();
-            auto slicedWeight = builder.create<tosa::SliceOp>(Conv2DOp.getLoc(), outputType, Conv2DOp->getOperand(1), start, size).output();
+            auto weightType = sharedKernel.op.getOperand(1).getType();
+            auto slicedWeight = builder.create<tosa::SliceOp>(Conv2DOp.getLoc(), weightType, Conv2DOp->getOperand(1), start, size).output();
             
-            start = builder.getI64ArrayAttr({0, 0, 0, iteration * sharedKernel.numInputChannels()});
+            start = builder.getI64ArrayAttr({0, 0, 0, inIter * sharedKernel.numInputChannels()});
             size = builder.getI64ArrayAttr({1, sharedKernel.getInputSize(), sharedKernel.getInputSize(), sharedKernel.numInputChannels()});
-            outputType = sharedKernel.op.getOperand(0).getType();
-            auto slicedInput = builder.create<tosa::SliceOp>(Conv2DOp.getLoc(), outputType, Conv2DOp->getOperand(0), start, size).output();
+            auto inputType = sharedKernel.op.getOperand(0).getType();
+            auto slicedInput = builder.create<tosa::SliceOp>(Conv2DOp.getLoc(), inputType, Conv2DOp->getOperand(0), start, size).output();
             Value bias;
-            if (iteration == 0) {
+            if (inIter == 0) {
               bias = Conv2DOp->getOperand(2);
             }
             else {
               // Set bias to zero to prevent redundant addition of bias
-              auto bias_tensor = RankedTensorType::get(static_cast<float>(sharedKernel.numOutputChannels()), builder.getF32Type());
+              auto bias_tensor = RankedTensorType::get(sharedKernel.numOutputChannels(), builder.getF32Type());
               auto bias_attr = DenseFPElementsAttr::get(bias_tensor, std::vector<float>(sharedKernel.numOutputChannels()));
               bias = builder.create<tosa::ConstOp>(Conv2DOp.getLoc(), sharedKernel.op.getOperand(2).getType(), bias_attr);
             }
@@ -196,9 +195,33 @@ static bool applyShareTensorOperation(ModuleOp module) {
 
             slicedOutputs.push_back(builder.create<CallOp>(Conv2DOp.getLoc(), functionName, sharedKernel.op->getResultTypes(), operands).getODSResults(0)[0]);
           }
-
           Operation* newAddOp = builder.create<tosa::AddOp>(Conv2DOp.getLoc(), Conv2DOp->getResultTypes(), slicedOutputs);
           Conv2DOp.replaceAllUsesWith(newAddOp);
+        }
+
+        else if (info.getInputSize() > sharedKernel.getInputSize()) {
+          opToErase.push_back(Conv2DOp);
+          builder.setInsertionPoint(Conv2DOp);
+          int64_t numIterations = info.getInputSize() / sharedKernel.getInputSize();
+
+          SmallVector<Value, 16> slicedRows;
+          for (int widthIter = 0; widthIter < numIterations; widthIter++) {
+            SmallVector<Value, 16> slicedColumns;
+            for (int heightIter = 0; heightIter < numIterations; heightIter++) {
+              auto start = builder.getI64ArrayAttr({0, widthIter * sharedKernel.getInputSize(), heightIter * sharedKernel.getInputSize(), 0});
+              auto size = builder.getI64ArrayAttr({1, sharedKernel.getInputSize(), sharedKernel.getInputSize(), sharedKernel.numInputChannels()});
+              auto inputType = sharedKernel.op.getOperand(0).getType();
+              auto slicedInput = builder.create<tosa::SliceOp>(Conv2DOp.getLoc(), inputType, Conv2DOp->getOperand(0), start, size).output();
+              auto operands = {slicedInput, Conv2DOp->getOperand(1), Conv2DOp->getOperand(2)};
+
+              slicedColumns.push_back(builder.create<CallOp>(Conv2DOp.getLoc(), functionName, sharedKernel.op->getResultTypes(), operands).getODSResults(0)[0]);
+            }
+            auto columnResultShape = ArrayRef<int64_t>({1, sharedKernel.getInputSize(), info.getInputSize(), info.numOutputChannels()});
+            auto columnResultType = RankedTensorType::get((columnResultShape), builder.getF32Type());
+            slicedRows.push_back(builder.create<tosa::ConcatOp>(Conv2DOp.getLoc(), columnResultType, slicedColumns, 2));
+          }
+          Operation* newConcatOp = builder.create<tosa::ConcatOp>(Conv2DOp.getLoc(), Conv2DOp->getResultTypes(), slicedRows, 1);
+          Conv2DOp.replaceAllUsesWith(newConcatOp);
         }
       }
     });
