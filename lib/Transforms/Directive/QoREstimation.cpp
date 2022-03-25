@@ -29,7 +29,7 @@ void ScaleHLSEstimator::getPartitionIndices(Operation *op) {
 
   // If the layout map does not exist, it means the memory is not partitioned.
   auto layoutMap = memrefType.getLayout().getAffineMap();
-  if (!layoutMap) {
+  if (layoutMap.isIdentity()) {
     auto partitionIndices = SmallVector<int64_t, 8>(memrefType.getRank(), 0);
     op->setAttr("partition_indices", builder.getI64ArrayAttr(partitionIndices));
     return;
@@ -129,8 +129,12 @@ void ScaleHLSEstimator::estimateLoadStoreTiming(Operation *op, int64_t begin) {
           info.rdwrPort = 1;
         else if (storageType == MemoryKind::BRAM_T2P)
           info.rdwrPort = 2;
-        else
+        else if (storageType == MemoryKind::BRAM_S2P)
           info.rdPort = 1, info.wrPort = 1;
+        else if (storageType == MemoryKind::DRAM)
+          info.rdPort = UINT_MAX, info.wrPort = UINT_MAX;
+        else
+          llvm_unreachable("unknown memory kind");
 
         memPortInfos.push_back(info);
       }
@@ -234,6 +238,10 @@ int64_t ScaleHLSEstimator::getResMinII(int64_t begin, int64_t end,
     auto memrefType = memref.getType().cast<MemRefType>();
     auto partitionNum = getPartitionFactors(memrefType);
     auto storageType = MemoryKind(memrefType.getMemorySpaceAsInt());
+
+    // FIXME: Study how Vivado HLS handle AXI interfaces.
+    if (storageType == MemoryKind::DRAM)
+      continue;
 
     auto accessNum = SmallVector<int64_t, 16>(partitionNum, 0);
     // Prepare for BRAM_S1P memory kind.
