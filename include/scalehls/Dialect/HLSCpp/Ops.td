@@ -26,8 +26,8 @@ class StreamOf<list<Type> allowedTypes> :
 def StreamChannelOp : HLSCppOp<"stream.channel", [DeclaresStreamChannel]> {
   let summary = "Stream channel declaration operation";
 
+  let hasVerifier = 1;
   let results = (outs StreamOf<[AnyType]>:$channel);
-  let verifier = "return ::verify(*this);";
 }
 
 def StreamReadOp : HLSCppOp<"stream.read"> {
@@ -37,9 +37,9 @@ def StreamReadOp : HLSCppOp<"stream.read"> {
     the popped value is dropped. Each stream channel can be read multiple times.
   }];
 
+  let hasVerifier = 1;
   let arguments = (ins StreamOf<[AnyType]>:$channel);
   let results = (outs Optional<AnyType>:$result);
-  let verifier = "return ::verify(*this);";
 }
 
 def StreamWriteOp : HLSCppOp<"stream.write"> {
@@ -49,16 +49,16 @@ def StreamWriteOp : HLSCppOp<"stream.write"> {
     written once.
   }];
 
+  let hasVerifier = 1;
   let arguments = (ins StreamOf<[AnyType]>:$channel, AnyType:$value);
-  let verifier = "return ::verify(*this);";
 }
 
 def StreamBufferOp : HLSCppOp<"stream.buffer", [DeclaresStreamChannel]> {
   let summary = "Stream channel buffer operation";
 
+  let hasVerifier = 1;
   let arguments = (ins StreamOf<[AnyType]>:$input);
   let results = (outs StreamOf<[AnyType]>:$output);
-  let verifier = "return ::verify(*this);";
 }
 
 def StreamNodeOp : HLSCppOp<"stream.node",
@@ -72,6 +72,8 @@ def StreamNodeOp : HLSCppOp<"stream.node",
 
   let results = (outs Variadic<AnyType>:$outputs);
   let regions = (region SizedRegion<1>:$body);
+
+  let assemblyFormat = [{ attr-dict `(` `)` (`->` type($outputs)^)? $body }];
 }
 
 def StreamOutputOp : HLSCppOp<"stream.output",
@@ -82,8 +84,10 @@ def StreamOutputOp : HLSCppOp<"stream.output",
     channels to the outside.
   }];
 
+  let hasVerifier = 1;
   let arguments = (ins Variadic<AnyType>:$outputs);
-  let verifier = "return ::verify(*this);";
+
+  let builders = [ OpBuilder<(ins), "build($_builder, $_state, Value());"> ];
 }
 
 //===----------------------------------------------------------------------===//
@@ -108,11 +112,11 @@ def PrimMulOp : HLSCppOp<"prim.mul", [NoSideEffect]> {
     more information.
   }];
 
+  let hasVerifier = 1;
   let arguments = (ins AnyTypeOf<[I8, VectorOfLengthAndType<[2], [I8]>]>:$A,
                        AnyTypeOf<[I8, VectorOfLengthAndType<[2], [I8]>]>:$B);
   let results = (outs AnyTypeOf<[I16, VectorOfLengthAndType<[2], [I16]>]>:$C);
 
-  let verifier = "return ::verify(*this);";
   let extraClassDeclaration = [{ bool isPackMul(); }];
 }
 

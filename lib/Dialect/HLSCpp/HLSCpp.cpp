@@ -186,34 +186,32 @@ template <typename OpType> static LogicalResult verifyChannelUsers(OpType op) {
   return success();
 }
 
-static LogicalResult verify(StreamChannelOp op) {
-  return verifyChannelUsers(op);
-}
+LogicalResult StreamChannelOp::verify() { return verifyChannelUsers(*this); }
 
-static LogicalResult verify(StreamReadOp op) {
-  if (op.result())
-    if (op.channel().getType().cast<StreamType>().getElementType() !=
-        op.result().getType())
+LogicalResult StreamReadOp::verify() {
+  if (result())
+    if (channel().getType().cast<StreamType>().getElementType() !=
+        result().getType())
       return failure();
   return success();
 }
 
-static LogicalResult verify(StreamWriteOp op) {
-  if (op.channel().getType().cast<StreamType>().getElementType() !=
-      op.value().getType())
+LogicalResult StreamWriteOp::verify() {
+  if (channel().getType().cast<StreamType>().getElementType() !=
+      value().getType())
     return failure();
   return success();
 }
 
-static LogicalResult verify(StreamBufferOp op) {
-  if (op.input().getType() != op.output().getType())
+LogicalResult StreamBufferOp::verify() {
+  if (input().getType() != output().getType())
     return failure();
-  return verifyChannelUsers(op);
+  return verifyChannelUsers(*this);
 }
 
-static LogicalResult verify(StreamOutputOp op) {
-  if (op.getOperandTypes() !=
-      op->getParentOfType<StreamNodeOp>().getResultTypes())
+LogicalResult StreamOutputOp::verify() {
+  if (getOperandTypes() !=
+      (*this)->getParentOfType<StreamNodeOp>().getResultTypes())
     return failure();
   return success();
 }
@@ -222,10 +220,10 @@ static LogicalResult verify(StreamOutputOp op) {
 // PrimMulOp
 //===----------------------------------------------------------------------===//
 
-static LogicalResult verify(PrimMulOp op) {
-  auto AIsVector = op.A().getType().isa<VectorType>();
-  auto BIsVector = op.B().getType().isa<VectorType>();
-  auto CIsVector = op.C().getType().isa<VectorType>();
+LogicalResult PrimMulOp::verify() {
+  auto AIsVector = A().getType().isa<VectorType>();
+  auto BIsVector = B().getType().isa<VectorType>();
+  auto CIsVector = C().getType().isa<VectorType>();
 
   if ((AIsVector || BIsVector) && CIsVector)
     return success();
