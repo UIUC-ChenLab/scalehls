@@ -19,6 +19,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Loop/AffineLoopTile.cpp
   Loop/AffineLoopUnrollJam.cpp
   Loop/ConvertCopyToAffineLoops.cpp
+  Loop/FuncPreprocess.cpp
   Loop/MaterializeReduction.cpp
   Loop/RemoveVariableBound.cpp
   Loop/SimplifyAffineIf.cpp
@@ -30,7 +31,6 @@ add_mlir_library(MLIRScaleHLSTransforms
   Memory/SimplifyMemrefAccess.cpp
   Runtime/CreateAxiInterface.cpp
   Runtime/CreateRuntimeMain.cpp
-  LegalizeToHLSCpp.cpp
   MultipleLevelDSE.cpp
   Passes.cpp
   Utils.cpp

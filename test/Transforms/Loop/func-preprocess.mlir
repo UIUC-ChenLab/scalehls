@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -scalehls-legalize-to-hlscpp="top-func=test_syrk" -split-input-file %s | FileCheck %s
+// RUN: scalehls-opt -scalehls-func-preprocess="top-func=test_syrk" -split-input-file %s | FileCheck %s
 
 #map0 = affine_map<(d0) -> (d0)>
 #map1 = affine_map<(d0) -> (d0 + 2)>

@@ -172,28 +172,18 @@ def CreateAxiInterface : Pass<"scalehls-create-axi-interface", "ModuleOp"> {
 }
 
 //===----------------------------------------------------------------------===//
-// HLSCpp Legalization Passes
+// Loop Optimization Passes
 //===----------------------------------------------------------------------===//
 
-def LegalizeToHLSCpp : Pass<"scalehls-legalize-to-hlscpp", "FuncOp"> {
-  let summary = "Convert to emittable MLIR code";
-  let description = [{
-    This legalize-to-hlscpp pass will legalize the input IR to make it
-    emittable. Meanwhile, this pass will set some default pragmas for the
-    convenience of the subsequent transforms and analysis.
-  }];
-
-  let constructor = "mlir::scalehls::createLegalizeToHLSCppPass()";
+def FuncPreprocess : Pass<"scalehls-func-preprocess", "FuncOp"> {
+  let summary = "Preprocess the functions for loop and directive optimizations";
+  let constructor = "mlir::scalehls::createFuncPreprocessPass()";
 
   let options = [
     Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
            "The top function for HLS synthesis">
   ];
 }
-
-//===----------------------------------------------------------------------===//
-// Loop Optimization Passes
-//===----------------------------------------------------------------------===//
 
 def ConvertCopyToAffineLoops :
       Pass<"scalehls-convert-copy-to-affine-loops", "FuncOp"> {

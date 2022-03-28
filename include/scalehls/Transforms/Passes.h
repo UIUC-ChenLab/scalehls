@@ -46,11 +46,9 @@ std::unique_ptr<Pass>
 createCreateRuntimeMainPass(std::string hlsTopFunc = "forward");
 std::unique_ptr<Pass> createCreateAxiInterfacePass();
 
-/// HLSCpp legalization pass.
-std::unique_ptr<Pass>
-createLegalizeToHLSCppPass(std::string hlsTopFunc = "forward");
-
 /// Loop optimization passes.
+std::unique_ptr<Pass>
+createFuncPreprocessPass(std::string hlsTopFunc = "forward");
 std::unique_ptr<Pass>
 createConvertCopyToAffineLoopsPass(bool convertInternCopyOnly = true);
 std::unique_ptr<Pass> createMaterializeReductionPass();

@@ -42,7 +42,7 @@ void scalehls::registerScaleHLSDSEPipeline() {
       "Launch design space exploration for C/C++ kernel",
       [](OpPassManager &pm, const ScaleHLSDSEPipelineOptions &opts) {
         // Legalize the input program.
-        pm.addPass(scalehls::createLegalizeToHLSCppPass(opts.hlsTopFunc));
+        pm.addPass(scalehls::createFuncPreprocessPass(opts.hlsTopFunc));
         pm.addPass(scalehls::createMaterializeReductionPass());
 
         // Apply the automatic design space exploration to the top function.
@@ -138,7 +138,7 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
           pm.addPass(mlir::createSuperVectorizePass({vectorSize}));
           pm.addPass(mlir::createCanonicalizerPass());
         }
-        pm.addPass(scalehls::createLegalizeToHLSCppPass(opts.hlsTopFunc));
+        pm.addPass(scalehls::createFuncPreprocessPass(opts.hlsTopFunc));
         pm.addPass(scalehls::createMaterializeReductionPass());
         if (loopUnrollSize) {
           pm.addPass(scalehls::createAffineLoopPerfectionPass());
@@ -234,7 +234,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createHoistStreamChannelPass());
         pm.addPass(scalehls::createCreateAxiInterfacePass());
 
-        pm.addPass(scalehls::createLegalizeToHLSCppPass(opts.hlsTopFunc));
+        pm.addPass(scalehls::createFuncPreprocessPass(opts.hlsTopFunc));
         pm.addPass(scalehls::createMaterializeReductionPass());
         pm.addPass(scalehls::createAffineLoopPerfectionPass());
         pm.addPass(mlir::createAffineScalarReplacementPass());

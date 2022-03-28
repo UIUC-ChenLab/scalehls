@@ -55,7 +55,7 @@ bool applyArrayPartition(Value array, ArrayRef<unsigned> factors,
 /// targeted function.
 bool applyAutoArrayPartition(FuncOp func);
 
-bool applyLegalizeToHLSCpp(FuncOp func, bool topFunc);
+bool applyFuncPreprocess(FuncOp func, bool topFunc);
 
 /// Apply memory optimizations.
 bool applyMemoryOpts(FuncOp func);

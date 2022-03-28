@@ -50,9 +50,8 @@ def main():
             pass
         func.__class__ = builtin.FuncOp
 
-        # Legalize the IR.
-        scalehls.legalize_to_hlscpp(
-            func, func.sym_name.value == opts.function)
+        # Preprocess the functions.
+        scalehls.func_preprocess(func, func.sym_name.value == opts.function)
 
         # Traverse all suitable loop bands in the function.
         bands = scalehls.LoopBandList(func)

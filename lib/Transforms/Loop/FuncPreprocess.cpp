@@ -54,7 +54,7 @@ struct MemrefStoreRewritePattern : public OpRewritePattern<memref::StoreOp> {
 };
 } // namespace
 
-bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
+bool scalehls::applyFuncPreprocess(FuncOp func, bool isTopFunc) {
   auto builder = OpBuilder(func);
 
   // We constrain functions to only contain one block.
@@ -100,19 +100,19 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc) {
 }
 
 namespace {
-struct LegalizeToHLSCpp : public LegalizeToHLSCppBase<LegalizeToHLSCpp> {
-  LegalizeToHLSCpp() = default;
-  LegalizeToHLSCpp(std::string hlsTopFunc) { topFunc = hlsTopFunc; }
+struct FuncPreprocess : public FuncPreprocessBase<FuncPreprocess> {
+  FuncPreprocess() = default;
+  FuncPreprocess(std::string hlsTopFunc) { topFunc = hlsTopFunc; }
 
   void runOnOperation() override {
     auto func = getOperation();
     auto isTop = func.getName() == topFunc;
-    applyLegalizeToHLSCpp(func, isTop);
+    applyFuncPreprocess(func, isTop);
   }
 };
 } // namespace
 
 std::unique_ptr<Pass>
-scalehls::createLegalizeToHLSCppPass(std::string hlsTopFunc) {
-  return std::make_unique<LegalizeToHLSCpp>(hlsTopFunc);
+scalehls::createFuncPreprocessPass(std::string hlsTopFunc) {
+  return std::make_unique<FuncPreprocess>(hlsTopFunc);
 }

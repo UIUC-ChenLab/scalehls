@@ -188,12 +188,12 @@ static bool loopPipelining(PyAffineLoopBand band, int64_t pipelineLoc,
 // Function transform APIs
 //===----------------------------------------------------------------------===//
 
-static bool legalizeToHLSCpp(MlirOperation op, bool topFunc) {
+static bool funcPreprocess(MlirOperation op, bool topFunc) {
   py::gil_scoped_release();
   auto func = dyn_cast<FuncOp>(unwrap(op));
   if (!func)
     throw SetPyError(PyExc_ValueError, "targeted operation not a function");
-  return applyLegalizeToHLSCpp(func, topFunc);
+  return applyFuncPreprocess(func, topFunc);
 }
 
 static bool memoryOpts(MlirOperation op) {
@@ -268,7 +268,7 @@ PYBIND11_MODULE(_scalehls, m) {
   m.def("loop_pipelining", &loopPipelining);
 
   // Function transform APIs.
-  m.def("legalize_to_hlscpp", &legalizeToHLSCpp);
+  m.def("func_preprocess", &funcPreprocess);
   m.def("memory_opts", &memoryOpts);
   m.def("auto_array_partition", &autoArrayPartition);
 
