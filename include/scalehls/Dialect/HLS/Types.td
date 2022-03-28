@@ -4,11 +4,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_DIALECT_HLSCPP_TYPES_TD
-#define SCALEHLS_DIALECT_HLSCPP_TYPES_TD
+#ifndef SCALEHLS_DIALECT_HLS_TYPES_TD
+#define SCALEHLS_DIALECT_HLS_TYPES_TD
 
-def StreamType : HLSCppType<"Stream"> {
-  let summary = "An HLSCpp stream type";
+def StreamType : HLSType<"Stream"> {
+  let summary = "An HLS stream type";
   let description = [{
     Represents a stream of any type that can be transfered between HLS modules.
     This type is equal to the hls::stream<> type in Xilinx Vivado HLS.
@@ -23,4 +23,4 @@ def StreamType : HLSCppType<"Stream"> {
   let assemblyFormat = "`<` qualified($elementType) `,` $depth `>`";
 }
 
-#endif // SCALEHLS_DIALECT_HLSCPP_TYPES_TD
+#endif // SCALEHLS_DIALECT_HLS_TYPES_TD

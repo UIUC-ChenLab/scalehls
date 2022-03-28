@@ -359,14 +359,14 @@ def ArrayPartition : Pass<"scalehls-array-partition", "ModuleOp"> {
   let constructor = "mlir::scalehls::createArrayPartitionPass()";
 }
 
-def CreateHLSCppPrimitive : Pass<"scalehls-create-hlscpp-primitive", "FuncOp"> {
+def CreateHLSPrimitive : Pass<"scalehls-create-hls-primitive", "FuncOp"> {
   let summary = "Create HLS C++ multiplification primitives";
   let description = [{
-    This create-hlscpp-primitive pass will convert 8-bits multiplifications to
-    HLS C++ primitives in order to utilize DSP instances in FPGA.
+    This create-hls-primitive pass will convert 8-bits multiplifications to HLS
+    C++ primitives in order to utilize DSP instances in FPGA.
   }];
 
-  let constructor = "mlir::scalehls::createCreateHLSCppPrimitivePass()";
+  let constructor = "mlir::scalehls::createCreateHLSPrimitivePass()";
 }
 
 //===----------------------------------------------------------------------===//

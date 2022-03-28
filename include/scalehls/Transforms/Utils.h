@@ -48,7 +48,7 @@ bool applyDataflow(Block &block, StringRef prefix, unsigned gran, bool balance);
 
 /// Apply the specified array partition factors and kinds.
 bool applyArrayPartition(Value array, ArrayRef<unsigned> factors,
-                         ArrayRef<hlscpp::PartitionKind> kinds,
+                         ArrayRef<hls::PartitionKind> kinds,
                          bool updateFuncSignature = true);
 
 /// Find the suitable array partition factors and kinds for all arrays in the

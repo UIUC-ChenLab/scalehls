@@ -13,7 +13,7 @@
 #include "mlir/CAPI/IR.h"
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
 #include "scalehls-c/EmitHLSCpp.h"
-#include "scalehls-c/HLSCpp.h"
+#include "scalehls-c/HLS.h"
 #include "scalehls/Transforms/Utils.h"
 
 #include "llvm-c/ErrorHandling.h"
@@ -222,10 +222,10 @@ static bool arrayPartition(MlirValue array, py::object factorsObject,
   py::gil_scoped_release();
   llvm::SmallVector<unsigned, 4> factors;
   getVectorFromUnsignedNpArray(factorsObject.ptr(), factors);
-  llvm::SmallVector<hlscpp::PartitionKind, 4> kinds(
-      factors.size(), kind == "cyclic"  ? hlscpp::PartitionKind::CYCLIC
-                      : kind == "block" ? hlscpp::PartitionKind::BLOCK
-                                        : hlscpp::PartitionKind::NONE);
+  llvm::SmallVector<hls::PartitionKind, 4> kinds(
+      factors.size(), kind == "cyclic"  ? hls::PartitionKind::CYCLIC
+                      : kind == "block" ? hls::PartitionKind::BLOCK
+                                        : hls::PartitionKind::NONE);
   return applyArrayPartition(unwrap(array), factors, kinds);
 }
 
@@ -254,9 +254,9 @@ PYBIND11_MODULE(_scalehls, m) {
     auto wrappedCapsule = capsule.attr(MLIR_PYTHON_CAPI_PTR_ATTR);
     MlirContext context = mlirPythonCapsuleToContext(wrappedCapsule.ptr());
 
-    MlirDialectHandle hlscpp = mlirGetDialectHandle__hlscpp__();
-    mlirDialectHandleRegisterDialect(hlscpp, context);
-    mlirDialectHandleLoadDialect(hlscpp, context);
+    MlirDialectHandle hls = mlirGetDialectHandle__hls__();
+    mlirDialectHandleRegisterDialect(hls, context);
+    mlirDialectHandleLoadDialect(hls, context);
   });
 
   // Loop transform APIs.

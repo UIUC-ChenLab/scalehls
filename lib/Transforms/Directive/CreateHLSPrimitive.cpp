@@ -12,7 +12,7 @@
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
+using namespace hls;
 
 static IntegerType getIntDataType(Type type) {
   auto dataType = type.dyn_cast<IntegerType>();
@@ -98,8 +98,7 @@ struct MulOpRewritePattern : public OpRewritePattern<arith::MulIOp> {
 } // namespace
 
 namespace {
-struct CreateHLSCppPrimitive
-    : public CreateHLSCppPrimitiveBase<CreateHLSCppPrimitive> {
+struct CreateHLSPrimitive : public CreateHLSPrimitiveBase<CreateHLSPrimitive> {
   void runOnOperation() override {
     auto func = getOperation();
 
@@ -111,6 +110,6 @@ struct CreateHLSCppPrimitive
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createCreateHLSCppPrimitivePass() {
-  return std::make_unique<CreateHLSCppPrimitive>();
+std::unique_ptr<Pass> scalehls::createCreateHLSPrimitivePass() {
+  return std::make_unique<CreateHLSPrimitive>();
 }

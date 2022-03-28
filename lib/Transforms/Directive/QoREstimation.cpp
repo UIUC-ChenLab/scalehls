@@ -15,7 +15,7 @@
 using namespace std;
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
+using namespace hls;
 
 //===----------------------------------------------------------------------===//
 // LoadOp and StoreOp Related Methods

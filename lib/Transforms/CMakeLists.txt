@@ -1,6 +1,6 @@
 add_mlir_library(MLIRScaleHLSTransforms
   Directive/ArrayPartition.cpp
-  Directive/CreateHLSCppPrimitive.cpp
+  Directive/CreateHLSPrimitive.cpp
   Directive/FuncPipelining.cpp
   Directive/LoopPipelining.cpp
   Directive/QoREstimation.cpp

@@ -9,7 +9,7 @@
 #include "mlir/IR/AffineExprVisitor.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/Translation.h"
-#include "scalehls/Dialect/HLSCpp/Visitor.h"
+#include "scalehls/Dialect/HLS/Visitor.h"
 #include "scalehls/InitAllDialects.h"
 #include "scalehls/Support/Utils.h"
 #include "llvm/Support/raw_ostream.h"
@@ -226,7 +226,7 @@ public:
   void emitTensorToMemref(bufferization::ToMemrefOp op);
   void emitMemrefToTensor(bufferization::ToTensorOp op);
 
-  /// HLSCpp dialect operation emitters.
+  /// HLS dialect operation emitters.
   void emitStreamChannel(StreamChannelOp op);
   void emitStreamRead(StreamReadOp op);
   void emitStreamWrite(StreamWriteOp op);
@@ -358,11 +358,11 @@ private:
 //===----------------------------------------------------------------------===//
 
 namespace {
-class StmtVisitor : public HLSCppVisitorBase<StmtVisitor, bool> {
+class StmtVisitor : public HLSVisitorBase<StmtVisitor, bool> {
 public:
   StmtVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
 
-  using HLSCppVisitorBase::visitOp;
+  using HLSVisitorBase::visitOp;
   /// SCF statements.
   bool visitOp(scf::ForOp op) { return emitter.emitScfFor(op), true; };
   bool visitOp(scf::IfOp op) { return emitter.emitScfIf(op), true; };
@@ -429,7 +429,7 @@ public:
     return emitter.emitMemrefToTensor(op), true;
   }
 
-  /// HLSCpp dialect operations.
+  /// HLS dialect operations.
   bool visitOp(StreamChannelOp op) {
     return emitter.emitStreamChannel(op), true;
   }
@@ -449,10 +449,10 @@ private:
 } // namespace
 
 namespace {
-class ExprVisitor : public HLSCppVisitorBase<ExprVisitor, bool> {
+class ExprVisitor : public HLSVisitorBase<ExprVisitor, bool> {
 public:
   ExprVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
-  using HLSCppVisitorBase::visitOp;
+  using HLSVisitorBase::visitOp;
 
   /// Unary expressions.
   bool visitOp(math::AbsOp op) { return emitter.emitUnary(op, "abs"), true; }
@@ -1263,7 +1263,7 @@ void ModuleEmitter::emitMemrefToTensor(bufferization::ToTensorOp op) {
   }
 }
 
-/// HLSCpp dialect operation emitters.
+/// HLS dialect operation emitters.
 void ModuleEmitter::emitStreamChannel(StreamChannelOp op) {
   indent();
   emitValue(op.channel());

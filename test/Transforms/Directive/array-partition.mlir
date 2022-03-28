@@ -7,8 +7,8 @@
 module  {
 
   // CHECK-LABEL: func @test_syrk(
-  // CHECK-SAME:  %arg0: f32, %arg1: f32, %arg2: memref<16x16xf32, #map0>, %arg3: memref<16x16xf32, #map1>) attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=false>, top_func} {
-  func @test_syrk(%arg0: f32, %arg1: f32, %arg2: memref<16x16xf32>, %arg3: memref<16x16xf32>) attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=false>, top_func} {
+  // CHECK-SAME:  %arg0: f32, %arg1: f32, %arg2: memref<16x16xf32, #map0>, %arg3: memref<16x16xf32, #map1>) attributes {func_directive = #hls.fd<pipeline=false, targetInterval=1, dataflow=false>, top_func} {
+  func @test_syrk(%arg0: f32, %arg1: f32, %arg2: memref<16x16xf32>, %arg3: memref<16x16xf32>) attributes {func_directive = #hls.fd<pipeline=false, targetInterval=1, dataflow=false>, top_func} {
     affine.for %arg4 = 0 to 16 step 2 {
       affine.for %arg5 = 0 to 16 {
         affine.for %arg6 = 0 to 16 {
@@ -38,9 +38,9 @@ module  {
             // CHECK: affine.store %12, %arg3[%arg5, %arg6] : memref<16x16xf32, #map1>
             affine.store %12, %arg3[%arg5, %arg6] : memref<16x16xf32>
           }
-        } {loop_directive = #hlscpp.ld<pipeline=true, targetII=2, dataflow=false, flatten=false>, parallel}
-      } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
-    } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
+        } {loop_directive = #hls.ld<pipeline=true, targetII=2, dataflow=false, flatten=false>, parallel}
+      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
     return
   }
 }
@@ -85,13 +85,13 @@ module {
                   %11 = arith.muli %8, %9 : vector<2xi8>
                   %12 = arith.addi %10, %11 : vector<2xi8>
                   vector.transfer_write %12, %arg2[%arg3, %6, %arg5, %arg6] : vector<2xi8>, memref<1x32x32x64xi8>
-                } {loop_directive = #hlscpp.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>}
-              } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
-            } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
-          } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
-        } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
-      } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
-    } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
+                } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>}
+              } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
+            } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
+          } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
+        } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
+      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
+    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>}
     return
   }
 }

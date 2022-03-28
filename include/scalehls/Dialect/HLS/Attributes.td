@@ -4,10 +4,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_DIALECT_HLSCPP_ATTRIBUTES_TD
-#define SCALEHLS_DIALECT_HLSCPP_ATTRIBUTES_TD
+#ifndef SCALEHLS_DIALECT_HLS_ATTRIBUTES_TD
+#define SCALEHLS_DIALECT_HLS_ATTRIBUTES_TD
 
-def Resource : HLSCppAttr<"Resource"> {
+def Resource : HLSAttr<"Resource"> {
   let summary = "Resource utilization information";
   let description = [{
     This attribute includes the utilization of several important on-chip
@@ -22,7 +22,7 @@ def Resource : HLSCppAttr<"Resource"> {
   );
 }
 
-def Timing : HLSCppAttr<"Timing"> {
+def Timing : HLSAttr<"Timing"> {
   let summary = "Timing information";
   let description = [{
     This attribute indicates the timing of operations, including scheduling
@@ -38,7 +38,7 @@ def Timing : HLSCppAttr<"Timing"> {
   );
 }
 
-def LoopInfo : HLSCppAttr<"LoopInfo"> {
+def LoopInfo : HLSAttr<"LoopInfo"> {
   let summary = "Loop information";
   let description = [{
     This attribute includes loop information used by estimator and optimizer,
@@ -54,7 +54,7 @@ def LoopInfo : HLSCppAttr<"LoopInfo"> {
   );
 }
 
-def LoopDirective : HLSCppAttr<"LoopDirective"> {
+def LoopDirective : HLSAttr<"LoopDirective"> {
   let summary = "Aggregation of loop directives";
   let description = [{
     This attribute includes all loop directives, including loop pipelining,
@@ -70,7 +70,7 @@ def LoopDirective : HLSCppAttr<"LoopDirective"> {
   );
 }
 
-def FuncDirective : HLSCppAttr<"FuncDirective"> {
+def FuncDirective : HLSAttr<"FuncDirective"> {
   let summary = "Aggregation of function directives";
   let description = [{
     This attribute includes all function directives, including function
@@ -85,4 +85,4 @@ def FuncDirective : HLSCppAttr<"FuncDirective"> {
   );
 }
 
-#endif // SCALEHLS_DIALECT_HLSCPP_ATTRIBUTES_TD
+#endif // SCALEHLS_DIALECT_HLS_ATTRIBUTES_TD

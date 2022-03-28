@@ -19,7 +19,7 @@
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/IR/Dialect.h"
-#include "scalehls/Dialect/HLSCpp/HLSCpp.h"
+#include "scalehls/Dialect/HLS/HLS.h"
 
 namespace mlir {
 namespace scalehls {
@@ -38,7 +38,7 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
     mlir::arith::ArithmeticDialect,
     mlir::vector::VectorDialect,
     mlir::scf::SCFDialect,
-    mlir::scalehls::hlscpp::HLSCppDialect,
+    mlir::scalehls::hls::HLSDialect,
     mlir::LLVM::LLVMDialect,
     mlir::DLTIDialect
   >();

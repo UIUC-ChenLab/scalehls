@@ -4,10 +4,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef BINDINGS_PYTHON_HLSCPP_OPS_TD
-#define BINDINGS_PYTHON_HLSCPP_OPS_TD
+#ifndef BINDINGS_PYTHON_HLS_OPS_TD
+#define BINDINGS_PYTHON_HLS_OPS_TD
 
 include "mlir/Bindings/Python/Attributes.td"
-include "scalehls/Dialect/HLSCpp/HLSCpp.td"
+include "scalehls/Dialect/HLS/HLS.td"
 
-#endif // BINDINGS_PYTHON_HLSCPP_OPS_TD
+#endif // BINDINGS_PYTHON_HLS_OPS_TD

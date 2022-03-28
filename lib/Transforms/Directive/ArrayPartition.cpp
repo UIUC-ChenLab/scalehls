@@ -13,7 +13,7 @@
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
+using namespace hls;
 
 static void updateSubFuncs(FuncOp func, Builder builder) {
   func.walk([&](func::CallOp op) {
@@ -47,7 +47,7 @@ static void updateSubFuncs(FuncOp func, Builder builder) {
 
 /// Apply the specified array partition factors and kinds.
 bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
-                                   ArrayRef<hlscpp::PartitionKind> kinds,
+                                   ArrayRef<hls::PartitionKind> kinds,
                                    bool updateFuncSignature) {
   auto builder = Builder(array.getContext());
   auto arrayType = array.getType().dyn_cast<MemRefType>();
@@ -399,7 +399,7 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
     auto memref = pair.first;
     auto partitions = pair.second;
 
-    SmallVector<hlscpp::PartitionKind, 4> kinds;
+    SmallVector<hls::PartitionKind, 4> kinds;
     SmallVector<unsigned, 4> factors;
     for (auto info : partitions) {
       kinds.push_back(info.first);

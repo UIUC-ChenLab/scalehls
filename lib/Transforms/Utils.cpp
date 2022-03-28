@@ -13,7 +13,7 @@
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
+using namespace hls;
 
 static void addMemoryOptsPipeline(PassManager &pm) {
   // To factor out the redundant affine operations.

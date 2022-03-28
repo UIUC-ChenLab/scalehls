@@ -18,7 +18,7 @@ module {
     %0 = "tosa.clamp"(%arg0) {max_fp = 3.40282347E+38 : f32, max_int = 2147483647 : i64, min_fp = 0.000000e+00 : f32, min_int = 0 : i64} : (tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
     %1 = "tosa.conv2d"(%0, %cst, %cst_0) {dilation = [1, 1], pad = [1, 1, 1, 1], quantization_info = {input_zp = 0 : i32, weight_zp = 0 : i32}, stride = [1, 1]} : (tensor<1x32x32x64xi8>, tensor<64x3x3x64xi8>, tensor<64xi8>) -> tensor<1x32x32x64xi8>
     %2 = "tosa.clamp"(%1) {max_fp = 3.40282347E+38 : f32, max_int = 2147483647 : i64, min_fp = 0.000000e+00 : f32, min_int = 0 : i64} : (tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
-    %3 = "hlscpp.buffer"(%0) : (tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
+    %3 = "hls.buffer"(%0) : (tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
     return %2, %3 : tensor<1x32x32x64xi8>, tensor<1x32x32x64xi8>
   }
 
@@ -40,7 +40,7 @@ module {
     %cst = arith.constant dense<2> : tensor<64x3x3x64xi8>
     %cst_0 = arith.constant dense<5> : tensor<64xi8>
     %0 = "tosa.conv2d"(%arg0, %cst, %cst_0) {dilation = [1, 1], pad = [1, 1, 1, 1], quantization_info = {input_zp = 0 : i32, weight_zp = 0 : i32}, stride = [1, 1]} : (tensor<1x32x32x64xi8>, tensor<64x3x3x64xi8>, tensor<64xi8>) -> tensor<1x32x32x64xi8>
-    %1 = "hlscpp.buffer"(%arg1) : (tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
+    %1 = "hls.buffer"(%arg1) : (tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
     %2 = "tosa.add"(%0, %1) : (tensor<1x32x32x64xi8>, tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
     %3 = "tosa.clamp"(%2) {max_fp = 3.40282347E+38 : f32, max_int = 2147483647 : i64, min_fp = 0.000000e+00 : f32, min_int = 0 : i64} : (tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
     return %3 : tensor<1x32x32x64xi8>
@@ -57,7 +57,7 @@ module {
     return %1 : tensor<1x32x32x64xi8>
   }
 
-  // CHECK: func @forward(%arg0: tensor<1x3x32x32xi8>, %arg1: tensor<64x3x3x3xi8>, %arg2: tensor<64x3x3x64xi8>, %arg3: tensor<64x3x3x64xi8>, %arg4: tensor<1x64x10xi8>) -> tensor<1x10xi8> attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=true>, top_func} {
+  // CHECK: func @forward(%arg0: tensor<1x3x32x32xi8>, %arg1: tensor<64x3x3x3xi8>, %arg2: tensor<64x3x3x64xi8>, %arg3: tensor<64x3x3x64xi8>, %arg4: tensor<1x64x10xi8>) -> tensor<1x10xi8> attributes {func_directive = #hls.fd<pipeline=false, targetInterval=1, dataflow=true>, top_func} {
   // CHECK:   %0 = call @dataflow5(%arg0, %arg1) : (tensor<1x3x32x32xi8>, tensor<64x3x3x3xi8>) -> tensor<1x32x32x64xi8>
   // CHECK:   %1:2 = call @dataflow4(%0, %arg2) : (tensor<1x32x32x64xi8>, tensor<64x3x3x64xi8>) -> (tensor<1x32x32x64xi8>, tensor<1x32x32x64xi8>)
   // CHECK:   %2 = call @dataflow3(%1#0, %1#1, %arg3) : (tensor<1x32x32x64xi8>, tensor<1x32x32x64xi8>, tensor<64x3x3x64xi8>) -> tensor<1x32x32x64xi8>
@@ -65,7 +65,7 @@ module {
   // CHECK:   %4 = call @dataflow1(%3, %arg4) : (tensor<1x1x64xi8>, tensor<1x64x10xi8>) -> tensor<1x10xi8>
   // CHECK:   return %4 : tensor<1x10xi8>
   // CHECK: }
-  func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=true>} {
+  func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> attributes {func_directive = #hls.fd<pipeline=false, targetInterval=1, dataflow=true>} {
     %0 = call @dataflow5(%arg0) : (tensor<1x3x32x32xi8>) -> tensor<1x32x32x64xi8>
     %1:2 = call @dataflow4(%0) : (tensor<1x32x32x64xi8>) -> (tensor<1x32x32x64xi8>, tensor<1x32x32x64xi8>)
     %2 = call @dataflow3(%1#0, %1#1) : (tensor<1x32x32x64xi8>, tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>

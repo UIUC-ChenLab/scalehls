@@ -10,7 +10,7 @@
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
+using namespace hls;
 
 static SmallVector<arith::ConstantOp, 8>
 collectConstantsAndUpdateFuncionType(FuncOp func) {

@@ -75,7 +75,7 @@ std::unique_ptr<Pass> createReduceInitialIntervalPass();
 std::unique_ptr<Pass> createFuncPipeliningPass();
 std::unique_ptr<Pass> createLoopPipeliningPass();
 std::unique_ptr<Pass> createArrayPartitionPass();
-std::unique_ptr<Pass> createCreateHLSCppPrimitivePass();
+std::unique_ptr<Pass> createCreateHLSPrimitivePass();
 
 #define GEN_PASS_CLASSES
 #include "scalehls/Transforms/Passes.h.inc"

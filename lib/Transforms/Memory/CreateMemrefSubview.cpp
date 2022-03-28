@@ -12,7 +12,7 @@
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
+using namespace hls;
 
 namespace {
 struct CreateMemrefSubview

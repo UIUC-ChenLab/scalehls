@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_DIALECT_HLSCPP_OPS_TD
-#define SCALEHLS_DIALECT_HLSCPP_OPS_TD
+#ifndef SCALEHLS_DIALECT_HLS_OPS_TD
+#define SCALEHLS_DIALECT_HLS_OPS_TD
 
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
@@ -13,7 +13,7 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 // Dataflow Operations
 //===----------------------------------------------------------------------===//
 
-def DataflowNodeOp : HLSCppOp<"dataflow.node",
+def DataflowNodeOp : HLSOp<"dataflow.node",
       [SingleBlockImplicitTerminator<"DataflowOutputOp">]> {
   let summary = "Dataflow node operation";
   let description = [{
@@ -29,7 +29,7 @@ def DataflowNodeOp : HLSCppOp<"dataflow.node",
   let extraClassDeclaration = [{ DataflowOutputOp getOutputOp(); }];
 }
 
-def DataflowOutputOp : HLSCppOp<"dataflow.output",
+def DataflowOutputOp : HLSOp<"dataflow.output",
       [Terminator, HasParent<"DataflowNodeOp">]> {
   let summary = "Output operation of a dataflow node";
   let description = [{
@@ -43,7 +43,7 @@ def DataflowOutputOp : HLSCppOp<"dataflow.output",
   let builders = [ OpBuilder<(ins), "build($_builder, $_state, Value());"> ];
 }
 
-def DataflowSourceOp : HLSCppOp<"dataflow.source"> {
+def DataflowSourceOp : HLSOp<"dataflow.source"> {
   let summary = "Dataflow source operation";
   let description = [{
     The operation represents the source of a dataflow value.
@@ -52,7 +52,7 @@ def DataflowSourceOp : HLSCppOp<"dataflow.source"> {
   let results = (outs AnyType:$output);
 }
 
-def DataflowSinkOp : HLSCppOp<"dataflow.sink"> {
+def DataflowSinkOp : HLSOp<"dataflow.sink"> {
   let summary = "Dataflow sink operation";
   let description = [{
     The operation represents the sink of a dataflow value.
@@ -61,7 +61,7 @@ def DataflowSinkOp : HLSCppOp<"dataflow.sink"> {
   let arguments = (ins AnyType:$input);
 }
 
-def DataflowBufferOp : HLSCppOp<"dataflow.buffer",
+def DataflowBufferOp : HLSOp<"dataflow.buffer",
       [SameOperandsAndResultElementType]> {
   let summary = "Dataflow buffer operation";
   let description = [{
@@ -79,20 +79,20 @@ def DataflowBufferOp : HLSCppOp<"dataflow.buffer",
 def DeclaresStreamChannel : NativeOpTrait<"DeclaresStreamChannel">;
 
 class StreamOf<list<Type> allowedTypes> : Type<And<[
-  CPred<"$_self.isa<::mlir::scalehls::hlscpp::StreamType>()">,
+  CPred<"$_self.isa<::mlir::scalehls::hls::StreamType>()">,
   Concat<"[](::mlir::Type elementType) { return ",
     SubstLeaves<"$_self", "elementType", AnyTypeOf<allowedTypes>.predicate>,
-    "; }($_self.cast<::mlir::scalehls::hlscpp::StreamType>().getElementType())">
+    "; }($_self.cast<::mlir::scalehls::hls::StreamType>().getElementType())">
 ]>>;
 
-def StreamChannelOp : HLSCppOp<"stream.channel", [DeclaresStreamChannel]> {
+def StreamChannelOp : HLSOp<"stream.channel", [DeclaresStreamChannel]> {
   let summary = "Stream channel declaration operation";
 
   let hasVerifier = 1;
   let results = (outs StreamOf<[AnyType]>:$channel);
 }
 
-def StreamReadOp : HLSCppOp<"stream.read"> {
+def StreamReadOp : HLSOp<"stream.read"> {
   let summary = "Stream channel read operation";
   let description = [{
     Read/pop a value from a stream channel. The absence of the result indicates
@@ -104,7 +104,7 @@ def StreamReadOp : HLSCppOp<"stream.read"> {
   let results = (outs Optional<AnyType>:$result);
 }
 
-def StreamWriteOp : HLSCppOp<"stream.write"> {
+def StreamWriteOp : HLSOp<"stream.write"> {
   let summary = "Stream channel write operation";
   let description = [{
     Write/push a value to a stream channel. Each stream channel can only be
@@ -115,7 +115,7 @@ def StreamWriteOp : HLSCppOp<"stream.write"> {
   let arguments = (ins StreamOf<[AnyType]>:$channel, AnyType:$value);
 }
 
-def StreamBufferOp : HLSCppOp<"stream.buffer", [DeclaresStreamChannel]> {
+def StreamBufferOp : HLSOp<"stream.buffer", [DeclaresStreamChannel]> {
   let summary = "Stream channel buffer operation";
 
   let hasVerifier = 1;
@@ -127,7 +127,7 @@ def StreamBufferOp : HLSCppOp<"stream.buffer", [DeclaresStreamChannel]> {
 // Primitive Operations
 //===----------------------------------------------------------------------===//
 
-def PrimMulOp : HLSCppOp<"prim.mul", [NoSideEffect]> {
+def PrimMulOp : HLSOp<"prim.mul", [NoSideEffect]> {
   let summary = "Multiplication primitive operation";
   let description = [{
     This primitive performs C = A * B, where A and B are 8-bits integers, while
@@ -153,7 +153,7 @@ def PrimMulOp : HLSCppOp<"prim.mul", [NoSideEffect]> {
   let extraClassDeclaration = [{ bool isPackMul(); }];
 }
 
-def PrimCastOp : HLSCppOp<"prim.cast",
+def PrimCastOp : HLSOp<"prim.cast",
     [SameOperandsAndResultShape, NoSideEffect]> {
   let summary = "Cast primitive operation";
 
@@ -168,7 +168,7 @@ def PrimCastOp : HLSCppOp<"prim.cast",
   );
 }
 
-def BufferOp : HLSCppOp<"buffer",
+def BufferOp : HLSOp<"buffer",
     [SameOperandsAndResultElementType, NoSideEffect]> {
   let summary = "Buffer the input value";
 
@@ -177,4 +177,4 @@ def BufferOp : HLSCppOp<"buffer",
   let results = (outs AnyType:$output);
 }
 
-#endif // SCALEHLS_DIALECT_HLSCPP_OPS_TD
+#endif // SCALEHLS_DIALECT_HLS_OPS_TD

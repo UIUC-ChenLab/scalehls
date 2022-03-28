@@ -13,7 +13,7 @@
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
+using namespace hls;
 
 static void createBufferAndCopy(MemRefType type, Value memref,
                                 OpBuilder &builder) {

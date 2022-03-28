@@ -10,7 +10,7 @@
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
+using namespace hls;
 
 // Updates the func op and entry block. Any args appended to the entry block are
 // added to `appendedEntryArgs`.
@@ -22,7 +22,7 @@ static void updateFuncOp(FuncOp func,
   SmallVector<Type, 6> erasedResultTypes;
   BitVector erasedResultIndices(functionType.getNumResults());
   for (const auto &resultType : llvm::enumerate(functionType.getResults())) {
-    if (resultType.value().isa<hlscpp::StreamType>()) {
+    if (resultType.value().isa<hls::StreamType>()) {
       erasedResultIndices.set(resultType.index());
       erasedResultTypes.push_back(resultType.value());
     }
@@ -70,7 +70,7 @@ static void updateReturnOps(FuncOp func,
     OpBuilder builder(op);
     for (auto t : llvm::zip(copyIntoOutParams, appendedEntryArgs)) {
       std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
-      if (auto stream = std::get<0>(t).getDefiningOp<hlscpp::StreamChannelOp>())
+      if (auto stream = std::get<0>(t).getDefiningOp<hls::StreamChannelOp>())
         stream.erase();
     }
     builder.create<func::ReturnOp>(op.getLoc(), keepAsReturnOperands);
@@ -85,7 +85,7 @@ static void updateCalls(ModuleOp module) {
     SmallVector<Value, 6> replaceWithNewCallResults;
     SmallVector<Value, 6> replaceWithOutParams;
     for (OpResult result : op.getResults()) {
-      if (result.getType().isa<hlscpp::StreamType>())
+      if (result.getType().isa<hls::StreamType>())
         replaceWithOutParams.push_back(result);
       else
         replaceWithNewCallResults.push_back(result);
@@ -93,7 +93,7 @@ static void updateCalls(ModuleOp module) {
     SmallVector<Value, 6> outParams;
     OpBuilder builder(op);
     for (Value stream : replaceWithOutParams) {
-      Value outParam = builder.create<hlscpp::StreamChannelOp>(
+      Value outParam = builder.create<hls::StreamChannelOp>(
           op.getLoc(), stream.getType().cast<StreamType>());
       stream.replaceAllUsesWith(outParam);
       outParams.push_back(outParam);
@@ -113,27 +113,26 @@ static void updateCalls(ModuleOp module) {
 
 namespace {
 struct LowerStreamBufferOpRewritePattern
-    : public OpRewritePattern<hlscpp::StreamBufferOp> {
-  using OpRewritePattern<hlscpp::StreamBufferOp>::OpRewritePattern;
+    : public OpRewritePattern<hls::StreamBufferOp> {
+  using OpRewritePattern<hls::StreamBufferOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(hlscpp::StreamBufferOp buffer,
+  LogicalResult matchAndRewrite(hls::StreamBufferOp buffer,
                                 PatternRewriter &rewriter) const override {
     auto loc = buffer.getLoc();
     auto block = buffer->getBlock();
 
     rewriter.setInsertionPointToStart(block);
-    if (!llvm::any_of(buffer.input().getUsers(), [](Operation *op) {
-          return isa<hlscpp::StreamReadOp>(op);
-        }))
-      rewriter.create<hlscpp::StreamReadOp>(loc, Type(), buffer.input());
-    auto channel = rewriter.replaceOpWithNewOp<hlscpp::StreamChannelOp>(
+    if (!llvm::any_of(buffer.input().getUsers(),
+                      [](Operation *op) { return isa<hls::StreamReadOp>(op); }))
+      rewriter.create<hls::StreamReadOp>(loc, Type(), buffer.input());
+    auto channel = rewriter.replaceOpWithNewOp<hls::StreamChannelOp>(
         buffer, buffer.getType());
 
     rewriter.setInsertionPoint(block->getTerminator());
     auto tokenType = channel.getType().cast<StreamType>().getElementType();
     auto tokenValue = rewriter.create<arith::ConstantOp>(
         loc, rewriter.getZeroAttr(tokenType));
-    rewriter.create<hlscpp::StreamWriteOp>(loc, channel, tokenValue);
+    rewriter.create<hls::StreamWriteOp>(loc, channel, tokenValue);
     return success();
   }
 };

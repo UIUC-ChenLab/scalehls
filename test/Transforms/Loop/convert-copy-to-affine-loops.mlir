@@ -28,11 +28,11 @@ module {
     }
 
     // CHECK-NOT: %[[VAL2:.*]] = bufferization.to_tensor %[[VAL0:.*]] : memref<1x32x32x64xi8>
-    // CHECK-NOT: %[[VAL3:.*]] = "hlscpp.buffer"(%[[VAL2:.*]]) : (tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
+    // CHECK-NOT: %[[VAL3:.*]] = "hls.buffer"(%[[VAL2:.*]]) : (tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
     // CHECK-NOT: %[[VAL4:.*]] = bufferization.to_memref %[[VAL3:.*]] : memref<1x32x32x64xi8>
     // CHECK-NOT: memref.copy %[[VAL4:.*]], %arg1 : memref<1x32x32x64xi8> to memref<1x32x32x64xi8>
     %2 = bufferization.to_tensor %1 : memref<1x32x32x64xi8>
-    %10 = "hlscpp.buffer"(%2) : (tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
+    %10 = "hls.buffer"(%2) : (tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
     %11 = bufferization.to_memref %10 : memref<1x32x32x64xi8>
     memref.copy %11, %arg1 : memref<1x32x32x64xi8> to memref<1x32x32x64xi8>
     return

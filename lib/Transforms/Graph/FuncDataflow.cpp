@@ -11,13 +11,13 @@
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "scalehls/Dialect/HLSCpp/HLSCpp.h"
+#include "scalehls/Dialect/HLS/HLS.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
+using namespace hls;
 
 namespace {
 struct DataflowGraph {
@@ -179,11 +179,11 @@ bool Dataflower::applyLegalizeDataflow(int64_t gran, bool balance) {
             copyOp = builder.create<memref::CopyOp>(op->getLoc(), values.back(),
                                                     newValue);
           } else if (auto type = value.getType().dyn_cast<StreamType>()) {
-            copyOp = builder.create<hlscpp::StreamBufferOp>(
+            copyOp = builder.create<hls::StreamBufferOp>(
                 op->getLoc(), value.getType(), values.back());
             newValue = copyOp->getResult(0);
           } else {
-            copyOp = builder.create<hlscpp::BufferOp>(
+            copyOp = builder.create<hls::BufferOp>(
                 op->getLoc(), value.getType(), values.back());
             newValue = copyOp->getResult(0);
           }

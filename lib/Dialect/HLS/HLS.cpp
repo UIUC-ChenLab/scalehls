@@ -4,7 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "scalehls/Dialect/HLSCpp/HLSCpp.h"
+#include "scalehls/Dialect/HLS/HLS.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/PatternMatch.h"
@@ -12,39 +12,39 @@
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
+using namespace hls;
 
 //===----------------------------------------------------------------------===//
-// HLSCpp dialect
+// HLS dialect
 //===----------------------------------------------------------------------===//
 
-void HLSCppDialect::initialize() {
+void HLSDialect::initialize() {
   addTypes<
 #define GET_TYPEDEF_LIST
-#include "scalehls/Dialect/HLSCpp/HLSCppTypes.cpp.inc"
+#include "scalehls/Dialect/HLS/HLSTypes.cpp.inc"
       >();
 
   addAttributes<
 #define GET_ATTRDEF_LIST
-#include "scalehls/Dialect/HLSCpp/HLSCppAttributes.cpp.inc"
+#include "scalehls/Dialect/HLS/HLSAttributes.cpp.inc"
       >();
 
   addOperations<
 #define GET_OP_LIST
-#include "scalehls/Dialect/HLSCpp/HLSCpp.cpp.inc"
+#include "scalehls/Dialect/HLS/HLS.cpp.inc"
       >();
 }
 
 //===----------------------------------------------------------------------===//
-// HLSCpp dialect utils
+// HLS dialect utils
 //===----------------------------------------------------------------------===//
 
 /// Get the users of a stream channel. If the channel is used by a function
 /// call, this method will recursively look into the corresponding sub-function.
 /// If the channel is used by a function return, this method will recursively
 /// look into each function that calls the parent function of the return.
-void hlscpp::getStreamChannelUsers(Value channel,
-                                   SmallVectorImpl<Operation *> &users) {
+void hls::getStreamChannelUsers(Value channel,
+                                SmallVectorImpl<Operation *> &users) {
   assert(channel.getType().isa<StreamType>() && "channel must be stream type");
 
   for (auto &use : channel.getUses()) {
@@ -70,99 +70,98 @@ void hlscpp::getStreamChannelUsers(Value channel,
 }
 
 /// Timing attribute utils.
-TimingAttr hlscpp::getTiming(Operation *op) {
+TimingAttr hls::getTiming(Operation *op) {
   return op->getAttrOfType<TimingAttr>("timing");
 }
-void hlscpp::setTiming(Operation *op, TimingAttr timing) {
+void hls::setTiming(Operation *op, TimingAttr timing) {
   assert(timing.getBegin() <= timing.getEnd() && "invalid timing attribute");
   op->setAttr("timing", timing);
 }
-void hlscpp::setTiming(Operation *op, int64_t begin, int64_t end,
-                       int64_t latency, int64_t minII) {
+void hls::setTiming(Operation *op, int64_t begin, int64_t end, int64_t latency,
+                    int64_t minII) {
   auto timing = TimingAttr::get(op->getContext(), begin, end, latency, minII);
   setTiming(op, timing);
 }
 
 /// Resource attribute utils.
-ResourceAttr hlscpp::getResource(Operation *op) {
+ResourceAttr hls::getResource(Operation *op) {
   return op->getAttrOfType<ResourceAttr>("resource");
 }
-void hlscpp::setResource(Operation *op, ResourceAttr resource) {
+void hls::setResource(Operation *op, ResourceAttr resource) {
   op->setAttr("resource", resource);
 }
-void hlscpp::setResource(Operation *op, int64_t lut, int64_t dsp,
-                         int64_t bram) {
+void hls::setResource(Operation *op, int64_t lut, int64_t dsp, int64_t bram) {
   auto resource = ResourceAttr::get(op->getContext(), lut, dsp, bram);
   setResource(op, resource);
 }
 
 /// Loop information attribute utils.
-LoopInfoAttr hlscpp::getLoopInfo(Operation *op) {
+LoopInfoAttr hls::getLoopInfo(Operation *op) {
   return op->getAttrOfType<LoopInfoAttr>("loop_info");
 }
-void hlscpp::setLoopInfo(Operation *op, LoopInfoAttr loopInfo) {
+void hls::setLoopInfo(Operation *op, LoopInfoAttr loopInfo) {
   op->setAttr("loop_info", loopInfo);
 }
-void hlscpp::setLoopInfo(Operation *op, int64_t flattenTripCount,
-                         int64_t iterLatency, int64_t minII) {
+void hls::setLoopInfo(Operation *op, int64_t flattenTripCount,
+                      int64_t iterLatency, int64_t minII) {
   auto loopInfo =
       LoopInfoAttr::get(op->getContext(), flattenTripCount, iterLatency, minII);
   setLoopInfo(op, loopInfo);
 }
 
 /// Loop directives attribute utils.
-LoopDirectiveAttr hlscpp::getLoopDirective(Operation *op) {
+LoopDirectiveAttr hls::getLoopDirective(Operation *op) {
   return op->getAttrOfType<LoopDirectiveAttr>("loop_directive");
 }
-void hlscpp::setLoopDirective(Operation *op, LoopDirectiveAttr loopDirective) {
+void hls::setLoopDirective(Operation *op, LoopDirectiveAttr loopDirective) {
   op->setAttr("loop_directive", loopDirective);
 }
-void hlscpp::setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
-                              bool dataflow, bool flatten) {
+void hls::setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
+                           bool dataflow, bool flatten) {
   auto loopDirective = LoopDirectiveAttr::get(op->getContext(), pipeline,
                                               targetII, dataflow, flatten);
   setLoopDirective(op, loopDirective);
 }
 
 /// Parrallel and point loop attribute utils.
-void hlscpp::setParallelAttr(Operation *op) {
+void hls::setParallelAttr(Operation *op) {
   op->setAttr("parallel", UnitAttr::get(op->getContext()));
 }
-bool hlscpp::hasParallelAttr(Operation *op) {
+bool hls::hasParallelAttr(Operation *op) {
   return op->hasAttrOfType<UnitAttr>("parallel");
 }
-void hlscpp::setPointAttr(Operation *op) {
+void hls::setPointAttr(Operation *op) {
   op->setAttr("point", UnitAttr::get(op->getContext()));
 }
-bool hlscpp::hasPointAttr(Operation *op) {
+bool hls::hasPointAttr(Operation *op) {
   return op->hasAttrOfType<UnitAttr>("point");
 }
 
 /// Function directives attribute utils.
-FuncDirectiveAttr hlscpp::getFuncDirective(Operation *op) {
+FuncDirectiveAttr hls::getFuncDirective(Operation *op) {
   return op->getAttrOfType<FuncDirectiveAttr>("func_directive");
 }
-void hlscpp::setFuncDirective(Operation *op, FuncDirectiveAttr funcDirective) {
+void hls::setFuncDirective(Operation *op, FuncDirectiveAttr funcDirective) {
   op->setAttr("func_directive", funcDirective);
 }
-void hlscpp::setFuncDirective(Operation *op, bool pipeline,
-                              int64_t targetInterval, bool dataflow) {
+void hls::setFuncDirective(Operation *op, bool pipeline, int64_t targetInterval,
+                           bool dataflow) {
   auto funcDirective = FuncDirectiveAttr::get(op->getContext(), pipeline,
                                               targetInterval, dataflow);
   setFuncDirective(op, funcDirective);
 }
 
 /// Top and runtime function attribute utils.
-void hlscpp::setTopFuncAttr(Operation *op) {
+void hls::setTopFuncAttr(Operation *op) {
   op->setAttr("top_func", UnitAttr::get(op->getContext()));
 }
-bool hlscpp::hasTopFuncAttr(Operation *op) {
+bool hls::hasTopFuncAttr(Operation *op) {
   return op->hasAttrOfType<UnitAttr>("top_func");
 }
-void hlscpp::setRuntimeAttr(Operation *op) {
+void hls::setRuntimeAttr(Operation *op) {
   op->setAttr("runtime", UnitAttr::get(op->getContext()));
 }
-bool hlscpp::hasRuntimeAttr(Operation *op) {
+bool hls::hasRuntimeAttr(Operation *op) {
   return op->hasAttrOfType<UnitAttr>("runtime");
 }
 
@@ -380,7 +379,7 @@ void FuncDirectiveAttr::print(AsmPrinter &p) const {
 }
 
 //===----------------------------------------------------------------------===//
-// HLSCpp operation canonicalizers
+// HLS operation canonicalizers
 //===----------------------------------------------------------------------===//
 
 namespace {
@@ -436,14 +435,14 @@ void BufferOp::getCanonicalizationPatterns(RewritePatternSet &results,
 // Include tablegen classes
 //===----------------------------------------------------------------------===//
 
-#include "scalehls/Dialect/HLSCpp/HLSCppDialect.cpp.inc"
-#include "scalehls/Dialect/HLSCpp/HLSCppEnums.cpp.inc"
+#include "scalehls/Dialect/HLS/HLSDialect.cpp.inc"
+#include "scalehls/Dialect/HLS/HLSEnums.cpp.inc"
 
 #define GET_TYPEDEF_CLASSES
-#include "scalehls/Dialect/HLSCpp/HLSCppTypes.cpp.inc"
+#include "scalehls/Dialect/HLS/HLSTypes.cpp.inc"
 
 #define GET_ATTRDEF_CLASSES
-#include "scalehls/Dialect/HLSCpp/HLSCppAttributes.cpp.inc"
+#include "scalehls/Dialect/HLS/HLSAttributes.cpp.inc"
 
 #define GET_OP_CLASSES
-#include "scalehls/Dialect/HLSCpp/HLSCpp.cpp.inc"
+#include "scalehls/Dialect/HLS/HLS.cpp.inc"

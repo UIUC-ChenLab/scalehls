@@ -10,7 +10,7 @@
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
+using namespace hls;
 
 /// Apply function pipelining to the input function, all contained loops are
 /// automatically fully unrolled.

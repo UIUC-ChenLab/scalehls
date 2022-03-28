@@ -10,7 +10,7 @@
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dominance.h"
-#include "scalehls/Dialect/HLSCpp/Visitor.h"
+#include "scalehls/Dialect/HLS/Visitor.h"
 #include "scalehls/Support/Utils.h"
 #include "scalehls/Transforms/Utils.h"
 #include "llvm/Support/JSON.h"
@@ -29,7 +29,7 @@ void getDspUsageMap(llvm::json::Object *config,
 //===----------------------------------------------------------------------===//
 
 class ScaleHLSEstimator
-    : public HLSCppVisitorBase<ScaleHLSEstimator, bool, int64_t> {
+    : public HLSVisitorBase<ScaleHLSEstimator, bool, int64_t> {
 public:
   explicit ScaleHLSEstimator(llvm::StringMap<int64_t> &latencyMap,
                              llvm::StringMap<int64_t> &dspUsageMap,
@@ -41,7 +41,7 @@ public:
   void estimateFunc(FuncOp func);
   void estimateLoop(AffineForOp loop, FuncOp func);
 
-  using HLSCppVisitorBase::visitOp;
+  using HLSVisitorBase::visitOp;
   bool visitUnhandledOp(Operation *op, int64_t begin) {
     // Default latency of any unhandled operation is 0.
     return setTiming(op, begin, begin, 0, 0), true;

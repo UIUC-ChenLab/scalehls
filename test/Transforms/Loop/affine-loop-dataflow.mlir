@@ -8,15 +8,15 @@
 #set0 = affine_set<(d0, d1, d2) : (d0 == 0, d1 == 0, d2 == 0)>
 #set1 = affine_set<(d0, d1, d2) : (-d0 + 2 == 0, -d1 + 2 == 0, -d2 + 63 == 0)>
 module {
-  // CHECK: func @forward_dataflow6(%arg0: memref<1x32x32x64xi8, 3>, %arg1: !hlscpp.stream<i1, 1>, %arg2: memref<3x3x64x64xi8, 3>, %arg3: memref<1x32x32x64xi8, 3>, %arg4: !hlscpp.stream<i1, 1>, %arg5: !hlscpp.stream<i1, 1>) attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=true>} {
-  func @forward_dataflow6(%arg0: memref<1x32x32x64xi8, 3>, %arg1: !hlscpp.stream<i1, 1>, %arg2: memref<3x3x64x64xi8, 3>, %arg3: memref<1x32x32x64xi8, 3>, %arg4: !hlscpp.stream<i1, 1>, %arg5: !hlscpp.stream<i1, 1>) attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=true>} {
+  // CHECK: func @forward_dataflow6(%arg0: memref<1x32x32x64xi8, 3>, %arg1: !hls.stream<i1, 1>, %arg2: memref<3x3x64x64xi8, 3>, %arg3: memref<1x32x32x64xi8, 3>, %arg4: !hls.stream<i1, 1>, %arg5: !hls.stream<i1, 1>) attributes {func_directive = #hls.fd<pipeline=false, targetInterval=1, dataflow=true>} {
+  func @forward_dataflow6(%arg0: memref<1x32x32x64xi8, 3>, %arg1: !hls.stream<i1, 1>, %arg2: memref<3x3x64x64xi8, 3>, %arg3: memref<1x32x32x64xi8, 3>, %arg4: !hls.stream<i1, 1>, %arg5: !hls.stream<i1, 1>) attributes {func_directive = #hls.fd<pipeline=false, targetInterval=1, dataflow=true>} {
     %c127_i8 = arith.constant 127 : i8
     %cst = arith.constant dense<5> : tensor<64xi8>
     %c0_i8 = arith.constant 0 : i8
     %false = arith.constant false
     %0 = memref.alloc() : memref<1x1x1x1xi8>
     %1 = bufferization.to_memref %cst : memref<64xi8>
-    "hlscpp.stream.read"(%arg1) : (!hlscpp.stream<i1, 1>) -> ()
+    "hls.stream.read"(%arg1) : (!hls.stream<i1, 1>) -> ()
     %2 = memref.alloc() : memref<1x4x4x4xi8>
     %3 = memref.alloc() : memref<1x1x4x4xi8>
     %4 = memref.alloc() : memref<1x4x4x4xi8>
@@ -30,7 +30,7 @@ module {
               // CHECK:   call @loop0_dataflow3
               // CHECK:   call @loop0_dataflow2
               // CHECK:   call @loop0_dataflow1
-              // CHECK: } {loop_directive = #hlscpp.ld<pipeline=false, targetII=1, dataflow=true, flatten=false>}
+              // CHECK: } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=true, flatten=false>}
               affine.for %arg11 = 0 to 16 {
                 affine.for %arg12 = 0 to 4 {
                   affine.for %arg13 = 0 to 4 {
@@ -87,8 +87,8 @@ module {
         }
       }
     }
-    "hlscpp.stream.write"(%arg4, %false) : (!hlscpp.stream<i1, 1>, i1) -> ()
-    "hlscpp.stream.write"(%arg5, %false) : (!hlscpp.stream<i1, 1>, i1) -> ()
+    "hls.stream.write"(%arg4, %false) : (!hls.stream<i1, 1>, i1) -> ()
+    "hls.stream.write"(%arg5, %false) : (!hls.stream<i1, 1>, i1) -> ()
     return
   }
 }

@@ -160,7 +160,7 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(scalehls::createLoopPipeliningPass());
         pm.addPass(scalehls::createArrayPartitionPass());
-        pm.addPass(scalehls::createCreateHLSCppPrimitivePass());
+        pm.addPass(scalehls::createCreateHLSPrimitivePass());
         pm.addPass(mlir::createCanonicalizerPass());
       });
 }
@@ -279,7 +279,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
 
         pm.addPass(scalehls::createLoopPipeliningPass());
         pm.addPass(scalehls::createArrayPartitionPass());
-        pm.addPass(scalehls::createCreateHLSCppPrimitivePass());
+        pm.addPass(scalehls::createCreateHLSPrimitivePass());
         pm.addPass(mlir::createCanonicalizerPass());
       });
 }

@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_DIALECT_HLSCPP_VISITOR_H
-#define SCALEHLS_DIALECT_HLSCPP_VISITOR_H
+#ifndef SCALEHLS_DIALECT_HLS_VISITOR_H
+#define SCALEHLS_DIALECT_HLS_VISITOR_H
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
@@ -16,17 +16,17 @@
 #include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
-#include "scalehls/Dialect/HLSCpp/HLSCpp.h"
+#include "scalehls/Dialect/HLS/HLS.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 namespace mlir {
 namespace scalehls {
 
-using namespace hlscpp;
+using namespace hls;
 
 /// This class is a visitor for SSACFG operation nodes.
 template <typename ConcreteType, typename ResultType, typename... ExtraArgs>
-class HLSCppVisitorBase {
+class HLSVisitorBase {
 public:
   ResultType dispatchVisitor(Operation *op, ExtraArgs... args) {
     auto *thisCast = static_cast<ConcreteType *>(this);
@@ -52,7 +52,7 @@ public:
             memref::ExpandShapeOp, memref::ReinterpretCastOp,
             bufferization::ToMemrefOp, bufferization::ToTensorOp,
 
-            // HLSCpp dialect operations.
+            // HLS dialect operations.
             StreamChannelOp, StreamReadOp, StreamWriteOp, PrimMulOp, PrimCastOp,
             BufferOp,
 
@@ -146,7 +146,7 @@ public:
   HANDLE(bufferization::ToMemrefOp);
   HANDLE(bufferization::ToTensorOp);
 
-  // HLSCpp dialect operations.
+  // HLS dialect operations.
   HANDLE(StreamChannelOp);
   HANDLE(StreamReadOp);
   HANDLE(StreamWriteOp);
@@ -221,4 +221,4 @@ public:
 } // namespace scalehls
 } // namespace mlir
 
-#endif // SCALEHLS_DIALECT_HLSCPP_VISITOR_H
+#endif // SCALEHLS_DIALECT_HLS_VISITOR_H

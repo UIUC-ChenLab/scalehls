@@ -4,25 +4,25 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_DIALECT_HLSCPP_HLSCPP_H
-#define SCALEHLS_DIALECT_HLSCPP_HLSCPP_H
+#ifndef SCALEHLS_DIALECT_HLS_HLS_H
+#define SCALEHLS_DIALECT_HLS_HLS_H
 
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
-#include "scalehls/Dialect/HLSCpp/HLSCppDialect.h.inc"
-#include "scalehls/Dialect/HLSCpp/HLSCppEnums.h.inc"
+#include "scalehls/Dialect/HLS/HLSDialect.h.inc"
+#include "scalehls/Dialect/HLS/HLSEnums.h.inc"
 
 #define GET_TYPEDEF_CLASSES
-#include "scalehls/Dialect/HLSCpp/HLSCppTypes.h.inc"
+#include "scalehls/Dialect/HLS/HLSTypes.h.inc"
 
 #define GET_ATTRDEF_CLASSES
-#include "scalehls/Dialect/HLSCpp/HLSCppAttributes.h.inc"
+#include "scalehls/Dialect/HLS/HLSAttributes.h.inc"
 
 namespace mlir {
 namespace scalehls {
-namespace hlscpp {
+namespace hls {
 
 enum class MemoryKind { BRAM_S2P = 0, BRAM_T2P = 1, BRAM_1P = 2, DRAM = 3 };
 enum class PartitionKind { CYCLIC = 0, BLOCK = 1, NONE = 2 };
@@ -74,7 +74,7 @@ void setTopFuncAttr(Operation *op);
 bool hasRuntimeAttr(Operation *op);
 void setRuntimeAttr(Operation *op);
 
-} // namespace hlscpp
+} // namespace hls
 } // namespace scalehls
 } // namespace mlir
 
@@ -86,7 +86,7 @@ class DeclaresStreamChannel
 public:
   static LogicalResult verifyTrait(Operation *op) {
     if (op->getNumResults() != 1 ||
-        !op->getResult(0).getType().isa<scalehls::hlscpp::StreamType>())
+        !op->getResult(0).getType().isa<scalehls::hls::StreamType>())
       return failure();
     return success();
   }
@@ -94,8 +94,8 @@ public:
   /// Get all users of the channel.
   SmallVector<Operation *, 2> getChannelUsers() {
     SmallVector<Operation *, 2> users;
-    scalehls::hlscpp::getStreamChannelUsers(this->getOperation()->getResult(0),
-                                            users);
+    scalehls::hls::getStreamChannelUsers(this->getOperation()->getResult(0),
+                                         users);
     return users;
   }
 };
@@ -103,6 +103,6 @@ public:
 } // namespace mlir
 
 #define GET_OP_CLASSES
-#include "scalehls/Dialect/HLSCpp/HLSCpp.h.inc"
+#include "scalehls/Dialect/HLS/HLS.h.inc"
 
-#endif // SCALEHLS_DIALECT_HLSCPP_HLSCPP_H
+#endif // SCALEHLS_DIALECT_HLS_HLS_H

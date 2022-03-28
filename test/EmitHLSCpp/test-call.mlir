@@ -1,6 +1,6 @@
 // RUN: scalehls-translate -emit-hlscpp %s | FileCheck %s
 
-func @callee(%arg0: index, %arg1: memref<16xindex>) -> (index, index, memref<16xindex>, memref<16xindex>) attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=false>} {
+func @callee(%arg0: index, %arg1: memref<16xindex>) -> (index, index, memref<16xindex>, memref<16xindex>) attributes {func_directive = #hls.fd<pipeline=false, targetInterval=1, dataflow=false>} {
   // CHECK-NOT: #pragma HLS interface s_axilite port=return bundle=ctrl
   // CHECK-NOT: #pragma HLS interface s_axilite port=v0 bundle=ctrl
   // CHECK-NOT: #pragma HLS interface s_axilite port=v2 bundle=ctrl
@@ -13,7 +13,7 @@ func @callee(%arg0: index, %arg1: memref<16xindex>) -> (index, index, memref<16x
   return %0, %1, %2, %3 : index, index, memref<16xindex>, memref<16xindex>
 }
 
-func @test_call(%arg0: index, %arg1: memref<16xindex>) -> (index, memref<16xindex>) attributes {func_directive = #hlscpp.fd<pipeline=false, targetInterval=1, dataflow=false>, top_func} {
+func @test_call(%arg0: index, %arg1: memref<16xindex>) -> (index, memref<16xindex>) attributes {func_directive = #hls.fd<pipeline=false, targetInterval=1, dataflow=false>, top_func} {
   // CHECK: #pragma HLS interface s_axilite port=return bundle=ctrl
   // CHECK: #pragma HLS interface s_axilite port=v6 bundle=ctrl
   // CHECK: #pragma HLS interface s_axilite port=v8 bundle=ctrl

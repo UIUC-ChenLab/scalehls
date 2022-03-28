@@ -15,7 +15,7 @@
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
+using namespace hls;
 
 //===----------------------------------------------------------------------===//
 // Memory and loop analysis utils
