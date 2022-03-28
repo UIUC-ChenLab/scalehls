@@ -21,11 +21,22 @@
 #include "scalehls/Dialect/HLS/HLSAttributes.h.inc"
 
 namespace mlir {
+
+class PatternRewriter;
+
 namespace scalehls {
 namespace hls {
 
+class DataflowNodeOp;
+
 enum class MemoryKind { BRAM_S2P = 0, BRAM_T2P = 1, BRAM_1P = 2, DRAM = 3 };
 enum class PartitionKind { CYCLIC = 0, BLOCK = 1, NONE = 2 };
+
+/// Fuse the given operations into a new dataflow node. The fused node will be
+/// created before the first operation and each operation will be inserted in
+/// order. This method always succeeds.
+DataflowNodeOp fuseOpsIntoNewNode(ArrayRef<Operation *> ops,
+                                  PatternRewriter &rewriter);
 
 /// Get the users of a stream channel. If the channel is used by a function
 /// call, this method will recursively look into the corresponding sub-function.

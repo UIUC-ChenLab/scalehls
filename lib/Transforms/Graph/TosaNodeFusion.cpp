@@ -25,89 +25,11 @@ struct OutliningPattern : public OpRewritePattern<OpType> {
                                 PatternRewriter &rewriter) const override {
     if (op->template getParentOfType<DataflowNodeOp>())
       return success();
-
-    // Create a new stream node.
-    rewriter.setInsertionPoint(op);
-    auto node = rewriter.template create<DataflowNodeOp>(op->getLoc(),
-                                                         op->getResultTypes());
-    op.replaceAllUsesWith(node);
-
-    // Create the output op of the node.
-    auto nodeBlock = rewriter.createBlock(&node.body());
-    rewriter.setInsertionPointToEnd(nodeBlock);
-    auto output =
-        rewriter.create<DataflowOutputOp>(op->getLoc(), op->getResults());
-
-    // Move the target operation into the node.
-    op->moveBefore(output);
-
+    fuseOpsIntoNewNode({op}, rewriter);
     return success();
   }
 };
 } // namespace
-
-/// Fuse the given operation into the given stream node and return the fused
-/// stream node.
-static DataflowNodeOp fuseOpIntoNode(Operation *op, DataflowNodeOp node,
-                                     DominanceInfo &DT,
-                                     PatternRewriter &rewriter) {
-  assert(op != node && op->getBlock() == node->getBlock() &&
-         "must be different ops in the same block");
-
-  // Move the target op into the node.
-  auto nodeBlock = &node.body().front();
-  if (DT.dominates(op, node))
-    op->moveBefore(&nodeBlock->front());
-  else
-    op->moveBefore(&nodeBlock->back());
-
-  auto output = nodeBlock->getTerminator();
-  SmallVector<Value, 4> outputValues;
-  SmallVector<Value, 4> resultsToReplace;
-
-  // Collect output results from the target op.
-  for (auto result : op->getResults())
-    if (result.isUsedOutsideOfBlock(nodeBlock)) {
-      outputValues.push_back(result);
-      resultsToReplace.push_back(result);
-    }
-
-  // Collect output results from the original node.
-  for (auto t : llvm::zip(output->getOperands(), node->getResults())) {
-    auto value = std::get<0>(t);
-    auto result = std::get<1>(t);
-
-    // Update the operand of the target op.
-    for (auto &use : llvm::make_early_inc_range(result.getUses()))
-      if (use.getOwner() == op)
-        use.set(value);
-
-    if (result.isUsedOutsideOfBlock(nodeBlock)) {
-      outputValues.push_back(value);
-      resultsToReplace.push_back(result);
-    }
-  }
-
-  SmallVector<Type, 4> outputTypes;
-  for (auto value : outputValues)
-    outputTypes.push_back(value.getType());
-
-  // Create new stream node and replace all uses.
-  rewriter.setInsertionPoint(node);
-  auto newNode = rewriter.create<DataflowNodeOp>(node.getLoc(), outputTypes);
-  for (auto t : llvm::zip(resultsToReplace, newNode.getResults()))
-    std::get<0>(t).replaceUsesWithIf(std::get<1>(t), [&](OpOperand &use) {
-      return !newNode->isProperAncestor(use.getOwner());
-    });
-  rewriter.inlineRegionBefore(node.body(), newNode.body(),
-                              newNode.body().end());
-  rewriter.eraseOp(node);
-
-  // Create new stream output.
-  rewriter.setInsertionPoint(output);
-  rewriter.replaceOpWithNewOp<DataflowOutputOp>(output, outputValues);
-  return newNode;
-}
 
 namespace {
 /// This pattern will forward fuse ops with the specified type.
@@ -130,7 +52,7 @@ struct ForwardFusingPattern : public OpRewritePattern<OpType> {
     }
 
     if (targetNode) {
-      fuseOpIntoNode(op, targetNode, DT, rewriter);
+      fuseOpsIntoNewNode({op, targetNode}, rewriter);
       return success();
     }
     return failure();
@@ -162,7 +84,7 @@ struct BackwardFusingPattern : public OpRewritePattern<OpType> {
     }
 
     if (targetNode) {
-      fuseOpIntoNode(op, targetNode, DT, rewriter);
+      fuseOpsIntoNewNode({targetNode, op}, rewriter);
       return success();
     }
     return failure();
