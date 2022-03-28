@@ -10,18 +10,79 @@
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
 //===----------------------------------------------------------------------===//
+// Dataflow Operations
+//===----------------------------------------------------------------------===//
+
+def DataflowNodeOp : HLSCppOp<"dataflow.node",
+      [SingleBlockImplicitTerminator<"DataflowOutputOp">]> {
+  let summary = "Dataflow node operation";
+  let description = [{
+    This operation represents a node of dataflow. It has a region, which is not
+    isolated from above, to represent the operations contained by the node. The
+    node can return variadic number of results.
+  }];
+
+  let results = (outs Variadic<AnyType>:$outputs);
+  let regions = (region SizedRegion<1>:$body);
+
+  let assemblyFormat = [{ attr-dict `(` `)` (`->` type($outputs)^)? $body }];
+}
+
+def DataflowOutputOp : HLSCppOp<"dataflow.output",
+      [Terminator, HasParent<"DataflowNodeOp">]> {
+  let summary = "Output operation of a dataflow node";
+  let description = [{
+    The operation terminates a dataflow node region and outputs internal values
+    to the outside.
+  }];
+
+  let hasVerifier = 1;
+  let arguments = (ins Variadic<AnyType>:$outputs);
+
+  let builders = [ OpBuilder<(ins), "build($_builder, $_state, Value());"> ];
+}
+
+def DataflowSourceOp : HLSCppOp<"dataflow.source"> {
+  let summary = "Dataflow source operation";
+  let description = [{
+    The operation represents the source of a dataflow value.
+  }];
+
+  let results = (outs AnyType:$output);
+}
+
+def DataflowSinkOp : HLSCppOp<"dataflow.sink"> {
+  let summary = "Dataflow sink operation";
+  let description = [{
+    The operation represents the sink of a dataflow value.
+  }];
+
+  let arguments = (ins AnyType:$input);
+}
+
+def DataflowBufferOp : HLSCppOp<"dataflow.buffer",
+      [SameOperandsAndResultElementType]> {
+  let summary = "Dataflow buffer operation";
+  let description = [{
+    The operation represents a buffer of a dataflow value.
+  }];
+
+  let arguments = (ins AnyType:$input, I32Attr:$depth);
+  let results = (outs AnyType:$output);
+}
+
+//===----------------------------------------------------------------------===//
 // Stream Operations
 //===----------------------------------------------------------------------===//
 
 def DeclaresStreamChannel : NativeOpTrait<"DeclaresStreamChannel">;
 
-class StreamOf<list<Type> allowedTypes> :
-    Type<And<[CPred<"$_self.isa<::mlir::scalehls::hlscpp::StreamType>()">,
-              Concat<"[](::mlir::Type elementType) { return ",
-                     SubstLeaves<"$_self", "elementType",
-                                 AnyTypeOf<allowedTypes>.predicate>,
-                     "; }($_self.cast<::mlir::scalehls::hlscpp::StreamType>()"
-                         ".getElementType())">]>>;
+class StreamOf<list<Type> allowedTypes> : Type<And<[
+  CPred<"$_self.isa<::mlir::scalehls::hlscpp::StreamType>()">,
+  Concat<"[](::mlir::Type elementType) { return ",
+    SubstLeaves<"$_self", "elementType", AnyTypeOf<allowedTypes>.predicate>,
+    "; }($_self.cast<::mlir::scalehls::hlscpp::StreamType>().getElementType())">
+]>>;
 
 def StreamChannelOp : HLSCppOp<"stream.channel", [DeclaresStreamChannel]> {
   let summary = "Stream channel declaration operation";
@@ -59,35 +120,6 @@ def StreamBufferOp : HLSCppOp<"stream.buffer", [DeclaresStreamChannel]> {
   let hasVerifier = 1;
   let arguments = (ins StreamOf<[AnyType]>:$input);
   let results = (outs StreamOf<[AnyType]>:$output);
-}
-
-def StreamNodeOp : HLSCppOp<"stream.node",
-      [SingleBlockImplicitTerminator<"StreamOutputOp">]> {
-  let summary = "Stream node operation";
-  let description = [{
-    This operation represents a node of a streaming dataflow. It has a region,
-    which is not isolated from above, to represent the operations contained by
-    the node. The node can return variadic number of stream channels as results.
-  }];
-
-  let results = (outs Variadic<AnyType>:$outputs);
-  let regions = (region SizedRegion<1>:$body);
-
-  let assemblyFormat = [{ attr-dict `(` `)` (`->` type($outputs)^)? $body }];
-}
-
-def StreamOutputOp : HLSCppOp<"stream.output",
-      [Terminator, HasParent<"StreamNodeOp">]> {
-  let summary = "Output operation of a stream node";
-  let description = [{
-    The operation terminates a stream node region and outputs internal stream
-    channels to the outside.
-  }];
-
-  let hasVerifier = 1;
-  let arguments = (ins Variadic<AnyType>:$outputs);
-
-  let builders = [ OpBuilder<(ins), "build($_builder, $_state, Value());"> ];
 }
 
 //===----------------------------------------------------------------------===//

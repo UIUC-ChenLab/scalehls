@@ -202,7 +202,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         if (opts.fakeQuantize)
           pm.addPass(scalehls::createFakeQuantizePass());
         pm.addPass(scalehls::createSimplifyTosaGraphPass());
-        pm.addPass(scalehls::createHeuristicNodeFusionPass());
+        pm.addPass(scalehls::createTosaNodeFusionPass());
         pm.addPass(scalehls::createCreateTokenFlowPass());
 
         pm.addPass(tosa::createTosaToLinalgNamed());

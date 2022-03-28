@@ -23,25 +23,22 @@ struct OutliningPattern : public OpRewritePattern<OpType> {
 
   LogicalResult matchAndRewrite(OpType op,
                                 PatternRewriter &rewriter) const override {
-    if (op->template getParentOfType<StreamNodeOp>())
+    if (op->template getParentOfType<DataflowNodeOp>())
       return success();
 
     // Create a new stream node.
     rewriter.setInsertionPoint(op);
-    auto node = rewriter.template create<StreamNodeOp>(op->getLoc(),
-                                                       op->getResultTypes());
+    auto node = rewriter.template create<DataflowNodeOp>(op->getLoc(),
+                                                         op->getResultTypes());
     op.replaceAllUsesWith(node);
 
     // Create the output op of the node.
     auto nodeBlock = rewriter.createBlock(&node.body());
     rewriter.setInsertionPointToEnd(nodeBlock);
     auto output =
-        rewriter.create<StreamOutputOp>(op->getLoc(), op->getResults());
+        rewriter.create<DataflowOutputOp>(op->getLoc(), op->getResults());
 
-    // Move the target operation and constants into the node.
-    for (auto operand : op->getOperands())
-      if (auto constOp = operand.template getDefiningOp<tosa::ConstOp>())
-        constOp->moveBefore(output);
+    // Move the target operation into the node.
     op->moveBefore(output);
 
     return success();
@@ -51,9 +48,9 @@ struct OutliningPattern : public OpRewritePattern<OpType> {
 
 /// Fuse the given operation into the given stream node and return the fused
 /// stream node.
-static StreamNodeOp fuseOpIntoNode(Operation *op, StreamNodeOp node,
-                                   DominanceInfo &DT,
-                                   PatternRewriter &rewriter) {
+static DataflowNodeOp fuseOpIntoNode(Operation *op, DataflowNodeOp node,
+                                     DominanceInfo &DT,
+                                     PatternRewriter &rewriter) {
   assert(op != node && op->getBlock() == node->getBlock() &&
          "must be different ops in the same block");
 
@@ -97,7 +94,7 @@ static StreamNodeOp fuseOpIntoNode(Operation *op, StreamNodeOp node,
 
   // Create new stream node and replace all uses.
   rewriter.setInsertionPoint(node);
-  auto newNode = rewriter.create<StreamNodeOp>(node.getLoc(), outputTypes);
+  auto newNode = rewriter.create<DataflowNodeOp>(node.getLoc(), outputTypes);
   for (auto t : llvm::zip(resultsToReplace, newNode.getResults()))
     std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
   rewriter.inlineRegionBefore(node.body(), newNode.body(),
@@ -106,7 +103,7 @@ static StreamNodeOp fuseOpIntoNode(Operation *op, StreamNodeOp node,
 
   // Create new stream output.
   rewriter.setInsertionPoint(output);
-  rewriter.replaceOpWithNewOp<StreamOutputOp>(output, outputValues);
+  rewriter.replaceOpWithNewOp<DataflowOutputOp>(output, outputValues);
   return newNode;
 }
 
@@ -116,17 +113,16 @@ template <typename OpType>
 struct ForwardFusingPattern : public OpRewritePattern<OpType> {
   ForwardFusingPattern(MLIRContext *context, DominanceInfo &DT)
       : OpRewritePattern<OpType>(context), DT(DT) {}
-  using OpRewritePattern<OpType>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(OpType op,
                                 PatternRewriter &rewriter) const override {
-    if (op->template getParentOfType<StreamNodeOp>())
+    if (op->template getParentOfType<DataflowNodeOp>())
       return success();
 
     // We always select the dominating node as the target node to fuse.
-    StreamNodeOp targetNode;
+    DataflowNodeOp targetNode;
     for (auto user : op->getUsers()) {
-      auto node = user->template getParentOfType<StreamNodeOp>();
+      auto node = user->template getParentOfType<DataflowNodeOp>();
       if (!targetNode || (targetNode && node && DT.dominates(node, targetNode)))
         targetNode = node;
     }
@@ -149,17 +145,16 @@ template <typename OpType>
 struct BackwardFusingPattern : public OpRewritePattern<OpType> {
   BackwardFusingPattern(MLIRContext *context, DominanceInfo &DT)
       : OpRewritePattern<OpType>(context), DT(DT) {}
-  using OpRewritePattern<OpType>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(OpType op,
                                 PatternRewriter &rewriter) const override {
-    if (op->template getParentOfType<StreamNodeOp>())
+    if (op->template getParentOfType<DataflowNodeOp>())
       return success();
 
     // We always select the dominated node as the target node to fuse.
-    StreamNodeOp targetNode;
+    DataflowNodeOp targetNode;
     for (auto operand : op->getOperands()) {
-      auto node = operand.template getDefiningOp<StreamNodeOp>();
+      auto node = operand.template getDefiningOp<DataflowNodeOp>();
       if (!targetNode || (targetNode && node && DT.dominates(targetNode, node)))
         targetNode = node;
     }
@@ -177,8 +172,7 @@ private:
 } // namespace
 
 namespace {
-struct HeuristicNodeFusion
-    : public HeuristicNodeFusionBase<HeuristicNodeFusion> {
+struct TosaNodeFusion : public TosaNodeFusionBase<TosaNodeFusion> {
   void runOnOperation() override {
     auto module = getOperation();
     auto context = module.getContext();
@@ -199,6 +193,6 @@ struct HeuristicNodeFusion
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createHeuristicNodeFusionPass() {
-  return std::make_unique<HeuristicNodeFusion>();
+std::unique_ptr<Pass> scalehls::createTosaNodeFusionPass() {
+  return std::make_unique<TosaNodeFusion>();
 }

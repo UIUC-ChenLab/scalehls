@@ -167,6 +167,17 @@ bool hlscpp::hasRuntimeAttr(Operation *op) {
 }
 
 //===----------------------------------------------------------------------===//
+// Dataflow operations
+//===----------------------------------------------------------------------===//
+
+LogicalResult DataflowOutputOp::verify() {
+  if (getOperandTypes() !=
+      (*this)->getParentOfType<DataflowNodeOp>().getResultTypes())
+    return failure();
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
 // Stream operations
 //===----------------------------------------------------------------------===//
 
@@ -207,13 +218,6 @@ LogicalResult StreamBufferOp::verify() {
   if (input().getType() != output().getType())
     return failure();
   return verifyChannelUsers(*this);
-}
-
-LogicalResult StreamOutputOp::verify() {
-  if (getOperandTypes() !=
-      (*this)->getParentOfType<StreamNodeOp>().getResultTypes())
-    return failure();
-  return success();
 }
 
 //===----------------------------------------------------------------------===//

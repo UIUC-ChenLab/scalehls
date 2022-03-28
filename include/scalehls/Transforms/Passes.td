@@ -77,10 +77,10 @@ def SimplifyTosaGraph : Pass<"scalehls-simplify-tosa-graph", "FuncOp"> {
   let constructor = "mlir::scalehls::createSimplifyTosaGraphPass()";
 }
 
-def HeuristicNodeFusion : Pass<"scalehls-heuristic-node-fusion", "ModuleOp"> {
-  let summary = "Heuristic node fusion on TOSA operations";
+def TosaNodeFusion : Pass<"scalehls-tosa-node-fusion", "FuncOp"> {
+  let summary = "Node fusion on TOSA operations";
 
-  let constructor = "mlir::scalehls::createHeuristicNodeFusionPass()";
+  let constructor = "mlir::scalehls::createTosaNodeFusionPass()";
 }
 
 def CreateTokenFlow : Pass<"scalehls-create-token-flow", "ModuleOp"> {
@@ -113,6 +113,19 @@ def FuncDataflow : Pass<"scalehls-func-dataflow", "ModuleOp"> {
     Option<"gran", "gran", "unsigned", /*default=*/"1",
            "Positive number: the minimum granularity of dataflow">
   ];
+}
+
+def DataflowBufferize : Pass<"scalehls-dataflow-bufferize", "FuncOp"> {
+  let summary = "Bufferize tensor and scalar to memref and stream";
+
+  let constructor = "mlir::scalehls::createDataflowBufferizePass()";
+}
+
+def ConvertDataflowToFunc :
+      Pass<"scalehls-convert-dataflow-to-func", "ModuleOp"> {
+  let summary = "Convert dataflow to function dialect";
+
+  let constructor = "mlir::scalehls::createConvertDataflowToFuncPass()";
 }
 
 def TosaAndLinalgCleanup : Pass<"scalehls-tosa-to-linalg-cleanup", "FuncOp"> {
