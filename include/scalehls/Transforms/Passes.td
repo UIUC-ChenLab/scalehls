@@ -83,7 +83,7 @@ def TosaNodeFusion : Pass<"scalehls-tosa-node-fusion", "FuncOp"> {
   let constructor = "mlir::scalehls::createTosaNodeFusionPass()";
 }
 
-def CreateTokenFlow : Pass<"scalehls-create-token-flow", "ModuleOp"> {
+def CreateTokenFlow : Pass<"scalehls-create-token-flow", "FuncOp"> {
   let summary = "Create a token flow based on the dataflow";
   let description = [{
     This create-token-flow pass will create a token flow to represent the

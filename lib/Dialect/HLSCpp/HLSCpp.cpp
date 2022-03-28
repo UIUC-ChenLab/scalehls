@@ -170,6 +170,10 @@ bool hlscpp::hasRuntimeAttr(Operation *op) {
 // Dataflow operations
 //===----------------------------------------------------------------------===//
 
+DataflowOutputOp DataflowNodeOp::getOutputOp() {
+  return cast<DataflowOutputOp>(body().front().getTerminator());
+}
+
 LogicalResult DataflowOutputOp::verify() {
   if (getOperandTypes() !=
       (*this)->getParentOfType<DataflowNodeOp>().getResultTypes())

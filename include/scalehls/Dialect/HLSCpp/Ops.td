@@ -26,6 +26,7 @@ def DataflowNodeOp : HLSCppOp<"dataflow.node",
   let regions = (region SizedRegion<1>:$body);
 
   let assemblyFormat = [{ attr-dict `(` `)` (`->` type($outputs)^)? $body }];
+  let extraClassDeclaration = [{ DataflowOutputOp getOutputOp(); }];
 }
 
 def DataflowOutputOp : HLSCppOp<"dataflow.output",

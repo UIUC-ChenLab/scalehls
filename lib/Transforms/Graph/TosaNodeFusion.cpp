@@ -96,7 +96,9 @@ static DataflowNodeOp fuseOpIntoNode(Operation *op, DataflowNodeOp node,
   rewriter.setInsertionPoint(node);
   auto newNode = rewriter.create<DataflowNodeOp>(node.getLoc(), outputTypes);
   for (auto t : llvm::zip(resultsToReplace, newNode.getResults()))
-    std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
+    std::get<0>(t).replaceUsesWithIf(std::get<1>(t), [&](OpOperand &use) {
+      return !newNode->isProperAncestor(use.getOwner());
+    });
   rewriter.inlineRegionBefore(node.body(), newNode.body(),
                               newNode.body().end());
   rewriter.eraseOp(node);
