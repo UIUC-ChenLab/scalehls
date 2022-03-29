@@ -98,10 +98,10 @@ private:
 namespace {
 struct TosaNodeFusion : public TosaNodeFusionBase<TosaNodeFusion> {
   void runOnOperation() override {
-    auto module = getOperation();
-    auto context = module.getContext();
-    localizeConstants(module.body().front());
-    auto DT = DominanceInfo(module);
+    auto func = getOperation();
+    auto context = func.getContext();
+    localizeConstants(func.front());
+    auto DT = DominanceInfo(func);
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<OutlinePattern<tosa::Conv2DOp>>(context);
@@ -112,7 +112,7 @@ struct TosaNodeFusion : public TosaNodeFusionBase<TosaNodeFusion> {
     patterns.add<BackwardFusePattern<tosa::ClampOp>>(context, DT);
     patterns.add<ForwardFusePattern<tosa::ReshapeOp>>(context, DT);
     patterns.add<ForwardFusePattern<tosa::TransposeOp>>(context, DT);
-    (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
+    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
 } // namespace

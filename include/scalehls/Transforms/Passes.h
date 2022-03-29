@@ -12,6 +12,9 @@
 
 namespace mlir {
 class Pass;
+namespace func {
+class FuncOp;
+} // namespace func
 } // namespace mlir
 
 namespace mlir {

@@ -15,8 +15,8 @@ using namespace hls;
 static SmallVector<arith::ConstantOp, 8>
 collectConstantsAndUpdateFuncionType(FuncOp func) {
   SmallVector<arith::ConstantOp, 8> constants;
-  SmallVector<Type, 8> newInputTypes(func.getType().getInputs().begin(),
-                                     func.getType().getInputs().end());
+  SmallVector<Type, 8> newInputTypes(func.getFunctionType().getInputs().begin(),
+                                     func.getFunctionType().getInputs().end());
 
   // Traverse all constants in the function.
   for (auto constant : func.getOps<arith::ConstantOp>()) {
@@ -78,8 +78,8 @@ struct CreateRuntimeMain : public CreateRuntimeMainBase<CreateRuntimeMain> {
     // Create the main function of runtime.
     // FIXME: Make sure there's no function called "main" already.
     builder.setInsertionPointAfter(func);
-    auto mainFunc =
-        builder.create<FuncOp>(builder.getUnknownLoc(), "main", func.getType());
+    auto mainFunc = builder.create<FuncOp>(builder.getUnknownLoc(), "main",
+                                           func.getFunctionType());
     setRuntimeAttr(mainFunc);
     auto entry = mainFunc.addEntryBlock();
 

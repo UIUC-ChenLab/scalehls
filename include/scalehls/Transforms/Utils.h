@@ -53,21 +53,21 @@ bool applyArrayPartition(Value array, ArrayRef<unsigned> factors,
 
 /// Find the suitable array partition factors and kinds for all arrays in the
 /// targeted function.
-bool applyAutoArrayPartition(FuncOp func);
+bool applyAutoArrayPartition(func::FuncOp func);
 
-bool applyFuncPreprocess(FuncOp func, bool topFunc);
+bool applyFuncPreprocess(func::FuncOp func, bool topFunc);
 
 /// Apply memory optimizations.
-bool applyMemoryOpts(FuncOp func);
+bool applyMemoryOpts(func::FuncOp func);
 
 /// Apply optimization strategy to a loop band. The ancestor function is also
 /// passed in because the post-tiling optimizations have to take function as
 /// target, e.g. canonicalizer and array partition.
-bool applyOptStrategy(AffineLoopBand &band, FuncOp func, TileList tileList,
-                      unsigned targetII);
+bool applyOptStrategy(AffineLoopBand &band, func::FuncOp func,
+                      TileList tileList, unsigned targetII);
 
 /// Apply optimization strategy to a function.
-bool applyOptStrategy(FuncOp func, ArrayRef<TileList> tileLists,
+bool applyOptStrategy(func::FuncOp func, ArrayRef<TileList> tileLists,
                       ArrayRef<unsigned> targetIIs);
 
 } // namespace scalehls

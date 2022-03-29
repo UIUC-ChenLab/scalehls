@@ -34,7 +34,7 @@ static void addMemoryOptsPipeline(PassManager &pm) {
 
 /// Apply memory optimizations.
 bool scalehls::applyMemoryOpts(FuncOp func) {
-  PassManager optPM(func.getContext(), "builtin.func");
+  PassManager optPM(func.getContext(), "func.func");
   addMemoryOptsPipeline(optPM);
   if (failed(optPM.run(func)))
     return false;

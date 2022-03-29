@@ -15,10 +15,7 @@ def StreamType : HLSType<"Stream"> {
   }];
 
   let mnemonic = "stream";
-  let parameters = (ins
-    "::mlir::Type":$elementType,
-    "int64_t":$depth
-  );
+  let parameters = (ins "::mlir::Type":$elementType, "int64_t":$depth );
 
   let assemblyFormat = "`<` qualified($elementType) `,` $depth `>`";
 }

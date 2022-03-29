@@ -406,26 +406,27 @@ void scalehls::localizeConstants(Block &block) {
   }
 }
 
-FuncOp scalehls::getTopFunc(ModuleOp module, std::string topFuncName) {
-  FuncOp topFunc;
-  for (auto func : module.getOps<FuncOp>())
+func::FuncOp scalehls::getTopFunc(ModuleOp module, std::string topFuncName) {
+  func::FuncOp topFunc;
+  for (auto func : module.getOps<func::FuncOp>())
     if (hasTopFuncAttr(func) || func.getName() == topFuncName) {
       if (!topFunc)
         topFunc = func;
       else
-        return FuncOp();
+        return func::FuncOp();
     }
   return topFunc;
 }
 
-FuncOp scalehls::getRuntimeFunc(ModuleOp module, std::string runtimeFuncName) {
-  FuncOp runtimeFunc;
-  for (auto func : module.getOps<FuncOp>())
+func::FuncOp scalehls::getRuntimeFunc(ModuleOp module,
+                                      std::string runtimeFuncName) {
+  func::FuncOp runtimeFunc;
+  for (auto func : module.getOps<func::FuncOp>())
     if (hasRuntimeAttr(func) || func.getName() == runtimeFuncName) {
       if (!runtimeFunc)
         runtimeFunc = func;
       else
-        return FuncOp();
+        return func::FuncOp();
     }
   return runtimeFunc;
 }

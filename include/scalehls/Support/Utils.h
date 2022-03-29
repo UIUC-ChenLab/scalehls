@@ -9,6 +9,7 @@
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "scalehls/Dialect/HLS/HLS.h"
 
@@ -85,9 +86,9 @@ bool checkDependence(Operation *A, Operation *B);
 /// Localize each tosa/arith constant to right before its each use.
 void localizeConstants(Block &block);
 
-FuncOp getTopFunc(ModuleOp module, std::string topFuncName = "");
+func::FuncOp getTopFunc(ModuleOp module, std::string topFuncName = "");
 
-FuncOp getRuntimeFunc(ModuleOp module, std::string runtimeFuncName = "");
+func::FuncOp getRuntimeFunc(ModuleOp module, std::string runtimeFuncName = "");
 
 //===----------------------------------------------------------------------===//
 // PtrLikeMemRefAccess Struct Declaration

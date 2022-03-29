@@ -25,7 +25,7 @@ static void updateSubFuncs(FuncOp func, Builder builder) {
     auto subInputTypes = op.getOperandTypes();
     auto newType = builder.getFunctionType(subInputTypes, subResultTypes);
 
-    if (subFunc.getType() != newType) {
+    if (subFunc.getFunctionType() != newType) {
       subFunc.setType(newType);
 
       // Set arguments type.
@@ -356,7 +356,7 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
     // Apply array partition to the sub-function.
     applyAutoArrayPartition(subFunc);
 
-    auto subFuncType = subFunc.getType();
+    auto subFuncType = subFunc.getFunctionType();
     unsigned index = 0;
     for (auto inputType : subFuncType.getInputs()) {
       if (auto memrefType = inputType.dyn_cast<MemRefType>()) {

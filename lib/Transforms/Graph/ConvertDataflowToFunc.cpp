@@ -34,7 +34,7 @@ struct ConvertDataflowToFunc
   void runOnOperation() override {
     auto module = getOperation();
     auto context = module.getContext();
-    localizeConstants(module.body().front());
+    localizeConstants(*module.getBody());
 
     mlir::RewritePatternSet patterns(context);
     // patterns.add<ConvertDataflowToFuncPattern>(context);

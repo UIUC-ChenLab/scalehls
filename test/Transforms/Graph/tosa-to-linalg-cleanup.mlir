@@ -2,7 +2,7 @@
 
   func @forward_node2(%arg0: tensor<1x32x32x64xi8>) -> tensor<1x34x34x64xi8> {
     // CHECK: %0 = linalg.init_tensor [1, 34, 34, 64] : tensor<1x34x34x64xi8>
-    // CHECK: %1 = linalg.fill(%c0_i8, %0) : i8, tensor<1x34x34x64xi8> -> tensor<1x34x34x64xi8> 
+    // CHECK: %1 = linalg.fill ins(%c0_i8 : i8) outs(%0 : tensor<1x34x34x64xi8>) -> tensor<1x34x34x64xi8> 
     // CHECK: %2 = linalg.generic {indexing_maps = [#map0, #map1], iterator_types = ["parallel", "parallel", "parallel", "parallel"]} ins(%arg0 : tensor<1x32x32x64xi8>) outs(%1 : tensor<1x34x34x64xi8>) {
     // CHECK: ^bb0(%arg1: i8, %arg2: i8):
     // CHECK:   linalg.yield %arg1 : i8

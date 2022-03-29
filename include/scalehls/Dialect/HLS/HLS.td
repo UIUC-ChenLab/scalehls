@@ -7,6 +7,7 @@
 #ifndef SCALEHLS_DIALECT_HLS_HLS_TD
 #define SCALEHLS_DIALECT_HLS_HLS_TD
 
+include "mlir/IR/AttrTypeBase.td"
 include "mlir/IR/OpBase.td"
 
 def HLSDialect : Dialect {

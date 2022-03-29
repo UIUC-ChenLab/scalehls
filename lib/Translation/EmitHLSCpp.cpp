@@ -8,7 +8,7 @@
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/IR/AffineExprVisitor.h"
 #include "mlir/IR/IntegerSet.h"
-#include "mlir/Translation.h"
+#include "mlir/Tools/mlir-translate/Translation.h"
 #include "scalehls/Dialect/HLS/Visitor.h"
 #include "scalehls/InitAllDialects.h"
 #include "scalehls/Support/Utils.h"
