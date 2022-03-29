@@ -9,6 +9,7 @@
 
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/OpDefinition.h"
+#include "mlir/IR/PatternMatch.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
 #include "scalehls/Dialect/HLS/HLSDialect.h.inc"
@@ -21,9 +22,6 @@
 #include "scalehls/Dialect/HLS/HLSAttributes.h.inc"
 
 namespace mlir {
-
-class PatternRewriter;
-
 namespace scalehls {
 namespace hls {
 
@@ -31,6 +29,11 @@ class DataflowNodeOp;
 
 enum class MemoryKind { BRAM_S2P = 0, BRAM_T2P = 1, BRAM_1P = 2, DRAM = 3 };
 enum class PartitionKind { CYCLIC = 0, BLOCK = 1, NONE = 2 };
+
+class DataflowNodeRewriter : public PatternRewriter {
+public:
+  DataflowNodeRewriter(MLIRContext *context) : PatternRewriter(context) {}
+};
 
 /// Fuse the given operations into a new dataflow node. The fused node will be
 /// created before the first operation and each operation will be inserted in

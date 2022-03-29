@@ -57,6 +57,7 @@ static void inlineChildNodes(DataflowNodeOp node, PatternRewriter &rewriter) {
 /// order. This method always succeeds.
 DataflowNodeOp hls::fuseOpsIntoNewNode(ArrayRef<Operation *> ops,
                                        PatternRewriter &rewriter) {
+  assert(!ops.empty() && "must fuse at least one op");
   if (ops.size() == 1)
     if (auto node = dyn_cast<DataflowNodeOp>(ops.front()))
       return node;

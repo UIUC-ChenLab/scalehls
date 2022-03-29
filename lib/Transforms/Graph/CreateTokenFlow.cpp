@@ -16,50 +16,41 @@ namespace {
 struct CreateTokenFlow : public CreateTokenFlowBase<CreateTokenFlow> {
   void runOnOperation() override {
     auto func = getOperation();
-    auto builder = OpBuilder(func);
-    auto loc = builder.getUnknownLoc();
+    auto rewriter = DataflowNodeRewriter(func.getContext());
+    auto loc = rewriter.getUnknownLoc();
 
     for (auto node :
          llvm::make_early_inc_range(func.getOps<DataflowNodeOp>())) {
-      auto output = node.getOutputOp();
-      SmallVector<Value, 4> outputValues(output.getOperands());
-      SmallVector<Value, 4> resultsToReplace(node.getResults());
-
-      // Create token sources.
-      for (auto result : node.getResults()) {
-        if (!result.getType().isa<TensorType>())
+      // Collect consumers of the current node. For each consumer, we only need
+      // to create one token flow.
+      llvm::SmallDenseSet<Operation *, 4> consumers;
+      for (auto &use : llvm::make_early_inc_range(node->getUses())) {
+        // Skip non-tensor and terminator users.
+        if (isa<DataflowBufferOp>(use.getOwner()) ||
+            !use.get().getType().isa<TensorType>() ||
+            use.getOwner() == use.getOwner()->getBlock()->getTerminator())
           continue;
-        builder.setInsertionPoint(output);
-        auto token = builder.create<DataflowSourceOp>(loc, builder.getI1Type());
-        outputValues.push_back(token);
 
-        for (auto user : result.getUsers()) {
-          builder.setInsertionPoint(user);
-          builder.create<DataflowSinkOp>(loc, token);
-        }
-        resultsToReplace.push_back(token);
+        auto consumer = use.getOwner()->getParentOfType<DataflowNodeOp>();
+        assert(consumer && "must have dataflow node parent");
+        consumers.insert(consumer);
       }
 
-      // Generate new output op.
-      builder.setInsertionPoint(output);
-      auto newOutput =
-          builder.create<DataflowOutputOp>(output.getLoc(), outputValues);
-      output.erase();
+      // Create token source and sink operations.
+      SmallVector<Operation *, 4> opsToFuse({node});
+      for (auto consumer : consumers) {
+        rewriter.setInsertionPointAfter(node);
+        auto token =
+            rewriter.create<DataflowSourceOp>(loc, rewriter.getI1Type());
+        opsToFuse.push_back(token);
 
-      // Generate new node op.
-      builder.setInsertionPoint(node);
-      auto newNode = builder.create<DataflowNodeOp>(
-          node.getLoc(), newOutput.getOperandTypes());
+        rewriter.setInsertionPointToStart(
+            &cast<DataflowNodeOp>(consumer).body().front());
+        rewriter.create<DataflowSinkOp>(loc, token);
+      }
 
-      // Inline the body of the original node into the new node and replace used
-      // if applicable.
-      newNode.body().getBlocks().splice(newNode.body().end(),
-                                        node.body().getBlocks());
-      for (auto t : llvm::zip(resultsToReplace, newNode.getResults()))
-        std::get<0>(t).replaceUsesWithIf(std::get<1>(t), [&](OpOperand &use) {
-          return !newNode->isProperAncestor(use.getOwner());
-        });
-      node.erase();
+      // Fuse the source operations and original dataflow node.
+      fuseOpsIntoNewNode(opsToFuse, rewriter);
     }
   }
 };

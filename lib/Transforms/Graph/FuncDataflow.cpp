@@ -127,19 +127,12 @@ private:
 };
 } // namespace
 
-namespace {
-class DataflowRewriter : public PatternRewriter {
-public:
-  DataflowRewriter(MLIRContext *context) : PatternRewriter(context) {}
-};
-} // namespace
-
 /// Apply dataflow (coarse-grained pipeline) to the block. "gran" determines the
 /// minimum granularity of dataflowing while "balance" indicates whether buffers
 /// are inserted to balance the dataflow pipeline.
 bool scalehls::applyDataflow(Block &block, StringRef prefix, unsigned gran,
                              bool balance) {
-  auto rewriter = DataflowRewriter(block.getParentOp()->getContext());
+  auto rewriter = DataflowNodeRewriter(block.getParentOp()->getContext());
   auto loc = rewriter.getUnknownLoc();
 
   // Make sure all operations except the terminator are fused into dataflow
