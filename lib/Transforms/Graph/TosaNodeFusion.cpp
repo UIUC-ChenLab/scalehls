@@ -18,7 +18,7 @@ using namespace hls;
 namespace {
 /// This pattern will outline ops with the specified type.
 template <typename OpType>
-struct OutliningPattern : public OpRewritePattern<OpType> {
+struct OutlinePattern : public OpRewritePattern<OpType> {
   using OpRewritePattern<OpType>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(OpType op,
@@ -34,8 +34,8 @@ struct OutliningPattern : public OpRewritePattern<OpType> {
 namespace {
 /// This pattern will forward fuse ops with the specified type.
 template <typename OpType>
-struct ForwardFusingPattern : public OpRewritePattern<OpType> {
-  ForwardFusingPattern(MLIRContext *context, DominanceInfo &DT)
+struct ForwardFusePattern : public OpRewritePattern<OpType> {
+  ForwardFusePattern(MLIRContext *context, DominanceInfo &DT)
       : OpRewritePattern<OpType>(context), DT(DT) {}
 
   LogicalResult matchAndRewrite(OpType op,
@@ -66,8 +66,8 @@ private:
 namespace {
 /// This pattern will backward fuse ops with the specified type.
 template <typename OpType>
-struct BackwardFusingPattern : public OpRewritePattern<OpType> {
-  BackwardFusingPattern(MLIRContext *context, DominanceInfo &DT)
+struct BackwardFusePattern : public OpRewritePattern<OpType> {
+  BackwardFusePattern(MLIRContext *context, DominanceInfo &DT)
       : OpRewritePattern<OpType>(context), DT(DT) {}
 
   LogicalResult matchAndRewrite(OpType op,
@@ -104,14 +104,14 @@ struct TosaNodeFusion : public TosaNodeFusionBase<TosaNodeFusion> {
     auto DT = DominanceInfo(module);
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<OutliningPattern<tosa::Conv2DOp>>(context);
-    patterns.add<OutliningPattern<tosa::AvgPool2dOp>>(context);
-    patterns.add<OutliningPattern<tosa::MaxPool2dOp>>(context);
-    patterns.add<OutliningPattern<tosa::MatMulOp>>(context);
-    patterns.add<OutliningPattern<tosa::AddOp>>(context);
-    patterns.add<BackwardFusingPattern<tosa::ClampOp>>(context, DT);
-    patterns.add<ForwardFusingPattern<tosa::ReshapeOp>>(context, DT);
-    patterns.add<ForwardFusingPattern<tosa::TransposeOp>>(context, DT);
+    patterns.add<OutlinePattern<tosa::Conv2DOp>>(context);
+    patterns.add<OutlinePattern<tosa::AvgPool2dOp>>(context);
+    patterns.add<OutlinePattern<tosa::MaxPool2dOp>>(context);
+    patterns.add<OutlinePattern<tosa::MatMulOp>>(context);
+    patterns.add<OutlinePattern<tosa::AddOp>>(context);
+    patterns.add<BackwardFusePattern<tosa::ClampOp>>(context, DT);
+    patterns.add<ForwardFusePattern<tosa::ReshapeOp>>(context, DT);
+    patterns.add<ForwardFusePattern<tosa::TransposeOp>>(context, DT);
     (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
   }
 };

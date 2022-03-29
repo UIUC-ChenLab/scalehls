@@ -125,6 +125,9 @@ void hls::getStreamChannelUsers(Value channel,
         if (auto call = dyn_cast<func::CallOp>(symbolUse.getUser()))
           getStreamChannelUsers(call.getResult(use.getOperandNumber()), users);
       }
+    } else if (auto output = dyn_cast<DataflowOutputOp>(user)) {
+      auto node = output->getParentOfType<DataflowNodeOp>();
+      getStreamChannelUsers(node.getResult(use.getOperandNumber()), users);
     } else
       users.push_back(user);
   }
@@ -237,7 +240,7 @@ DataflowOutputOp DataflowNodeOp::getOutputOp() {
 LogicalResult DataflowOutputOp::verify() {
   if (getOperandTypes() !=
       (*this)->getParentOfType<DataflowNodeOp>().getResultTypes())
-    return failure();
+    return emitOpError("output type doesn't align with node type");
   return success();
 }
 
@@ -254,7 +257,7 @@ template <typename OpType> static LogicalResult verifyChannelUsers(OpType op) {
     else if (isa<StreamWriteOp>(user))
       ++numWrite;
     else
-      return user->emitOpError("unsupported user of a stream channel");
+      return user->emitOpError("stream channel has unsupported user");
   }
   if (numWrite > 1)
     return op->emitOpError("stream channel is written by multiple ops");
@@ -267,14 +270,14 @@ LogicalResult StreamReadOp::verify() {
   if (result())
     if (channel().getType().cast<StreamType>().getElementType() !=
         result().getType())
-      return failure();
+      return emitOpError("result type doesn't align with channel type");
   return success();
 }
 
 LogicalResult StreamWriteOp::verify() {
   if (channel().getType().cast<StreamType>().getElementType() !=
       value().getType())
-    return failure();
+    return emitOpError("value type doesn't align with channel type");
   return success();
 }
 
