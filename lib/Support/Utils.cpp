@@ -388,21 +388,21 @@ bool scalehls::checkDependence(Operation *A, Operation *B) {
 void scalehls::localizeConstants(Block &block) {
   auto builder = OpBuilder(block.getParentOp());
 
-  // Collect all constants that have more than one use.
+  // Collect all constants.
   SmallVector<Operation *, 16> constants;
   block.walk([&](Operation *constant) {
-    if (isa<tosa::ConstOp, arith::ConstantOp>(constant) &&
-        !constant->hasOneUse())
+    if (isa<tosa::ConstOp, arith::ConstantOp>(constant))
       constants.push_back(constant);
   });
+
   // Localize constants to each of its use.
   for (auto constant : constants) {
     for (auto &use : llvm::make_early_inc_range(constant->getUses())) {
-      auto cloneConstant = constant->clone();
       builder.setInsertionPoint(use.getOwner());
-      builder.insert(cloneConstant);
+      auto cloneConstant = builder.clone(*constant);
       use.set(cloneConstant->getResult(0));
     }
+    constant->erase();
   }
 }
 

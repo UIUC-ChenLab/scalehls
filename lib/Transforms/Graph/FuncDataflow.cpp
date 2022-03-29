@@ -127,305 +127,88 @@ private:
 };
 } // namespace
 
-/// Legalize the dataflow of "block", whose parent operation must be a function
-/// or affine loop. Return false if the legalization failed, for example, the
-/// dataflow has cycles.
-bool Dataflower::applyLegalizeDataflow(int64_t gran, bool balance) {
-  auto builder = OpBuilder(block.getParentOp());
-
-  llvm::SmallDenseMap<Operation *, int64_t, 32> map;
-  llvm::SmallDenseMap<int64_t, int64_t, 16> dataflowToMerge;
-
-  // Walk through all dataflow operations in a reversed order for establishing
-  // a ALAP scheduling.
-  for (auto it = block.rbegin(); it != block.rend(); ++it) {
-    auto op = &*it;
-    if (!graph.hasNode(op))
-      continue;
-
-    // Walk through all uses and schedule the dataflow level.
-    int64_t dataflowLevel = 0;
-    for (auto use : graph.getNodeUses(op)) {
-      if (!map.count(use.second))
-        return op->emitOpError("has unexpected use, legalize failed"), false;
-      dataflowLevel = std::max(dataflowLevel, map.lookup(use.second));
-    }
-    map[op] = dataflowLevel + 1;
-
-    // Eliminate bypass paths if detected.
-    for (auto use : graph.getNodeUses(op)) {
-      auto value = use.first;
-      auto successor = use.second;
-
-      // Continue if bypass path does not exist.
-      auto successorDataflowLevel = map.lookup(successor);
-      if (dataflowLevel == successorDataflowLevel)
-        continue;
-
-      // If insert-copy is set, insert CopyOp to the bypass path. Otherwise,
-      // record all the bypass paths in dataflowToMerge.
-      if (balance) {
-        // Insert CopyOps if required.
-        SmallVector<Value, 4> values;
-        values.push_back(value);
-
-        builder.setInsertionPoint(successor);
-        for (auto i = dataflowLevel; i > successorDataflowLevel; --i) {
-          // Create and set the dataflow level of CopyOp.
-          Value newValue;
-          Operation *copyOp;
-          if (auto type = value.getType().dyn_cast<MemRefType>()) {
-            newValue = builder.create<memref::AllocOp>(op->getLoc(), type);
-            copyOp = builder.create<memref::CopyOp>(op->getLoc(), values.back(),
-                                                    newValue);
-          } else if (auto type = value.getType().dyn_cast<StreamType>()) {
-            copyOp = builder.create<hls::StreamBufferOp>(
-                op->getLoc(), value.getType(), values.back());
-            newValue = copyOp->getResult(0);
-          } else {
-            copyOp = builder.create<hls::BufferOp>(
-                op->getLoc(), value.getType(), values.back());
-            newValue = copyOp->getResult(0);
-          }
-          map[copyOp] = i;
-
-          // Chain created CopyOps.
-          if (i == successorDataflowLevel + 1)
-            value.replaceUsesWithIf(newValue, [&](OpOperand &use) {
-              return successor->isAncestor(use.getOwner());
-            });
-          else
-            values.push_back(newValue);
-        }
-      } else {
-        // Always retain the longest merge path.
-        auto dst = dataflowToMerge.lookup(successorDataflowLevel);
-        dataflowToMerge[successorDataflowLevel] = std::max(dst, dataflowLevel);
-      }
-    }
-  }
-
-  // Merge dataflow levels according to the bypasses and minimum granularity.
-  if (gran != 1 || !balance) {
-    // Collect all operations in each dataflow level.
-    DenseMap<int64_t, SmallVector<Operation *, 8>> dataflowOps;
-    for (auto &op : block.getOperations())
-      if (map.count(&op))
-        dataflowOps[map.lookup(&op)].push_back(&op);
-
-    unsigned newLevel = 1;
-    unsigned toMerge = gran;
-    for (unsigned i = 1, e = dataflowOps.size(); i <= e; ++i) {
-      // If the current level is the start point of a bypass, refresh toMerge.
-      // Otherwise, decrease toMerge by 1.
-      if (auto dst = dataflowToMerge.lookup(i))
-        toMerge = dst - i;
-      else
-        toMerge--;
-
-      // Annotate all ops in the current level to the new level.
-      for (auto op : dataflowOps[i])
-        op->setAttr("dataflow_level",
-                    builder.getIntegerAttr(builder.getI64Type(), newLevel));
-
-      // Update toMerge and newLevel if required.
-      if (toMerge == 0) {
-        toMerge = gran;
-        ++newLevel;
-      }
-    }
-  } else {
-    for (auto pair : map)
-      pair.first->setAttr(
-          "dataflow_level",
-          builder.getIntegerAttr(builder.getI64Type(), pair.second));
-  }
-  return true;
-}
-
-/// Inline all sub-functions in the given "func". TODO: This simple inliner
-/// doesn't consider SCCs in the call graph. Should somehow use the built-in
-/// inlining API, which is not exposed for now.
-static void inlineFunction(FuncOp func) {
-  auto module = func->getParentOfType<ModuleOp>();
-  for (auto call : llvm::make_early_inc_range(func.getOps<func::CallOp>())) {
-    auto subFunc = module.lookupSymbol<FuncOp>(call.getCallee());
-    assert(subFunc && "sub-function is not found");
-    if (subFunc.isPrivate())
-      continue;
-    inlineFunction(subFunc);
-
-    auto returnOp = subFunc.front().getTerminator();
-    for (auto zip : llvm::zip(call.getResults(), returnOp->getOperands()))
-      std::get<0>(zip).replaceAllUsesWith(std::get<1>(zip));
-    for (auto zip : llvm::zip(subFunc.getArguments(), call.getOperands()))
-      std::get<0>(zip).replaceAllUsesWith(std::get<1>(zip));
-
-    auto &blockOps = call->getBlock()->getOperations();
-    assert(llvm::hasSingleElement(subFunc) && "must only have one block");
-    auto &subFuncOps = subFunc.front().getOperations();
-
-    blockOps.splice(call->getIterator(), subFuncOps, subFuncOps.begin(),
-                    std::prev(subFuncOps.end()));
-    call.erase();
-    subFunc.erase();
-  }
-}
-
-/// Split each dataflow stage of "block" into a separate sub-function.
-bool Dataflower::applySplitFunction() {
-  auto builder = OpBuilder(block.getParentOp());
-  localizeConstants(block);
-
-  // Split sub-functions.
-  DenseMap<int64_t, SmallVector<Operation *, 8>> dataflowOps;
-  for (auto &op : block)
-    if (auto attr = op.getAttrOfType<IntegerAttr>("dataflow_level"))
-      dataflowOps[attr.getInt()].push_back(&op);
-
-  for (auto pair : dataflowOps) {
-    auto &ops = pair.second;
-    // TODO: It seems we need to perform a liveness analysis each iteration?
-    Liveness liveness(block.getParentOp());
-
-    // A helper that checks whether a value is a liveout value.
-    auto isLiveOut = [&](Value value) {
-      return any_of(value.getUsers(), [&](auto user) {
-        return all_of(ops, [&](auto op) { return !op->isAncestor(user); });
-      });
-    };
-
-    // Output types and values of the sub-function.
-    SmallVector<Type, 8> outputTypes;
-    SmallVector<Value, 8> outputValues;
-
-    // Internal values of the sub-function.
-    llvm::SmallDenseSet<Value, 16> internalValues;
-
-    for (auto op : ops) {
-      for (auto result : op->getResults()) {
-        internalValues.insert(result);
-        if (isLiveOut(result)) {
-          outputTypes.push_back(result.getType());
-          outputValues.push_back(result);
-        }
-      }
-      op->walk([&](AffineForOp loop) {
-        internalValues.insert(loop.getInductionVar());
-      });
-    }
-
-    // Input types and values of the sub-function.
-    SmallVector<Type, 8> inputTypes;
-    SmallVector<Value, 8> inputValues;
-
-    // Local buffers of the sub-function.
-    llvm::SmallDenseSet<Operation *, 8> localOps;
-
-    for (auto op : ops) {
-      // Push back all operands and liveins as candidates.
-      SmallVector<Value, 8> inputCandidates(op->getOperands());
-      for (auto &region : op->getRegions()) {
-        auto entryBlock = &region.front();
-        auto args = entryBlock->getArguments();
-
-        for (auto liveIn : liveness.getLiveIn(entryBlock))
-          if (llvm::find(args, liveIn) == args.end())
-            inputCandidates.push_back(liveIn);
-      }
-
-      for (auto input : inputCandidates) {
-        // If the current input is an internal value, it doesn't needs to be
-        // passed in as argument.
-        if (internalValues.count(input))
-          continue;
-
-        if (auto defOp = input.getDefiningOp()) {
-          // If the current input is not a liveout and it's defined by an memref
-          // alloc/alloca op, it is a local buffer and can be localized later.
-          if (!isLiveOut(input) &&
-              isa<memref::AllocOp, memref::AllocaOp>(defOp)) {
-            localOps.insert(defOp);
-            continue;
-          }
-
-          // Since we have localized all tosa constant operations, we can safely
-          // insert a constant as a local op here.
-          if (isa<tosa::ConstOp, arith::ConstantOp>(defOp)) {
-            localOps.insert(defOp);
-            continue;
-          }
-        }
-
-        // Only unique inputs will be added.
-        if (llvm::find(inputValues, input) != inputValues.end())
-          continue;
-
-        inputTypes.push_back(input.getType());
-        inputValues.push_back(input);
-      }
-    }
-
-    // Create a new function for the current dataflow level.
-    auto loc = builder.getUnknownLoc();
-    builder.setInsertionPoint(block.getParent()->getParentOfType<FuncOp>());
-    auto name = prefix.str() + "_dataflow" + std::to_string(pair.first);
-    auto subFunc = builder.create<FuncOp>(
-        loc, name, builder.getFunctionType(inputTypes, outputTypes));
-
-    // Create a function call and reconnect all inputs and outputs.
-    builder.setInsertionPointAfter(ops.back());
-    auto call = builder.create<func::CallOp>(loc, subFunc, inputValues);
-    unsigned outputIdx = 0;
-    for (auto result : call.getResults())
-      outputValues[outputIdx++].replaceAllUsesWith(result);
-
-    // Create new return operation in the new created function.
-    auto entry = subFunc.addEntryBlock();
-    builder.setInsertionPointToEnd(entry);
-    auto returnOp = builder.create<func::ReturnOp>(loc, outputValues);
-
-    // Move local buffers into the new created function.
-    for (auto localOp : localOps)
-      localOp->moveBefore(&subFunc.front().front());
-
-    // Move same level operations into the new created function.
-    for (auto op : ops) {
-      op->moveBefore(returnOp);
-      op->removeAttr("dataflow_level");
-    }
-
-    // Connect operands to the arguments of the new created function.
-    for (unsigned i = 0, e = inputValues.size(); i < e; ++i)
-      inputValues[i].replaceUsesWithIf(
-          entry->getArgument(i),
-          [&](OpOperand &use) { return subFunc->isAncestor(use.getOwner()); });
-
-    // Inline all calls in the sub-function.
-    inlineFunction(subFunc);
-    setFuncDirective(subFunc, false, 1, true);
-  }
-  return true;
-}
+namespace {
+class DataflowRewriter : public PatternRewriter {
+public:
+  DataflowRewriter(MLIRContext *context) : PatternRewriter(context) {}
+};
+} // namespace
 
 /// Apply dataflow (coarse-grained pipeline) to the block. "gran" determines the
 /// minimum granularity of dataflowing while "balance" indicates whether buffers
 /// are inserted to balance the dataflow pipeline.
 bool scalehls::applyDataflow(Block &block, StringRef prefix, unsigned gran,
                              bool balance) {
-  Dataflower dataflower(block, prefix);
-  if (!dataflower.applyLegalizeDataflow(gran, balance) ||
-      !dataflower.applySplitFunction())
-    return false;
+  auto rewriter = DataflowRewriter(block.getParentOp()->getContext());
+  auto loc = rewriter.getUnknownLoc();
 
-  auto parentOp = block.getParentOp();
-  if (isa<FuncOp>(parentOp))
-    setFuncDirective(parentOp, false, 1, true);
-  else if (isa<AffineForOp, scf::ForOp>(parentOp))
-    setLoopDirective(parentOp, false, 1, true, false);
-  else
-    return false;
+  // Make sure all operations except the terminator are fused into dataflow
+  // nodes. TODO: Support affine loop nest?
+  localizeConstants(block);
+  SmallVector<Operation *, 4> opsToFuse;
+  for (auto &op : block) {
+    if (isa<DataflowNodeOp>(op) || &op == block.getTerminator()) {
+      if (!opsToFuse.empty())
+        fuseOpsIntoNewNode(opsToFuse, rewriter);
+      opsToFuse.clear();
+    } else
+      opsToFuse.push_back(&op);
+  }
 
+  // A helper to get the scheduled dataflow level.
+  llvm::SmallDenseMap<Operation *, unsigned> dataflowLevelMap;
+  auto getDataflowLevel = [&](Operation *op) {
+    if (op == block.getTerminator())
+      return (unsigned)0;
+    if (!isa<DataflowNodeOp>(op))
+      op = op->getParentOfType<DataflowNodeOp>();
+    assert(op && dataflowLevelMap.count(op) && "unexpected dataflow op");
+    return dataflowLevelMap.lookup(op);
+  };
+
+  // Schedule all dataflow nodes in an ALAP manner.
+  llvm::SmallDenseMap<unsigned, SmallVector<Operation *>> dataflowOpsList;
+  for (auto &node : llvm::drop_begin(llvm::reverse(block))) {
+    unsigned level = 0;
+    for (auto userLevel : llvm::map_range(node.getUsers(), getDataflowLevel))
+      level = std::max(level, userLevel + 1);
+
+    dataflowLevelMap[&node] = level;
+    dataflowOpsList[level].push_back(&node);
+  }
+
+  // Fuse ops of each dataflow level into the same node.
+  dataflowLevelMap.clear();
+  for (const auto &p : dataflowOpsList) {
+    auto node = fuseOpsIntoNewNode(p.second, rewriter);
+    dataflowLevelMap[node] = p.first;
+  }
+
+  // Now, we have legalized the dataflow into a feed-forward path and we can
+  // handle the bypass uses through inserting dataflow buffers.
+  for (auto node : llvm::make_early_inc_range(block.getOps<DataflowNodeOp>())) {
+    auto level = getDataflowLevel(node);
+
+    // TODO: For now, we always create a new buffer for each bypass use. To be
+    // more efficient, we should reuse buffers as much as possible.
+    for (auto &use : llvm::make_early_inc_range(node->getUses())) {
+      auto levelDiff = level - getDataflowLevel(use.getOwner());
+      if (levelDiff > 1) {
+        rewriter.setInsertionPointAfter(node);
+        auto buffer = rewriter.create<DataflowBufferOp>(
+            loc, use.get().getType(), use.get(), /*depth=*/levelDiff - 1);
+        use.set(buffer.output());
+      }
+    }
+  }
+
+  // auto parentOp = block.getParentOp();
+  // if (isa<FuncOp>(parentOp))
+  //   setFuncDirective(parentOp, false, 1, true);
+  // else if (isa<AffineForOp, scf::ForOp>(parentOp))
+  //   setLoopDirective(parentOp, false, 1, true, false);
+  // else
+  //   return false;
   return true;
 }
 

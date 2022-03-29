@@ -57,6 +57,10 @@ static void inlineChildNodes(DataflowNodeOp node, PatternRewriter &rewriter) {
 /// order. This method always succeeds.
 DataflowNodeOp hls::fuseOpsIntoNewNode(ArrayRef<Operation *> ops,
                                        PatternRewriter &rewriter) {
+  if (ops.size() == 1)
+    if (auto node = dyn_cast<DataflowNodeOp>(ops.front()))
+      return node;
+
   SmallVector<Value, 4> outputValues;
   SmallVector<Type, 4> outputTypes;
   for (auto op : ops)
