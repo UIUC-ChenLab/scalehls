@@ -134,16 +134,6 @@ def TosaAndLinalgCleanup : Pass<"scalehls-tosa-to-linalg-cleanup", "FuncOp"> {
   let constructor = "mlir::scalehls::createTosaAndLinalgCleanupPass()";
 }
 
-def HoistStreamChannel : Pass<"scalehls-hoist-stream-channel", "ModuleOp"> {
-  let summary = "Hoist stream channel from sub-function to top-function";
-  let description = [{
-    This is similar to what buffer-result-to-out-param pass has done to memrefs
-    in sub-functions.
-  }];
-
-  let constructor = "mlir::scalehls::createHoistStreamChannelPass()";
-}
-
 //===----------------------------------------------------------------------===//
 // Runtime-related Passes
 //===----------------------------------------------------------------------===//

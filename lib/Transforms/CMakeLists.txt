@@ -9,7 +9,6 @@ add_mlir_library(MLIRScaleHLSTransforms
   Graph/DataflowBufferize.cpp
   Graph/FakeQuantize.cpp
   Graph/FuncDataflow.cpp
-  Graph/HoistStreamChannel.cpp
   Graph/SimplifyTosaGraph.cpp
   Graph/TosaAndLinalgCleanup.cpp
   Graph/TosaNodeFusion.cpp

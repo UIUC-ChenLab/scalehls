@@ -115,14 +115,6 @@ def StreamWriteOp : HLSOp<"stream.write"> {
   let arguments = (ins StreamOf<[AnyType]>:$channel, AnyType:$value);
 }
 
-def StreamBufferOp : HLSOp<"stream.buffer", [DeclaresStreamChannel]> {
-  let summary = "Stream channel buffer operation";
-
-  let hasVerifier = 1;
-  let arguments = (ins StreamOf<[AnyType]>:$input);
-  let results = (outs StreamOf<[AnyType]>:$output);
-}
-
 //===----------------------------------------------------------------------===//
 // Primitive Operations
 //===----------------------------------------------------------------------===//

@@ -248,7 +248,7 @@ LogicalResult DataflowOutputOp::verify() {
 template <typename OpType> static LogicalResult verifyChannelUsers(OpType op) {
   unsigned numRead = 0, numWrite = 0;
   for (auto user : op.getChannelUsers()) {
-    if (isa<StreamReadOp, StreamBufferOp>(user))
+    if (isa<StreamReadOp>(user))
       ++numRead;
     else if (isa<StreamWriteOp>(user))
       ++numWrite;
@@ -275,12 +275,6 @@ LogicalResult StreamWriteOp::verify() {
       value().getType())
     return failure();
   return success();
-}
-
-LogicalResult StreamBufferOp::verify() {
-  if (input().getType() != output().getType())
-    return failure();
-  return verifyChannelUsers(*this);
 }
 
 //===----------------------------------------------------------------------===//

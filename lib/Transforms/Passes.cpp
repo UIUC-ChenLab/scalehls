@@ -231,7 +231,6 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
 
         pm.addPass(scalehls::createFuncDataflowPass(opts.hlsTopFunc));
-        pm.addPass(scalehls::createHoistStreamChannelPass());
         pm.addPass(scalehls::createCreateAxiInterfacePass());
 
         pm.addPass(scalehls::createFuncPreprocessPass(opts.hlsTopFunc));
