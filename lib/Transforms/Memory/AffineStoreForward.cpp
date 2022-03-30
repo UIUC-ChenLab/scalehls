@@ -145,6 +145,16 @@ static bool applyAffineStoreForward(FuncOp func) {
         lastIsChainLoadOp = false;
       }
     }
+
+    auto memref = memAccessesPair.first;
+    auto defOp = memref.getDefiningOp();
+    if (defOp && llvm::all_of(memref.getUsers(), [](Operation *user) {
+          return isa<mlir::AffineWriteOpInterface>(user);
+        })) {
+      for (auto user : memref.getUsers())
+        user->erase();
+      defOp->erase();
+    }
   }
 
   for (auto op : opsToErase)
