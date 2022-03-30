@@ -384,15 +384,22 @@ bool scalehls::checkDependence(Operation *A, Operation *B) {
   return false;
 }
 
-/// Localize each tosa/arith constant to right before its each use.
-void scalehls::localizeConstants(Block &block) {
+/// Localize each tosa/arith constant to right before its each use. Only
+/// localize the constants whose size is below the bitsThreshold.
+void scalehls::localizeConstants(Block &block, int64_t bitsThreshold) {
   auto builder = OpBuilder(block.getParentOp());
 
   // Collect all constants.
   SmallVector<Operation *, 16> constants;
   block.walk([&](Operation *constant) {
-    if (isa<tosa::ConstOp, arith::ConstantOp>(constant))
-      constants.push_back(constant);
+    if (isa<tosa::ConstOp, arith::ConstantOp>(constant)) {
+      auto type = constant->getResult(0).getType();
+      if (auto shapedType = type.dyn_cast<ShapedType>()) {
+        if (shapedType.getSizeInBits() <= bitsThreshold)
+          constants.push_back(constant);
+      } else
+        constants.push_back(constant);
+    }
   });
 
   // Localize constants to each of its use.

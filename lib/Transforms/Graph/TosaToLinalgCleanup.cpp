@@ -6,7 +6,7 @@
 
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
-#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "mlir/Transforms/DialectConversion.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
@@ -76,10 +76,17 @@ struct TosaToLinalgCleanup
     auto func = getOperation();
     auto context = func.getContext();
 
+    ConversionTarget target(*context);
+    target.addIllegalOp<tensor::PadOp, tosa::ReshapeOp>();
+    target.addLegalOp<linalg::GenericOp, linalg::YieldOp, linalg::InitTensorOp,
+                      linalg::FillOp, arith::ConstantOp>();
+
     mlir::RewritePatternSet patterns(context);
     patterns.add<ReshapeOpRewritePattern>(context);
     patterns.add<linalg::PadOpTransformationPattern>(context);
-    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+
+    if (failed(applyPartialConversion(func, target, std::move(patterns))))
+      return signalPassFailure();
   }
 };
 } // namespace
