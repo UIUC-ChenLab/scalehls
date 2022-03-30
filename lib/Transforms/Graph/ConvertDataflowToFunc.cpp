@@ -20,9 +20,7 @@ struct ConvertDataflowToFunc
     auto module = getOperation();
     auto builder = OpBuilder(module);
     auto loc = builder.getUnknownLoc();
-    // TODO: Here we set the threshold of constant localization to a magic
-    // number, which is the size of a Xilinx BRAM instance.
-    localizeConstants(*module.getBody(), /*bitsThreshold=*/1024 * 16);
+    localizeConstants(*module.getBody());
 
     for (auto func :
          llvm::make_early_inc_range(module.getOps<func::FuncOp>())) {

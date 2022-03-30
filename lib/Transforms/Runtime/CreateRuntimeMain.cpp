@@ -20,10 +20,9 @@ collectConstantsAndUpdateFuncionType(FuncOp func) {
 
   // Traverse all constants in the function.
   for (auto constant : func.getOps<arith::ConstantOp>()) {
-    // TODO: Now we just set a simple threshold to determine whether the
-    // constant tensor should be stored locally on chip.
-    auto tensorType = constant.getType().dyn_cast<TensorType>();
-    if (!tensorType || tensorType.getNumElements() < 256)
+    // TODO: Here we could set a threshold to a magic number to control the
+    // location of buffer allocation, e.g., the size of a Xilinx BRAM instance.
+    if (!constant.getType().isa<TensorType>())
       continue;
 
     // Construct the constants list and input types list.
@@ -55,25 +54,6 @@ struct CreateRuntimeMain : public CreateRuntimeMainBase<CreateRuntimeMain> {
       return signalPassFailure();
     }
     setTopFuncAttr(func);
-
-    // Hoist local constants to the top function.
-    for (auto call : llvm::make_early_inc_range(func.getOps<func::CallOp>())) {
-      auto subFunc = module.lookupSymbol<FuncOp>(call.getCallee());
-      auto constants = collectConstantsAndUpdateFuncionType(subFunc);
-
-      // Replace the original call with a new call.
-      SmallVector<Value, 8> inputs(call.getOperands());
-      inputs.append(constants.begin(), constants.end());
-      builder.setInsertionPoint(call);
-      auto newCall =
-          builder.create<func::CallOp>(call.getLoc(), subFunc, inputs);
-      call.replaceAllUsesWith(newCall);
-      call.erase();
-
-      // Move all selected constants to the front of the call.
-      for (auto constant : constants)
-        constant->moveBefore(newCall);
-    }
 
     // Create the main function of runtime.
     // FIXME: Make sure there's no function called "main" already.
