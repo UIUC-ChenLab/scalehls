@@ -9,6 +9,7 @@
 #include "mlir/Dialect/Affine/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/LoopUtils.h"
+#include "mlir/Dialect/Affine/Utils.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
@@ -36,12 +37,12 @@ bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList,
     return false;
 
   // Get the tile loop band and point loop band.
-  band = tiledBand;
-  band.resize(originalBandSize);
-  auto pointLoopBand = llvm::drop_begin(tiledBand, originalBandSize);
+  AffineLoopBand pointBand(std::next(tiledBand.begin(), originalBandSize),
+                           tiledBand.end());
+  tiledBand.resize(originalBandSize);
 
   // Annotate the required attributes.
-  for (auto zip : llvm::zip(band, pointLoopBand, flags)) {
+  for (auto zip : llvm::zip(tiledBand, pointBand, flags)) {
     auto tileLoop = std::get<0>(zip);
     auto pointLoop = std::get<1>(zip);
     auto flag = std::get<2>(zip);
@@ -60,6 +61,15 @@ bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList,
     // Annotate the point attribute to the point loop.
     if (annotatePointLoop)
       setPointAttr(pointLoop);
+  }
+
+  // Collect the normalized tile band.
+  band.clear();
+  for (auto loop : tiledBand) {
+    (void)normalizeAffineFor(loop);
+    auto tripCount = getConstantTripCount(loop);
+    if (!tripCount || tripCount.getValue() != 1)
+      band.push_back(loop);
   }
   return true;
 }
