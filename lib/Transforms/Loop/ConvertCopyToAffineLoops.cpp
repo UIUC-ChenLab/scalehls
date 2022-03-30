@@ -102,74 +102,6 @@ struct BufferOpRewritePattern : public OpRewritePattern<BufferOp> {
 } // namespace
 
 namespace {
-/// From the semantics point of view, reshape should not introduce a redundant
-/// memref copy. However, in HLS, a reinterpret-like statement will obstruct the
-/// array partition of the on-chip memory. Therefore, we convert reshape to
-/// explict alloc and copy in this lowering.
-struct ReshapeOpLoweringPattern : public OpRewritePattern<tensor::ReshapeOp> {
-  using OpRewritePattern<tensor::ReshapeOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(tensor::ReshapeOp reshape,
-                                PatternRewriter &rewriter) const override {
-    if (!reshape->hasOneUse())
-      return failure();
-
-    auto toTensorOp =
-        reshape.source().getDefiningOp<bufferization::ToTensorOp>();
-    auto toMemrefOp =
-        dyn_cast<bufferization::ToMemrefOp>(*reshape.result().user_begin());
-    if (!toTensorOp || !toMemrefOp)
-      return failure();
-
-    auto inputType = toTensorOp.memref().getType().cast<MemRefType>();
-    auto resultType = toMemrefOp.getType().cast<MemRefType>();
-    auto loc = reshape.getLoc();
-
-    // Create a single loop to traverse all elements of the memrefs.
-    rewriter.setInsertionPointAfter(toMemrefOp);
-    auto loop =
-        rewriter.create<mlir::AffineForOp>(loc, 0, resultType.getNumElements());
-    rewriter.setInsertionPointToStart(loop.getBody());
-
-    // A helper to get the memory access map.
-    auto getMemrefAccessMap = [&](MemRefType type) {
-      unsigned rank = type.getRank();
-      SmallVector<AffineExpr, 4> exprs(rank, rewriter.getAffineDimExpr(0));
-
-      for (unsigned dim = 0; dim < rank; ++dim)
-        for (unsigned idx = 0; idx < dim; ++idx)
-          exprs[idx] = exprs[idx].floorDiv(type.getDimSize(dim));
-
-      for (unsigned idx = 0; idx < rank; ++idx) {
-        auto &expr = exprs[idx];
-        if (auto constantExpr = expr.dyn_cast<AffineDimExpr>())
-          if (resultType.getNumElements() <= type.getDimSize(idx))
-            continue;
-        expr = expr % type.getDimSize(idx);
-      }
-
-      return AffineMap::get(/*dimCount=*/1, 0, exprs, rewriter.getContext());
-    };
-
-    // Create affine load/store operations.
-    auto value = rewriter.create<mlir::AffineLoadOp>(
-        loc, toTensorOp.memref(), getMemrefAccessMap(inputType),
-        loop.getInductionVar());
-    rewriter.create<mlir::AffineStoreOp>(loc, value, toMemrefOp.memref(),
-                                         getMemrefAccessMap(resultType),
-                                         loop.getInductionVar());
-
-    // Convert the reshape result to an explicit alloc.
-    rewriter.setInsertionPointAfter(toMemrefOp);
-    rewriter.replaceOpWithNewOp<memref::AllocOp>(toMemrefOp, resultType);
-    rewriter.eraseOp(reshape);
-
-    return success();
-  }
-};
-} // namespace
-
-namespace {
 struct CopyOpLoweringPattern : public OpRewritePattern<memref::CopyOp> {
   CopyOpLoweringPattern(MLIRContext *context, bool internCopyOnly = true)
       : OpRewritePattern(context), internCopyOnly(internCopyOnly) {}
@@ -235,7 +167,6 @@ struct ConvertCopyToAffineLoops
     mlir::RewritePatternSet patterns(context);
     patterns.add<AllocOpRewritePattern>(context, DT);
     patterns.add<BufferOpRewritePattern>(context);
-    patterns.add<ReshapeOpLoweringPattern>(context);
     (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
 
     // Lower copy and assign operation.

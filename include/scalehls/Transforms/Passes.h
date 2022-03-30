@@ -41,7 +41,7 @@ createFuncDataflowPass(std::string dataflowTargetFunc = "forward",
                        unsigned dataflowGran = 1, bool dataflowBalance = true);
 std::unique_ptr<Pass> createDataflowBufferizePass();
 std::unique_ptr<Pass> createConvertDataflowToFuncPass();
-std::unique_ptr<Pass> createTosaAndLinalgCleanupPass();
+std::unique_ptr<Pass> createTosaToLinalgCleanupPass();
 
 /// Runtime-related passes.
 std::unique_ptr<Pass>

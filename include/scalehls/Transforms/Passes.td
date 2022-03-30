@@ -128,11 +128,11 @@ def ConvertDataflowToFunc :
   let constructor = "mlir::scalehls::createConvertDataflowToFuncPass()";
 }
 
-def TosaAndLinalgCleanup :
+def TosaToLinalgCleanup :
       Pass<"scalehls-tosa-to-linalg-cleanup", "func::FuncOp"> {
   let summary = "Lower tosa::ReshapeOp and tensor::PadOp";
 
-  let constructor = "mlir::scalehls::createTosaAndLinalgCleanupPass()";
+  let constructor = "mlir::scalehls::createTosaToLinalgCleanupPass()";
 }
 
 //===----------------------------------------------------------------------===//

@@ -114,7 +114,7 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(tosa::createTosaToLinalgNamed());
         pm.addPass(mlir::createCanonicalizerPass());
-        pm.addPass(scalehls::createTosaAndLinalgCleanupPass());
+        pm.addPass(scalehls::createTosaToLinalgCleanupPass());
         pm.addPass(tosa::createTosaToLinalg());
         pm.addPass(tosa::createTosaToStandard());
 
@@ -207,7 +207,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
 
         pm.addPass(tosa::createTosaToLinalgNamed());
         pm.addPass(mlir::createCanonicalizerPass());
-        pm.addPass(scalehls::createTosaAndLinalgCleanupPass());
+        pm.addPass(scalehls::createTosaToLinalgCleanupPass());
         pm.addPass(tosa::createTosaToLinalg());
         pm.addPass(tosa::createTosaToStandard());
         pm.addPass(scalehls::createCreateRuntimeMainPass(opts.hlsTopFunc));
