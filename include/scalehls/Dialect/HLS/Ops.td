@@ -8,13 +8,14 @@
 #define SCALEHLS_DIALECT_HLS_OPS_TD
 
 include "mlir/Interfaces/SideEffectInterfaces.td"
+include "mlir/Interfaces/ControlFlowInterfaces.td"
 
 //===----------------------------------------------------------------------===//
 // Dataflow Operations
 //===----------------------------------------------------------------------===//
 
 def DataflowNodeOp : HLSOp<"dataflow.node",
-      [SingleBlockImplicitTerminator<"DataflowOutputOp">, NoSideEffect]> {
+      [SingleBlockImplicitTerminator<"DataflowOutputOp">]> {
   let summary = "Dataflow node operation";
   let description = [{
     This operation represents a node of dataflow. It has a region, which is not
@@ -25,12 +26,14 @@ def DataflowNodeOp : HLSOp<"dataflow.node",
   let results = (outs Variadic<AnyType>:$outputs);
   let regions = (region SizedRegion<1>:$body);
 
-  let assemblyFormat = [{ attr-dict `(` `)` (`->` type($outputs)^)? $body }];
+  let assemblyFormat = [{
+    attr-dict `(` `)` (`->` qualified(type($outputs))^)? $body
+  }];
   let extraClassDeclaration = [{ DataflowOutputOp getOutputOp(); }];
 }
 
 def DataflowOutputOp : HLSOp<"dataflow.output",
-      [Terminator, HasParent<"DataflowNodeOp">, NoSideEffect]> {
+      [Terminator, HasParent<"DataflowNodeOp">, ReturnLike]> {
   let summary = "Output operation of a dataflow node";
   let description = [{
     The operation terminates a dataflow node region and outputs internal values
@@ -39,8 +42,7 @@ def DataflowOutputOp : HLSOp<"dataflow.output",
 
   let hasVerifier = 1;
   let arguments = (ins Variadic<AnyType>:$outputs);
-
-  let builders = [ OpBuilder<(ins), "build($_builder, $_state, Value());"> ];
+  let builders = [ OpBuilder<(ins), "build($_builder, $_state, llvm::None);"> ];
 }
 
 def DataflowSourceOp : HLSOp<"dataflow.source", [NoSideEffect]> {
@@ -52,7 +54,7 @@ def DataflowSourceOp : HLSOp<"dataflow.source", [NoSideEffect]> {
   let results = (outs AnyType:$output);
 }
 
-def DataflowSinkOp : HLSOp<"dataflow.sink", [NoSideEffect]> {
+def DataflowSinkOp : HLSOp<"dataflow.sink"> {
   let summary = "Dataflow sink operation";
   let description = [{
     The operation represents the sink of a dataflow value.
