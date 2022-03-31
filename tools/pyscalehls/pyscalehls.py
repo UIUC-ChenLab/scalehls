@@ -37,11 +37,14 @@ def main():
     p1 = subprocess.Popen(['mlir-clang', opts.input, '-function=' + opts.function, '-memref-fullrank', '-raise-scf-to-affine', '-S'], stdout=subprocess.PIPE, stderr=PIPE, universal_newlines=True)                          
     p2 = subprocess.run(['scalehls-opt', '-allow-unregistered-dialect', '-materialize-reduction'], stdin=p1.stdout, stdout=subprocess.PIPE, stderr=PIPE, universal_newlines=True)                  
     fin = p2.stdout
+    # fin = p1.stdout
 
     # Parse MLIR into memory.
     ctx = mlir.ir.Context()
     scalehls.register_dialects(ctx)
     mod = mlir.ir.Module.parse(fin, ctx)
+
+    print(mod)
 
     # Traverse all functions in the MLIR module.
     for func in mod.body:
@@ -71,10 +74,12 @@ def main():
             # Apply loop tiling. Tile sizes are defined from the outermost loop to the innermost.
             # Note: We use the trip count to generate this example "factors".
             print("test")
-            factors = np.ones(band.depth, dtype=int)
-            factors = np.array([[1,5,25]])
+            # factors = np.ones(band.depth, dtype=int)
+            # list_ts = [[1, 16], [8], [1, 16], [8], [8, 16], [8], [1, 16], [8], [4, 3], [1], [8, 3], [1]]
+            list_ts = [[1, 16]]
+            factors = np.array(list_ts[band_count])
             print(factors)
-            loc = scalehls.loop_tiling(band, factors[band_count], True) # simplify = True
+            loc = scalehls.loop_tiling(band, factors, True) # simplify = True
 
             band_count += 1
 

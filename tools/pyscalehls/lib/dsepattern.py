@@ -15,6 +15,9 @@ import scalehls
 import mlir.ir
 from mlir.dialects import builtin
 
+c_keywords = ["auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else", "enum", "extern", "float", "for", "goto", "if", "inline", "int", "long", "register", "restrict", "return", "short", "signed", "sizeof", "static", "struct", "switch", "typedef", "union", "unsigned", "void", "volatile", "while"]
+c_vars = ["char", "double", "float", "int", "short"]
+
 def sdse_target(new_dir, dsespec, resource, tag, inputfile, inputtop):
 
     if new_dir != None:
@@ -30,11 +33,11 @@ def sdse_target(new_dir, dsespec, resource, tag, inputfile, inputtop):
 
     p1 = subprocess.Popen(['mlir-clang', inputfile, '-function=' + inputtop, '-memref-fullrank', '-raise-scf-to-affine', '-S'],
                             stdout=subprocess.PIPE)                           
-    process = subprocess.run(['scalehls-opt', '-materialize-reduction', '-dse=top-func='+ inputtop + ' output-path=./ csv-path=./ ' + targetspec, '-debug-only=scalehls'], 
-                            stdin=p1.stdout, stdout=subprocess.DEVNULL)
+    p2 = subprocess.Popen(['scalehls-opt', '-materialize-reduction', '-dse=top-func='+ inputtop + ' output-path=./ csv-path=./ ' + targetspec, '-debug-only=scalehls'], 
+                            stdin=p1.stdout, stdout=subprocess.PIPE)
 
-    fout = open("snip_" + tag + "_sdse.cpp", 'wb')
-    subprocess.run(['scalehls-translate', '-emit-hlscpp', "./" + inputtop + '_pareto_0.mlir'], stdout=fout)
+    with open("snip_" + tag + "_sdse.cpp", 'wb') as fout:
+        subprocess.run(['scalehls-translate', '-emit-hlscpp'], stdin=p2.stdout, stdout=fout)    
 
     if new_dir != None:
         os.chdir("../../..")
@@ -61,25 +64,25 @@ def issinglechild(pattern, node_UID):
                 return False
     return True
 
-def loop_insertionsort(inputarray):  #insertion sort    
+def universal_low_insertionsort(inputarray, sortkeystring):  #insertion sort    
     for i in range(1, len(inputarray)): 
         j = i-1
         key = inputarray[i]
-        key_raw = re.findall(r'Loop(\d+)', inputarray[i])
-        inputarray_raw = re.findall(r'Loop(\d+)', inputarray[j])
+        key_raw = re.findall(sortkeystring, inputarray[i])
+        inputarray_raw = re.findall(sortkeystring, inputarray[j])
         while j >= 0 and int(key_raw[0]) < int(inputarray_raw[0]):
                 inputarray[j + 1] = inputarray[j]
                 j -= 1
                 if j >= 0:
-                    inputarray_raw = re.findall(r'Loop(\d+)', inputarray[j])
+                    inputarray_raw = re.findall(sortkeystring, inputarray[j])
         inputarray[j + 1] = key
 
-def cull_function_by_pattern(dir, inputfile, dsespec, resource, pattern):
+def cull_function_by_pattern(dir, inputfile, func_list, removed_function_calls, dsespec, resource, pattern):
     
     root = pattern[pattern.root].tag
     
     new_dir = dir + "/snips/snip_" + root
-    snipfile = "snip_" + root + ".c"
+    snipfile_raw = "snip_" + root
     inputfile =  "../../../" + inputfile
 
     if not(os.path.exists(new_dir)):
@@ -90,36 +93,38 @@ def cull_function_by_pattern(dir, inputfile, dsespec, resource, pattern):
     brace_count = 0
     brace_count_cut = math.inf
 
+    functioncall_list = []
+
     infunction = False
     in_pattern = False
-    bracefound = False
     is_brace = False
     functioncall = False
     scope = None
 
-    newfile = open (snipfile, 'w')
-    with open(inputfile, 'r') as file:        
+    newfile = open (snipfile_raw + ".c", 'w')
+    with open(inputfile, 'r') as file:
         for line in file:
-            bracefound = False
             is_brace = False
-            functioncall = False
 
             #find function calls
-            if brace_count >= 1:
-                functioncall = re.findall(r'\s([A-Za-z_]+[A-Za-z_\d]*)\s?\(', line)
-                if functioncall:
-                    functioncall = True
+            if brace_count >= 1 and in_pattern:
+                line_function_call = re.findall(r'\s?([A-Za-z_]+[A-Za-z_\d]*)\s?\(', line)
+                if line_function_call:
+                    for keyword in line_function_call:
+                        if not(keyword.strip() in c_keywords): #ignore c keywords
+                            if keyword in func_list:
+                                functioncall = True
+                                functioncall_list.append(keyword)
 
             #scope finder
             if brace_count == 0: 
-                raw_scope = re.findall(r'(void|int|float)\s([A-Za-z_]+[A-Za-z_\d]*)(\s)?(\()', line)
+                raw_scope = re.findall(r'(void|char|double|float|int|short)\s([A-Za-z_]+[A-Za-z_\d]*)(\s)?(\()', line)
                 if raw_scope:
                     scope = raw_scope[0][1]
                     infunction = True
                     if scope == root:
                         in_pattern = True
-                    if re.findall('{', line): #multiline function
-                        bracefound = True
+                        
 
             if(re.findall('{', line)):
                 is_brace = True
@@ -139,7 +144,7 @@ def cull_function_by_pattern(dir, inputfile, dsespec, resource, pattern):
                             brace_count_cut = brace_count + 1
             elif brace_count == 0 and not(infunction):
                 newfile.write(line)
-            elif in_pattern and not(functioncall):
+            elif in_pattern:
                 if brace_count < brace_count_cut:
                     newfile.write(line)
 
@@ -157,8 +162,89 @@ def cull_function_by_pattern(dir, inputfile, dsespec, resource, pattern):
     file.close()
     newfile.close()
 
-#########################################################################################################
-    # sdse_target(None, dsespec, resource, root, snipfile, root)
+    snipfile_target = snipfile_raw + ".c"
+
+    # edit file if there exists private subfunction calls
+    # Idea: uses a placeholder value to store function call location
+    if functioncall:
+        # Change sdse input name
+        snipfile_target = snipfile_raw + "_funrem" + ".c"
+        
+        end_of_decl = False
+        var_list = []
+        numb_of_funcalls = len(functioncall_list)
+        func_call_written = 0
+        brace_count = 0
+        variable_count = 0
+        
+        newfile = open (snipfile_target, 'w')
+        with open(snipfile_raw + ".c", 'r') as file:
+            for line in file:
+                # infunction = False
+                end_of_decl = False
+                functioncall = False
+
+                #keep track of variable order
+                if brace_count == 0:
+                    variables = re.findall(r'(char|double|float|int|short)\s\*?([A-Za-z_]+[A-Za-z_\d]*)\s?(,|;|\)|' ')+', line)
+                    if variables:
+                        for mytuple in variables:
+                            buf_list = list(mytuple)
+                            buf_list.remove('')
+                            for item in buf_list:
+                                if not(item in c_keywords):
+                                    var_list.append((item, variable_count))
+                                    variable_count += 1
+                        # print(var_list)
+                
+                if(re.findall('{', line)):
+                    if brace_count == 0:
+                        end_of_decl = True
+                        brace_count += 1
+                        newfile.write(re.sub(r'\)\s?{', ',', line))
+                        # place holder to track function call locations
+                        newfile.write("double " + "pla_hold[" + str(numb_of_funcalls) + "] ) {\n")
+                    else:
+                        brace_count += 1
+                
+                if(re.findall('}', line)):
+                    brace_count -= 1
+
+                #find function calls
+                if brace_count >= 1:
+                    line_function_call = re.findall(r'\s?([A-Za-z_]+[A-Za-z_\d]*\s?\(.*\))', line)
+                    if line_function_call:
+                        for raw_out in line_function_call:
+                            keyword = re.findall(r'([A-Za-z_]+[A-Za-z_\d]*)\s?\(', raw_out)
+                            keyword = keyword[0].strip()
+                            if not(keyword in c_keywords): #ignore c keywords
+                                if keyword in func_list:
+                                    if re.search(r'=\s?' + keyword, line): #error catch
+                                        print("Error: Function Calls has return value")
+                                    else:
+                                        functioncall = True
+                                        newfile.write("pla_hold[" + str(func_call_written) +"] = " + "42.42424242" + ";\n")
+                                        func_call_written += 1
+
+                                        transformed_call = re.findall(r'(\(.*\))', raw_out)
+                                        transformed_call = transformed_call[0]
+                                        variable_names = re.findall(r'([A-Za-z_]+[A-Za-z_\d]*)', raw_out)
+                                        variable_names.remove(keyword)
+                                        for fun_var in variable_names: #get new name
+                                            for var in var_list:
+                                                if fun_var == var[0]:
+                                                    transformed_call = re.sub(var[0], "v" + str(var[1]), transformed_call)
+
+                                        removed_function_calls.append((root , keyword + transformed_call))
+
+
+                if not(end_of_decl or functioncall):
+                    newfile.write(line)
+    file.close()
+    newfile.close()
+
+########################################################################################################
+    # sdse_target(None, dsespec, resource, root, snipfile_target, root)
 #########################################################################################################    
 
     #load pareto space
@@ -168,26 +254,29 @@ def cull_function_by_pattern(dir, inputfile, dsespec, resource, pattern):
         if var.endswith(".csv"):
             if re.findall(r'(loop_\d+)', var):
                 raw_loopparetospace_list.append(var)
+    #sort list                
+    universal_low_insertionsort(raw_loopparetospace_list, r'loop_(\d+)')
     
     #if sdse failed
     if len(raw_loopparetospace_list) == 0:
         os.chdir("../../..")
-        return False, []
+        return False, [], removed_function_calls
 
     #corresponding loops in graph
     toploops = []
     get_highest_singlechildloops(pattern, toploops, pattern.root)
-    loop_insertionsort(toploops)
+    universal_low_insertionsort(toploops, r'Loop(\d+)')
     
     # get loop csv file
     loopparetospace_list = []
     for i in range(len(raw_loopparetospace_list)):
         loop_pareto_space = pd.read_csv(raw_loopparetospace_list[i])
         loopparetospace_list.append((toploops[i], loop_pareto_space))
+        # print((toploops[i], raw_loopparetospace_list[i]))
 
     os.chdir("../../..")
 
-    return True, loopparetospace_list
+    return True, loopparetospace_list, removed_function_calls
 
 
 def combine_two_spaces(pareto_space_list, input1, input2):

@@ -3,10 +3,11 @@
 
 
 
-void matrix_vector_product_with_bias_input_layer(double biases[64],
+void test(double biases[64],
                                                  double weights[13*64],
                                                  double activations[64],
-                                                 double input_sample[13]){
+                                                 double input_sample[13],
+float ph0[0] ) {
     int i,j;
     Loop4: for(j = 0; j < 64; j++){
         activations[j] = (double)0.0;
@@ -14,14 +15,5 @@ void matrix_vector_product_with_bias_input_layer(double biases[64],
             activations[j] += weights[j*13 + i] * input_sample[i];
         }
     }
+ph0[0] = 42.42424242;
 }
-
-
-
-
-
-
-
-
-
-

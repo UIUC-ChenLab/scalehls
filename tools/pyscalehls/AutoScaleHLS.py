@@ -152,14 +152,17 @@ def main():
         val = input("What ScaleHLS optimizations? (Manual / DSE / None)\n")
         if((val == "DSE") or (val == "D") or (val == "d")):
             PYSHLS.scalehls_dse(tar_dir, source_file, inputtop)
-            var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_DSE_out.cpp", inputtop, sdse=True)
+            func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_DSE_out.cpp", inputtop, sdse=True)
         elif((val == "Manual") or (val == "M") or (val == "m")):
             opt_knobs, opt_knob_names = PYSHLS.ScaleHLSopt(source_file, inputtop, tar_dir + "/ScaleHLS_opted.c")   
             print_optknobs(opt_knobs, opt_knob_names)
-            var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_opted.c", inputtop)
+            func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_opted.c", inputtop)
         elif((val == "None") or (val == "N") or (val == "n")):
-            var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, source_file, inputtop)            
-            
+            func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, source_file, inputtop)            
+
+
+    
+
     print_variables(var_forlist, var_arraylist_sized)
     
     print("\nScope")
@@ -175,12 +178,15 @@ def main():
     for item in tree_list:
         item.show(idhidden=True)
 
-    isbreak = input("\n\nBreak\n")
+    # print(func_list)
     
-    # target = treelib.Tree(tree_list[0].subtree("kernel_atax"), deep=True)
+    # target = treelib.Tree(tree_list[3].subtree(tree_list[3][tree_list[3].root].identifier), deep=True)
     # target.show()
-    # DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", dse_target, 1, target)   
+    # DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", func_list, removed_function_calls, dse_target, 1, target)   
 
+
+
+    removed_function_calls = []
     pareto_space_list = []
     for i in range(len(tree_list) - 1):
         target = treelib.Tree(tree_list[i].subtree(tree_list[i][tree_list[i].root].identifier), deep=True)
@@ -196,44 +202,52 @@ def main():
                     if (target.level(DFS_node.identifier) == 1) and (DFS_node.tag == item[0]) and (item[-1] == "Variable"):
                         do_SDSE = False
         if do_SDSE and has_loops:
-            suc_fail, buffer = DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", dse_target, 1, target)
+            suc_fail, buffer, removed_function_calls = DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", func_list, removed_function_calls, dse_target, 1, target)
             if suc_fail:
                 pareto_space_list = pareto_space_list + buffer
 
+    print("removed calls")
+    print(removed_function_calls)
     print("space")
     for i in range(0, len(pareto_space_list)):
         print(pareto_space_list[i][0])
 
+###############################################################################################################    
+    isbreak = input("\n\nBreak\n")
+###############################################################################################################
+
     # print("comb")
     # #combine whole space
-    # buffer = DPAT.combine_two_spaces(pareto_space_list, "Loop4", "Loop6")
-    # for i in range(2, len(pareto_space_list)):
-    #     print(pareto_space_list[i][0])
-    #     buffer = DPAT.combine_two_spaces(pareto_space_list, buffer, pareto_space_list[i][0])
-    #     buffer.to_csv('./test_space.csv')
+    buffer = DPAT.combine_two_spaces(pareto_space_list, "Loop0", "Loop1")
+    for i in range(2, len(pareto_space_list)):
+        print(pareto_space_list[i][0])
+        buffer = DPAT.combine_two_spaces(pareto_space_list, buffer, pareto_space_list[i][0])
+        buffer.to_csv('./test_space.csv')
 
-    pspace = pd.read_csv('./test_space.csv', index_col=0)
-    print(pspace)
-    print(pspace.iloc[0]['b4l0'])
+    # pspace = pd.read_csv('./test_space.csv', index_col=0)
+    # print(pspace)
+    # print(pspace.iloc[0]['b4l0'])
 
-    shutil.copy2(tar_dir + "/ML_in.cpp", tar_dir + "/DSE_in.c")
+    # shutil.copy2(tar_dir + "/ML_in.cpp", tar_dir + "/DSE_in.c")
 
-    DPAT.apply_loop_ops(tar_dir, tree_list[3], np.array([[13, 8]]))
-    DPAT.apply_loop_ops(tar_dir, tree_list[4], np.array([[8, 1]]))
-    DPAT.apply_loop_ops(tar_dir, tree_list[5], np.array([[8, 3]]))
-    DPAT.apply_loop_ops(tar_dir, tree_list[6], np.array([[1]]))
-    DPAT.apply_loop_ops(tar_dir, tree_list[7], np.array([[8, 3]]))
-    DPAT.apply_loop_ops(tar_dir, tree_list[8], np.array([[3, 8]]))
-    DPAT.apply_loop_ops(tar_dir, tree_list[9], np.array([[1, 16]]))
-    DPAT.apply_loop_ops(tar_dir, tree_list[10], np.array([[16, 1]]))
-    DPAT.apply_loop_ops(tar_dir, tree_list[11], np.array([[1, 16]]))
-    DPAT.apply_loop_ops(tar_dir, tree_list[12], [[1, 16], [8], [1, 16], [8], [8, 16], [8], [1, 16], [8], [4, 3], [1], [8, 3], [1]])
+    # DPAT.apply_loop_ops(tar_dir, tree_list[3], np.array([[13, 8]]))
+    # DPAT.apply_loop_ops(tar_dir, tree_list[4], np.array([[8, 1]]))
+    # DPAT.apply_loop_ops(tar_dir, tree_list[5], np.array([[8, 3]]))
+    # DPAT.apply_loop_ops(tar_dir, tree_list[6], np.array([[1]]))
+    # DPAT.apply_loop_ops(tar_dir, tree_list[7], np.array([[8, 3]]))
+    # DPAT.apply_loop_ops(tar_dir, tree_list[8], np.array([[3, 8]]))
+    # DPAT.apply_loop_ops(tar_dir, tree_list[9], np.array([[1, 16]]))
+    # DPAT.apply_loop_ops(tar_dir, tree_list[10], np.array([[16, 1]]))
+    # DPAT.apply_loop_ops(tar_dir, tree_list[11], np.array([[1, 16]]))
+    # DPAT.apply_loop_ops(tar_dir, tree_list[12], [[1, 16], [8], [1, 16], [8], [8, 16], [8], [1, 16], [8], [4, 3], [1], [8, 3], [1]])
 
     # pandas.set_option('display.max_rows', None)
     # buffer = DPAT.combine_two_spaces(pareto_space_list, "Loop0", "Loop1")
     # # print(buffer)
     # final = DPAT.combine_two_spaces(pareto_space_list, buffer, "Loop2")
     # # print(final)
+
+# isbreak = input("\n\nBreak\n")
 
     # #create paramfile
     # INPAR.create_params(tar_dir, var_forlist, var_arraylist_sized)
