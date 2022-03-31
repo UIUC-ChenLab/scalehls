@@ -145,6 +145,13 @@ def PrimMulOp : HLSOp<"prim.mul", [NoSideEffect]> {
   let extraClassDeclaration = [{ bool isPackMul(); }];
 }
 
+def PrimBufferOp : HLSOp<"prim.buffer"> {
+  let summary = "Represent a buffer primitive";
+
+  let arguments = (ins I32Attr:$depth);
+  let results = (outs AnyMemRef:$memref);
+}
+
 def PrimCastOp : HLSOp<"prim.cast",
     [SameOperandsAndResultShape, NoSideEffect]> {
   let summary = "Cast primitive operation";
