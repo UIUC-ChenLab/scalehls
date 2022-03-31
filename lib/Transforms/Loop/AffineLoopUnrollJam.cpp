@@ -81,7 +81,7 @@ struct AffineLoopUnrollJam
       std::reverse(sizes.begin(), sizes.end());
 
       // Apply loop tiling and then unroll all point loops
-      applyLoopTiling(band, sizes);
+      applyLoopTiling(band, sizes, /*loopNormalize=*/false);
       if (loopOrderOpt.getValue())
         applyAffineLoopOrderOpt(band);
       applyFullyLoopUnrolling(*band.back().getBody());

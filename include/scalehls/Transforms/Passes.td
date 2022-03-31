@@ -272,7 +272,7 @@ def AffineLoopUnrollJam :
            "Positive number: the factor of unrolling">,
     Option<"pointLoopOnly", "point-loop-only", "bool", /*default=*/"false",
            "Only apply unroll and jam to point loop band">,
-    Option<"loopOrderOpt", "loop-order-opt", "bool", /*default=*/"true",
+    Option<"loopOrderOpt", "loop-order-opt", "bool", /*default=*/"false",
            "Whether loop order optimization after unrolling">
   ];
 }

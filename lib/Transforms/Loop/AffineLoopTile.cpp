@@ -20,7 +20,7 @@ using namespace hls;
 /// Apply loop tiling to the input loop band and sink all intra-tile loops to
 /// the innermost loop with the original loop order.
 bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList,
-                               bool annotatePointLoop) {
+                               bool loopNormalize, bool annotatePointLoop) {
   assert(!band.empty() && "no loops provided");
   if (!isPerfectlyNested(band))
     return false;
@@ -64,13 +64,16 @@ bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList,
   }
 
   // Collect the normalized tile band.
-  band.clear();
-  for (auto loop : tiledBand) {
-    (void)normalizeAffineFor(loop);
-    auto tripCount = getConstantTripCount(loop);
-    if (!tripCount || tripCount.getValue() != 1)
-      band.push_back(loop);
-  }
+  if (loopNormalize) {
+    band.clear();
+    for (auto loop : tiledBand) {
+      (void)normalizeAffineFor(loop);
+      auto tripCount = getConstantTripCount(loop);
+      if (!tripCount || tripCount.getValue() != 1)
+        band.push_back(loop);
+    }
+  } else
+    band = tiledBand;
   return true;
 }
 
@@ -112,7 +115,7 @@ struct AffineLoopTile : public AffineLoopTileBase<AffineLoopTile> {
       if (avoidMaxMinBounds)
         adjustToDivisorsOfTripCounts(band, &tileSizes);
 
-      applyLoopTiling(band, tileSizes, /*annotatePointLoop=*/true);
+      applyLoopTiling(band, tileSizes, /*loopNormalize=*/false);
     }
   }
 

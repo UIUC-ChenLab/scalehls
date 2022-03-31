@@ -31,7 +31,7 @@ bool applyRemoveVariableBound(AffineLoopBand &band);
 /// the innermost loop with the original loop order.
 using TileList = SmallVector<unsigned, 8>;
 bool applyLoopTiling(AffineLoopBand &band, TileList tileList,
-                     bool annotatePointLoop = false);
+                     bool loopNormalize = true, bool annotatePointLoop = true);
 
 /// Apply loop pipelining to the pipelineLoc of the input loop band, all inner
 /// loops are automatically fully unrolled.
