@@ -1,9 +1,8 @@
 // RUN: scalehls-opt -scalehls-affine-loop-tile="tile-size=4" %s | FileCheck %s
 
-// CHECK: #map0 = affine_map<(d0) -> (d0 * 4)>
-// CHECK: #map1 = affine_map<(d0) -> (d0)>
-// CHECK: #map2 = affine_map<(d0) -> (d0 + 4)>
-// CHECK: #map3 = affine_map<(d0) -> (d0 + 1)>
+// CHECK: #map0 = affine_map<(d0) -> (d0)>
+// CHECK: #map1 = affine_map<(d0) -> (d0 + 4)>
+// CHECK: #map2 = affine_map<(d0) -> (d0 + 1)>
 // CHECK: #set0 = affine_set<(d0, d1, d2) : (d0 == 0, d1 == 0, d2 == 0)>
 // CHECK: #set1 = affine_set<(d0, d1, d2) : (-d0 + 2 == 0, -d1 + 2 == 0, -d2 + 63 == 0)>
 
@@ -19,15 +18,12 @@ module {
     %1 = bufferization.to_memref %cst : memref<64xi8>
     "hls.stream.read"(%arg1) : (!hls.stream<i1, 1>) -> ()
 
-    // CHECK: affine.for %arg6 = 0 to 8 {
-    // CHECK:   %2 = affine.apply #map0(%arg6)
-    // CHECK:   affine.for %arg7 = 0 to 8 {
-    // CHECK:     %3 = affine.apply #map0(%arg7)
-    // CHECK:     affine.for %arg8 = 0 to 16 {
-    // CHECK:       %4 = affine.apply #map0(%arg8)
+    // CHECK: affine.for %arg6 = 0 to 32 step 4 {
+    // CHECK:   affine.for %arg7 = 0 to 32 step 4 {
+    // CHECK:     affine.for %arg8 = 0 to 64 step 4 {
     // CHECK:       affine.for %arg9 = 0 to 3 {
     // CHECK:         affine.for %arg10 = 0 to 3 {
-    // CHECK:           affine.for %arg11 = 0 to 16 {
+    // CHECK:           affine.for %arg11 = 0 to 64 step 4 {
     affine.for %arg6 = 0 to 32 {
       affine.for %arg7 = 0 to 32 {
         affine.for %arg8 = 0 to 64 {
@@ -35,12 +31,12 @@ module {
             affine.for %arg10 = 0 to 3 {
               affine.for %arg11 = 0 to 64 {
 
-                // CHECK: affine.for %arg12 = #map1(%2) to #map2(%2) {
-                // CHECK:   affine.for %arg13 = #map1(%3) to #map2(%3) {
-                // CHECK:     affine.for %arg14 = #map1(%4) to #map2(%4) {
-                // CHECK:       affine.for %arg15 = #map1(%arg9) to #map3(%arg9) {
-                // CHECK:         affine.for %arg16 = #map1(%arg10) to #map3(%arg10) {
-                // CHECK:           affine.for %arg17 = #map1(%5) to #map2(%5) {
+                // CHECK: affine.for %arg12 = #map0(%arg6) to #map1(%arg6) {
+                // CHECK:   affine.for %arg13 = #map0(%arg7) to #map1(%arg7) {
+                // CHECK:     affine.for %arg14 = #map0(%arg8) to #map1(%arg8) {
+                // CHECK:       affine.for %arg15 = #map0(%arg9) to #map2(%arg9) {
+                // CHECK:         affine.for %arg16 = #map0(%arg10) to #map2(%arg10) {
+                // CHECK:           affine.for %arg17 = #map0(%arg11) to #map1(%arg11) {
                 // CHECK:           } {point}
                 // CHECK:         } {point}
                 // CHECK:       } {point}
