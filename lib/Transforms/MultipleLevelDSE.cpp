@@ -666,7 +666,7 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
       tmpFunc.walk([&](AffineForOp loop) {
         if (loop->getAttrOfType<BoolAttr>("opt_flag")) {
           applyFullyLoopUnrolling(*loop.getBody());
-          applySimplificationOpts(tmpFunc);
+          applyMemoryOpts(tmpFunc);
           applyAutoArrayPartition(tmpFunc);
           return;
         }
@@ -678,7 +678,7 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
       // Fully unroll the candidate loop or delve into child loops.
       if (getResource(tmpFunc).getDsp() <= maxDspNum) {
         applyFullyLoopUnrolling(*candidate.getBody());
-        applySimplificationOpts(func);
+        applyMemoryOpts(func);
         applyAutoArrayPartition(func);
       } else {
         auto childForOps = candidate.getOps<AffineForOp>();
@@ -892,7 +892,7 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
     // Optimize the top function.
     // TODO: Support to contain sub-functions.
     for (auto func : module.getOps<FuncOp>()) {
-      if (isTopFunc(func))
+      if (hasTopFuncAttr(func))
         optimizer.applyMultipleLevelDSE(func, directiveOnly, outputPath,
                                         csvPath);
     }

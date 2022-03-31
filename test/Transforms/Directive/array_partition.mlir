@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -array-partition -split-input-file %s | FileCheck %s
+// RUN: scalehls-opt -scalehls-array-partition -split-input-file %s | FileCheck %s
 
 // CHECK: #map0 = affine_map<(d0, d1) -> (0, d1 mod 2, d0, d1 floordiv 2)>
 // CHECK: #map1 = affine_map<(d0, d1) -> (0, 0, d0, d1)>

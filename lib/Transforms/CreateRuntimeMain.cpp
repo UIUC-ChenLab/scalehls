@@ -61,7 +61,7 @@ struct CreateRuntimeMain : public CreateRuntimeMainBase<CreateRuntimeMain> {
     }
 
     // Hoist local constants to the top function.
-    for (auto call : llvm::make_early_inc_range(func.getOps<CallOp>())) {
+    for (auto call : llvm::make_early_inc_range(func.getOps<func::CallOp>())) {
       auto subFunc = module.lookupSymbol<FuncOp>(call.getCallee());
       auto constants = collectConstantsAndUpdateFuncionType(subFunc);
 
@@ -69,7 +69,8 @@ struct CreateRuntimeMain : public CreateRuntimeMainBase<CreateRuntimeMain> {
       SmallVector<Value, 8> inputs(call.getOperands());
       inputs.append(constants.begin(), constants.end());
       builder.setInsertionPoint(call);
-      auto newCall = builder.create<CallOp>(call.getLoc(), subFunc, inputs);
+      auto newCall =
+          builder.create<func::CallOp>(call.getLoc(), subFunc, inputs);
       call.replaceAllUsesWith(newCall);
       call.erase();
 
@@ -92,8 +93,9 @@ struct CreateRuntimeMain : public CreateRuntimeMainBase<CreateRuntimeMain> {
                                   entry->getArguments().end());
     inputs.append(constants.begin(), constants.end());
     builder.setInsertionPointToStart(entry);
-    auto call = builder.create<CallOp>(builder.getUnknownLoc(), func, inputs);
-    builder.create<ReturnOp>(builder.getUnknownLoc(), call.getResults());
+    auto call =
+        builder.create<func::CallOp>(builder.getUnknownLoc(), func, inputs);
+    builder.create<func::ReturnOp>(builder.getUnknownLoc(), call.getResults());
 
     // Move all selected constants to the front of the call.
     for (auto constant : constants)

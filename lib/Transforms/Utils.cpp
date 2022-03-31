@@ -67,8 +67,12 @@ void scalehls::setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
   setLoopDirective(op, loopDirective);
 }
 
-void scalehls::setParallel(AffineForOp loop) {
+void scalehls::setParallelAttr(AffineForOp loop) {
   loop->setAttr("parallel", UnitAttr::get(loop.getContext()));
+}
+
+void scalehls::setPointAttr(AffineForOp loop) {
+  loop->setAttr("point", UnitAttr::get(loop.getContext()));
 }
 
 /// Set func directives.
@@ -84,7 +88,7 @@ void scalehls::setFuncDirective(Operation *op, bool pipeline,
   setFuncDirective(op, funcDirective);
 }
 
-void scalehls::setTopFunc(FuncOp func) {
+void scalehls::setTopFuncAttr(FuncOp func) {
   func->setAttr("top_func", UnitAttr::get(func.getContext()));
 }
 
@@ -92,7 +96,7 @@ void scalehls::setTopFunc(FuncOp func) {
 // Loop transform utils
 //===----------------------------------------------------------------------===//
 
-static void addSimplificationPipeline(PassManager &pm) {
+static void addMemoryOptsPipeline(PassManager &pm) {
   // To factor out the redundant affine operations.
   pm.addPass(createAffineLoopNormalizePass());
   pm.addPass(createSimplifyAffineStructuresPass());
@@ -109,31 +113,12 @@ static void addSimplificationPipeline(PassManager &pm) {
   pm.addPass(createReduceInitialIntervalPass());
 }
 
-/// Apply simplification optimizations.
-bool scalehls::applySimplificationOpts(FuncOp func) {
-  // Apply general optimizations.
+/// Apply memory optimizations.
+bool scalehls::applyMemoryOpts(FuncOp func) {
   PassManager optPM(func.getContext(), "builtin.func");
-  addSimplificationPipeline(optPM);
+  addMemoryOptsPipeline(optPM);
   if (failed(optPM.run(func)))
     return false;
-  return true;
-}
-
-/// Fully unroll all loops insides of a block.
-bool scalehls::applyFullyLoopUnrolling(Block &block, unsigned maxIterNum) {
-  for (unsigned i = 0; i < maxIterNum; ++i) {
-    bool hasFullyUnrolled = true;
-    block.walk([&](AffineForOp loop) {
-      if (failed(loopUnrollFull(loop)))
-        hasFullyUnrolled = false;
-    });
-
-    if (hasFullyUnrolled)
-      break;
-
-    if (i == 7)
-      return false;
-  }
   return true;
 }
 
@@ -156,7 +141,7 @@ bool scalehls::applyOptStrategy(AffineLoopBand &band, FuncOp func,
 
   // Apply memory access optimizations and the best suitable array partition
   // strategy to the function.
-  applySimplificationOpts(func);
+  applyMemoryOpts(func);
   applyAutoArrayPartition(func);
   return true;
 }
@@ -180,7 +165,7 @@ bool scalehls::applyOptStrategy(FuncOp func, ArrayRef<TileList> tileLists,
 
   // Apply memory access optimizations and the best suitable array partition
   // strategy to the function.
-  applySimplificationOpts(func);
+  applyMemoryOpts(func);
   applyAutoArrayPartition(func);
   return true;
 }

@@ -10,6 +10,7 @@
 #include "mlir/Dialect/Affine/Analysis/Utils.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
+#include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 
 using namespace mlir;
@@ -38,8 +39,12 @@ LoopDirectiveAttr scalehls::getLoopDirective(Operation *op) {
   return op->getAttrOfType<LoopDirectiveAttr>("loop_directive");
 }
 
-bool scalehls::isParallel(AffineForOp loop) {
+bool scalehls::hasParallelAttr(AffineForOp loop) {
   return loop->hasAttrOfType<UnitAttr>("parallel");
+}
+
+bool scalehls::hasPointAttr(AffineForOp loop) {
+  return loop->hasAttrOfType<UnitAttr>("point");
 }
 
 /// Parse function directives.
@@ -47,7 +52,7 @@ FuncDirectiveAttr scalehls::getFuncDirective(Operation *op) {
   return op->getAttrOfType<FuncDirectiveAttr>("func_directive");
 }
 
-bool scalehls::isTopFunc(FuncOp func) {
+bool scalehls::hasTopFuncAttr(FuncOp func) {
   return func->hasAttrOfType<UnitAttr>("top_func");
 }
 
@@ -157,44 +162,43 @@ unsigned scalehls::getCommonSurroundingLoops(Operation *A, Operation *B,
   return numCommonLoops;
 }
 
-/// Calculate the upper and lower bound of "bound" if possible.
+/// Calculate the lower and upper bound of the affine map if possible.
 Optional<std::pair<int64_t, int64_t>>
-scalehls::getBoundOfAffineBound(AffineBound bound) {
-  auto boundMap = bound.getMap();
-  if (boundMap.isSingleConstant()) {
-    auto constBound = boundMap.getSingleConstantResult();
+scalehls::getBoundOfAffineMap(AffineMap map, ValueRange operands) {
+  if (map.isSingleConstant()) {
+    auto constBound = map.getSingleConstantResult();
     return std::pair<int64_t, int64_t>(constBound, constBound);
   }
 
-  // For now, we can only handle one result affine bound.
-  if (boundMap.getNumResults() != 1)
+  // For now, we can only handle one result value map.
+  if (map.getNumResults() != 1)
     return Optional<std::pair<int64_t, int64_t>>();
 
-  auto context = boundMap.getContext();
+  auto context = map.getContext();
   SmallVector<int64_t, 4> lbs;
   SmallVector<int64_t, 4> ubs;
-  for (auto operand : bound.getOperands()) {
-    // Only if the affine bound operands are induction variable, the calculation
+  for (auto operand : operands) {
+    // Only if the affine map operands are induction variable, the calculation
     // is possible.
     if (!isForInductionVar(operand))
       return Optional<std::pair<int64_t, int64_t>>();
 
     // Only if the owner for op of the induction variable has constant bound,
     // the calculation is possible.
-    auto ifOp = getForInductionVarOwner(operand);
-    if (!ifOp.hasConstantBounds())
+    auto forOp = getForInductionVarOwner(operand);
+    if (!forOp.hasConstantBounds())
       return Optional<std::pair<int64_t, int64_t>>();
 
-    auto lb = ifOp.getConstantLowerBound();
-    auto ub = ifOp.getConstantUpperBound();
-    auto step = ifOp.getStep();
+    auto lb = forOp.getConstantLowerBound();
+    auto ub = forOp.getConstantUpperBound();
+    auto step = forOp.getStep();
 
     lbs.push_back(lb);
     ubs.push_back(ub - 1 - (ub - 1 - lb) % step);
   }
 
   // TODO: maybe a more efficient algorithm.
-  auto operandNum = bound.getNumOperands();
+  auto operandNum = operands.size();
   SmallVector<int64_t, 16> results;
   for (unsigned i = 0, e = pow(2, operandNum); i < e; ++i) {
     SmallVector<AffineExpr, 4> replacements;
@@ -204,8 +208,7 @@ scalehls::getBoundOfAffineBound(AffineBound bound) {
       else
         replacements.push_back(getAffineConstantExpr(ubs[pos], context));
     }
-    auto newExpr =
-        bound.getMap().getResult(0).replaceDimsAndSymbols(replacements, {});
+    auto newExpr = map.getResult(0).replaceDimsAndSymbols(replacements, {});
 
     if (auto constExpr = newExpr.dyn_cast<AffineConstantExpr>())
       results.push_back(constExpr.getValue());
@@ -263,7 +266,7 @@ int64_t scalehls::getPartitionFactors(MemRefType memrefType,
 
 /// This is method for finding the number of child loops which immediatedly
 /// contained by the input operation.
-static unsigned getChildLoopNum(Operation *op) {
+unsigned scalehls::getChildLoopNum(Operation *op) {
   unsigned childNum = 0;
   for (auto &region : op->getRegions())
     for (auto &block : region)
@@ -294,6 +297,35 @@ static void getLoopBandFromInnermost(AffineForOp forOp, AffineLoopBand &band) {
   }
 
   band.append(reverseBand.rbegin(), reverseBand.rend());
+}
+
+/// Given a tiled loop band, return true and get the tile (tile-space) loop band
+/// and the point (intra-tile) loop band. If failed, return false.
+bool scalehls::getTileAndPointLoopBand(const AffineLoopBand &band,
+                                       AffineLoopBand &tileBand,
+                                       AffineLoopBand &pointBand) {
+  tileBand.clear();
+  pointBand.clear();
+  bool isPointLoop = false;
+
+  for (auto loop : band) {
+    if (!isPointLoop && !hasPointAttr(loop))
+      tileBand.push_back(loop);
+
+    else if (isPointLoop && hasPointAttr(loop))
+      pointBand.push_back(loop);
+
+    else if (!isPointLoop && hasPointAttr(loop)) {
+      isPointLoop = true;
+      pointBand.push_back(loop);
+
+    } else {
+      tileBand.clear();
+      pointBand.clear();
+      return false;
+    }
+  }
+  return true;
 }
 
 /// Get the whole loop band given the outermost loop and return it in "band".
@@ -354,8 +386,10 @@ Optional<unsigned> scalehls::getAverageTripCount(AffineForOp forOp) {
     // TODO: A temporary approach to estimate the trip count. For now, we take
     // the average of the upper bound and lower bound of trip count as the
     // estimated trip count.
-    auto lowerBound = getBoundOfAffineBound(forOp.getLowerBound());
-    auto upperBound = getBoundOfAffineBound(forOp.getUpperBound());
+    auto lowerBound = getBoundOfAffineMap(forOp.getLowerBoundMap(),
+                                          forOp.getLowerBoundOperands());
+    auto upperBound = getBoundOfAffineMap(forOp.getUpperBoundMap(),
+                                          forOp.getUpperBoundOperands());
 
     if (lowerBound && upperBound) {
       auto lowerTripCount =
@@ -393,7 +427,7 @@ bool scalehls::checkDependence(Operation *A, Operation *B) {
   // Traverse each loop level to find dependencies.
   for (unsigned depth = numCommonLoops; depth > 0; depth--) {
     // Skip all parallel loop level.
-    if (isParallel(commonLoops[depth - 1]))
+    if (hasParallelAttr(commonLoops[depth - 1]))
       continue;
 
     FlatAffineValueConstraints depConstrs;
@@ -405,6 +439,28 @@ bool scalehls::checkDependence(Operation *A, Operation *B) {
   }
 
   return false;
+}
+
+/// Localize each tosa/arith constant to right before its each use.
+void scalehls::localizeConstants(Block &block) {
+  auto builder = OpBuilder(block.getParentOp());
+
+  // Collect all constants that have more than one use.
+  SmallVector<Operation *, 16> constants;
+  block.walk([&](Operation *constant) {
+    if (isa<tosa::ConstOp, arith::ConstantOp>(constant) &&
+        !constant->hasOneUse())
+      constants.push_back(constant);
+  });
+  // Localize constants to each of its use.
+  for (auto constant : constants) {
+    for (auto &use : llvm::make_early_inc_range(constant->getUses())) {
+      auto cloneConstant = constant->clone();
+      builder.setInsertionPoint(use.getOwner());
+      builder.insert(cloneConstant);
+      use.set(cloneConstant->getResult(0));
+    }
+  }
 }
 
 //===----------------------------------------------------------------------===//

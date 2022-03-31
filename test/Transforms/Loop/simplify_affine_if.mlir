@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -simplify-affine-if %s | FileCheck %s
+// RUN: scalehls-opt -scalehls-simplify-affine-if %s | FileCheck %s
 
 #map = affine_map<(d0) -> (d0 + 1)>
 #set0 = affine_set<(d0, d1) : (d0 - d1 >= 0)>

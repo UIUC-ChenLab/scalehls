@@ -3,21 +3,27 @@ add_mlir_library(MLIRScaleHLSTransforms
   Directive/CreateHLSCppPrimitive.cpp
   Directive/FuncPipelining.cpp
   Directive/LoopPipelining.cpp
-  Graph/ConvertCopyToAffineLoops.cpp
   Graph/FakeQuantize.cpp
-  Graph/LegalizeDataflow.cpp
+  Graph/FuncDataflow.cpp
+  Graph/HeuristicNodeFusion.cpp
   Graph/ShareTensorOperation.cpp
   Graph/SimplifyTosaGraph.cpp
-  Graph/SplitFunction.cpp
+  Graph/TosaToLinalgCleanup.cpp
+  Loop/AffineLoopDataflow.cpp
   Loop/AffineLoopOrderOpt.cpp
   Loop/AffineLoopPerfection.cpp
-  Loop/AffineLoopUnrollAndPipeline.cpp
+  Loop/AffineLoopTile.cpp
+  Loop/AffineLoopUnrollJam.cpp
+  Loop/ConvertCopyToAffineLoops.cpp
   Loop/MaterializeReduction.cpp
   Loop/RemoveVariableBound.cpp
-  Simplification/AffineStoreForward.cpp
-  Simplification/ReduceInitialInterval.cpp
-  Simplification/SimplifyAffineIf.cpp
-  Simplification/SimplifyMemrefAccess.cpp
+  Loop/SimplifyAffineIf.cpp
+  Memory/AffineStoreForward.cpp
+  Memory/CreateMemrefSubview.cpp
+  Memory/PromoteBuffer.cpp
+  Memory/RaiseImplicitCopy.cpp
+  Memory/ReduceInitialInterval.cpp
+  Memory/SimplifyMemrefAccess.cpp
   CreateRuntimeMain.cpp
   LegalizeToHLSCpp.cpp
   MultipleLevelDSE.cpp

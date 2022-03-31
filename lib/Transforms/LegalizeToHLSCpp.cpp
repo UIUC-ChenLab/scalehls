@@ -65,43 +65,21 @@ bool scalehls::applyLegalizeToHLSCpp(FuncOp func, bool isTopFunc,
 
   // Set top function attribute.
   if (isTopFunc)
-    setTopFunc(func);
+    setTopFuncAttr(func);
 
   // Set parallel attribute to each loop that is applicable.
   func.walk([&](AffineForOp loop) {
     if (isLoopParallel(loop))
-      setParallel(loop);
+      setParallelAttr(loop);
   });
 
   if (axiInterf) {
-    auto loc = builder.getUnknownLoc();
-
     // Convert each argument memory kind to DRAM and buffer each of them.
     for (auto arg : func.getArguments()) {
       if (auto type = arg.getType().dyn_cast<MemRefType>()) {
         arg.setType(MemRefType::get(type.getShape(), type.getElementType(),
                                     type.getLayout().getAffineMap(),
                                     (unsigned)MemoryKind::DRAM));
-
-        // Allocate an on-chip buffer and create a copy from DRAM to the buffer.
-        builder.setInsertionPointToStart(&func.front());
-        auto buf = builder.create<memref::AllocOp>(loc, type);
-        arg.replaceAllUsesWith(buf);
-        auto argCopy = builder.create<memref::CopyOp>(loc, arg, buf);
-
-        // If the buffer's state is written in the function, create a copy from
-        // the buffer to DRAM.
-        if (llvm::any_of(buf->getUsers(), [](Operation *op) {
-              return isa<AffineWriteOpInterface, memref::StoreOp>(op);
-            })) {
-          // Create another result buffer to prepare for the dataflowing.
-          auto resultBuf = builder.create<memref::AllocOp>(loc, type);
-          buf.memref().replaceAllUsesExcept(resultBuf, argCopy);
-          builder.create<memref::CopyOp>(loc, buf, resultBuf);
-
-          builder.setInsertionPoint(func.back().getTerminator());
-          builder.create<memref::CopyOp>(loc, resultBuf, arg);
-        }
       }
     }
 

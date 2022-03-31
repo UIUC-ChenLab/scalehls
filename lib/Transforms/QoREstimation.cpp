@@ -309,7 +309,7 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
   for (unsigned i = 1, e = band.size(); i <= e; ++i) {
     auto loop = band[i - 1];
     auto loopDirect = getLoopDirective(loop);
-    if (!isParallel(forOp) && loopDirect)
+    if (!hasParallelAttr(forOp) && loopDirect)
       if (loopDirect.getFlatten() || loopDirect.getPipeline())
         loopDepths.push_back(i);
   }
@@ -556,7 +556,7 @@ bool ScaleHLSEstimator::visitOp(scf::IfOp op, int64_t begin) {
   return true;
 }
 
-bool ScaleHLSEstimator::visitOp(CallOp op, int64_t begin) {
+bool ScaleHLSEstimator::visitOp(func::CallOp op, int64_t begin) {
   auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCalleeAttr());
   auto subFunc = dyn_cast<FuncOp>(callee);
   assert(subFunc && "callable is not a function operation");
@@ -668,8 +668,8 @@ TimingAttr ScaleHLSEstimator::estimateBlock(Block &block, int64_t begin) {
 
           // If either the depOp or the current operation is a function call,
           // dependency exists and the schedule level should be updated.
-          if (isa<CallOp, memref::CopyOp>(op) ||
-              isa<CallOp, memref::CopyOp>(depOp)) {
+          if (isa<func::CallOp, memref::CopyOp>(op) ||
+              isa<func::CallOp, memref::CopyOp>(depOp)) {
             opBegin = max(opBegin, depOpEnd);
             continue;
           }
@@ -702,7 +702,8 @@ TimingAttr ScaleHLSEstimator::estimateBlock(Block &block, int64_t begin) {
 
           for (unsigned depth = 1; depth <= loopDepth + 1; ++depth) {
             // Skip all parallel loop level.
-            if (depth != loopDepth + 1 && isParallel(commonLoops[depth - 1]))
+            if (depth != loopDepth + 1 &&
+                hasParallelAttr(commonLoops[depth - 1]))
               continue;
 
             FlatAffineValueConstraints dependConstrs;
@@ -809,7 +810,7 @@ ResourceAttr ScaleHLSEstimator::calculateResource(Operation *funcOrLoop) {
   int64_t dspNum = 0;
   int64_t bramNum = 0;
   funcOrLoop->walk([&](Operation *op) {
-    if (isa<CallOp>(op) || isNoTouch(op)) {
+    if (isa<func::CallOp>(op) || isNoTouch(op)) {
       // TODO: For now, we consider the resource utilization of sub-fuctions are
       // static and not shareable. But actually this is not the truth. The
       // resource can be shared between different sub-functions to some extent,
@@ -876,7 +877,7 @@ void ScaleHLSEstimator::estimateFunc(FuncOp func) {
   if (auto funcDirect = getFuncDirective(func)) {
     if (funcDirect.getDataflow()) {
       interval = 1;
-      for (auto callOp : func.getOps<CallOp>()) {
+      for (auto callOp : func.getOps<func::CallOp>()) {
         auto subFuncLatency =
             getTiming(callOp).getEnd() - getTiming(callOp).getBegin();
         interval = max(interval, subFuncLatency);
@@ -978,7 +979,7 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     // called by the top function, it will be estimated in the procedure of
     // estimating the top function.
     for (auto func : module.getOps<FuncOp>())
-      if (isTopFunc(func))
+      if (hasTopFuncAttr(func))
         ScaleHLSEstimator(latencyMap, dspUsageMap, true).estimateFunc(func);
   }
 };

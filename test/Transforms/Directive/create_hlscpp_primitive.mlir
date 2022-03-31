@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -create-hlscpp-primitive %s | FileCheck %s
+// RUN: scalehls-opt -scalehls-create-hlscpp-primitive %s | FileCheck %s
 
 #map0 = affine_map<(d0, d1, d2, d3) -> (0, 0, 0, 0, d0, d1, d2, d3)>
 #map1 = affine_map<(d0, d1, d2, d3) -> (0, 0, 0, d3 mod 2, d0, d1, d2, d3 floordiv 2)>

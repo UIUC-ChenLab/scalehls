@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_ANALYSIS_QORESTIMATION_H
-#define SCALEHLS_ANALYSIS_QORESTIMATION_H
+#ifndef SCALEHLS_TRANSFORMS_QORESTIMATION_H
+#define SCALEHLS_TRANSFORMS_QORESTIMATION_H
 
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -50,7 +50,7 @@ public:
   bool visitOp(AffineForOp op, int64_t begin);
   bool visitOp(AffineIfOp op, int64_t begin);
   bool visitOp(scf::IfOp op, int64_t begin);
-  bool visitOp(CallOp op, int64_t begin);
+  bool visitOp(func::CallOp op, int64_t begin);
   bool visitOp(AffineLoadOp op, int64_t begin) {
     return estimateLoadStoreTiming(op, begin), true;
   }
@@ -133,4 +133,4 @@ private:
 } // namespace scalehls
 } // namespace mlir
 
-#endif // SCALEHLS_ANALYSIS_QORESTIMATION_H
+#endif // SCALEHLS_TRANSFORMS_QORESTIMATION_H

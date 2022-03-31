@@ -233,7 +233,7 @@ public:
   template <typename AssignOpType> void emitAssign(AssignOpType op);
 
   /// Control flow operation emitters.
-  void emitCall(CallOp op);
+  void emitCall(func::CallOp op);
 
   /// Standard expression emitters.
   void emitUnary(Operation *op, const char *syntax);
@@ -436,8 +436,8 @@ public:
   bool visitOp(AssignOp op) { return emitter.emitAssign(op), true; }
 
   /// Control flow operations.
-  bool visitOp(CallOp op) { return emitter.emitCall(op), true; }
-  bool visitOp(ReturnOp op) { return true; }
+  bool visitOp(func::CallOp op) { return emitter.emitCall(op), true; }
+  bool visitOp(func::ReturnOp op) { return true; }
 
 private:
   ModuleEmitter &emitter;
@@ -1332,7 +1332,7 @@ void ModuleEmitter::emitAssign(AssignOpType op) {
 }
 
 /// Control flow operation emitters.
-void ModuleEmitter::emitCall(CallOp op) {
+void ModuleEmitter::emitCall(func::CallOp op) {
   // Handle returned value by the callee.
   for (auto result : op.getResults()) {
     if (!isDeclared(result)) {
@@ -1723,7 +1723,7 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
 void ModuleEmitter::emitFunctionDirectives(FuncOp func,
                                            ArrayRef<Value> portList) {
   // Only top function should emit interface pragmas.
-  if (isTopFunc(func)) {
+  if (hasTopFuncAttr(func)) {
     indent();
     os << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
 
@@ -1796,7 +1796,7 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   if (func.getBlocks().size() != 1)
     emitError(func, "has zero or more than one basic blocks.");
 
-  if (isTopFunc(func))
+  if (hasTopFuncAttr(func))
     os << "/// This is top function.\n";
 
   if (auto timing = getTiming(func)) {
@@ -1834,7 +1834,8 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   }
 
   // Emit results.
-  if (auto funcReturn = dyn_cast<ReturnOp>(func.front().getTerminator())) {
+  if (auto funcReturn =
+          dyn_cast<func::ReturnOp>(func.front().getTerminator())) {
     for (auto result : funcReturn.getOperands()) {
       os << ",\n";
       indent();

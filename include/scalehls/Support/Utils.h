@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_ANALYSIS_UTILS_H
-#define SCALEHLS_ANALYSIS_UTILS_H
+#ifndef SCALEHLS_SUPPORT_UTILS_H
+#define SCALEHLS_SUPPORT_UTILS_H
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
@@ -28,11 +28,12 @@ LoopInfoAttr getLoopInfo(Operation *op);
 
 /// Parse loop directives.
 LoopDirectiveAttr getLoopDirective(Operation *op);
-bool isParallel(AffineForOp loop);
+bool hasParallelAttr(AffineForOp loop);
+bool hasPointAttr(AffineForOp loop);
 
 /// Parse function directives.
 FuncDirectiveAttr getFuncDirective(Operation *op);
-bool isTopFunc(FuncOp func);
+bool hasTopFuncAttr(FuncOp func);
 
 /// Parse array attributes.
 SmallVector<int64_t, 8> getIntArrayAttrValue(Operation *op, StringRef name);
@@ -61,8 +62,9 @@ Optional<std::pair<Operation *, Operation *>> checkSameLevel(Operation *lhsOp,
 unsigned getCommonSurroundingLoops(Operation *A, Operation *B,
                                    AffineLoopBand *band);
 
-/// Calculate the upper and lower bound of "bound" if possible.
-Optional<std::pair<int64_t, int64_t>> getBoundOfAffineBound(AffineBound bound);
+/// Calculate the upper and lower bound of the affine map if possible.
+Optional<std::pair<int64_t, int64_t>> getBoundOfAffineMap(AffineMap map,
+                                                          ValueRange operands);
 
 /// Calculate partition factors through analyzing the "memrefType" and return
 /// them in "factors". Meanwhile, the overall partition number is calculated and
@@ -71,6 +73,16 @@ int64_t getPartitionFactors(MemRefType memrefType,
                             SmallVector<int64_t, 8> *factors = nullptr);
 
 bool isFullyPartitioned(MemRefType memrefType);
+
+/// This is method for finding the number of child loops which immediatedly
+/// contained by the input operation.
+unsigned getChildLoopNum(Operation *op);
+
+/// Given a tiled loop band, return true and get the tile (tile-space) loop
+/// band and the point (intra-tile) loop band. If failed, return false.
+bool getTileAndPointLoopBand(const AffineLoopBand &band,
+                             AffineLoopBand &tileBand,
+                             AffineLoopBand &pointBand);
 
 /// Get the whole loop band given the outermost loop and return it in "band".
 /// Meanwhile, the return value is the innermost loop of this loop band.
@@ -91,6 +103,9 @@ Optional<unsigned> getAverageTripCount(AffineForOp forOp);
 Optional<unsigned> getMaximumTripCount(AffineForOp forOp);
 
 bool checkDependence(Operation *A, Operation *B);
+
+/// Localize each tosa/arith constant to right before its each use.
+void localizeConstants(Block &block);
 
 //===----------------------------------------------------------------------===//
 // PtrLikeMemRefAccess Struct Declaration
@@ -151,4 +166,4 @@ template <> struct DenseMapInfo<mlir::scalehls::PtrLikeMemRefAccess> {
 
 } // namespace llvm
 
-#endif // SCALEHLS_ANALYSIS_UTILS_H
+#endif // SCALEHLS_SUPPORT_UTILS_H
