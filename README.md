@@ -83,7 +83,7 @@ $ python3 export_resnet18_mlir.py | torch-mlir-opt \
 
 $ # Optimize the model and emit C++ code.
 $ scalehls-opt resnet18.mlir \
-    -scalehls-pytorch-pipeline="top-func=forward opt-level=2" \
+    -scalehls-pytorch-pipeline-v2="top-func=forward loop-tile-size=4 loop-unroll-factor=2" \
     | scalehls-translate -emit-hlscpp > resnet18.cpp
 ```
 

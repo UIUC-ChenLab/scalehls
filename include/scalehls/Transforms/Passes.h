@@ -21,7 +21,6 @@ namespace mlir {
 namespace scalehls {
 
 void registerScaleHLSDSEPipeline();
-void registerScaleHLSPyTorchPipeline();
 void registerScaleHLSPyTorchPipelineV2();
 void registerTransformsPasses();
 
