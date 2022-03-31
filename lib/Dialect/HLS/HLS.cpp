@@ -470,13 +470,16 @@ void PrimCastOp::getCanonicalizationPatterns(RewritePatternSet &results,
 }
 
 namespace {
-struct SimplifyBufferOp : public OpRewritePattern<BufferOp> {
-  using OpRewritePattern<BufferOp>::OpRewritePattern;
+struct SimplifyDataflowBufferOp : public OpRewritePattern<DataflowBufferOp> {
+  using OpRewritePattern<DataflowBufferOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(BufferOp buffer,
+  LogicalResult matchAndRewrite(DataflowBufferOp buffer,
                                 PatternRewriter &rewriter) const override {
-    if (auto defOp = buffer.input().getDefiningOp<BufferOp>()) {
+    if (auto defOp = buffer.input().getDefiningOp<DataflowBufferOp>()) {
       buffer.inputMutable().assign(defOp.input());
+      auto newDepth = buffer.depth() + defOp.depth();
+      buffer->setAttr(buffer.depthAttrName(),
+                      rewriter.getUI32IntegerAttr(newDepth));
       return success();
     }
     return failure();
@@ -484,9 +487,9 @@ struct SimplifyBufferOp : public OpRewritePattern<BufferOp> {
 };
 } // namespace
 
-void BufferOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                           MLIRContext *context) {
-  results.add<SimplifyBufferOp>(context);
+void DataflowBufferOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                                   MLIRContext *context) {
+  results.add<SimplifyDataflowBufferOp>(context);
 }
 
 //===----------------------------------------------------------------------===//

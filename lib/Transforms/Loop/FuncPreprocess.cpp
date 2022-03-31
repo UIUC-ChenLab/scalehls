@@ -7,6 +7,7 @@
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
@@ -58,9 +59,8 @@ bool scalehls::applyFuncPreprocess(FuncOp func, bool isTopFunc) {
   auto builder = OpBuilder(func);
 
   // We constrain functions to only contain one block.
-  // TODO: Make sure there's no memref store/load or scf operations?
   if (!llvm::hasSingleElement(func))
-    func.emitError("has zero or more than one basic blocks.");
+    func.emitError("has more than one basic blocks.");
 
   // Set top function attribute.
   if (isTopFunc)
@@ -72,29 +72,34 @@ bool scalehls::applyFuncPreprocess(FuncOp func, bool isTopFunc) {
       setParallelAttr(loop);
   });
 
-  // Insert BufferOp when an arguments or result of ConstantOp are directly
-  // connected to ReturnOp.
+  // We always don't return results in HLS. Instead, we convert results to
+  // function parameters. Therefore, we insert BufferOp when an arguments or
+  // result of ConstantOp are directly connected to ReturnOp.
+  // TODO: We should introduce pointer types here.
   auto returnOp = func.front().getTerminator();
-  builder.setInsertionPoint(returnOp);
-  unsigned idx = 0;
-  for (auto operand : returnOp->getOperands()) {
-    if (operand.dyn_cast<BlockArgument>()) {
-      auto value = builder.create<BufferOp>(returnOp->getLoc(),
-                                            operand.getType(), operand);
-      returnOp->setOperand(idx, value);
-    } else if (isa<arith::ConstantOp>(operand.getDefiningOp())) {
-      auto value = builder.create<BufferOp>(returnOp->getLoc(),
-                                            operand.getType(), operand);
-      returnOp->setOperand(idx, value);
+  for (auto &use : llvm::make_early_inc_range(returnOp->getOpOperands()))
+    if (use.get().dyn_cast<BlockArgument>() ||
+        isa<arith::ConstantOp>(use.get().getDefiningOp())) {
+      builder.setInsertionPoint(returnOp);
+      auto value = builder.create<DataflowBufferOp>(
+          returnOp->getLoc(), use.get().getType(), use.get(), /*depth=*/1);
+      use.set(value);
     }
-    ++idx;
-  }
 
   mlir::RewritePatternSet patterns(func.getContext());
   patterns.add<MemrefLoadRewritePattern>(func.getContext());
   patterns.add<MemrefStoreRewritePattern>(func.getContext());
   vector::populateVectorTransferLoweringPatterns(patterns);
   (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+
+  // We don't support any scf or memref load/store operations.
+  if (WalkResult::interrupt() == func.walk([&](Operation *op) {
+        if (isa<scf::SCFDialect>(op->getDialect()) ||
+            isa<memref::LoadOp, memref::StoreOp>(op))
+          return WalkResult::interrupt();
+        return WalkResult::advance();
+      }))
+    return false;
 
   return true;
 }

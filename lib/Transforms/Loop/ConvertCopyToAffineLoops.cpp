@@ -74,34 +74,6 @@ private:
 } // namespace
 
 namespace {
-struct BufferOpRewritePattern : public OpRewritePattern<BufferOp> {
-  using OpRewritePattern<BufferOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(BufferOp assign,
-                                PatternRewriter &rewriter) const override {
-    if (!assign->hasOneUse())
-      return failure();
-
-    auto toTensorOp = assign.input().getDefiningOp<bufferization::ToTensorOp>();
-    auto toMemrefOp =
-        dyn_cast<bufferization::ToMemrefOp>(*assign.output().user_begin());
-    if (!toTensorOp || !toMemrefOp)
-      return failure();
-
-    // Convert the tensor assign to an explicit alloc+copy.
-    rewriter.setInsertionPointAfter(toMemrefOp);
-    rewriter.create<memref::CopyOp>(assign.getLoc(), toTensorOp.memref(),
-                                    toMemrefOp.memref());
-    rewriter.replaceOpWithNewOp<memref::AllocOp>(
-        toMemrefOp, toMemrefOp.getType().cast<MemRefType>());
-    rewriter.eraseOp(assign);
-
-    return success();
-  }
-};
-} // namespace
-
-namespace {
 struct CopyOpLoweringPattern : public OpRewritePattern<memref::CopyOp> {
   CopyOpLoweringPattern(MLIRContext *context, bool internCopyOnly = true)
       : OpRewritePattern(context), internCopyOnly(internCopyOnly) {}
@@ -166,7 +138,6 @@ struct ConvertCopyToAffineLoops
     // Simplify alloc and copy ops.
     mlir::RewritePatternSet patterns(context);
     patterns.add<AllocOpRewritePattern>(context, DT);
-    patterns.add<BufferOpRewritePattern>(context);
     (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
 
     // Lower copy and assign operation.

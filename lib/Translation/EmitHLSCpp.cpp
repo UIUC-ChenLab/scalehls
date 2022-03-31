@@ -430,6 +430,11 @@ public:
   }
 
   /// HLS dialect operations.
+  bool visitOp(DataflowBufferOp op) {
+    if (op.depth() == 1)
+      return emitter.emitAssign(op), true;
+    return op.emitOpError("only support depth of 1"), false;
+  }
   bool visitOp(StreamChannelOp op) {
     return emitter.emitStreamChannel(op), true;
   }
@@ -437,7 +442,11 @@ public:
   bool visitOp(StreamWriteOp op) { return emitter.emitStreamWrite(op), true; }
   bool visitOp(PrimMulOp op) { return emitter.emitPrimMul(op), true; }
   bool visitOp(PrimCastOp op) { return emitter.emitAssign(op), true; }
-  bool visitOp(BufferOp op) { return emitter.emitAssign(op), true; }
+  bool visitOp(PrimBufferOp op) {
+    if (op.depth() == 1)
+      return emitter.emitAlloc(op), true;
+    return op.emitOpError("only support depth of 1"), false;
+  }
 
   /// Control flow operations.
   bool visitOp(func::CallOp op) { return emitter.emitCall(op), true; }
@@ -1795,23 +1804,20 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   }
 
   // Emit results.
-  if (auto funcReturn =
-          dyn_cast<func::ReturnOp>(func.front().getTerminator())) {
-    for (auto result : funcReturn.getOperands()) {
-      os << ",\n";
-      indent();
-      // TODO: a known bug, cannot return a value twice, e.g. return %0, %0 :
-      // index, index. However, typically this should not happen.
-      if (result.getType().isa<ShapedType>())
-        emitArrayDecl(result);
-      else
-        // In Vivado HLS, pointer indicates the value is an output.
-        emitValue(result, /*rank=*/0, /*isPtr=*/true);
+  auto funcReturn = cast<func::ReturnOp>(func.front().getTerminator());
+  for (auto result : funcReturn.getOperands()) {
+    os << ",\n";
+    indent();
+    // TODO: a known bug, cannot return a value twice, e.g. return %0, %0 :
+    // index, index. However, typically this should not happen.
+    if (result.getType().isa<ShapedType>())
+      emitArrayDecl(result);
+    else
+      // In Vivado HLS, pointer indicates the value is an output.
+      emitValue(result, /*rank=*/0, /*isPtr=*/true);
 
-      portList.push_back(result);
-    }
-  } else
-    emitError(func, "doesn't have a return operation as terminator.");
+    portList.push_back(result);
+  }
 
   reduceIndent();
   os << "\n) {";

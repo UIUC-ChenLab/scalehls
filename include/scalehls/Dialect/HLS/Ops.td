@@ -14,7 +14,7 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 //===----------------------------------------------------------------------===//
 
 def DataflowNodeOp : HLSOp<"dataflow.node",
-      [SingleBlockImplicitTerminator<"DataflowOutputOp">]> {
+      [SingleBlockImplicitTerminator<"DataflowOutputOp">, NoSideEffect]> {
   let summary = "Dataflow node operation";
   let description = [{
     This operation represents a node of dataflow. It has a region, which is not
@@ -30,7 +30,7 @@ def DataflowNodeOp : HLSOp<"dataflow.node",
 }
 
 def DataflowOutputOp : HLSOp<"dataflow.output",
-      [Terminator, HasParent<"DataflowNodeOp">]> {
+      [Terminator, HasParent<"DataflowNodeOp">, NoSideEffect]> {
   let summary = "Output operation of a dataflow node";
   let description = [{
     The operation terminates a dataflow node region and outputs internal values
@@ -43,7 +43,7 @@ def DataflowOutputOp : HLSOp<"dataflow.output",
   let builders = [ OpBuilder<(ins), "build($_builder, $_state, Value());"> ];
 }
 
-def DataflowSourceOp : HLSOp<"dataflow.source"> {
+def DataflowSourceOp : HLSOp<"dataflow.source", [NoSideEffect]> {
   let summary = "Dataflow source operation";
   let description = [{
     The operation represents the source of a dataflow value.
@@ -52,7 +52,7 @@ def DataflowSourceOp : HLSOp<"dataflow.source"> {
   let results = (outs AnyType:$output);
 }
 
-def DataflowSinkOp : HLSOp<"dataflow.sink"> {
+def DataflowSinkOp : HLSOp<"dataflow.sink", [NoSideEffect]> {
   let summary = "Dataflow sink operation";
   let description = [{
     The operation represents the sink of a dataflow value.
@@ -62,12 +62,13 @@ def DataflowSinkOp : HLSOp<"dataflow.sink"> {
 }
 
 def DataflowBufferOp : HLSOp<"dataflow.buffer",
-      [SameOperandsAndResultElementType]> {
+      [SameOperandsAndResultElementType, NoSideEffect]> {
   let summary = "Dataflow buffer operation";
   let description = [{
     The operation represents a buffer of a dataflow value.
   }];
 
+  let hasCanonicalizer = 1;
   let arguments = (ins AnyType:$input, I32Attr:$depth);
   let results = (outs AnyType:$output);
 }
@@ -165,15 +166,6 @@ def PrimCastOp : HLSOp<"prim.cast",
     AnyTypeOf<[I8, I16, I32,
                VectorOfLengthAndType<[2], [I8, I16, I32]>]>:$output
   );
-}
-
-def BufferOp : HLSOp<"buffer",
-    [SameOperandsAndResultElementType, NoSideEffect]> {
-  let summary = "Buffer the input value";
-
-  let hasCanonicalizer = 1;
-  let arguments = (ins AnyType:$input);
-  let results = (outs AnyType:$output);
 }
 
 #endif // SCALEHLS_DIALECT_HLS_OPS_TD

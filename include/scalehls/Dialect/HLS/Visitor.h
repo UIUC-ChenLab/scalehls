@@ -53,8 +53,8 @@ public:
             bufferization::ToMemrefOp, bufferization::ToTensorOp,
 
             // HLS dialect operations.
-            StreamChannelOp, StreamReadOp, StreamWriteOp, PrimMulOp, PrimCastOp,
-            BufferOp,
+            DataflowBufferOp, StreamChannelOp, StreamReadOp, StreamWriteOp,
+            PrimMulOp, PrimCastOp, PrimBufferOp,
 
             // Control flow operations.
             func::CallOp, func::ReturnOp,
@@ -147,12 +147,13 @@ public:
   HANDLE(bufferization::ToTensorOp);
 
   // HLS dialect operations.
+  HANDLE(DataflowBufferOp);
   HANDLE(StreamChannelOp);
   HANDLE(StreamReadOp);
   HANDLE(StreamWriteOp);
   HANDLE(PrimMulOp);
   HANDLE(PrimCastOp);
-  HANDLE(BufferOp);
+  HANDLE(PrimBufferOp);
 
   // Control flow operations.
   HANDLE(func::CallOp);
