@@ -11,7 +11,6 @@
 using namespace mlir;
 using namespace scalehls;
 using namespace hlscpp;
-using namespace tosa;
 
 struct ConvHelper {
   tosa::Conv2DOp op;
@@ -79,7 +78,7 @@ struct ConvHelper {
   }
 };
 
-static FuncOp createSharedFunction(ModuleOp module, Conv2DOp sharedConv, StringRef functionName) {
+static FuncOp createSharedFunction(ModuleOp module, tosa::Conv2DOp sharedConv, StringRef functionName) {
   auto builder = OpBuilder(module);
   
   // Create a function that contains the most frequent convolution.
@@ -107,12 +106,12 @@ static FuncOp createSharedFunction(ModuleOp module, Conv2DOp sharedConv, StringR
   auto newConvOp = builder.create<tosa::Conv2DOp>(builder.getUnknownLoc(), outputType, input, weight, bias, pad, stride, dilation);
 
   // Create ReturnOp inside the created function/
-  builder.create<ReturnOp>(builder.getUnknownLoc(), newConvOp.output());
+  builder.create<func::ReturnOp>(builder.getUnknownLoc(), newConvOp.output());
 
   return newFuncOp;
 }
 
-static bool replaceFunction(ModuleOp module, Conv2DOp sharedConv, FuncOp newFuncOp) {
+static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv, FuncOp newFuncOp) {
   auto builder = OpBuilder(module);
 
   // Traverse the entire module and count all the convolutions.
@@ -139,7 +138,7 @@ static bool replaceFunction(ModuleOp module, Conv2DOp sharedConv, FuncOp newFunc
             int64_t inSizeDiv = (CurrHelper.getInputSize() + SharedHelper.getInputSize() - 1) / SharedHelper.getInputSize();
 
             if (outChannelDiv <= 1 && inChannelDiv <= 1 && inSizeDiv <= 1) {
-              auto newCallOp = builder.create<CallOp>(Conv2DOp.getLoc(), functionName, Conv2DOp->getResultTypes(), Conv2DOp->getOperands());
+              auto newCallOp = builder.create<func::CallOp>(Conv2DOp.getLoc(), functionName, Conv2DOp->getResultTypes(), Conv2DOp->getOperands());
               Conv2DOp.replaceAllUsesWith(newCallOp);
             }
             else {
@@ -192,7 +191,7 @@ static bool replaceFunction(ModuleOp module, Conv2DOp sharedConv, FuncOp newFunc
                       }
 
                       auto operands = {slicedInput, slicedWeight, slicedBias};
-                      slicedOutColumns.push_back(builder.create<CallOp>(Conv2DOp.getLoc(), functionName, SharedHelper.op->getResultTypes(), operands).getODSResults(0)[0]);
+                      slicedOutColumns.push_back(builder.create<func::CallOp>(Conv2DOp.getLoc(), functionName, SharedHelper.op->getResultTypes(), operands).getODSResults(0)[0]);
                     }
                     if (slicedOutColumns.size() == 1) {
                       slicedOutRows.push_back(slicedOutColumns[0]);
