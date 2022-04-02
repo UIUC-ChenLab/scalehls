@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
@@ -18,7 +19,7 @@ using namespace hls;
 
 namespace {
 /// Simple memref load to affine load raising.
-struct MemrefLoadRewritePattern : public OpRewritePattern<memref::LoadOp> {
+struct MemrefLoadRaisePattern : public OpRewritePattern<memref::LoadOp> {
   using OpRewritePattern<memref::LoadOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(memref::LoadOp load,
@@ -37,7 +38,7 @@ struct MemrefLoadRewritePattern : public OpRewritePattern<memref::LoadOp> {
 
 namespace {
 /// Simple memref store to affine store raising.
-struct MemrefStoreRewritePattern : public OpRewritePattern<memref::StoreOp> {
+struct MemrefStoreRaisePattern : public OpRewritePattern<memref::StoreOp> {
   using OpRewritePattern<memref::StoreOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(memref::StoreOp store,
@@ -54,8 +55,39 @@ struct MemrefStoreRewritePattern : public OpRewritePattern<memref::StoreOp> {
 };
 } // namespace
 
+namespace {
+struct AffineStoreUndefFoldPattern
+    : public OpRewritePattern<mlir::AffineStoreOp> {
+  using OpRewritePattern<mlir::AffineStoreOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(mlir::AffineStoreOp store,
+                                PatternRewriter &rewriter) const override {
+    if (store.getValueToStore().getDefiningOp<LLVM::UndefOp>()) {
+      store.emitWarning("undef memory store is folded");
+      rewriter.eraseOp(store);
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
+struct AllocaDemotePattern : public OpRewritePattern<memref::AllocaOp> {
+  using OpRewritePattern<memref::AllocaOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(memref::AllocaOp alloca,
+                                PatternRewriter &rewriter) const override {
+    rewriter.setInsertionPoint(alloca);
+    rewriter.replaceOpWithNewOp<memref::AllocOp>(alloca, alloca.getType());
+    return success();
+  }
+};
+} // namespace
+
 bool scalehls::applyFuncPreprocess(FuncOp func, bool isTopFunc) {
   auto builder = OpBuilder(func);
+  auto context = func.getContext();
 
   // We constrain functions to only contain one block.
   if (!llvm::hasSingleElement(func))
@@ -85,10 +117,12 @@ bool scalehls::applyFuncPreprocess(FuncOp func, bool isTopFunc) {
       use.set(value);
     }
 
-  mlir::RewritePatternSet patterns(func.getContext());
-  patterns.add<MemrefLoadRewritePattern>(func.getContext());
-  patterns.add<MemrefStoreRewritePattern>(func.getContext());
+  mlir::RewritePatternSet patterns(context);
+  patterns.add<MemrefLoadRaisePattern>(context);
+  patterns.add<MemrefStoreRaisePattern>(context);
   vector::populateVectorTransferLoweringPatterns(patterns);
+  patterns.add<AffineStoreUndefFoldPattern>(context);
+  patterns.add<AllocaDemotePattern>(context);
   (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
   // We don't support any scf or memref load/store operations.
