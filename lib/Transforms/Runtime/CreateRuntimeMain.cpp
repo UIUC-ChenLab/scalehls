@@ -20,9 +20,10 @@ collectConstantsAndUpdateFuncionType(FuncOp func) {
 
   // Traverse all constants in the function.
   for (auto constant : func.getOps<arith::ConstantOp>()) {
-    // TODO: Here we could set a threshold to a magic number to control the
-    // location of buffer allocation, e.g., the size of a Xilinx BRAM instance.
-    if (!constant.getType().isa<TensorType>())
+    // Here we set a threshold to a magic number, which is the size of a Xilinx
+    // BRAM instance, to control the location of constants allocation.
+    auto type = constant.getType().dyn_cast<TensorType>();
+    if (!type || type.getNumElements() * type.getElementTypeBitWidth() <= 16384)
       continue;
 
     // Construct the constants list and input types list.
@@ -39,6 +40,8 @@ collectConstantsAndUpdateFuncionType(FuncOp func) {
 }
 
 namespace {
+// FIXME: A known issue is when a constant is read multiple times in the top
+// function, we can no longer create correct number of AXI interfaces later.
 struct CreateRuntimeMain : public CreateRuntimeMainBase<CreateRuntimeMain> {
   CreateRuntimeMain() = default;
   CreateRuntimeMain(std::string hlsTopFunc) { topFunc = hlsTopFunc; }

@@ -59,6 +59,8 @@ struct NodeConversionPattern : public OpRewritePattern<DataflowNodeOp> {
     rewriter.setInsertionPoint(op);
     rewriter.create<func::CallOp>(op.getLoc(), subFunc, inputs);
     rewriter.eraseOp(op);
+
+    setFuncDirective(subFunc, false, 1, true);
     return success();
   }
 
@@ -94,26 +96,26 @@ struct ConvertDataflowToFunc
     auto context = module.getContext();
     localizeConstants(*module.getBody());
 
+    // Hoist the memrefs and stream channels outputed by each node.
+    // TODO: Maybe this should be factored out to somewhere else.
+    module.walk([&](DataflowNodeOp node) {
+      auto output = node.getOutputOp();
+      for (auto &use : output->getOpOperands()) {
+        // TODO: Support other types of outputs?
+        if (!use.get().getType().isa<MemRefType, StreamType>()) {
+          output.emitOpError("dataflow output has not been bufferized");
+          return signalPassFailure();
+        }
+
+        if (auto defOp = use.get().getDefiningOp())
+          if (node->isAncestor(defOp))
+            defOp->moveBefore(node);
+        node.getResult(use.getOperandNumber()).replaceAllUsesWith(use.get());
+      }
+    });
+
     for (auto func :
          llvm::make_early_inc_range(module.getOps<func::FuncOp>())) {
-      // Hoist the memrefs and stream channels outputed by each node.
-      // TODO: Maybe this should be factored out to somewhere else.
-      for (auto node : func.getOps<DataflowNodeOp>()) {
-        auto output = node.getOutputOp();
-        for (auto &use : output->getOpOperands()) {
-          // TODO: Support other types of outputs?
-          if (!use.get().getType().isa<MemRefType, StreamType>()) {
-            output.emitOpError("dataflow output has not been bufferized");
-            return signalPassFailure();
-          }
-
-          if (auto defOp = use.get().getDefiningOp())
-            if (node->isAncestor(defOp))
-              defOp->moveBefore(node);
-          node.getResult(use.getOperandNumber()).replaceAllUsesWith(use.get());
-        }
-      }
-
       // Convert dataflow node and buffer operations.
       ConversionTarget target(*context);
       target.addIllegalOp<DataflowNodeOp, DataflowOutputOp, DataflowBufferOp>();
