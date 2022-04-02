@@ -1,7 +1,7 @@
-// RUN: scalehls-opt -scalehls-func-dataflow="target-func=forward" -split-input-file %s | FileCheck %s
+// RUN: scalehls-opt -scalehls-func-dataflow="target-func=forward" %s | FileCheck %s
 
 module {
-  // CHECK: func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> {
+  // CHECK: func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> attributes {func_directive = #hls.fd<pipeline=false, targetInterval=1, dataflow=true>} {
   func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> {
     %0 = "tosa.const"() {value = dense<[0, 2, 3, 1]> : tensor<4xi32>} : () -> tensor<4xi32>
     %1 = "tosa.const"() {value = dense<4> : tensor<64x3x3x3xi8>} : () -> tensor<64x3x3x3xi8>

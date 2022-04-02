@@ -1,9 +1,4 @@
 // RUN: scalehls-opt -scalehls-affine-loop-dataflow %s | FileCheck %s
-// XFAIL: *
-
-// CHECK-LABEL: func @loop0_dataflow2
-// CHECK-LABEL: func @loop0_dataflow1
-// CHECK-LABEL: func @loop0_dataflow3
 
 #map = affine_map<(d0, d1) -> (d0 + d1 * 4)>
 #set0 = affine_set<(d0, d1, d2) : (d0 == 0, d1 == 0, d2 == 0)>
@@ -26,13 +21,24 @@ module {
         affine.for %arg8 = 0 to 16 {
           affine.for %arg9 = 0 to 3 {
             affine.for %arg10 = 0 to 3 {
-
-              // CHECK: affine.for %arg11 = 0 to 16 {
-              // CHECK:   call @loop0_dataflow3
-              // CHECK:   call @loop0_dataflow2
-              // CHECK:   call @loop0_dataflow1
-              // CHECK: } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=true, flatten=false>}
               affine.for %arg11 = 0 to 16 {
+
+                // CHECK: hls.dataflow.node() {
+                // CHECK:   affine.for %arg12 = 0 to 4 {
+                // CHECK:     affine.for %arg13 = 0 to 4 {
+                // CHECK:       %5 = affine.load %arg2[%arg9, %arg10, %arg12 + %arg11 * 4, %arg13 + %arg8 * 4] : memref<3x3x64x64xi8, 3>
+                // CHECK:       affine.store %5, %3[0, 0, %arg12, %arg13] : memref<1x1x4x4xi8>
+                // CHECK:     }
+                // CHECK:   }
+                // CHECK:   affine.for %arg12 = 0 to 4 {
+                // CHECK:     affine.for %arg13 = 0 to 4 {
+                // CHECK:       affine.for %arg14 = 0 to 4 {
+                // CHECK:         %5 = affine.load %arg0[0, %arg12 + %arg9 + %arg6 * 4 - 1, %arg13 + %arg10 + %arg7 * 4 - 1, %arg14 + %arg11 * 4] : memref<1x32x32x64xi8, 3>
+                // CHECK:         affine.store %5, %2[0, %arg12, %arg13, %arg14] : memref<1x4x4x4xi8>
+                // CHECK:       }
+                // CHECK:     }
+                // CHECK:   }
+                // CHECK: }
                 affine.for %arg12 = 0 to 4 {
                   affine.for %arg13 = 0 to 4 {
                     affine.for %arg14 = 0 to 4 {
@@ -47,6 +53,17 @@ module {
                     affine.store %5, %3[0, 0, %arg12, %arg13] : memref<1x1x4x4xi8>
                   }
                 }
+
+                // CHECK: hls.dataflow.node() {
+                // CHECK:   affine.for %arg12 = 0 to 4 {
+                // CHECK:     affine.for %arg13 = 0 to 4 {
+                // CHECK:       affine.for %arg14 = 0 to 4 {
+                // CHECK:         affine.for %arg15 = 0 to 4 {
+                // CHECK:         } {point}
+                // CHECK:       } {point}
+                // CHECK:     } {point}
+                // CHECK:   } {point}
+                // CHECK: }
                 affine.for %arg12 = 0 to 4 {
                   affine.for %arg13 = 0 to 4 {
                     affine.for %arg14 = 0 to 4 {
@@ -74,6 +91,17 @@ module {
                     } {point}
                   } {point}
                 } {point}
+
+                // CHECK: hls.dataflow.node() {
+                // CHECK:   affine.for %arg12 = 0 to 4 {
+                // CHECK:     affine.for %arg13 = 0 to 4 {
+                // CHECK:       affine.for %arg14 = 0 to 4 {
+                // CHECK:         %5 = affine.load %4[0, %arg12, %arg13, %arg14] : memref<1x4x4x4xi8>
+                // CHECK:         affine.store %5, %arg3[0, %arg12 + %arg6 * 4, %arg13 + %arg7 * 4, %arg14 + %arg8 * 4] : memref<1x32x32x64xi8, 3>
+                // CHECK:       }
+                // CHECK:     }
+                // CHECK:   }
+                // CHECK: }
                 affine.for %arg12 = 0 to 4 {
                   affine.for %arg13 = 0 to 4 {
                     affine.for %arg14 = 0 to 4 {
@@ -82,6 +110,8 @@ module {
                     }
                   }
                 }
+
+              // CHECK: } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=true, flatten=false>}
               }
             }
           }

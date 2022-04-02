@@ -17,7 +17,7 @@ namespace {
 struct CreateTokenFlow : public CreateTokenFlowBase<CreateTokenFlow> {
   void runOnOperation() override {
     auto func = getOperation();
-    auto rewriter = ScaleHLSDataflower(func.getContext());
+    auto rewriter = ScaleHLSDataflower(func.front());
     auto loc = rewriter.getUnknownLoc();
 
     for (auto node :

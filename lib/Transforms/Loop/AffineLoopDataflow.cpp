@@ -22,7 +22,6 @@ struct AffineLoopDataflow : public AffineLoopDataflowBase<AffineLoopDataflow> {
   void runOnOperation() override {
     auto module = getOperation();
 
-    unsigned bandIdx = 0;
     for (auto func : llvm::make_early_inc_range(module.getOps<FuncOp>())) {
       localizeConstants(func.front());
 
@@ -33,10 +32,8 @@ struct AffineLoopDataflow : public AffineLoopDataflowBase<AffineLoopDataflow> {
       // Apply loop dataflow to each innermost loop that has more than one
       // child loops.
       for (auto &band : targetBands)
-        if (getChildLoopNum(band.back()) > 1) {
-          auto prefix = "loop" + std::to_string(bandIdx++);
-          applyDataflow(*band.back().getBody(), prefix, gran, balance);
-        }
+        if (getChildLoopNum(band.back()) > 1)
+          applyDataflow(*band.back().getBody(), gran, balance);
     }
   }
 };
