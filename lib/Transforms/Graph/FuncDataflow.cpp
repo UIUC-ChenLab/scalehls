@@ -4,7 +4,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Analysis/Liveness.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
@@ -12,6 +11,7 @@
 #include "mlir/IR/Dominance.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Dialect/HLS/HLS.h"
+#include "scalehls/Transforms/Dataflower.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
@@ -132,7 +132,7 @@ private:
 /// are inserted to balance the dataflow pipeline.
 bool scalehls::applyDataflow(Block &block, StringRef prefix, unsigned gran,
                              bool balance) {
-  auto rewriter = DataflowNodeRewriter(block.getParentOp()->getContext());
+  auto rewriter = ScaleHLSDataflower(block.getParentOp()->getContext());
   auto loc = rewriter.getUnknownLoc();
 
   // Make sure all operations except the terminator are fused into dataflow

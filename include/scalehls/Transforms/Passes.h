@@ -28,7 +28,7 @@ void registerTransformsPasses();
 std::unique_ptr<Pass> createQoREstimationPass();
 std::unique_ptr<Pass> createQoREstimationPass(std::string qorTargetSpec);
 std::unique_ptr<Pass>
-createMultipleLevelDSEPass(std::string dseTargetSpec = "");
+createDesignSpaceExplorePass(std::string dseTargetSpec = "");
 
 /// Graph optimization passes.
 std::unique_ptr<Pass> createFakeQuantizePass();

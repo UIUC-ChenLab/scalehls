@@ -30,7 +30,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Memory/SimplifyMemrefAccess.cpp
   Runtime/CreateAxiInterface.cpp
   Runtime/CreateRuntimeMain.cpp
-  MultipleLevelDSE.cpp
+  DesignSpaceExplore.cpp
   Passes.cpp
   Utils.cpp
 

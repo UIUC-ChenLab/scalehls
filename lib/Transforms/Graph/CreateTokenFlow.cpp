@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Dialect/HLS/HLS.h"
+#include "scalehls/Transforms/Dataflower.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
@@ -16,7 +17,7 @@ namespace {
 struct CreateTokenFlow : public CreateTokenFlowBase<CreateTokenFlow> {
   void runOnOperation() override {
     auto func = getOperation();
-    auto rewriter = DataflowNodeRewriter(func.getContext());
+    auto rewriter = ScaleHLSDataflower(func.getContext());
     auto loc = rewriter.getUnknownLoc();
 
     for (auto node :

@@ -31,11 +31,6 @@ class DataflowNodeOp;
 enum class MemoryKind { BRAM_S2P = 0, BRAM_T2P = 1, BRAM_1P = 2, DRAM = 3 };
 enum class PartitionKind { CYCLIC = 0, BLOCK = 1, NONE = 2 };
 
-class DataflowNodeRewriter : public PatternRewriter {
-public:
-  DataflowNodeRewriter(MLIRContext *context) : PatternRewriter(context) {}
-};
-
 /// Fuse the given operations into a new dataflow node. The fused node will be
 /// created before the first operation and each operation will be inserted in
 /// order. This method always succeeds.

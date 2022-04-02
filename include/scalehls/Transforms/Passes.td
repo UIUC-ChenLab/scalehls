@@ -31,7 +31,7 @@ def QoREstimation : Pass<"scalehls-qor-estimation", "ModuleOp"> {
   ];
 }
 
-def MultipleLevelDSE : Pass<"scalehls-dse", "ModuleOp"> {
+def DesignSpaceExplore : Pass<"scalehls-dse", "ModuleOp"> {
   let summary = "Optimize HLS design at multiple abstraction level";
   let description = [{
     This dse pass will automatically conduct the design space exploration (DSE)
@@ -41,7 +41,7 @@ def MultipleLevelDSE : Pass<"scalehls-dse", "ModuleOp"> {
     efficient optimization convergence.
   }];
 
-  let constructor = "mlir::scalehls::createMultipleLevelDSEPass()";
+  let constructor = "mlir::scalehls::createDesignSpaceExplorePass()";
 
   let options = [
     Option<"outputPath", "output-path", "std::string",

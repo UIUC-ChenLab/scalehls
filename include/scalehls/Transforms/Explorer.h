@@ -4,10 +4,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_TRANSFORMS_MULTIPLELEVELDSE_H
-#define SCALEHLS_TRANSFORMS_MULTIPLELEVELDSE_H
+#ifndef SCALEHLS_TRANSFORMS_EXPLORER_H
+#define SCALEHLS_TRANSFORMS_EXPLORER_H
 
-#include "scalehls/Transforms/QoREstimation.h"
+#include "scalehls/Transforms/Estimator.h"
 #include "scalehls/Transforms/Utils.h"
 
 namespace mlir {
@@ -156,15 +156,15 @@ public:
 };
 
 //===----------------------------------------------------------------------===//
-// ScaleHLSOptimizer Class Declaration
+// ScaleHLSExplorer Class Declaration
 //===----------------------------------------------------------------------===//
 
-class ScaleHLSOptimizer {
+class ScaleHLSExplorer {
 public:
-  explicit ScaleHLSOptimizer(ScaleHLSEstimator &estimator, unsigned outputNum,
-                             unsigned maxDspNum, unsigned maxInitParallel,
-                             unsigned maxExplParallel, unsigned maxLoopParallel,
-                             unsigned maxIterNum, float maxDistance)
+  explicit ScaleHLSExplorer(ScaleHLSEstimator &estimator, unsigned outputNum,
+                            unsigned maxDspNum, unsigned maxInitParallel,
+                            unsigned maxExplParallel, unsigned maxLoopParallel,
+                            unsigned maxIterNum, float maxDistance)
       : estimator(estimator), outputNum(outputNum), maxDspNum(maxDspNum),
         maxInitParallel(maxInitParallel), maxExplParallel(maxExplParallel),
         maxLoopParallel(maxLoopParallel), maxIterNum(maxIterNum),
@@ -178,8 +178,8 @@ public:
   bool exploreDesignSpace(FuncOp func, bool directiveOnly,
                           StringRef outputRootPath, StringRef csvRootPath);
 
-  void applyMultipleLevelDSE(FuncOp func, bool directiveOnly,
-                             StringRef outputRootPath, StringRef csvRootPath);
+  void applyDesignSpaceExplore(FuncOp func, bool directiveOnly,
+                               StringRef outputRootPath, StringRef csvRootPath);
 
   ScaleHLSEstimator &estimator;
 
@@ -205,4 +205,4 @@ public:
 } // namespace scalehls
 } // namespace mlir
 
-#endif // SCALEHLS_TRANSFORMS_MULTIPLELEVELDSE_H
+#endif // SCALEHLS_TRANSFORMS_EXPLORER_H

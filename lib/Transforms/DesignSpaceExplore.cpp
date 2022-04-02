@@ -4,10 +4,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "scalehls/Transforms/MultipleLevelDSE.h"
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/Utils.h"
 #include "mlir/Support/FileUtilities.h"
+#include "scalehls/Transforms/Explorer.h"
 #include "scalehls/Transforms/Passes.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -552,10 +552,10 @@ bool FuncDesignSpace::exportParetoDesigns(unsigned outputNum,
 }
 
 //===----------------------------------------------------------------------===//
-// Optimizer Class Definition
+// Explorer Class Definition
 //===----------------------------------------------------------------------===//
 
-bool ScaleHLSOptimizer::emitQoRDebugInfo(FuncOp func, std::string message) {
+bool ScaleHLSExplorer::emitQoRDebugInfo(FuncOp func, std::string message) {
   estimator.estimateFunc(func);
   // auto latency = getTiming(func).getLatency();
   auto dspNum = getResource(func).getDsp();
@@ -582,7 +582,7 @@ static int64_t getInnerParallelism(Block &block) {
   return std::max(count, (int64_t)1);
 }
 
-bool ScaleHLSOptimizer::evaluateFuncPipeline(FuncOp func) { return true; }
+bool ScaleHLSExplorer::evaluateFuncPipeline(FuncOp func) { return true; }
 
 /// DSE Stage1: Simplify loop nests by unrolling. If we take the following loops
 /// as example, where each nodes represents one sequential loop nests (LN). In
@@ -616,7 +616,7 @@ bool ScaleHLSOptimizer::evaluateFuncPipeline(FuncOp func) { return true; }
 ///   LN2 LN5
 ///
 /// TODO: there is a large design space in this simplification.
-bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
+bool ScaleHLSExplorer::simplifyLoopNests(FuncOp func) {
   LLVM_DEBUG(llvm::dbgs()
                  << "----------\nStage1: Simplify loop nests structure...\n";);
 
@@ -696,7 +696,7 @@ bool ScaleHLSOptimizer::simplifyLoopNests(FuncOp func) {
 /// will be applied to each leaf LNs, and the best one which meets the resource
 /// constraints will be picked as the final solution.
 /// TODO: better handle variable bound kernels.
-bool ScaleHLSOptimizer::optimizeLoopBands(FuncOp func, bool directiveOnly) {
+bool ScaleHLSExplorer::optimizeLoopBands(FuncOp func, bool directiveOnly) {
   LLVM_DEBUG(llvm::dbgs() << "----------\nStage2: Apply loop perfection, loop "
                              "order opt, and remove variable loop bound...\n";);
 
@@ -722,9 +722,9 @@ bool ScaleHLSOptimizer::optimizeLoopBands(FuncOp func, bool directiveOnly) {
 }
 
 /// DSE Stage3: Explore the function design space through dynamic programming.
-bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, bool directiveOnly,
-                                           StringRef outputRootPath,
-                                           StringRef csvRootPath) {
+bool ScaleHLSExplorer::exploreDesignSpace(FuncOp func, bool directiveOnly,
+                                          StringRef outputRootPath,
+                                          StringRef csvRootPath) {
   LLVM_DEBUG(llvm::dbgs() << "----------\nStage3: Conduct top function design "
                              "space exploration...\n";);
 
@@ -797,13 +797,13 @@ bool ScaleHLSOptimizer::exploreDesignSpace(FuncOp func, bool directiveOnly,
 }
 
 //===----------------------------------------------------------------------===//
-// MultipleLevelDSE Entry
+// DesignSpaceExplore Entry
 //===----------------------------------------------------------------------===//
 
 /// This is a temporary approach that does not scale.
-void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func, bool directiveOnly,
-                                              StringRef outputRootPath,
-                                              StringRef csvRootPath) {
+void ScaleHLSExplorer::applyDesignSpaceExplore(FuncOp func, bool directiveOnly,
+                                               StringRef outputRootPath,
+                                               StringRef csvRootPath) {
   emitQoRDebugInfo(func, "Start multiple level DSE.");
 
   // Simplify loop nests by unrolling.
@@ -821,9 +821,9 @@ void ScaleHLSOptimizer::applyMultipleLevelDSE(FuncOp func, bool directiveOnly,
 }
 
 namespace {
-struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
-  MultipleLevelDSE() = default;
-  MultipleLevelDSE(std::string dseTargetSpec) { targetSpec = dseTargetSpec; }
+struct DesignSpaceExplore : public DesignSpaceExploreBase<DesignSpaceExplore> {
+  DesignSpaceExplore() = default;
+  DesignSpaceExplore(std::string dseTargetSpec) { targetSpec = dseTargetSpec; }
 
   void runOnOperation() override {
     auto module = getOperation();
@@ -885,22 +885,22 @@ struct MultipleLevelDSE : public MultipleLevelDSEBase<MultipleLevelDSE> {
 
     // Initialize an performance and resource estimator.
     auto estimator = ScaleHLSEstimator(latencyMap, dspUsageMap, true);
-    auto optimizer = ScaleHLSOptimizer(
-        estimator, outputNum, maxDspNum, maxInitParallel, maxExplParallel,
-        maxLoopParallel, maxIterNum, maxDistance);
+    auto explorer = ScaleHLSExplorer(estimator, outputNum, maxDspNum,
+                                     maxInitParallel, maxExplParallel,
+                                     maxLoopParallel, maxIterNum, maxDistance);
 
     // Optimize the top function.
     // TODO: Support to contain sub-functions.
     for (auto func : module.getOps<FuncOp>()) {
       if (hasTopFuncAttr(func))
-        optimizer.applyMultipleLevelDSE(func, directiveOnly, outputPath,
-                                        csvPath);
+        explorer.applyDesignSpaceExplore(func, directiveOnly, outputPath,
+                                         csvPath);
     }
   }
 };
 } // namespace
 
 std::unique_ptr<Pass>
-scalehls::createMultipleLevelDSEPass(std::string dseTargetSpec) {
-  return std::make_unique<MultipleLevelDSE>(dseTargetSpec);
+scalehls::createDesignSpaceExplorePass(std::string dseTargetSpec) {
+  return std::make_unique<DesignSpaceExplore>(dseTargetSpec);
 }

@@ -47,7 +47,7 @@ void scalehls::registerScaleHLSDSEPipeline() {
         pm.addPass(scalehls::createMaterializeReductionPass());
 
         // Apply the automatic design space exploration to the top function.
-        pm.addPass(scalehls::createMultipleLevelDSEPass(opts.dseTargetSpec));
+        pm.addPass(scalehls::createDesignSpaceExplorePass(opts.dseTargetSpec));
 
         // Finally, estimate the QoR of the DSE result.
         pm.addPass(scalehls::createQoREstimationPass(opts.dseTargetSpec));
