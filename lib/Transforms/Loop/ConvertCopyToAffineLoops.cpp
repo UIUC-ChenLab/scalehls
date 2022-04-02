@@ -42,7 +42,8 @@ struct AllocOpRewritePattern : public OpRewritePattern<memref::AllocOp> {
     auto anotherMemref = alloc.memref() == copy.getSource() ? copy.getTarget()
                                                             : copy.getSource();
     if (auto anotherAlloc = anotherMemref.getDefiningOp())
-      if (DT.dominates(alloc.getOperation(), anotherAlloc))
+      if (!isa<memref::AllocOp>(anotherAlloc) ||
+          DT.dominates(alloc.getOperation(), anotherAlloc))
         return failure();
     if (alloc.getType().getMemorySpaceAsInt() !=
         anotherMemref.getType().cast<MemRefType>().getMemorySpaceAsInt())
