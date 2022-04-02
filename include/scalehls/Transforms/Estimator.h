@@ -8,10 +8,8 @@
 #define SCALEHLS_TRANSFORMS_ESTIMATOR_H
 
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
-#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dominance.h"
 #include "scalehls/Dialect/HLS/Visitor.h"
-#include "scalehls/Support/Utils.h"
 #include "scalehls/Transforms/Utils.h"
 #include "llvm/Support/JSON.h"
 

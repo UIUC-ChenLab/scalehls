@@ -7,7 +7,6 @@
 #include "scalehls/Dialect/HLS/HLS.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/DialectImplementation.h"
-#include "mlir/IR/PatternMatch.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 using namespace mlir;

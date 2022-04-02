@@ -7,7 +7,6 @@
 #include "mlir/Analysis/Liveness.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Transforms/DialectConversion.h"
-#include "scalehls/Dialect/HLS/HLS.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 

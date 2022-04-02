@@ -5,11 +5,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Affine/Analysis/Utils.h"
-#include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/Support/FileUtilities.h"
 #include "scalehls/Transforms/Estimator.h"
 #include "scalehls/Transforms/Passes.h"
-#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Support/MemoryBuffer.h"
 
 using namespace std;

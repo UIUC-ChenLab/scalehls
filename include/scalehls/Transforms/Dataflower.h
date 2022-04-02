@@ -7,7 +7,7 @@
 #ifndef SCALEHLS_TRANSFORMS_DATAFLOWER_H
 #define SCALEHLS_TRANSFORMS_DATAFLOWER_H
 
-#include "scalehls/Transforms/Utils.h"
+#include "scalehls/Dialect/HLS/HLS.h"
 
 namespace mlir {
 namespace scalehls {

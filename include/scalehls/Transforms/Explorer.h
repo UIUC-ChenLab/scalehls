@@ -8,7 +8,6 @@
 #define SCALEHLS_TRANSFORMS_EXPLORER_H
 
 #include "scalehls/Transforms/Estimator.h"
-#include "scalehls/Transforms/Utils.h"
 
 namespace mlir {
 namespace scalehls {

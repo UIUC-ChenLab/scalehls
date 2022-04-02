@@ -4,9 +4,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
-#include "mlir/Dialect/Affine/Analysis/Utils.h"
-#include "mlir/IR/Dominance.h"
 #include "mlir/IR/IntegerSet.h"
 #include "scalehls/Support/Utils.h"
 #include "scalehls/Transforms/Passes.h"

@@ -4,11 +4,11 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "scalehls/Transforms/Passes.h"
-#include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;

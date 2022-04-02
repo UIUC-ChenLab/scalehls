@@ -7,16 +7,7 @@
 #ifndef SCALEHLS_DIALECT_HLS_VISITOR_H
 #define SCALEHLS_DIALECT_HLS_VISITOR_H
 
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
-#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/Math/IR/Math.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/SCF/SCF.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
-#include "mlir/Dialect/Vector/IR/VectorOps.h"
-#include "scalehls/Dialect/HLS/HLS.h"
+#include "scalehls/InitAllDialects.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 namespace mlir {

@@ -7,7 +7,6 @@
 #ifndef SCALEHLS_TRANSFORMS_UTILS_H
 #define SCALEHLS_TRANSFORMS_UTILS_H
 
-#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "scalehls/Support/Utils.h"
 
 namespace mlir {
