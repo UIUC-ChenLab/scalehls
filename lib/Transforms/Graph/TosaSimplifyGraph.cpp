@@ -104,7 +104,7 @@ struct AddOpRewritePattern : public OpRewritePattern<tosa::AddOp> {
 } // namespace
 
 namespace {
-struct SimplifyTosaGraph : public SimplifyTosaGraphBase<SimplifyTosaGraph> {
+struct TosaSimplifyGraph : public TosaSimplifyGraphBase<TosaSimplifyGraph> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -118,6 +118,6 @@ struct SimplifyTosaGraph : public SimplifyTosaGraphBase<SimplifyTosaGraph> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createSimplifyTosaGraphPass() {
-  return std::make_unique<SimplifyTosaGraph>();
+std::unique_ptr<Pass> scalehls::createTosaSimplifyGraphPass() {
+  return std::make_unique<TosaSimplifyGraph>();
 }

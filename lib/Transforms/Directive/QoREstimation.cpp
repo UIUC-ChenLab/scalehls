@@ -993,9 +993,6 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createQoREstimationPass() {
-  return std::make_unique<QoREstimation>();
-}
 std::unique_ptr<Pass>
 scalehls::createQoREstimationPass(std::string qorTargetSpec) {
   return std::make_unique<QoREstimation>(qorTargetSpec);

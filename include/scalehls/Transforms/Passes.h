@@ -24,15 +24,13 @@ void registerScaleHLSDSEPipeline();
 void registerScaleHLSPyTorchPipelineV2();
 void registerTransformsPasses();
 
-/// QoR estimation and DSE passes.
-std::unique_ptr<Pass> createQoREstimationPass();
-std::unique_ptr<Pass> createQoREstimationPass(std::string qorTargetSpec);
+/// Design space exploration passes.
 std::unique_ptr<Pass>
 createDesignSpaceExplorePass(std::string dseTargetSpec = "");
 
 /// Graph optimization passes.
-std::unique_ptr<Pass> createFakeQuantizePass();
-std::unique_ptr<Pass> createSimplifyTosaGraphPass();
+std::unique_ptr<Pass> createTosaFakeQuantizePass();
+std::unique_ptr<Pass> createTosaSimplifyGraphPass();
 std::unique_ptr<Pass> createTosaNodeFusionPass();
 std::unique_ptr<Pass> createCreateTokenFlowPass();
 std::unique_ptr<Pass>
@@ -77,6 +75,7 @@ std::unique_ptr<Pass> createFuncPipeliningPass();
 std::unique_ptr<Pass> createLoopPipeliningPass();
 std::unique_ptr<Pass> createArrayPartitionPass();
 std::unique_ptr<Pass> createCreateHLSPrimitivePass();
+std::unique_ptr<Pass> createQoREstimationPass(std::string qorTargetSpec = "");
 
 #define GEN_PASS_CLASSES
 #include "scalehls/Transforms/Passes.h.inc"

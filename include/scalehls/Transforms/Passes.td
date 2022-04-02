@@ -10,26 +10,8 @@
 include "mlir/Pass/PassBase.td"
 
 //===----------------------------------------------------------------------===//
-// QoR Estimation and Design Space Exploration Pass
+// Design Space Exploration Pass
 //===----------------------------------------------------------------------===//
-
-def QoREstimation : Pass<"scalehls-qor-estimation", "ModuleOp"> {
-  let summary = "Estimate the performance and resource utilization";
-  let description = [{
-    This qor-estimation pass will analyze the input IR and estimate the latency
-    and resource utilization of HLS C++ synthesis. This pass will take all
-    dependency and resource constraints and pragma settings into consideration,
-    and conduct the estimation through an ALAP scheduling.
-  }];
-
-  let constructor = "mlir::scalehls::createQoREstimationPass()";
-
-  let options = [
-    Option<"targetSpec", "target-spec", "std::string",
-           /*default=*/"\"./config.json\"",
-           "File path: target backend specifications and configurations">
-  ];
-}
 
 def DesignSpaceExplore : Pass<"scalehls-dse", "ModuleOp"> {
   let summary = "Optimize HLS design at multiple abstraction level";
@@ -61,20 +43,20 @@ def DesignSpaceExplore : Pass<"scalehls-dse", "ModuleOp"> {
 // Graph Optimization Passes
 //===----------------------------------------------------------------------===//
 
-def FakeQuantize : Pass<"scalehls-fake-quantize", "ModuleOp"> {
+def TosaFakeQuantize : Pass<"scalehls-tosa-fake-quantize", "ModuleOp"> {
   let summary = "Convert to 8-bits quantized model (only for testing use)";
 
-  let constructor = "mlir::scalehls::createFakeQuantizePass()";
+  let constructor = "mlir::scalehls::createTosaFakeQuantizePass()";
 }
 
-def SimplifyTosaGraph : Pass<"scalehls-simplify-tosa-graph", "func::FuncOp"> {
+def TosaSimplifyGraph : Pass<"scalehls-tosa-simplify-graph", "func::FuncOp"> {
   let summary = "Remove redundant TOSA operations";
   let description = [{
     This simplify-tosa-graph pass will try to remove redundant transpose ops
     through pattern matching.
   }];
 
-  let constructor = "mlir::scalehls::createSimplifyTosaGraphPass()";
+  let constructor = "mlir::scalehls::createTosaSimplifyGraphPass()";
 }
 
 def TosaNodeFusion : Pass<"scalehls-tosa-node-fusion", "func::FuncOp"> {
@@ -427,6 +409,24 @@ def ReduceInitialInterval :
   }];
 
   let constructor = "mlir::scalehls::createReduceInitialIntervalPass()";
+}
+
+def QoREstimation : Pass<"scalehls-qor-estimation", "ModuleOp"> {
+  let summary = "Estimate the performance and resource utilization";
+  let description = [{
+    This qor-estimation pass will analyze the input IR and estimate the latency
+    and resource utilization of HLS C++ synthesis. This pass will take all
+    dependency and resource constraints and pragma settings into consideration,
+    and conduct the estimation through an ALAP scheduling.
+  }];
+
+  let constructor = "mlir::scalehls::createQoREstimationPass()";
+
+  let options = [
+    Option<"targetSpec", "target-spec", "std::string",
+           /*default=*/"\"./config.json\"",
+           "File path: target backend specifications and configurations">
+  ];
 }
 
 #endif // SCALEHLS_TRANSFORMS_PASSES_TD

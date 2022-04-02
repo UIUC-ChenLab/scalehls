@@ -27,7 +27,7 @@ namespace {
 /// This pass is only for testing use!!! To really support quantized model,
 /// first we need to have front-ends, such as Torch-MLIR, to support the model
 /// quantization, which has not came true unfortunately.
-struct FakeQuantize : public FakeQuantizeBase<FakeQuantize> {
+struct TosaFakeQuantize : public TosaFakeQuantizeBase<TosaFakeQuantize> {
   void runOnOperation() override {
     auto module = getOperation();
     auto builder = OpBuilder(module);
@@ -89,6 +89,6 @@ struct FakeQuantize : public FakeQuantizeBase<FakeQuantize> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createFakeQuantizePass() {
-  return std::make_unique<FakeQuantize>();
+std::unique_ptr<Pass> scalehls::createTosaFakeQuantizePass() {
+  return std::make_unique<TosaFakeQuantize>();
 }

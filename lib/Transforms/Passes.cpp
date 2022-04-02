@@ -102,10 +102,10 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
 
         // TOSA fake quantization.
         if (opts.fakeQuantize)
-          pm.addPass(scalehls::createFakeQuantizePass());
+          pm.addPass(scalehls::createTosaFakeQuantizePass());
 
         // Graph-level optimization.
-        pm.addPass(scalehls::createSimplifyTosaGraphPass());
+        pm.addPass(scalehls::createTosaSimplifyGraphPass());
         pm.addPass(scalehls::createTosaNodeFusionPass());
         pm.addPass(scalehls::createFuncDataflowPass(opts.hlsTopFunc));
         pm.addPass(scalehls::createCreateTokenFlowPass());
