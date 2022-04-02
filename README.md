@@ -1,6 +1,6 @@
 # ScaleHLS Project
 
-[![Build and Test](https://github.com/hanchenye/scalehls/actions/workflows/buildAndTest.yml/badge.svg?branch=torch-hls)](https://github.com/hanchenye/scalehls/actions/workflows/buildAndTest.yml)
+[![Build and Test](https://github.com/hanchenye/scalehls/actions/workflows/buildAndTest.yml/badge.svg?branch=master)](https://github.com/hanchenye/scalehls/actions/workflows/buildAndTest.yml)
 
 ScaleHLS is a High-level Synthesis (HLS) framework on [MLIR](https://mlir.llvm.org). ScaleHLS can compile HLS C/C++ or PyTorch model to optimized HLS C/C++ in order to generate high-efficiency RTL design using downstream tools, such as Xilinx Vivado HLS.
 
