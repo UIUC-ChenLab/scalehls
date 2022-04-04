@@ -7,6 +7,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "scalehls/Transforms/Dataflower.h"
 #include "scalehls/Transforms/Passes.h"
+#include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;

@@ -1,18 +1,18 @@
 add_mlir_library(MLIRScaleHLSTransforms
+  Dataflow/AffineLoopDataflow.cpp
+  Dataflow/ConvertDataflowToFunc.cpp
+  Dataflow/CreateTokenFlow.cpp
+  Dataflow/DataflowBufferize.cpp
+  Dataflow/FuncDataflow.cpp
   Directive/ArrayPartition.cpp
   Directive/CreateHLSPrimitive.cpp
   Directive/FuncPipelining.cpp
   Directive/LoopPipelining.cpp
   Directive/QoREstimation.cpp
-  Graph/ConvertDataflowToFunc.cpp
-  Graph/CreateTokenFlow.cpp
-  Graph/DataflowBufferize.cpp
-  Graph/FuncDataflow.cpp
   Graph/TosaFakeQuantize.cpp
   Graph/TosaToLinalgCleanup.cpp
   Graph/TosaSimplifyGraph.cpp
   Graph/TosaNodeFusion.cpp
-  Loop/AffineLoopDataflow.cpp
   Loop/AffineLoopOrderOpt.cpp
   Loop/AffineLoopPerfection.cpp
   Loop/AffineLoopTile.cpp

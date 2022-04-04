@@ -38,67 +38,6 @@ void HLSDialect::initialize() {
 // HLS dialect utils
 //===----------------------------------------------------------------------===//
 
-/// Inline all child nodes in the given node recursively.
-static void inlineChildNodes(DataflowNodeOp node, PatternRewriter &rewriter) {
-  auto &nodeOps = node.body().front().getOperations();
-  for (auto childNode :
-       llvm::make_early_inc_range(node.getOps<DataflowNodeOp>())) {
-    inlineChildNodes(childNode, rewriter);
-    auto &childNodeOps = childNode.body().front().getOperations();
-    nodeOps.splice(childNode->getIterator(), childNodeOps, childNodeOps.begin(),
-                   std::prev(childNodeOps.end()));
-    rewriter.replaceOp(childNode, childNode.getOutputOp().getOperands());
-  }
-}
-
-/// Fuse the given operations into a new dataflow node. The fused node will be
-/// created before the first operation and each operation will be inserted in
-/// order. This method always succeeds.
-DataflowNodeOp hls::fuseOpsIntoNewNode(ArrayRef<Operation *> ops,
-                                       PatternRewriter &rewriter) {
-  assert(!ops.empty() && "must fuse at least one op");
-  if (ops.size() == 1)
-    if (auto node = dyn_cast<DataflowNodeOp>(ops.front()))
-      return node;
-
-  SmallVector<Value, 4> outputValues;
-  SmallVector<Type, 4> outputTypes;
-  for (auto op : ops)
-    for (auto result : op->getResults()) {
-      // Only if any user of the result is used outside of "ops", we need to
-      // return it as a node output.
-      if (llvm::any_of(result.getUsers(), [&](Operation *user) {
-            return llvm::all_of(
-                ops, [&](Operation *op) { return !op->isAncestor(user); });
-          })) {
-        outputValues.push_back(result);
-        outputTypes.push_back(result.getType());
-      }
-    }
-
-  // Create new dataflow node.
-  auto loc = rewriter.getUnknownLoc();
-  rewriter.setInsertionPoint(ops.front());
-  auto node = rewriter.create<DataflowNodeOp>(loc, outputTypes);
-  auto nodeBlock = rewriter.createBlock(&node.body());
-
-  // Create new dataflow output and move each targeted op before the output.
-  rewriter.setInsertionPointToEnd(nodeBlock);
-  auto output = rewriter.create<DataflowOutputOp>(loc, outputValues);
-  for (auto op : ops)
-    op->moveBefore(output);
-
-  // Replace external uses with the node results.
-  for (auto t : llvm::zip(outputValues, node.getResults()))
-    std::get<0>(t).replaceUsesWithIf(std::get<1>(t), [&](OpOperand &use) {
-      return !node->isProperAncestor(use.getOwner());
-    });
-
-  // Inline all child nodes.
-  inlineChildNodes(node, rewriter);
-  return node;
-}
-
 /// Get the users of a stream channel. If the channel is used by a function
 /// call, this method will recursively look into the corresponding sub-function.
 /// If the channel is used by a function return, this method will recursively

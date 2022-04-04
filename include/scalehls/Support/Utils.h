@@ -82,10 +82,6 @@ Optional<unsigned> getAverageTripCount(AffineForOp forOp);
 
 bool checkDependence(Operation *A, Operation *B);
 
-/// Localize each tosa/arith constant to right before its each use. Only
-/// localize the constants whose size is below the bitsThreshold.
-void localizeConstants(Block &block, int64_t bitsThreshold = INT64_MAX);
-
 func::FuncOp getTopFunc(ModuleOp module, std::string topFuncName = "");
 
 func::FuncOp getRuntimeFunc(ModuleOp module, std::string runtimeFuncName = "");
