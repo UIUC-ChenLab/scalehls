@@ -23,6 +23,7 @@ def DataflowNodeOp : HLSOp<"dataflow.node",
     node can return variadic number of results.
   }];
 
+  let hasCanonicalizer = 1;
   let results = (outs Variadic<AnyType>:$outputs);
   let regions = (region SizedRegion<1>:$body);
 

@@ -408,6 +408,51 @@ void PrimCastOp::getCanonicalizationPatterns(RewritePatternSet &results,
 }
 
 namespace {
+struct SimplifyDataflowNodeOp : public OpRewritePattern<DataflowNodeOp> {
+  using OpRewritePattern<DataflowNodeOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(DataflowNodeOp node,
+                                PatternRewriter &rewriter) const override {
+    auto output = node.getOutputOp();
+    bool hasUnusedResult = false;
+
+    SmallVector<Value, 4> outputValues;
+    SmallVector<Value, 4> resultsToReplace;
+    for (auto result : node.getResults()) {
+      if (result.use_empty()) {
+        hasUnusedResult = true;
+        continue;
+      }
+      outputValues.push_back(output.getOperand(result.getResultNumber()));
+      resultsToReplace.push_back(result);
+    }
+
+    if (hasUnusedResult) {
+      rewriter.setInsertionPoint(output);
+      rewriter.replaceOpWithNewOp<DataflowOutputOp>(output, outputValues);
+
+      rewriter.setInsertionPoint(node);
+      auto newNode = rewriter.create<DataflowNodeOp>(node.getLoc(),
+                                                     ValueRange(outputValues));
+      rewriter.inlineRegionBefore(node.body(), newNode.body(),
+                                  newNode.body().end());
+      for (auto t : llvm::zip(resultsToReplace, newNode.getResults()))
+        std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
+
+      rewriter.eraseOp(node);
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+void DataflowNodeOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                                 MLIRContext *context) {
+  results.add<SimplifyDataflowNodeOp>(context);
+}
+
+namespace {
 struct SimplifyDataflowBufferOp : public OpRewritePattern<DataflowBufferOp> {
   using OpRewritePattern<DataflowBufferOp>::OpRewritePattern;
 

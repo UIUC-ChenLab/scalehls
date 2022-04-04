@@ -7,7 +7,9 @@
 #include "scalehls/Transforms/Utils.h"
 #include "mlir/Dialect/Affine/LoopUtils.h"
 #include "mlir/Dialect/Affine/Passes.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
+#include "mlir/IR/Dominance.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
 #include "scalehls/Transforms/Passes.h"
@@ -142,25 +144,24 @@ DataflowNodeOp scalehls::fuseOpsIntoNewNode(ArrayRef<Operation *> ops,
     if (auto node = dyn_cast<DataflowNodeOp>(ops.front()))
       return node;
 
+  // Collect output values. Note that here we consider not only SSA outputs, but
+  // also memrefs that are updated.
   SmallVector<Value, 4> outputValues;
-  SmallVector<Type, 4> outputTypes;
-  for (auto op : ops)
-    for (auto result : op->getResults()) {
-      // Only if any user of the result is used outside of "ops", we need to
-      // return it as a node output.
-      if (llvm::any_of(result.getUsers(), [&](Operation *user) {
-            return llvm::all_of(
-                ops, [&](Operation *op) { return !op->isAncestor(user); });
-          })) {
-        outputValues.push_back(result);
-        outputTypes.push_back(result.getType());
-      }
-    }
+  for (auto op : ops) {
+    outputValues.append(op->result_begin(), op->result_end());
+    op->walk([&](Operation *child) {
+      // TODO: Anymore ops need to be included?
+      if (auto copy = dyn_cast<memref::CopyOp>(child))
+        outputValues.push_back(copy.target());
+      else if (auto affineStore = dyn_cast<mlir::AffineWriteOpInterface>(child))
+        outputValues.push_back(affineStore.getMemRef());
+    });
+  }
 
   // Create new dataflow node.
   auto loc = rewriter.getUnknownLoc();
   rewriter.setInsertionPoint(ops.front());
-  auto node = rewriter.create<DataflowNodeOp>(loc, outputTypes);
+  auto node = rewriter.create<DataflowNodeOp>(loc, ValueRange(outputValues));
   auto nodeBlock = rewriter.createBlock(&node.body());
 
   // Create new dataflow output and move each targeted op before the output.
@@ -169,10 +170,13 @@ DataflowNodeOp scalehls::fuseOpsIntoNewNode(ArrayRef<Operation *> ops,
   for (auto op : ops)
     op->moveBefore(output);
 
-  // Replace external uses with the node results.
+  // Replace external uses with the node results if the user is dominated by the
+  // dataflow node.
+  DominanceInfo DT;
   for (auto t : llvm::zip(outputValues, node.getResults()))
     std::get<0>(t).replaceUsesWithIf(std::get<1>(t), [&](OpOperand &use) {
-      return !node->isProperAncestor(use.getOwner());
+      return !node->isProperAncestor(use.getOwner()) &&
+             DT.properlyDominates(node, use.getOwner());
     });
 
   // Inline all child nodes.
