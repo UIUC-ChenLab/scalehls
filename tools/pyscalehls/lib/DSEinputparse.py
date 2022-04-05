@@ -121,18 +121,18 @@ def create_params(dir, var_forlist, var_arraylist_sized):
         if item == "":
             None
         elif re.findall(r'U+', item[0]):
-            paramfile.write("LoopU,"+str(item[0])+','+str(item[2])+','+str(item[3])+"\n")
+            paramfile.write("loopU,"+str(item[0])+','+str(item[2])+','+str(item[3])+"\n")
         else:
-            paramfile.write("Loop,"+str(item[0])+','+str(item[2])+','+str(item[3])+"\n")
+            paramfile.write("loop,"+str(item[0])+','+str(item[2])+','+str(item[3])+"\n")
     #array
     for item in var_arraylist_sized :
         if item:
             name0 = re.findall(r'(.+?)\[', item[1])
             if item[4] > 1:
                 for i in range(int(item[4])):
-                    paramfile.write("Array,"+str(item[2])+','+str(item[3])+','+str(item[5+i])+','+str(1+i)+"\n")
+                    paramfile.write("array,"+str(item[2])+','+str(item[3])+','+str(item[5+i])+','+str(1+i)+"\n")
             else:
-                paramfile.write("Array,"+str(item[2])+','+str(item[3])+','+str(item[5])+','+str(item[4])+"\n")
+                paramfile.write("array,"+str(item[2])+','+str(item[3])+','+str(item[5])+','+str(item[4])+"\n")
     paramfile.close()
     return 0
 
@@ -149,7 +149,7 @@ def create_template(dir, sourcefile, inputfiles, template):
         templatefile.write(item)
     return 0
 
-def process_source_file(dir, inputfile, topfun, sdse=False):
+def process_source_file(dir, inputfile, outfile, topfun, sdse=False):
     
     var_forlist_tree = []
     var_forlist_tree_popped = []
@@ -168,7 +168,7 @@ def process_source_file(dir, inputfile, topfun, sdse=False):
     var_arraylist_sized = []
     var_forlist_scoped = []
 
-    newfile = open (dir + "/ML_in.cpp", 'w')
+    newfile = open (dir + outfile, 'w')
     with open(inputfile, 'r') as file:        
         for line in file:
             is_brace = False
@@ -427,4 +427,53 @@ def process_source_file(dir, inputfile, topfun, sdse=False):
         tree_list.append(mastertree)
     
     return var_func_names, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list
+
+def asdse_get_knobs(inputfile, topfun):
+
+    in_pattern = False
+
+    brace_count = 0
+    arraynum = 0
+
+    var_arraylist_sized = []
+
+    with open(inputfile, 'r') as file:
+        for line in file:
+
+            #scope finder
+            if brace_count == 0: 
+                raw_scope = re.findall(r'(void|char|double|float|int|short)\s([A-Za-z_]+[A-Za-z_\d]*)(\s)?(\()', line)
+                if raw_scope:
+                    scope = raw_scope[0][1]
+                    if scope == topfun:
+                        in_pattern = True                        
+
+            if(re.findall('{', line)):
+                brace_count += 1
+
+            if(re.findall('}', line)):
+                if brace_count == 1:
+                    in_pattern = False
+                    brace_count -= 1
+                else:
+                    brace_count -= 1
+
+            if in_pattern and brace_count > 0:
+                arr2part = re.findall(r'(int|float|double)\s([A-Za-z_]+[A-Za-z_\d]*)\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])+(,|;|\)|' ')', line)
+                if(arr2part):
+                    for item in arr2part:
+                        current_array = "".join(item[1:-1])
+                        array_sizeofdim = re.findall(r'\[(.+?)\]', current_array)
+                        array_dim = len(array_sizeofdim)
+                        list_buffer = list(("Array"+str(arraynum), current_array, item[1], scope, array_dim))
+                        for cdim in array_sizeofdim:
+                            val_eval = eval(cdim)
+                            list_buffer.append(val_eval)
+                        var_arraylist_sized.append(list_buffer)
+                        arraynum += 1
+
+    file.close()
+    
+    
+    return var_arraylist_sized
     

@@ -361,17 +361,32 @@ def combine_two_spaces(pareto_space_list, input1, input2):
 
     return pareto_combinedspace
 
-def apply_loop_ops(dir, pattern, loop_tile_array):
-
-    pattern.show()
-    
+def apply_loop_ops(dir, pattern, var_forlist, removed_function_calls, loop_tile_array):    
     topfunction = pattern[pattern.root].tag
     input_dir = dir + "/snips/snip_" + topfunction
-    inputfile = "snip_" + topfunction + ".c"
     outputfile = input_dir + "/snip_" + topfunction + "_adse.cpp"
 
-    ML_in_main = dir + "/DSE_in.c"
-    
+    ML_in_main = dir + "/ML_in.cpp"
+
+    for_bounds = []
+    removed_functions_list = []
+    removed_functions = False
+    # test if function removal was done
+    for item in removed_function_calls:
+        if item[0] == pattern.root:
+            removed_functions = True
+            removed_functions_list.append(item)            
+    #get file location
+    if removed_functions:
+        inputfile = "snip_" + topfunction + "_funrem.c"
+    else:
+        inputfile = "snip_" + topfunction + ".c"
+    # get for bounds
+    for item in var_forlist:
+        if item != '' and item[2] == pattern.root:
+            for_bounds.append(item[int(3)])      
+
+    #apply scaleHLS optimizations    
     p1 = subprocess.Popen(['mlir-clang', input_dir + "/" + inputfile, '-function=' + topfunction, '-memref-fullrank', '-raise-scf-to-affine', '-S'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)                          
     p2 = subprocess.run(['scalehls-opt', '-allow-unregistered-dialect', '-materialize-reduction'], stdin=p1.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)                  
     fin = p2.stdout
@@ -381,6 +396,7 @@ def apply_loop_ops(dir, pattern, loop_tile_array):
     mod = mlir.ir.Module.parse(fin, ctx)
 
     pipeline_loc = []
+    loop_count = 0
     for func in mod.body:
         if not isinstance(func, builtin.FuncOp):
             pass
@@ -410,7 +426,15 @@ def apply_loop_ops(dir, pattern, loop_tile_array):
             
             np_array = np.array(loop_tile_array[loopband_count])
             loc = scalehls.loop_tiling(band, np_array, True) # simplify = True
-            pipeline_loc.append(loc)
+
+            #keep track of number of loops
+            pipeline_loc.append(loop_count + loc + 1)
+            for l in np_array:
+                cur_bound = for_bounds.pop(0)
+                if l == 1 or l == int(cur_bound):
+                    loop_count += 1              
+                else:
+                    loop_count += 2            
             
             loopband_count += 1
     
@@ -431,23 +455,42 @@ def apply_loop_ops(dir, pattern, loop_tile_array):
     fout.close()
 
     brace_count = 0
+    for_count = 0
     infunction = False
     in_pattern = False
-    functioncall = False
     done_copy = False
     scope = None
+    func_decl = False
+    global_write = False
 
+    #find place holder location
+    ph_loc = []
+    if removed_functions:
+        with open(outputfile, 'r+') as file:        
+            lines = file.readlines()
+            for i in range(len(lines)):
+                if brace_count == 0:
+                    if re.findall(r'(void|int|float)\s([A-Za-z_]+[A-Za-z_\d]*)(\s)?(\()', lines[i]):
+                        func_decl = True
+
+                if func_decl:
+                    if re.findall(r'\)\s?{', lines[i]):
+                        ph_pre = re.findall(r'(double\sv\d+)', lines[i-2])
+                        ph_loc.append(ph_pre)
+                        ph = re.findall(r'(double\sv\d+)', lines[i-1])
+                        ph_loc.append(ph)
+                        func_decl = False
+        file.close()
+        ph_new_name = re.findall(r'(v\d+)', ph_loc[1][0])
+        trigger_string = ph_new_name[0] + r'\[\d+\] = 42.424242;'
+
+    
+
+    #copy scalehls dse to combined file
     newfile = open (dir + "/buffer.c", 'w')
     with open(ML_in_main, 'r') as file:        
         for line in file:
-            is_brace = False
-            functioncall = False
 
-            #find function calls
-            if brace_count >= 1:
-                functioncall = re.findall(r'\s([A-Za-z_]+[A-Za-z_\d]*)\s?\(', line)
-                if functioncall:
-                    functioncall = True
 
             #scope finder
             if brace_count == 0: 
@@ -466,17 +509,44 @@ def apply_loop_ops(dir, pattern, loop_tile_array):
                 if not(done_copy):
                     insubfunction = False
                     subfunc_brace_count = 0
+###########################subfunciton while loop###########################
                     with open(outputfile, 'r') as adse:
                         for subline in adse:
+                            global_write = True
                             #detect function
                             if subfunc_brace_count == 0:
                                 if re.findall(r'(void|int|float)\s([A-Za-z_]+[A-Za-z_\d]*)(\s)?(\()', subline):
                                     insubfunction = True
                             #write subfuntion to buffer
                             if insubfunction:
+                                #place holder finder
+                                if removed_functions:
+                                    if re.findall(ph_loc[0][0], subline):
+                                        global_write = False
+                                        newfile.write(re.sub(',', '', subline))
+                                    elif re.findall(ph_loc[1][0], subline):
+                                        global_write = False
+                                    elif re.findall(trigger_string, subline):
+                                        global_write = False
+                                        leading_space = re.findall(r'(\s*).*', subline)
+                                        print("test")
+                                        print(removed_functions_list)
+                                        correct_func_call = removed_functions_list.pop(0)                                        
+                                        print(correct_func_call)
+                                        print(correct_func_call[1])
+                                        newfile.write(leading_space[0] + correct_func_call[1] + ';\n')
+                                
+                                #main write
                                 if re.findall(r'#pragma', subline): #remove pragma
                                     None
-                                else:
+                                elif re.findall(r'for', subline): #add pipeline pragma
+                                    for_count += 1
+                                    if for_count in pipeline_loc:
+                                        newfile.write(subline)
+                                        newfile.write("#pragma HLS pipeline\n")
+                                    else:
+                                        newfile.write(subline)
+                                elif global_write:
                                     newfile.write(subline)
                             # open brackets
                             if(re.findall('{', subline)):
@@ -490,6 +560,7 @@ def apply_loop_ops(dir, pattern, loop_tile_array):
                                     subfunc_brace_count -= 1
                     adse.close()
                     done_copy = True
+###########################subfunciton while loop###########################
             elif brace_count == 0 and not(infunction):
                 newfile.write(line)
             else:
@@ -508,5 +579,6 @@ def apply_loop_ops(dir, pattern, loop_tile_array):
     newfile.close()
 
     shutil.copy2(dir + "/buffer.c", ML_in_main)
+    os.remove(dir + "/buffer.c")
 
 
