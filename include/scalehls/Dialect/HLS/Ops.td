@@ -88,6 +88,8 @@ def DataflowBufferOp : HLSOp<"dataflow.buffer",
   let builders = [OpBuilder<(ins "mlir::Type":$output, "mlir::Value":$input,
                    "uint32_t":$depth),
     "build($_builder, $_state, output, input, depth, nullptr);">];
+
+  let extraClassDeclaration = [{ bool isExternal(); }];
 }
 
 //===----------------------------------------------------------------------===//

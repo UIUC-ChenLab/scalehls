@@ -55,17 +55,19 @@ static Optional<unsigned> getDataflowLevel(Operation *op) {
   return llvm::None;
 }
 
-/// Schedule the dataflow level of the given operation.
-static Optional<unsigned> scheduleDataflowOp(Operation *op) {
-  assert(isa<DataflowNodeOp>(op) || isa<DataflowBufferOp>(op));
+/// Schedule the dataflow level of the given operation. Supports DataflowNodeOp
+/// and DataflowBufferOp.
+template <typename OpType>
+static LogicalResult scheduleDataflowOp(OpType op, PatternRewriter &rewriter) {
   unsigned level = 0;
   for (auto user : op->getUsers()) {
     auto userLevel = getDataflowLevel(user);
     if (!userLevel.hasValue())
-      return llvm::None;
+      return failure();
     level = std::max(level, userLevel.getValue() + 1);
   }
-  return level;
+  op->setAttr(op.levelAttrName(), rewriter.getI32IntegerAttr(level));
+  return success();
 }
 
 namespace {
@@ -74,30 +76,9 @@ struct NodeSchedulePattern : public OpRewritePattern<DataflowNodeOp> {
 
   LogicalResult matchAndRewrite(DataflowNodeOp node,
                                 PatternRewriter &rewriter) const override {
-    if (!node.level().hasValue())
-      if (auto level = scheduleDataflowOp(node)) {
-        node->setAttr(node.levelAttrName(),
-                      rewriter.getI32IntegerAttr(level.getValue()));
-        return success();
-      }
-    return failure();
-  }
-};
-} // namespace
-
-namespace {
-struct BufferSchedulePattern : public OpRewritePattern<DataflowBufferOp> {
-  using OpRewritePattern<DataflowBufferOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(DataflowBufferOp buffer,
-                                PatternRewriter &rewriter) const override {
-    if (buffer.level().hasValue() || buffer.depth() == 1)
-      if (auto level = scheduleDataflowOp(buffer)) {
-        buffer->setAttr(buffer.levelAttrName(),
-                        rewriter.getI32IntegerAttr(level.getValue()));
-        return success();
-      }
-    return failure();
+    if (node.level().hasValue())
+      return failure();
+    return scheduleDataflowOp(node, rewriter);
   }
 };
 } // namespace
@@ -140,21 +121,16 @@ struct BufferSplitPattern : public OpRewritePattern<DataflowBufferOp> {
 
   LogicalResult matchAndRewrite(DataflowBufferOp buffer,
                                 PatternRewriter &rewriter) const override {
-    auto type = buffer.getType().dyn_cast<MemRefType>();
-    if (buffer.depth() == 1 || !type ||
-        type.getMemorySpaceAsInt() == (unsigned)MemoryKind::DRAM)
+    // Single-element and external buffer don't need to split.
+    if (buffer.depth() == 1 || buffer.isExternal())
       return failure();
-
-    // auto type = buffer.getType();
-    // if (buffer.depth() == 1)
-    //   return failure();
 
     Value currentValue = buffer.input();
     DataflowBufferOp currentBuffer;
     for (unsigned i = 0; i < buffer.depth(); ++i) {
       rewriter.setInsertionPoint(buffer);
       currentBuffer = rewriter.create<DataflowBufferOp>(
-          buffer.getLoc(), type, currentValue, /*depth=*/1);
+          buffer.getLoc(), buffer.getType(), currentValue, /*depth=*/1);
       currentValue = currentBuffer.output();
     }
     rewriter.replaceOp(buffer, currentValue);
@@ -164,8 +140,22 @@ struct BufferSplitPattern : public OpRewritePattern<DataflowBufferOp> {
 } // namespace
 
 namespace {
+struct BufferSchedulePattern : public OpRewritePattern<DataflowBufferOp> {
+  using OpRewritePattern<DataflowBufferOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(DataflowBufferOp buffer,
+                                PatternRewriter &rewriter) const override {
+    // Multi-elements and external buffer should not be scheduled.
+    if (buffer.level().hasValue() || buffer.depth() != 1 || buffer.isExternal())
+      return failure();
+    return scheduleDataflowOp(buffer, rewriter);
+  }
+};
+} // namespace
+
+namespace {
 template <typename OpType>
-struct DataflowNodeMergePattern : public OpRewritePattern<OpType> {
+struct DataflowMergePattern : public OpRewritePattern<OpType> {
   using OpRewritePattern<OpType>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(OpType target,
@@ -173,6 +163,11 @@ struct DataflowNodeMergePattern : public OpRewritePattern<OpType> {
     llvm::SmallDenseMap<unsigned, SmallVector<Operation *>> dataflowOpsList;
     for (auto &op : target.getOps())
       if (isa<DataflowNodeOp, DataflowBufferOp>(op)) {
+        // Multi-elements and external buffer should not be merged.
+        if (auto buffer = dyn_cast<DataflowBufferOp>(op))
+          if (buffer.depth() != 1 || buffer.isExternal())
+            continue;
+
         if (auto level = getDataflowLevel(&op))
           dataflowOpsList[level.getValue()].push_back(&op);
         else
@@ -204,14 +199,10 @@ struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
     patterns.add<BufferSchedulePattern>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
-    patterns.clear();
-    patterns.add<DataflowNodeMergePattern<func::FuncOp>>(context);
-    patterns.add<DataflowNodeMergePattern<mlir::AffineForOp>>(context);
-    FrozenRewritePatternSet frozenPatterns(std::move(patterns));
-
     // Legalize function dataflow.
-    if (failed(applyOpPatternsAndFold(func, frozenPatterns)))
-      return signalPassFailure();
+    patterns.clear();
+    patterns.add<DataflowMergePattern<func::FuncOp>>(context);
+    (void)applyOpPatternsAndFold(func, std::move(patterns));
     setFuncDirective(func, false, 1, true);
 
     // Collect all target loop bands.
@@ -219,9 +210,11 @@ struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
     getLoopBands(func.front(), targetBands, /*allowHavingChilds=*/true);
 
     // Legalize loop dataflow to each innermost loop.
+    patterns.clear();
+    patterns.add<DataflowMergePattern<mlir::AffineForOp>>(context);
+    FrozenRewritePatternSet frozenPatterns(std::move(patterns));
     for (auto &band : targetBands) {
-      if (failed(applyOpPatternsAndFold(band.back(), frozenPatterns)))
-        return signalPassFailure();
+      (void)applyOpPatternsAndFold(band.back(), frozenPatterns);
       setLoopDirective(band.back(), false, 1, true, false);
     }
   }

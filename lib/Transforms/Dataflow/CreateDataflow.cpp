@@ -84,8 +84,7 @@ struct CreateFuncDataflow : public CreateFuncDataflowBase<CreateFuncDataflow> {
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<DataflowNodeCreatePattern<func::FuncOp>>(context);
-    FrozenRewritePatternSet frozenPatterns(std::move(patterns));
-    (void)applyOpPatternsAndFold(func, frozenPatterns);
+    (void)applyOpPatternsAndFold(func, std::move(patterns));
   }
 };
 } // namespace
@@ -96,15 +95,14 @@ struct CreateLoopDataflow : public CreateLoopDataflowBase<CreateLoopDataflow> {
     auto func = getOperation();
     auto context = func.getContext();
 
-    mlir::RewritePatternSet patterns(context);
-    patterns.add<DataflowNodeCreatePattern<mlir::AffineForOp>>(context);
-    FrozenRewritePatternSet frozenPatterns(std::move(patterns));
-
     // Collect all target loop bands.
     AffineLoopBands targetBands;
     getLoopBands(func.front(), targetBands, /*allowHavingChilds=*/true);
 
     // Create loop dataflow to each innermost loop.
+    mlir::RewritePatternSet patterns(context);
+    patterns.add<DataflowNodeCreatePattern<mlir::AffineForOp>>(context);
+    FrozenRewritePatternSet frozenPatterns(std::move(patterns));
     for (auto &band : targetBands)
       (void)applyOpPatternsAndFold(band.back(), frozenPatterns);
   }

@@ -205,8 +205,8 @@ struct DataflowNodeCanonicalizePattern
       rewriter.replaceOpWithNewOp<DataflowOutputOp>(output, outputValues);
 
       rewriter.setInsertionPoint(node);
-      auto newNode = rewriter.create<DataflowNodeOp>(node.getLoc(),
-                                                     ValueRange(outputValues));
+      auto newNode = rewriter.create<DataflowNodeOp>(
+          node.getLoc(), ValueRange(outputValues), node.levelAttr());
       rewriter.inlineRegionBefore(node.body(), newNode.body(),
                                   newNode.body().end());
       for (auto t : llvm::zip(resultsToReplace, newNode.getResults()))
@@ -283,6 +283,15 @@ struct DataflowBufferCanonicalizePattern
 void DataflowBufferOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                                    MLIRContext *context) {
   results.add<DataflowBufferCanonicalizePattern>(context);
+}
+
+bool DataflowBufferOp::isExternal() {
+  if (getType().isa<TensorType>())
+    return true;
+  if (auto type = getType().dyn_cast<MemRefType>())
+    if (type.getMemorySpaceAsInt() == (unsigned)MemoryKind::DRAM)
+      return true;
+  return false;
 }
 
 //===----------------------------------------------------------------------===//
