@@ -168,7 +168,7 @@ bool hls::hasRuntimeAttr(Operation *op) {
 }
 
 //===----------------------------------------------------------------------===//
-// Dataflow operations
+// DataflowNodeOp
 //===----------------------------------------------------------------------===//
 
 LogicalResult DataflowNodeOp::verify() {
@@ -177,6 +177,52 @@ LogicalResult DataflowNodeOp::verify() {
       }))
     return emitOpError("has unexpected dataflow consumer");
   return success();
+}
+
+namespace {
+struct DataflowNodeCanonicalizePattern
+    : public OpRewritePattern<DataflowNodeOp> {
+  using OpRewritePattern<DataflowNodeOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(DataflowNodeOp node,
+                                PatternRewriter &rewriter) const override {
+    auto output = node.getOutputOp();
+    bool hasUnusedResult = false;
+
+    SmallVector<Value, 4> outputValues;
+    SmallVector<Value, 4> resultsToReplace;
+    for (auto result : node.getResults()) {
+      if (result.use_empty()) {
+        hasUnusedResult = true;
+        continue;
+      }
+      outputValues.push_back(output.getOperand(result.getResultNumber()));
+      resultsToReplace.push_back(result);
+    }
+
+    if (hasUnusedResult) {
+      rewriter.setInsertionPoint(output);
+      rewriter.replaceOpWithNewOp<DataflowOutputOp>(output, outputValues);
+
+      rewriter.setInsertionPoint(node);
+      auto newNode = rewriter.create<DataflowNodeOp>(node.getLoc(),
+                                                     ValueRange(outputValues));
+      rewriter.inlineRegionBefore(node.body(), newNode.body(),
+                                  newNode.body().end());
+      for (auto t : llvm::zip(resultsToReplace, newNode.getResults()))
+        std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
+
+      rewriter.eraseOp(node);
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+void DataflowNodeOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                                 MLIRContext *context) {
+  results.add<DataflowNodeCanonicalizePattern>(context);
 }
 
 DataflowOutputOp DataflowNodeOp::getOutputOp() {
@@ -194,11 +240,49 @@ SmallVector<std::pair<Value, Operation *>> DataflowNodeOp::getDataflowUses() {
   return dfUses;
 }
 
+//===----------------------------------------------------------------------===//
+// DataflowOutputOp
+//===----------------------------------------------------------------------===//
+
 LogicalResult DataflowOutputOp::verify() {
   if (getOperandTypes() !=
       (*this)->getParentOfType<DataflowNodeOp>().getResultTypes())
     return emitOpError("output type doesn't align with node type");
   return success();
+}
+
+//===----------------------------------------------------------------------===//
+// DataflowBufferOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult DataflowBufferOp::verify() {
+  if (depth() != 1 && level())
+    return emitOpError("only buffer with depth of 1 can have level attribute");
+  return success();
+}
+
+namespace {
+struct DataflowBufferCanonicalizePattern
+    : public OpRewritePattern<DataflowBufferOp> {
+  using OpRewritePattern<DataflowBufferOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(DataflowBufferOp buffer,
+                                PatternRewriter &rewriter) const override {
+    if (auto defOp = buffer.input().getDefiningOp<DataflowBufferOp>()) {
+      buffer.inputMutable().assign(defOp.input());
+      auto newDepth = buffer.depth() + defOp.depth();
+      buffer->setAttr(buffer.depthAttrName(),
+                      rewriter.getUI32IntegerAttr(newDepth));
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+void DataflowBufferOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                                   MLIRContext *context) {
+  results.add<DataflowBufferCanonicalizePattern>(context);
 }
 
 //===----------------------------------------------------------------------===//
@@ -258,6 +342,39 @@ bool PrimMulOp::isPackMul() {
   auto AIsVector = A().getType().isa<VectorType>();
   auto BIsVector = B().getType().isa<VectorType>();
   return (AIsVector && !BIsVector) || (!AIsVector && BIsVector);
+}
+
+//===----------------------------------------------------------------------===//
+// PrimCastOp
+//===----------------------------------------------------------------------===//
+
+namespace {
+struct SimplifyPrimCastOp : public OpRewritePattern<PrimCastOp> {
+  using OpRewritePattern<PrimCastOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(PrimCastOp cast,
+                                PatternRewriter &rewriter) const override {
+    if (cast.input().getType() == cast.output().getType()) {
+      rewriter.replaceOp(cast, cast.input());
+      return success();
+    }
+
+    // If the input of the cast is defined by another cast, then the two casts
+    // can be merged into one.
+    if (cast.input().hasOneUse())
+      if (auto defCast = cast.input().getDefiningOp<PrimCastOp>()) {
+        rewriter.replaceOpWithNewOp<PrimCastOp>(cast, cast.getType(),
+                                                defCast.input());
+        return success();
+      }
+    return failure();
+  }
+};
+} // namespace
+
+void PrimCastOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                             MLIRContext *context) {
+  results.add<SimplifyPrimCastOp>(context);
 }
 
 //===----------------------------------------------------------------------===//
@@ -391,107 +508,6 @@ void FuncDirectiveAttr::print(AsmPrinter &p) const {
   p << "<pipeline=" << getPipeline()
     << ", targetInterval=" << getTargetInterval()
     << ", dataflow=" << getDataflow() << ">";
-}
-
-//===----------------------------------------------------------------------===//
-// HLS operation canonicalizers
-//===----------------------------------------------------------------------===//
-
-namespace {
-struct SimplifyPrimCastOp : public OpRewritePattern<PrimCastOp> {
-  using OpRewritePattern<PrimCastOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(PrimCastOp cast,
-                                PatternRewriter &rewriter) const override {
-    if (cast.input().getType() == cast.output().getType()) {
-      rewriter.replaceOp(cast, cast.input());
-      return success();
-    }
-
-    // If the input of the cast is defined by another cast, then the two casts
-    // can be merged into one.
-    if (cast.input().hasOneUse())
-      if (auto defCast = cast.input().getDefiningOp<PrimCastOp>()) {
-        rewriter.replaceOpWithNewOp<PrimCastOp>(cast, cast.getType(),
-                                                defCast.input());
-        return success();
-      }
-    return failure();
-  }
-};
-} // namespace
-
-void PrimCastOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                             MLIRContext *context) {
-  results.add<SimplifyPrimCastOp>(context);
-}
-
-namespace {
-struct SimplifyDataflowNodeOp : public OpRewritePattern<DataflowNodeOp> {
-  using OpRewritePattern<DataflowNodeOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(DataflowNodeOp node,
-                                PatternRewriter &rewriter) const override {
-    auto output = node.getOutputOp();
-    bool hasUnusedResult = false;
-
-    SmallVector<Value, 4> outputValues;
-    SmallVector<Value, 4> resultsToReplace;
-    for (auto result : node.getResults()) {
-      if (result.use_empty()) {
-        hasUnusedResult = true;
-        continue;
-      }
-      outputValues.push_back(output.getOperand(result.getResultNumber()));
-      resultsToReplace.push_back(result);
-    }
-
-    if (hasUnusedResult) {
-      rewriter.setInsertionPoint(output);
-      rewriter.replaceOpWithNewOp<DataflowOutputOp>(output, outputValues);
-
-      rewriter.setInsertionPoint(node);
-      auto newNode = rewriter.create<DataflowNodeOp>(node.getLoc(),
-                                                     ValueRange(outputValues));
-      rewriter.inlineRegionBefore(node.body(), newNode.body(),
-                                  newNode.body().end());
-      for (auto t : llvm::zip(resultsToReplace, newNode.getResults()))
-        std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
-
-      rewriter.eraseOp(node);
-      return success();
-    }
-    return failure();
-  }
-};
-} // namespace
-
-void DataflowNodeOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                                 MLIRContext *context) {
-  results.add<SimplifyDataflowNodeOp>(context);
-}
-
-namespace {
-struct SimplifyDataflowBufferOp : public OpRewritePattern<DataflowBufferOp> {
-  using OpRewritePattern<DataflowBufferOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(DataflowBufferOp buffer,
-                                PatternRewriter &rewriter) const override {
-    if (auto defOp = buffer.input().getDefiningOp<DataflowBufferOp>()) {
-      buffer.inputMutable().assign(defOp.input());
-      auto newDepth = buffer.depth() + defOp.depth();
-      buffer->setAttr(buffer.depthAttrName(),
-                      rewriter.getUI32IntegerAttr(newDepth));
-      return success();
-    }
-    return failure();
-  }
-};
-} // namespace
-
-void DataflowBufferOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                                   MLIRContext *context) {
-  results.add<SimplifyDataflowBufferOp>(context);
 }
 
 //===----------------------------------------------------------------------===//

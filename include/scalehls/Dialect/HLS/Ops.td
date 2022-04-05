@@ -80,8 +80,14 @@ def DataflowBufferOp : HLSOp<"dataflow.buffer",
   }];
 
   let hasCanonicalizer = 1;
-  let arguments = (ins AnyType:$input, I32Attr:$depth);
+  let hasVerifier = 1;
+  let arguments = (ins AnyType:$input, I32Attr:$depth,
+                       OptionalAttr<I32Attr>:$level);
   let results = (outs AnyType:$output);
+
+  let builders = [OpBuilder<(ins "mlir::Type":$output, "mlir::Value":$input,
+                   "uint32_t":$depth),
+    "build($_builder, $_state, output, input, depth, nullptr);">];
 }
 
 //===----------------------------------------------------------------------===//
