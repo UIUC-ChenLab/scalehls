@@ -22,7 +22,6 @@ def DesignSpaceExplore : Pass<"scalehls-dse", "ModuleOp"> {
     the current design point, and feed it back to the DSE engine for an
     efficient optimization convergence.
   }];
-
   let constructor = "mlir::scalehls::createDesignSpaceExplorePass()";
 
   let options = [
@@ -45,7 +44,6 @@ def DesignSpaceExplore : Pass<"scalehls-dse", "ModuleOp"> {
 
 def TosaFakeQuantize : Pass<"scalehls-tosa-fake-quantize", "ModuleOp"> {
   let summary = "Convert to 8-bits quantized model (only for testing use)";
-
   let constructor = "mlir::scalehls::createTosaFakeQuantizePass()";
 }
 
@@ -55,14 +53,33 @@ def TosaSimplifyGraph : Pass<"scalehls-tosa-simplify-graph", "func::FuncOp"> {
     This simplify-tosa-graph pass will try to remove redundant transpose ops
     through pattern matching.
   }];
-
   let constructor = "mlir::scalehls::createTosaSimplifyGraphPass()";
 }
 
 def TosaNodeFusion : Pass<"scalehls-tosa-node-fusion", "func::FuncOp"> {
   let summary = "Node fusion on TOSA operations";
-
   let constructor = "mlir::scalehls::createTosaNodeFusionPass()";
+}
+
+def CreateFuncDataflow : Pass<"scalehls-create-func-dataflow", "func::FuncOp"> {
+  let summary = "Create dataflow hierarchy to functions";
+  let constructor = "mlir::scalehls::createCreateFuncDataflowPass()";
+}
+
+def CreateLoopDataflow : Pass<"scalehls-create-loop-dataflow", "func::FuncOp"> {
+  let summary = "Create dataflow hierarchy to affine loops";
+  let constructor = "mlir::scalehls::createCreateLoopDataflowPass()";
+}
+
+def LegalizeDataflow : Pass<"scalehls-legalize-dataflow", "func::FuncOp"> {
+  let summary = "Legalize dataflow to a one-way feed-forward path";
+  let description = [{
+    This legalize-dataflow pass will legalize the dataflow scheduling to meet
+    the requirements of the dataflow pragma: 1) single-producer single-consumer;
+    2) no bypass paths. Then, it will fuse operations/loops scheduled at the
+    same dataflow level into one dataflow node and apply the dataflow directive.
+  }];
+  let constructor = "mlir::scalehls::createLegalizeDataflowPass()";
 }
 
 def CreateTokenDepends : Pass<"scalehls-create-token-depends", "func::FuncOp"> {
@@ -71,55 +88,23 @@ def CreateTokenDepends : Pass<"scalehls-create-token-depends", "func::FuncOp"> {
     This create-token-depends pass will create a token flow to represent the
     dependency graph of the original dataflow.
   }];
-
   let constructor = "mlir::scalehls::createCreateTokenDependsPass()";
 }
 
-def FuncDataflow : Pass<"scalehls-func-dataflow", "ModuleOp"> {
-  let summary = "Apply dataflow to functions";
-  let description = [{
-    This func-dataflow pass will first legalize the dataflow scheduling to meet
-    the requirements of the dataflow pragma: 1) single-producer single-consumer;
-    2) no bypass paths. Then, it will split operations/loops scheduled at the
-    same dataflow level into a separate sub-function and apply the dataflow
-    directive to the top function.
-  }];
-
-  let constructor = "mlir::scalehls::createFuncDataflowPass()";
-
-  let options = [
-    Option<"targetFunc", "target-func", "std::string",
-           /*default=*/"\"main\"", "The target function to be dataflowed">,
-    Option<"balance", "balance", "bool", /*default=*/"true",
-           "Whether insert copies to balance the dataflow">,
-    Option<"gran", "gran", "unsigned", /*default=*/"1",
-           "Positive number: the minimum granularity of dataflow">
-  ];
-}
-
-def DataflowLegalize : Pass<"scalehls-dataflow-legalize", "func::FuncOp"> {
-  let summary = "Legalize dataflow to a one-way feed-forward path";
-
-  let constructor = "mlir::scalehls::createDataflowLegalizePass()";
-}
-
-def DataflowBufferize : Pass<"scalehls-dataflow-bufferize", "func::FuncOp"> {
+def BufferizeDataflow : Pass<"scalehls-bufferize-dataflow", "func::FuncOp"> {
   let summary = "Bufferize tensor and scalar to memref and stream";
-
-  let constructor = "mlir::scalehls::createDataflowBufferizePass()";
+  let constructor = "mlir::scalehls::createBufferizeDataflowPass()";
 }
 
 def ConvertDataflowToFunc :
       Pass<"scalehls-convert-dataflow-to-func", "ModuleOp"> {
   let summary = "Convert dataflow to function dialect";
-
   let constructor = "mlir::scalehls::createConvertDataflowToFuncPass()";
 }
 
 def TosaToLinalgCleanup :
       Pass<"scalehls-tosa-to-linalg-cleanup", "func::FuncOp"> {
   let summary = "Lower tosa::ReshapeOp and tensor::PadOp";
-
   let constructor = "mlir::scalehls::createTosaToLinalgCleanupPass()";
 }
 
@@ -135,7 +120,6 @@ def CreateRuntimeMain : Pass<"scalehls-create-runtime-main", "ModuleOp"> {
     "main" function and passed into the original top function as arguments after
     the transform.
   }];
-
   let constructor = "mlir::scalehls::createCreateRuntimeMainPass()";
 
   let options = [
@@ -146,7 +130,6 @@ def CreateRuntimeMain : Pass<"scalehls-create-runtime-main", "ModuleOp"> {
 
 def CreateAxiInterface : Pass<"scalehls-create-axi-interface", "ModuleOp"> {
   let summary = "Create AXI interfaces for the top function";
-
   let constructor = "mlir::scalehls::createCreateAxiInterfacePass()";
 }
 
@@ -171,7 +154,6 @@ def ConvertCopyToAffineLoops :
     This convert-copy-to-affine-loops pass will first remove redundant copies
     and lower assigns to copies, and then convert copies to affine loops.
   }];
-
   let constructor = "mlir::scalehls::createConvertCopyToAffineLoopsPass()";
 
   let options = [
@@ -188,7 +170,6 @@ def MaterializeReduction :
     buffer read/writes in order to expose more optimization opportunities
     targeting HLS.
   }];
-
   let constructor = "mlir::scalehls::createMaterializeReductionPass()";
 }
 
@@ -201,7 +182,6 @@ def AffineLoopPerfection :
     innermost loop and create if statements to ensure the correctness of the
     transformation.
   }];
-
   let constructor = "mlir::scalehls::createAffineLoopPerfectionPass()";
 }
 
@@ -214,7 +194,6 @@ def RemoveVariableBound :
     expression of induction variables of other loops with constant lower and
     upper bound.
   }];
-
   let constructor = "mlir::scalehls::createRemoveVariableBoundPass()";
 }
 
@@ -223,7 +202,6 @@ def AffineLoopTile : Pass<"scalehls-affine-loop-tile", "func::FuncOp"> {
   let description = [{
     Apply the same "tile-size" to each affine loop in the nests.
   }];
-
   let constructor = "mlir::scalehls::createAffineLoopTilePass()";
 
   let options = [
@@ -240,7 +218,6 @@ def AffineLoopOrderOpt :
     loop nests through polyhedral-based dependency analysis. The objective of
     this pass is to maximize the distance of loop-carried dependencies.
   }];
-
   let constructor = "mlir::scalehls::createAffineLoopOrderOptPass()";
 }
 
@@ -252,7 +229,6 @@ def AffineLoopUnrollJam :
     reaches the specified "unroll-factor". Optionally, optimize the loop order
     after the unrolling.
   }];
-
   let constructor = "mlir::scalehls::createAffineLoopUnrollJamPass()";
 
   let options = [
@@ -265,24 +241,6 @@ def AffineLoopUnrollJam :
   ];
 }
 
-def AffineLoopDataflow : Pass<"scalehls-affine-loop-dataflow", "ModuleOp"> {
-  let summary = "Apply dataflow to affine loops";
-  let description = [{
-    This affine-loop-dataflow pass will apply dataflow pipeline to the innermost
-    loop that have more than one child loops, such that the loads, computation,
-    and stores in the loop body can work in a pipeline manner.
-  }];
-
-  let constructor = "mlir::scalehls::createAffineLoopDataflowPass()";
-
-  let options = [
-    Option<"balance", "balance", "bool", /*default=*/"true",
-           "Whether insert copies to balance the dataflow">,
-    Option<"gran", "gran", "unsigned", /*default=*/"1",
-           "Positive number: the minimum granularity of dataflow">
-  ];
-}
-
 def SimplifyAffineIf : Pass<"scalehls-simplify-affine-if", "func::FuncOp"> {
   let summary = "Simplify affine if operations";
   let description = [{
@@ -290,7 +248,6 @@ def SimplifyAffineIf : Pass<"scalehls-simplify-affine-if", "func::FuncOp"> {
     operations which will always take then or else branch, and merge all affine
     if operations that having the same statement.
   }];
-
   let constructor = "mlir::scalehls::createSimplifyAffineIfPass()";
 }
 
@@ -304,7 +261,6 @@ def FuncPipelining : Pass<"scalehls-func-pipelining", "func::FuncOp"> {
     This func-pipelining pass will insert pipeline pragma to the specified
     function, all contained loops will be automatically unrolled.
   }];
-
   let constructor = "mlir::scalehls::createFuncPipeliningPass()";
 
   let options = [
@@ -321,7 +277,6 @@ def LoopPipelining : Pass<"scalehls-loop-pipelining", "func::FuncOp"> {
     This loop-pipelining pass will insert pipeline pragma to the target loop
     level, and automatically unroll all inner loops.
   }];
-
   let constructor = "mlir::scalehls::createLoopPipeliningPass()";
 
   let options = [
@@ -339,7 +294,6 @@ def ArrayPartition : Pass<"scalehls-array-partition", "ModuleOp"> {
     partition solution for each on-chip memory instance and apply the solution
     through changing the layout of the corresponding memref.
   }];
-
   let constructor = "mlir::scalehls::createArrayPartitionPass()";
 }
 
@@ -349,7 +303,6 @@ def CreateHLSPrimitive : Pass<"scalehls-create-hls-primitive", "func::FuncOp"> {
     This create-hls-primitive pass will convert 8-bits multiplifications to HLS
     C++ primitives in order to utilize DSP instances in FPGA.
   }];
-
   let constructor = "mlir::scalehls::createCreateHLSPrimitivePass()";
 }
 
@@ -371,7 +324,6 @@ def CreateMemrefSubview :
 
 def PromoteBuffer : Pass<"scalehls-promote-buffer", "func::FuncOp"> {
   let summary = "Promote external buffer to on-chip buffer";
-
   let constructor = "mlir::scalehls::createPromoteBufferPass()";
 }
 
@@ -381,7 +333,6 @@ def AffineStoreForward : Pass<"scalehls-affine-store-forward", "func::FuncOp"> {
     This affine-store-forward pass is similar to scal-repl, but supports to
     forward stores located in if statements.
   }];
-
   let constructor = "mlir::scalehls::createAffineStoreForwardPass()";
 }
 
@@ -392,7 +343,6 @@ def SimplifyMemrefAccess :
     This simplify-memref-access pass will eliminate the known redundant load and
     store operations for simplifying the memref access.
   }];
-
   let constructor = "mlir::scalehls::createSimplifyMemrefAccessPass()";
 }
 
@@ -402,7 +352,6 @@ def RaiseImplicitCopy : Pass<"scalehls-raise-implicit-copy", "func::FuncOp"> {
     This raise-implicit-copy pass will detect implicit copy in affine loops and
     raise to memref.copy in order to eliminate redundant copies.
   }];
-
   let constructor = "mlir::scalehls::createRaiseImplicitCopyPass()";
 }
 
@@ -413,7 +362,6 @@ def ReduceInitialInterval :
     This reduce-initial-interval pass try to reduce the II by optimizing the
     commutative operator trees and iteration variables.
   }];
-
   let constructor = "mlir::scalehls::createReduceInitialIntervalPass()";
 }
 
@@ -425,7 +373,6 @@ def QoREstimation : Pass<"scalehls-qor-estimation", "ModuleOp"> {
     dependency and resource constraints and pragma settings into consideration,
     and conduct the estimation through an ALAP scheduling.
   }];
-
   let constructor = "mlir::scalehls::createQoREstimationPass()";
 
   let options = [

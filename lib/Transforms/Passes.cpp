@@ -107,7 +107,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         // Graph-level optimization.
         pm.addPass(scalehls::createTosaSimplifyGraphPass());
         pm.addPass(scalehls::createTosaNodeFusionPass());
-        pm.addPass(scalehls::createFuncDataflowPass(opts.hlsTopFunc));
+        pm.addPass(scalehls::createCreateFuncDataflowPass());
         pm.addPass(scalehls::createCreateTokenDependsPass());
 
         // TOSA to Linalg conversion.
@@ -120,7 +120,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         // Bufferization and rumtime creation.
         pm.addPass(scalehls::createCreateRuntimeMainPass(opts.hlsTopFunc));
         pm.addPass(mlir::createLinalgBufferizePass());
-        pm.addPass(scalehls::createDataflowBufferizePass());
+        pm.addPass(scalehls::createBufferizeDataflowPass());
         pm.addPass(func::createFuncBufferizePass());
         pm.addPass(bufferization::createBufferResultsToOutParamsPass());
         pm.addPass(mlir::createCanonicalizerPass());
@@ -176,8 +176,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(mlir::createCanonicalizerPass());
 
         // Affine loop dataflowing.
-        pm.addPass(scalehls::createAffineLoopDataflowPass());
-        pm.addPass(scalehls::createDataflowBufferizePass());
+        pm.addPass(scalehls::createBufferizeDataflowPass());
         pm.addPass(scalehls::createConvertDataflowToFuncPass());
 
         // Affine loop unrolling.

@@ -164,13 +164,14 @@ struct BufferSplitPattern : public OpRewritePattern<DataflowBufferOp> {
 } // namespace
 
 namespace {
-struct DataflowMergePattern : public OpRewritePattern<func::FuncOp> {
-  using OpRewritePattern<func::FuncOp>::OpRewritePattern;
+template <typename OpType>
+struct DataflowNodeMergePattern : public OpRewritePattern<OpType> {
+  using OpRewritePattern<OpType>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(func::FuncOp func,
+  LogicalResult matchAndRewrite(OpType target,
                                 PatternRewriter &rewriter) const override {
     llvm::SmallDenseMap<unsigned, SmallVector<Operation *>> dataflowOpsList;
-    for (auto &op : func.getOps())
+    for (auto &op : target.getOps())
       if (isa<DataflowNodeOp, DataflowBufferOp>(op)) {
         if (auto level = getDataflowLevel(&op))
           dataflowOpsList[level.getValue()].push_back(&op);
@@ -190,13 +191,11 @@ struct DataflowMergePattern : public OpRewritePattern<func::FuncOp> {
 } // namespace
 
 namespace {
-struct DataflowLegalize : public DataflowLegalizeBase<DataflowLegalize> {
+struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
 
-    /// TODO: Support conservative dataflow merging, which doesn't require to
-    /// split buffers.
     mlir::RewritePatternSet patterns(context);
     patterns.add<MultiProducerRemovePattern>(context);
     patterns.add<NodeSchedulePattern>(context);
@@ -206,12 +205,29 @@ struct DataflowLegalize : public DataflowLegalizeBase<DataflowLegalize> {
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
     patterns.clear();
-    patterns.add<DataflowMergePattern>(context);
-    (void)applyOpPatternsAndFold(func, std::move(patterns));
+    patterns.add<DataflowNodeMergePattern<func::FuncOp>>(context);
+    patterns.add<DataflowNodeMergePattern<mlir::AffineForOp>>(context);
+    FrozenRewritePatternSet frozenPatterns(std::move(patterns));
+
+    // Legalize function dataflow.
+    if (failed(applyOpPatternsAndFold(func, frozenPatterns)))
+      return signalPassFailure();
+    setFuncDirective(func, false, 1, true);
+
+    // Collect all target loop bands.
+    AffineLoopBands targetBands;
+    getLoopBands(func.front(), targetBands, /*allowHavingChilds=*/true);
+
+    // Legalize loop dataflow to each innermost loop.
+    for (auto &band : targetBands) {
+      if (failed(applyOpPatternsAndFold(band.back(), frozenPatterns)))
+        return signalPassFailure();
+      setLoopDirective(band.back(), false, 1, true, false);
+    }
   }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createDataflowLegalizePass() {
-  return std::make_unique<DataflowLegalize>();
+std::unique_ptr<Pass> scalehls::createLegalizeDataflowPass() {
+  return std::make_unique<LegalizeDataflow>();
 }

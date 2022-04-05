@@ -33,11 +33,10 @@ std::unique_ptr<Pass> createTosaFakeQuantizePass();
 std::unique_ptr<Pass> createTosaSimplifyGraphPass();
 std::unique_ptr<Pass> createTosaNodeFusionPass();
 std::unique_ptr<Pass> createCreateTokenDependsPass();
-std::unique_ptr<Pass>
-createFuncDataflowPass(std::string dataflowTargetFunc = "forward",
-                       unsigned dataflowGran = 1, bool dataflowBalance = true);
-std::unique_ptr<Pass> createDataflowLegalizePass();
-std::unique_ptr<Pass> createDataflowBufferizePass();
+std::unique_ptr<Pass> createCreateFuncDataflowPass();
+std::unique_ptr<Pass> createCreateLoopDataflowPass();
+std::unique_ptr<Pass> createLegalizeDataflowPass();
+std::unique_ptr<Pass> createBufferizeDataflowPass();
 std::unique_ptr<Pass> createConvertDataflowToFuncPass();
 std::unique_ptr<Pass> createTosaToLinalgCleanupPass();
 
@@ -59,8 +58,6 @@ std::unique_ptr<Pass> createAffineLoopTilePass(unsigned loopTileSize = 1);
 std::unique_ptr<Pass>
 createAffineLoopUnrollJamPass(unsigned loopUnrollFactor = 1,
                               bool unrollPointLoopOnly = false);
-std::unique_ptr<Pass> createAffineLoopDataflowPass(unsigned dataflowGran = 1,
-                                                   bool dataflowBalance = true);
 std::unique_ptr<Pass> createSimplifyAffineIfPass();
 
 /// Memory optimization passes.

@@ -1,10 +1,9 @@
 add_mlir_library(MLIRScaleHLSTransforms
-  Dataflow/AffineLoopDataflow.cpp
+  Dataflow/BufferizeDataflow.cpp
   Dataflow/ConvertDataflowToFunc.cpp
+  Dataflow/CreateDataflow.cpp
   Dataflow/CreateTokenDepends.cpp
-  Dataflow/DataflowBufferize.cpp
-  Dataflow/DataflowLegalize.cpp
-  Dataflow/FuncDataflow.cpp
+  Dataflow/LegalizeDataflow.cpp
   Directive/ArrayPartition.cpp
   Directive/CreateHLSPrimitive.cpp
   Directive/FuncPipelining.cpp
