@@ -4,8 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "scalehls/Transforms/Dataflower.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
@@ -14,10 +13,11 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-struct CreateTokenFlow : public CreateTokenFlowBase<CreateTokenFlow> {
-  void runOnOperation() override {
-    auto func = getOperation();
-    auto rewriter = ScaleHLSDataflower(func.front());
+struct TokenCreatePattern : public OpRewritePattern<func::FuncOp> {
+  using OpRewritePattern<func::FuncOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(func::FuncOp func,
+                                PatternRewriter &rewriter) const override {
     auto loc = rewriter.getUnknownLoc();
 
     for (auto node :
@@ -26,15 +26,17 @@ struct CreateTokenFlow : public CreateTokenFlowBase<CreateTokenFlow> {
       // to create one token flow.
       llvm::SmallDenseSet<Operation *, 4> consumers;
       for (auto &use : llvm::make_early_inc_range(node->getUses())) {
-        // Skip non-tensor and terminator users.
+        // Skip non-tensor, buffer, and terminator users.
         if (isa<DataflowBufferOp>(use.getOwner()) ||
             !use.get().getType().isa<TensorType>() ||
             use.getOwner() == use.getOwner()->getBlock()->getTerminator())
           continue;
 
-        auto consumer = use.getOwner()->getParentOfType<DataflowNodeOp>();
-        assert(consumer && "must have dataflow node parent");
-        consumers.insert(consumer);
+        if (auto consumer = use.getOwner()->getParentOfType<DataflowNodeOp>())
+          consumers.insert(consumer);
+        else
+          return use.getOwner()->emitOpError(
+              "doesn't have parent dataflow node");
       }
 
       // Create token source and sink operations.
@@ -53,10 +55,24 @@ struct CreateTokenFlow : public CreateTokenFlowBase<CreateTokenFlow> {
       // Fuse the source operations and original dataflow node.
       fuseOpsIntoNewNode(opsToFuse, rewriter);
     }
+    return success();
   }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createCreateTokenFlowPass() {
-  return std::make_unique<CreateTokenFlow>();
+namespace {
+struct CreateTokenDepends : public CreateTokenDependsBase<CreateTokenDepends> {
+  void runOnOperation() override {
+    auto func = getOperation();
+    auto context = func.getContext();
+
+    mlir::RewritePatternSet patterns(context);
+    patterns.add<TokenCreatePattern>(context);
+    (void)applyOpPatternsAndFold(func, std::move(patterns));
+  }
+};
+} // namespace
+
+std::unique_ptr<Pass> scalehls::createCreateTokenDependsPass() {
+  return std::make_unique<CreateTokenDepends>();
 }

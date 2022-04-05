@@ -108,7 +108,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createTosaSimplifyGraphPass());
         pm.addPass(scalehls::createTosaNodeFusionPass());
         pm.addPass(scalehls::createFuncDataflowPass(opts.hlsTopFunc));
-        pm.addPass(scalehls::createCreateTokenFlowPass());
+        pm.addPass(scalehls::createCreateTokenDependsPass());
 
         // TOSA to Linalg conversion.
         pm.addNestedPass<func::FuncOp>(tosa::createTosaToLinalgNamed());

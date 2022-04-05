@@ -32,7 +32,7 @@ createDesignSpaceExplorePass(std::string dseTargetSpec = "");
 std::unique_ptr<Pass> createTosaFakeQuantizePass();
 std::unique_ptr<Pass> createTosaSimplifyGraphPass();
 std::unique_ptr<Pass> createTosaNodeFusionPass();
-std::unique_ptr<Pass> createCreateTokenFlowPass();
+std::unique_ptr<Pass> createCreateTokenDependsPass();
 std::unique_ptr<Pass>
 createFuncDataflowPass(std::string dataflowTargetFunc = "forward",
                        unsigned dataflowGran = 1, bool dataflowBalance = true);
