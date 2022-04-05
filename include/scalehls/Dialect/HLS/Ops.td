@@ -24,13 +24,21 @@ def DataflowNodeOp : HLSOp<"dataflow.node",
   }];
 
   let hasCanonicalizer = 1;
+  let hasVerifier = 1;
+  let arguments = (ins OptionalAttr<I32Attr>:$level);
   let results = (outs Variadic<AnyType>:$outputs);
   let regions = (region SizedRegion<1>:$body);
 
+  let builders = [OpBuilder<(ins "mlir::TypeRange":$outputs),
+                            "build($_builder, $_state, outputs, nullptr);">];
+
   let assemblyFormat = [{
-    attr-dict `(` `)` (`->` qualified(type($outputs))^)? $body
+    `(` `)` (`->` qualified(type($outputs))^)? attr-dict-with-keyword $body
   }];
-  let extraClassDeclaration = [{ DataflowOutputOp getOutputOp(); }];
+  let extraClassDeclaration = [{
+    DataflowOutputOp getOutputOp();
+    SmallVector<std::pair<mlir::Value, mlir::Operation *>> getDataflowUses();
+  }];
 }
 
 def DataflowOutputOp : HLSOp<"dataflow.output",

@@ -171,8 +171,27 @@ bool hls::hasRuntimeAttr(Operation *op) {
 // Dataflow operations
 //===----------------------------------------------------------------------===//
 
+LogicalResult DataflowNodeOp::verify() {
+  if (llvm::any_of((*this)->getUsers(), [&](Operation *user) {
+        return !(*this)->getBlock()->findAncestorOpInBlock(*user);
+      }))
+    return emitOpError("has unexpected dataflow consumer");
+  return success();
+}
+
 DataflowOutputOp DataflowNodeOp::getOutputOp() {
   return cast<DataflowOutputOp>(body().front().getTerminator());
+}
+
+SmallVector<std::pair<Value, Operation *>> DataflowNodeOp::getDataflowUses() {
+  SmallVector<std::pair<Value, Operation *>> dfUses;
+  for (auto &use : (*this)->getUses()) {
+    auto user = (*this)->getBlock()->findAncestorOpInBlock(*use.getOwner());
+    auto dfUse = std::pair<Value, Operation *>(use.get(), user);
+    if (llvm::find(dfUses, dfUse) == dfUses.end())
+      dfUses.push_back(dfUse);
+  }
+  return dfUses;
 }
 
 LogicalResult DataflowOutputOp::verify() {

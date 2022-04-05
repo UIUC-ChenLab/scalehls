@@ -97,6 +97,12 @@ def FuncDataflow : Pass<"scalehls-func-dataflow", "ModuleOp"> {
   ];
 }
 
+def DataflowLegalize : Pass<"scalehls-dataflow-legalize", "func::FuncOp"> {
+  let summary = "Legalize dataflow to a one-way feed-forward path";
+
+  let constructor = "mlir::scalehls::createDataflowLegalizePass()";
+}
+
 def DataflowBufferize : Pass<"scalehls-dataflow-bufferize", "func::FuncOp"> {
   let summary = "Bufferize tensor and scalar to memref and stream";
 
