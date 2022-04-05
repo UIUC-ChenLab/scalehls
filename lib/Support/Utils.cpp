@@ -15,46 +15,11 @@
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
+using namespace hls;
 
 //===----------------------------------------------------------------------===//
-// HLSCpp attribute utils
+// Memory and loop analysis utils
 //===----------------------------------------------------------------------===//
-
-/// Parse attributes.
-TimingAttr scalehls::getTiming(Operation *op) {
-  return op->getAttrOfType<TimingAttr>("timing");
-}
-
-ResourceAttr scalehls::getResource(Operation *op) {
-  return op->getAttrOfType<ResourceAttr>("resource");
-}
-
-LoopInfoAttr scalehls::getLoopInfo(Operation *op) {
-  return op->getAttrOfType<LoopInfoAttr>("loop_info");
-}
-
-/// Parse loop directives.
-LoopDirectiveAttr scalehls::getLoopDirective(Operation *op) {
-  return op->getAttrOfType<LoopDirectiveAttr>("loop_directive");
-}
-
-bool scalehls::hasParallelAttr(AffineForOp loop) {
-  return loop->hasAttrOfType<UnitAttr>("parallel");
-}
-
-bool scalehls::hasPointAttr(AffineForOp loop) {
-  return loop->hasAttrOfType<UnitAttr>("point");
-}
-
-/// Parse function directives.
-FuncDirectiveAttr scalehls::getFuncDirective(Operation *op) {
-  return op->getAttrOfType<FuncDirectiveAttr>("func_directive");
-}
-
-bool scalehls::hasTopFuncAttr(FuncOp func) {
-  return func->hasAttrOfType<UnitAttr>("top_func");
-}
 
 /// Parse array attributes.
 SmallVector<int64_t, 8> scalehls::getIntArrayAttrValue(Operation *op,
@@ -70,10 +35,6 @@ SmallVector<int64_t, 8> scalehls::getIntArrayAttrValue(Operation *op,
   } else
     return SmallVector<int64_t, 8>();
 }
-
-//===----------------------------------------------------------------------===//
-// Memory and loop analysis utils
-//===----------------------------------------------------------------------===//
 
 /// Collect all load and store operations in the block and return them in "map".
 void scalehls::getMemAccessesMap(Block &block, MemAccessesMap &map,
@@ -441,26 +402,58 @@ bool scalehls::checkDependence(Operation *A, Operation *B) {
   return false;
 }
 
-/// Localize each tosa/arith constant to right before its each use.
-void scalehls::localizeConstants(Block &block) {
+/// Localize each tosa/arith constant to right before its each use. Only
+/// localize the constants whose size is below the bitsThreshold.
+void scalehls::localizeConstants(Block &block, int64_t bitsThreshold) {
   auto builder = OpBuilder(block.getParentOp());
 
-  // Collect all constants that have more than one use.
+  // Collect all constants.
   SmallVector<Operation *, 16> constants;
   block.walk([&](Operation *constant) {
-    if (isa<tosa::ConstOp, arith::ConstantOp>(constant) &&
-        !constant->hasOneUse())
-      constants.push_back(constant);
+    if (isa<tosa::ConstOp, arith::ConstantOp>(constant)) {
+      auto type = constant->getResult(0).getType();
+      if (auto shapedType = type.dyn_cast<ShapedType>()) {
+        if (shapedType.getSizeInBits() <= bitsThreshold)
+          constants.push_back(constant);
+      } else
+        constants.push_back(constant);
+    }
   });
+
   // Localize constants to each of its use.
   for (auto constant : constants) {
     for (auto &use : llvm::make_early_inc_range(constant->getUses())) {
-      auto cloneConstant = constant->clone();
       builder.setInsertionPoint(use.getOwner());
-      builder.insert(cloneConstant);
+      auto cloneConstant = builder.clone(*constant);
       use.set(cloneConstant->getResult(0));
     }
+    constant->erase();
   }
+}
+
+func::FuncOp scalehls::getTopFunc(ModuleOp module, std::string topFuncName) {
+  func::FuncOp topFunc;
+  for (auto func : module.getOps<func::FuncOp>())
+    if (hasTopFuncAttr(func) || func.getName() == topFuncName) {
+      if (!topFunc)
+        topFunc = func;
+      else
+        return func::FuncOp();
+    }
+  return topFunc;
+}
+
+func::FuncOp scalehls::getRuntimeFunc(ModuleOp module,
+                                      std::string runtimeFuncName) {
+  func::FuncOp runtimeFunc;
+  for (auto func : module.getOps<func::FuncOp>())
+    if (hasRuntimeAttr(func) || func.getName() == runtimeFuncName) {
+      if (!runtimeFunc)
+        runtimeFunc = func;
+      else
+        return func::FuncOp();
+    }
+  return runtimeFunc;
 }
 
 //===----------------------------------------------------------------------===//

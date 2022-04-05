@@ -9,38 +9,18 @@
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
-#include "mlir/IR/BuiltinOps.h"
-#include "scalehls/Dialect/HLSCpp/HLSCpp.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "scalehls/Dialect/HLS/HLS.h"
 
 namespace mlir {
 namespace scalehls {
 
 //===----------------------------------------------------------------------===//
-// HLSCpp attribute parsing utils
+// Memory and loop analysis utils
 //===----------------------------------------------------------------------===//
-
-using namespace hlscpp;
-
-/// Parse attributes.
-TimingAttr getTiming(Operation *op);
-ResourceAttr getResource(Operation *op);
-LoopInfoAttr getLoopInfo(Operation *op);
-
-/// Parse loop directives.
-LoopDirectiveAttr getLoopDirective(Operation *op);
-bool hasParallelAttr(AffineForOp loop);
-bool hasPointAttr(AffineForOp loop);
-
-/// Parse function directives.
-FuncDirectiveAttr getFuncDirective(Operation *op);
-bool hasTopFuncAttr(FuncOp func);
 
 /// Parse array attributes.
 SmallVector<int64_t, 8> getIntArrayAttrValue(Operation *op, StringRef name);
-
-//===----------------------------------------------------------------------===//
-// Memory and loop analysis utils
-//===----------------------------------------------------------------------===//
 
 using AffineLoopBand = SmallVector<AffineForOp, 6>;
 using AffineLoopBands = std::vector<AffineLoopBand>;
@@ -104,8 +84,13 @@ Optional<unsigned> getMaximumTripCount(AffineForOp forOp);
 
 bool checkDependence(Operation *A, Operation *B);
 
-/// Localize each tosa/arith constant to right before its each use.
-void localizeConstants(Block &block);
+/// Localize each tosa/arith constant to right before its each use. Only
+/// localize the constants whose size is below the bitsThreshold.
+void localizeConstants(Block &block, int64_t bitsThreshold = INT64_MAX);
+
+func::FuncOp getTopFunc(ModuleOp module, std::string topFuncName = "");
+
+func::FuncOp getRuntimeFunc(ModuleOp module, std::string runtimeFuncName = "");
 
 //===----------------------------------------------------------------------===//
 // PtrLikeMemRefAccess Struct Declaration

@@ -1,20 +1,25 @@
 add_mlir_library(MLIRScaleHLSTransforms
   Directive/ArrayPartition.cpp
-  Directive/CreateHLSCppPrimitive.cpp
+  Directive/CreateHLSPrimitive.cpp
   Directive/FuncPipelining.cpp
   Directive/LoopPipelining.cpp
-  Graph/FakeQuantize.cpp
+  Directive/QoREstimation.cpp
+  Graph/ConvertDataflowToFunc.cpp
+  Graph/CreateTokenFlow.cpp
+  Graph/DataflowBufferize.cpp
   Graph/FuncDataflow.cpp
-  Graph/HeuristicNodeFusion.cpp
   Graph/ShareTensorOperation.cpp
-  Graph/SimplifyTosaGraph.cpp
+  Graph/TosaFakeQuantize.cpp
   Graph/TosaToLinalgCleanup.cpp
+  Graph/TosaSimplifyGraph.cpp
+  Graph/TosaNodeFusion.cpp
   Loop/AffineLoopDataflow.cpp
   Loop/AffineLoopOrderOpt.cpp
   Loop/AffineLoopPerfection.cpp
   Loop/AffineLoopTile.cpp
   Loop/AffineLoopUnrollJam.cpp
   Loop/ConvertCopyToAffineLoops.cpp
+  Loop/FuncPreprocess.cpp
   Loop/MaterializeReduction.cpp
   Loop/RemoveVariableBound.cpp
   Loop/SimplifyAffineIf.cpp
@@ -24,12 +29,11 @@ add_mlir_library(MLIRScaleHLSTransforms
   Memory/RaiseImplicitCopy.cpp
   Memory/ReduceInitialInterval.cpp
   Memory/SimplifyMemrefAccess.cpp
-  CreateRuntimeMain.cpp
-  LegalizeToHLSCpp.cpp
-  MultipleLevelDSE.cpp
+  Runtime/CreateAxiInterface.cpp
+  Runtime/CreateRuntimeMain.cpp
+  DesignSpaceExplore.cpp
   Passes.cpp
   PreserveUnoptimized.cpp
-  QoREstimation.cpp
   Utils.cpp
 
   DEPENDS

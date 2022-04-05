@@ -10,7 +10,7 @@
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
+using namespace hls;
 
 struct ConvHelper {
   tosa::Conv2DOp op;
@@ -99,7 +99,7 @@ static FuncOp createSharedFunction(ModuleOp module, tosa::Conv2DOp sharedConv, S
   auto input = entryBlock->getArgument(0);
   auto weight = entryBlock->getArgument(1);
   auto bias = entryBlock->getArgument(2);
-  auto outputType = newFuncOp.getType().getResults()[0];
+  auto outputType = newFuncOp.getResultTypes()[0];
   auto pad = sharedConv.pad();
   auto stride = sharedConv.stride();
   auto dilation = sharedConv.dilation();

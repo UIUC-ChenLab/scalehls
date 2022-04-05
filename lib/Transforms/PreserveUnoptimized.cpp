@@ -7,7 +7,7 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "scalehls/Transforms/Passes.h"
-#include <iostream>
+#include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -21,7 +21,7 @@ struct PreserveUnoptimized : public PreserveUnoptimizedBase<PreserveUnoptimized>
     SmallVector<FuncOp, 16> clones;
     for (auto func : module.getOps<FuncOp>()) {
       auto clone = func.clone();
-      auto cloneFunctionName = "__UNOPTIMIZED__" + func.sym_name().str();
+      auto cloneFunctionName = "__UNOPTIMIZED__" + func.getName().str();
       clone->setAttr("sym_name", builder.getStringAttr(cloneFunctionName));
       clone->setAttr("bypass", builder.getBoolAttr(true));
       clones.push_back(clone);

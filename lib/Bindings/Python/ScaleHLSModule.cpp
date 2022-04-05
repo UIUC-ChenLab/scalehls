@@ -13,7 +13,7 @@
 #include "mlir/CAPI/IR.h"
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
 #include "scalehls-c/EmitHLSCpp.h"
-#include "scalehls-c/HLSCpp.h"
+#include "scalehls-c/HLS.h"
 #include "scalehls/Transforms/Utils.h"
 
 #include "llvm-c/ErrorHandling.h"
@@ -188,12 +188,12 @@ static bool loopPipelining(PyAffineLoopBand band, int64_t pipelineLoc,
 // Function transform APIs
 //===----------------------------------------------------------------------===//
 
-static bool legalizeToHLSCpp(MlirOperation op, bool topFunc) {
+static bool funcPreprocess(MlirOperation op, bool topFunc) {
   py::gil_scoped_release();
   auto func = dyn_cast<FuncOp>(unwrap(op));
   if (!func)
     throw SetPyError(PyExc_ValueError, "targeted operation not a function");
-  return applyLegalizeToHLSCpp(func, topFunc);
+  return applyFuncPreprocess(func, topFunc);
 }
 
 static bool memoryOpts(MlirOperation op) {
@@ -222,10 +222,10 @@ static bool arrayPartition(MlirValue array, py::object factorsObject,
   py::gil_scoped_release();
   llvm::SmallVector<unsigned, 4> factors;
   getVectorFromUnsignedNpArray(factorsObject.ptr(), factors);
-  llvm::SmallVector<hlscpp::PartitionKind, 4> kinds(
-      factors.size(), kind == "cyclic"  ? hlscpp::PartitionKind::CYCLIC
-                      : kind == "block" ? hlscpp::PartitionKind::BLOCK
-                                        : hlscpp::PartitionKind::NONE);
+  llvm::SmallVector<hls::PartitionKind, 4> kinds(
+      factors.size(), kind == "cyclic"  ? hls::PartitionKind::CYCLIC
+                      : kind == "block" ? hls::PartitionKind::BLOCK
+                                        : hls::PartitionKind::NONE);
   return applyArrayPartition(unwrap(array), factors, kinds);
 }
 
@@ -254,9 +254,9 @@ PYBIND11_MODULE(_scalehls, m) {
     auto wrappedCapsule = capsule.attr(MLIR_PYTHON_CAPI_PTR_ATTR);
     MlirContext context = mlirPythonCapsuleToContext(wrappedCapsule.ptr());
 
-    MlirDialectHandle hlscpp = mlirGetDialectHandle__hlscpp__();
-    mlirDialectHandleRegisterDialect(hlscpp, context);
-    mlirDialectHandleLoadDialect(hlscpp, context);
+    MlirDialectHandle hls = mlirGetDialectHandle__hls__();
+    mlirDialectHandleRegisterDialect(hls, context);
+    mlirDialectHandleLoadDialect(hls, context);
   });
 
   // Loop transform APIs.
@@ -268,7 +268,7 @@ PYBIND11_MODULE(_scalehls, m) {
   m.def("loop_pipelining", &loopPipelining);
 
   // Function transform APIs.
-  m.def("legalize_to_hlscpp", &legalizeToHLSCpp);
+  m.def("func_preprocess", &funcPreprocess);
   m.def("memory_opts", &memoryOpts);
   m.def("auto_array_partition", &autoArrayPartition);
 

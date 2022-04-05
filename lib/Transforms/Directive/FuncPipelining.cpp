@@ -4,12 +4,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/Affine/LoopUtils.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
+using namespace hls;
 
 /// Apply function pipelining to the input function, all contained loops are
 /// automatically fully unrolled.

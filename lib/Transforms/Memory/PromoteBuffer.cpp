@@ -5,14 +5,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/IR/AffineExprVisitor.h"
-#include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
+using namespace hls;
 
 static void createBufferAndCopy(MemRefType type, Value memref,
                                 OpBuilder &builder) {
@@ -21,19 +20,38 @@ static void createBufferAndCopy(MemRefType type, Value memref,
   auto bufType = MemRefType::get(type.getShape(), type.getElementType());
   auto loc = builder.getUnknownLoc();
 
-  // Allocate an on-chip buffer and create a copy from memory to the buffer.
+  // Check the read/write status of the memref.
+  auto readFlag = llvm::any_of(memref.getUsers(), [](Operation *op) {
+    return isa<mlir::AffineReadOpInterface, memref::LoadOp, func::CallOp>(op);
+  });
+  auto writeFlag = llvm::any_of(memref.getUsers(), [](Operation *op) {
+    return isa<mlir::AffineWriteOpInterface, memref::StoreOp, func::CallOp>(op);
+  });
+
+  // Allocate an on-chip buffer and replace all its uses.
+  assert((readFlag || writeFlag) && "found unused memref");
   auto buf = builder.create<memref::AllocOp>(loc, bufType);
   memref.replaceAllUsesWith(buf);
-  auto copy = builder.create<memref::CopyOp>(loc, memref, buf);
 
-  // If the buffer's state is updated in the function, create a copy from the
-  // buffer to memory.
-  if (llvm::any_of(buf->getUsers(), [](Operation *op) {
-        return isa<AffineWriteOpInterface, memref::StoreOp>(op);
-      })) {
-    // Create another result buffer to prepare for the dataflowing.
+  if (readFlag && !writeFlag) {
+    // If the on-chip buffer is read-only, we copy the data from DDR to buffer
+    // right after the buffer allocation.
+    builder.create<memref::CopyOp>(loc, memref, buf);
+
+  } else if (!readFlag && writeFlag) {
+    // If the on-chip buffer is write-only, we copy the data from buffer to DDR
+    // at the end of the current region.
+    builder.setInsertionPoint(memref.getParentRegion()->back().getTerminator());
+    builder.create<memref::CopyOp>(loc, buf, memref);
+
+  } else {
+    // Otherwise, if the on-chip buffer has both read and write, to enable the
+    // pipeline between load-compute-store, we must create another "result"
+    // buffer and carry out the computation over the "result" buffer.
     auto resultBuf = builder.create<memref::AllocOp>(loc, bufType);
-    buf.memref().replaceAllUsesExcept(resultBuf, copy);
+    buf.memref().replaceAllUsesWith(resultBuf);
+
+    builder.create<memref::CopyOp>(loc, memref, buf);
     builder.create<memref::CopyOp>(loc, buf, resultBuf);
 
     builder.setInsertionPoint(memref.getParentRegion()->back().getTerminator());
@@ -63,6 +81,11 @@ struct PromoteBuffer : public scalehls::PromoteBufferBase<PromoteBuffer> {
   void runOnOperation() override {
     auto func = getOperation();
     auto builder = OpBuilder(func);
+
+    // We assume after create-axi-interface, we should not allocate any on-chip
+    // buffer in the top function. TODO: Make this an option.
+    if (hasTopFuncAttr(func) || hasRuntimeAttr(func))
+      return;
 
     // Promote function arguments that are not only used by subviews.
     for (auto arg : func.getArguments()) {

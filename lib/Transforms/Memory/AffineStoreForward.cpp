@@ -4,9 +4,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
-#include "mlir/Dialect/Affine/Analysis/Utils.h"
-#include "mlir/IR/Dominance.h"
 #include "mlir/IR/IntegerSet.h"
 #include "scalehls/Support/Utils.h"
 #include "scalehls/Transforms/Passes.h"
@@ -144,6 +141,16 @@ static bool applyAffineStoreForward(FuncOp func) {
 
         lastIsChainLoadOp = false;
       }
+    }
+
+    auto memref = memAccessesPair.first;
+    auto defOp = memref.getDefiningOp();
+    if (defOp && llvm::all_of(memref.getUsers(), [](Operation *user) {
+          return isa<mlir::AffineWriteOpInterface>(user);
+        })) {
+      for (auto user : memref.getUsers())
+        user->erase();
+      defOp->erase();
     }
   }
 

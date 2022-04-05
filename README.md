@@ -1,5 +1,7 @@
 # ScaleHLS Project
 
+[![Build and Test](https://github.com/hanchenye/scalehls/actions/workflows/buildAndTest.yml/badge.svg?branch=torch-hls)](https://github.com/hanchenye/scalehls/actions/workflows/buildAndTest.yml)
+
 ScaleHLS is a High-level Synthesis (HLS) framework on [MLIR](https://mlir.llvm.org). ScaleHLS can compile HLS C/C++ or PyTorch model to optimized HLS C/C++ in order to generate high-efficiency RTL design using downstream tools, such as Xilinx Vivado HLS.
 
 By using the MLIR framework that can be better tuned to particular algorithms at different representation levels, ScaleHLS is more scalable and customizable towards various applications coming with intrinsic structural or functional hierarchies. ScaleHLS represents HLS designs at multiple levels of abstraction and provides an HLS-dedicated analysis and transform library (in both C++ and Python) to solve the optimization problems at the suitable representation levels. Using this library, we've developed a design space exploration engine to generate optimized HLS designs automatically.
@@ -69,7 +71,7 @@ $ pyscalehls.py test_gemm.c -f test_gemm > test_gemm_pyscalehls.cpp
 ```
 
 ## Compiling PyTorch Model
-If you have installed [Torch-MLIR](https://github.com/llvm/torch-mlir), you should be able to run the following test:
+If you have installed [Torch-MLIR](https://github.com/llvm/torch-mlir) with SHA [ea371a9](https://github.com/llvm/torch-mlir/tree/ea371a9bf2860cf5f0741b28b0bf68e9a9c3d08b), you should be able to run the following test:
 ```sh
 $ cd samples/pytorch/resnet18
 
@@ -81,7 +83,7 @@ $ python3 export_resnet18_mlir.py | torch-mlir-opt \
 
 $ # Optimize the model and emit C++ code.
 $ scalehls-opt resnet18.mlir \
-    -scalehls-pytorch-pipeline="top-func=forward opt-level=2" \
+    -scalehls-pytorch-pipeline-v2="top-func=forward loop-tile-size=4 loop-unroll-factor=2" \
     | scalehls-translate -emit-hlscpp > resnet18.cpp
 ```
 

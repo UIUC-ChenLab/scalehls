@@ -6,6 +6,7 @@
 
 #include "mlir/Dialect/Affine/Analysis/AffineStructures.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/IR/IntegerSet.h"
@@ -163,7 +164,7 @@ static bool checkSameIfStatement(AffineIfOp lhsOp, AffineIfOp rhsOp) {
   return true;
 }
 
-static bool applySimplifyAffineIf(FuncOp func) {
+static bool applySimplifyAffineIf(func::FuncOp func) {
   SmallVector<AffineIfOp, 32> ifOpsToErase;
 
   // Remove redundant affine if statements.

@@ -4,21 +4,20 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
-#include "mlir/Dialect/Affine/Analysis/Utils.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/LoopUtils.h"
+#include "mlir/Dialect/Affine/Utils.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
+using namespace hls;
 
 /// Apply loop tiling to the input loop band and sink all intra-tile loops to
 /// the innermost loop with the original loop order.
 bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList,
-                               bool annotatePointLoop) {
+                               bool loopNormalize, bool annotatePointLoop) {
   assert(!band.empty() && "no loops provided");
   if (!isPerfectlyNested(band))
     return false;
@@ -35,12 +34,12 @@ bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList,
     return false;
 
   // Get the tile loop band and point loop band.
-  band = tiledBand;
-  band.resize(originalBandSize);
-  auto pointLoopBand = llvm::drop_begin(tiledBand, originalBandSize);
+  AffineLoopBand pointBand(std::next(tiledBand.begin(), originalBandSize),
+                           tiledBand.end());
+  tiledBand.resize(originalBandSize);
 
   // Annotate the required attributes.
-  for (auto zip : llvm::zip(band, pointLoopBand, flags)) {
+  for (auto zip : llvm::zip(tiledBand, pointBand, flags)) {
     auto tileLoop = std::get<0>(zip);
     auto pointLoop = std::get<1>(zip);
     auto flag = std::get<2>(zip);
@@ -60,6 +59,18 @@ bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList,
     if (annotatePointLoop)
       setPointAttr(pointLoop);
   }
+
+  // Collect the normalized tile band.
+  if (loopNormalize) {
+    band.clear();
+    for (auto loop : tiledBand) {
+      (void)normalizeAffineFor(loop);
+      auto tripCount = getConstantTripCount(loop);
+      if (!tripCount || tripCount.getValue() != 1)
+        band.push_back(loop);
+    }
+  } else
+    band = tiledBand;
   return true;
 }
 
@@ -101,7 +112,7 @@ struct AffineLoopTile : public AffineLoopTileBase<AffineLoopTile> {
       if (avoidMaxMinBounds)
         adjustToDivisorsOfTripCounts(band, &tileSizes);
 
-      applyLoopTiling(band, tileSizes, /*annotatePointLoop=*/true);
+      applyLoopTiling(band, tileSizes, /*loopNormalize=*/false);
     }
   }
 
@@ -112,9 +123,6 @@ struct AffineLoopTile : public AffineLoopTileBase<AffineLoopTile> {
 
 /// Creates a pass to perform loop tiling on all suitable loop nests of a
 /// Function.
-std::unique_ptr<Pass> scalehls::createAffineLoopTilePass() {
-  return std::make_unique<AffineLoopTile>();
-}
 std::unique_ptr<Pass>
 scalehls::createAffineLoopTilePass(unsigned loopTileSize) {
   return std::make_unique<AffineLoopTile>(loopTileSize);

@@ -16,7 +16,7 @@ declare_mlir_python_extension(ScaleHLSBindingsPythonExtension.Core
   SOURCES
     ScaleHLSModule.cpp
   EMBED_CAPI_LINK_LIBS
-    MLIRScaleHLSCAPIHLSCpp
+    MLIRScaleHLSCAPIHLS
     MLIRScaleHLSCAPIEmitHLSCpp
   PRIVATE_LINK_LIBS
     LLVMSupport
@@ -48,10 +48,10 @@ declare_mlir_python_sources(ScaleHLSBindingsPythonSources.Dialects
 declare_mlir_dialect_python_bindings(
   ADD_TO_PARENT ScaleHLSBindingsPythonSources.Dialects
   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
-  TD_FILE scalehls/dialects/HLSCppOps.td
+  TD_FILE scalehls/dialects/HLSOps.td
   SOURCES
-    scalehls/dialects/hlscpp.py
-  DIALECT_NAME hlscpp)
+    scalehls/dialects/hls.py
+  DIALECT_NAME hls)
 
 ################################################################################
 # Build composite binaries

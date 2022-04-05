@@ -6,7 +6,6 @@
 
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
 #include "mlir/Dialect/Affine/LoopUtils.h"
-#include "mlir/Dialect/Affine/Utils.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
@@ -35,8 +34,8 @@ namespace {
 struct AffineLoopUnrollJam
     : public AffineLoopUnrollJamBase<AffineLoopUnrollJam> {
   AffineLoopUnrollJam() = default;
-  AffineLoopUnrollJam(unsigned loopUnrollSize, bool unrollPointLoopOnly) {
-    unrollSize = loopUnrollSize;
+  AffineLoopUnrollJam(unsigned loopUnrollFactor, bool unrollPointLoopOnly) {
+    unrollFactor = loopUnrollFactor;
     pointLoopOnly = unrollPointLoopOnly;
   }
 
@@ -56,11 +55,11 @@ struct AffineLoopUnrollJam
       }
 
       TileList sizes;
-      unsigned remainTileSize = unrollSize;
+      unsigned remainTileSize = unrollFactor;
 
       // Calculate the tiling size of each loop level.
-      for (auto loop : band) {
-        if (auto optionalTripCount = getConstantTripCount(loop)) {
+      for (auto it = band.rbegin(), e = band.rend(); it != e; ++it) {
+        if (auto optionalTripCount = getConstantTripCount(*it)) {
           auto tripCount = optionalTripCount.getValue();
           auto size = tripCount;
 
@@ -78,9 +77,10 @@ struct AffineLoopUnrollJam
         } else
           sizes.push_back(1);
       }
+      std::reverse(sizes.begin(), sizes.end());
 
-      // Apply loop tiling and then unroll all point loops.
-      applyLoopTiling(band, sizes);
+      // Apply loop tiling and then unroll all point loops
+      applyLoopTiling(band, sizes, /*loopNormalize=*/false);
       if (loopOrderOpt.getValue())
         applyAffineLoopOrderOpt(band);
       applyFullyLoopUnrolling(*band.back().getBody());
@@ -89,12 +89,9 @@ struct AffineLoopUnrollJam
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createAffineLoopUnrollJamPass() {
-  return std::make_unique<AffineLoopUnrollJam>();
-}
 std::unique_ptr<Pass>
-scalehls::createAffineLoopUnrollJamPass(unsigned loopUnrollSize,
+scalehls::createAffineLoopUnrollJamPass(unsigned loopUnrollFactor,
                                         bool unrollPointLoopOnly) {
-  return std::make_unique<AffineLoopUnrollJam>(loopUnrollSize,
+  return std::make_unique<AffineLoopUnrollJam>(loopUnrollFactor,
                                                unrollPointLoopOnly);
 }

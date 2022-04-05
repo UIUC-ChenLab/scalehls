@@ -4,8 +4,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
-#include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "scalehls/Transforms/Passes.h"
@@ -13,7 +11,7 @@
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
+using namespace hls;
 
 static void updateSubFuncs(FuncOp func, Builder builder) {
   func.walk([&](func::CallOp op) {
@@ -25,7 +23,7 @@ static void updateSubFuncs(FuncOp func, Builder builder) {
     auto subInputTypes = op.getOperandTypes();
     auto newType = builder.getFunctionType(subInputTypes, subResultTypes);
 
-    if (subFunc.getType() != newType) {
+    if (subFunc.getFunctionType() != newType) {
       subFunc.setType(newType);
 
       // Set arguments type.
@@ -47,7 +45,7 @@ static void updateSubFuncs(FuncOp func, Builder builder) {
 
 /// Apply the specified array partition factors and kinds.
 bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
-                                   ArrayRef<hlscpp::PartitionKind> kinds,
+                                   ArrayRef<hls::PartitionKind> kinds,
                                    bool updateFuncSignature) {
   auto builder = Builder(array.getContext());
   auto arrayType = array.getType().dyn_cast<MemRefType>();
@@ -356,7 +354,7 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
     // Apply array partition to the sub-function.
     applyAutoArrayPartition(subFunc);
 
-    auto subFuncType = subFunc.getType();
+    auto subFuncType = subFunc.getFunctionType();
     unsigned index = 0;
     for (auto inputType : subFuncType.getInputs()) {
       if (auto memrefType = inputType.dyn_cast<MemRefType>()) {
@@ -399,7 +397,7 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
     auto memref = pair.first;
     auto partitions = pair.second;
 
-    SmallVector<hlscpp::PartitionKind, 4> kinds;
+    SmallVector<hls::PartitionKind, 4> kinds;
     SmallVector<unsigned, 4> factors;
     for (auto info : partitions) {
       kinds.push_back(info.first);
@@ -430,7 +428,7 @@ struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
     // FIXME: A better solution to handle the runtime main function.
     FuncOp topFunc;
     for (auto func : module.getOps<FuncOp>()) {
-      if (func.getName() == "main") {
+      if (hasRuntimeAttr(func)) {
         topFunc = func;
         break;
       } else if (hasTopFuncAttr(func))
@@ -438,7 +436,7 @@ struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
     }
 
     if (!topFunc) {
-      emitError(module.getLoc(), "top function is not found");
+      emitError(module.getLoc(), "fail to find the top function");
       return signalPassFailure();
     }
     applyAutoArrayPartition(topFunc);

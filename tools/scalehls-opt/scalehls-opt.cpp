@@ -4,7 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Support/MlirOptMain.h"
+#include "mlir/Tools/mlir-opt/MlirOptMain.h"
 #include "scalehls/InitAllDialects.h"
 #include "scalehls/InitAllPasses.h"
 

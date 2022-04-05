@@ -22,8 +22,9 @@ struct AffineLoopDataflow : public AffineLoopDataflowBase<AffineLoopDataflow> {
   void runOnOperation() override {
     auto module = getOperation();
 
-    // Dataflow each function in the module.
     for (auto func : llvm::make_early_inc_range(module.getOps<FuncOp>())) {
+      localizeConstants(func.front());
+
       // Collect all target loop bands.
       AffineLoopBands targetBands;
       getLoopBands(func.front(), targetBands, /*allowHavingChilds=*/true);
@@ -38,9 +39,6 @@ struct AffineLoopDataflow : public AffineLoopDataflowBase<AffineLoopDataflow> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createAffineLoopDataflowPass() {
-  return std::make_unique<AffineLoopDataflow>();
-}
 std::unique_ptr<Pass>
 scalehls::createAffineLoopDataflowPass(unsigned dataflowGran,
                                        bool dataflowBalance) {

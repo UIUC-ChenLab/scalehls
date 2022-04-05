@@ -9,12 +9,17 @@
 
 using namespace mlir;
 using namespace scalehls;
+using namespace hls;
 
 /// Apply loop pipelining to the input loop, all inner loops are automatically
 /// fully unrolled.
 bool scalehls::applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
                                    unsigned targetII) {
   auto targetLoop = band[pipelineLoc];
+
+  if (auto directive = getLoopDirective(targetLoop))
+    if (directive.getDataflow())
+      return false;
 
   // All inner loops of the pipelined loop are automatically unrolled.
   if (!applyFullyLoopUnrolling(*targetLoop.getBody()))

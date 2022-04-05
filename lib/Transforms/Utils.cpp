@@ -13,88 +13,7 @@
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
-
-//===----------------------------------------------------------------------===//
-// Directive transform utils
-//===----------------------------------------------------------------------===//
-
-/// Set timing attribute.
-void scalehls::setTiming(Operation *op, TimingAttr timing) {
-  assert(timing.getBegin() <= timing.getEnd() && "invalid timing attribute");
-  op->setAttr("timing", timing);
-}
-
-void scalehls::setTiming(Operation *op, int64_t begin, int64_t end,
-                         int64_t latency, int64_t minII) {
-  auto timing = TimingAttr::get(op->getContext(), begin, end, latency, minII);
-  setTiming(op, timing);
-}
-
-/// Set resource attribute.
-void scalehls::setResource(Operation *op, ResourceAttr resource) {
-  op->setAttr("resource", resource);
-}
-
-void scalehls::setResource(Operation *op, int64_t lut, int64_t dsp,
-                           int64_t bram) {
-  auto resource = ResourceAttr::get(op->getContext(), lut, dsp, bram);
-  setResource(op, resource);
-}
-
-/// Set loop information attribute.
-void scalehls::setLoopInfo(Operation *op, LoopInfoAttr loopInfo) {
-  op->setAttr("loop_info", loopInfo);
-}
-
-void scalehls::setLoopInfo(Operation *op, int64_t flattenTripCount,
-                           int64_t iterLatency, int64_t minII) {
-  auto loopInfo =
-      LoopInfoAttr::get(op->getContext(), flattenTripCount, iterLatency, minII);
-  setLoopInfo(op, loopInfo);
-}
-
-/// Set loop directives.
-void scalehls::setLoopDirective(Operation *op,
-                                LoopDirectiveAttr loopDirective) {
-  op->setAttr("loop_directive", loopDirective);
-}
-
-void scalehls::setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
-                                bool dataflow, bool flatten) {
-  auto loopDirective = LoopDirectiveAttr::get(op->getContext(), pipeline,
-                                              targetII, dataflow, flatten);
-  setLoopDirective(op, loopDirective);
-}
-
-void scalehls::setParallelAttr(AffineForOp loop) {
-  loop->setAttr("parallel", UnitAttr::get(loop.getContext()));
-}
-
-void scalehls::setPointAttr(AffineForOp loop) {
-  loop->setAttr("point", UnitAttr::get(loop.getContext()));
-}
-
-/// Set func directives.
-void scalehls::setFuncDirective(Operation *op,
-                                FuncDirectiveAttr funcDirective) {
-  op->setAttr("func_directive", funcDirective);
-}
-
-void scalehls::setFuncDirective(Operation *op, bool pipeline,
-                                int64_t targetInterval, bool dataflow) {
-  auto funcDirective = FuncDirectiveAttr::get(op->getContext(), pipeline,
-                                              targetInterval, dataflow);
-  setFuncDirective(op, funcDirective);
-}
-
-void scalehls::setTopFuncAttr(FuncOp func) {
-  func->setAttr("top_func", UnitAttr::get(func.getContext()));
-}
-
-//===----------------------------------------------------------------------===//
-// Loop transform utils
-//===----------------------------------------------------------------------===//
+using namespace hls;
 
 static void addMemoryOptsPipeline(PassManager &pm) {
   // To factor out the redundant affine operations.
@@ -115,7 +34,7 @@ static void addMemoryOptsPipeline(PassManager &pm) {
 
 /// Apply memory optimizations.
 bool scalehls::applyMemoryOpts(FuncOp func) {
-  PassManager optPM(func.getContext(), "builtin.func");
+  PassManager optPM(func.getContext(), "func.func");
   addMemoryOptsPipeline(optPM);
   if (failed(optPM.run(func)))
     return false;

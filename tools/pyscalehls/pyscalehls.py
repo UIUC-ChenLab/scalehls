@@ -7,7 +7,7 @@ import io
 from subprocess import PIPE, run
 import scalehls
 import mlir.ir
-from mlir.dialects import builtin
+from mlir.dialects import func as func_dialect
 import numpy as np
 
 
@@ -46,13 +46,12 @@ def main():
 
     # Traverse all functions in the MLIR module.
     for func in mod.body:
-        if not isinstance(func, builtin.FuncOp):
+        if not isinstance(func, func_dialect.FuncOp):
             pass
-        func.__class__ = builtin.FuncOp
+        func.__class__ = func_dialect.FuncOp
 
-        # Legalize the IR.
-        scalehls.legalize_to_hlscpp(
-            func, func.sym_name.value == opts.function)
+        # Preprocess the functions.
+        scalehls.func_preprocess(func, func.sym_name.value == opts.function)
 
         # Traverse all suitable loop bands in the function.
         bands = scalehls.LoopBandList(func)

@@ -4,18 +4,18 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/IR/Dominance.h"
-#include "mlir/IR/Matchers.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "scalehls/Dialect/HLS/HLS.h"
 #include "scalehls/Transforms/Passes.h"
-#include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
+using namespace hls;
 
 namespace {
 struct AllocOpRewritePattern : public OpRewritePattern<memref::AllocOp> {
@@ -41,7 +41,8 @@ struct AllocOpRewritePattern : public OpRewritePattern<memref::AllocOp> {
     auto anotherMemref = alloc.memref() == copy.getSource() ? copy.getTarget()
                                                             : copy.getSource();
     if (auto anotherAlloc = anotherMemref.getDefiningOp())
-      if (DT.dominates(alloc.getOperation(), anotherAlloc))
+      if (!isa<memref::AllocOp>(anotherAlloc) ||
+          DT.dominates(alloc.getOperation(), anotherAlloc))
         return failure();
     if (alloc.getType().getMemorySpaceAsInt() !=
         anotherMemref.getType().cast<MemRefType>().getMemorySpaceAsInt())
@@ -69,102 +70,6 @@ struct AllocOpRewritePattern : public OpRewritePattern<memref::AllocOp> {
 
 private:
   DominanceInfo &DT;
-};
-} // namespace
-
-namespace {
-struct AssignOpRewritePattern : public OpRewritePattern<AssignOp> {
-  using OpRewritePattern<AssignOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(AssignOp assign,
-                                PatternRewriter &rewriter) const override {
-    if (!assign->hasOneUse())
-      return failure();
-
-    auto toTensorOp = assign.input().getDefiningOp<bufferization::ToTensorOp>();
-    auto toMemrefOp =
-        dyn_cast<bufferization::ToMemrefOp>(*assign.output().user_begin());
-    if (!toTensorOp || !toMemrefOp)
-      return failure();
-
-    // Convert the tensor assign to an explicit alloc+copy.
-    rewriter.setInsertionPointAfter(toMemrefOp);
-    rewriter.create<memref::CopyOp>(assign.getLoc(), toTensorOp.memref(),
-                                    toMemrefOp.memref());
-    rewriter.replaceOpWithNewOp<memref::AllocOp>(
-        toMemrefOp, toMemrefOp.getType().cast<MemRefType>());
-    rewriter.eraseOp(assign);
-
-    return success();
-  }
-};
-} // namespace
-
-namespace {
-/// From the semantics point of view, reshape should not introduce a redundant
-/// memref copy. However, in HLS, a reinterpret-like statement will obstruct the
-/// array partition of the on-chip memory. Therefore, we convert reshape to
-/// explict alloc and copy in this lowering.
-struct ReshapeOpLoweringPattern : public OpRewritePattern<tensor::ReshapeOp> {
-  using OpRewritePattern<tensor::ReshapeOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(tensor::ReshapeOp reshape,
-                                PatternRewriter &rewriter) const override {
-    if (!reshape->hasOneUse())
-      return failure();
-
-    auto toTensorOp =
-        reshape.source().getDefiningOp<bufferization::ToTensorOp>();
-    auto toMemrefOp =
-        dyn_cast<bufferization::ToMemrefOp>(*reshape.result().user_begin());
-    if (!toTensorOp || !toMemrefOp)
-      return failure();
-
-    auto inputType = toTensorOp.memref().getType().cast<MemRefType>();
-    auto resultType = toMemrefOp.getType().cast<MemRefType>();
-    auto loc = reshape.getLoc();
-
-    // Create a single loop to traverse all elements of the memrefs.
-    rewriter.setInsertionPointAfter(toMemrefOp);
-    auto loop =
-        rewriter.create<mlir::AffineForOp>(loc, 0, resultType.getNumElements());
-    rewriter.setInsertionPointToStart(loop.getBody());
-
-    // A helper to get the memory access map.
-    auto getMemrefAccessMap = [&](MemRefType type) {
-      unsigned rank = type.getRank();
-      SmallVector<AffineExpr, 4> exprs(rank, rewriter.getAffineDimExpr(0));
-
-      for (unsigned dim = 0; dim < rank; ++dim)
-        for (unsigned idx = 0; idx < dim; ++idx)
-          exprs[idx] = exprs[idx].floorDiv(type.getDimSize(dim));
-
-      for (unsigned idx = 0; idx < rank; ++idx) {
-        auto &expr = exprs[idx];
-        if (auto constantExpr = expr.dyn_cast<AffineDimExpr>())
-          if (resultType.getNumElements() <= type.getDimSize(idx))
-            continue;
-        expr = expr % type.getDimSize(idx);
-      }
-
-      return AffineMap::get(/*dimCount=*/1, 0, exprs, rewriter.getContext());
-    };
-
-    // Create affine load/store operations.
-    auto value = rewriter.create<mlir::AffineLoadOp>(
-        loc, toTensorOp.memref(), getMemrefAccessMap(inputType),
-        loop.getInductionVar());
-    rewriter.create<mlir::AffineStoreOp>(loc, value, toMemrefOp.memref(),
-                                         getMemrefAccessMap(resultType),
-                                         loop.getInductionVar());
-
-    // Convert the reshape result to an explicit alloc.
-    rewriter.setInsertionPointAfter(toMemrefOp);
-    rewriter.replaceOpWithNewOp<memref::AllocOp>(toMemrefOp, resultType);
-    rewriter.eraseOp(reshape);
-
-    return success();
-  }
 };
 } // namespace
 
@@ -233,8 +138,6 @@ struct ConvertCopyToAffineLoops
     // Simplify alloc and copy ops.
     mlir::RewritePatternSet patterns(context);
     patterns.add<AllocOpRewritePattern>(context, DT);
-    patterns.add<AssignOpRewritePattern>(context);
-    patterns.add<ReshapeOpLoweringPattern>(context);
     (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
 
     // Lower copy and assign operation.

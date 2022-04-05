@@ -12,56 +12,54 @@
 
 namespace mlir {
 class Pass;
+namespace func {
+class FuncOp;
+} // namespace func
 } // namespace mlir
 
 namespace mlir {
 namespace scalehls {
 
 void registerScaleHLSDSEPipeline();
-void registerScaleHLSPyTorchPipeline();
-void registerScaleHLSTestPipeline();
+void registerScaleHLSPyTorchPipelineV2();
 void registerTransformsPasses();
 
-/// QoR estimation and DSE passes.
-std::unique_ptr<Pass> createQoREstimationPass();
-std::unique_ptr<Pass> createQoREstimationPass(std::string qorTargetSpec);
-std::unique_ptr<Pass> createMultipleLevelDSEPass();
-std::unique_ptr<Pass> createMultipleLevelDSEPass(std::string dseTargetSpec);
+/// Design space exploration passes.
+std::unique_ptr<Pass>
+createDesignSpaceExplorePass(std::string dseTargetSpec = "");
 
 /// Graph optimization passes.
-std::unique_ptr<Pass> createFakeQuantizePass();
-std::unique_ptr<Pass> createSimplifyTosaGraphPass();
 std::unique_ptr<Pass> createShareTensorOperationPass();
-std::unique_ptr<Pass> createHeuristicNodeFusionPass();
-std::unique_ptr<Pass> createFuncDataflowPass();
-std::unique_ptr<Pass> createFuncDataflowPass(unsigned dataflowGran,
-                                             bool dataflowBalance = true);
+std::unique_ptr<Pass> createTosaFakeQuantizePass();
+std::unique_ptr<Pass> createTosaSimplifyGraphPass();
+std::unique_ptr<Pass> createTosaNodeFusionPass();
+std::unique_ptr<Pass> createCreateTokenFlowPass();
+std::unique_ptr<Pass>
+createFuncDataflowPass(std::string dataflowTargetFunc = "forward",
+                       unsigned dataflowGran = 1, bool dataflowBalance = true);
+std::unique_ptr<Pass> createDataflowBufferizePass();
+std::unique_ptr<Pass> createConvertDataflowToFuncPass();
 std::unique_ptr<Pass> createTosaToLinalgCleanupPass();
 
 /// Runtime-related passes.
-std::unique_ptr<Pass> createCreateRuntimeMainPass();
-std::unique_ptr<Pass> createCreateRuntimeMainPass(std::string hlsTopFunc);
-
-/// HLSCpp legalization pass.
-std::unique_ptr<Pass> createLegalizeToHLSCppPass();
-std::unique_ptr<Pass> createLegalizeToHLSCppPass(std::string hlsTopFunc,
-                                                 bool hlsAxiInterf = false);
+std::unique_ptr<Pass>
+createCreateRuntimeMainPass(std::string hlsTopFunc = "forward");
+std::unique_ptr<Pass> createCreateAxiInterfacePass();
 
 /// Loop optimization passes.
+std::unique_ptr<Pass>
+createFuncPreprocessPass(std::string hlsTopFunc = "forward");
 std::unique_ptr<Pass>
 createConvertCopyToAffineLoopsPass(bool convertInternCopyOnly = true);
 std::unique_ptr<Pass> createMaterializeReductionPass();
 std::unique_ptr<Pass> createAffineLoopPerfectionPass();
 std::unique_ptr<Pass> createRemoveVariableBoundPass();
 std::unique_ptr<Pass> createAffineLoopOrderOptPass();
-std::unique_ptr<Pass> createAffineLoopTilePass();
-std::unique_ptr<Pass> createAffineLoopTilePass(unsigned loopTileSize);
-std::unique_ptr<Pass> createAffineLoopUnrollJamPass();
+std::unique_ptr<Pass> createAffineLoopTilePass(unsigned loopTileSize = 1);
 std::unique_ptr<Pass>
-createAffineLoopUnrollJamPass(unsigned loopUnrollSize,
+createAffineLoopUnrollJamPass(unsigned loopUnrollFactor = 1,
                               bool unrollPointLoopOnly = false);
-std::unique_ptr<Pass> createAffineLoopDataflowPass();
-std::unique_ptr<Pass> createAffineLoopDataflowPass(unsigned dataflowGran,
+std::unique_ptr<Pass> createAffineLoopDataflowPass(unsigned dataflowGran = 1,
                                                    bool dataflowBalance = true);
 std::unique_ptr<Pass> createSimplifyAffineIfPass();
 
@@ -78,7 +76,8 @@ void registerScaleHLSPassPipeline();
 std::unique_ptr<Pass> createFuncPipeliningPass();
 std::unique_ptr<Pass> createLoopPipeliningPass();
 std::unique_ptr<Pass> createArrayPartitionPass();
-std::unique_ptr<Pass> createCreateHLSCppPrimitivePass();
+std::unique_ptr<Pass> createCreateHLSPrimitivePass();
+std::unique_ptr<Pass> createQoREstimationPass(std::string qorTargetSpec = "");
 
 /// Other passes.
 std::unique_ptr<Pass> createPreserveUnoptimizedPass();
