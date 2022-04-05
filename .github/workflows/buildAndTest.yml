@@ -28,44 +28,19 @@ jobs:
           path: polygeist/llvm-project/build
           key: ${{ runner.os }}-llvm-${{ steps.get-llvm-hash.outputs.hash }}
 
-      - name: Rebuild and Install LLVM
+      - name: Rebuild LLVM
         if: steps.cache-llvm.outputs.cache-hit != 'true'
         run: |
           mkdir -p polygeist/llvm-project/build
           cd polygeist/llvm-project/build
           cmake ../llvm \
-            -DLLVM_ENABLE_PROJECTS="mlir;clang" \
+            -DLLVM_ENABLE_PROJECTS="mlir" \
             -DLLVM_TARGETS_TO_BUILD="host" \
             -DCMAKE_BUILD_TYPE=RELEASE \
             -DLLVM_USE_LINKER=lld \
             -DCMAKE_C_COMPILER=clang \
             -DCMAKE_CXX_COMPILER=clang++
           cmake --build . -j $(nproc)
-
-      - name: Get Polygeist Hash
-        id: get-polygeist-hash
-        run: echo "::set-output name=hash::$(git rev-parse @:./polygeist)"
-
-      - name: Cache Polygeist
-        id: cache-polygeist
-        uses: actions/cache@v2
-        with:
-          path: polygeist/build
-          key: ${{ runner.os }}-polygeist-${{ steps.get-polygeist-hash.outputs.hash }}
-
-      - name: Rebuild and Test Polygeist
-        if: steps.cache-polygeist.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p polygeist/build
-          cd polygeist/build
-          cmake .. \
-            -DMLIR_DIR="$PWD/../llvm-project/build/lib/cmake/mlir" \
-            -DCLANG_DIR="$PWD/../llvm-project/build/lib/cmake/clang" \
-            -DCMAKE_BUILD_TYPE=RELEASE \
-            -DLLVM_USE_LINKER=lld \
-            -DCMAKE_C_COMPILER=clang \
-            -DCMAKE_CXX_COMPILER=clang++
-          cmake --build . --target check-mlir-clang -j $(nproc)
 
       - name: Build and Test ScaleHLS
         run: |
