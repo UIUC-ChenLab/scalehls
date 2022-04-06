@@ -59,13 +59,13 @@ struct CreateAxiInterface
       return signalPassFailure();
     };
 
-    // Move each memory, including normal allocs and buffer primitive, allocated
+    // Move each allocs, buffer primitives, and constant primitives, allocated
     // in the top function to the runtime function. As each AXI interface only
     // has one read and one write channel, we need to avoid interface conflicts
     // by analyzing the memroy access pattern of sub-functions.
     SmallVector<Value, 32> inputs(call.getOperands());
     for (auto &op : llvm::make_early_inc_range(func.front())) {
-      if (!isa<memref::AllocOp, PrimBufferOp>(op))
+      if (!isa<memref::AllocOp, PrimBufferOp, PrimConstOp>(op))
         continue;
       auto memref = op.getResult(0);
       auto type = memref.getType().cast<MemRefType>();

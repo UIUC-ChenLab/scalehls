@@ -234,6 +234,7 @@ public:
   void emitStreamWrite(StreamWriteOp op);
   void emitPrimMul(PrimMulOp op);
   template <typename AssignOpType> void emitAssign(AssignOpType op);
+  void emitPrimConst(PrimConstOp op);
 
   /// Control flow operation emitters.
   void emitCall(func::CallOp op);
@@ -248,7 +249,7 @@ public:
 
   /// Special operation emitters.
   void emitSelect(arith::SelectOp op);
-  void emitConstant(arith::ConstantOp op);
+  template <typename OpType> void emitConstant(OpType op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
@@ -453,6 +454,7 @@ public:
       return emitter.emitAlloc(op), true;
     return op.emitOpError("only support depth of 1"), false;
   }
+  bool visitOp(PrimConstOp op) { return emitter.emitPrimConst(op), true; }
 
   /// Control flow operations.
   bool visitOp(func::CallOp op) { return emitter.emitCall(op), true; }
@@ -1362,6 +1364,11 @@ void ModuleEmitter::emitAssign(AssignOpType op) {
   emitNestedLoopFooter(rank);
 }
 
+void ModuleEmitter::emitPrimConst(PrimConstOp op) {
+  emitConstant(op);
+  emitArrayDirectives(op.getResult());
+}
+
 /// Control flow operation emitters.
 void ModuleEmitter::emitCall(func::CallOp op) {
   // Handle returned value by the callee.
@@ -1506,21 +1513,23 @@ void ModuleEmitter::emitSelect(arith::SelectOp op) {
   emitNestedLoopFooter(rank);
 }
 
-void ModuleEmitter::emitConstant(arith::ConstantOp op) {
+template <typename OpType> void ModuleEmitter::emitConstant(OpType op) {
   // This indicates the constant type is scalar (float, integer, or bool).
   if (isDeclared(op.getResult()))
     return;
 
-  if (auto denseAttr = op.getValue().dyn_cast<DenseElementsAttr>()) {
+  if (auto denseAttr = op.getValue().template dyn_cast<DenseElementsAttr>()) {
     indent();
     emitArrayDecl(op.getResult());
     os << " = {";
-    auto type = op.getResult().getType().cast<ShapedType>().getElementType();
+    auto type =
+        op.getResult().getType().template cast<ShapedType>().getElementType();
 
     unsigned elementIdx = 0;
-    for (auto element : denseAttr.getValues<Attribute>()) {
+    for (auto element : denseAttr.template getValues<Attribute>()) {
       if (type.isF32()) {
-        auto value = element.cast<FloatAttr>().getValue().convertToFloat();
+        auto value =
+            element.template cast<FloatAttr>().getValue().convertToFloat();
         if (std::isfinite(value))
           os << value;
         else if (value > 0)
@@ -1529,7 +1538,8 @@ void ModuleEmitter::emitConstant(arith::ConstantOp op) {
           os << "-INFINITY";
 
       } else if (type.isF64()) {
-        auto value = element.cast<FloatAttr>().getValue().convertToDouble();
+        auto value =
+            element.template cast<FloatAttr>().getValue().convertToDouble();
         if (std::isfinite(value))
           os << value;
         else if (value > 0)
@@ -1538,9 +1548,9 @@ void ModuleEmitter::emitConstant(arith::ConstantOp op) {
           os << "-INFINITY";
 
       } else if (type.isInteger(1))
-        os << element.cast<BoolAttr>().getValue();
+        os << element.template cast<BoolAttr>().getValue();
       else if (type.isIntOrIndex())
-        os << element.cast<IntegerAttr>().getValue();
+        os << element.template cast<IntegerAttr>().getValue();
       else
         emitError(op, "array has unsupported element type.");
 

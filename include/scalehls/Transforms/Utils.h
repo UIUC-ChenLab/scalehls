@@ -71,10 +71,6 @@ bool applyOptStrategy(AffineLoopBand &band, func::FuncOp func,
 bool applyOptStrategy(func::FuncOp func, ArrayRef<TileList> tileLists,
                       ArrayRef<unsigned> targetIIs);
 
-/// Localize each tosa/arith constant to right before its each use. Only
-/// localize the constants whose size is below the bitsThreshold.
-void localizeConstants(Block &block, int64_t bitsThreshold = INT64_MAX);
-
 /// Fuse the given operations into a new dataflow node. The fused node will be
 /// created before the first operation and each operation will be inserted in
 /// order. This method always succeeds.

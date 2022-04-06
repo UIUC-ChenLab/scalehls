@@ -87,13 +87,49 @@ struct BufferConversionPattern : public OpRewritePattern<DataflowBufferOp> {
 };
 } // namespace
 
+/// Localize each tosa/arith constant to right before its each use. Only
+/// localize the constants whose size is below the bitsThreshold.
+static void localizeConstants(Block &block, int64_t bitsThreshold = INT64_MAX) {
+  auto builder = OpBuilder(block.getParentOp());
+
+  // Collect all constants.
+  SmallVector<Operation *, 16> constants;
+  block.walk([&](Operation *constant) {
+    if (isa<arith::ConstantOp, PrimConstOp>(constant)) {
+      auto type = constant->getResult(0).getType();
+      if (auto shapedType = type.dyn_cast<ShapedType>()) {
+        if (shapedType.getSizeInBits() <= bitsThreshold)
+          constants.push_back(constant);
+      } else
+        constants.push_back(constant);
+    }
+  });
+
+  // Localize constants to each of its use.
+  for (auto constant : constants) {
+    for (auto &use : llvm::make_early_inc_range(constant->getUses())) {
+      // Avoid to move constant across loop nests.
+      if (auto loop = use.getOwner()->getParentOfType<mlir::AffineForOp>())
+        if (loop != constant->getParentOp())
+          continue;
+      builder.setInsertionPoint(use.getOwner());
+      auto cloneConstant = builder.clone(*constant);
+      use.set(cloneConstant->getResult(0));
+    }
+    if (constant->use_empty())
+      constant->erase();
+  }
+}
+
 namespace {
 struct ConvertDataflowToFunc
     : public ConvertDataflowToFuncBase<ConvertDataflowToFunc> {
   void runOnOperation() override {
     auto module = getOperation();
     auto context = module.getContext();
-    localizeConstants(*module.getBody());
+    // FIXME: Here we set a magic number as threshold, which is the size in bits
+    // of one Xilinx BRAM instance.
+    localizeConstants(*module.getBody(), 1024 * 16);
 
     // Hoist the memrefs and stream channels outputed by each node.
     // TODO: Maybe this should be factored out to somewhere else.

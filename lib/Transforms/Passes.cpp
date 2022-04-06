@@ -118,9 +118,9 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addNestedPass<func::FuncOp>(tosa::createTosaToLinalg());
         pm.addPass(tosa::createTosaToStandard());
         pm.addPass(mlir::createLinalgGeneralizationPass());
+        pm.addPass(mlir::createCanonicalizerPass());
 
-        // Bufferization and rumtime creation.
-        pm.addPass(scalehls::createCreateRuntimeMainPass(opts.hlsTopFunc));
+        // Tensor bufferization.
         pm.addPass(mlir::createLinalgBufferizePass());
         pm.addPass(scalehls::createBufferizeDataflowPass());
         pm.addPass(func::createFuncBufferizePass());
@@ -142,6 +142,9 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createAffineStoreForwardPass());
         pm.addPass(scalehls::createRaiseImplicitCopyPass());
         pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
+
+        // Create runtime components.
+        pm.addPass(scalehls::createCreateRuntimeMainPass(opts.hlsTopFunc));
         pm.addPass(scalehls::createCreateAxiInterfacePass());
 
         // // Vectorization.

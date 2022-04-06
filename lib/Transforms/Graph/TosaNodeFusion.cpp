@@ -99,7 +99,6 @@ struct TosaNodeFusion : public TosaNodeFusionBase<TosaNodeFusion> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
-    localizeConstants(func.front());
     auto DT = DominanceInfo(func);
 
     mlir::RewritePatternSet patterns(context);
@@ -109,8 +108,8 @@ struct TosaNodeFusion : public TosaNodeFusionBase<TosaNodeFusion> {
     patterns.add<OutlinePattern<tosa::MatMulOp>>(context);
     patterns.add<OutlinePattern<tosa::AddOp>>(context);
     patterns.add<BackwardFusePattern<tosa::ClampOp>>(context, DT);
+    patterns.add<BackwardFusePattern<tosa::TransposeOp>>(context, DT);
     patterns.add<ForwardFusePattern<tosa::ReshapeOp>>(context, DT);
-    patterns.add<ForwardFusePattern<tosa::TransposeOp>>(context, DT);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
