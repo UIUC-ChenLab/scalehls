@@ -230,6 +230,7 @@ public:
   void emitStreamWrite(StreamWriteOp op);
   void emitPrimMul(PrimMulOp op);
   template <typename AssignOpType> void emitAssign(AssignOpType op);
+  void emitPrimConst(PrimConstOp op);
 
   /// Control flow operation emitters.
   void emitCall(func::CallOp op);
@@ -445,7 +446,7 @@ public:
       return emitter.emitAlloc(op), true;
     return op.emitOpError("only support depth of 1"), false;
   }
-  bool visitOp(PrimConstOp op) { return emitter.emitConstant(op), true; }
+  bool visitOp(PrimConstOp op) { return emitter.emitPrimConst(op), true; }
 
   /// Control flow operations.
   bool visitOp(func::CallOp op) { return emitter.emitCall(op), true; }
@@ -1349,6 +1350,11 @@ void ModuleEmitter::emitAssign(AssignOpType op) {
   os << ";";
   emitInfoAndNewLine(op);
   emitNestedLoopFooter(rank);
+}
+
+void ModuleEmitter::emitPrimConst(PrimConstOp op) {
+  emitConstant(op);
+  emitArrayDirectives(op.getResult());
 }
 
 /// Control flow operation emitters.

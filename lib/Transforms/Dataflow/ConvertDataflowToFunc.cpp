@@ -108,11 +108,16 @@ static void localizeConstants(Block &block, int64_t bitsThreshold = INT64_MAX) {
   // Localize constants to each of its use.
   for (auto constant : constants) {
     for (auto &use : llvm::make_early_inc_range(constant->getUses())) {
+      // Avoid to move constant across loop nests.
+      if (auto loop = use.getOwner()->getParentOfType<mlir::AffineForOp>())
+        if (loop != constant->getParentOp())
+          continue;
       builder.setInsertionPoint(use.getOwner());
       auto cloneConstant = builder.clone(*constant);
       use.set(cloneConstant->getResult(0));
     }
-    constant->erase();
+    if (constant->use_empty())
+      constant->erase();
   }
 }
 

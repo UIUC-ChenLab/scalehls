@@ -203,7 +203,8 @@ struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
     patterns.clear();
     patterns.add<DataflowMergePattern<func::FuncOp>>(context);
     (void)applyOpPatternsAndFold(func, std::move(patterns));
-    setFuncDirective(func, false, 1, true);
+    if (!func.getOps<DataflowNodeOp>().empty())
+      setFuncDirective(func, false, 1, true);
 
     // Collect all target loop bands.
     AffineLoopBands targetBands;
@@ -215,7 +216,8 @@ struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
     FrozenRewritePatternSet frozenPatterns(std::move(patterns));
     for (auto &band : targetBands) {
       (void)applyOpPatternsAndFold(band.back(), frozenPatterns);
-      setLoopDirective(band.back(), false, 1, true, false);
+      if (!band.back().getOps<DataflowNodeOp>().empty())
+        setLoopDirective(band.back(), false, 1, true, false);
     }
   }
 };
