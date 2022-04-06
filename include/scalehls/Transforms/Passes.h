@@ -68,6 +68,7 @@ std::unique_ptr<Pass> createAffineStoreForwardPass();
 std::unique_ptr<Pass> createSimplifyMemrefAccessPass();
 std::unique_ptr<Pass> createRaiseImplicitCopyPass();
 std::unique_ptr<Pass> createReduceInitialIntervalPass();
+std::unique_ptr<Pass> createLowerCastAndSubviewPass();
 
 void registerScaleHLSPassPipeline();
 /// Directive optimization passes.

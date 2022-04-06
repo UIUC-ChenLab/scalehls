@@ -376,18 +376,11 @@ def ReduceInitialInterval :
   let constructor = "mlir::scalehls::createReduceInitialIntervalPass()";
 }
 
-//===----------------------------------------------------------------------===//
-// Other Passes
-//===----------------------------------------------------------------------===//
-
-def PreserveUnoptimized : Pass<"preserve-unoptimized", "ModuleOp"> {
-  let summary = "Return unoptimized version of code along with the optimized one";
-  let description = [{
-    This preserve-unoptimized pass will create a copy of unoptimized module
-    before optimization and return it along with the optimized version. 
-  }];
-
-  let constructor = "mlir::scalehls::createPreserveUnoptimizedPass()";
+def LowerCastAndSubview :
+      Pass<"scalehls-lower-cast-and-subview", "func::FuncOp"> {
+  let summary = "Lower the cast and subviews into alloc and copy";
+  let description = [{}];
+  let constructor = "mlir::scalehls::createLowerCastAndSubviewPass()";
 }
 
 def QoREstimation : Pass<"scalehls-qor-estimation", "ModuleOp"> {
@@ -405,6 +398,16 @@ def QoREstimation : Pass<"scalehls-qor-estimation", "ModuleOp"> {
            /*default=*/"\"./config.json\"",
            "File path: target backend specifications and configurations">
   ];
+}
+
+def PreserveUnoptimized : Pass<"preserve-unoptimized", "ModuleOp"> {
+  let summary = "Return unoptimized version of code along with the optimized one";
+  let description = [{
+    This preserve-unoptimized pass will create a copy of unoptimized module
+    before optimization and return it along with the optimized version. 
+  }];
+
+  let constructor = "mlir::scalehls::createPreserveUnoptimizedPass()";
 }
 
 #endif // SCALEHLS_TRANSFORMS_PASSES_TD
