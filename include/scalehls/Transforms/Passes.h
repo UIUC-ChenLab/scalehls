@@ -22,6 +22,7 @@ namespace scalehls {
 
 void registerScaleHLSDSEPipeline();
 void registerScaleHLSPyTorchPipelineV2();
+void registerScaleHLSConvertTosaToHLS();
 void registerTransformsPasses();
 
 /// Design space exploration passes.

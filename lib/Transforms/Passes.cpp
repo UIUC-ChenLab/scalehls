@@ -12,6 +12,7 @@
 #include "mlir/Dialect/Func/Transforms/Passes.h"
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
+#include "mlir/Dialect/Tensor/Transforms/Passes.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
 
@@ -212,8 +213,80 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
       });
 }
 
+namespace {
+struct ScaleHLSConvertTosaToHLSOptions
+    : public PassPipelineOptions<ScaleHLSConvertTosaToHLSOptions> {
+  Option<std::string> hlsTopFunc{
+      *this, "top-func", llvm::cl::init("main"),
+      llvm::cl::desc("Specify the top function of the design")};
+};
+} // namespace
+
+void scalehls::registerScaleHLSConvertTosaToHLS() {
+  PassPipelineRegistration<ScaleHLSConvertTosaToHLSOptions>(
+      "scalehls-convert-tosa-to-hls",
+      "Lower TOSA operations to Affine HLS code",
+      [](OpPassManager &pm, const ScaleHLSConvertTosaToHLSOptions &opts) {
+        // Graph-level optimization.
+        pm.addPass(scalehls::createTosaSimplifyGraphPass());
+        pm.addPass(mlir::createCanonicalizerPass());
+
+        // TOSA to Linalg conversion.
+        pm.addNestedPass<func::FuncOp>(tosa::createTosaToLinalgNamed());
+        pm.addPass(scalehls::createTosaToLinalgCleanupPass());
+        pm.addNestedPass<func::FuncOp>(tosa::createTosaToLinalg());
+        pm.addPass(tosa::createTosaToStandard());
+        pm.addPass(mlir::createLinalgGeneralizationPass());
+        pm.addPass(mlir::createCanonicalizerPass());
+
+        // Tensor bufferization.
+        pm.addPass(mlir::createLinalgBufferizePass());
+        pm.addPass(mlir::createTensorBufferizePass());
+        pm.addPass(func::createFuncBufferizePass());
+        pm.addPass(bufferization::createBufferResultsToOutParamsPass());
+
+        // Dataflow and Linalg lowering.
+        pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
+        pm.addPass(scalehls::createLowerCastAndSubviewPass());
+        pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
+        pm.addPass(memref::createFoldSubViewOpsPass());
+        pm.addPass(mlir::createAffineLoopNormalizePass());
+        pm.addPass(mlir::createSimplifyAffineStructuresPass());
+        pm.addPass(mlir::createCanonicalizerPass());
+
+        // Affine loop perfectization.
+        pm.addPass(scalehls::createCreateRuntimeMainPass(opts.hlsTopFunc));
+        pm.addPass(scalehls::createFuncPreprocessPass(opts.hlsTopFunc));
+        pm.addPass(scalehls::createMaterializeReductionPass());
+        pm.addPass(scalehls::createAffineLoopPerfectionPass());
+        pm.addPass(mlir::createAffineScalarReplacementPass());
+        pm.addPass(scalehls::createRemoveVariableBoundPass());
+
+        // Affine loop tiling.
+        pm.addPass(mlir::createAffineLoopNormalizePass());
+        pm.addPass(mlir::createSimplifyAffineStructuresPass());
+        pm.addPass(mlir::createCanonicalizerPass());
+
+        // Memory optimization.
+        pm.addPass(scalehls::createSimplifyAffineIfPass());
+        pm.addPass(scalehls::createAffineStoreForwardPass());
+        pm.addPass(scalehls::createSimplifyMemrefAccessPass());
+        pm.addPass(scalehls::createReduceInitialIntervalPass());
+        pm.addPass(mlir::createCanonicalizerPass());
+
+        // Directive-level optimization.
+        pm.addPass(scalehls::createLoopPipeliningPass());
+        pm.addPass(scalehls::createArrayPartitionPass());
+        pm.addPass(scalehls::createCreateHLSPrimitivePass());
+        pm.addPass(mlir::createCSEPass());
+        pm.addPass(mlir::createCanonicalizerPass());
+      });
+}
+
+
 void scalehls::registerTransformsPasses() {
   registerScaleHLSDSEPipeline();
   registerScaleHLSPyTorchPipelineV2();
+  registerScaleHLSConvertTosaToHLS();
   registerPasses();
 }
