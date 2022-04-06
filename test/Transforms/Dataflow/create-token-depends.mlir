@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -scalehls-create-token-flow %s | FileCheck %s
+// RUN: scalehls-opt -scalehls-create-token-depends %s | FileCheck %s
 
 module {
   // CHECK: func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> {

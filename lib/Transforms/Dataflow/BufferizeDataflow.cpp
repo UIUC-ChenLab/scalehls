@@ -131,7 +131,7 @@ struct BufferBufferizePattern : public OpRewritePattern<DataflowBufferOp> {
 } // namespace
 
 namespace {
-struct DataflowBufferize : public DataflowBufferizeBase<DataflowBufferize> {
+struct BufferizeDataflow : public BufferizeDataflowBase<BufferizeDataflow> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -147,6 +147,6 @@ struct DataflowBufferize : public DataflowBufferizeBase<DataflowBufferize> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createDataflowBufferizePass() {
-  return std::make_unique<DataflowBufferize>();
+std::unique_ptr<Pass> scalehls::createBufferizeDataflowPass() {
+  return std::make_unique<BufferizeDataflow>();
 }

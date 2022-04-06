@@ -23,13 +23,22 @@ def DataflowNodeOp : HLSOp<"dataflow.node",
     node can return variadic number of results.
   }];
 
+  let hasCanonicalizer = 1;
+  let hasVerifier = 1;
+  let arguments = (ins OptionalAttr<I32Attr>:$level);
   let results = (outs Variadic<AnyType>:$outputs);
   let regions = (region SizedRegion<1>:$body);
 
+  let builders = [OpBuilder<(ins "mlir::TypeRange":$outputs),
+                            "build($_builder, $_state, outputs, nullptr);">];
+
   let assemblyFormat = [{
-    attr-dict `(` `)` (`->` qualified(type($outputs))^)? $body
+    `(` `)` (`->` qualified(type($outputs))^)? attr-dict-with-keyword $body
   }];
-  let extraClassDeclaration = [{ DataflowOutputOp getOutputOp(); }];
+  let extraClassDeclaration = [{
+    DataflowOutputOp getOutputOp();
+    SmallVector<std::pair<mlir::Value, mlir::Operation *>> getDataflowUses();
+  }];
 }
 
 def DataflowOutputOp : HLSOp<"dataflow.output",
@@ -71,8 +80,16 @@ def DataflowBufferOp : HLSOp<"dataflow.buffer",
   }];
 
   let hasCanonicalizer = 1;
-  let arguments = (ins AnyType:$input, I32Attr:$depth);
+  let hasVerifier = 1;
+  let arguments = (ins AnyType:$input, I32Attr:$depth,
+                       OptionalAttr<I32Attr>:$level);
   let results = (outs AnyType:$output);
+
+  let builders = [OpBuilder<(ins "mlir::Type":$output, "mlir::Value":$input,
+                   "uint32_t":$depth),
+    "build($_builder, $_state, output, input, depth, nullptr);">];
+
+  let extraClassDeclaration = [{ bool isExternal(); }];
 }
 
 //===----------------------------------------------------------------------===//

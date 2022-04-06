@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -scalehls-dataflow-bufferize %s | FileCheck %s
+// RUN: scalehls-opt -scalehls-bufferize-dataflow %s | FileCheck %s
 
 module {
   func @forward() -> tensor<1x32x32x64xi8> attributes {top_func} {
