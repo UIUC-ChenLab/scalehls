@@ -240,10 +240,6 @@ SmallVector<std::pair<Value, Operation *>> DataflowNodeOp::getDataflowUses() {
   return dfUses;
 }
 
-//===----------------------------------------------------------------------===//
-// DataflowOutputOp
-//===----------------------------------------------------------------------===//
-
 LogicalResult DataflowOutputOp::verify() {
   if (getOperandTypes() !=
       (*this)->getParentOfType<DataflowNodeOp>().getResultTypes())
@@ -332,7 +328,7 @@ LogicalResult StreamWriteOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
-// PrimMulOp
+// Primitive operations
 //===----------------------------------------------------------------------===//
 
 LogicalResult PrimMulOp::verify() {
@@ -352,10 +348,6 @@ bool PrimMulOp::isPackMul() {
   auto BIsVector = B().getType().isa<VectorType>();
   return (AIsVector && !BIsVector) || (!AIsVector && BIsVector);
 }
-
-//===----------------------------------------------------------------------===//
-// PrimCastOp
-//===----------------------------------------------------------------------===//
 
 namespace {
 struct SimplifyPrimCastOp : public OpRewritePattern<PrimCastOp> {
@@ -384,6 +376,18 @@ struct SimplifyPrimCastOp : public OpRewritePattern<PrimCastOp> {
 void PrimCastOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                              MLIRContext *context) {
   results.add<SimplifyPrimCastOp>(context);
+}
+
+LogicalResult PrimConstOp::verify() {
+  auto memrefType = getType();
+  auto attrType = value().getType().cast<TensorType>();
+  if (memrefType.getElementType() != attrType.getElementType())
+    return emitOpError("element type mismatch");
+  if (!memrefType.hasStaticShape() || !attrType.hasStaticShape())
+    return emitOpError("has dynamic shape");
+  if (memrefType.getShape() != attrType.getShape())
+    return emitOpError("shape mismatch");
+  return success();
 }
 
 //===----------------------------------------------------------------------===//

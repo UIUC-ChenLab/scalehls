@@ -131,6 +131,24 @@ struct BufferBufferizePattern : public OpRewritePattern<DataflowBufferOp> {
 } // namespace
 
 namespace {
+struct ConstantBufferizePattern
+    : public OpRewritePattern<bufferization::ToMemrefOp> {
+  using OpRewritePattern<bufferization::ToMemrefOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(bufferization::ToMemrefOp op,
+                                PatternRewriter &rewriter) const override {
+    if (auto constant = op.tensor().getDefiningOp<arith::ConstantOp>()) {
+      rewriter.setInsertionPoint(op);
+      rewriter.replaceOpWithNewOp<PrimConstOp>(
+          op, op.getType(), constant.getValue().cast<ElementsAttr>());
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
 struct BufferizeDataflow : public BufferizeDataflowBase<BufferizeDataflow> {
   void runOnOperation() override {
     auto func = getOperation();
@@ -142,6 +160,7 @@ struct BufferizeDataflow : public BufferizeDataflowBase<BufferizeDataflow> {
     patterns.add<SourceBufferizePattern>(context);
     patterns.add<SinkBufferizePattern>(context);
     patterns.add<BufferBufferizePattern>(context);
+    patterns.add<ConstantBufferizePattern>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };

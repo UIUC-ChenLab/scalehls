@@ -99,7 +99,6 @@ struct TosaNodeFusion : public TosaNodeFusionBase<TosaNodeFusion> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
-    localizeConstants(func.front());
     auto DT = DominanceInfo(func);
 
     mlir::RewritePatternSet patterns(context);

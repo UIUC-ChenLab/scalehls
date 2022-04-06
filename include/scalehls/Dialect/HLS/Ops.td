@@ -172,6 +172,18 @@ def PrimBufferOp : HLSOp<"prim.buffer"> {
   let results = (outs AnyMemRef:$memref);
 }
 
+def PrimConstOp : HLSOp<"prim.const"> {
+  let summary = "Represent a cosntant memref primitive";
+
+  let hasVerifier = 1;
+  let arguments = (ins ElementsAttr:$value);
+  let results = (outs AnyMemRef:$memref);
+
+  let extraClassDeclaration = [{
+    mlir::Attribute getValue() { return value(); }
+  }];
+}
+
 def PrimCastOp : HLSOp<"prim.cast",
     [SameOperandsAndResultShape, NoSideEffect]> {
   let summary = "Cast primitive operation";

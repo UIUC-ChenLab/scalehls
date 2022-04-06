@@ -45,7 +45,7 @@ public:
 
             // HLS dialect operations.
             DataflowBufferOp, StreamChannelOp, StreamReadOp, StreamWriteOp,
-            PrimMulOp, PrimCastOp, PrimBufferOp,
+            PrimMulOp, PrimCastOp, PrimBufferOp, PrimConstOp,
 
             // Control flow operations.
             func::CallOp, func::ReturnOp,
@@ -145,6 +145,7 @@ public:
   HANDLE(PrimMulOp);
   HANDLE(PrimCastOp);
   HANDLE(PrimBufferOp);
+  HANDLE(PrimConstOp);
 
   // Control flow operations.
   HANDLE(func::CallOp);

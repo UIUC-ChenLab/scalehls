@@ -13,8 +13,8 @@ module {
     %7 = "tosa.const"() {value = dense<5> : tensor<64xi8>} : () -> tensor<64xi8>
 
     // CHECK: %8:3 = hls.dataflow.node() -> tensor<1x32x32x3xi8>, tensor<1x32x32x64xi8>, tensor<1x32x32x64xi8> {
-    // CHECK:   %15 = "tosa.transpose"(%arg0, %0) : (tensor<1x3x32x32xi8>, tensor<4xi32>) -> tensor<1x32x32x3xi8>
-    // CHECK:   %16 = "tosa.conv2d"(%15, %1, %2) {dilation = [1, 1], pad = [1, 1, 1, 1], quantization_info = {input_zp = 0 : i32, weight_zp = 0 : i32}, stride = [1, 1]} : (tensor<1x32x32x3xi8>, tensor<64x3x3x3xi8>, tensor<64xi8>) -> tensor<1x32x32x64xi8>
+    // CHECK:   %15 = "tosa.transpose"(%arg0, %6) : (tensor<1x3x32x32xi8>, tensor<4xi32>) -> tensor<1x32x32x3xi8>
+    // CHECK:   %16 = "tosa.conv2d"(%15, %4, %7) {dilation = [1, 1], pad = [1, 1, 1, 1], quantization_info = {input_zp = 0 : i32, weight_zp = 0 : i32}, stride = [1, 1]} : (tensor<1x32x32x3xi8>, tensor<64x3x3x3xi8>, tensor<64xi8>) -> tensor<1x32x32x64xi8>
     // CHECK:   %17 = "tosa.clamp"(%16) {max_fp = 3.40282347E+38 : f32, max_int = 2147483647 : i64, min_fp = 0.000000e+00 : f32, min_int = 0 : i64} : (tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
     // CHECK:   "hls.dataflow.output"(%15, %16, %17) : (tensor<1x32x32x3xi8>, tensor<1x32x32x64xi8>, tensor<1x32x32x64xi8>) -> ()
     // CHECK: }
@@ -23,7 +23,7 @@ module {
     %10 = "tosa.clamp"(%9) {max_fp = 3.40282347E+38 : f32, max_int = 2147483647 : i64, min_fp = 0.000000e+00 : f32, min_int = 0 : i64} : (tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
 
     // CHECK: %9:2 = hls.dataflow.node() -> tensor<1x32x32x64xi8>, tensor<1x32x32x64xi8> {
-    // CHECK:   %15 = "tosa.conv2d"(%8#2, %3, %2) {dilation = [1, 1], pad = [1, 1, 1, 1], quantization_info = {input_zp = 0 : i32, weight_zp = 0 : i32}, stride = [1, 1]} : (tensor<1x32x32x64xi8>, tensor<64x3x3x64xi8>, tensor<64xi8>) -> tensor<1x32x32x64xi8>
+    // CHECK:   %15 = "tosa.conv2d"(%8#2, %3, %7) {dilation = [1, 1], pad = [1, 1, 1, 1], quantization_info = {input_zp = 0 : i32, weight_zp = 0 : i32}, stride = [1, 1]} : (tensor<1x32x32x64xi8>, tensor<64x3x3x64xi8>, tensor<64xi8>) -> tensor<1x32x32x64xi8>
     // CHECK:   %16 = "tosa.clamp"(%15) {max_fp = 3.40282347E+38 : f32, max_int = 2147483647 : i64, min_fp = 0.000000e+00 : f32, min_int = 0 : i64} : (tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
     // CHECK:   "hls.dataflow.output"(%15, %16) : (tensor<1x32x32x64xi8>, tensor<1x32x32x64xi8>) -> ()
     // CHECK: }
@@ -31,7 +31,7 @@ module {
     %12 = "tosa.clamp"(%11) {max_fp = 3.40282347E+38 : f32, max_int = 2147483647 : i64, min_fp = 0.000000e+00 : f32, min_int = 0 : i64} : (tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
 
     // CHECK: %10 = hls.dataflow.node() -> tensor<1x32x32x64xi8> {
-    // CHECK:   %15 = "tosa.conv2d"(%9#1, %4, %2) {dilation = [1, 1], pad = [1, 1, 1, 1], quantization_info = {input_zp = 0 : i32, weight_zp = 0 : i32}, stride = [1, 1]} : (tensor<1x32x32x64xi8>, tensor<64x3x3x64xi8>, tensor<64xi8>) -> tensor<1x32x32x64xi8>
+    // CHECK:   %15 = "tosa.conv2d"(%9#1, %2, %7) {dilation = [1, 1], pad = [1, 1, 1, 1], quantization_info = {input_zp = 0 : i32, weight_zp = 0 : i32}, stride = [1, 1]} : (tensor<1x32x32x64xi8>, tensor<64x3x3x64xi8>, tensor<64xi8>) -> tensor<1x32x32x64xi8>
     // CHECK:   "hls.dataflow.output"(%15) : (tensor<1x32x32x64xi8>) -> ()
     // CHECK: }
     %13 = "tosa.conv2d"(%12, %2, %7) {dilation = [1, 1], pad = [1, 1, 1, 1], quantization_info = {input_zp = 0 : i32, weight_zp = 0 : i32}, stride = [1, 1]} : (tensor<1x32x32x64xi8>, tensor<64x3x3x64xi8>, tensor<64xi8>) -> tensor<1x32x32x64xi8>
@@ -53,7 +53,7 @@ module {
     // CHECK: %13:3 = hls.dataflow.node() -> tensor<1x64x1x1xi8>, tensor<1x1x64xi8>, tensor<1x1x10xi8> {
     // CHECK:   %15 = "tosa.transpose"(%12, %5) : (tensor<1x1x1x64xi8>, tensor<4xi32>) -> tensor<1x64x1x1xi8>
     // CHECK:   %16 = "tosa.reshape"(%15) {new_shape = [1, 1, 64]} : (tensor<1x64x1x1xi8>) -> tensor<1x1x64xi8>
-    // CHECK:   %17 = "tosa.matmul"(%16, %6) {quantization_info = {a_zp = 0 : i32, b_zp = 0 : i32}} : (tensor<1x1x64xi8>, tensor<1x64x10xi8>) -> tensor<1x1x10xi8>
+    // CHECK:   %17 = "tosa.matmul"(%16, %1) {quantization_info = {a_zp = 0 : i32, b_zp = 0 : i32}} : (tensor<1x1x64xi8>, tensor<1x64x10xi8>) -> tensor<1x1x10xi8>
     // CHECK:   "hls.dataflow.output"(%15, %16, %17) : (tensor<1x64x1x1xi8>, tensor<1x1x64xi8>, tensor<1x1x10xi8>) -> ()
     // CHECK: }
     %17 = "tosa.transpose"(%16, %5) : (tensor<1x1x1x64xi8>, tensor<4xi32>) -> tensor<1x64x1x1xi8>
@@ -62,7 +62,7 @@ module {
 
     // CHECK: %14:2 = hls.dataflow.node() -> tensor<1x10xi8>, tensor<1x10xi8> {
     // CHECK:   %15 = "tosa.reshape"(%13#2) {new_shape = [1, 10]} : (tensor<1x1x10xi8>) -> tensor<1x10xi8>
-    // CHECK:   %16 = "tosa.add"(%15, %7) : (tensor<1x10xi8>, tensor<1x10xi8>) -> tensor<1x10xi8>
+    // CHECK:   %16 = "tosa.add"(%15, %0) : (tensor<1x10xi8>, tensor<1x10xi8>) -> tensor<1x10xi8>
     // CHECK:   "hls.dataflow.output"(%15, %16) : (tensor<1x10xi8>, tensor<1x10xi8>) -> ()
     // CHECK: }
     %20 = "tosa.reshape"(%19) {new_shape = [1, 10]} : (tensor<1x1x10xi8>) -> tensor<1x10xi8>
