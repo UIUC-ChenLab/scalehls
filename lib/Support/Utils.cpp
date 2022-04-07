@@ -371,7 +371,8 @@ Optional<unsigned> scalehls::getMaximumTripCount(AffineForOp forOp) {
     int64_t minUpperBound = std::numeric_limits<int64_t>::max();
     for (auto upperBound : upperMap.getResults()) {
       if (upperBound.isa<AffineConstantExpr>()) {
-        auto constantUpperBound = upperBound.dyn_cast<AffineConstantExpr>().getValue();
+        auto constantUpperBound =
+            upperBound.dyn_cast<AffineConstantExpr>().getValue();
         if (minUpperBound > constantUpperBound) {
           minUpperBound = constantUpperBound;
         }

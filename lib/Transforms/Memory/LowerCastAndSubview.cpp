@@ -18,15 +18,17 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-struct LowerCastAndSubview : public LowerCastAndSubviewBase<LowerCastAndSubview> {
+struct LowerCastAndSubview
+    : public LowerCastAndSubviewBase<LowerCastAndSubview> {
   void runOnOperation() override {
     auto module = getOperation();
     auto builder = OpBuilder(module);
-    
+
     for (auto cast : module.getOps<memref::CastOp>()) {
       auto loc = cast.getLoc();
       builder.setInsertionPointAfter(cast);
-      auto buffer = builder.create<memref::AllocOp>(loc, cast.dest().getType().dyn_cast<MemRefType>());
+      auto buffer = builder.create<memref::AllocOp>(
+          loc, cast.dest().getType().dyn_cast<MemRefType>());
       builder.setInsertionPointAfter(buffer);
       auto copy = builder.create<memref::CopyOp>(loc, cast.dest(), buffer);
       cast.replaceAllUsesWith(copy.target());
@@ -36,7 +38,8 @@ struct LowerCastAndSubview : public LowerCastAndSubviewBase<LowerCastAndSubview>
     for (auto subview : module.getOps<memref::SubViewOp>()) {
       auto loc = subview.getLoc();
       builder.setInsertionPointAfter(subview);
-      auto buffer = builder.create<memref::AllocOp>(loc, subview.result().getType().dyn_cast<MemRefType>());
+      auto buffer = builder.create<memref::AllocOp>(
+          loc, subview.result().getType().dyn_cast<MemRefType>());
       builder.setInsertionPointAfter(buffer);
       auto copy = builder.create<memref::CopyOp>(loc, subview.result(), buffer);
       subview.replaceAllUsesWith(copy.target());
@@ -46,7 +49,6 @@ struct LowerCastAndSubview : public LowerCastAndSubviewBase<LowerCastAndSubview>
 };
 } // namespace
 
-std::unique_ptr<Pass>
-scalehls::createLowerCastAndSubviewPass() {
+std::unique_ptr<Pass> scalehls::createLowerCastAndSubviewPass() {
   return std::make_unique<LowerCastAndSubview>();
 }

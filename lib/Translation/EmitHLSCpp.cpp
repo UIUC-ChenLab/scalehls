@@ -244,7 +244,7 @@ public:
   void emitBinary(Operation *op, const char *syntax);
   template <typename OpType> void emitMaxMin(OpType op, const char *syntax);
 
-  /// IP operation emitter. 
+  /// IP operation emitter.
   void emitIP(IPOp op);
 
   /// Special operation emitters.
@@ -543,7 +543,7 @@ public:
   bool visitOp(arith::ExtUIOp op) { return emitter.emitAssign(op), true; }
   bool visitOp(arith::ExtSIOp op) { return emitter.emitAssign(op), true; }
 
-  /// IP operation. 
+  /// IP operation.
   bool visitOp(IPOp op) { return emitter.emitIP(op), true; }
 
 private:
@@ -1435,7 +1435,7 @@ void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
   emitNestedLoopFooter(rank);
 }
 
-/// IP operation emitter. 
+/// IP operation emitter.
 void ModuleEmitter::emitIP(IPOp op) {
   // Emit IP source from JSON if IP exists.
   std::string errorMessage;
@@ -1445,10 +1445,16 @@ void ModuleEmitter::emitIP(IPOp op) {
         if (auto source = O->getObject("source")) {
           for (auto line : *source->getArray("code")) {
             auto l = line.getAsString()->str();
-            for (size_t idx = 0; idx < source->getArray("params")->size(); idx++) {
-              auto p = source->getArray("params")->operator[](idx).getAsString()->str();
+            for (size_t idx = 0; idx < source->getArray("params")->size();
+                 idx++) {
+              auto p = source->getArray("params")
+                           ->
+                           operator[](idx)
+                           .getAsString()
+                           ->str();
               auto o = getName(op.getOperands()[idx]).str().str();
-              for (std::size_t pos = 0; l.npos != (pos = l.find(p, pos)); pos += o.length()) {
+              for (std::size_t pos = 0; l.npos != (pos = l.find(p, pos));
+                   pos += o.length()) {
                 l.replace(pos, p.length(), o);
               }
             }
@@ -1460,9 +1466,9 @@ void ModuleEmitter::emitIP(IPOp op) {
         }
       }
     }
-    //emitError(op, "IP JSON cannot be parsed.");
+    // emitError(op, "IP JSON cannot be parsed.");
   }
-  //emitError(op, "IP cannot be found.");
+  // emitError(op, "IP cannot be found.");
 
   // Emit a regular function call if IP does not exist.
   os << "  __IP__" << op.name() << "(";
@@ -1697,8 +1703,7 @@ void ModuleEmitter::emitLoopDirectives(Operation *op) {
 void ModuleEmitter::emitLoopTripCount(AffineForOp op) {
   if (getConstantTripCount(op)) {
     return;
-  }
-  else {
+  } else {
     indent();
     os << "#pragma HLS loop_tripcount max=" << getMaximumTripCount(op) << "\n";
   }
@@ -1935,7 +1940,8 @@ void ModuleEmitter::emitModule(ModuleOp module) {
   for (auto &op : *module.getBody()) {
     if (auto include = dyn_cast<IncludeOp>(op)) {
       for (auto library : include.libraries()) {
-        os << "#include <" << library.dyn_cast<StringAttr>().getValue() << ">\n";
+        os << "#include <" << library.dyn_cast<StringAttr>().getValue()
+           << ">\n";
       }
     }
   }

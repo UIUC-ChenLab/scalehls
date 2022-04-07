@@ -45,8 +45,7 @@ public:
 
             // HLS dialect operations.
             DataflowBufferOp, StreamChannelOp, StreamReadOp, StreamWriteOp,
-            PrimMulOp, PrimCastOp, PrimBufferOp, PrimConstOp,
-            IncludeOp, IPOp,
+            PrimMulOp, PrimCastOp, PrimBufferOp, PrimConstOp, IncludeOp, IPOp,
 
             // Control flow operations.
             func::CallOp, func::ReturnOp,
@@ -81,8 +80,8 @@ public:
 
   /// This callback is invoked on any invalid operations.
   ResultType visitInvalidOp(Operation *op, ExtraArgs... args) {
-    //op->emitOpError("is unsupported operation.");
-    //abort();
+    // op->emitOpError("is unsupported operation.");
+    // abort();
     return ResultType();
   }
 
