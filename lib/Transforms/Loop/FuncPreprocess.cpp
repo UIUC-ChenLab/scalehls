@@ -97,8 +97,10 @@ bool scalehls::applyFuncPreprocess(FuncOp func, bool isTopFunc) {
   if (isTopFunc)
     setTopFuncAttr(func);
 
-  // Set parallel attribute to each loop that is applicable.
+  // Set parallel attribute to each loop that is applicable. Meanwhile, strip
+  // all loop directives.
   func.walk([&](AffineForOp loop) {
+    loop->removeAttr("loop_directive");
     if (isLoopParallel(loop))
       setParallelAttr(loop);
   });
