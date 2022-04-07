@@ -275,14 +275,13 @@ void scalehls::registerScaleHLSConvertTosaToHLS() {
         pm.addPass(mlir::createCanonicalizerPass());
 
         // Directive-level optimization.
-        pm.addPass(scalehls::createLoopPipeliningPass());
-        pm.addPass(scalehls::createArrayPartitionPass());
-        pm.addPass(scalehls::createCreateHLSPrimitivePass());
-        pm.addPass(mlir::createCSEPass());
-        pm.addPass(mlir::createCanonicalizerPass());
+        // pm.addPass(scalehls::createLoopPipeliningPass());
+        // pm.addPass(scalehls::createArrayPartitionPass());
+        // pm.addPass(scalehls::createCreateHLSPrimitivePass());
+        // pm.addPass(mlir::createCSEPass());
+        // pm.addPass(mlir::createCanonicalizerPass());
       });
 }
-
 
 void scalehls::registerTransformsPasses() {
   registerScaleHLSDSEPipeline();

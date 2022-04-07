@@ -13,7 +13,8 @@ using namespace mlir;
 using namespace scalehls;
 
 namespace {
-struct PreserveUnoptimized : public PreserveUnoptimizedBase<PreserveUnoptimized> {
+struct PreserveUnoptimized
+    : public PreserveUnoptimizedBase<PreserveUnoptimized> {
   void runOnOperation() override {
     auto module = getOperation();
     auto builder = OpBuilder(module);

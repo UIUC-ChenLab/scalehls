@@ -31,10 +31,12 @@ def DesignSpaceExplore : Pass<"scalehls-dse", "ModuleOp"> {
     Option<"csvPath", "csv-path", "std::string",
            /*default=*/"\"./\"",
            "File path: the path for dumping the CSV of design spaces">,
-
     Option<"targetSpec", "target-spec", "std::string",
            /*default=*/"\"./config.json\"",
-           "File path: target backend specifications and configurations">
+           "File path: target backend specifications and configurations">,
+    Option<"targetFunc", "target-func", "std::string", 
+           /*default=*/"\"\"",
+           "The target function for design space exploration">
   ];
 }
 

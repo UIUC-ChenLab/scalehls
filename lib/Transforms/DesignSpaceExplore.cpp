@@ -7,6 +7,7 @@
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/Utils.h"
 #include "mlir/Support/FileUtilities.h"
+#include "scalehls/Support/Utils.h"
 #include "scalehls/Transforms/Explorer.h"
 #include "scalehls/Transforms/Passes.h"
 #include "llvm/Support/Debug.h"
@@ -890,11 +891,17 @@ struct DesignSpaceExplore : public DesignSpaceExploreBase<DesignSpaceExplore> {
                                      maxLoopParallel, maxIterNum, maxDistance);
 
     // Optimize the top function.
-    // TODO: Support to contain sub-functions.
+    // TODO: Support to contain sub-functions
     for (auto func : module.getOps<FuncOp>()) {
-      if (hasTopFuncAttr(func))
+      if (targetFunc == "") {
+        if (hasTopFuncAttr(func))
+          explorer.applyDesignSpaceExplore(func, directiveOnly, outputPath,
+                                           csvPath);
+      } else if (targetFunc == func.getSymName()) {
         explorer.applyDesignSpaceExplore(func, directiveOnly, outputPath,
                                          csvPath);
+        applyAutoArrayPartition(getTopFunc(module));
+      }
     }
   }
 };
