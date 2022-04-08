@@ -199,9 +199,8 @@ getDimAccessMaps(Operation *op, AffineValueMap valueMap, int64_t dim) {
 bool scalehls::applyAutoArrayPartition(FuncOp func) {
   // Check whether the input function is pipelined.
   bool funcPipeline = false;
-  if (auto attr = func->getAttrOfType<BoolAttr>("pipeline"))
-    if (attr.getValue())
-      funcPipeline = true;
+  if (auto attr = getFuncDirective(func))
+    funcPipeline = attr.getPipeline();
 
   // Collect target basic blocks to be considered.
   SmallVector<Block *, 4> targetBlocks;
