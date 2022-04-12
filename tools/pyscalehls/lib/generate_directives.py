@@ -179,14 +179,21 @@ class RandomDirectiveGenerator(DirectiveGenerator):
                 directives_list = directives_list+[pragma, '-type '+partition_scheme]    
          
                 if partition_scheme != 'complete':
-                    # minimum factor should be 2, required by HLS
-                    factor = random.randrange(2, min(boundary+1, 256)) # 1024 is the maximum reasonable value
-
-                    # the size of this dimension must be divisible by the unrolling factor
-                    # this is required by HLS
-                    while (boundary % factor != 0):
-                        # print("finding factor")
-                        factor = random.randrange(2, min(boundary+1, 256)) # +1 because the upper bound is not inclusive
+                    raw_divisors = []
+                    #get divisors
+                    for i in range(1, boundary + 1):
+                        if boundary % i == 0:
+                            raw_divisors.append(i)
+                    #remove 1 / minimum factor should be 2, required by HLS
+                    raw_divisors.remove(1)
+                    #do not partions past 256
+                    divisors = []
+                    for d in raw_divisors:
+                        if d <= 256:
+                            divisors.append(d)
+                    # print(divisors)
+                    
+                    factor = divisors[random.randrange(0, len(divisors))]
 
                     # dimensions start with 1 if we want to control the dimensions separately
                     directives_list = directives_list+['-factor '+str(factor), '-dim '+str(dim)] 

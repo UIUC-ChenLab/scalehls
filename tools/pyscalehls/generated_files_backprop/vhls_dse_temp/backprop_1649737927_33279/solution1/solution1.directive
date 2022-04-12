@@ -1,0 +1,131 @@
+<AutoPilot:ProjectResources xmlns:AutoPilot="com.autoesl.autopilot.ui.directiveView">
+    <sourceFile name="">
+        <directive functionName="backprop" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="weights2" positionalBoolean="4"/>
+                <option name="cyclic" value="" positionalBoolean="type"/>
+                <option name="factor" value="8"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+        <directive functionName="backprop" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="weights3" positionalBoolean="4"/>
+                <option name="cyclic" value="" positionalBoolean="type"/>
+                <option name="factor" value="16"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+        <directive functionName="backprop" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="biases1" positionalBoolean="4"/>
+                <option name="cyclic" value="" positionalBoolean="type"/>
+                <option name="factor" value="16"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+        <directive functionName="backprop" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="biases2" positionalBoolean="4"/>
+                <option name="block" value="" positionalBoolean="type"/>
+                <option name="factor" value="4"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+        <directive functionName="backprop" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="biases3" positionalBoolean="4"/>
+                <option name="block" value="" positionalBoolean="type"/>
+                <option name="factor" value="3"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+        <directive functionName="backprop" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="training_data" positionalBoolean="4"/>
+                <option name="block" value="" positionalBoolean="type"/>
+                <option name="factor" value="13"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+        <directive functionName="backprop" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="training_targets" positionalBoolean="4"/>
+                <option name="cyclic" value="" positionalBoolean="type"/>
+                <option name="factor" value="3"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+        <directive functionName="backprop" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="activations1" positionalBoolean="4"/>
+                <option name="cyclic" value="" positionalBoolean="type"/>
+                <option name="factor" value="2"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+        <directive functionName="backprop" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="activations2" positionalBoolean="4"/>
+                <option name="block" value="" positionalBoolean="type"/>
+                <option name="factor" value="2"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+        <directive functionName="backprop" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="activations3" positionalBoolean="4"/>
+                <option name="block" value="" positionalBoolean="type"/>
+                <option name="factor" value="3"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+        <directive functionName="backprop" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="dactivations1" positionalBoolean="4"/>
+                <option name="block" value="" positionalBoolean="type"/>
+                <option name="factor" value="64"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+        <directive functionName="backprop" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="dactivations2" positionalBoolean="4"/>
+                <option name="complete" value="" positionalBoolean="type"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+        <directive functionName="backprop" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="dactivations3" positionalBoolean="4"/>
+                <option name="block" value="" positionalBoolean="type"/>
+                <option name="factor" value="3"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+        <directive functionName="backprop" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="net_outputs" positionalBoolean="4"/>
+                <option name="complete" value="" positionalBoolean="type"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+        <directive functionName="backprop" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="delta_weights2" positionalBoolean="4"/>
+                <option name="block" value="" positionalBoolean="type"/>
+                <option name="factor" value="256"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+        <directive functionName="backprop" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="oracle_activations1" positionalBoolean="4"/>
+                <option name="block" value="" positionalBoolean="type"/>
+                <option name="factor" value="8"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+    </sourceFile>
+</AutoPilot:ProjectResources>
+

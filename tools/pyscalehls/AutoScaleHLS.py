@@ -24,14 +24,31 @@ def print_optknobs(opt_knobs, opt_knob_names):
     for i in range(len(opt_knobs) - 1):
         print("{0}: {1}".format(opt_knob_names[i+1], opt_knobs[i+1]))
 
-def print_variables(var_forlist, var_arraylist_sized):
+def sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list):
     print("\nLoops")
     for item in var_forlist :
         print(item)
     
     print("\nArrays")
     for item in var_arraylist_sized :
-        print(item)    
+        print(item)
+    
+    print("\nScope")
+    for i in var_forlist_scoped:
+        print(i)
+        
+    sortedarray = sortbyhotness(var_forlist_scoped)
+    print("\nSorted Scope")
+    for i in sortedarray:
+        print(i)
+
+    print("\nTree")
+    for item in tree_list:
+        item.show(idhidden=True)
+
+    print(func_list)
+
+    return sortedarray
 
 def sortbyhotness(inputarray):  #insertion sort
     sortedarray = copy.deepcopy(inputarray)
@@ -149,108 +166,31 @@ def main():
     #scaleHLS manual optimization
     val = ""
     while val == "":
-        val = input("What ScaleHLS optimizations? (Manual / ScaleHLS + DSE + ML / Auto Scale DSE / None)\n")
+        val = input("What ScaleHLS optimizations? (Manual / ScaleHLS+DSE+ML / AutoScaleDSE / None)\n")
         if((val == "DSE") or (val == "D") or (val == "d")):
             PYSHLS.scalehls_dse(tar_dir, source_file, inputtop)
             func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_DSE_out.cpp", "/ML_in.cpp", inputtop, sdse=True)
+            sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)
         elif((val == "Manual") or (val == "M") or (val == "m")):
             opt_knobs, opt_knob_names = PYSHLS.ScaleHLSopt(source_file, inputtop, tar_dir + "/ScaleHLS_opted.c")   
             print_optknobs(opt_knobs, opt_knob_names)
             func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_opted.c", "/ML_in.cpp", inputtop)
+            sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)
         elif((val == "Auto") or (val == "A") or (val == "a")):
             func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, source_file,  "/ref_design.c", inputtop)                        
+            sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)
+            DPAT.graph_algorithm(tar_dir, dse_target, sortedarray, func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)
+            #array for only the top function
+            var_arraylist_sized = INPAR.asdse_get_knobs(tar_dir + "/ML_in.cpp", 'backprop')
+            print(var_arraylist_sized)
+            var_forlist = []
         elif((val == "None") or (val == "N") or (val == "n")):
             func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, source_file, "/ML_in.cpp", inputtop)            
+            sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)    
 
-    print_variables(var_forlist, var_arraylist_sized)
-    
-    print("\nScope")
-    for i in var_forlist_scoped:
-        print(i)
-
-    sortedarray = sortbyhotness(var_forlist_scoped)
-    print("\nSorted Scope")
-    for i in sortedarray:
-        print(i)
-
-    print("\nTree")
-    for item in tree_list:
-        item.show(idhidden=True)
-
-    print(func_list)
-    
-    # target = treelib.Tree(tree_list[3].subtree(tree_list[3][tree_list[3].root].identifier), deep=True)
-    # target.show()
-    # DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", func_list, removed_function_calls, dse_target, 1, target)  
-
-    removed_function_calls = []
-    pareto_space_list = []
-    for i in range(len(tree_list) - 1):
-        target = treelib.Tree(tree_list[i].subtree(tree_list[i][tree_list[i].root].identifier), deep=True)
-        DFS_list = [target[node] for node in target.expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
-        do_SDSE = True
-        has_loops = False
-        for DFS_node in DFS_list: 
-            if re.findall(r'(Loop)', DFS_node.tag):
-                has_loops = True
-            for item in var_forlist:
-                if (item != ''): 
-                    #check if variable loops are at top level of loop band
-                    if (target.level(DFS_node.identifier) == 1) and (DFS_node.tag == item[0]) and (item[-1] == "Variable"):
-                        do_SDSE = False
-        if do_SDSE and has_loops:
-            suc_fail, buffer, removed_function_calls = DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ref_design.c", func_list, removed_function_calls, dse_target, 1, target)
-            if suc_fail:
-                pareto_space_list = pareto_space_list + buffer
-
-    print("removed calls")
-    print(removed_function_calls)
-    print("space")
-    for i in range(0, len(pareto_space_list)):
-        print(pareto_space_list[i][0])
-
-    # print("comb")
-    # #combine whole space
-    # buffer = DPAT.combine_two_spaces(pareto_space_list, "Loop0", "Loop1")
-    # for i in range(2, len(pareto_space_list)):
-    #     print(pareto_space_list[i][0])
-    #     buffer = DPAT.combine_two_spaces(pareto_space_list, buffer, pareto_space_list[i][0])
-    #     buffer.to_csv('./test_space.csv')
-
-    pspace = pd.read_csv('./test_space.csv', index_col=0)
-    print(pspace)
-    # print(pspace.iloc[0]['b4l0'])
-
-    shutil.copy2(tar_dir + "/ref_design.c", tar_dir + "/ML_in.cpp")
-    # DPAT.apply_loop_ops(tar_dir, tree_list[12], var_forlist, removed_function_calls, [[1, 16], [8], [1, 16], [8], [8, 16], [8], [1, 16], [8], [4, 3], [1], [8, 3], [1]])
-    DPAT.apply_loop_ops(tar_dir, tree_list[3], var_forlist, removed_function_calls, [[13, 8]])
-
-    # shutil.copy2(tar_dir + "/ML_in.cpp", tar_dir + "/DSE_in.c")
-
-    # DPAT.apply_loop_ops(tar_dir, tree_list[3], np.array([[13, 8]]))
-    # DPAT.apply_loop_ops(tar_dir, tree_list[4], np.array([[8, 1]]))
-    # DPAT.apply_loop_ops(tar_dir, tree_list[5], np.array([[8, 3]]))
-    # DPAT.apply_loop_ops(tar_dir, tree_list[6], np.array([[1]]))
-    # DPAT.apply_loop_ops(tar_dir, tree_list[7], np.array([[8, 3]]))
-    # DPAT.apply_loop_ops(tar_dir, tree_list[8], np.array([[3, 8]]))
-    # DPAT.apply_loop_ops(tar_dir, tree_list[9], np.array([[1, 16]]))
-    # DPAT.apply_loop_ops(tar_dir, tree_list[10], np.array([[16, 1]]))
-    # DPAT.apply_loop_ops(tar_dir, tree_list[11], np.array([[1, 16]]))
-    # DPAT.apply_loop_ops(tar_dir, tree_list[12], [[1, 16], [8], [1, 16], [8], [8, 16], [8], [1, 16], [8], [4, 3], [1], [8, 3], [1]])
-
-    # pandas.set_option('display.max_rows', None)
-    # buffer = DPAT.combine_two_spaces(pareto_space_list, "Loop0", "Loop1")
-    # # print(buffer)
-    # final = DPAT.combine_two_spaces(pareto_space_list, buffer, "Loop2")
-    # # print(final)
-
-###############################################################################################################    
+# ###############################################################################################################    
     isbreak = input("\n\nBreak\n")
 ###############################################################################################################
-
-    var_arraylist_sized = INPAR.asdse_get_knobs(tar_dir + "/ML_in.cpp", 'backprop')
-    print(var_arraylist_sized)
-    var_forlist = []
 
     #create paramfile
     INPAR.create_params(tar_dir, var_forlist, var_arraylist_sized)
@@ -264,7 +204,7 @@ def main():
         val = input("Generate Random Training Set? (Y / N)\n")
         # val = "n"
         if((val == "Y") or (val == "y") or (val == "yes")):
-            dataset, feature_columns = RT.random_train_RFML(tar_dir, inputtop, inputpart, multiprocess = 4, nub_of_init = 20)
+            dataset, feature_columns = RT.random_train_RFML(tar_dir, inputtop, inputpart, multiprocess = 4, nub_of_init = 40)
             print(dataset)
         elif((val == "N") or (val == "n") or (val == "no")):
             parameter_file = tar_dir + '/ML_params.csv'
@@ -274,7 +214,7 @@ def main():
             # print(dataset)
 
 
-    # DMain.DSE_start(tar_dir, proj_name, dataset, 150, inputtop, inputpart, feature_columns)
+    DMain.DSE_start(tar_dir, proj_name, dataset, 250, inputtop, inputpart, feature_columns)
     
 
 

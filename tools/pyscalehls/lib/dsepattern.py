@@ -287,7 +287,7 @@ def combine_two_spaces(pareto_space_list, input1, input2):
     if not(isinstance(input1, str)):
         space1 = input1
     if not(isinstance(input2, str)):
-        space1 = input2
+        space2 = input2
 
     for loop_space in pareto_space_list:
         if isinstance(input1, str) and loop_space[0] == input1:
@@ -482,9 +482,7 @@ def apply_loop_ops(dir, pattern, var_forlist, removed_function_calls, loop_tile_
                         func_decl = False
         file.close()
         ph_new_name = re.findall(r'(v\d+)', ph_loc[1][0])
-        trigger_string = ph_new_name[0] + r'\[\d+\] = 42.424242;'
-
-    
+        trigger_string = ph_new_name[0] + r'\[\d+\] = 42.424242;'    
 
     #copy scalehls dse to combined file
     newfile = open (dir + "/buffer.c", 'w')
@@ -529,11 +527,7 @@ def apply_loop_ops(dir, pattern, var_forlist, removed_function_calls, loop_tile_
                                     elif re.findall(trigger_string, subline):
                                         global_write = False
                                         leading_space = re.findall(r'(\s*).*', subline)
-                                        print("test")
-                                        print(removed_functions_list)
                                         correct_func_call = removed_functions_list.pop(0)                                        
-                                        print(correct_func_call)
-                                        print(correct_func_call[1])
                                         newfile.write(leading_space[0] + correct_func_call[1] + ';\n')
                                 
                                 #main write
@@ -581,4 +575,65 @@ def apply_loop_ops(dir, pattern, var_forlist, removed_function_calls, loop_tile_
     shutil.copy2(dir + "/buffer.c", ML_in_main)
     os.remove(dir + "/buffer.c")
 
+def graph_algorithm(tar_dir, dse_target, sortedarray, func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list):
+    # target = treelib.Tree(tree_list[3].subtree(tree_list[3][tree_list[3].root].identifier), deep=True)
+    # target.show()
+    # DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", func_list, removed_function_calls, dse_target, 1, target)  
+
+    #scalehls dse initial pareto space creation
+    removed_function_calls = []
+    pareto_space_list = []
+    for i in range(len(tree_list) - 1):
+        target = treelib.Tree(tree_list[i].subtree(tree_list[i][tree_list[i].root].identifier), deep=True)
+        DFS_list = [target[node] for node in target.expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
+        do_SDSE = True
+        has_loops = False
+        for DFS_node in DFS_list: 
+            if re.findall(r'(Loop)', DFS_node.tag):
+                has_loops = True
+            for item in var_forlist:
+                if (item != ''): 
+                    #check if variable loops are at top level of loop band
+                    if (target.level(DFS_node.identifier) == 1) and (DFS_node.tag == item[0]) and (item[-1] == "Variable"):
+                        do_SDSE = False
+        if do_SDSE and has_loops:
+            suc_fail, buffer, removed_function_calls = cull_function_by_pattern(tar_dir, tar_dir + "/ref_design.c", func_list, removed_function_calls, dse_target, 1, target)
+            if suc_fail:
+                pareto_space_list = pareto_space_list + buffer
+
+    print("removed calls")
+    print(removed_function_calls)
+    print("space")
+    for i in range(0, len(pareto_space_list)):
+        print(pareto_space_list[i][0])
+
+    # Initial naive combination of individual spaces
+    print("comb")
+    #combine whole space
+    buffer = combine_two_spaces(pareto_space_list, "Loop0", "Loop1")
+    for i in range(2, len(pareto_space_list)):
+        print(pareto_space_list[i][0])
+        buffer = combine_two_spaces(pareto_space_list, buffer, pareto_space_list[i][0])
+        buffer.to_csv(tar_dir + '/combspace.csv')
+
+    # pspace = pd.read_csv(tar_dir + '/combspace.csv', index_col=0)
+    # print(pspace)
+    # print(pspace.iloc[0]['b4l0'])
+
+    # shutil.copy2(tar_dir + "/ref_design.c", tar_dir + "/ML_in.cpp")
+    # DPAT.apply_loop_ops(tar_dir, tree_list[12], var_forlist, removed_function_calls, [[1, 16], [8], [1, 16], [8], [8, 16], [8], [1, 16], [8], [4, 3], [1], [8, 3], [1]])
+    # DPAT.apply_loop_ops(tar_dir, tree_list[3], var_forlist, removed_function_calls, [[13, 8]])
+
+    shutil.copy2(tar_dir + "/ref_design.c", tar_dir + "/ML_in.cpp")
+    apply_loop_ops(tar_dir, tree_list[0], var_forlist, removed_function_calls, np.array([[1], [1]]))
+    apply_loop_ops(tar_dir, tree_list[3], var_forlist, removed_function_calls, np.array([[13, 8]]))
+    apply_loop_ops(tar_dir, tree_list[4], var_forlist, removed_function_calls, np.array([[8, 1]]))
+    apply_loop_ops(tar_dir, tree_list[5], var_forlist, removed_function_calls, np.array([[8, 3]]))
+    apply_loop_ops(tar_dir, tree_list[6], var_forlist, removed_function_calls, np.array([[1]]))
+    apply_loop_ops(tar_dir, tree_list[7], var_forlist, removed_function_calls, np.array([[8, 3]]))
+    apply_loop_ops(tar_dir, tree_list[8], var_forlist, removed_function_calls, np.array([[3, 8]]))
+    apply_loop_ops(tar_dir, tree_list[9], var_forlist, removed_function_calls, np.array([[1, 16]]))
+    apply_loop_ops(tar_dir, tree_list[10], var_forlist, removed_function_calls, np.array([[16, 1]]))
+    apply_loop_ops(tar_dir, tree_list[11], var_forlist, removed_function_calls, np.array([[1, 16]]))
+    apply_loop_ops(tar_dir, tree_list[12], var_forlist, removed_function_calls, [[1, 16], [8], [1, 16], [8], [8, 16], [8], [1, 16], [8], [4, 3], [1], [8, 3], [1]])
 

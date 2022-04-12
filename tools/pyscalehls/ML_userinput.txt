@@ -53,7 +53,8 @@ top_function = backprop
 ##############################hardware-constraints#################################
 ###################################################################################
 
-part = xc7k70tfbv676-1
+#part = xc7k70tfbv676-1
+part = xc7z045-ffg900-2
 
 # Extra file locations -> remove default keyword
 add_files default

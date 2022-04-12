@@ -458,7 +458,8 @@ def asdse_get_knobs(inputfile, topfun):
                 else:
                     brace_count -= 1
 
-            if in_pattern and brace_count > 0:
+            # if in_pattern and brace_count > 0:
+            if in_pattern:
                 arr2part = re.findall(r'(int|float|double)\s([A-Za-z_]+[A-Za-z_\d]*)\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])+(,|;|\)|' ')', line)
                 if(arr2part):
                     for item in arr2part:

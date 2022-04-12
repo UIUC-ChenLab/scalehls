@@ -1,0 +1,523 @@
+
+
+================================================================
+== Vivado HLS Report for 'matrix_vector_produc_1'
+================================================================
+* Date:           Mon Apr 11 23:40:28 2022
+
+* Version:        2019.2 (Build 2704478 on Wed Nov 06 22:10:23 MST 2019)
+* Project:        backprop_1649738179_45301
+* Solution:       solution1
+* Product family: zynq
+* Target device:  xc7z045-ffg900-2
+
+
+================================================================
+== Performance Estimates
+================================================================
++ Timing: 
+    * Summary: 
+    +--------+----------+----------+------------+
+    |  Clock |  Target  | Estimated| Uncertainty|
+    +--------+----------+----------+------------+
+    |ap_clk  | 10.00 ns | 8.690 ns |   1.25 ns  |
+    +--------+----------+----------+------------+
+
++ Latency: 
+    * Summary: 
+    +---------+---------+----------+----------+-----+-----+---------+
+    |  Latency (cycles) |  Latency (absolute) |  Interval | Pipeline|
+    |   min   |   max   |    min   |    max   | min | max |   Type  |
+    +---------+---------+----------+----------+-----+-----+---------+
+    |       55|       55| 0.550 us | 0.550 us |   55|   55|   none  |
+    +---------+---------+----------+----------+-----+-----+---------+
+
+    + Detail: 
+        * Instance: 
+        N/A
+
+        * Loop: 
+        +----------+---------+---------+----------+-----------+-----------+------+----------+
+        |          |  Latency (cycles) | Iteration|  Initiation Interval  | Trip |          |
+        | Loop Name|   min   |   max   |  Latency |  achieved |   target  | Count| Pipelined|
+        +----------+---------+---------+----------+-----------+-----------+------+----------+
+        |- Loop 1  |       34|       34|        21|          2|          1|     8|    yes   |
+        |- Loop3   |       18|       18|         6|          -|          -|     3|    no    |
+        +----------+---------+---------+----------+-----------+-----------+------+----------+
+
+============================================================
++ Verbose Summary: Synthesis Manager
+============================================================
+InlineROM: 1
+ExposeGlobal: 0
+============================================================
++ Verbose Summary: CDFG Model
+============================================================
+IsTopModel: 0
+ResetActiveHigh: 1
+IsCombinational: 0
+IsDatapathOnly: 0
+HasWiredReturn: 1
+HasMFsm: 0
+HasVarLatency: 1
+IsPipeline: 0
+IsRtlPipelined: 0
+IsInstanceOverlapped: 0
+IsDontTouch: 0
+HasImplIP: 0
+IsGatedGlobalClock: 0
+
++ Individual pipeline summary: 
+  * Pipeline-0: initiation interval (II) = 2, depth = 21
+
+
+============================================================
++ Verbose Summary: Schedule
+============================================================
+* Number of FSM states : 29
+* Pipeline : 1
+  Pipeline-0 : II = 2, D = 21, States = { 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 }
+* Dataflow Pipeline: 0
+
+* FSM state transitions: 
+1 --> 2 
+2 --> 23 3 
+3 --> 4 
+4 --> 5 
+5 --> 6 
+6 --> 7 
+7 --> 8 
+8 --> 9 
+9 --> 10 
+10 --> 11 
+11 --> 12 
+12 --> 13 
+13 --> 14 
+14 --> 15 
+15 --> 16 
+16 --> 17 
+17 --> 18 
+18 --> 19 
+19 --> 20 
+20 --> 21 
+21 --> 22 
+22 --> 2 
+23 --> 24 
+24 --> 25 
+25 --> 26 
+26 --> 27 
+27 --> 28 
+28 --> 29 
+29 --> 24 
+
+* FSM state operations: 
+
+State 1 <SV = 0> <Delay = 0.46>
+ST_1 : Operation 30 [1/1] (0.00ns)   --->   "%v3_63_read_1 = call double @_ssdm_op_Read.ap_auto.double(double %v3_63_read)" [../ML_in.cpp:111]   --->   Operation 30 'read' 'v3_63_read_1' <Predicate = true> <Delay = 0.00>
+ST_1 : Operation 31 [1/1] (0.00ns)   --->   "%v3_55_read_1 = call double @_ssdm_op_Read.ap_auto.double(double %v3_55_read)" [../ML_in.cpp:111]   --->   Operation 31 'read' 'v3_55_read_1' <Predicate = true> <Delay = 0.00>
+ST_1 : Operation 32 [1/1] (0.00ns)   --->   "%v3_47_read_1 = call double @_ssdm_op_Read.ap_auto.double(double %v3_47_read)" [../ML_in.cpp:111]   --->   Operation 32 'read' 'v3_47_read_1' <Predicate = true> <Delay = 0.00>
+ST_1 : Operation 33 [1/1] (0.00ns)   --->   "%v3_39_read_1 = call double @_ssdm_op_Read.ap_auto.double(double %v3_39_read)" [../ML_in.cpp:111]   --->   Operation 33 'read' 'v3_39_read_1' <Predicate = true> <Delay = 0.00>
+ST_1 : Operation 34 [1/1] (0.00ns)   --->   "%v3_31_read_1 = call double @_ssdm_op_Read.ap_auto.double(double %v3_31_read)" [../ML_in.cpp:111]   --->   Operation 34 'read' 'v3_31_read_1' <Predicate = true> <Delay = 0.00>
+ST_1 : Operation 35 [1/1] (0.00ns)   --->   "%v3_23_read_1 = call double @_ssdm_op_Read.ap_auto.double(double %v3_23_read)" [../ML_in.cpp:111]   --->   Operation 35 'read' 'v3_23_read_1' <Predicate = true> <Delay = 0.00>
+ST_1 : Operation 36 [1/1] (0.00ns)   --->   "%v3_15_read_1 = call double @_ssdm_op_Read.ap_auto.double(double %v3_15_read)" [../ML_in.cpp:111]   --->   Operation 36 'read' 'v3_15_read_1' <Predicate = true> <Delay = 0.00>
+ST_1 : Operation 37 [1/1] (0.00ns)   --->   "%v3_7_read_1 = call double @_ssdm_op_Read.ap_auto.double(double %v3_7_read)" [../ML_in.cpp:111]   --->   Operation 37 'read' 'v3_7_read_1' <Predicate = true> <Delay = 0.00>
+ST_1 : Operation 38 [1/1] (0.00ns)   --->   "%v2_2_read11 = call double @_ssdm_op_Read.ap_auto.double(double %v2_2_read)" [../ML_in.cpp:111]   --->   Operation 38 'read' 'v2_2_read11' <Predicate = true> <Delay = 0.00>
+ST_1 : Operation 39 [1/1] (0.00ns)   --->   "%v2_1_read_2 = call double @_ssdm_op_Read.ap_auto.double(double %v2_1_read)" [../ML_in.cpp:111]   --->   Operation 39 'read' 'v2_1_read_2' <Predicate = true> <Delay = 0.00>
+ST_1 : Operation 40 [1/1] (0.00ns)   --->   "%v2_0_read_2 = call double @_ssdm_op_Read.ap_auto.double(double %v2_0_read)" [../ML_in.cpp:111]   --->   Operation 40 'read' 'v2_0_read_2' <Predicate = true> <Delay = 0.00>
+ST_1 : Operation 41 [1/1] (0.00ns)   --->   "%v0_2_read_3 = call double @_ssdm_op_Read.ap_auto.double(double %v0_2_read)" [../ML_in.cpp:111]   --->   Operation 41 'read' 'v0_2_read_3' <Predicate = true> <Delay = 0.00>
+ST_1 : Operation 42 [1/1] (0.00ns)   --->   "%v0_1_read_3 = call double @_ssdm_op_Read.ap_auto.double(double %v0_1_read)" [../ML_in.cpp:111]   --->   Operation 42 'read' 'v0_1_read_3' <Predicate = true> <Delay = 0.00>
+ST_1 : Operation 43 [1/1] (0.00ns)   --->   "%v0_0_read_3 = call double @_ssdm_op_Read.ap_auto.double(double %v0_0_read)" [../ML_in.cpp:111]   --->   Operation 43 'read' 'v0_0_read_3' <Predicate = true> <Delay = 0.00>
+ST_1 : Operation 44 [1/1] (0.46ns)   --->   "br label %1" [../ML_in.cpp:121]   --->   Operation 44 'br' <Predicate = true> <Delay = 0.46>
+
+State 2 <SV = 1> <Delay = 3.30>
+ST_2 : Operation 45 [1/1] (0.00ns)   --->   "%v2_0_0 = phi double [ %v2_0_read_2, %0 ], [ %v13_7, %hls_label_4_end ]" [../ML_in.cpp:111]   --->   Operation 45 'phi' 'v2_0_0' <Predicate = true> <Delay = 0.00>
+ST_2 : Operation 46 [1/1] (0.00ns)   --->   "%v2_1_0 = phi double [ %v2_1_read_2, %0 ], [ %v13_7_1, %hls_label_4_end ]" [../ML_in.cpp:111]   --->   Operation 46 'phi' 'v2_1_0' <Predicate = true> <Delay = 0.00>
+ST_2 : Operation 47 [1/1] (0.00ns)   --->   "%v2_2_0 = phi double [ %v2_2_read11, %0 ], [ %v13_7_2, %hls_label_4_end ]" [../ML_in.cpp:111]   --->   Operation 47 'phi' 'v2_2_0' <Predicate = true> <Delay = 0.00>
+ST_2 : Operation 48 [1/1] (0.00ns)   --->   "%v5_0 = phi i4 [ 0, %0 ], [ %v5, %hls_label_4_end ]"   --->   Operation 48 'phi' 'v5_0' <Predicate = true> <Delay = 0.00>
+ST_2 : Operation 49 [1/1] (0.96ns)   --->   "%icmp_ln121 = icmp eq i4 %v5_0, -8" [../ML_in.cpp:121]   --->   Operation 49 'icmp' 'icmp_ln121' <Predicate = true> <Delay = 0.96> <Core = "Cmp">   --->   Core 25 'Cmp' <Latency = 0> <II = 1> <Delay = 0.50> <FuncUnit> <Opcode : 'icmp'> <InPorts = 2> <OutPorts = 1>
+ST_2 : Operation 50 [1/1] (0.00ns)   --->   "%empty = call i32 (...)* @_ssdm_op_SpecLoopTripCount(i64 8, i64 8, i64 8)"   --->   Operation 50 'speclooptripcount' 'empty' <Predicate = true> <Delay = 0.00>
+ST_2 : Operation 51 [1/1] (0.99ns)   --->   "%v5 = add i4 %v5_0, 1" [../ML_in.cpp:121]   --->   Operation 51 'add' 'v5' <Predicate = true> <Delay = 0.99> <Core = "AddSub">   --->   Core 14 'AddSub' <Latency = 0> <II = 1> <Delay = 0.63> <FuncUnit> <Opcode : 'add' 'sub'> <InPorts = 2> <OutPorts = 1>
+ST_2 : Operation 52 [1/1] (0.00ns)   --->   "br i1 %icmp_ln121, label %.preheader.preheader, label %hls_label_4_begin" [../ML_in.cpp:121]   --->   Operation 52 'br' <Predicate = true> <Delay = 0.00>
+ST_2 : Operation 53 [1/1] (0.00ns)   --->   "%trunc_ln124 = trunc i4 %v5_0 to i3" [../ML_in.cpp:124]   --->   Operation 53 'trunc' 'trunc_ln124' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_2 : Operation 54 [1/1] (0.00ns)   --->   "%shl_ln = call i6 @_ssdm_op_BitConcatenate.i6.i3.i3(i3 %trunc_ln124, i3 0)" [../ML_in.cpp:124]   --->   Operation 54 'bitconcatenate' 'shl_ln' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_2 : Operation 55 [10/10] (3.30ns)   --->   "%urem_ln127 = urem i6 %shl_ln, 3" [../ML_in.cpp:127]   --->   Operation 55 'urem' 'urem_ln127' <Predicate = (!icmp_ln121)> <Delay = 3.30> <Core = "DivnS">   --->   Core 23 'DivnS' <Latency = 9> <II = 1> <Delay = 3.30> <FuncUnit> <Opcode : 'sdiv' 'srem' 'udiv' 'urem'> <InPorts = 2> <OutPorts = 1>
+
+State 3 <SV = 2> <Delay = 3.30>
+ST_3 : Operation 56 [9/10] (3.30ns)   --->   "%urem_ln127 = urem i6 %shl_ln, 3" [../ML_in.cpp:127]   --->   Operation 56 'urem' 'urem_ln127' <Predicate = (!icmp_ln121)> <Delay = 3.30> <Core = "DivnS">   --->   Core 23 'DivnS' <Latency = 9> <II = 1> <Delay = 3.30> <FuncUnit> <Opcode : 'sdiv' 'srem' 'udiv' 'urem'> <InPorts = 2> <OutPorts = 1>
+
+State 4 <SV = 3> <Delay = 3.30>
+ST_4 : Operation 57 [8/10] (3.30ns)   --->   "%urem_ln127 = urem i6 %shl_ln, 3" [../ML_in.cpp:127]   --->   Operation 57 'urem' 'urem_ln127' <Predicate = (!icmp_ln121)> <Delay = 3.30> <Core = "DivnS">   --->   Core 23 'DivnS' <Latency = 9> <II = 1> <Delay = 3.30> <FuncUnit> <Opcode : 'sdiv' 'srem' 'udiv' 'urem'> <InPorts = 2> <OutPorts = 1>
+
+State 5 <SV = 4> <Delay = 3.30>
+ST_5 : Operation 58 [7/10] (3.30ns)   --->   "%urem_ln127 = urem i6 %shl_ln, 3" [../ML_in.cpp:127]   --->   Operation 58 'urem' 'urem_ln127' <Predicate = (!icmp_ln121)> <Delay = 3.30> <Core = "DivnS">   --->   Core 23 'DivnS' <Latency = 9> <II = 1> <Delay = 3.30> <FuncUnit> <Opcode : 'sdiv' 'srem' 'udiv' 'urem'> <InPorts = 2> <OutPorts = 1>
+
+State 6 <SV = 5> <Delay = 3.30>
+ST_6 : Operation 59 [6/10] (3.30ns)   --->   "%urem_ln127 = urem i6 %shl_ln, 3" [../ML_in.cpp:127]   --->   Operation 59 'urem' 'urem_ln127' <Predicate = (!icmp_ln121)> <Delay = 3.30> <Core = "DivnS">   --->   Core 23 'DivnS' <Latency = 9> <II = 1> <Delay = 3.30> <FuncUnit> <Opcode : 'sdiv' 'srem' 'udiv' 'urem'> <InPorts = 2> <OutPorts = 1>
+
+State 7 <SV = 6> <Delay = 3.30>
+ST_7 : Operation 60 [5/10] (3.30ns)   --->   "%urem_ln127 = urem i6 %shl_ln, 3" [../ML_in.cpp:127]   --->   Operation 60 'urem' 'urem_ln127' <Predicate = (!icmp_ln121)> <Delay = 3.30> <Core = "DivnS">   --->   Core 23 'DivnS' <Latency = 9> <II = 1> <Delay = 3.30> <FuncUnit> <Opcode : 'sdiv' 'srem' 'udiv' 'urem'> <InPorts = 2> <OutPorts = 1>
+
+State 8 <SV = 7> <Delay = 3.30>
+ST_8 : Operation 61 [4/10] (3.30ns)   --->   "%urem_ln127 = urem i6 %shl_ln, 3" [../ML_in.cpp:127]   --->   Operation 61 'urem' 'urem_ln127' <Predicate = (!icmp_ln121)> <Delay = 3.30> <Core = "DivnS">   --->   Core 23 'DivnS' <Latency = 9> <II = 1> <Delay = 3.30> <FuncUnit> <Opcode : 'sdiv' 'srem' 'udiv' 'urem'> <InPorts = 2> <OutPorts = 1>
+
+State 9 <SV = 8> <Delay = 3.30>
+ST_9 : Operation 62 [3/10] (3.30ns)   --->   "%urem_ln127 = urem i6 %shl_ln, 3" [../ML_in.cpp:127]   --->   Operation 62 'urem' 'urem_ln127' <Predicate = (!icmp_ln121)> <Delay = 3.30> <Core = "DivnS">   --->   Core 23 'DivnS' <Latency = 9> <II = 1> <Delay = 3.30> <FuncUnit> <Opcode : 'sdiv' 'srem' 'udiv' 'urem'> <InPorts = 2> <OutPorts = 1>
+ST_9 : Operation 63 [1/1] (0.98ns)   --->   "switch i3 %trunc_ln124, label %branch191 [
+    i3 0, label %hls_label_4_end
+    i3 1, label %branch143
+    i3 2, label %branch151
+    i3 3, label %branch159
+    i3 -4, label %branch167
+    i3 -3, label %branch175
+    i3 -2, label %branch183
+  ]" [../ML_in.cpp:128]   --->   Operation 63 'switch' <Predicate = (!icmp_ln121)> <Delay = 0.98>
+ST_9 : Operation 64 [1/1] (0.98ns)   --->   "br label %hls_label_4_end" [../ML_in.cpp:128]   --->   Operation 64 'br' <Predicate = (!icmp_ln121 & trunc_ln124 == 6)> <Delay = 0.98>
+ST_9 : Operation 65 [1/1] (0.98ns)   --->   "br label %hls_label_4_end" [../ML_in.cpp:128]   --->   Operation 65 'br' <Predicate = (!icmp_ln121 & trunc_ln124 == 5)> <Delay = 0.98>
+ST_9 : Operation 66 [1/1] (0.98ns)   --->   "br label %hls_label_4_end" [../ML_in.cpp:128]   --->   Operation 66 'br' <Predicate = (!icmp_ln121 & trunc_ln124 == 4)> <Delay = 0.98>
+ST_9 : Operation 67 [1/1] (0.98ns)   --->   "br label %hls_label_4_end" [../ML_in.cpp:128]   --->   Operation 67 'br' <Predicate = (!icmp_ln121 & trunc_ln124 == 3)> <Delay = 0.98>
+ST_9 : Operation 68 [1/1] (0.98ns)   --->   "br label %hls_label_4_end" [../ML_in.cpp:128]   --->   Operation 68 'br' <Predicate = (!icmp_ln121 & trunc_ln124 == 2)> <Delay = 0.98>
+ST_9 : Operation 69 [1/1] (0.98ns)   --->   "br label %hls_label_4_end" [../ML_in.cpp:128]   --->   Operation 69 'br' <Predicate = (!icmp_ln121 & trunc_ln124 == 1)> <Delay = 0.98>
+ST_9 : Operation 70 [1/1] (0.98ns)   --->   "br label %hls_label_4_end" [../ML_in.cpp:128]   --->   Operation 70 'br' <Predicate = (!icmp_ln121 & trunc_ln124 == 7)> <Delay = 0.98>
+
+State 10 <SV = 9> <Delay = 6.38>
+ST_10 : Operation 71 [2/10] (3.30ns)   --->   "%urem_ln127 = urem i6 %shl_ln, 3" [../ML_in.cpp:127]   --->   Operation 71 'urem' 'urem_ln127' <Predicate = (!icmp_ln121)> <Delay = 3.30> <Core = "DivnS">   --->   Core 23 'DivnS' <Latency = 9> <II = 1> <Delay = 3.30> <FuncUnit> <Opcode : 'sdiv' 'srem' 'udiv' 'urem'> <InPorts = 2> <OutPorts = 1>
+ST_10 : Operation 72 [1/1] (0.00ns)   --->   "%or_ln124 = or i6 %shl_ln, 7" [../ML_in.cpp:124]   --->   Operation 72 'or' 'or_ln124' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_10 : Operation 73 [1/1] (0.00ns)   --->   "%zext_ln127_4 = zext i6 %or_ln124 to i14" [../ML_in.cpp:127]   --->   Operation 73 'zext' 'zext_ln127_4' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_10 : Operation 74 [1/1] (3.61ns)   --->   "%mul_ln127 = mul i14 86, %zext_ln127_4" [../ML_in.cpp:127]   --->   Operation 74 'mul' 'mul_ln127' <Predicate = (!icmp_ln121)> <Delay = 3.61> <Core = "Mul">   --->   Core 16 'Mul' <Latency = 0> <II = 1> <Delay = 3.78> <FuncUnit> <Opcode : 'mul'> <InPorts = 2> <OutPorts = 1>
+ST_10 : Operation 75 [1/1] (0.00ns)   --->   "%udiv_ln = call i6 @_ssdm_op_PartSelect.i6.i14.i32.i32(i14 %mul_ln127, i32 8, i32 13)" [../ML_in.cpp:127]   --->   Operation 75 'partselect' 'udiv_ln' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_10 : Operation 76 [1/1] (0.00ns)   --->   "%zext_ln127_1 = zext i6 %udiv_ln to i64" [../ML_in.cpp:127]   --->   Operation 76 'zext' 'zext_ln127_1' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_10 : Operation 77 [1/1] (0.00ns)   --->   "%v1_1_addr = getelementptr [64 x double]* %v1_1, i64 0, i64 %zext_ln127_1" [../ML_in.cpp:127]   --->   Operation 77 'getelementptr' 'v1_1_addr' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_10 : Operation 78 [2/2] (2.77ns)   --->   "%v1_1_load = load double* %v1_1_addr, align 8" [../ML_in.cpp:127]   --->   Operation 78 'load' 'v1_1_load' <Predicate = (!icmp_ln121)> <Delay = 2.77> <Core = "RAM">   --->   Core 37 'RAM' <Latency = 1> <II = 1> <Delay = 2.77> <Storage> <Opcode : 'load' 'store'> <Ports = 2> <Width = 64> <Depth = 64> <RAM>
+ST_10 : Operation 79 [1/1] (0.00ns)   --->   "%v1_2_addr = getelementptr [64 x double]* %v1_2, i64 0, i64 %zext_ln127_1" [../ML_in.cpp:127]   --->   Operation 79 'getelementptr' 'v1_2_addr' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_10 : Operation 80 [2/2] (2.77ns)   --->   "%v1_2_load = load double* %v1_2_addr, align 8" [../ML_in.cpp:127]   --->   Operation 80 'load' 'v1_2_load' <Predicate = (!icmp_ln121)> <Delay = 2.77> <Core = "RAM">   --->   Core 37 'RAM' <Latency = 1> <II = 1> <Delay = 2.77> <Storage> <Opcode : 'load' 'store'> <Ports = 2> <Width = 64> <Depth = 64> <RAM>
+ST_10 : Operation 81 [1/1] (0.00ns)   --->   "%v1_0_addr = getelementptr [64 x double]* %v1_0, i64 0, i64 %zext_ln127_1" [../ML_in.cpp:127]   --->   Operation 81 'getelementptr' 'v1_0_addr' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_10 : Operation 82 [2/2] (2.77ns)   --->   "%v1_0_load = load double* %v1_0_addr, align 8" [../ML_in.cpp:127]   --->   Operation 82 'load' 'v1_0_load' <Predicate = (!icmp_ln121)> <Delay = 2.77> <Core = "RAM">   --->   Core 37 'RAM' <Latency = 1> <II = 1> <Delay = 2.77> <Storage> <Opcode : 'load' 'store'> <Ports = 2> <Width = 64> <Depth = 64> <RAM>
+ST_10 : Operation 83 [1/1] (0.00ns)   --->   "%or_ln = call i7 @_ssdm_op_BitConcatenate.i7.i1.i6(i1 true, i6 %or_ln124)" [../ML_in.cpp:127]   --->   Operation 83 'bitconcatenate' 'or_ln' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_10 : Operation 84 [1/1] (0.00ns)   --->   "%zext_ln127_5 = zext i7 %or_ln to i16" [../ML_in.cpp:127]   --->   Operation 84 'zext' 'zext_ln127_5' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_10 : Operation 85 [1/1] (3.59ns)   --->   "%mul_ln127_1 = mul i16 %zext_ln127_5, 171" [../ML_in.cpp:127]   --->   Operation 85 'mul' 'mul_ln127_1' <Predicate = (!icmp_ln121)> <Delay = 3.59> <Core = "Mul">   --->   Core 16 'Mul' <Latency = 0> <II = 1> <Delay = 3.78> <FuncUnit> <Opcode : 'mul'> <InPorts = 2> <OutPorts = 1>
+ST_10 : Operation 86 [1/1] (0.00ns)   --->   "%udiv_ln127_1 = call i7 @_ssdm_op_PartSelect.i7.i16.i32.i32(i16 %mul_ln127_1, i32 9, i32 15)" [../ML_in.cpp:127]   --->   Operation 86 'partselect' 'udiv_ln127_1' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_10 : Operation 87 [1/1] (0.00ns)   --->   "%zext_ln127_2 = zext i7 %udiv_ln127_1 to i64" [../ML_in.cpp:127]   --->   Operation 87 'zext' 'zext_ln127_2' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_10 : Operation 88 [1/1] (0.00ns)   --->   "%v1_2_addr_1 = getelementptr [64 x double]* %v1_2, i64 0, i64 %zext_ln127_2" [../ML_in.cpp:127]   --->   Operation 88 'getelementptr' 'v1_2_addr_1' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_10 : Operation 89 [2/2] (2.77ns)   --->   "%v1_2_load_1 = load double* %v1_2_addr_1, align 8" [../ML_in.cpp:127]   --->   Operation 89 'load' 'v1_2_load_1' <Predicate = (!icmp_ln121)> <Delay = 2.77> <Core = "RAM">   --->   Core 37 'RAM' <Latency = 1> <II = 1> <Delay = 2.77> <Storage> <Opcode : 'load' 'store'> <Ports = 2> <Width = 64> <Depth = 64> <RAM>
+ST_10 : Operation 90 [1/1] (0.00ns)   --->   "%v1_0_addr_1 = getelementptr [64 x double]* %v1_0, i64 0, i64 %zext_ln127_2" [../ML_in.cpp:127]   --->   Operation 90 'getelementptr' 'v1_0_addr_1' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_10 : Operation 91 [2/2] (2.77ns)   --->   "%v1_0_load_1 = load double* %v1_0_addr_1, align 8" [../ML_in.cpp:127]   --->   Operation 91 'load' 'v1_0_load_1' <Predicate = (!icmp_ln121)> <Delay = 2.77> <Core = "RAM">   --->   Core 37 'RAM' <Latency = 1> <II = 1> <Delay = 2.77> <Storage> <Opcode : 'load' 'store'> <Ports = 2> <Width = 64> <Depth = 64> <RAM>
+ST_10 : Operation 92 [1/1] (0.00ns)   --->   "%v1_1_addr_1 = getelementptr [64 x double]* %v1_1, i64 0, i64 %zext_ln127_2" [../ML_in.cpp:127]   --->   Operation 92 'getelementptr' 'v1_1_addr_1' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_10 : Operation 93 [2/2] (2.77ns)   --->   "%v1_1_load_1 = load double* %v1_1_addr_1, align 8" [../ML_in.cpp:127]   --->   Operation 93 'load' 'v1_1_load_1' <Predicate = (!icmp_ln121)> <Delay = 2.77> <Core = "RAM">   --->   Core 37 'RAM' <Latency = 1> <II = 1> <Delay = 2.77> <Storage> <Opcode : 'load' 'store'> <Ports = 2> <Width = 64> <Depth = 64> <RAM>
+
+State 11 <SV = 10> <Delay = 6.55>
+ST_11 : Operation 94 [1/10] (3.30ns)   --->   "%urem_ln127 = urem i6 %shl_ln, 3" [../ML_in.cpp:127]   --->   Operation 94 'urem' 'urem_ln127' <Predicate = (!icmp_ln121)> <Delay = 3.30> <Core = "DivnS">   --->   Core 23 'DivnS' <Latency = 9> <II = 1> <Delay = 3.30> <FuncUnit> <Opcode : 'sdiv' 'srem' 'udiv' 'urem'> <InPorts = 2> <OutPorts = 1>
+ST_11 : Operation 95 [1/1] (0.00ns)   --->   "%zext_ln127 = zext i6 %urem_ln127 to i32" [../ML_in.cpp:127]   --->   Operation 95 'zext' 'zext_ln127' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_11 : Operation 96 [1/2] (2.77ns)   --->   "%v1_1_load = load double* %v1_1_addr, align 8" [../ML_in.cpp:127]   --->   Operation 96 'load' 'v1_1_load' <Predicate = (!icmp_ln121)> <Delay = 2.77> <Core = "RAM">   --->   Core 37 'RAM' <Latency = 1> <II = 1> <Delay = 2.77> <Storage> <Opcode : 'load' 'store'> <Ports = 2> <Width = 64> <Depth = 64> <RAM>
+ST_11 : Operation 97 [1/2] (2.77ns)   --->   "%v1_2_load = load double* %v1_2_addr, align 8" [../ML_in.cpp:127]   --->   Operation 97 'load' 'v1_2_load' <Predicate = (!icmp_ln121)> <Delay = 2.77> <Core = "RAM">   --->   Core 37 'RAM' <Latency = 1> <II = 1> <Delay = 2.77> <Storage> <Opcode : 'load' 'store'> <Ports = 2> <Width = 64> <Depth = 64> <RAM>
+ST_11 : Operation 98 [1/2] (2.77ns)   --->   "%v1_0_load = load double* %v1_0_addr, align 8" [../ML_in.cpp:127]   --->   Operation 98 'load' 'v1_0_load' <Predicate = (!icmp_ln121)> <Delay = 2.77> <Core = "RAM">   --->   Core 37 'RAM' <Latency = 1> <II = 1> <Delay = 2.77> <Storage> <Opcode : 'load' 'store'> <Ports = 2> <Width = 64> <Depth = 64> <RAM>
+ST_11 : Operation 99 [1/1] (1.35ns)   --->   "%tmp_s = call double @_ssdm_op_Mux.ap_auto.3double.i32(double %v1_1_load, double %v1_2_load, double %v1_0_load, i32 %zext_ln127)" [../ML_in.cpp:127]   --->   Operation 99 'mux' 'tmp_s' <Predicate = (!icmp_ln121)> <Delay = 1.35> <Core = "MuxnS">   --->   Core 31 'MuxnS' <Latency = 0> <II = 1> <Delay = 1.35> <FuncUnit> <Opcode : 'mux'> <InPorts = 2> <OutPorts = 1>
+ST_11 : Operation 100 [1/2] (2.77ns)   --->   "%v1_2_load_1 = load double* %v1_2_addr_1, align 8" [../ML_in.cpp:127]   --->   Operation 100 'load' 'v1_2_load_1' <Predicate = (!icmp_ln121)> <Delay = 2.77> <Core = "RAM">   --->   Core 37 'RAM' <Latency = 1> <II = 1> <Delay = 2.77> <Storage> <Opcode : 'load' 'store'> <Ports = 2> <Width = 64> <Depth = 64> <RAM>
+ST_11 : Operation 101 [1/2] (2.77ns)   --->   "%v1_0_load_1 = load double* %v1_0_addr_1, align 8" [../ML_in.cpp:127]   --->   Operation 101 'load' 'v1_0_load_1' <Predicate = (!icmp_ln121)> <Delay = 2.77> <Core = "RAM">   --->   Core 37 'RAM' <Latency = 1> <II = 1> <Delay = 2.77> <Storage> <Opcode : 'load' 'store'> <Ports = 2> <Width = 64> <Depth = 64> <RAM>
+ST_11 : Operation 102 [1/2] (2.77ns)   --->   "%v1_1_load_1 = load double* %v1_1_addr_1, align 8" [../ML_in.cpp:127]   --->   Operation 102 'load' 'v1_1_load_1' <Predicate = (!icmp_ln121)> <Delay = 2.77> <Core = "RAM">   --->   Core 37 'RAM' <Latency = 1> <II = 1> <Delay = 2.77> <Storage> <Opcode : 'load' 'store'> <Ports = 2> <Width = 64> <Depth = 64> <RAM>
+ST_11 : Operation 103 [1/1] (1.35ns)   --->   "%tmp_66 = call double @_ssdm_op_Mux.ap_auto.3double.i32(double %v1_2_load_1, double %v1_0_load_1, double %v1_1_load_1, i32 %zext_ln127)" [../ML_in.cpp:127]   --->   Operation 103 'mux' 'tmp_66' <Predicate = (!icmp_ln121)> <Delay = 1.35> <Core = "MuxnS">   --->   Core 31 'MuxnS' <Latency = 0> <II = 1> <Delay = 1.35> <FuncUnit> <Opcode : 'mux'> <InPorts = 2> <OutPorts = 1>
+ST_11 : Operation 104 [1/1] (0.98ns)   --->   "%icmp_ln128 = icmp eq i3 %trunc_ln124, 0" [../ML_in.cpp:128]   --->   Operation 104 'icmp' 'icmp_ln128' <Predicate = (!icmp_ln121)> <Delay = 0.98> <Core = "Cmp">   --->   Core 25 'Cmp' <Latency = 0> <II = 1> <Delay = 0.50> <FuncUnit> <Opcode : 'icmp'> <InPorts = 2> <OutPorts = 1>
+ST_11 : Operation 105 [1/1] (0.00ns) (grouped into LUT with out node select_ln128_1)   --->   "%select_ln128 = select i1 %icmp_ln128, double %v3_7_read_1, double %v3_63_read_1" [../ML_in.cpp:128]   --->   Operation 105 'select' 'select_ln128' <Predicate = (!icmp_ln121)> <Delay = 0.00> <Core = "Sel">   --->   Core 26 'Sel' <Latency = 0> <II = 1> <Delay = 1.17> <FuncUnit> <Opcode : 'select'> <InPorts = 3> <OutPorts = 1>
+ST_11 : Operation 106 [1/1] (0.98ns)   --->   "%icmp_ln128_1 = icmp eq i3 %trunc_ln124, 1" [../ML_in.cpp:128]   --->   Operation 106 'icmp' 'icmp_ln128_1' <Predicate = (!icmp_ln121)> <Delay = 0.98> <Core = "Cmp">   --->   Core 25 'Cmp' <Latency = 0> <II = 1> <Delay = 0.50> <FuncUnit> <Opcode : 'icmp'> <InPorts = 2> <OutPorts = 1>
+ST_11 : Operation 107 [1/1] (1.17ns) (out node of the LUT)   --->   "%select_ln128_1 = select i1 %icmp_ln128_1, double %v3_15_read_1, double %select_ln128" [../ML_in.cpp:128]   --->   Operation 107 'select' 'select_ln128_1' <Predicate = (!icmp_ln121)> <Delay = 1.17> <Core = "Sel">   --->   Core 26 'Sel' <Latency = 0> <II = 1> <Delay = 1.17> <FuncUnit> <Opcode : 'select'> <InPorts = 3> <OutPorts = 1>
+ST_11 : Operation 108 [1/1] (0.98ns)   --->   "%icmp_ln128_2 = icmp eq i3 %trunc_ln124, 2" [../ML_in.cpp:128]   --->   Operation 108 'icmp' 'icmp_ln128_2' <Predicate = (!icmp_ln121)> <Delay = 0.98> <Core = "Cmp">   --->   Core 25 'Cmp' <Latency = 0> <II = 1> <Delay = 0.50> <FuncUnit> <Opcode : 'icmp'> <InPorts = 2> <OutPorts = 1>
+ST_11 : Operation 109 [1/1] (0.00ns) (grouped into LUT with out node select_ln128_3)   --->   "%select_ln128_2 = select i1 %icmp_ln128_2, double %v3_23_read_1, double %select_ln128_1" [../ML_in.cpp:128]   --->   Operation 109 'select' 'select_ln128_2' <Predicate = (!icmp_ln121)> <Delay = 0.00> <Core = "Sel">   --->   Core 26 'Sel' <Latency = 0> <II = 1> <Delay = 1.17> <FuncUnit> <Opcode : 'select'> <InPorts = 3> <OutPorts = 1>
+ST_11 : Operation 110 [1/1] (0.98ns)   --->   "%icmp_ln128_3 = icmp eq i3 %trunc_ln124, 3" [../ML_in.cpp:128]   --->   Operation 110 'icmp' 'icmp_ln128_3' <Predicate = (!icmp_ln121)> <Delay = 0.98> <Core = "Cmp">   --->   Core 25 'Cmp' <Latency = 0> <II = 1> <Delay = 0.50> <FuncUnit> <Opcode : 'icmp'> <InPorts = 2> <OutPorts = 1>
+ST_11 : Operation 111 [1/1] (1.17ns) (out node of the LUT)   --->   "%select_ln128_3 = select i1 %icmp_ln128_3, double %v3_31_read_1, double %select_ln128_2" [../ML_in.cpp:128]   --->   Operation 111 'select' 'select_ln128_3' <Predicate = (!icmp_ln121)> <Delay = 1.17> <Core = "Sel">   --->   Core 26 'Sel' <Latency = 0> <II = 1> <Delay = 1.17> <FuncUnit> <Opcode : 'select'> <InPorts = 3> <OutPorts = 1>
+ST_11 : Operation 112 [1/1] (0.98ns)   --->   "%icmp_ln128_4 = icmp eq i3 %trunc_ln124, -4" [../ML_in.cpp:128]   --->   Operation 112 'icmp' 'icmp_ln128_4' <Predicate = (!icmp_ln121)> <Delay = 0.98> <Core = "Cmp">   --->   Core 25 'Cmp' <Latency = 0> <II = 1> <Delay = 0.50> <FuncUnit> <Opcode : 'icmp'> <InPorts = 2> <OutPorts = 1>
+ST_11 : Operation 113 [1/1] (0.00ns) (grouped into LUT with out node select_ln128_5)   --->   "%select_ln128_4 = select i1 %icmp_ln128_4, double %v3_39_read_1, double %select_ln128_3" [../ML_in.cpp:128]   --->   Operation 113 'select' 'select_ln128_4' <Predicate = (!icmp_ln121)> <Delay = 0.00> <Core = "Sel">   --->   Core 26 'Sel' <Latency = 0> <II = 1> <Delay = 1.17> <FuncUnit> <Opcode : 'select'> <InPorts = 3> <OutPorts = 1>
+ST_11 : Operation 114 [1/1] (0.98ns)   --->   "%icmp_ln128_5 = icmp eq i3 %trunc_ln124, -3" [../ML_in.cpp:128]   --->   Operation 114 'icmp' 'icmp_ln128_5' <Predicate = (!icmp_ln121)> <Delay = 0.98> <Core = "Cmp">   --->   Core 25 'Cmp' <Latency = 0> <II = 1> <Delay = 0.50> <FuncUnit> <Opcode : 'icmp'> <InPorts = 2> <OutPorts = 1>
+ST_11 : Operation 115 [1/1] (1.17ns) (out node of the LUT)   --->   "%select_ln128_5 = select i1 %icmp_ln128_5, double %v3_47_read_1, double %select_ln128_4" [../ML_in.cpp:128]   --->   Operation 115 'select' 'select_ln128_5' <Predicate = (!icmp_ln121)> <Delay = 1.17> <Core = "Sel">   --->   Core 26 'Sel' <Latency = 0> <II = 1> <Delay = 1.17> <FuncUnit> <Opcode : 'select'> <InPorts = 3> <OutPorts = 1>
+ST_11 : Operation 116 [1/1] (0.98ns)   --->   "%icmp_ln128_6 = icmp eq i3 %trunc_ln124, -2" [../ML_in.cpp:128]   --->   Operation 116 'icmp' 'icmp_ln128_6' <Predicate = (!icmp_ln121)> <Delay = 0.98> <Core = "Cmp">   --->   Core 25 'Cmp' <Latency = 0> <II = 1> <Delay = 0.50> <FuncUnit> <Opcode : 'icmp'> <InPorts = 2> <OutPorts = 1>
+ST_11 : Operation 117 [1/1] (1.17ns) (out node of the LUT)   --->   "%select_ln128_6 = select i1 %icmp_ln128_6, double %v3_55_read_1, double %select_ln128_5" [../ML_in.cpp:128]   --->   Operation 117 'select' 'select_ln128_6' <Predicate = (!icmp_ln121)> <Delay = 1.17> <Core = "Sel">   --->   Core 26 'Sel' <Latency = 0> <II = 1> <Delay = 1.17> <FuncUnit> <Opcode : 'select'> <InPorts = 3> <OutPorts = 1>
+ST_11 : Operation 118 [1/1] (0.00ns)   --->   "%or_ln127_1 = call i8 @_ssdm_op_BitConcatenate.i8.i2.i6(i2 -2, i6 %or_ln124)" [../ML_in.cpp:127]   --->   Operation 118 'bitconcatenate' 'or_ln127_1' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_11 : Operation 119 [1/1] (0.00ns)   --->   "%zext_ln127_6 = zext i8 %or_ln127_1 to i18" [../ML_in.cpp:127]   --->   Operation 119 'zext' 'zext_ln127_6' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_11 : Operation 120 [1/1] (3.78ns)   --->   "%mul_ln127_2 = mul i18 %zext_ln127_6, 342" [../ML_in.cpp:127]   --->   Operation 120 'mul' 'mul_ln127_2' <Predicate = (!icmp_ln121)> <Delay = 3.78> <Core = "Mul">   --->   Core 16 'Mul' <Latency = 0> <II = 1> <Delay = 3.78> <FuncUnit> <Opcode : 'mul'> <InPorts = 2> <OutPorts = 1>
+ST_11 : Operation 121 [1/1] (0.00ns)   --->   "%udiv_ln127_2 = call i8 @_ssdm_op_PartSelect.i8.i18.i32.i32(i18 %mul_ln127_2, i32 10, i32 17)" [../ML_in.cpp:127]   --->   Operation 121 'partselect' 'udiv_ln127_2' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_11 : Operation 122 [1/1] (0.00ns)   --->   "%zext_ln127_3 = zext i8 %udiv_ln127_2 to i64" [../ML_in.cpp:127]   --->   Operation 122 'zext' 'zext_ln127_3' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_11 : Operation 123 [1/1] (0.00ns)   --->   "%v1_0_addr_2 = getelementptr [64 x double]* %v1_0, i64 0, i64 %zext_ln127_3" [../ML_in.cpp:127]   --->   Operation 123 'getelementptr' 'v1_0_addr_2' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_11 : Operation 124 [2/2] (2.77ns)   --->   "%v1_0_load_2 = load double* %v1_0_addr_2, align 8" [../ML_in.cpp:127]   --->   Operation 124 'load' 'v1_0_load_2' <Predicate = (!icmp_ln121)> <Delay = 2.77> <Core = "RAM">   --->   Core 37 'RAM' <Latency = 1> <II = 1> <Delay = 2.77> <Storage> <Opcode : 'load' 'store'> <Ports = 2> <Width = 64> <Depth = 64> <RAM>
+ST_11 : Operation 125 [1/1] (0.00ns)   --->   "%v1_1_addr_2 = getelementptr [64 x double]* %v1_1, i64 0, i64 %zext_ln127_3" [../ML_in.cpp:127]   --->   Operation 125 'getelementptr' 'v1_1_addr_2' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_11 : Operation 126 [2/2] (2.77ns)   --->   "%v1_1_load_2 = load double* %v1_1_addr_2, align 8" [../ML_in.cpp:127]   --->   Operation 126 'load' 'v1_1_load_2' <Predicate = (!icmp_ln121)> <Delay = 2.77> <Core = "RAM">   --->   Core 37 'RAM' <Latency = 1> <II = 1> <Delay = 2.77> <Storage> <Opcode : 'load' 'store'> <Ports = 2> <Width = 64> <Depth = 64> <RAM>
+ST_11 : Operation 127 [1/1] (0.00ns)   --->   "%v1_2_addr_2 = getelementptr [64 x double]* %v1_2, i64 0, i64 %zext_ln127_3" [../ML_in.cpp:127]   --->   Operation 127 'getelementptr' 'v1_2_addr_2' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_11 : Operation 128 [2/2] (2.77ns)   --->   "%v1_2_load_2 = load double* %v1_2_addr_2, align 8" [../ML_in.cpp:127]   --->   Operation 128 'load' 'v1_2_load_2' <Predicate = (!icmp_ln121)> <Delay = 2.77> <Core = "RAM">   --->   Core 37 'RAM' <Latency = 1> <II = 1> <Delay = 2.77> <Storage> <Opcode : 'load' 'store'> <Ports = 2> <Width = 64> <Depth = 64> <RAM>
+
+State 12 <SV = 11> <Delay = 8.41>
+ST_12 : Operation 129 [1/1] (0.00ns)   --->   "%phi_ln128 = phi double [ %v3_15_read_1, %branch143 ], [ %v3_23_read_1, %branch151 ], [ %v3_31_read_1, %branch159 ], [ %v3_39_read_1, %branch167 ], [ %v3_47_read_1, %branch175 ], [ %v3_55_read_1, %branch183 ], [ %v3_63_read_1, %branch191 ], [ %v3_7_read_1, %hls_label_4_begin ]" [../ML_in.cpp:128]   --->   Operation 129 'phi' 'phi_ln128' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_12 : Operation 130 [5/5] (8.41ns)   --->   "%v11_7 = fmul double %tmp_s, %phi_ln128" [../ML_in.cpp:129]   --->   Operation 130 'dmul' 'v11_7' <Predicate = (!icmp_ln121)> <Delay = 8.41> <Core = "DMul">   --->   Core 116 'DMul' <Latency = 4> <II = 1> <Delay = 8.41> <FuncUnit> <Opcode : 'dmul'> <InPorts = 2> <OutPorts = 1>
+ST_12 : Operation 131 [5/5] (8.41ns)   --->   "%v11_7_1 = fmul double %tmp_66, %select_ln128_6" [../ML_in.cpp:129]   --->   Operation 131 'dmul' 'v11_7_1' <Predicate = (!icmp_ln121)> <Delay = 8.41> <Core = "DMul">   --->   Core 116 'DMul' <Latency = 4> <II = 1> <Delay = 8.41> <FuncUnit> <Opcode : 'dmul'> <InPorts = 2> <OutPorts = 1>
+ST_12 : Operation 132 [1/2] (2.77ns)   --->   "%v1_0_load_2 = load double* %v1_0_addr_2, align 8" [../ML_in.cpp:127]   --->   Operation 132 'load' 'v1_0_load_2' <Predicate = (!icmp_ln121)> <Delay = 2.77> <Core = "RAM">   --->   Core 37 'RAM' <Latency = 1> <II = 1> <Delay = 2.77> <Storage> <Opcode : 'load' 'store'> <Ports = 2> <Width = 64> <Depth = 64> <RAM>
+ST_12 : Operation 133 [1/2] (2.77ns)   --->   "%v1_1_load_2 = load double* %v1_1_addr_2, align 8" [../ML_in.cpp:127]   --->   Operation 133 'load' 'v1_1_load_2' <Predicate = (!icmp_ln121)> <Delay = 2.77> <Core = "RAM">   --->   Core 37 'RAM' <Latency = 1> <II = 1> <Delay = 2.77> <Storage> <Opcode : 'load' 'store'> <Ports = 2> <Width = 64> <Depth = 64> <RAM>
+ST_12 : Operation 134 [1/2] (2.77ns)   --->   "%v1_2_load_2 = load double* %v1_2_addr_2, align 8" [../ML_in.cpp:127]   --->   Operation 134 'load' 'v1_2_load_2' <Predicate = (!icmp_ln121)> <Delay = 2.77> <Core = "RAM">   --->   Core 37 'RAM' <Latency = 1> <II = 1> <Delay = 2.77> <Storage> <Opcode : 'load' 'store'> <Ports = 2> <Width = 64> <Depth = 64> <RAM>
+ST_12 : Operation 135 [1/1] (1.35ns)   --->   "%tmp_67 = call double @_ssdm_op_Mux.ap_auto.3double.i32(double %v1_0_load_2, double %v1_1_load_2, double %v1_2_load_2, i32 %zext_ln127)" [../ML_in.cpp:127]   --->   Operation 135 'mux' 'tmp_67' <Predicate = (!icmp_ln121)> <Delay = 1.35> <Core = "MuxnS">   --->   Core 31 'MuxnS' <Latency = 0> <II = 1> <Delay = 1.35> <FuncUnit> <Opcode : 'mux'> <InPorts = 2> <OutPorts = 1>
+
+State 13 <SV = 12> <Delay = 8.41>
+ST_13 : Operation 136 [4/5] (8.41ns)   --->   "%v11_7 = fmul double %tmp_s, %phi_ln128" [../ML_in.cpp:129]   --->   Operation 136 'dmul' 'v11_7' <Predicate = (!icmp_ln121)> <Delay = 8.41> <Core = "DMul">   --->   Core 116 'DMul' <Latency = 4> <II = 1> <Delay = 8.41> <FuncUnit> <Opcode : 'dmul'> <InPorts = 2> <OutPorts = 1>
+ST_13 : Operation 137 [4/5] (8.41ns)   --->   "%v11_7_1 = fmul double %tmp_66, %select_ln128_6" [../ML_in.cpp:129]   --->   Operation 137 'dmul' 'v11_7_1' <Predicate = (!icmp_ln121)> <Delay = 8.41> <Core = "DMul">   --->   Core 116 'DMul' <Latency = 4> <II = 1> <Delay = 8.41> <FuncUnit> <Opcode : 'dmul'> <InPorts = 2> <OutPorts = 1>
+ST_13 : Operation 138 [5/5] (8.41ns)   --->   "%v11_7_2 = fmul double %tmp_67, %select_ln128_6" [../ML_in.cpp:129]   --->   Operation 138 'dmul' 'v11_7_2' <Predicate = (!icmp_ln121)> <Delay = 8.41> <Core = "DMul">   --->   Core 116 'DMul' <Latency = 4> <II = 1> <Delay = 8.41> <FuncUnit> <Opcode : 'dmul'> <InPorts = 2> <OutPorts = 1>
+
+State 14 <SV = 13> <Delay = 8.41>
+ST_14 : Operation 139 [3/5] (8.41ns)   --->   "%v11_7 = fmul double %tmp_s, %phi_ln128" [../ML_in.cpp:129]   --->   Operation 139 'dmul' 'v11_7' <Predicate = (!icmp_ln121)> <Delay = 8.41> <Core = "DMul">   --->   Core 116 'DMul' <Latency = 4> <II = 1> <Delay = 8.41> <FuncUnit> <Opcode : 'dmul'> <InPorts = 2> <OutPorts = 1>
+ST_14 : Operation 140 [3/5] (8.41ns)   --->   "%v11_7_1 = fmul double %tmp_66, %select_ln128_6" [../ML_in.cpp:129]   --->   Operation 140 'dmul' 'v11_7_1' <Predicate = (!icmp_ln121)> <Delay = 8.41> <Core = "DMul">   --->   Core 116 'DMul' <Latency = 4> <II = 1> <Delay = 8.41> <FuncUnit> <Opcode : 'dmul'> <InPorts = 2> <OutPorts = 1>
+ST_14 : Operation 141 [4/5] (8.41ns)   --->   "%v11_7_2 = fmul double %tmp_67, %select_ln128_6" [../ML_in.cpp:129]   --->   Operation 141 'dmul' 'v11_7_2' <Predicate = (!icmp_ln121)> <Delay = 8.41> <Core = "DMul">   --->   Core 116 'DMul' <Latency = 4> <II = 1> <Delay = 8.41> <FuncUnit> <Opcode : 'dmul'> <InPorts = 2> <OutPorts = 1>
+
+State 15 <SV = 14> <Delay = 8.41>
+ST_15 : Operation 142 [2/5] (8.41ns)   --->   "%v11_7 = fmul double %tmp_s, %phi_ln128" [../ML_in.cpp:129]   --->   Operation 142 'dmul' 'v11_7' <Predicate = (!icmp_ln121)> <Delay = 8.41> <Core = "DMul">   --->   Core 116 'DMul' <Latency = 4> <II = 1> <Delay = 8.41> <FuncUnit> <Opcode : 'dmul'> <InPorts = 2> <OutPorts = 1>
+ST_15 : Operation 143 [2/5] (8.41ns)   --->   "%v11_7_1 = fmul double %tmp_66, %select_ln128_6" [../ML_in.cpp:129]   --->   Operation 143 'dmul' 'v11_7_1' <Predicate = (!icmp_ln121)> <Delay = 8.41> <Core = "DMul">   --->   Core 116 'DMul' <Latency = 4> <II = 1> <Delay = 8.41> <FuncUnit> <Opcode : 'dmul'> <InPorts = 2> <OutPorts = 1>
+ST_15 : Operation 144 [3/5] (8.41ns)   --->   "%v11_7_2 = fmul double %tmp_67, %select_ln128_6" [../ML_in.cpp:129]   --->   Operation 144 'dmul' 'v11_7_2' <Predicate = (!icmp_ln121)> <Delay = 8.41> <Core = "DMul">   --->   Core 116 'DMul' <Latency = 4> <II = 1> <Delay = 8.41> <FuncUnit> <Opcode : 'dmul'> <InPorts = 2> <OutPorts = 1>
+
+State 16 <SV = 15> <Delay = 8.41>
+ST_16 : Operation 145 [1/5] (8.41ns)   --->   "%v11_7 = fmul double %tmp_s, %phi_ln128" [../ML_in.cpp:129]   --->   Operation 145 'dmul' 'v11_7' <Predicate = (!icmp_ln121)> <Delay = 8.41> <Core = "DMul">   --->   Core 116 'DMul' <Latency = 4> <II = 1> <Delay = 8.41> <FuncUnit> <Opcode : 'dmul'> <InPorts = 2> <OutPorts = 1>
+ST_16 : Operation 146 [1/5] (8.41ns)   --->   "%v11_7_1 = fmul double %tmp_66, %select_ln128_6" [../ML_in.cpp:129]   --->   Operation 146 'dmul' 'v11_7_1' <Predicate = (!icmp_ln121)> <Delay = 8.41> <Core = "DMul">   --->   Core 116 'DMul' <Latency = 4> <II = 1> <Delay = 8.41> <FuncUnit> <Opcode : 'dmul'> <InPorts = 2> <OutPorts = 1>
+ST_16 : Operation 147 [2/5] (8.41ns)   --->   "%v11_7_2 = fmul double %tmp_67, %select_ln128_6" [../ML_in.cpp:129]   --->   Operation 147 'dmul' 'v11_7_2' <Predicate = (!icmp_ln121)> <Delay = 8.41> <Core = "DMul">   --->   Core 116 'DMul' <Latency = 4> <II = 1> <Delay = 8.41> <FuncUnit> <Opcode : 'dmul'> <InPorts = 2> <OutPorts = 1>
+
+State 17 <SV = 16> <Delay = 8.41>
+ST_17 : Operation 148 [5/5] (7.51ns)   --->   "%v13_7 = fadd double %v11_7, 0.000000e+00" [../ML_in.cpp:131]   --->   Operation 148 'dadd' 'v13_7' <Predicate = (!icmp_ln121)> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+ST_17 : Operation 149 [5/5] (7.51ns)   --->   "%v13_7_1 = fadd double %v11_7_1, 0.000000e+00" [../ML_in.cpp:131]   --->   Operation 149 'dadd' 'v13_7_1' <Predicate = (!icmp_ln121)> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+ST_17 : Operation 150 [1/5] (8.41ns)   --->   "%v11_7_2 = fmul double %tmp_67, %select_ln128_6" [../ML_in.cpp:129]   --->   Operation 150 'dmul' 'v11_7_2' <Predicate = (!icmp_ln121)> <Delay = 8.41> <Core = "DMul">   --->   Core 116 'DMul' <Latency = 4> <II = 1> <Delay = 8.41> <FuncUnit> <Opcode : 'dmul'> <InPorts = 2> <OutPorts = 1>
+
+State 18 <SV = 17> <Delay = 7.51>
+ST_18 : Operation 151 [4/5] (7.51ns)   --->   "%v13_7 = fadd double %v11_7, 0.000000e+00" [../ML_in.cpp:131]   --->   Operation 151 'dadd' 'v13_7' <Predicate = (!icmp_ln121)> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+ST_18 : Operation 152 [4/5] (7.51ns)   --->   "%v13_7_1 = fadd double %v11_7_1, 0.000000e+00" [../ML_in.cpp:131]   --->   Operation 152 'dadd' 'v13_7_1' <Predicate = (!icmp_ln121)> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+ST_18 : Operation 153 [5/5] (7.51ns)   --->   "%v13_7_2 = fadd double %v11_7_2, 0.000000e+00" [../ML_in.cpp:131]   --->   Operation 153 'dadd' 'v13_7_2' <Predicate = (!icmp_ln121)> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+
+State 19 <SV = 18> <Delay = 7.51>
+ST_19 : Operation 154 [3/5] (7.51ns)   --->   "%v13_7 = fadd double %v11_7, 0.000000e+00" [../ML_in.cpp:131]   --->   Operation 154 'dadd' 'v13_7' <Predicate = (!icmp_ln121)> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+ST_19 : Operation 155 [3/5] (7.51ns)   --->   "%v13_7_1 = fadd double %v11_7_1, 0.000000e+00" [../ML_in.cpp:131]   --->   Operation 155 'dadd' 'v13_7_1' <Predicate = (!icmp_ln121)> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+ST_19 : Operation 156 [4/5] (7.51ns)   --->   "%v13_7_2 = fadd double %v11_7_2, 0.000000e+00" [../ML_in.cpp:131]   --->   Operation 156 'dadd' 'v13_7_2' <Predicate = (!icmp_ln121)> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+
+State 20 <SV = 19> <Delay = 7.51>
+ST_20 : Operation 157 [2/5] (7.51ns)   --->   "%v13_7 = fadd double %v11_7, 0.000000e+00" [../ML_in.cpp:131]   --->   Operation 157 'dadd' 'v13_7' <Predicate = (!icmp_ln121)> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+ST_20 : Operation 158 [2/5] (7.51ns)   --->   "%v13_7_1 = fadd double %v11_7_1, 0.000000e+00" [../ML_in.cpp:131]   --->   Operation 158 'dadd' 'v13_7_1' <Predicate = (!icmp_ln121)> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+ST_20 : Operation 159 [3/5] (7.51ns)   --->   "%v13_7_2 = fadd double %v11_7_2, 0.000000e+00" [../ML_in.cpp:131]   --->   Operation 159 'dadd' 'v13_7_2' <Predicate = (!icmp_ln121)> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+
+State 21 <SV = 20> <Delay = 7.51>
+ST_21 : Operation 160 [1/5] (7.51ns)   --->   "%v13_7 = fadd double %v11_7, 0.000000e+00" [../ML_in.cpp:131]   --->   Operation 160 'dadd' 'v13_7' <Predicate = (!icmp_ln121)> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+ST_21 : Operation 161 [1/5] (7.51ns)   --->   "%v13_7_1 = fadd double %v11_7_1, 0.000000e+00" [../ML_in.cpp:131]   --->   Operation 161 'dadd' 'v13_7_1' <Predicate = (!icmp_ln121)> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+ST_21 : Operation 162 [2/5] (7.51ns)   --->   "%v13_7_2 = fadd double %v11_7_2, 0.000000e+00" [../ML_in.cpp:131]   --->   Operation 162 'dadd' 'v13_7_2' <Predicate = (!icmp_ln121)> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+
+State 22 <SV = 21> <Delay = 7.51>
+ST_22 : Operation 163 [1/1] (0.00ns)   --->   "%tmp = call i32 (...)* @_ssdm_op_SpecRegionBegin([12 x i8]* @p_str7)" [../ML_in.cpp:121]   --->   Operation 163 'specregionbegin' 'tmp' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_22 : Operation 164 [1/1] (0.00ns)   --->   "call void (...)* @_ssdm_op_SpecPipeline(i32 -1, i32 1, i32 1, i32 0, [1 x i8]* @p_str1) nounwind" [../ML_in.cpp:122]   --->   Operation 164 'specpipeline' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_22 : Operation 165 [1/5] (7.51ns)   --->   "%v13_7_2 = fadd double %v11_7_2, 0.000000e+00" [../ML_in.cpp:131]   --->   Operation 165 'dadd' 'v13_7_2' <Predicate = (!icmp_ln121)> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+ST_22 : Operation 166 [1/1] (0.00ns)   --->   "%empty_50 = call i32 (...)* @_ssdm_op_SpecRegionEnd([12 x i8]* @p_str7, i32 %tmp)" [../ML_in.cpp:135]   --->   Operation 166 'specregionend' 'empty_50' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+ST_22 : Operation 167 [1/1] (0.00ns)   --->   "br label %1" [../ML_in.cpp:121]   --->   Operation 167 'br' <Predicate = (!icmp_ln121)> <Delay = 0.00>
+
+State 23 <SV = 2> <Delay = 0.46>
+ST_23 : Operation 168 [1/1] (0.46ns)   --->   "br label %.preheader"   --->   Operation 168 'br' <Predicate = true> <Delay = 0.46>
+
+State 24 <SV = 3> <Delay = 1.35>
+ST_24 : Operation 169 [1/1] (0.00ns)   --->   "%v2_0_1 = phi double [ %v2_0_2, %branch0.i ], [ %v2_0_0, %.preheader.preheader ]" [../ML_in.cpp:48->../ML_in.cpp:136]   --->   Operation 169 'phi' 'v2_0_1' <Predicate = true> <Delay = 0.00>
+ST_24 : Operation 170 [1/1] (0.00ns)   --->   "%v2_1_1 = phi double [ %v2_1_2, %branch0.i ], [ %v2_1_0, %.preheader.preheader ]" [../ML_in.cpp:48->../ML_in.cpp:136]   --->   Operation 170 'phi' 'v2_1_1' <Predicate = true> <Delay = 0.00>
+ST_24 : Operation 171 [1/1] (0.00ns)   --->   "%v2_2_1 = phi double [ %v2_2_2, %branch0.i ], [ %v2_2_0, %.preheader.preheader ]" [../ML_in.cpp:48->../ML_in.cpp:136]   --->   Operation 171 'phi' 'v2_2_1' <Predicate = true> <Delay = 0.00>
+ST_24 : Operation 172 [1/1] (0.00ns)   --->   "%i_0_i = phi i2 [ %i, %branch0.i ], [ 0, %.preheader.preheader ]"   --->   Operation 172 'phi' 'i_0_i' <Predicate = true> <Delay = 0.00>
+ST_24 : Operation 173 [1/1] (0.00ns)   --->   "%empty_51 = call i32 (...)* @_ssdm_op_SpecLoopTripCount(i64 3, i64 3, i64 3)"   --->   Operation 173 'speclooptripcount' 'empty_51' <Predicate = true> <Delay = 0.00>
+ST_24 : Operation 174 [1/1] (0.50ns)   --->   "%icmp_ln47 = icmp eq i2 %i_0_i, -1" [../ML_in.cpp:47->../ML_in.cpp:136]   --->   Operation 174 'icmp' 'icmp_ln47' <Predicate = true> <Delay = 0.50> <Core = "Cmp">   --->   Core 25 'Cmp' <Latency = 0> <II = 1> <Delay = 0.50> <FuncUnit> <Opcode : 'icmp'> <InPorts = 2> <OutPorts = 1>
+ST_24 : Operation 175 [1/1] (0.63ns)   --->   "%i = add i2 %i_0_i, 1" [../ML_in.cpp:47->../ML_in.cpp:136]   --->   Operation 175 'add' 'i' <Predicate = true> <Delay = 0.63> <Core = "AddSub">   --->   Core 14 'AddSub' <Latency = 0> <II = 1> <Delay = 0.63> <FuncUnit> <Opcode : 'add' 'sub'> <InPorts = 2> <OutPorts = 1>
+ST_24 : Operation 176 [1/1] (0.00ns)   --->   "br i1 %icmp_ln47, label %add_bias_to_activations.1.exit, label %branch0.i" [../ML_in.cpp:47->../ML_in.cpp:136]   --->   Operation 176 'br' <Predicate = true> <Delay = 0.00>
+ST_24 : Operation 177 [1/1] (1.35ns)   --->   "%tmp_64 = call double @_ssdm_op_Mux.ap_auto.3double.i2(double %v2_0_1, double %v2_1_1, double %v2_2_1, i2 %i_0_i)" [../ML_in.cpp:48->../ML_in.cpp:136]   --->   Operation 177 'mux' 'tmp_64' <Predicate = (!icmp_ln47)> <Delay = 1.35> <Core = "MuxnS">   --->   Core 31 'MuxnS' <Latency = 0> <II = 1> <Delay = 1.35> <FuncUnit> <Opcode : 'mux'> <InPorts = 2> <OutPorts = 1>
+ST_24 : Operation 178 [1/1] (1.35ns)   --->   "%tmp_65 = call double @_ssdm_op_Mux.ap_auto.3double.i2(double %v0_0_read_3, double %v0_1_read_3, double %v0_2_read_3, i2 %i_0_i)" [../ML_in.cpp:48->../ML_in.cpp:136]   --->   Operation 178 'mux' 'tmp_65' <Predicate = (!icmp_ln47)> <Delay = 1.35> <Core = "MuxnS">   --->   Core 31 'MuxnS' <Latency = 0> <II = 1> <Delay = 1.35> <FuncUnit> <Opcode : 'mux'> <InPorts = 2> <OutPorts = 1>
+ST_24 : Operation 179 [1/1] (0.00ns)   --->   "%mrv = insertvalue { double, double, double } undef, double %v2_0_1, 0" [../ML_in.cpp:137]   --->   Operation 179 'insertvalue' 'mrv' <Predicate = (icmp_ln47)> <Delay = 0.00>
+ST_24 : Operation 180 [1/1] (0.00ns)   --->   "%mrv_1 = insertvalue { double, double, double } %mrv, double %v2_1_1, 1" [../ML_in.cpp:137]   --->   Operation 180 'insertvalue' 'mrv_1' <Predicate = (icmp_ln47)> <Delay = 0.00>
+ST_24 : Operation 181 [1/1] (0.00ns)   --->   "%mrv_2 = insertvalue { double, double, double } %mrv_1, double %v2_2_1, 2" [../ML_in.cpp:137]   --->   Operation 181 'insertvalue' 'mrv_2' <Predicate = (icmp_ln47)> <Delay = 0.00>
+ST_24 : Operation 182 [1/1] (0.00ns)   --->   "ret { double, double, double } %mrv_2" [../ML_in.cpp:137]   --->   Operation 182 'ret' <Predicate = (icmp_ln47)> <Delay = 0.00>
+
+State 25 <SV = 4> <Delay = 7.51>
+ST_25 : Operation 183 [5/5] (7.51ns)   --->   "%activations_2_assig = fadd double %tmp_64, %tmp_65" [../ML_in.cpp:48->../ML_in.cpp:136]   --->   Operation 183 'dadd' 'activations_2_assig' <Predicate = true> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+
+State 26 <SV = 5> <Delay = 7.51>
+ST_26 : Operation 184 [4/5] (7.51ns)   --->   "%activations_2_assig = fadd double %tmp_64, %tmp_65" [../ML_in.cpp:48->../ML_in.cpp:136]   --->   Operation 184 'dadd' 'activations_2_assig' <Predicate = true> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+
+State 27 <SV = 6> <Delay = 7.51>
+ST_27 : Operation 185 [3/5] (7.51ns)   --->   "%activations_2_assig = fadd double %tmp_64, %tmp_65" [../ML_in.cpp:48->../ML_in.cpp:136]   --->   Operation 185 'dadd' 'activations_2_assig' <Predicate = true> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+
+State 28 <SV = 7> <Delay = 7.51>
+ST_28 : Operation 186 [2/5] (7.51ns)   --->   "%activations_2_assig = fadd double %tmp_64, %tmp_65" [../ML_in.cpp:48->../ML_in.cpp:136]   --->   Operation 186 'dadd' 'activations_2_assig' <Predicate = true> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+
+State 29 <SV = 8> <Delay = 8.69>
+ST_29 : Operation 187 [1/1] (0.00ns)   --->   "call void (...)* @_ssdm_op_SpecLoopName([6 x i8]* @p_str4) nounwind" [../ML_in.cpp:47->../ML_in.cpp:136]   --->   Operation 187 'specloopname' <Predicate = true> <Delay = 0.00>
+ST_29 : Operation 188 [1/5] (7.51ns)   --->   "%activations_2_assig = fadd double %tmp_64, %tmp_65" [../ML_in.cpp:48->../ML_in.cpp:136]   --->   Operation 188 'dadd' 'activations_2_assig' <Predicate = true> <Delay = 7.51> <Core = "DAddSub">   --->   Core 115 'DAddSub' <Latency = 4> <II = 1> <Delay = 7.51> <FuncUnit> <Opcode : 'dadd' 'dsub'> <InPorts = 2> <OutPorts = 1>
+ST_29 : Operation 189 [1/1] (0.50ns)   --->   "%icmp_ln48 = icmp eq i2 %i_0_i, 0" [../ML_in.cpp:48->../ML_in.cpp:136]   --->   Operation 189 'icmp' 'icmp_ln48' <Predicate = true> <Delay = 0.50> <Core = "Cmp">   --->   Core 25 'Cmp' <Latency = 0> <II = 1> <Delay = 0.50> <FuncUnit> <Opcode : 'icmp'> <InPorts = 2> <OutPorts = 1>
+ST_29 : Operation 190 [1/1] (0.00ns) (grouped into LUT with out node v2_2_2)   --->   "%select_ln48 = select i1 %icmp_ln48, double %v2_2_1, double %activations_2_assig" [../ML_in.cpp:48->../ML_in.cpp:136]   --->   Operation 190 'select' 'select_ln48' <Predicate = true> <Delay = 0.00> <Core = "Sel">   --->   Core 26 'Sel' <Latency = 0> <II = 1> <Delay = 1.17> <FuncUnit> <Opcode : 'select'> <InPorts = 3> <OutPorts = 1>
+ST_29 : Operation 191 [1/1] (0.50ns)   --->   "%icmp_ln48_1 = icmp eq i2 %i_0_i, 1" [../ML_in.cpp:48->../ML_in.cpp:136]   --->   Operation 191 'icmp' 'icmp_ln48_1' <Predicate = true> <Delay = 0.50> <Core = "Cmp">   --->   Core 25 'Cmp' <Latency = 0> <II = 1> <Delay = 0.50> <FuncUnit> <Opcode : 'icmp'> <InPorts = 2> <OutPorts = 1>
+ST_29 : Operation 192 [1/1] (1.17ns) (out node of the LUT)   --->   "%v2_2_2 = select i1 %icmp_ln48_1, double %v2_2_1, double %select_ln48" [../ML_in.cpp:48->../ML_in.cpp:136]   --->   Operation 192 'select' 'v2_2_2' <Predicate = true> <Delay = 1.17> <Core = "Sel">   --->   Core 26 'Sel' <Latency = 0> <II = 1> <Delay = 1.17> <FuncUnit> <Opcode : 'select'> <InPorts = 3> <OutPorts = 1>
+ST_29 : Operation 193 [1/1] (1.17ns)   --->   "%v2_1_2 = select i1 %icmp_ln48_1, double %activations_2_assig, double %v2_1_1" [../ML_in.cpp:48->../ML_in.cpp:136]   --->   Operation 193 'select' 'v2_1_2' <Predicate = true> <Delay = 1.17> <Core = "Sel">   --->   Core 26 'Sel' <Latency = 0> <II = 1> <Delay = 1.17> <FuncUnit> <Opcode : 'select'> <InPorts = 3> <OutPorts = 1>
+ST_29 : Operation 194 [1/1] (0.00ns) (grouped into LUT with out node v2_0_2)   --->   "%select_ln48_1 = select i1 %icmp_ln48, double %activations_2_assig, double %v2_0_1" [../ML_in.cpp:48->../ML_in.cpp:136]   --->   Operation 194 'select' 'select_ln48_1' <Predicate = true> <Delay = 0.00> <Core = "Sel">   --->   Core 26 'Sel' <Latency = 0> <II = 1> <Delay = 1.17> <FuncUnit> <Opcode : 'select'> <InPorts = 3> <OutPorts = 1>
+ST_29 : Operation 195 [1/1] (1.17ns) (out node of the LUT)   --->   "%v2_0_2 = select i1 %icmp_ln48_1, double %v2_0_1, double %select_ln48_1" [../ML_in.cpp:48->../ML_in.cpp:136]   --->   Operation 195 'select' 'v2_0_2' <Predicate = true> <Delay = 1.17> <Core = "Sel">   --->   Core 26 'Sel' <Latency = 0> <II = 1> <Delay = 1.17> <FuncUnit> <Opcode : 'select'> <InPorts = 3> <OutPorts = 1>
+ST_29 : Operation 196 [1/1] (0.00ns)   --->   "br label %.preheader" [../ML_in.cpp:47->../ML_in.cpp:136]   --->   Operation 196 'br' <Predicate = true> <Delay = 0.00>
+
+
+============================================================
++ Verbose Summary: Timing violations
+============================================================
+Target clock period: 10ns, clock uncertainty: 1.25ns.
+
+ <State 1>: 0.466ns
+The critical path consists of the following:
+	multiplexor before 'phi' operation ('v2_0_0', ../ML_in.cpp:111) with incoming values : ('v2[0]', ../ML_in.cpp:111) ('v13_7', ../ML_in.cpp:131) [34]  (0.466 ns)
+
+ <State 2>: 3.3ns
+The critical path consists of the following:
+	'phi' operation ('v5') with incoming values : ('v5', ../ML_in.cpp:121) [37]  (0 ns)
+	'urem' operation ('urem_ln127', ../ML_in.cpp:127) [47]  (3.3 ns)
+
+ <State 3>: 3.3ns
+The critical path consists of the following:
+	'urem' operation ('urem_ln127', ../ML_in.cpp:127) [47]  (3.3 ns)
+
+ <State 4>: 3.3ns
+The critical path consists of the following:
+	'urem' operation ('urem_ln127', ../ML_in.cpp:127) [47]  (3.3 ns)
+
+ <State 5>: 3.3ns
+The critical path consists of the following:
+	'urem' operation ('urem_ln127', ../ML_in.cpp:127) [47]  (3.3 ns)
+
+ <State 6>: 3.3ns
+The critical path consists of the following:
+	'urem' operation ('urem_ln127', ../ML_in.cpp:127) [47]  (3.3 ns)
+
+ <State 7>: 3.3ns
+The critical path consists of the following:
+	'urem' operation ('urem_ln127', ../ML_in.cpp:127) [47]  (3.3 ns)
+
+ <State 8>: 3.3ns
+The critical path consists of the following:
+	'urem' operation ('urem_ln127', ../ML_in.cpp:127) [47]  (3.3 ns)
+
+ <State 9>: 3.3ns
+The critical path consists of the following:
+	'urem' operation ('urem_ln127', ../ML_in.cpp:127) [47]  (3.3 ns)
+
+ <State 10>: 6.38ns
+The critical path consists of the following:
+	'or' operation ('or_ln124', ../ML_in.cpp:124) [49]  (0 ns)
+	'mul' operation ('mul_ln127', ../ML_in.cpp:127) [51]  (3.61 ns)
+	'getelementptr' operation ('v1_1_addr', ../ML_in.cpp:127) [54]  (0 ns)
+	'load' operation ('v1_1_load', ../ML_in.cpp:127) on array 'v1_1' [55]  (2.77 ns)
+
+ <State 11>: 6.55ns
+The critical path consists of the following:
+	'mul' operation ('mul_ln127_2', ../ML_in.cpp:127) [110]  (3.78 ns)
+	'getelementptr' operation ('v1_0_addr_2', ../ML_in.cpp:127) [113]  (0 ns)
+	'load' operation ('v1_0_load_2', ../ML_in.cpp:127) on array 'v1_0' [114]  (2.77 ns)
+
+ <State 12>: 8.42ns
+The critical path consists of the following:
+	'phi' operation ('phi_ln128', ../ML_in.cpp:128) with incoming values : ('v3[63]', ../ML_in.cpp:111) ('v3[55]', ../ML_in.cpp:111) ('v3[47]', ../ML_in.cpp:111) ('v3[39]', ../ML_in.cpp:111) ('v3[31]', ../ML_in.cpp:111) ('v3[23]', ../ML_in.cpp:111) ('v3[15]', ../ML_in.cpp:111) ('v3[7]', ../ML_in.cpp:111) [77]  (0 ns)
+	'dmul' operation ('v11_7', ../ML_in.cpp:129) [78]  (8.42 ns)
+
+ <State 13>: 8.42ns
+The critical path consists of the following:
+	'dmul' operation ('v11_7', ../ML_in.cpp:129) [78]  (8.42 ns)
+
+ <State 14>: 8.42ns
+The critical path consists of the following:
+	'dmul' operation ('v11_7', ../ML_in.cpp:129) [78]  (8.42 ns)
+
+ <State 15>: 8.42ns
+The critical path consists of the following:
+	'dmul' operation ('v11_7', ../ML_in.cpp:129) [78]  (8.42 ns)
+
+ <State 16>: 8.42ns
+The critical path consists of the following:
+	'dmul' operation ('v11_7', ../ML_in.cpp:129) [78]  (8.42 ns)
+
+ <State 17>: 8.42ns
+The critical path consists of the following:
+	'dmul' operation ('v11_7_2', ../ML_in.cpp:129) [120]  (8.42 ns)
+
+ <State 18>: 7.52ns
+The critical path consists of the following:
+	'dadd' operation ('v13_7', ../ML_in.cpp:131) [79]  (7.52 ns)
+
+ <State 19>: 7.52ns
+The critical path consists of the following:
+	'dadd' operation ('v13_7', ../ML_in.cpp:131) [79]  (7.52 ns)
+
+ <State 20>: 7.52ns
+The critical path consists of the following:
+	'dadd' operation ('v13_7', ../ML_in.cpp:131) [79]  (7.52 ns)
+
+ <State 21>: 7.52ns
+The critical path consists of the following:
+	'dadd' operation ('v13_7', ../ML_in.cpp:131) [79]  (7.52 ns)
+
+ <State 22>: 7.52ns
+The critical path consists of the following:
+	'dadd' operation ('v13_7_2', ../ML_in.cpp:131) [121]  (7.52 ns)
+
+ <State 23>: 0.466ns
+The critical path consists of the following:
+	multiplexor before 'phi' operation ('v2_0_1', ../ML_in.cpp:48->../ML_in.cpp:136) with incoming values : ('v2[0]', ../ML_in.cpp:111) ('v13_7', ../ML_in.cpp:131) ('v2_0_2', ../ML_in.cpp:48->../ML_in.cpp:136) [127]  (0.466 ns)
+
+ <State 24>: 1.36ns
+The critical path consists of the following:
+	'phi' operation ('v2_0_1', ../ML_in.cpp:48->../ML_in.cpp:136) with incoming values : ('v2[0]', ../ML_in.cpp:111) ('v13_7', ../ML_in.cpp:131) ('v2_0_2', ../ML_in.cpp:48->../ML_in.cpp:136) [127]  (0 ns)
+	'mux' operation ('tmp_64', ../ML_in.cpp:48->../ML_in.cpp:136) [137]  (1.36 ns)
+
+ <State 25>: 7.52ns
+The critical path consists of the following:
+	'dadd' operation ('activations_2_assig', ../ML_in.cpp:48->../ML_in.cpp:136) [139]  (7.52 ns)
+
+ <State 26>: 7.52ns
+The critical path consists of the following:
+	'dadd' operation ('activations_2_assig', ../ML_in.cpp:48->../ML_in.cpp:136) [139]  (7.52 ns)
+
+ <State 27>: 7.52ns
+The critical path consists of the following:
+	'dadd' operation ('activations_2_assig', ../ML_in.cpp:48->../ML_in.cpp:136) [139]  (7.52 ns)
+
+ <State 28>: 7.52ns
+The critical path consists of the following:
+	'dadd' operation ('activations_2_assig', ../ML_in.cpp:48->../ML_in.cpp:136) [139]  (7.52 ns)
+
+ <State 29>: 8.69ns
+The critical path consists of the following:
+	'dadd' operation ('activations_2_assig', ../ML_in.cpp:48->../ML_in.cpp:136) [139]  (7.52 ns)
+	'select' operation ('select_ln48', ../ML_in.cpp:48->../ML_in.cpp:136) [141]  (0 ns)
+	'select' operation ('v2_2_2', ../ML_in.cpp:48->../ML_in.cpp:136) [143]  (1.17 ns)
+
+
+============================================================
++ Verbose Summary: Binding
+============================================================
+N/A
+* FSMD analyzer results:
+  - Output states:
+ - Input state : 
+  - Chain level:
+	State 1
+	State 2
+	State 3
+	State 4
+	State 5
+	State 6
+	State 7
+	State 8
+	State 9
+	State 10
+	State 11
+	State 12
+	State 13
+	State 14
+	State 15
+	State 16
+	State 17
+	State 18
+	State 19
+	State 20
+	State 21
+	State 22
+	State 23
+	State 24
+	State 25
+	State 26
+	State 27
+	State 28
+	State 29
+
+
+============================================================
++ Verbose Summary: Datapath Resource usage 
+============================================================
+N/A

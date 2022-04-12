@@ -36,11 +36,17 @@ def dataframe_create(parafile, no_partitioning = False):
         boundary = knob['range']
         dim = knob.at['dim']
         
-        # to fix the NaN problem for dim, since dim doesn't exist for loops
-        try:
-            knob.at['dim']=int(dim)
-        except ValueError:
-            knob.at['dim']=int(0)
+        
+        #removed due to 
+        # A value is trying to be set on a copy of a slice from a DataFrame
+        # See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+        # self._set_values(loc, value)
+        
+        # to fix the NaN problem for dim, since dim doesn't exist for loops 
+        # try:
+        #     knob.at['dim']=int(dim)
+        # except ValueError:
+        #     knob.at['dim']=int(0)
         
         # parse the file and find the column names, the naming MUST be consistent with generate_directives.py
         if(knob['type'] == 'loop' or knob['type'] == 'loopU'):
@@ -81,7 +87,8 @@ def get_row(df, row):
         return df[srs]
 
 def threaded_generate_random_training_set(parameter_file, directives_path, template_path, top_function, part):
-    
+    global dataset
+
     #generate unique name
     project_ident = str(int(time.time()))+'_'+str(random.getrandbits(16))
     directive_project_ident = directives_path + '_' + project_ident
@@ -93,12 +100,11 @@ def threaded_generate_random_training_set(parameter_file, directives_path, templ
 
     while (True):
         # generate a new design point
-        
+
         _, parameters = dir_gen.generate_directives(out_file_path=directive_project_ident, no_partitioning=False)
-        # print("running")
 
         # check if the design point is valid
-        if (get_row(dataset, parameters).empty): 
+        if (get_row(dataset, parameters).empty):
             break
 
     new_design_point = run_hls.get_perf(template_path, directive_project_ident, top_function, part, parameters, project_ident, verbose=False, timelimit=1000)
@@ -115,6 +121,7 @@ def threaded_generate_random_training_set(parameter_file, directives_path, templ
 
 def record_dataframe(result):
     global dataset
+    # dataset = pd.read_csv('../ML_train.csv', index_col=0)
 
     # add the evaluated design point to current dataset
     dataset = dataset.append(result, ignore_index=True)
@@ -142,8 +149,10 @@ def random_train_RFML(dir, top_function, part, multiprocess = 2, nub_of_init = 2
     # print(os.getcwd())
     
     nub_pro = multiprocessing.cpu_count() - multiprocess
+    # print(nub_pro)
 
     dataset, feature_columns, label_columns = dataframe_create(parameter_file)
+    # dataset.to_csv('../ML_train.csv')
 
     print("\n")
     print("Starting Evaluation of {0} Randomly Generated Design Points".format(nub_of_init))
