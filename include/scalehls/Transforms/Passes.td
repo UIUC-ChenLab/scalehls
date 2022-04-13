@@ -34,9 +34,8 @@ def DesignSpaceExplore : Pass<"scalehls-dse", "ModuleOp"> {
     Option<"targetSpec", "target-spec", "std::string",
            /*default=*/"\"./config.json\"",
            "File path: target backend specifications and configurations">,
-    Option<"targetFunc", "target-func", "std::string", 
-           /*default=*/"\"\"",
-           "The target function for design space exploration">
+    Option<"forSharedFuncs", "for-shared-funcs", "bool", /*default=*/"false",
+           "Apply DSE to all shared functions">
   ];
 }
 

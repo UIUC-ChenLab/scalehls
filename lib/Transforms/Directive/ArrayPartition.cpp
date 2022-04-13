@@ -346,13 +346,21 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
 
   // Apply partition to all sub-functions and traverse all function to update
   // the "partitionsMap".
+  llvm::SmallDenseMap<FuncOp, unsigned> funcMap;
+
   func.walk([&](func::CallOp op) {
     auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCalleeAttr());
     auto subFunc = dyn_cast<FuncOp>(callee);
     assert(subFunc && "callable is not a function operation");
 
     // Apply array partition to the sub-function.
-    applyAutoArrayPartition(subFunc);
+    if (!funcMap.count(subFunc)) {
+      applyAutoArrayPartition(subFunc);
+      funcMap[subFunc] = 1;
+    } else {
+      funcMap[subFunc] += 1;
+    }
+    // applyAutoArrayPartition(subFunc);
 
     auto subFuncType = subFunc.getFunctionType();
     unsigned index = 0;

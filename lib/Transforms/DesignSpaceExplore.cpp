@@ -724,6 +724,7 @@ bool ScaleHLSExplorer::optimizeLoopBands(FuncOp func, bool directiveOnly) {
 
 /// DSE Stage3: Explore the function design space through dynamic programming.
 bool ScaleHLSExplorer::exploreDesignSpace(FuncOp func, bool directiveOnly,
+                                          bool searchOnly,
                                           StringRef outputRootPath,
                                           StringRef csvRootPath) {
   LLVM_DEBUG(llvm::dbgs() << "----------\nStage3: Conduct top function design "
@@ -768,29 +769,32 @@ bool ScaleHLSExplorer::exploreDesignSpace(FuncOp func, bool directiveOnly,
   funcSpace.exportParetoDesigns(outputNum, outputRootPath);
 
   // Apply the best function design point under the constraints.
-  for (auto &funcPoint : funcSpace.paretoPoints) {
-    if (funcPoint.dspNum <= maxDspNum) {
-      std::vector<TileList> tileLists;
-      SmallVector<unsigned, 4> targetIIs;
+  if (!searchOnly) {
+    for (auto &funcPoint : funcSpace.paretoPoints) {
+      if (funcPoint.dspNum <= maxDspNum) {
+        std::vector<TileList> tileLists;
+        SmallVector<unsigned, 4> targetIIs;
 
-      for (unsigned i = 0; i < targetNum; ++i) {
-        auto &loopSpace = funcSpace.loopDesignSpaces[i];
-        auto &loopPoint = funcPoint.loopDesignPoints[i];
-        auto tileList = loopSpace.getTileList(loopPoint.tileConfig);
-        auto targetII = loopPoint.targetII;
+        for (unsigned i = 0; i < targetNum; ++i) {
+          auto &loopSpace = funcSpace.loopDesignSpaces[i];
+          auto &loopPoint = funcPoint.loopDesignPoints[i];
+          auto tileList = loopSpace.getTileList(loopPoint.tileConfig);
+          auto targetII = loopPoint.targetII;
 
-        LLVM_DEBUG(llvm::dbgs() << "Loop band " << i << ": "
-                                << "Loop tiling & pipelining (";);
-        LLVM_DEBUG(for (auto tile : tileList) { llvm::dbgs() << tile << ","; });
-        LLVM_DEBUG(llvm::dbgs() << targetII << ")\n");
+          LLVM_DEBUG(llvm::dbgs() << "Loop band " << i << ": "
+                                  << "Loop tiling & pipelining (";);
+          LLVM_DEBUG(for (auto tile
+                          : tileList) { llvm::dbgs() << tile << ","; });
+          LLVM_DEBUG(llvm::dbgs() << targetII << ")\n");
 
-        tileLists.push_back(tileList);
-        targetIIs.push_back(targetII);
+          tileLists.push_back(tileList);
+          targetIIs.push_back(targetII);
+        }
+
+        if (!applyOptStrategy(func, tileLists, targetIIs))
+          return false;
+        break;
       }
-
-      if (!applyOptStrategy(func, tileLists, targetIIs))
-        return false;
-      break;
     }
   }
 
@@ -803,6 +807,7 @@ bool ScaleHLSExplorer::exploreDesignSpace(FuncOp func, bool directiveOnly,
 
 /// This is a temporary approach that does not scale.
 void ScaleHLSExplorer::applyDesignSpaceExplore(FuncOp func, bool directiveOnly,
+                                               bool searchOnly,
                                                StringRef outputRootPath,
                                                StringRef csvRootPath) {
   emitQoRDebugInfo(func, "Start multiple level DSE.");
@@ -817,7 +822,8 @@ void ScaleHLSExplorer::applyDesignSpaceExplore(FuncOp func, bool directiveOnly,
     return;
 
   // Explore the design space through a multiple level approach.
-  if (!exploreDesignSpace(func, directiveOnly, outputRootPath, csvRootPath))
+  if (!exploreDesignSpace(func, directiveOnly, searchOnly, outputRootPath,
+                          csvRootPath))
     return;
 }
 
@@ -893,14 +899,16 @@ struct DesignSpaceExplore : public DesignSpaceExploreBase<DesignSpaceExplore> {
     // Optimize the top function.
     // TODO: Support to contain sub-functions
     for (auto func : module.getOps<FuncOp>()) {
-      if (targetFunc == "") {
+      if (forSharedFuncs) {
+        if (func->getAttr("shared")) {
+          explorer.applyDesignSpaceExplore(
+              func, directiveOnly, /*searchOnly*/ true, outputPath, csvPath);
+          applyAutoArrayPartition(getRuntimeFunc(module));
+        }
+      } else {
         if (hasTopFuncAttr(func))
-          explorer.applyDesignSpaceExplore(func, directiveOnly, outputPath,
-                                           csvPath);
-      } else if (targetFunc == func.getSymName()) {
-        explorer.applyDesignSpaceExplore(func, directiveOnly, outputPath,
-                                         csvPath);
-        applyAutoArrayPartition(getTopFunc(module));
+          explorer.applyDesignSpaceExplore(
+              func, directiveOnly, /*searchOnly*/ false, outputPath, csvPath);
       }
     }
   }

@@ -174,10 +174,10 @@ public:
   bool evaluateFuncPipeline(FuncOp func);
   bool simplifyLoopNests(FuncOp func);
   bool optimizeLoopBands(FuncOp func, bool directiveOnly);
-  bool exploreDesignSpace(FuncOp func, bool directiveOnly,
+  bool exploreDesignSpace(FuncOp func, bool directiveOnly, bool searchOnly,
                           StringRef outputRootPath, StringRef csvRootPath);
 
-  void applyDesignSpaceExplore(FuncOp func, bool directiveOnly,
+  void applyDesignSpaceExplore(FuncOp func, bool directiveOnly, bool searchOnly,
                                StringRef outputRootPath, StringRef csvRootPath);
 
   ScaleHLSEstimator &estimator;
