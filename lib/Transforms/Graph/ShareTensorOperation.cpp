@@ -61,7 +61,31 @@ struct ConvHelper {
            (this->getWeightShape() == rhs.getWeightShape());
   }
 
+  bool isEmptyKey() {
+    void *pointer = llvm::DenseMapInfo<void *>::getEmptyKey();
+    return tosa::Conv2DOp::getFromOpaquePointer(pointer) == op;
+  }
+
+  bool isTombstoneKey() {
+    void *pointer = llvm::DenseMapInfo<void *>::getTombstoneKey();
+    return tosa::Conv2DOp::getFromOpaquePointer(pointer) == op;
+  }
+
   bool operator==(ConvHelper &rhs) {
+    if (this->isEmptyKey() || rhs.isEmptyKey()) {
+      if (this->isEmptyKey() && rhs.isEmptyKey()) {
+        return true;
+      }
+      return false;
+    }
+
+    if (this->isTombstoneKey() || rhs.isTombstoneKey()) {
+      if (this->isTombstoneKey() && rhs.isTombstoneKey()) {
+        return true;
+      }
+      return false;
+    }
+
     return this->equalAttr(rhs) && this->equalShape(rhs);
   }
 
@@ -75,6 +99,23 @@ struct ConvHelper {
     }
   }
 };
+
+namespace llvm {
+template <> struct DenseMapInfo<ConvHelper> {
+  static ConvHelper getEmptyKey() {
+    void *pointer = llvm::DenseMapInfo<void *>::getEmptyKey();
+    return ConvHelper{tosa::Conv2DOp::getFromOpaquePointer(pointer)};
+  }
+  static ConvHelper getTombstoneKey() {
+    void *pointer = llvm::DenseMapInfo<void *>::getTombstoneKey();
+    return ConvHelper{tosa::Conv2DOp::getFromOpaquePointer(pointer)};
+  }
+  static unsigned getHashValue(ConvHelper Val) {
+    return mlir::hash_value(Val.op);
+  }
+  static bool isEqual(ConvHelper LHS, ConvHelper RHS) { return LHS == RHS; }
+};
+} // namespace llvm
 
 static FuncOp createSharedFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
                                    StringRef functionName) {
@@ -276,13 +317,19 @@ static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
                 if (slicedOutInChannel.size() == 1) {
                   slicedOutChannel.push_back(slicedOutInChannel[0]);
                 } else {
-                  auto inChResultShape = ArrayRef<int64_t>(
-                      {1, CurrHelper.getInputSize(), CurrHelper.getInputSize(),
-                       SharedHelper.numOutputChannels()});
-                  auto inChResultType = RankedTensorType::get(
-                      (inChResultShape), builder.getF32Type());
-                  slicedOutChannel.push_back(builder.create<tosa::AddOp>(
-                      Conv2DOp.getLoc(), inChResultType, slicedOutInChannel));
+                  auto inChResultType = slicedOutInChannel[0].getType();
+                  auto newAddOp = builder.create<tosa::AddOp>(
+                      Conv2DOp.getLoc(), inChResultType,
+                      ValueRange(
+                          {slicedOutInChannel[0], slicedOutInChannel[1]}));
+                  for (auto inChannelIter = 2; inChannelIter < inChannelDiv;
+                       inChannelIter++) {
+                    newAddOp = builder.create<tosa::AddOp>(
+                        Conv2DOp.getLoc(), inChResultType,
+                        ValueRange(
+                            {newAddOp, slicedOutInChannel[inChannelIter]}));
+                  }
+                  slicedOutChannel.push_back(newAddOp);
                 }
               }
               if (slicedOutChannel.size() == 1) {
@@ -309,7 +356,7 @@ static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
 
 static bool applyShareTensorOperation(ModuleOp module) {
   // Count the number of each shape of convolution.
-  std::map<ConvHelper, unsigned> countMap;
+  DenseMap<ConvHelper, unsigned> countMap;
 
   // Traverse the entire module and count all the convolutions.
   auto funcs = module.getOps<FuncOp>();
