@@ -1,3 +1,4 @@
+from gettext import find
 import treelib
 import re
 import math 
@@ -10,6 +11,7 @@ import subprocess
 import numpy as np
 import io
 import shutil
+import time
 
 import scalehls
 import mlir.ir
@@ -17,6 +19,10 @@ from mlir.dialects import builtin
 
 c_keywords = ["auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else", "enum", "extern", "float", "for", "goto", "if", "inline", "int", "long", "register", "restrict", "return", "short", "signed", "sizeof", "static", "struct", "switch", "typedef", "union", "unsigned", "void", "volatile", "while"]
 c_vars = ["char", "double", "float", "int", "short"]
+
+class ROI(object):
+    def __init__(self, input):
+        self.group = input
 
 def sdse_target(new_dir, dsespec, resource, tag, inputfile, inputtop):
 
@@ -41,6 +47,13 @@ def sdse_target(new_dir, dsespec, resource, tag, inputfile, inputtop):
 
     if new_dir != None:
         os.chdir("../../..")
+
+def mark_subsequent_node(mastertree, startingnode, roi_num):
+    children = mastertree.children(startingnode.identifier)
+    if children:
+        for child in children:
+            child.data.group = str(roi_num)
+            mark_subsequent_node(mastertree, child, roi_num)
 
 def get_highest_singlechildloops(pattern, storedlist, node_UID):
     next_iteration = []
@@ -295,25 +308,41 @@ def combine_two_spaces(pareto_space_list, input1, input2):
         if isinstance(input2, str) and loop_space[0] == input2:
             space2 = loop_space[1]
 
-    space1_looplables = re.findall(r'(l\d+|b\d+l\d+)', "--".join(space1.columns))
-    space2_looplables = re.findall(r'(l\d+|b\d+l\d+)', "--".join(space2.columns))
+    space1_looplables = re.findall(r'(l\d+|ii|b\d+l\d+|b\d+ii)', "--".join(space1.columns))
+    space2_looplables = re.findall(r'(l\d+|ii|b\d+l\d+|b\d+ii)', "--".join(space2.columns))
+    # print(space1_looplables)
+    # print(space2_looplables)
+
+    print("Merging :", len(space1), len(space2))
 
     combined_columns = []
     for loopvariable in space1_looplables:
         if re.findall(r'(b\d+l\d+)', loopvariable):
             combined_columns.append(loopvariable)
+        elif re.findall(r'(b\d+ii)', loopvariable):
+            combined_columns.append(loopvariable)
         elif re.findall(r'(l\d+)', loopvariable):
+            loopbandnumb = re.findall(r'Loop(\d+)', input1)
+            combined_columns.append('b' + loopbandnumb[0] + loopvariable)
+        elif re.findall(r'(ii)', loopvariable):
             loopbandnumb = re.findall(r'Loop(\d+)', input1)
             combined_columns.append('b' + loopbandnumb[0] + loopvariable)
     for loopvariable in space2_looplables:
         if re.findall(r'(b\d+l\d+)', loopvariable):
             combined_columns.append(loopvariable)
+        elif re.findall(r'(b\d+ii)', loopvariable):
+            combined_columns.append(loopvariable)
         elif re.findall(r'(l\d+)', loopvariable):
+            loopbandnumb = re.findall(r'Loop(\d+)', input2)
+            combined_columns.append('b' + loopbandnumb[0] + loopvariable)
+        elif re.findall(r'(ii)', loopvariable):
             loopbandnumb = re.findall(r'Loop(\d+)', input2)
             combined_columns.append('b' + loopbandnumb[0] + loopvariable)
     combined_columns.append("cycle")
     combined_columns.append("dsp")
     combined_columns.append("type")
+
+    # print(combined_columns)
 
     combinedbuffer = []
     for i in range(len(space1)):
@@ -339,6 +368,8 @@ def combine_two_spaces(pareto_space_list, input1, input2):
                     combinedbuffer.append(row_deepcopy)
 
     raw_combineddataspace = pd.DataFrame(combinedbuffer, columns=combined_columns)
+    merge_ops = len(raw_combineddataspace)
+    # print(raw_combineddataspace)
     
     #mark pareto points
     sorted_dataset = raw_combineddataspace.sort_values(by=['cycle','dsp'])
@@ -359,7 +390,7 @@ def combine_two_spaces(pareto_space_list, input1, input2):
     #remove unwanted points
     pareto_combinedspace = pareto_combinedspace.loc[pareto_combinedspace['type'] == 'pareto']
 
-    return pareto_combinedspace
+    return pareto_combinedspace, merge_ops
 
 def apply_loop_ops(dir, pattern, var_forlist, removed_function_calls, loop_tile_array):    
     topfunction = pattern[pattern.root].tag
@@ -576,9 +607,6 @@ def apply_loop_ops(dir, pattern, var_forlist, removed_function_calls, loop_tile_
     os.remove(dir + "/buffer.c")
 
 def graph_algorithm(tar_dir, dse_target, sortedarray, func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list):
-    # target = treelib.Tree(tree_list[3].subtree(tree_list[3][tree_list[3].root].identifier), deep=True)
-    # target.show()
-    # DPAT.cull_function_by_pattern(tar_dir, tar_dir + "/ML_in.cpp", func_list, removed_function_calls, dse_target, 1, target)  
 
     #scalehls dse initial pareto space creation
     removed_function_calls = []
@@ -600,40 +628,81 @@ def graph_algorithm(tar_dir, dse_target, sortedarray, func_list, var_forlist, va
             suc_fail, buffer, removed_function_calls = cull_function_by_pattern(tar_dir, tar_dir + "/ref_design.c", func_list, removed_function_calls, dse_target, 1, target)
             if suc_fail:
                 pareto_space_list = pareto_space_list + buffer
-
-    print("removed calls")
-    print(removed_function_calls)
-    print("space")
+    
+    # print("removed calls")
+    # print(removed_function_calls)
+    print("\nInitial Pareto Space")
+    initial_pspace = []
     for i in range(0, len(pareto_space_list)):
-        print(pareto_space_list[i][0])
-
+        # print(pareto_space_list[i][0])
+        initial_pspace.append(pareto_space_list[i][0])
+    print(initial_pspace)
+    
     # Initial naive combination of individual spaces
-    print("comb")
-    #combine whole space
-    buffer = combine_two_spaces(pareto_space_list, "Loop0", "Loop1")
-    for i in range(2, len(pareto_space_list)):
-        print(pareto_space_list[i][0])
-        buffer = combine_two_spaces(pareto_space_list, buffer, pareto_space_list[i][0])
-        buffer.to_csv(tar_dir + '/combspace.csv')
+    # print("comb")
+    # merge_ops = 0    
+    # t0 = time.time()
+    # buffer, mo = combine_two_spaces(pareto_space_list, "Loop0", "Loop1")
+    # merge_ops += mo
+    # for i in range(2, len(pareto_space_list)):
+    #     print(pareto_space_list[i][0])
+    #     buffer, mo = combine_two_spaces(pareto_space_list, buffer, pareto_space_list[i][0])
+    #     merge_ops += mo
+    # t1 = time.time()
+    # buffer.to_csv(tar_dir + '/combspace.csv')
+    # total = t1-t0
+    # print("Time to execute naive merging", total, " merge opts:", merge_ops)
 
-    # pspace = pd.read_csv(tar_dir + '/combspace.csv', index_col=0)
-    # print(pspace)
-    # print(pspace.iloc[0]['b4l0'])
+    pspace = pd.read_csv(tar_dir + '/combspace.csv', index_col=0)
 
-    # shutil.copy2(tar_dir + "/ref_design.c", tar_dir + "/ML_in.cpp")
-    # DPAT.apply_loop_ops(tar_dir, tree_list[12], var_forlist, removed_function_calls, [[1, 16], [8], [1, 16], [8], [8, 16], [8], [1, 16], [8], [4, 3], [1], [8, 3], [1]])
-    # DPAT.apply_loop_ops(tar_dir, tree_list[3], var_forlist, removed_function_calls, [[13, 8]])
+    apply_p_point(tar_dir, tree_list, var_forlist, removed_function_calls, pspace, 653)
 
+
+
+def apply_p_point(tar_dir, tree_list, var_forlist, removed_function_calls, pspace, target):
+    
+    # copy ref file
     shutil.copy2(tar_dir + "/ref_design.c", tar_dir + "/ML_in.cpp")
-    apply_loop_ops(tar_dir, tree_list[0], var_forlist, removed_function_calls, np.array([[1], [1]]))
-    apply_loop_ops(tar_dir, tree_list[3], var_forlist, removed_function_calls, np.array([[13, 8]]))
-    apply_loop_ops(tar_dir, tree_list[4], var_forlist, removed_function_calls, np.array([[8, 1]]))
-    apply_loop_ops(tar_dir, tree_list[5], var_forlist, removed_function_calls, np.array([[8, 3]]))
-    apply_loop_ops(tar_dir, tree_list[6], var_forlist, removed_function_calls, np.array([[1]]))
-    apply_loop_ops(tar_dir, tree_list[7], var_forlist, removed_function_calls, np.array([[8, 3]]))
-    apply_loop_ops(tar_dir, tree_list[8], var_forlist, removed_function_calls, np.array([[3, 8]]))
-    apply_loop_ops(tar_dir, tree_list[9], var_forlist, removed_function_calls, np.array([[1, 16]]))
-    apply_loop_ops(tar_dir, tree_list[10], var_forlist, removed_function_calls, np.array([[16, 1]]))
-    apply_loop_ops(tar_dir, tree_list[11], var_forlist, removed_function_calls, np.array([[1, 16]]))
-    apply_loop_ops(tar_dir, tree_list[12], var_forlist, removed_function_calls, [[1, 16], [8], [1, 16], [8], [8, 16], [8], [1, 16], [8], [4, 3], [1], [8, 3], [1]])
+
+    # find loop bands that are to be optimized
+    pspace_columns = pspace.columns
+    Loop_bands2opt = []
+    for col in pspace_columns:
+        loopband = re.findall(r'b(\d+)', col)
+        if (loopband != []) and not(("Loop"+loopband[0]) in Loop_bands2opt):
+            Loop_bands2opt.append("Loop"+loopband[0])
+    universal_low_insertionsort(Loop_bands2opt, r'Loop(\d+)')
+    print(Loop_bands2opt)
+
+    # functions that are to be optimized
+    opt_func = []
+    for loop in Loop_bands2opt:
+        for i in range(len(tree_list) - 1):
+            DFS_list = [tree_list[i][node].tag for node in tree_list[i].expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
+            if loop in DFS_list and not(tree_list[i][tree_list[i].root].tag in opt_func):
+                opt_func.append(tree_list[i][tree_list[i].root].tag)
+    print(opt_func)
+
+    # get tiling stratergy and apply
+    for i in range(len(tree_list) - 1):
+        if tree_list[i][tree_list[i].root].tag in opt_func:
+            #get tile map of function
+            tile_map = []
+            children = tree_list[i].children(tree_list[i].root)
+            for child in children:
+                # find number of loops in loop band
+                child_DFS_list = [tree_list[i][node] for node in tree_list[i].expand_tree(child.identifier, mode=treelib.Tree.DEPTH, sorting=False)]
+                loop_band = []
+                for j in range(len(child_DFS_list)):
+                    colname = 'b' + str(child.identifier) + 'l' + str(j) #pandas index by name
+                    loop_band.append(pspace.iloc[target][colname])
+                tile_map.append(loop_band)
+            print("Applying Loop Optimizations to:", tree_list[i].root)
+            print("Using the following tiling stratergy:", tile_map)
+
+            #apply tiling stratergy to functions
+            apply_loop_ops(tar_dir, tree_list[i], var_forlist, removed_function_calls, tile_map)
+
+
+
 

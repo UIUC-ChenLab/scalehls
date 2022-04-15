@@ -33,14 +33,14 @@ void get_delta_matrix_weights2(
 
   #pragma HLS resource variable=v2 core=ram_s2p_bram
 
-  for (int v3 = 0; v3 < 64; v3 += 1) {	// L3
-    for (int v4 = 0; v4 < 4; v4 += 1) {	// L3
-      for (int v5 = 0; v5 < 16; v5 += 1) {	// L3
-        int v6 = (v5 + (v4 * 16));	// L3
-        double v7 = v2[v3];	// L5
+  for (int v3 = 0; v3 < 32; v3 += 1) {	// L3
+    for (int v4 = 0; v4 < 2; v4 += 1) {	// L3
+      int v5 = (v4 + (v3 * 2));	// L3
+      for (int v6 = 0; v6 < 64; v6 += 1) {	// L3
+        double v7 = v2[v5];	// L5
         double v8 = v1[v6];	// L6
         double v9 = v7 * v8;	// L7
-        v0[(v6 + (v3 * 64))] = v9;	// L8
+        v0[(v6 + (v5 * 64))] = v9;	// L8
       }
     }
   }

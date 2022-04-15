@@ -38,10 +38,10 @@ void matrix_vector_product_with_bias_input_layer(
 
   #pragma HLS resource variable=v3 core=ram_s2p_bram
 
-  for (int v5 = 0; v5 < 8; v5 += 1) {	// L7
+  for (int v5 = 0; v5 < 4; v5 += 1) {	// L7
     for (int v6 = 0; v6 < 13; v6 += 1) {	// L7
-      for (int v7 = 0; v7 < 8; v7 += 1) {	// L7
-        int v8 = (v7 + (v5 * 8));	// L7
+      for (int v7 = 0; v7 < 16; v7 += 1) {	// L7
+        int v8 = (v7 + (v5 * 16));	// L7
         v2[v8] = 0.000000;	// L6
         double v9 = v1[(v6 + (v8 * 13))];	// L8
         double v10 = v3[v6];	// L9

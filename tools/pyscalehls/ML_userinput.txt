@@ -37,6 +37,7 @@
 ###################################################################################
 
 #target_source_file_location = ../../samples/rosetta/spam-filter/sgd_sw_raw.c
+#target_source_file_location = ../../samples/rosetta/spam-filter/sgd_sw.c
 #top_function = SgdLR_sw
 
 #target_source_file_location = ../../samples/rosetta/digit-recognition/digitrec_sw_raw.c
@@ -50,11 +51,18 @@ target_source_file_location = ../../samples/MachSuit/backprop.c
 top_function = backprop
 
 ###################################################################################
+##############################pylog################################################
+###################################################################################
+
+#target_source_file_location = ../../samples/Pylog/canny_detection.c
+#top_function = canny_detection
+
+###################################################################################
 ##############################hardware-constraints#################################
 ###################################################################################
 
-#part = xc7k70tfbv676-1
-part = xc7z045-ffg900-2
+part = xc7k70tfbv676-1
+#part = xc7z045-ffg900-2
 
 # Extra file locations -> remove default keyword
 add_files default

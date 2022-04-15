@@ -78,11 +78,11 @@ def scalehls_dse(dir, source_file, inputtop):
 
     p1 = subprocess.Popen(['mlir-clang', source_file, '-function=' + inputtop, '-memref-fullrank', '-raise-scf-to-affine', '-S'],
                             stdout=subprocess.PIPE)                           
-    process = subprocess.run(['scalehls-opt', '-materialize-reduction', '-dse=top-func='+ inputtop + ' output-path=./' + sdse_dir + ' csv-path=./' + sdse_dir + ' ' + targetspec, '-debug-only=scalehls'], 
-                            stdin=p1.stdout, stdout=subprocess.DEVNULL)
+    p2 = subprocess.Popen(['scalehls-opt', '-materialize-reduction', '-dse=top-func='+ inputtop + ' output-path=./' + sdse_dir + ' csv-path=./' + sdse_dir + ' ' + targetspec, '-debug-only=scalehls'], 
+                            stdin=p1.stdout, stdout=subprocess.PIPE)
 
-    fout = open(dir + '/ScaleHLS_DSE_out.cpp', 'wb')
-    subprocess.run(['scalehls-translate', '-emit-hlscpp', sdse_dir + inputtop + '_pareto_0.mlir'], stdout=fout)
+    with open(dir + '/ScaleHLS_DSE_out.cpp', 'wb') as fout:
+        subprocess.run(['scalehls-translate', '-emit-hlscpp'], stdin=p2.stdout, stdout=fout)
 
     print("Finished ScaleHLS DSE")
 

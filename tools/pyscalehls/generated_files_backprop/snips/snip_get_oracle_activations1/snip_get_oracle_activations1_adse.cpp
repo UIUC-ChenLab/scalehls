@@ -37,10 +37,10 @@ void get_oracle_activations1(
 
   #pragma HLS resource variable=v3 core=ram_s2p_bram
 
-  for (int v4 = 0; v4 < 4; v4 += 1) {	// L6
+  for (int v4 = 0; v4 < 2; v4 += 1) {	// L6
     for (int v5 = 0; v5 < 64; v5 += 1) {	// L6
-      for (int v6 = 0; v6 < 16; v6 += 1) {	// L6
-        int v7 = (v6 + (v4 * 16));	// L6
+      for (int v6 = 0; v6 < 32; v6 += 1) {	// L6
+        int v7 = (v6 + (v4 * 32));	// L6
         v2[v5] = 0.000000;	// L5
         double v8 = v1[v7];	// L7
         double v9 = v0[(v7 + (v5 * 64))];	// L8

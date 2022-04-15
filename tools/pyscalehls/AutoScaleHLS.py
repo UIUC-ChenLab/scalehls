@@ -33,9 +33,9 @@ def sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlis
     for item in var_arraylist_sized :
         print(item)
     
-    print("\nScope")
-    for i in var_forlist_scoped:
-        print(i)
+    # print("\nScope")
+    # for i in var_forlist_scoped:
+    #     print(i)
         
     sortedarray = sortbyhotness(var_forlist_scoped)
     print("\nSorted Scope")
@@ -43,9 +43,11 @@ def sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlis
         print(i)
 
     print("\nTree")
-    for item in tree_list:
-        item.show(idhidden=True)
+    # for item in tree_list:
+    #     item.show(idhidden=False)
+    tree_list[-1].show(idhidden=True)
 
+    print("\nFunction List")
     print(func_list)
 
     return sortedarray
@@ -166,8 +168,8 @@ def main():
     #scaleHLS manual optimization
     val = ""
     while val == "":
-        val = input("What ScaleHLS optimizations? (Manual / ScaleHLS+DSE+ML / AutoScaleDSE / None)\n")
-        if((val == "DSE") or (val == "D") or (val == "d")):
+        val = input("What ScaleHLS optimizations? (Manual(M) / ScaleHLS+DSE+ML(S) / AutoScaleDSE(A) / None(N))\n")
+        if((val == "DSE") or (val == "S") or (val == "s")):
             PYSHLS.scalehls_dse(tar_dir, source_file, inputtop)
             func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_DSE_out.cpp", "/ML_in.cpp", inputtop, sdse=True)
             sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)
@@ -181,9 +183,9 @@ def main():
             sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)
             DPAT.graph_algorithm(tar_dir, dse_target, sortedarray, func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)
             #array for only the top function
-            var_arraylist_sized = INPAR.asdse_get_knobs(tar_dir + "/ML_in.cpp", 'backprop')
-            print(var_arraylist_sized)
-            var_forlist = []
+            # var_arraylist_sized = INPAR.asdse_get_knobs(tar_dir + "/ML_in.cpp", 'backprop')
+            # print(var_arraylist_sized)
+            # var_forlist = []
         elif((val == "None") or (val == "N") or (val == "n")):
             func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, source_file, "/ML_in.cpp", inputtop)            
             sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)    
@@ -204,7 +206,7 @@ def main():
         val = input("Generate Random Training Set? (Y / N)\n")
         # val = "n"
         if((val == "Y") or (val == "y") or (val == "yes")):
-            dataset, feature_columns = RT.random_train_RFML(tar_dir, inputtop, inputpart, multiprocess = 4, nub_of_init = 40)
+            dataset, feature_columns = RT.random_train_RFML(tar_dir, inputtop, inputpart, multiprocess = 4, nub_of_init = 20)
             print(dataset)
         elif((val == "N") or (val == "n") or (val == "no")):
             parameter_file = tar_dir + '/ML_params.csv'
@@ -214,7 +216,7 @@ def main():
             # print(dataset)
 
 
-    DMain.DSE_start(tar_dir, proj_name, dataset, 250, inputtop, inputpart, feature_columns)
+    DMain.DSE_start(tar_dir, proj_name, dataset, 150, inputtop, inputpart, feature_columns)
     
 
 

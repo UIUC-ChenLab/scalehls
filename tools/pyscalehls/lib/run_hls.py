@@ -186,29 +186,29 @@ def get_perf (template_path, directives_path, top_function, part, parameters, pr
         avg_latency, period, dsp_perc, ff_perc, lut_perc, bram_perc = float('inf'),float('inf'),1,1,1,1
         is_error = True
     
-    if avg_latency > 100000 and avg_latency < float('inf'):
-        try:
-            os.rename(project_name, "Error_file" + project_name)
-        except OSError as e:
-            print("Error rname")
+    # if avg_latency > 100000 and avg_latency < float('inf'):
+    #     try:
+    #         os.rename(project_name, "Error_file" + project_name)
+    #     except OSError as e:
+    #         print("Error rname")
         
-        # remove the tcl file
-        try:
-            os.rename(script_path, "Error_script" + project_name)
-        except OSError as e:
-            print("Error rname")
-    else:
-        # remove the directory
-        try:
-            shutil.rmtree(project_name)
-        except OSError as e:
-            print("Error: %s : %s" % (os.dir_path, e.strerror))
-        
-        # remove the tcl file
-        try:
-            os.remove(script_path)
-        except OSError as e:
-            print("Error: %s : %s" % (os.file_path, e.strerror))
+    #     # remove the tcl file
+    #     try:
+    #         os.rename(script_path, "Error_script" + project_name)
+    #     except OSError as e:
+    #         print("Error rname")
+    # else:
+    # remove the directory
+    try:
+        shutil.rmtree(project_name)
+    except OSError as e:
+        print("Error: %s : %s" % (os.dir_path, e.strerror))
+    
+    # remove the tcl file
+    try:
+        os.remove(script_path)
+    except OSError as e:
+        print("Error: %s : %s" % (os.file_path, e.strerror))
        
 
     # remove the log file // if enabled conflict with multiprocessor 

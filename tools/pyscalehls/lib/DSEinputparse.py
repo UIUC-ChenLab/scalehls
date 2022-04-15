@@ -4,6 +4,10 @@ import re
 import copy
 import treelib
 
+class ROI(object):
+         def __init__(self, input):
+             self.group = input
+
 def int_to_alpha(input):
     output = ''
     alphabet = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z']
@@ -285,7 +289,7 @@ def process_source_file(dir, inputfile, outfile, topfun, sdse=False):
             #find array
             #only upto six dimentions
             arr2part = re.findall(r'(int|float|double)\s([A-Za-z_]+[A-Za-z_\d]*)\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])+(,|;|\)|' ')', line)
-            if(arr2part):
+            if(arr2part and brace_cout < 2): #do not add arrays instantiated within loops
                 for item in arr2part:
                     current_array = "".join(item[1:-1])
                     array_sizeofdim = re.findall(r'(\[)(.+?)(\])', current_array)
@@ -319,19 +323,25 @@ def process_source_file(dir, inputfile, outfile, topfun, sdse=False):
             #hotloop counter
             if len(var_forlist_tree) > 0:
                 num_mul = 0
+                num_div = 0
                 num_add = 0
+                num_min = 0
                 if not(re.findall('for', line)):
                     #do not count address calculations as calculations
-                    remove_address_cal = re.findall(r'([^[\]]+)(?:$|\[)', line)
-                    clean_line = " ".join(remove_address_cal)
+                    # remove_address_cal = re.findall(r'([^[\]]+)(?:$|\[)', line)
+                    # clean_line = " ".join(remove_address_cal)
 
-                    nub_mul_raw = re.findall(r'\*', clean_line)
-                    nub_add_raw = re.findall(r'\+', clean_line)
+                    nub_mul_raw = re.findall(r'\*', line)
+                    nub_div_raw = re.findall(r'\/', line)
+                    nub_add_raw = re.findall(r'\+', line)
+                    nub_min_raw = re.findall(r'\-', line)
                     num_mul = len(nub_mul_raw)
+                    num_div = len(nub_div_raw)
                     num_add = len(nub_add_raw)
+                    num_min = len(nub_min_raw)
 
                 line_trip_count = 1
-                if(num_mul + num_add) > 0:
+                if(num_mul + num_div + num_add + num_min) > 0:
                     for asso_loop in var_forlist_tree:
                         for loopdirectory in var_forlist:
                             if loopdirectory == "":
@@ -345,7 +355,7 @@ def process_source_file(dir, inputfile, outfile, topfun, sdse=False):
                                     loc_loopnum = re.findall(r'\d+', loopdirectory[0])
                                     if int(loc_loopnum[0]) == asso_loop[0]:
                                         line_trip_count *= int(loopdirectory[-1])
-                    loopband_hotness += line_trip_count * (4 * num_mul + num_add) #weight for mul and addition
+                    loopband_hotness += line_trip_count * (4 * (num_mul + num_div) + num_add + num_min) #weight for mul and addition
     file.close()
     newfile.close()
 
@@ -423,6 +433,12 @@ def process_source_file(dir, inputfile, outfile, topfun, sdse=False):
             if tree.root == topfun:
                 mastertree = treelib.Tree(tree.subtree(topfun), deep=True)
                 recur_add_subtree(mastertree, mastertree, tree_list, function_depend)
+
+        #add ROI datastructure
+        DFS_list = [mastertree[node] for node in mastertree.expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
+        for node in DFS_list:
+            mastertree[node.identifier].data = ROI("None")
+        # mastertree.show(data_property="group")
 
         tree_list.append(mastertree)
     

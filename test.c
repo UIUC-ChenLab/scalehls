@@ -1,25 +1,27 @@
-#define NI 64
-#define NJ 64
-#define NK 64
-#define NL 64
+# define HIGH_THRESHOLD 0.15
+# define LOW_THRESHOLD 0.05
+# define WEAK_PIXEL 75
+# define STRONG_PIXEL 255
+# define WEAK_PIXEL_CAST_TO_INTEGER 75
+# define STRONG_PIXEL_CAST_TO_INTEGER 255
 
-void kernel_2mm(float alpha, float beta, float tmp[NI][NJ], float A[NI][NK],
-                float B[NK][NJ], float C[NL][NJ], float D[NI][NL]) {
-  int i, j, k;
+void sobel_kernel_3_by_3(float image_smoothed[1920][1080], float output[1920][1080], float temp[1920][1080], float Kx[3][3], float Ky[3][3]) {
 
-#pragma scop
-  /* D := alpha*A*B*C + beta*D */
-  for (i = 0; i < NI; i++)
-    for (j = 0; j < NJ; j++) {
-      tmp[i][j] = 0;
-      for (k = 0; k < NK; ++k)
-        tmp[i][j] += alpha * A[i][k] * B[k][j];
+    float max = (float)0.0;
+    for (int idx_row = 0; idx_row < 1920; idx_row += 1) {
+        for (int idx_col = 0; idx_col < 1080; idx_col += 1) {
+            float theta = 2.1;
+            output[idx_row][idx_col] = (float)(output[idx_row][idx_col] * output[idx_row][idx_col]) + (temp[idx_row][idx_col] * temp[idx_row][idx_col]);
+            temp[idx_row][idx_col] = theta;
+            if (max < output[idx_row][idx_col]) {
+                max = output[idx_row][idx_col];
+            }
+        }
     }
-  for (i = 0; i < NI; i++)
-    for (j = 0; j < NL; j++) {
-      D[i][j] *= beta;
-      for (k = 0; k < NJ; ++k)
-        D[i][j] += tmp[i][k] * C[k][j];
+
+    for (int idx_row = 0; idx_row < 1920; idx_row += 1) {
+        for (int idx_col = 0; idx_col < 1080; idx_col += 1) {
+            output[idx_row][idx_col] = (output[idx_row][idx_col] / max) * (float)255.0;
+        }
     }
-#pragma endscop
 }

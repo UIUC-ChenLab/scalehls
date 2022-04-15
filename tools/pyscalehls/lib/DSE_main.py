@@ -463,16 +463,16 @@ def DSE_searching(proj_name, dataset, models, total_steps, top_function, part, p
                                     timelimit=800)
 
         # remove the tcl file
-        if new_design_point['latency'] > 100000 and new_design_point['latency'] < float("inf"):
-            try:
-                os.rename(directive_project_ident, "Error_directive" + project_ident)
-            except OSError as e:
-                print("Error tcl")
-        else:
-            try:
-                os.remove(directive_project_ident)
-            except OSError as e:
-                print("Error: %s : %s" % (os.file_path, e.strerror))
+        # if new_design_point['latency'] > 100000 and new_design_point['latency'] < float("inf"):
+        #     try:
+        #         os.rename(directive_project_ident, "Error_directive" + project_ident)
+        #     except OSError as e:
+        #         print("Error tcl")
+        # else:
+        try:
+            os.remove(directive_project_ident)
+        except OSError as e:
+            print("Error: %s : %s" % (os.file_path, e.strerror))
   
 
         print(new_design_point)

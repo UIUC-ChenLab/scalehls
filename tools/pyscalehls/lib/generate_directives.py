@@ -85,12 +85,22 @@ class RandomDirectiveGenerator(DirectiveGenerator):
             # Step 4: generate the loop factor for the unrolling factor if needed
             factor = 2 # default case, fail safe
             if (scheme == 'unroll'):
-                factor = random.randrange(2, min(boundary+1, 256)) # unrolling with factor 1 effectively is 'none'
-                # pick a divisible unrolling factor
-                # this is not required by HLS, but good practice in general
-                # also reduces the possible options
-                while (boundary % factor != 0): # limit the factor to 256, larger factor is useless in most cases anyway
-                    factor = random.randrange(2, min(boundary+1, 256))
+                raw_divisors = []
+                #get divisors
+                for i in range(1, boundary + 1):
+                    if boundary % i == 0:
+                        raw_divisors.append(i)
+                #remove 1 / minimum factor should be 2, required by HLS
+                raw_divisors.remove(1)
+                #do not partion past 256
+                divisors = []
+                for d in raw_divisors:
+                    if d <= 256:
+                        divisors.append(d)
+                # print(divisors)
+
+                factor = divisors[random.randrange(0, len(divisors))]
+
                 directives_list.append('-factor '+str(factor))
                 parameters_dict['loop_'+knob['name']+'_factor'] = factor
             else: # if not unroll then we set this factor to 0 for safety and debugging purpose
@@ -192,7 +202,7 @@ class RandomDirectiveGenerator(DirectiveGenerator):
                         if d <= 256:
                             divisors.append(d)
                     # print(divisors)
-                    
+                                        
                     factor = divisors[random.randrange(0, len(divisors))]
 
                     # dimensions start with 1 if we want to control the dimensions separately
