@@ -230,6 +230,15 @@ static bool arrayPartition(MlirValue array, py::object factorsObject,
 }
 
 //===----------------------------------------------------------------------===//
+// Graph transform APIs
+//===----------------------------------------------------------------------===//
+
+static bool shareTensorOperation(MlirModule mod, int64_t numTargets) {
+  py::gil_scoped_release();
+  return applyShareTensorOperation(unwrap(mod), numTargets);
+}
+
+//===----------------------------------------------------------------------===//
 // Emission APIs
 //===----------------------------------------------------------------------===//
 
@@ -274,6 +283,9 @@ PYBIND11_MODULE(_scalehls, m) {
 
   // Array transform APIs.
   m.def("array_partition", &arrayPartition);
+
+  // Graph transform APIs.
+  m.def("share_tensor_operation", &shareTensorOperation);
 
   // Emission APIs.
   m.def("emit_hlscpp", &emitHlsCpp);
