@@ -6,8 +6,14 @@
 #set0 = affine_set<(d0, d1) : (d0 - d1 >= 0)>
 #set1 = affine_set<(d0) : (d0 == 0)>
 module  {
+  memref.global @foo : memref<16x16xf32> = dense<1.0>
+
   // CHECK: attributes {top_func}
-  func @test_syrk(%arg0: f32, %arg1: f32, %arg2: memref<16x16xf32>, %arg3: memref<16x16xf32>) {
+  func @test_syrk(%arg0: f32, %arg1: f32, %arg3: memref<16x16xf32>) {
+
+    // CHECK: %0 = "hls.prim.const"() {value = dense<1.000000e+00> : tensor<16x16xf32>} : () -> memref<16x16xf32>
+    %arg2 = memref.get_global @foo : memref<16x16xf32>
+
     affine.for %arg4 = 0 to 16 step 2 {
       affine.for %arg5 = 0 to 16 {
         affine.for %arg6 = 0 to 16 {
