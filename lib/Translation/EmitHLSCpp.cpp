@@ -491,6 +491,7 @@ public:
   bool visitOp(arith::RemFOp op) { return emitter.emitBinary(op, "%"), true; }
   bool visitOp(arith::MaxFOp op) { return emitter.emitMaxMin(op, "max"), true; }
   bool visitOp(arith::MinFOp op) { return emitter.emitMaxMin(op, "min"), true; }
+  bool visitOp(math::PowFOp op) { return emitter.emitMaxMin(op, "pow"), true; }
 
   /// Integer binary expressions.
   bool visitOp(arith::CmpIOp op);
@@ -534,6 +535,7 @@ public:
   bool visitOp(arith::TruncFOp op) { return emitter.emitAssign(op), true; }
   bool visitOp(arith::ExtUIOp op) { return emitter.emitAssign(op), true; }
   bool visitOp(arith::ExtSIOp op) { return emitter.emitAssign(op), true; }
+  bool visitOp(arith::ExtFOp op) { return emitter.emitAssign(op), true; }
 
 private:
   ModuleEmitter &emitter;
