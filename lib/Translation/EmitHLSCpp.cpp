@@ -5,11 +5,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Translation/EmitHLSCpp.h"
+#include "mlir/Analysis/CallGraph.h"
 #include "mlir/IR/AffineExprVisitor.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/Tools/mlir-translate/Translation.h"
 #include "scalehls/Dialect/HLS/Visitor.h"
 #include "scalehls/Support/Utils.h"
+#include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace mlir;
@@ -1883,12 +1885,26 @@ void pack_mul(int8_t A[2], int8_t B, int16_t C[2]) {
 
 )XXX";
 
+  // Emit all functions in the call graph in a post order.
+  CallGraph graph(module);
+  llvm::SmallDenseSet<func::FuncOp> emittedFuncs;
+  for (auto node : llvm::post_order<const CallGraph *>(&graph)) {
+    if (node->isExternal())
+      continue;
+    if (auto func = node->getCallableRegion()->getParentOfType<func::FuncOp>();
+        !hasRuntimeAttr(func)) {
+      emitFunction(func);
+      emittedFuncs.insert(func);
+    }
+  }
+
+  // Emit remained functions accordingly.
   for (auto &op : *module.getBody()) {
     if (auto func = dyn_cast<FuncOp>(op)) {
-      if (func.getName() != "main")
+      if (!emittedFuncs.count(func) && !hasRuntimeAttr(func))
         emitFunction(func);
     } else
-      emitError(&op, "is unsupported operation.");
+      emitError(&op, "is unsupported operation");
   }
 }
 
