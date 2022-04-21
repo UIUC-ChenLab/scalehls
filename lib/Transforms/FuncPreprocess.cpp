@@ -62,8 +62,8 @@ struct GetGlobalConvertPattern : public OpRewritePattern<memref::GetGlobalOp> {
 
   LogicalResult matchAndRewrite(memref::GetGlobalOp getGlobal,
                                 PatternRewriter &rewriter) const override {
-    auto global = cast<memref::GlobalOp>(
-        SymbolTable::lookupNearestSymbolFrom(getGlobal, getGlobal.nameAttr()));
+    auto global = SymbolTable::lookupNearestSymbolFrom<memref::GlobalOp>(
+        getGlobal, getGlobal.nameAttr());
     rewriter.setInsertionPoint(getGlobal);
     rewriter.replaceOpWithNewOp<PrimConstOp>(
         getGlobal, global.type(),

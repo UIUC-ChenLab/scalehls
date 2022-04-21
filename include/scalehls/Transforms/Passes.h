@@ -24,30 +24,32 @@ void registerScaleHLSDSEPipeline();
 void registerScaleHLSPyTorchPipelineV2();
 void registerTransformsPasses();
 
-/// Design space exploration passes.
 std::unique_ptr<Pass>
 createDesignSpaceExplorePass(std::string dseTargetSpec = "");
+std::unique_ptr<Pass>
+createFuncPreprocessPass(std::string hlsTopFunc = "forward");
 
-/// Graph optimization passes.
-std::unique_ptr<Pass> createTosaFakeQuantizePass();
-std::unique_ptr<Pass> createTosaSimplifyGraphPass();
-std::unique_ptr<Pass> createTosaNodeFusionPass();
-std::unique_ptr<Pass> createCreateTokenDependsPass();
+/// Dataflow-related passes.
+std::unique_ptr<Pass> createFuncDuplicationPass();
 std::unique_ptr<Pass> createCreateFuncDataflowPass();
 std::unique_ptr<Pass> createCreateLoopDataflowPass();
 std::unique_ptr<Pass> createLegalizeDataflowPass();
+std::unique_ptr<Pass> createCreateTokenDependsPass();
 std::unique_ptr<Pass> createBufferizeDataflowPass();
 std::unique_ptr<Pass> createConvertDataflowToFuncPass();
+
+/// Graph-related passes.
+std::unique_ptr<Pass> createTosaFakeQuantizePass();
+std::unique_ptr<Pass> createTosaSimplifyGraphPass();
+std::unique_ptr<Pass> createTosaNodeFusionPass();
 std::unique_ptr<Pass> createTosaToLinalgCleanupPass();
 
 /// Runtime-related passes.
+std::unique_ptr<Pass> createCreateAxiInterfacePass();
 std::unique_ptr<Pass>
 createCreateRuntimeMainPass(std::string hlsTopFunc = "forward");
-std::unique_ptr<Pass> createCreateAxiInterfacePass();
 
-/// Loop optimization passes.
-std::unique_ptr<Pass>
-createFuncPreprocessPass(std::string hlsTopFunc = "forward");
+/// Loop-related passes.
 std::unique_ptr<Pass>
 createConvertCopyToAffineLoopsPass(bool convertInternCopyOnly = true);
 std::unique_ptr<Pass> createMaterializeReductionPass();
@@ -60,7 +62,7 @@ createAffineLoopUnrollJamPass(unsigned loopUnrollFactor = 1,
                               bool unrollPointLoopOnly = false);
 std::unique_ptr<Pass> createSimplifyAffineIfPass();
 
-/// Memory optimization passes.
+/// Memory-related passes.
 std::unique_ptr<Pass> createCreateMemrefSubviewPass();
 std::unique_ptr<Pass> createPromoteBufferPass();
 std::unique_ptr<Pass> createAffineStoreForwardPass();
@@ -68,7 +70,7 @@ std::unique_ptr<Pass> createSimplifyMemrefAccessPass();
 std::unique_ptr<Pass> createRaiseImplicitCopyPass();
 std::unique_ptr<Pass> createReduceInitialIntervalPass();
 
-/// Directive optimization passes.
+/// Directive-related passes.
 std::unique_ptr<Pass> createFuncPipeliningPass();
 std::unique_ptr<Pass> createLoopPipeliningPass();
 std::unique_ptr<Pass> createArrayPartitionPass();

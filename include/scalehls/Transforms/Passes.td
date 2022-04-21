@@ -9,10 +9,6 @@
 
 include "mlir/Pass/PassBase.td"
 
-//===----------------------------------------------------------------------===//
-// Design Space Exploration Pass
-//===----------------------------------------------------------------------===//
-
 def DesignSpaceExplore : Pass<"scalehls-dse", "ModuleOp"> {
   let summary = "Optimize HLS design at multiple abstraction level";
   let description = [{
@@ -38,27 +34,23 @@ def DesignSpaceExplore : Pass<"scalehls-dse", "ModuleOp"> {
   ];
 }
 
-//===----------------------------------------------------------------------===//
-// Graph Optimization Passes
-//===----------------------------------------------------------------------===//
+def FuncPreprocess : Pass<"scalehls-func-preprocess", "func::FuncOp"> {
+  let summary = "Preprocess the functions subsequent ScaleHLS optimizations";
+  let constructor = "mlir::scalehls::createFuncPreprocessPass()";
 
-def TosaFakeQuantize : Pass<"scalehls-tosa-fake-quantize", "ModuleOp"> {
-  let summary = "Convert to 8-bits quantized model (only for testing use)";
-  let constructor = "mlir::scalehls::createTosaFakeQuantizePass()";
+  let options = [
+    Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
+           "The top function for HLS synthesis">
+  ];
 }
 
-def TosaSimplifyGraph : Pass<"scalehls-tosa-simplify-graph", "func::FuncOp"> {
-  let summary = "Remove redundant TOSA operations";
-  let description = [{
-    This simplify-tosa-graph pass will try to remove redundant transpose ops
-    through pattern matching.
-  }];
-  let constructor = "mlir::scalehls::createTosaSimplifyGraphPass()";
-}
+//===----------------------------------------------------------------------===//
+// Dataflow-related Passes
+//===----------------------------------------------------------------------===//
 
-def TosaNodeFusion : Pass<"scalehls-tosa-node-fusion", "func::FuncOp"> {
-  let summary = "Node fusion on TOSA operations";
-  let constructor = "mlir::scalehls::createTosaNodeFusionPass()";
+def FuncDuplication : Pass<"scalehls-func-duplication", "mlir::ModuleOp"> {
+  let summary = "Duplicate function for each function call";
+  let constructor = "mlir::scalehls::createFuncDuplicationPass()";
 }
 
 def CreateFuncDataflow : Pass<"scalehls-create-func-dataflow", "func::FuncOp"> {
@@ -102,6 +94,29 @@ def ConvertDataflowToFunc :
   let constructor = "mlir::scalehls::createConvertDataflowToFuncPass()";
 }
 
+//===----------------------------------------------------------------------===//
+// Graph-related Passes
+//===----------------------------------------------------------------------===//
+
+def TosaFakeQuantize : Pass<"scalehls-tosa-fake-quantize", "ModuleOp"> {
+  let summary = "Convert to 8-bits quantized model (only for testing use)";
+  let constructor = "mlir::scalehls::createTosaFakeQuantizePass()";
+}
+
+def TosaSimplifyGraph : Pass<"scalehls-tosa-simplify-graph", "func::FuncOp"> {
+  let summary = "Remove redundant TOSA operations";
+  let description = [{
+    This simplify-tosa-graph pass will try to remove redundant transpose ops
+    through pattern matching.
+  }];
+  let constructor = "mlir::scalehls::createTosaSimplifyGraphPass()";
+}
+
+def TosaNodeFusion : Pass<"scalehls-tosa-node-fusion", "func::FuncOp"> {
+  let summary = "Node fusion on TOSA operations";
+  let constructor = "mlir::scalehls::createTosaNodeFusionPass()";
+}
+
 def TosaToLinalgCleanup :
       Pass<"scalehls-tosa-to-linalg-cleanup", "func::FuncOp"> {
   let summary = "Lower tosa::ReshapeOp and tensor::PadOp";
@@ -111,6 +126,11 @@ def TosaToLinalgCleanup :
 //===----------------------------------------------------------------------===//
 // Runtime-related Passes
 //===----------------------------------------------------------------------===//
+
+def CreateAxiInterface : Pass<"scalehls-create-axi-interface", "ModuleOp"> {
+  let summary = "Create AXI interfaces for the top function";
+  let constructor = "mlir::scalehls::createCreateAxiInterfacePass()";
+}
 
 def CreateRuntimeMain : Pass<"scalehls-create-runtime-main", "ModuleOp"> {
   let summary = "Create the main function of runtime";
@@ -128,24 +148,9 @@ def CreateRuntimeMain : Pass<"scalehls-create-runtime-main", "ModuleOp"> {
   ];
 }
 
-def CreateAxiInterface : Pass<"scalehls-create-axi-interface", "ModuleOp"> {
-  let summary = "Create AXI interfaces for the top function";
-  let constructor = "mlir::scalehls::createCreateAxiInterfacePass()";
-}
-
 //===----------------------------------------------------------------------===//
-// Loop Optimization Passes
+// Loop-related Passes
 //===----------------------------------------------------------------------===//
-
-def FuncPreprocess : Pass<"scalehls-func-preprocess", "func::FuncOp"> {
-  let summary = "Preprocess the functions for loop and directive optimizations";
-  let constructor = "mlir::scalehls::createFuncPreprocessPass()";
-
-  let options = [
-    Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
-           "The top function for HLS synthesis">
-  ];
-}
 
 def ConvertCopyToAffineLoops :
       Pass<"scalehls-convert-copy-to-affine-loops", "func::FuncOp"> {
@@ -252,62 +257,7 @@ def SimplifyAffineIf : Pass<"scalehls-simplify-affine-if", "func::FuncOp"> {
 }
 
 //===----------------------------------------------------------------------===//
-// Directive Optimization Passes
-//===----------------------------------------------------------------------===//
-
-def FuncPipelining : Pass<"scalehls-func-pipelining", "func::FuncOp"> {
-  let summary = "Apply function pipelining";
-  let description = [{
-    This func-pipelining pass will insert pipeline pragma to the specified
-    function, all contained loops will be automatically unrolled.
-  }];
-  let constructor = "mlir::scalehls::createFuncPipeliningPass()";
-
-  let options = [
-    Option<"targetFunc", "target-func", "std::string",
-           /*default=*/"\"main\"", "The target function to be pipelined">,
-    Option<"targetII", "target-ii", "unsigned", /*default=*/"1",
-           "Positive number: the targeted II to achieve">
-  ];
-}
-
-def LoopPipelining : Pass<"scalehls-loop-pipelining", "func::FuncOp"> {
-  let summary = "Apply loop pipelining";
-  let description = [{
-    This loop-pipelining pass will insert pipeline pragma to the target loop
-    level, and automatically unroll all inner loops.
-  }];
-  let constructor = "mlir::scalehls::createLoopPipeliningPass()";
-
-  let options = [
-    Option<"pipelineLevel", "pipeline-level", "unsigned", /*default=*/"0",
-           "Positive number: loop level to be pipelined (from innermost)">,
-    Option<"targetII", "target-ii", "unsigned", /*default=*/"1",
-           "Positive number: the targeted II to achieve">
-  ];
-}
-
-def ArrayPartition : Pass<"scalehls-array-partition", "ModuleOp"> {
-  let summary = "Apply optimized array partition strategy";
-  let description = [{
-    This array-partition pass will automatically search for the best array
-    partition solution for each on-chip memory instance and apply the solution
-    through changing the layout of the corresponding memref.
-  }];
-  let constructor = "mlir::scalehls::createArrayPartitionPass()";
-}
-
-def CreateHLSPrimitive : Pass<"scalehls-create-hls-primitive", "func::FuncOp"> {
-  let summary = "Create HLS C++ multiplification primitives";
-  let description = [{
-    This create-hls-primitive pass will convert 8-bits multiplifications to HLS
-    C++ primitives in order to utilize DSP instances in FPGA.
-  }];
-  let constructor = "mlir::scalehls::createCreateHLSPrimitivePass()";
-}
-
-//===----------------------------------------------------------------------===//
-// Memory Optimization Passes
+// Memory-related Passes
 //===----------------------------------------------------------------------===//
 
 def CreateMemrefSubview :
@@ -363,6 +313,61 @@ def ReduceInitialInterval :
     commutative operator trees and iteration variables.
   }];
   let constructor = "mlir::scalehls::createReduceInitialIntervalPass()";
+}
+
+//===----------------------------------------------------------------------===//
+// Directive-related Passes
+//===----------------------------------------------------------------------===//
+
+def FuncPipelining : Pass<"scalehls-func-pipelining", "func::FuncOp"> {
+  let summary = "Apply function pipelining";
+  let description = [{
+    This func-pipelining pass will insert pipeline pragma to the specified
+    function, all contained loops will be automatically unrolled.
+  }];
+  let constructor = "mlir::scalehls::createFuncPipeliningPass()";
+
+  let options = [
+    Option<"targetFunc", "target-func", "std::string",
+           /*default=*/"\"main\"", "The target function to be pipelined">,
+    Option<"targetII", "target-ii", "unsigned", /*default=*/"1",
+           "Positive number: the targeted II to achieve">
+  ];
+}
+
+def LoopPipelining : Pass<"scalehls-loop-pipelining", "func::FuncOp"> {
+  let summary = "Apply loop pipelining";
+  let description = [{
+    This loop-pipelining pass will insert pipeline pragma to the target loop
+    level, and automatically unroll all inner loops.
+  }];
+  let constructor = "mlir::scalehls::createLoopPipeliningPass()";
+
+  let options = [
+    Option<"pipelineLevel", "pipeline-level", "unsigned", /*default=*/"0",
+           "Positive number: loop level to be pipelined (from innermost)">,
+    Option<"targetII", "target-ii", "unsigned", /*default=*/"1",
+           "Positive number: the targeted II to achieve">
+  ];
+}
+
+def ArrayPartition : Pass<"scalehls-array-partition", "ModuleOp"> {
+  let summary = "Apply optimized array partition strategy";
+  let description = [{
+    This array-partition pass will automatically search for the best array
+    partition solution for each on-chip memory instance and apply the solution
+    through changing the layout of the corresponding memref.
+  }];
+  let constructor = "mlir::scalehls::createArrayPartitionPass()";
+}
+
+def CreateHLSPrimitive : Pass<"scalehls-create-hls-primitive", "func::FuncOp"> {
+  let summary = "Create HLS C++ multiplification primitives";
+  let description = [{
+    This create-hls-primitive pass will convert 8-bits multiplifications to HLS
+    C++ primitives in order to utilize DSP instances in FPGA.
+  }];
+  let constructor = "mlir::scalehls::createCreateHLSPrimitivePass()";
 }
 
 def QoREstimation : Pass<"scalehls-qor-estimation", "ModuleOp"> {
