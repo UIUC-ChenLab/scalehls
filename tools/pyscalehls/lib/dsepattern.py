@@ -24,6 +24,13 @@ class ROI(object):
     def __init__(self, input):
         self.group = input
 
+def alpha_to_int(input):
+    intfromalpha = 0
+    for abc in input:
+        intfromalpha += (ord(abc) - 96)
+
+    return intfromalpha
+
 def sdse_target(new_dir, dsespec, resource, tag, inputfile, inputtop):
 
     if new_dir != None:
@@ -89,6 +96,52 @@ def universal_low_insertionsort(inputarray, sortkeystring):  #insertion sort
                 if j >= 0:
                     inputarray_raw = re.findall(sortkeystring, inputarray[j])
         inputarray[j + 1] = key
+
+def apply_p_point(tar_dir, tree_list, var_forlist, removed_function_calls, pspace, target):
+    
+    # copy ref file
+    shutil.copy2(tar_dir + "/ref_design.c", tar_dir + "/ML_in.cpp")
+
+    print("")
+
+    # find loop bands that are to be optimized
+    pspace_columns = pspace.columns
+    Loop_bands2opt = []
+    for col in pspace_columns:
+        loopband = re.findall(r'b(\d+)', col)
+        if (loopband != []) and not(("Loop"+loopband[0]) in Loop_bands2opt):
+            Loop_bands2opt.append("Loop"+loopband[0])
+    universal_low_insertionsort(Loop_bands2opt, r'Loop(\d+)')
+    # print(Loop_bands2opt)
+
+    # functions that are to be optimized
+    opt_func = []
+    for loop in Loop_bands2opt:
+        for i in range(len(tree_list) - 1):
+            DFS_list = [tree_list[i][node].tag for node in tree_list[i].expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
+            if loop in DFS_list and not(tree_list[i][tree_list[i].root].tag in opt_func):
+                opt_func.append(tree_list[i][tree_list[i].root].tag)
+    # print(opt_func)
+
+    # get tiling stratergy and apply
+    for i in range(len(tree_list) - 1):
+        if tree_list[i][tree_list[i].root].tag in opt_func:
+            #get tile map of function
+            tile_map = []
+            children = tree_list[i].children(tree_list[i].root)
+            for child in children:
+                # find number of loops in loop band
+                child_DFS_list = [tree_list[i][node] for node in tree_list[i].expand_tree(child.identifier, mode=treelib.Tree.DEPTH, sorting=False)]
+                loop_band = []
+                for j in range(len(child_DFS_list)):
+                    colname = 'b' + str(child.identifier) + 'l' + str(j) #pandas index by name
+                    loop_band.append(pspace.iloc[target][colname])
+                tile_map.append(loop_band)
+            print("Applying Loop Optimizations to:", tree_list[i].root)
+            print("Using the following tiling stratergy:", tile_map)
+
+            #apply tiling stratergy to functions
+            apply_loop_ops(tar_dir, tree_list[i], var_forlist, removed_function_calls, tile_map)
 
 def cull_function_by_pattern(dir, inputfile, func_list, removed_function_calls, dsespec, resource, pattern):
     
@@ -273,7 +326,7 @@ def cull_function_by_pattern(dir, inputfile, func_list, removed_function_calls, 
     #if sdse failed
     if len(raw_loopparetospace_list) == 0:
         os.chdir("../../..")
-        return False, [], removed_function_calls
+        return False, [], removed_function_calls, []
 
     #corresponding loops in graph
     toploops = []
@@ -286,11 +339,90 @@ def cull_function_by_pattern(dir, inputfile, func_list, removed_function_calls, 
         loop_pareto_space = pd.read_csv(raw_loopparetospace_list[i])
         loopparetospace_list.append((toploops[i], loop_pareto_space))
         # print((toploops[i], raw_loopparetospace_list[i]))
+   
+    sdse_var_part = get_sdes_array_partition(root, removed_function_calls)
 
     os.chdir("../../..")
 
-    return True, loopparetospace_list, removed_function_calls
+    return True, loopparetospace_list, removed_function_calls, sdse_var_part
 
+def get_sdes_array_partition(root, removed_function_calls):
+    in_pattern = False
+    brace_count = 0
+
+    function_passed_val = []
+    function_declared_val = []
+    # get local array partition scheme
+    with open("snip_" + root + "_sdse.cpp", 'r') as file:
+        for line in file:
+
+            #scope finder
+            if brace_count == 0: 
+                raw_scope = re.findall(r'(void|char|double|float|int|short)\s([A-Za-z_]+[A-Za-z_\d]*)(\s)?(\()', line)
+                if raw_scope:
+                    scope = raw_scope[0][1]
+                    if scope == root:
+                        in_pattern = True                        
+
+            if(re.findall('{', line)):
+                brace_count += 1
+
+            if(re.findall('}', line)):
+                if brace_count == 1:
+                    in_pattern = False
+                    brace_count -= 1
+                else:
+                    brace_count -= 1
+
+            # get sdse array partition scheme
+            if re.findall("#pragma HLS array_partition", line):
+                part_var = re.findall(r'variable\s?=\s?([A-Za-z_]+[A-Za-z_\d]*)\s', line)
+                part_scheme = re.findall(r'(cyclic|block|complete)', line)
+                part_factor = re.findall(r'factor\s?=\s?(\d+)\s', line)
+                part_dim = re.findall(r'dim\s?=\s?(\d+)\s?', line)
+                
+                # store scheme in list
+                for item in function_passed_val:
+                    if part_var[0] == item[1]:
+                        item.append(part_scheme[0])
+                        item.append(part_factor[0])
+                        item.append(part_dim[0])
+                for item in function_declared_val:
+                    if part_var[0] == item[1]:
+                        item.append(part_scheme[0])
+                        item.append(part_factor[0])
+                        item.append(part_dim[0])
+
+            # if in_pattern and brace_count > 0:
+            if in_pattern and brace_count == 0:
+                arr2part = re.findall(r'(int|float|double)\s([A-Za-z_]+[A-Za-z_\d]*)\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])+(,|;|\)|' ')', line)
+                if(arr2part):
+                    for item in arr2part:
+                        function_passed_val.append([scope, item[1]])                            
+            elif in_pattern and brace_count > 0:
+                arr2part = re.findall(r'(int|float|double)\s([A-Za-z_]+[A-Za-z_\d]*)\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])+(,|;|\)|' ')', line)
+                if(arr2part):
+                    for item in arr2part:
+                        current_array = "".join(item[1:-1])
+                        array_sizeofdim = re.findall(r'\[(.+?)\]', current_array)
+                        array_dim = len(array_sizeofdim)
+                        # do not capture scalehls auto gen arrays which are a dummy array of dim1 size1
+                        if not(array_dim < 2 and int(array_sizeofdim[0]) < 2):
+                            function_declared_val.append([scope, item[1]])
+    file.close()
+
+    # remove dummy variable
+    sub_function_call = False
+    for item in removed_function_calls:
+        if item[0] == root:
+            sub_function_call = True
+    if sub_function_call:
+        function_passed_val.pop()
+
+    # 1st dim stores passed values second dim stores non passed values
+    sdse_var_part = [root, function_passed_val, function_declared_val]
+
+    return sdse_var_part
 
 def combine_two_spaces(pareto_space_list, input1, input2):
 
@@ -611,6 +743,7 @@ def graph_algorithm(tar_dir, dse_target, sortedarray, func_list, var_forlist, va
     #scalehls dse initial pareto space creation
     removed_function_calls = []
     pareto_space_list = []
+    sdse_var_part_list = []
     for i in range(len(tree_list) - 1):
         target = treelib.Tree(tree_list[i].subtree(tree_list[i][tree_list[i].root].identifier), deep=True)
         DFS_list = [target[node] for node in target.expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
@@ -625,9 +758,10 @@ def graph_algorithm(tar_dir, dse_target, sortedarray, func_list, var_forlist, va
                     if (target.level(DFS_node.identifier) == 1) and (DFS_node.tag == item[0]) and (item[-1] == "Variable"):
                         do_SDSE = False
         if do_SDSE and has_loops:
-            suc_fail, buffer, removed_function_calls = cull_function_by_pattern(tar_dir, tar_dir + "/ref_design.c", func_list, removed_function_calls, dse_target, 1, target)
+            suc_fail, buffer, removed_function_calls, sdse_var_part = cull_function_by_pattern(tar_dir, tar_dir + "/ref_design.c", func_list, removed_function_calls, dse_target, 1, target)            
             if suc_fail:
                 pareto_space_list = pareto_space_list + buffer
+                sdse_var_part_list.append(sdse_var_part)
     
     # print("removed calls")
     # print(removed_function_calls)
@@ -637,8 +771,68 @@ def graph_algorithm(tar_dir, dse_target, sortedarray, func_list, var_forlist, va
         # print(pareto_space_list[i][0])
         initial_pspace.append(pareto_space_list[i][0])
     print(initial_pspace)
+
+    # starting ROI
+    # todo: case for when starting ROI is not unique
+    print("\nStarting ROI")
+    number_of_ROI = 3
+    starting_ROI = []
+    sibling_ROI = -1
+    for i in range(len(sortedarray)):
+        sibling_ROI = -1
+        # cheak if ROIs are siblings
+        for j in range(len(starting_ROI)):
+            if sortedarray[i][0] == starting_ROI[j][0]:
+                sibling_ROI = j
+        # if first entry
+        if sibling_ROI == -1:
+            starting_ROI.append([sortedarray[i][0], "Loop" + str(sortedarray[i][1]), 1])
+        # if not first entry increase expansion factor by 1
+        else:
+            starting_ROI[j][2] = int(starting_ROI[j][2]) + 1
+        # number of ROIs
+        number_of_ROI -= 1
+        if number_of_ROI == 0:
+            break
+    print(starting_ROI)
+
+    # DFS traversal for master tree
+    mastertree = tree_list[-1]
+    DFS_list = [mastertree[node] for node in mastertree.expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
+
+    # mark starting ROI
+    roi_count = 0
+    seed_roi = -1
+    starting_ROI_nodes = []
+    for node in DFS_list:
+        # cheak if node is seed roi
+        seed_roi = -1
+        for i in range(len(starting_ROI)):
+            if node.tag == starting_ROI[i][1]:
+                seed_roi = i
+        # mark starting ROI
+        if seed_roi != -1:
+            # mark starting node with c
+            starting_ROI_nodes.append(node)
+            node.data.group = str(roi_count) + "-c" + str(starting_ROI[seed_roi][2])
+            mastertree.parent(node.identifier).data.group = "Seed"
+            mark_subsequent_node(mastertree, node, roi_count)
+            roi_count += 1
+
+    print("")
+    mastertree.show(idhidden = True, data_property="group")
+
+    print("one")
+    for node in DFS_list:
+        # start expansion from core node
+        if re.findall(r'(\d+)-c', node.data.group):
+            print(node.data.group)
+            print(expand_by_factor(mastertree, initial_pspace, starting_ROI_nodes, node, 1))
+    print("\nExpanded1")
+    mastertree.show(idhidden = True, data_property="group")
     
-    # Initial naive combination of individual spaces
+
+    # # Initial naive combination of individual spaces
     # print("comb")
     # merge_ops = 0    
     # t0 = time.time()
@@ -653,56 +847,104 @@ def graph_algorithm(tar_dir, dse_target, sortedarray, func_list, var_forlist, va
     # total = t1-t0
     # print("Time to execute naive merging", total, " merge opts:", merge_ops)
 
-    pspace = pd.read_csv(tar_dir + '/combspace.csv', index_col=0)
+    # pspace = pd.read_csv(tar_dir + '/combspace.csv', index_col=0)
 
-    apply_p_point(tar_dir, tree_list, var_forlist, removed_function_calls, pspace, 653)
+    # apply_p_point(tar_dir, tree_list, var_forlist, removed_function_calls, pspace, 653)
+
+    return sdse_var_part_list
+
+def expand_by_factor(mastertree, initial_pspace, starting_ROI_node, start_node, factor):
+
+    roi_tag = re.findall(r'(\d+)-c', start_node.data.group)
+
+    freeparent = get_free_parent(mastertree, start_node)
+    print(freeparent)
+    siblings_list = mastertree.children(freeparent.identifier)
+    # print(siblings_list)
+
+    # Loop siblings
+    loop_siblings = []
+    for sib in siblings_list:
+        if re.findall(r'Loop', sib.tag):
+            loop_siblings.append(sib)
+
+    # function siblings
+    func_siblings = []
+    for sib in siblings_list:
+        if re.findall(r'([a-z]*)-.*', sib.tag):
+            func_siblings.append(sib)
+
+    # try expanding loop siblings
+    level_complete = True
+    for lsib in loop_siblings:
+        if lsib.data.group == "None" and factor > 0:
+            lsib.data.group = str(roi_tag[0])
+            mark_subsequent_node(mastertree, lsib, roi_tag[0])
+            # do not mark loops that are not design space
+            if lsib.tag in initial_pspace:
+                factor -= 1
+        # check if siblings have been marked
+        if lsib.data.group == "None":
+            level_complete = False
+
+    # return if expanded
+    if factor == 0:
+        return "loopexit"
 
 
 
-def apply_p_point(tar_dir, tree_list, var_forlist, removed_function_calls, pspace, target):
     
-    # copy ref file
-    shutil.copy2(tar_dir + "/ref_design.c", tar_dir + "/ML_in.cpp")
+    # print(alpha_to_int('ab'))
+    
+    # mark parent node if complete -> has cost
+    if level_complete and (freeparent.data.group != "Complete"):
+        freeparent.data.group = "Complete"
+        factor -= 1
 
-    # find loop bands that are to be optimized
-    pspace_columns = pspace.columns
-    Loop_bands2opt = []
-    for col in pspace_columns:
-        loopband = re.findall(r'b(\d+)', col)
-        if (loopband != []) and not(("Loop"+loopband[0]) in Loop_bands2opt):
-            Loop_bands2opt.append("Loop"+loopband[0])
-    universal_low_insertionsort(Loop_bands2opt, r'Loop(\d+)')
-    print(Loop_bands2opt)
+    # return if expanded(marking function boundaries is a step)
+    if factor == 0:
+        return "completeexit"
+    
 
-    # functions that are to be optimized
-    opt_func = []
-    for loop in Loop_bands2opt:
-        for i in range(len(tree_list) - 1):
-            DFS_list = [tree_list[i][node].tag for node in tree_list[i].expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
-            if loop in DFS_list and not(tree_list[i][tree_list[i].root].tag in opt_func):
-                opt_func.append(tree_list[i][tree_list[i].root].tag)
-    print(opt_func)
-
-    # get tiling stratergy and apply
-    for i in range(len(tree_list) - 1):
-        if tree_list[i][tree_list[i].root].tag in opt_func:
-            #get tile map of function
-            tile_map = []
-            children = tree_list[i].children(tree_list[i].root)
-            for child in children:
-                # find number of loops in loop band
-                child_DFS_list = [tree_list[i][node] for node in tree_list[i].expand_tree(child.identifier, mode=treelib.Tree.DEPTH, sorting=False)]
-                loop_band = []
-                for j in range(len(child_DFS_list)):
-                    colname = 'b' + str(child.identifier) + 'l' + str(j) #pandas index by name
-                    loop_band.append(pspace.iloc[target][colname])
-                tile_map.append(loop_band)
-            print("Applying Loop Optimizations to:", tree_list[i].root)
-            print("Using the following tiling stratergy:", tile_map)
-
-            #apply tiling stratergy to functions
-            apply_loop_ops(tar_dir, tree_list[i], var_forlist, removed_function_calls, tile_map)
+    # print("test")
+    # print(clos_sib_Loop)
+    # print(clos_sib_func)
 
 
+    # if re.findall(r'Loop', ref_node.tag):
+    #     ref_lnub = re.findall(r'Loop(\d+)', ref_node.tag)
+    #     distancefromref = []
+    #     for node in clos_sib_Loop:
+    #         node_lnub = re.findall(r'Loop(\d+)', node.tag)
+    #         ref2node_dis = int(node_lnub[0]) - int(ref_lnub[0])
+    #         distancefromref.append(str(ref2node_dis) + "_" + node.tag)
+    #     print(distancefromref)
+
+    return 0
+    
+
+    
+    # find sibling that is the ancestor of start node
+    for sib in func_siblings:
+        if mastertree.is_ancestor(sib.identifier, start_node.identifier):
+            sibling_acncestor_startnode = sib
+    # get sibling list based on distance to starting node
+    distance = 1
+    siblings_by_distance = []
+    while func_siblings != []:
+        for sib in func_siblings:
+            ordertag = re.findall(r'([a-z]+)-.*', sib.tag)
+            print(ordertag)
+ 
+
+def get_free_parent(mastertree, start_node):
+    parent = mastertree.parent(start_node.identifier)
+
+    if parent.data.group == "None" or parent.data.group == "Seed":
+        return parent
+    elif parent == mastertree.root:
+        return parent
+    else:
+         return get_free_parent(mastertree, parent)
 
 

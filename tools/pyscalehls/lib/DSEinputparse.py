@@ -4,9 +4,19 @@ import re
 import copy
 import treelib
 
+c_keywords = ["auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else", "enum", "extern", "float", "for", "goto", "if", "inline", "int", "long", "register", "restrict", "return", "short", "signed", "sizeof", "static", "struct", "switch", "typedef", "union", "unsigned", "void", "volatile", "while"]
+c_vars = ["char", "double", "float", "int", "short"]
+
 class ROI(object):
          def __init__(self, input):
              self.group = input
+
+class ArrayP(object):
+         def __init__(self, count=0, type=None, factor=None, dim=None):
+             self.count = count
+             self.type = type
+             self.factor = factor
+             self.dim = dim
 
 def int_to_alpha(input):
     output = ''
@@ -444,14 +454,16 @@ def process_source_file(dir, inputfile, outfile, topfun, sdse=False):
     
     return var_func_names, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list
 
-def asdse_get_knobs(inputfile, topfun):
+def asdse_get_knobs(inputfile, topfun, sdse_var_part_list):
 
     in_pattern = False
+    line_break = False
 
     brace_count = 0
     arraynum = 0
 
     var_arraylist_sized = []
+    function_pass_var_list = []
 
     with open(inputfile, 'r') as file:
         for line in file:
@@ -489,8 +501,89 @@ def asdse_get_knobs(inputfile, topfun):
                         var_arraylist_sized.append(list_buffer)
                         arraynum += 1
 
+            # find function calls -> can support line breaks
+            line_function_call = re.findall(r'\s?([A-Za-z_]+[A-Za-z_\d]*\s?\(.*)', line)
+            if in_pattern and (brace_count > 0) and (line_function_call or line_break):
+                keyword = None
+                if not(line_break):
+                    keyword = re.findall(r'([A-Za-z_]+[A-Za-z_\d]*)\s?\(', line)
+                    keyword = keyword[0].strip()
+
+                if not(keyword in c_keywords) or line_break: #ignore c keywords
+                    # get variables
+                    raw_variables = re.findall(r'[A-Za-z_]+[A-Za-z_\d]*', line)
+                    # print(raw_variables)
+
+                    # only store arrays
+                    if keyword != None:
+                        function_pass_buf = [keyword]
+                    
+                    for var_pass in raw_variables:
+                        for var_dec in var_arraylist_sized:
+                            if var_dec[2] == var_pass:
+                                function_pass_buf.append(var_pass)
+
+                    # if line break should capture next line
+                    if re.findall(';', line):
+                        line_break = False
+                        function_pass_var_list.append(function_pass_buf)
+                    else:
+                        line_break = True
+                    # if line_break and len(re.findall(';', line)) > 0 :
+                    #     line_break = False
+                    #     function_pass_var_list.append(function_pass_buf)
     file.close()
+
+    # print("local")
+    # for item in sdse_var_part_list:
+    #     print(item)
+    # print("top")
+    # for item in function_pass_var_list:
+    #     print(item)
     
+    # create array tree
+    array_tree_list = []
+    for top_call in function_pass_var_list:
+        function_name = top_call[0]
+
+        # find stored location of sdse local variable names
+        for sdse_func in sdse_var_part_list:
+            if sdse_func[0] == function_name:
+                sdse_func_inq = sdse_func
+
+        for i in range(1, len(top_call)):
+            array_inq = top_call[i]
+            array_tree = None
+            # find array tree if it already exists
+            for tree in array_tree_list:
+                if array_inq == tree[tree.root].tag:
+                    array_tree = tree
+
+            # create tree if not in tree list
+            if array_tree == None:
+                array_tree = treelib.Tree()
+                array_tree.create_node(tag=array_inq, identifier=array_inq, data=ArrayP(1))
+                array_tree_list.append(array_tree)
+
+            # only add to tree if sdse outputs an array partition scheme
+            j = i -1
+            if len(sdse_func_inq[1][j]) > 2:
+                # function call name
+                parent_iden = function_name + '-' + str(array_tree[array_tree.root].data.count)
+                array_tree.create_node(tag=function_name, identifier=parent_iden, parent=array_inq, data=ArrayP())
+                array_tree[array_tree.root].data.count += 1
+                # add local variable name -> partition scheme stored as data
+                array_tree.create_node(tag=sdse_func_inq[1][j][1], identifier=sdse_func_inq[1][j][1] + '-' + str(array_tree[array_tree.root].data.count), parent=parent_iden,
+                                        data=ArrayP(0, sdse_func_inq[1][j][2], sdse_func_inq[1][j][3], sdse_func_inq[1][j][4]))
+                array_tree[array_tree.root].data.count += 1
+
+    # print("array trees")
+    # count = 0
+    # for item in array_tree_list:
+    #     item.show(idhidden=False)
+    #     item.show(data_property="dim")
+    #     count += 1
+    # print(count)
     
-    return var_arraylist_sized
+    return var_arraylist_sized, array_tree_list
     

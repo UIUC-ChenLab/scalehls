@@ -181,11 +181,12 @@ def main():
         elif((val == "Auto") or (val == "A") or (val == "a")):
             func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, source_file,  "/ref_design.c", inputtop)                        
             sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)
-            DPAT.graph_algorithm(tar_dir, dse_target, sortedarray, func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)
-            #array for only the top function
-            # var_arraylist_sized = INPAR.asdse_get_knobs(tar_dir + "/ML_in.cpp", 'backprop')
+            sdse_var_part_list = DPAT.graph_algorithm(tar_dir, dse_target, sortedarray, func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)
+            var_arraylist_sized, array_tree_list = INPAR.asdse_get_knobs(tar_dir + "/ML_in.cpp", inputtop, sdse_var_part_list)
+            # array for only the top function
+            # print("\n Top function Arrays")
             # print(var_arraylist_sized)
-            # var_forlist = []
+            var_forlist = []
         elif((val == "None") or (val == "N") or (val == "n")):
             func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, source_file, "/ML_in.cpp", inputtop)            
             sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)    

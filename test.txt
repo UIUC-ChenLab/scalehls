@@ -1,0 +1,1 @@
+mlir-clang test.c -function=test -memref-fullrank -raise-scf-to-affine -S | scalehls-opt -materialize-reduction -canonicalize -legalize-to-hlscpp="top-func=test" -qor-estimation="target-spec=config.json" | scalehls-translate -emit-hlscpp > test_qor.cpp
