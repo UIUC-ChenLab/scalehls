@@ -1,4 +1,4 @@
-// RUN: scalehls-opt -scalehls-affine-loop-perfection %s | FileCheck %s
+// RUN: scalehls-opt -buffer-loop-hoisting -scalehls-affine-loop-perfection %s | FileCheck %s
 
 module {
   func @test_perfection(%arg0: f32, %arg1: f32, %arg2: memref<32x32xf32>, %arg3: memref<32x32xf32>, %arg4: memref<32x32xf32>) {
