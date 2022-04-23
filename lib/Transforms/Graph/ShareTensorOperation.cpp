@@ -242,81 +242,88 @@ static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
               newFuncOp->setAttr("count", builder.getI64IntegerAttr(count + 1));
               Conv2DOp.replaceAllUsesWith(newCallOp);
             } else {
-              SmallVector<Value, 16> slicedOutCh;
+              // Slice inputs
+              SmallVector<SmallVector<Value, 16>, 16> slicedInputs;
+              for (auto inWidthIt = 0; inWidthIt < inSizeDiv; inWidthIt++) {
+                slicedInputs.push_back(SmallVector<Value, 16>());
+                for (auto inHeightIt = 0; inHeightIt < inSizeDiv;
+                     inHeightIt++) {
+                  auto inputStart = builder.getI64ArrayAttr(
+                      {0, inWidthIt * SharedHelper.inSize(),
+                       inHeightIt * SharedHelper.inSize(), 0});
+                  auto inputSize = builder.getI64ArrayAttr(
+                      {1, SharedHelper.inSize(), SharedHelper.inSize(),
+                       SharedHelper.inCh()});
+                  auto inputType = SharedHelper.op.getOperand(0).getType();
+                  slicedInputs[inWidthIt].push_back(
+                      builder
+                          .create<tosa::SliceOp>(Conv2DOp.getLoc(), inputType,
+                                                 Conv2DOp->getOperand(0),
+                                                 inputStart, inputSize)
+                          .output());
+                }
+              }
+
+              // Slice weights
+              SmallVector<SmallVector<Value, 16>, 16> slicedWeights;
               for (auto outChIt = 0; outChIt < outChDiv; outChIt++) {
-                SmallVector<Value, 16> slicedOutInCh;
+                slicedWeights.push_back(SmallVector<Value, 16>());
                 for (auto inChIt = 0; inChIt < inChDiv; inChIt++) {
+                  auto weightStart = builder.getI64ArrayAttr(
+                      {outChIt * SharedHelper.outCh(), 0, 0,
+                       inChIt * SharedHelper.inCh()});
+                  auto weightSize = builder.getI64ArrayAttr(
+                      {SharedHelper.outCh(), SharedHelper.kernelSize(),
+                       SharedHelper.kernelSize(), SharedHelper.inCh()});
+                  auto weightType = SharedHelper.op.getOperand(1).getType();
+                  slicedWeights[outChIt].push_back(
+                      builder
+                          .create<tosa::SliceOp>(Conv2DOp.getLoc(), weightType,
+                                                 Conv2DOp->getOperand(1),
+                                                 weightStart, weightSize)
+                          .output());
+                }
+              }
+
+              // Slice biases
+              auto biasTensor = RankedTensorType::get(SharedHelper.outCh(),
+                                                      builder.getF32Type());
+              auto biasAttr = DenseFPElementsAttr::get(
+                  biasTensor, std::vector<float>(SharedHelper.outCh()));
+              auto biasType = SharedHelper.op.getOperand(2).getType();
+              auto zeroBias = builder.create<tosa::ConstOp>(Conv2DOp.getLoc(),
+                                                            biasType, biasAttr);
+
+              SmallVector<Value, 16> slicedBiases;
+              for (auto outChIt = 0; outChIt < outChDiv; outChIt++) {
+                auto biasStart =
+                    builder.getI64ArrayAttr({outChIt * SharedHelper.outCh()});
+                auto biasSize = builder.getI64ArrayAttr({SharedHelper.outCh()});
+                auto biasType = SharedHelper.op.getOperand(2).getType();
+                slicedBiases.push_back(
+                    builder
+                        .create<tosa::SliceOp>(Conv2DOp.getLoc(), biasType,
+                                               Conv2DOp->getOperand(2),
+                                               biasStart, biasSize)
+                        .output());
+              }
+
+              SmallVector<Value, 16> slicedOutInCh;
+              for (auto inChIt = 0; inChIt < inChDiv; inChIt++) {
+                SmallVector<Value, 16> slicedOutOutCh;
+                for (auto outChIt = 0; outChIt < outChDiv; outChIt++) {
                   SmallVector<Value, 16> slicedOutRows;
                   for (auto inWidthIt = 0; inWidthIt < inSizeDiv; inWidthIt++) {
                     SmallVector<Value, 16> slicedOutCols;
                     for (auto inHeightIt = 0; inHeightIt < inSizeDiv;
                          inHeightIt++) {
                       Value slicedInput, slicedWeight, slicedBias;
-
-                      if (inChDiv <= 1 && inSizeDiv <= 1) {
-                        slicedInput = Conv2DOp.getOperand(0);
-                      } else {
-                        auto inputStart = builder.getI64ArrayAttr(
-                            {0, inWidthIt * SharedHelper.inSize(),
-                             inHeightIt * SharedHelper.inSize(), 0});
-                        auto inputSize = builder.getI64ArrayAttr(
-                            {1, SharedHelper.inSize(), SharedHelper.inSize(),
-                             SharedHelper.inCh()});
-                        auto inputType =
-                            SharedHelper.op.getOperand(0).getType();
-                        slicedInput = builder
-                                          .create<tosa::SliceOp>(
-                                              Conv2DOp.getLoc(), inputType,
-                                              Conv2DOp->getOperand(0),
-                                              inputStart, inputSize)
-                                          .output();
-                      }
-
-                      if (outChDiv <= 1 && inChDiv <= 1) {
-                        slicedWeight = Conv2DOp->getOperand(1);
-                      } else {
-                        auto weightStart = builder.getI64ArrayAttr(
-                            {outChIt * SharedHelper.outCh(), 0, 0,
-                             inChIt * SharedHelper.inCh()});
-                        auto weightSize = builder.getI64ArrayAttr(
-                            {SharedHelper.outCh(), SharedHelper.kernelSize(),
-                             SharedHelper.kernelSize(), SharedHelper.inCh()});
-                        auto weightType =
-                            SharedHelper.op.getOperand(1).getType();
-                        slicedWeight = builder
-                                           .create<tosa::SliceOp>(
-                                               Conv2DOp.getLoc(), weightType,
-                                               Conv2DOp->getOperand(1),
-                                               weightStart, weightSize)
-                                           .output();
-                      }
-
+                      slicedInput = slicedInputs[inWidthIt][inHeightIt];
+                      slicedWeight = slicedWeights[outChIt][inChIt];
                       if (inChIt == 0) {
-                        if (outChDiv <= 1) {
-                          slicedBias = Conv2DOp->getOperand(2);
-                        } else {
-                          auto biasStart = builder.getI64ArrayAttr(
-                              {outChIt * SharedHelper.outCh()});
-                          auto biasSize =
-                              builder.getI64ArrayAttr({SharedHelper.outCh()});
-                          auto biasType =
-                              SharedHelper.op.getOperand(2).getType();
-                          slicedBias = builder
-                                           .create<tosa::SliceOp>(
-                                               Conv2DOp.getLoc(), biasType,
-                                               Conv2DOp->getOperand(2),
-                                               biasStart, biasSize)
-                                           .output();
-                        }
+                        slicedBias = slicedBiases[outChIt];
                       } else {
-                        auto biasTensor = RankedTensorType::get(
-                            SharedHelper.outCh(), builder.getF32Type());
-                        auto biasAttr = DenseFPElementsAttr::get(
-                            biasTensor,
-                            std::vector<float>(SharedHelper.outCh()));
-                        auto biasType = SharedHelper.op.getOperand(2).getType();
-                        slicedBias = builder.create<tosa::ConstOp>(
-                            Conv2DOp.getLoc(), biasType, biasAttr);
+                        slicedBias = zeroBias;
                       }
 
                       auto operands = {slicedInput, slicedWeight, slicedBias};
@@ -346,39 +353,39 @@ static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
                     }
                   }
                   if (slicedOutRows.size() == 1) {
-                    slicedOutInCh.push_back(slicedOutRows[0]);
+                    slicedOutOutCh.push_back(slicedOutRows[0]);
                   } else {
                     auto rowResultShape = ArrayRef<int64_t>(
                         {1, CurrHelper.outSize(), CurrHelper.outSize(),
                          SharedHelper.outCh()});
                     auto rowResultType = RankedTensorType::get(
                         (rowResultShape), builder.getF32Type());
-                    slicedOutInCh.push_back(builder.create<tosa::ConcatOp>(
+                    slicedOutOutCh.push_back(builder.create<tosa::ConcatOp>(
                         Conv2DOp.getLoc(), rowResultType, slicedOutRows, 1));
                   }
                 }
-                if (slicedOutInCh.size() == 1) {
-                  slicedOutCh.push_back(slicedOutInCh[0]);
+                if (slicedOutOutCh.size() == 1) {
+                  slicedOutInCh.push_back(slicedOutOutCh[0]);
                 } else {
-                  auto inChResultType = slicedOutInCh[0].getType();
-                  auto newAddOp = builder.create<tosa::AddOp>(
-                      Conv2DOp.getLoc(), inChResultType,
-                      ValueRange({slicedOutInCh[0], slicedOutInCh[1]}));
-                  for (auto inChIt = 2; inChIt < inChDiv; inChIt++) {
-                    newAddOp = builder.create<tosa::AddOp>(
-                        Conv2DOp.getLoc(), inChResultType,
-                        ValueRange({newAddOp, slicedOutInCh[inChIt]}));
-                  }
-                  slicedOutCh.push_back(newAddOp);
+                  slicedOutInCh.push_back(builder.create<tosa::ConcatOp>(
+                      Conv2DOp.getLoc(), Conv2DOp->getResultTypes(),
+                      slicedOutOutCh, 3));
                 }
               }
-              if (slicedOutCh.size() == 1) {
-                Conv2DOp.replaceAllUsesWith(slicedOutCh[0]);
+
+              if (slicedOutInCh.size() == 1) {
+                Conv2DOp.replaceAllUsesWith(slicedOutInCh[0]);
               } else {
-                Operation *newConcatOp = builder.create<tosa::ConcatOp>(
-                    Conv2DOp.getLoc(), Conv2DOp->getResultTypes(), slicedOutCh,
-                    3);
-                Conv2DOp.replaceAllUsesWith(newConcatOp);
+                auto inChResultType = slicedOutInCh[0].getType();
+                Value newAddOp = builder.create<tosa::AddOp>(
+                    Conv2DOp.getLoc(), inChResultType,
+                    ValueRange({slicedOutInCh[0], slicedOutInCh[1]}));
+                for (auto inChIt = 2; inChIt < inChDiv; inChIt++) {
+                  newAddOp = builder.create<tosa::AddOp>(
+                      Conv2DOp.getLoc(), inChResultType,
+                      ValueRange({newAddOp, slicedOutInCh[inChIt]}));
+                }
+                Conv2DOp.replaceAllUsesWith(newAddOp);
               }
             }
           }

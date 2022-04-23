@@ -109,7 +109,7 @@ def TosaToLinalgCleanup :
   let constructor = "mlir::scalehls::createTosaToLinalgCleanupPass()";
 }
 
-def ShareTensorOperation : Pass<"share-tensor-operation", "ModuleOp"> {
+def ShareTensorOperation : Pass<"scalehls-share-tensor-operation", "ModuleOp"> {
   let summary = "Share kernels for repetitive tensor operations";
   let description = [{
     This share-tensor-operation pass will analyze all tensor operations to see 
