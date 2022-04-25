@@ -1743,20 +1743,20 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
   if (kind != MemoryKind::DRAM && !isFullyPartitioned(type)) {
     emitPragmaFlag = true;
 
-    indent() << "#pragma HLS resource";
+    indent() << "#pragma HLS bind_storage";
     os << " variable=";
     emitValue(memref);
 
-    os << " core=";
+    os << " type=";
     if (kind == MemoryKind::BRAM_1P)
-      os << "ram_1p_bram";
+      os << "ram_1p";
     else if (kind == MemoryKind::BRAM_S2P)
-      os << "ram_s2p_bram";
+      os << "ram_s2p";
     else if (kind == MemoryKind::BRAM_T2P)
-      os << "ram_t2p_bram";
+      os << "ram_t2p";
     else
-      os << "ram_s2p_bram";
-    os << "\n";
+      os << "ram_s2p";
+    os << " impl=auto\n";
   }
 
   // Emit an empty line.
@@ -1814,9 +1814,9 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
     os << "\n";
 
     // Emit other pragmas for function ports.
-    for (auto &port : portList)
-      if (port.getType().isa<MemRefType>())
-        emitArrayDirectives(port);
+    // for (auto &port : portList)
+    //  if (port.getType().isa<MemRefType>())
+    //    emitArrayDirectives(port);
   }
 
   auto funcDirect = getFuncDirective(func);

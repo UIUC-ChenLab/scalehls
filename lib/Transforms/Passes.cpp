@@ -247,6 +247,8 @@ void scalehls::registerScaleHLSConvertTosaToHLS() {
 
         // Dataflow and Linalg lowering.
         pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
+        pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
+        pm.addPass(memref::createFoldSubViewOpsPass());
         pm.addPass(scalehls::createLowerCastAndSubviewPass());
         pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
         pm.addPass(memref::createFoldSubViewOpsPass());
@@ -273,13 +275,29 @@ void scalehls::registerScaleHLSConvertTosaToHLS() {
         pm.addPass(scalehls::createSimplifyMemrefAccessPass());
         pm.addPass(scalehls::createReduceInitialIntervalPass());
         pm.addPass(mlir::createCanonicalizerPass());
+      });
+}
 
+namespace {
+struct ScaleHLSApplyDSEResultsOptions
+    : public PassPipelineOptions<ScaleHLSApplyDSEResultsOptions> {
+  Option<std::string> hlsTopFunc{
+      *this, "top-func", llvm::cl::init("main"),
+      llvm::cl::desc("Specify the top function of the design")};
+};
+} // namespace
+
+void scalehls::registerScaleHLSApplyDSEResults() {
+  PassPipelineRegistration<ScaleHLSApplyDSEResultsOptions>(
+      "scalehls-apply-dse-results", "Apply DSE results to the design",
+      [](OpPassManager &pm, const ScaleHLSApplyDSEResultsOptions &opts) {
         // Directive-level optimization.
-        // pm.addPass(scalehls::createLoopPipeliningPass());
-        // pm.addPass(scalehls::createArrayPartitionPass());
-        // pm.addPass(scalehls::createCreateHLSPrimitivePass());
-        // pm.addPass(mlir::createCSEPass());
-        // pm.addPass(mlir::createCanonicalizerPass());
+        pm.addPass(scalehls::createLoopPipeliningPass());
+        pm.addPass(scalehls::createArrayPartitionPass());
+        pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
+        pm.addPass(scalehls::createCreateHLSPrimitivePass());
+        pm.addPass(mlir::createCSEPass());
+        pm.addPass(mlir::createCanonicalizerPass());
       });
 }
 
@@ -287,5 +305,6 @@ void scalehls::registerTransformsPasses() {
   registerScaleHLSDSEPipeline();
   registerScaleHLSPyTorchPipelineV2();
   registerScaleHLSConvertTosaToHLS();
+  registerScaleHLSApplyDSEResults();
   registerPasses();
 }
