@@ -44,8 +44,6 @@ def main():
     scalehls.register_dialects(ctx)
     mod = mlir.ir.Module.parse(fin, ctx)
 
-    print(mod)
-
     # Traverse all functions in the MLIR module.
     for func in mod.body:
         if not isinstance(func, builtin.FuncOp):
@@ -76,7 +74,7 @@ def main():
             print("test")
             # factors = np.ones(band.depth, dtype=int)
             # list_ts = [[1, 16], [8], [1, 16], [8], [8, 16], [8], [1, 16], [8], [4, 3], [1], [8, 3], [1]]
-            list_ts = [[1, 16]]
+            list_ts = [[8, 2, 8]]
             factors = np.array(list_ts[band_count])
             print(factors)
             loc = scalehls.loop_tiling(band, factors, True) # simplify = True
@@ -100,8 +98,7 @@ def main():
         #     scalehls.array_partition(array, factors, "cyclic")
 
         # Legalize the IR to make it emittable.
-        scalehls.legalize_to_hlscpp(
-            func, func.sym_name.value == opts.function)
+        scalehls.legalize_to_hlscpp(func, func.sym_name.value == opts.function)
 
         # # Optimize memory accesses through store forwarding, etc.
         scalehls.memory_access_opt(func)
