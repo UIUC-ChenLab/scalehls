@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Translation/EmitHLSCpp.h"
+#include "mlir/Analysis/CallGraph.h"
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
 #include "mlir/IR/AffineExprVisitor.h"
 #include "mlir/IR/IntegerSet.h"
@@ -12,6 +13,7 @@
 #include "mlir/Tools/mlir-translate/Translation.h"
 #include "scalehls/Dialect/HLS/Visitor.h"
 #include "scalehls/Support/Utils.h"
+#include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
@@ -499,6 +501,7 @@ public:
   bool visitOp(arith::RemFOp op) { return emitter.emitBinary(op, "%"), true; }
   bool visitOp(arith::MaxFOp op) { return emitter.emitMaxMin(op, "max"), true; }
   bool visitOp(arith::MinFOp op) { return emitter.emitMaxMin(op, "min"), true; }
+  bool visitOp(math::PowFOp op) { return emitter.emitMaxMin(op, "pow"), true; }
 
   /// Integer binary expressions.
   bool visitOp(arith::CmpIOp op);
@@ -542,6 +545,7 @@ public:
   bool visitOp(arith::TruncFOp op) { return emitter.emitAssign(op), true; }
   bool visitOp(arith::ExtUIOp op) { return emitter.emitAssign(op), true; }
   bool visitOp(arith::ExtSIOp op) { return emitter.emitAssign(op), true; }
+  bool visitOp(arith::ExtFOp op) { return emitter.emitAssign(op), true; }
 
   /// IP operation.
   bool visitOp(IPOp op) { return emitter.emitIP(op), true; }
@@ -1966,12 +1970,26 @@ void pack_mul(int8_t A[2], int8_t B, int16_t C[2]) {
 
 )XXX";
 
+  // Emit all functions in the call graph in a post order.
+  CallGraph graph(module);
+  llvm::SmallDenseSet<func::FuncOp> emittedFuncs;
+  for (auto node : llvm::post_order<const CallGraph *>(&graph)) {
+    if (node->isExternal())
+      continue;
+    if (auto func = node->getCallableRegion()->getParentOfType<func::FuncOp>();
+        !hasRuntimeAttr(func)) {
+      emitFunction(func);
+      emittedFuncs.insert(func);
+    }
+  }
+
+  // Emit remained functions accordingly.
   for (auto &op : *module.getBody()) {
     if (auto func = dyn_cast<FuncOp>(op)) {
-      if (func.getName() != "main")
+      if (!emittedFuncs.count(func) && !hasRuntimeAttr(func))
         emitFunction(func);
     } else
-      emitError(&op, "is unsupported operation.");
+      emitError(&op, "is unsupported operation");
   }
 }
 

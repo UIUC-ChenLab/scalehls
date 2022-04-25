@@ -26,22 +26,12 @@ bool scalehls::applyAffineLoopPerfection(AffineLoopBand &band) {
     auto loop = band[i - 1];
     auto childLoop = band[i];
 
+    // If any prefix operation is consumed by users in the child loop, we need
+    // to buffer the result in a memory on stack such that the users can fetch
+    // the correct data from the stack.
     for (auto &op : llvm::make_early_inc_range(loop.getOps())) {
       if (&op == childLoop)
         break;
-      // Any operations that generate memrefs should be promoted out of the loop
-      // nest. If the operation has more than one results, return false.
-      if (llvm::any_of(op.getResultTypes(),
-                       [](Type type) { return type.isa<MemRefType>(); })) {
-        if (op.getNumResults() != 1)
-          return false;
-        op.moveBefore(band.front());
-        continue;
-      }
-
-      // If any user of prefix operations is in the child loop, we need to
-      // buffer the result in a memory on stack such that the users can fetch
-      // the correct data from the stack.
       for (auto result : op.getResults())
         if (llvm::any_of(result.getUsers(), [&](Operation *user) {
               return childLoop->isProperAncestor(user);
@@ -66,11 +56,21 @@ bool scalehls::applyAffineLoopPerfection(AffineLoopBand &band) {
         }
     }
 
-    // Collect all operations before and afterthe child loop.
+    // Collect all operations before and after the child loop.
     SmallVector<Operation *, 4> prefixOps;
     SmallVector<Operation *, 4> suffixOps;
     bool isPrefix = true;
     for (auto &op : loop.getOps()) {
+      // TODO: For now, any operations that generate memrefs should have been
+      // hoisted. Otherwise, the perfection cannot be done.
+      if (llvm::any_of(op.getResultTypes(),
+                       [](Type type) { return type.isa<MemRefType>(); }))
+        return false;
+
+      // TODO: Fow now, call ops are always not be perfectized.
+      if (isa<func::CallOp>(op))
+        return false;
+
       if (&op == childLoop) {
         isPrefix = false;
         continue;

@@ -3,6 +3,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Dataflow/ConvertDataflowToFunc.cpp
   Dataflow/CreateDataflow.cpp
   Dataflow/CreateTokenDepends.cpp
+  Dataflow/FuncDuplication.cpp
   Dataflow/LegalizeDataflow.cpp
   Directive/ArrayPartition.cpp
   Directive/CreateHLSPrimitive.cpp
@@ -19,7 +20,6 @@ add_mlir_library(MLIRScaleHLSTransforms
   Loop/AffineLoopTile.cpp
   Loop/AffineLoopUnrollJam.cpp
   Loop/ConvertCopyToAffineLoops.cpp
-  Loop/FuncPreprocess.cpp
   Loop/MaterializeReduction.cpp
   Loop/RemoveVariableBound.cpp
   Loop/SimplifyAffineIf.cpp
@@ -33,6 +33,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Runtime/CreateAxiInterface.cpp
   Runtime/CreateRuntimeMain.cpp
   DesignSpaceExplore.cpp
+  FuncPreprocess.cpp
   Passes.cpp
   PreserveUnoptimized.cpp
   Utils.cpp

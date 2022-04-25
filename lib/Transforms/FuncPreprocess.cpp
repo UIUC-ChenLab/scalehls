@@ -56,6 +56,24 @@ struct MemrefStoreRaisePattern : public OpRewritePattern<memref::StoreOp> {
 } // namespace
 
 namespace {
+/// Legalize memref get_global to constant primitive.
+struct GetGlobalConvertPattern : public OpRewritePattern<memref::GetGlobalOp> {
+  using OpRewritePattern<memref::GetGlobalOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(memref::GetGlobalOp getGlobal,
+                                PatternRewriter &rewriter) const override {
+    auto global = SymbolTable::lookupNearestSymbolFrom<memref::GlobalOp>(
+        getGlobal, getGlobal.nameAttr());
+    rewriter.setInsertionPoint(getGlobal);
+    rewriter.replaceOpWithNewOp<PrimConstOp>(
+        getGlobal, global.type(),
+        global.initial_valueAttr().cast<ElementsAttr>());
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 struct AffineStoreUndefFoldPattern
     : public OpRewritePattern<mlir::AffineStoreOp> {
   using OpRewritePattern<mlir::AffineStoreOp>::OpRewritePattern;
@@ -122,6 +140,7 @@ bool scalehls::applyFuncPreprocess(FuncOp func, bool isTopFunc) {
   mlir::RewritePatternSet patterns(context);
   patterns.add<MemrefLoadRaisePattern>(context);
   patterns.add<MemrefStoreRaisePattern>(context);
+  patterns.add<GetGlobalConvertPattern>(context);
   vector::populateVectorTransferLoweringPatterns(patterns);
   patterns.add<AffineStoreUndefFoldPattern>(context);
   patterns.add<AllocaDemotePattern>(context);

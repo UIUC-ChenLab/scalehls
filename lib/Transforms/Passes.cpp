@@ -157,6 +157,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         // Affine loop perfectization.
         pm.addPass(scalehls::createFuncPreprocessPass(opts.hlsTopFunc));
         pm.addPass(scalehls::createMaterializeReductionPass());
+        pm.addPass(bufferization::createBufferLoopHoistingPass());
         pm.addPass(scalehls::createAffineLoopPerfectionPass());
         pm.addPass(mlir::createAffineScalarReplacementPass());
         pm.addPass(scalehls::createRemoveVariableBoundPass());
