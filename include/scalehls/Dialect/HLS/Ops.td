@@ -37,6 +37,13 @@ def DataflowNodeOp : HLSOp<"dataflow.node",
   }];
   let extraClassDeclaration = [{
     DataflowOutputOp getOutputOp();
+    
+    /// Collect output values of the dataflow node. Note that here we consider
+    /// not only SSA outputs, but also memrefs that are updated.
+    SmallVector<mlir::Value> getOutputValues();
+    
+    /// Collect uses of the dataflow node. A use is defined by a pair of value
+    /// (the edge) and operation (the user).
     SmallVector<std::pair<mlir::Value, mlir::Operation *>> getDataflowUses();
   }];
 }

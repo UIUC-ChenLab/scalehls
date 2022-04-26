@@ -4,12 +4,16 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Analysis/CallGraph.h"
+#include "mlir/Dialect/Affine/LoopUtils.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
+#include "llvm/ADT/PostOrderIterator.h"
+#include "llvm/ADT/SCCIterator.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -29,7 +33,8 @@ struct DataflowNodeCreatePattern : public OpRewritePattern<OpType> {
     auto &block = target.getRegion().front();
 
     // Fuse operations into dataflow nodes. TODO: We need more case study to
-    // figure out any other operations need to be separately handled.
+    // figure out any other operations need to be separately handled. For
+    // example, how to handle AffineIfOp?
     SmallVector<Operation *, 4> opsToFuse;
     for (auto &op : llvm::make_early_inc_range(block)) {
       if (isa<linalg::LinalgDialect>(op.getDialect())) {
@@ -51,9 +56,8 @@ struct DataflowNodeCreatePattern : public OpRewritePattern<OpType> {
           op.moveBefore(&block, block.begin());
 
       } else if (&op == block.getTerminator()) {
-        // If the block is empty or only has one dataflow stage, we'll not touch
-        // it and directly return.
-        if (opsToFuse.empty() || opsToFuse.front() == &block.front())
+        // If the block is empty, directly return.
+        if (opsToFuse.empty())
           return failure();
         fuseOpsIntoNewNode(opsToFuse, rewriter);
         opsToFuse.clear();
@@ -77,42 +81,52 @@ struct DataflowNodeCreatePattern : public OpRewritePattern<OpType> {
 } // namespace
 
 namespace {
-struct CreateFuncDataflow : public CreateFuncDataflowBase<CreateFuncDataflow> {
+struct CreateDataflow : public CreateDataflowBase<CreateDataflow> {
   void runOnOperation() override {
-    auto func = getOperation();
-    auto context = func.getContext();
+    auto module = getOperation();
+    auto context = module.getContext();
+    CallGraph graph(module);
 
+    // If any cycle appears in the call graph, return.
+    using SCCIterator = llvm::scc_iterator<const CallGraph *>;
+    for (auto scc = SCCIterator::begin(&graph); !scc.isAtEnd(); ++scc)
+      if (scc.hasCycle()) {
+        emitError(module.getLoc(), "has cycle in the call graph");
+        return signalPassFailure();
+      }
+
+    // Traverse each function in a post order and dataflow each of them.
     mlir::RewritePatternSet patterns(context);
-    patterns.add<DataflowNodeCreatePattern<func::FuncOp>>(context);
-    (void)applyOpPatternsAndFold(func, std::move(patterns));
+    for (auto node : llvm::make_early_inc_range(
+             llvm::post_order<const CallGraph *>(&graph))) {
+      if (node->isExternal())
+        continue;
+
+      if (auto func =
+              node->getCallableRegion()->getParentOfType<func::FuncOp>()) {
+        // Collect all target loop bands in the current function. FIXME: Using
+        // getTileableBands is a temporary solution.
+        AffineLoopBands targetBands;
+        getTileableBands(func, &targetBands);
+
+        // Create dataflow to the innermost loop of each loop band.
+        patterns.clear();
+        patterns.add<DataflowNodeCreatePattern<mlir::AffineForOp>>(context);
+        FrozenRewritePatternSet loopPattern(std::move(patterns));
+        for (auto &band : targetBands)
+          (void)applyOpPatternsAndFold(band.back(), loopPattern);
+
+        // Create dataflow to the function itself.
+        patterns.clear();
+        patterns.add<DataflowNodeCreatePattern<func::FuncOp>>(context);
+        FrozenRewritePatternSet funcPattern(std::move(patterns));
+        (void)applyOpPatternsAndFold(func, funcPattern);
+      }
+    }
   }
 };
 } // namespace
 
-namespace {
-struct CreateLoopDataflow : public CreateLoopDataflowBase<CreateLoopDataflow> {
-  void runOnOperation() override {
-    auto func = getOperation();
-    auto context = func.getContext();
-
-    // Collect all target loop bands.
-    AffineLoopBands targetBands;
-    getLoopBands(func.front(), targetBands, /*allowHavingChilds=*/true);
-
-    // Create loop dataflow to each innermost loop.
-    mlir::RewritePatternSet patterns(context);
-    patterns.add<DataflowNodeCreatePattern<mlir::AffineForOp>>(context);
-    FrozenRewritePatternSet frozenPatterns(std::move(patterns));
-    for (auto &band : targetBands)
-      (void)applyOpPatternsAndFold(band.back(), frozenPatterns);
-  }
-};
-} // namespace
-
-std::unique_ptr<Pass> scalehls::createCreateFuncDataflowPass() {
-  return std::make_unique<CreateFuncDataflow>();
-}
-
-std::unique_ptr<Pass> scalehls::createCreateLoopDataflowPass() {
-  return std::make_unique<CreateLoopDataflow>();
+std::unique_ptr<Pass> scalehls::createCreateDataflowPass() {
+  return std::make_unique<CreateDataflow>();
 }

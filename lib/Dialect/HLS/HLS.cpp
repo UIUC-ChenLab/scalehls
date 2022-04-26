@@ -5,8 +5,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Dialect/HLS/HLS.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/DialectImplementation.h"
+#include "mlir/IR/Dominance.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 using namespace mlir;
@@ -175,13 +178,12 @@ LogicalResult DataflowNodeOp::verify() {
   if (llvm::any_of((*this)->getUsers(), [&](Operation *user) {
         return !(*this)->getBlock()->findAncestorOpInBlock(*user);
       }))
-    return emitOpError("has unexpected dataflow consumer");
+    return emitOpError("has unexpected dataflow consumer from parent block");
   return success();
 }
 
 namespace {
-struct DataflowNodeCanonicalizePattern
-    : public OpRewritePattern<DataflowNodeOp> {
+struct OutputSimplifyPattern : public OpRewritePattern<DataflowNodeOp> {
   using OpRewritePattern<DataflowNodeOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(DataflowNodeOp node,
@@ -220,15 +222,66 @@ struct DataflowNodeCanonicalizePattern
 };
 } // namespace
 
+namespace {
+struct HierarchySimplifyPattern : public OpRewritePattern<DataflowNodeOp> {
+  using OpRewritePattern<DataflowNodeOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(DataflowNodeOp node,
+                                PatternRewriter &rewriter) const override {
+    // If the parent block only contains the current dataflow node, then the
+    // node can be fully inlined.
+    auto parentBlock = node->getBlock();
+    if (llvm::hasSingleElement(parentBlock->getOps<DataflowNodeOp>())) {
+      auto &nodeOps = node.getBody()->getOperations();
+      auto &parentOps = parentBlock->getOperations();
+      parentOps.splice(node->getIterator(), nodeOps, nodeOps.begin(),
+                       std::prev(nodeOps.end()));
+
+      auto output = node.getBody()->getTerminator();
+      rewriter.replaceOp(node, output->getOperands());
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
 void DataflowNodeOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                                  MLIRContext *context) {
-  results.add<DataflowNodeCanonicalizePattern>(context);
+  results.add<HierarchySimplifyPattern>(context);
+  results.add<OutputSimplifyPattern>(context);
 }
 
 DataflowOutputOp DataflowNodeOp::getOutputOp() {
   return cast<DataflowOutputOp>(body().front().getTerminator());
 }
 
+/// Collect output values of the dataflow node. Note that here we consider not
+/// only SSA outputs, but also memrefs that are updated.
+SmallVector<mlir::Value> DataflowNodeOp::getOutputValues() {
+  DominanceInfo DT;
+  SmallVector<Value> outputValues;
+  for (auto &op : getBody()->getOperations()) {
+    outputValues.append(op.result_begin(), op.result_end());
+    op.walk([&](Operation *child) {
+      // TODO: Any other ops need to be included?
+      Value output;
+      if (auto copy = dyn_cast<memref::CopyOp>(child))
+        output = copy.target();
+      else if (auto store = dyn_cast<mlir::AffineWriteOpInterface>(child))
+        output = store.getMemRef();
+
+      // Only push back unique outputs.
+      if (output && DT.dominates(output.getParentBlock(), getBody()) &&
+          llvm::find(outputValues, output) == outputValues.end())
+        outputValues.push_back(output);
+    });
+  }
+  return outputValues;
+}
+
+/// Collect uses of the dataflow node. A use is defined by a pair of value (the
+/// edge) and operation (the user).
 SmallVector<std::pair<Value, Operation *>> DataflowNodeOp::getDataflowUses() {
   SmallVector<std::pair<Value, Operation *>> dfUses;
   for (auto &use : (*this)->getUses()) {
@@ -239,6 +292,10 @@ SmallVector<std::pair<Value, Operation *>> DataflowNodeOp::getDataflowUses() {
   }
   return dfUses;
 }
+
+//===----------------------------------------------------------------------===//
+// DataflowOutputOp
+//===----------------------------------------------------------------------===//
 
 LogicalResult DataflowOutputOp::verify() {
   if (getOperandTypes() !=

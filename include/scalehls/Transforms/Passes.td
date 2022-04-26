@@ -53,14 +53,9 @@ def FuncDuplication : Pass<"scalehls-func-duplication", "mlir::ModuleOp"> {
   let constructor = "mlir::scalehls::createFuncDuplicationPass()";
 }
 
-def CreateFuncDataflow : Pass<"scalehls-create-func-dataflow", "func::FuncOp"> {
-  let summary = "Create dataflow hierarchy to functions";
-  let constructor = "mlir::scalehls::createCreateFuncDataflowPass()";
-}
-
-def CreateLoopDataflow : Pass<"scalehls-create-loop-dataflow", "func::FuncOp"> {
-  let summary = "Create dataflow hierarchy to affine loops";
-  let constructor = "mlir::scalehls::createCreateLoopDataflowPass()";
+def CreateDataflow : Pass<"scalehls-create-dataflow", "mlir::ModuleOp"> {
+  let summary = "Create dataflow hierarchy";
+  let constructor = "mlir::scalehls::createCreateDataflowPass()";
 }
 
 def LegalizeDataflow : Pass<"scalehls-legalize-dataflow", "func::FuncOp"> {

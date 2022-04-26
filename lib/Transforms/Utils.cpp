@@ -92,65 +92,80 @@ bool scalehls::applyOptStrategy(FuncOp func, ArrayRef<TileList> tileLists,
   return true;
 }
 
-/// Inline all child nodes in the given node recursively.
-static void inlineChildNodes(DataflowNodeOp node, PatternRewriter &rewriter) {
-  auto &nodeOps = node.body().front().getOperations();
-  for (auto childNode :
-       llvm::make_early_inc_range(node.getOps<DataflowNodeOp>())) {
-    inlineChildNodes(childNode, rewriter);
-    auto &childNodeOps = childNode.body().front().getOperations();
-    nodeOps.splice(childNode->getIterator(), childNodeOps, childNodeOps.begin(),
-                   std::prev(childNodeOps.end()));
-    rewriter.replaceOp(childNode, childNode.getOutputOp().getOperands());
-  }
+static DataflowNodeOp generateNodeOutputs(DataflowNodeOp node,
+                                          PatternRewriter &rewriter) {
+  // Create output operation.
+  auto outputValues = node.getOutputValues();
+  rewriter.setInsertionPointToEnd(node.getBody());
+  rewriter.create<DataflowOutputOp>(rewriter.getUnknownLoc(), outputValues);
+
+  // Create a new node with outputs.
+  rewriter.setInsertionPoint(node);
+  auto newNode =
+      rewriter.create<DataflowNodeOp>(node.getLoc(), ValueRange(outputValues));
+
+  // Inline all ops of the original node.
+  rewriter.inlineRegionBefore(node.body(), newNode.body(),
+                              newNode.body().end());
+  rewriter.eraseOp(node);
+
+  // Replace external uses with the node results if the user is dominated by the
+  // current dataflow node.
+  DominanceInfo DT;
+  for (auto t : llvm::zip(outputValues, newNode.getResults()))
+    std::get<0>(t).replaceUsesWithIf(std::get<1>(t), [&](OpOperand &use) {
+      return !newNode->isProperAncestor(use.getOwner()) &&
+             DT.properlyDominates(newNode, use.getOwner());
+    });
+  return newNode;
 }
 
 /// Fuse the given operations into a new dataflow node. The fused node will be
 /// created before the first operation and each operation will be inserted in
-/// order. This method always succeeds.
+/// order. All the child nodes and functions are inlined afterward. Such that
+/// this method must be applied AFTER all functions are duplicated. This method
+/// always succeeds.
 DataflowNodeOp scalehls::fuseOpsIntoNewNode(ArrayRef<Operation *> ops,
                                             PatternRewriter &rewriter) {
   assert(!ops.empty() && "must fuse at least one op");
-  if (ops.size() == 1)
-    if (auto node = dyn_cast<DataflowNodeOp>(ops.front()))
-      return node;
-
-  // Collect output values. Note that here we consider not only SSA outputs, but
-  // also memrefs that are updated.
-  SmallVector<Value, 4> outputValues;
-  for (auto op : ops) {
-    outputValues.append(op->result_begin(), op->result_end());
-    op->walk([&](Operation *child) {
-      // TODO: Anymore ops need to be included?
-      if (auto copy = dyn_cast<memref::CopyOp>(child))
-        outputValues.push_back(copy.target());
-      else if (auto affineStore = dyn_cast<mlir::AffineWriteOpInterface>(child))
-        outputValues.push_back(affineStore.getMemRef());
-    });
-  }
 
   // Create new dataflow node.
   auto loc = rewriter.getUnknownLoc();
   rewriter.setInsertionPoint(ops.front());
-  auto node = rewriter.create<DataflowNodeOp>(loc, ValueRange(outputValues));
+  auto node = rewriter.create<DataflowNodeOp>(loc, TypeRange());
+
+  // Create a node block and move each targeted op into it.
   auto nodeBlock = rewriter.createBlock(&node.body());
-
-  // Create new dataflow output and move each targeted op before the output.
-  rewriter.setInsertionPointToEnd(nodeBlock);
-  auto output = rewriter.create<DataflowOutputOp>(loc, outputValues);
   for (auto op : ops)
-    op->moveBefore(output);
+    op->moveBefore(nodeBlock, nodeBlock->end());
 
-  // Replace external uses with the node results if the user is dominated by the
-  // dataflow node.
-  DominanceInfo DT;
-  for (auto t : llvm::zip(outputValues, node.getResults()))
-    std::get<0>(t).replaceUsesWithIf(std::get<1>(t), [&](OpOperand &use) {
-      return !node->isProperAncestor(use.getOwner()) &&
-             DT.properlyDominates(node, use.getOwner());
-    });
+  // Inline all child nodes or functions. Note that the inlining will not be
+  // applied recursively.
+  auto &nodeOps = nodeBlock->getOperations();
+  for (auto &child : llvm::make_early_inc_range(*nodeBlock)) {
+    if (auto childNode = dyn_cast<DataflowNodeOp>(child)) {
+      auto &childNodeOps = childNode.getBody()->getOperations();
+      nodeOps.splice(childNode->getIterator(), childNodeOps,
+                     childNodeOps.begin(), std::prev(childNodeOps.end()));
+      rewriter.replaceOp(childNode, childNode.getOutputOp().getOperands());
 
-  // Inline all child nodes.
-  inlineChildNodes(node, rewriter);
-  return node;
+    } else if (auto call = dyn_cast<func::CallOp>(child)) {
+      auto func = SymbolTable::lookupNearestSymbolFrom<func::FuncOp>(
+          call, call.getCalleeAttr());
+      assert(func && llvm::hasSingleElement(func) &&
+             "failed to find legal function definition");
+
+      auto &funcOps = func.front().getOperations();
+      nodeOps.splice(call->getIterator(), funcOps, funcOps.begin(),
+                     std::prev(funcOps.end()));
+
+      for (auto t : llvm::zip(func.getArguments(), call.getOperands()))
+        std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
+      rewriter.replaceOp(call, func.front().getTerminator()->getOperands());
+      rewriter.eraseOp(func);
+    }
+  }
+
+  // Create outputs for the dataflow node.
+  return generateNodeOutputs(node, rewriter);
 }
