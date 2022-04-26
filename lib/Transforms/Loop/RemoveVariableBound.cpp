@@ -14,6 +14,8 @@ using namespace scalehls;
 
 /// Apply remove variable bound to all inner loops of the input loop.
 bool scalehls::applyRemoveVariableBound(AffineLoopBand &band) {
+  assert(!band.empty() && "no loops provided");
+
   auto innermostLoop = band.back();
   auto builder = OpBuilder(innermostLoop);
 
@@ -21,8 +23,9 @@ bool scalehls::applyRemoveVariableBound(AffineLoopBand &band) {
   for (auto loop : band) {
     if (!loop.hasConstantUpperBound()) {
       // TODO: support variable upper bound with more than one result in the
-      // getBoundOfAffineBound() method.
-      if (auto bound = getBoundOfAffineBound(loop.getUpperBound())) {
+      // getBoundOfAffineValueMap() method.
+      if (auto bound = getBoundOfAffineMap(loop.getUpperBoundMap(),
+                                           loop.getUpperBoundOperands())) {
         // Collect all components for creating AffineIf operation.
         auto upperMap = loop.getUpperBoundMap();
         auto ifExpr = upperMap.getResult(0) -
@@ -54,8 +57,9 @@ bool scalehls::applyRemoveVariableBound(AffineLoopBand &band) {
 
     if (!loop.hasConstantLowerBound()) {
       // TODO: support variable lower bound with more than one result in the
-      // getBoundOfAffineBound() method.
-      if (auto bound = getBoundOfAffineBound(loop.getLowerBound())) {
+      // getBoundOfAffineValueMap() method.
+      if (auto bound = getBoundOfAffineMap(loop.getLowerBoundMap(),
+                                           loop.getLowerBoundOperands())) {
         // Collect all components for creating AffineIf operation.
         auto lowerMap = loop.getLowerBoundMap();
         auto ifExpr = builder.getAffineDimExpr(lowerMap.getNumDims()) -

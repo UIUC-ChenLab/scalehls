@@ -7,7 +7,7 @@ import io
 from subprocess import PIPE, run
 import scalehls
 import mlir.ir
-from mlir.dialects import builtin
+from mlir.dialects import func as func_dialect
 import numpy as np
 import subprocess
 
@@ -46,9 +46,12 @@ def main():
 
     # Traverse all functions in the MLIR module.
     for func in mod.body:
-        if not isinstance(func, builtin.FuncOp):
+        if not isinstance(func, func_dialect.FuncOp):
             pass
-        func.__class__ = builtin.FuncOp
+        func.__class__ = func_dialect.FuncOp
+
+        # Preprocess the functions.
+        scalehls.func_preprocess(func, func.sym_name.value == opts.function)
 
         # Traverse all suitable loop bands in the function.
         bands = scalehls.LoopBandList(func)
@@ -71,6 +74,7 @@ def main():
 
             # Apply loop tiling. Tile sizes are defined from the outermost loop to the innermost.
             # Note: We use the trip count to generate this example "factors".
+
             print("test")
             # factors = np.ones(band.depth, dtype=int)
             # list_ts = [[1, 16], [8], [1, 16], [8], [8, 16], [8], [1, 16], [8], [4, 3], [1], [8, 3], [1]]
@@ -79,9 +83,8 @@ def main():
             print(factors)
             loc = scalehls.loop_tiling(band, factors, True) # simplify = True
 
-            band_count += 1
-
             # Apply loop pipelining. All loops inside of the pipelined loop are fully unrolled.
+
             # scalehls.loop_pipelining(band, loc, 3)  # targetII = 3
 
         # Traverse all arrays in the function.

@@ -1,24 +1,38 @@
 add_mlir_library(MLIRScaleHLSTransforms
+  Dataflow/BufferizeDataflow.cpp
+  Dataflow/ConvertDataflowToFunc.cpp
+  Dataflow/CreateDataflow.cpp
+  Dataflow/CreateTokenDepends.cpp
+  Dataflow/FuncDuplication.cpp
+  Dataflow/LegalizeDataflow.cpp
   Directive/ArrayPartition.cpp
-  Directive/CreateHLSCppPrimitive.cpp
+  Directive/CreateHLSPrimitive.cpp
   Directive/FuncPipelining.cpp
   Directive/LoopPipelining.cpp
-  Graph/LegalizeDataflow.cpp
-  Graph/SimplifyGraph.cpp
-  Graph/SplitFunction.cpp
+  Directive/QoREstimation.cpp
+  Graph/TosaFakeQuantize.cpp
+  Graph/TosaToLinalgCleanup.cpp
+  Graph/TosaSimplifyGraph.cpp
+  Graph/TosaNodeFusion.cpp
   Loop/AffineLoopOrderOpt.cpp
   Loop/AffineLoopPerfection.cpp
+  Loop/AffineLoopTile.cpp
+  Loop/AffineLoopUnrollJam.cpp
+  Loop/ConvertCopyToAffineLoops.cpp
   Loop/MaterializeReduction.cpp
-  Loop/PartialAffineLoopTile.cpp
   Loop/RemoveVariableBound.cpp
-  Simplification/AffineStoreForward.cpp
-  Simplification/ReduceInitialInterval.cpp
-  Simplification/SimplifyAffineIf.cpp
-  Simplification/SimplifyMemrefAccess.cpp
-  LegalizeToHLSCpp.cpp
-  MultipleLevelDSE.cpp
+  Loop/SimplifyAffineIf.cpp
+  Memory/AffineStoreForward.cpp
+  Memory/CreateMemrefSubview.cpp
+  Memory/PromoteBuffer.cpp
+  Memory/RaiseImplicitCopy.cpp
+  Memory/ReduceInitialInterval.cpp
+  Memory/SimplifyMemrefAccess.cpp
+  Runtime/CreateAxiInterface.cpp
+  Runtime/CreateRuntimeMain.cpp
+  DesignSpaceExplore.cpp
+  FuncPreprocess.cpp
   Passes.cpp
-  QoREstimation.cpp
   Utils.cpp
 
   DEPENDS

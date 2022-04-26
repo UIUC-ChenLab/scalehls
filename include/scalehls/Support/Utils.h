@@ -4,39 +4,23 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_ANALYSIS_UTILS_H
-#define SCALEHLS_ANALYSIS_UTILS_H
+#ifndef SCALEHLS_SUPPORT_UTILS_H
+#define SCALEHLS_SUPPORT_UTILS_H
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
-#include "scalehls/Dialect/HLSCpp/HLSCpp.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "scalehls/Dialect/HLS/HLS.h"
 
 namespace mlir {
 namespace scalehls {
 
 //===----------------------------------------------------------------------===//
-// HLSCpp attribute parsing utils
-//===----------------------------------------------------------------------===//
-
-using namespace hlscpp;
-
-/// Parse attributes.
-TimingAttr getTiming(Operation *op);
-ResourceAttr getResource(Operation *op);
-LoopInfoAttr getLoopInfo(Operation *op);
-
-/// Parse loop directives.
-LoopDirectiveAttr getLoopDirective(Operation *op);
-
-/// Parse function directives.
-FuncDirectiveAttr getFuncDirective(Operation *op);
-
-/// Parse other attributes.
-SmallVector<int64_t, 8> getIntArrayAttrValue(Operation *op, StringRef name);
-
-//===----------------------------------------------------------------------===//
 // Memory and loop analysis utils
 //===----------------------------------------------------------------------===//
+
+/// Parse array attributes.
+SmallVector<int64_t, 8> getIntArrayAttrValue(Operation *op, StringRef name);
 
 using AffineLoopBand = SmallVector<AffineForOp, 6>;
 using AffineLoopBands = std::vector<AffineLoopBand>;
@@ -58,8 +42,9 @@ Optional<std::pair<Operation *, Operation *>> checkSameLevel(Operation *lhsOp,
 unsigned getCommonSurroundingLoops(Operation *A, Operation *B,
                                    AffineLoopBand *band);
 
-/// Calculate the upper and lower bound of "bound" if possible.
-Optional<std::pair<int64_t, int64_t>> getBoundOfAffineBound(AffineBound bound);
+/// Calculate the upper and lower bound of the affine map if possible.
+Optional<std::pair<int64_t, int64_t>> getBoundOfAffineMap(AffineMap map,
+                                                          ValueRange operands);
 
 /// Calculate partition factors through analyzing the "memrefType" and return
 /// them in "factors". Meanwhile, the overall partition number is calculated and
@@ -68,6 +53,16 @@ int64_t getPartitionFactors(MemRefType memrefType,
                             SmallVector<int64_t, 8> *factors = nullptr);
 
 bool isFullyPartitioned(MemRefType memrefType);
+
+/// This is method for finding the number of child loops which immediatedly
+/// contained by the input operation.
+unsigned getChildLoopNum(Operation *op);
+
+/// Given a tiled loop band, return true and get the tile (tile-space) loop
+/// band and the point (intra-tile) loop band. If failed, return false.
+bool getTileAndPointLoopBand(const AffineLoopBand &band,
+                             AffineLoopBand &tileBand,
+                             AffineLoopBand &pointBand);
 
 /// Get the whole loop band given the outermost loop and return it in "band".
 /// Meanwhile, the return value is the innermost loop of this loop band.
@@ -86,6 +81,10 @@ void getArrays(Block &block, SmallVectorImpl<Value> &arrays,
 Optional<unsigned> getAverageTripCount(AffineForOp forOp);
 
 bool checkDependence(Operation *A, Operation *B);
+
+func::FuncOp getTopFunc(ModuleOp module, std::string topFuncName = "");
+
+func::FuncOp getRuntimeFunc(ModuleOp module, std::string runtimeFuncName = "");
 
 //===----------------------------------------------------------------------===//
 // PtrLikeMemRefAccess Struct Declaration
@@ -146,4 +145,4 @@ template <> struct DenseMapInfo<mlir::scalehls::PtrLikeMemRefAccess> {
 
 } // namespace llvm
 
-#endif // SCALEHLS_ANALYSIS_UTILS_H
+#endif // SCALEHLS_SUPPORT_UTILS_H

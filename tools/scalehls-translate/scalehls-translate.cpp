@@ -4,8 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/IR/Diagnostics.h"
-#include "mlir/Translation.h"
+#include "mlir/Tools/mlir-translate/MlirTranslateMain.h"
 #include "scalehls/Translation/EmitHLSCpp.h"
 
 int main(int argc, char **argv) {

@@ -7,47 +7,12 @@
 #ifndef SCALEHLS_TRANSFORMS_UTILS_H
 #define SCALEHLS_TRANSFORMS_UTILS_H
 
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "scalehls/Support/Utils.h"
 
 namespace mlir {
 namespace scalehls {
 
-//===----------------------------------------------------------------------===//
-// HLSCpp transform utils
-//===----------------------------------------------------------------------===//
-
-using namespace hlscpp;
-
-/// Set timing attribute.
-void setTiming(Operation *op, TimingAttr timing);
-void setTiming(Operation *op, int64_t begin, int64_t end, int64_t latency,
-               int64_t interval);
-
-/// Set resource attribute.
-void setResource(Operation *op, ResourceAttr resource);
-void setResource(Operation *op, int64_t lut, int64_t dsp, int64_t bram);
-
-/// Set loop information attribute.
-void setLoopInfo(Operation *op, LoopInfoAttr loopInfo);
-void setLoopInfo(Operation *op, int64_t flattenTripCount, int64_t iterLatency,
-                 int64_t minII);
-
-/// Set loop directives.
-void setLoopDirective(Operation *op, LoopDirectiveAttr loopDirective);
-void setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
-                      bool dataflow, bool flatten, bool parallel);
-
-/// Set function directives.
-void setFuncDirective(Operation *op, FuncDirectiveAttr FuncDirective);
-void setFuncDirective(Operation *op, bool pipeline, int64_t targetInterval,
-                      bool dataflow, bool topFunc);
-
-//===----------------------------------------------------------------------===//
-// Loop transform utils
-//===----------------------------------------------------------------------===//
-
-using TileList = SmallVector<unsigned, 8>;
+using namespace hls;
 
 /// Apply loop perfection. Try to sink all operations between loop statements
 /// into the innermost loop of the input loop band.
@@ -64,12 +29,10 @@ bool applyAffineLoopOrderOpt(AffineLoopBand &band,
 bool applyRemoveVariableBound(AffineLoopBand &band);
 
 /// Apply loop tiling to the input loop band and sink all intra-tile loops to
-/// the innermost loop with the original loop order. Return the location of the
-/// innermost tile-space loop.
-Optional<unsigned> applyLoopTiling(AffineLoopBand &band, TileList tileList,
-                                   bool simplify = true);
-
-bool applyLegalizeToHLSCpp(FuncOp func, bool topFunc);
+/// the innermost loop with the original loop order.
+using TileList = SmallVector<unsigned, 8>;
+bool applyLoopTiling(AffineLoopBand &band, TileList tileList,
+                     bool loopNormalize = true, bool annotatePointLoop = true);
 
 /// Apply loop pipelining to the pipelineLoc of the input loop band, all inner
 /// loops are automatically fully unrolled.
@@ -77,27 +40,42 @@ bool applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
                          unsigned targetII);
 
 /// Fully unroll all loops insides of a loop block.
-bool applyFullyLoopUnrolling(Block &block);
+bool applyFullyLoopUnrolling(Block &block, unsigned maxIterNum = 10);
 
-bool applyFullyUnrollAndPartition(Block &block, FuncOp func);
+/// Apply dataflow (coarse-grained pipeline) to the block. "gran" determines the
+/// minimum granularity of dataflowing while "balance" indicates whether buffers
+/// are inserted to balance the dataflow pipeline.
+bool applyDataflow(Block &block, unsigned gran, bool balance);
 
-bool applyMemoryAccessOpt(FuncOp func);
-
+/// Apply the specified array partition factors and kinds.
 bool applyArrayPartition(Value array, ArrayRef<unsigned> factors,
-                         ArrayRef<hlscpp::PartitionKind> kinds,
+                         ArrayRef<hls::PartitionKind> kinds,
                          bool updateFuncSignature = true);
 
-bool applyAutoArrayPartition(FuncOp func);
+/// Find the suitable array partition factors and kinds for all arrays in the
+/// targeted function.
+bool applyAutoArrayPartition(func::FuncOp func);
 
-/// Apply optimization strategy to a loop band. The ancestor function is
-/// also passed in because the post-tiling optimizations have to take
-/// function as target, e.g. canonicalizer and array partition.
-bool applyOptStrategy(AffineLoopBand &band, FuncOp func, TileList tileList,
-                      unsigned targetII);
+bool applyFuncPreprocess(func::FuncOp func, bool topFunc);
+
+/// Apply memory optimizations.
+bool applyMemoryOpts(func::FuncOp func);
+
+/// Apply optimization strategy to a loop band. The ancestor function is also
+/// passed in because the post-tiling optimizations have to take function as
+/// target, e.g. canonicalizer and array partition.
+bool applyOptStrategy(AffineLoopBand &band, func::FuncOp func,
+                      TileList tileList, unsigned targetII);
 
 /// Apply optimization strategy to a function.
-bool applyOptStrategy(FuncOp func, ArrayRef<TileList> tileLists,
+bool applyOptStrategy(func::FuncOp func, ArrayRef<TileList> tileLists,
                       ArrayRef<unsigned> targetIIs);
+
+/// Fuse the given operations into a new dataflow node. The fused node will be
+/// created before the first operation and each operation will be inserted in
+/// order. This method always succeeds.
+DataflowNodeOp fuseOpsIntoNewNode(ArrayRef<Operation *> ops,
+                                  PatternRewriter &rewriter);
 
 } // namespace scalehls
 } // namespace mlir

@@ -25,6 +25,7 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band,
                                        ArrayRef<unsigned> permMap,
                                        bool reverse) {
   LLVM_DEBUG(llvm::dbgs() << "Loop order opt ";);
+  assert(!band.empty() && "no loops provided");
 
   if (!isPerfectlyNested(band))
     return false;
@@ -187,8 +188,21 @@ struct AffineLoopOrderOpt : public AffineLoopOrderOptBase<AffineLoopOrderOpt> {
     getLoopBands(getOperation().front(), targetBands);
 
     // Apply loop order optimization to each loop band.
-    for (auto &band : targetBands)
-      applyAffineLoopOrderOpt(band);
+    for (auto &band : targetBands) {
+      AffineLoopBand tileBand;
+      AffineLoopBand pointBand;
+
+      // If the current loop band can be split into a tile band and point band,
+      // apply to these two partial bands separately. Otherwise, apply to the
+      // whole loop band.
+      if (getTileAndPointLoopBand(band, tileBand, pointBand)) {
+        if (!tileBand.empty())
+          applyAffineLoopOrderOpt(tileBand);
+        if (!pointBand.empty())
+          applyAffineLoopOrderOpt(pointBand);
+      } else
+        applyAffineLoopOrderOpt(band);
+    }
   }
 };
 } // namespace

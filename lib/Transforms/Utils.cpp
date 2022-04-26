@@ -6,106 +6,22 @@
 
 #include "scalehls/Transforms/Utils.h"
 #include "mlir/Dialect/Affine/LoopUtils.h"
+#include "mlir/Dialect/Affine/Passes.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/Tosa/IR/TosaOps.h"
+#include "mlir/IR/Dominance.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
-#include "scalehls/Conversion/Passes.h"
 #include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
+using namespace hls;
 
-//===----------------------------------------------------------------------===//
-// Directive transform utils
-//===----------------------------------------------------------------------===//
-
-/// Set timing attribute.
-void scalehls::setTiming(Operation *op, TimingAttr timing) {
-  assert(timing.getBegin() <= timing.getEnd() && "invalid timing attribute");
-  op->setAttr("timing", timing);
-}
-
-void scalehls::setTiming(Operation *op, int64_t begin, int64_t end,
-                         int64_t latency, int64_t minII) {
-  auto timing = TimingAttr::get(op->getContext(), begin, end, latency, minII);
-  setTiming(op, timing);
-}
-
-/// Set resource attribute.
-void scalehls::setResource(Operation *op, ResourceAttr resource) {
-  op->setAttr("resource", resource);
-}
-
-void scalehls::setResource(Operation *op, int64_t lut, int64_t dsp,
-                           int64_t bram) {
-  auto resource = ResourceAttr::get(op->getContext(), lut, dsp, bram);
-  setResource(op, resource);
-}
-
-/// Set loop information attribute.
-void scalehls::setLoopInfo(Operation *op, LoopInfoAttr loopInfo) {
-  op->setAttr("loop_info", loopInfo);
-}
-
-void scalehls::setLoopInfo(Operation *op, int64_t flattenTripCount,
-                           int64_t iterLatency, int64_t minII) {
-  auto loopInfo =
-      LoopInfoAttr::get(op->getContext(), flattenTripCount, iterLatency, minII);
-  setLoopInfo(op, loopInfo);
-}
-
-/// Set loop directives.
-void scalehls::setLoopDirective(Operation *op,
-                                LoopDirectiveAttr loopDirective) {
-  op->setAttr("loop_directive", loopDirective);
-}
-
-void scalehls::setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
-                                bool dataflow, bool flatten, bool parallel) {
-  auto loopDirective = LoopDirectiveAttr::get(
-      op->getContext(), pipeline, targetII, dataflow, flatten, parallel);
-  setLoopDirective(op, loopDirective);
-}
-
-/// Set func directives.
-void scalehls::setFuncDirective(Operation *op,
-                                FuncDirectiveAttr funcDirective) {
-  op->setAttr("func_directive", funcDirective);
-}
-
-void scalehls::setFuncDirective(Operation *op, bool pipeline,
-                                int64_t targetInterval, bool dataflow,
-                                bool topFunc) {
-  auto funcDirective = FuncDirectiveAttr::get(
-      op->getContext(), pipeline, targetInterval, dataflow, topFunc);
-  setFuncDirective(op, funcDirective);
-}
-
-//===----------------------------------------------------------------------===//
-// Loop transform utils
-//===----------------------------------------------------------------------===//
-
-/// Fully unroll all loops insides of a block.
-bool scalehls::applyFullyLoopUnrolling(Block &block) {
-  // Try 8 iterations before exiting.
-  for (auto i = 0; i < 8; ++i) {
-    bool hasFullyUnrolled = true;
-    block.walk([&](AffineForOp loop) {
-      if (failed(loopUnrollFull(loop)))
-        hasFullyUnrolled = false;
-    });
-
-    if (hasFullyUnrolled)
-      break;
-
-    if (i == 7)
-      return false;
-  }
-  return true;
-}
-
-static void addPassPipeline(PassManager &pm) {
-  // To factor out the redundant AffineApply/AffineIf operations.
+static void addMemoryOptsPipeline(PassManager &pm) {
+  // To factor out the redundant affine operations.
+  pm.addPass(createAffineLoopNormalizePass());
+  pm.addPass(createSimplifyAffineStructuresPass());
   pm.addPass(createCanonicalizerPass());
   pm.addPass(createSimplifyAffineIfPass());
 
@@ -119,28 +35,12 @@ static void addPassPipeline(PassManager &pm) {
   pm.addPass(createReduceInitialIntervalPass());
 }
 
-bool scalehls::applyMemoryAccessOpt(FuncOp func) {
-  // Apply general optimizations.
-  PassManager optPM(func.getContext(), "builtin.func");
-  addPassPipeline(optPM);
+/// Apply memory optimizations.
+bool scalehls::applyMemoryOpts(FuncOp func) {
+  PassManager optPM(func.getContext(), "func.func");
+  addMemoryOptsPipeline(optPM);
   if (failed(optPM.run(func)))
     return false;
-
-  return true;
-}
-
-bool scalehls::applyFullyUnrollAndPartition(Block &block, FuncOp func) {
-  applyFullyLoopUnrolling(block);
-
-  // Apply general optimizations.
-  PassManager optPM(func.getContext(), "builtin.func");
-  addPassPipeline(optPM);
-  if (failed(optPM.run(func)))
-    return false;
-
-  // Apply the best suitable array partition strategy to the function.
-  applyAutoArrayPartition(func);
-
   return true;
 }
 
@@ -154,26 +54,17 @@ bool scalehls::applyOptStrategy(AffineLoopBand &band, FuncOp func,
     return false;
 
   // Apply loop tiling.
-  auto pipelineLoopLoc = applyLoopTiling(band, tileList);
-  if (!pipelineLoopLoc)
+  if (!applyLoopTiling(band, tileList))
     return false;
-
-  // Apply LegalizeToHLSCpp conversion.
-  applyLegalizeToHLSCpp(func, /*isTopFunc=*/true);
 
   // Apply loop pipelining.
-  if (!applyLoopPipelining(band, pipelineLoopLoc.getValue(), targetII))
+  if (!applyLoopPipelining(band, band.size() - 1, targetII))
     return false;
 
-  // Apply generic optimizations.
-  PassManager optPM(func.getContext(), "builtin.func");
-  addPassPipeline(optPM);
-  if (failed(optPM.run(func)))
-    return false;
-
-  // Apply the best suitable array partition strategy to the function.
+  // Apply memory access optimizations and the best suitable array partition
+  // strategy to the function.
+  applyMemoryOpts(func);
   applyAutoArrayPartition(func);
-
   return true;
 }
 
@@ -182,32 +73,84 @@ bool scalehls::applyOptStrategy(FuncOp func, ArrayRef<TileList> tileLists,
                                 ArrayRef<unsigned> targetIIs) {
   AffineLoopBands bands;
   getLoopBands(func.front(), bands);
+  assert(bands.size() == tileLists.size() && bands.size() == targetIIs.size() &&
+         "unexpected size of tile lists or target IIs");
 
-  // Apply loop tiling and pipelining to all loop bands.
-  SmallVector<unsigned, 4> pipelineLoopLocs;
-  for (unsigned i = 0, e = bands.size(); i < e; ++i) {
-    auto pipelineLoopLoc = applyLoopTiling(bands[i], tileLists[i]);
-    if (!pipelineLoopLoc)
+  // Apply loop tiling to all loop bands.
+  for (unsigned i = 0, e = bands.size(); i < e; ++i)
+    if (!applyLoopTiling(bands[i], tileLists[i]))
       return false;
-    pipelineLoopLocs.push_back(pipelineLoopLoc.getValue());
-  }
 
-  // Apply LegalizeToHLSCpp conversion.
-  applyLegalizeToHLSCpp(func, /*isTopFunc=*/true);
-
-  for (unsigned i = 0, e = bands.size(); i < e; ++i) {
-    if (!applyLoopPipelining(bands[i], pipelineLoopLocs[i], targetIIs[i]))
+  for (unsigned i = 0, e = bands.size(); i < e; ++i)
+    if (!applyLoopPipelining(bands[i], bands[i].size() - 1, targetIIs[i]))
       return false;
-  }
 
-  // Apply generic optimizations.
-  PassManager optPM(func.getContext(), "builtin.func");
-  addPassPipeline(optPM);
-  if (failed(optPM.run(func)))
-    return false;
-
-  // Apply the best suitable array partition strategy to the function.
+  // Apply memory access optimizations and the best suitable array partition
+  // strategy to the function.
+  applyMemoryOpts(func);
   applyAutoArrayPartition(func);
-
   return true;
+}
+
+/// Inline all child nodes in the given node recursively.
+static void inlineChildNodes(DataflowNodeOp node, PatternRewriter &rewriter) {
+  auto &nodeOps = node.body().front().getOperations();
+  for (auto childNode :
+       llvm::make_early_inc_range(node.getOps<DataflowNodeOp>())) {
+    inlineChildNodes(childNode, rewriter);
+    auto &childNodeOps = childNode.body().front().getOperations();
+    nodeOps.splice(childNode->getIterator(), childNodeOps, childNodeOps.begin(),
+                   std::prev(childNodeOps.end()));
+    rewriter.replaceOp(childNode, childNode.getOutputOp().getOperands());
+  }
+}
+
+/// Fuse the given operations into a new dataflow node. The fused node will be
+/// created before the first operation and each operation will be inserted in
+/// order. This method always succeeds.
+DataflowNodeOp scalehls::fuseOpsIntoNewNode(ArrayRef<Operation *> ops,
+                                            PatternRewriter &rewriter) {
+  assert(!ops.empty() && "must fuse at least one op");
+  if (ops.size() == 1)
+    if (auto node = dyn_cast<DataflowNodeOp>(ops.front()))
+      return node;
+
+  // Collect output values. Note that here we consider not only SSA outputs, but
+  // also memrefs that are updated.
+  SmallVector<Value, 4> outputValues;
+  for (auto op : ops) {
+    outputValues.append(op->result_begin(), op->result_end());
+    op->walk([&](Operation *child) {
+      // TODO: Anymore ops need to be included?
+      if (auto copy = dyn_cast<memref::CopyOp>(child))
+        outputValues.push_back(copy.target());
+      else if (auto affineStore = dyn_cast<mlir::AffineWriteOpInterface>(child))
+        outputValues.push_back(affineStore.getMemRef());
+    });
+  }
+
+  // Create new dataflow node.
+  auto loc = rewriter.getUnknownLoc();
+  rewriter.setInsertionPoint(ops.front());
+  auto node = rewriter.create<DataflowNodeOp>(loc, ValueRange(outputValues));
+  auto nodeBlock = rewriter.createBlock(&node.body());
+
+  // Create new dataflow output and move each targeted op before the output.
+  rewriter.setInsertionPointToEnd(nodeBlock);
+  auto output = rewriter.create<DataflowOutputOp>(loc, outputValues);
+  for (auto op : ops)
+    op->moveBefore(output);
+
+  // Replace external uses with the node results if the user is dominated by the
+  // dataflow node.
+  DominanceInfo DT;
+  for (auto t : llvm::zip(outputValues, node.getResults()))
+    std::get<0>(t).replaceUsesWithIf(std::get<1>(t), [&](OpOperand &use) {
+      return !node->isProperAncestor(use.getOwner()) &&
+             DT.properlyDominates(node, use.getOwner());
+    });
+
+  // Inline all child nodes.
+  inlineChildNodes(node, rewriter);
+  return node;
 }

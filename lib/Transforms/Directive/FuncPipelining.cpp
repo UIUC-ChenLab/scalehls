@@ -4,25 +4,19 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/Affine/LoopUtils.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
+using namespace hls;
 
 /// Apply function pipelining to the input function, all contained loops are
 /// automatically fully unrolled.
 static bool applyFuncPipelining(FuncOp func, int64_t targetII) {
   if (!applyFullyLoopUnrolling(func.front()))
     return false;
-
-  auto topFunc = false;
-  if (auto funcDirect = getFuncDirective(func))
-    topFunc = funcDirect.getTopFunc();
-
-  setFuncDirective(func, true, targetII, false, topFunc);
-
+  setFuncDirective(func, true, targetII, false);
   return true;
 }
 

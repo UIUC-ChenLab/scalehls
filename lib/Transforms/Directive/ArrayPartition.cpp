@@ -4,8 +4,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
-#include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "scalehls/Transforms/Passes.h"
@@ -13,10 +11,10 @@
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hlscpp;
+using namespace hls;
 
 static void updateSubFuncs(FuncOp func, Builder builder) {
-  func.walk([&](CallOp op) {
+  func.walk([&](func::CallOp op) {
     auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCalleeAttr());
     auto subFunc = dyn_cast<FuncOp>(callee);
 
@@ -25,7 +23,7 @@ static void updateSubFuncs(FuncOp func, Builder builder) {
     auto subInputTypes = op.getOperandTypes();
     auto newType = builder.getFunctionType(subInputTypes, subResultTypes);
 
-    if (subFunc.getType() != newType) {
+    if (subFunc.getFunctionType() != newType) {
       subFunc.setType(newType);
 
       // Set arguments type.
@@ -34,7 +32,7 @@ static void updateSubFuncs(FuncOp func, Builder builder) {
         subFunc.getArgument(index++).setType(inputType);
 
       // Set results type.
-      auto returnOp = cast<ReturnOp>(subFunc.front().getTerminator());
+      auto returnOp = cast<func::ReturnOp>(subFunc.front().getTerminator());
       index = 0;
       for (auto resultType : op.getResultTypes())
         returnOp.getOperand(index++).setType(resultType);
@@ -45,8 +43,9 @@ static void updateSubFuncs(FuncOp func, Builder builder) {
   });
 }
 
+/// Apply the specified array partition factors and kinds.
 bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
-                                   ArrayRef<hlscpp::PartitionKind> kinds,
+                                   ArrayRef<hls::PartitionKind> kinds,
                                    bool updateFuncSignature) {
   auto builder = Builder(array.getContext());
   auto arrayType = array.getType().dyn_cast<MemRefType>();
@@ -91,14 +90,6 @@ bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
 
   // Set new type.
   array.setType(newType);
-
-  // FIXME: This is a very very bad practice...
-  // TODO: How to represent different memory resource?
-  if (auto getGlobal = array.getDefiningOp<memref::GetGlobalOp>()) {
-    auto module = getGlobal->getParentOfType<ModuleOp>();
-    auto global = module.lookupSymbol<memref::GlobalOp>(getGlobal.nameAttr());
-    global->setAttr(global.typeAttrName(), TypeAttr::get(newType));
-  }
 
   if (updateFuncSignature)
     if (auto func = dyn_cast<FuncOp>(array.getParentBlock()->getParentOp())) {
@@ -203,12 +194,13 @@ getDimAccessMaps(Operation *op, AffineValueMap valueMap, int64_t dim) {
   return maps;
 }
 
+/// Find the suitable array partition factors and kinds for all arrays in the
+/// targeted function.
 bool scalehls::applyAutoArrayPartition(FuncOp func) {
   // Check whether the input function is pipelined.
   bool funcPipeline = false;
-  if (auto attr = func->getAttrOfType<BoolAttr>("pipeline"))
-    if (attr.getValue())
-      funcPipeline = true;
+  if (auto attr = getFuncDirective(func))
+    funcPipeline = attr.getPipeline();
 
   // Collect target basic blocks to be considered.
   SmallVector<Block *, 4> targetBlocks;
@@ -353,7 +345,7 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
 
   // Apply partition to all sub-functions and traverse all function to update
   // the "partitionsMap".
-  func.walk([&](CallOp op) {
+  func.walk([&](func::CallOp op) {
     auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCalleeAttr());
     auto subFunc = dyn_cast<FuncOp>(callee);
     assert(subFunc && "callable is not a function operation");
@@ -361,7 +353,7 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
     // Apply array partition to the sub-function.
     applyAutoArrayPartition(subFunc);
 
-    auto subFuncType = subFunc.getType();
+    auto subFuncType = subFunc.getFunctionType();
     unsigned index = 0;
     for (auto inputType : subFuncType.getInputs()) {
       if (auto memrefType = inputType.dyn_cast<MemRefType>()) {
@@ -404,7 +396,7 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
     auto memref = pair.first;
     auto partitions = pair.second;
 
-    SmallVector<hlscpp::PartitionKind, 4> kinds;
+    SmallVector<hls::PartitionKind, 4> kinds;
     SmallVector<unsigned, 4> factors;
     for (auto info : partitions) {
       kinds.push_back(info.first);
@@ -430,14 +422,23 @@ namespace {
 struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
   void runOnOperation() override {
     auto module = getOperation();
-    for (auto func : module.getOps<FuncOp>())
-      if (auto funcDirect = getFuncDirective(func))
-        if (funcDirect.getTopFunc()) {
-          applyAutoArrayPartition(func);
-          return;
-        }
-    emitError(module.getLoc(), "top function is not found");
-    signalPassFailure();
+
+    // Get the top function.
+    // FIXME: A better solution to handle the runtime main function.
+    FuncOp topFunc;
+    for (auto func : module.getOps<FuncOp>()) {
+      if (hasRuntimeAttr(func)) {
+        topFunc = func;
+        break;
+      } else if (hasTopFuncAttr(func))
+        topFunc = func;
+    }
+
+    if (!topFunc) {
+      emitError(module.getLoc(), "fail to find the top function");
+      return signalPassFailure();
+    }
+    applyAutoArrayPartition(topFunc);
   }
 };
 } // namespace

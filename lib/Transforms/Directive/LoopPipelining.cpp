@@ -9,12 +9,17 @@
 
 using namespace mlir;
 using namespace scalehls;
+using namespace hls;
 
 /// Apply loop pipelining to the input loop, all inner loops are automatically
 /// fully unrolled.
 bool scalehls::applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
                                    unsigned targetII) {
   auto targetLoop = band[pipelineLoc];
+
+  if (auto directive = getLoopDirective(targetLoop))
+    if (directive.getDataflow())
+      return false;
 
   // All inner loops of the pipelined loop are automatically unrolled.
   if (!applyFullyLoopUnrolling(*targetLoop.getBody()))
@@ -23,10 +28,7 @@ bool scalehls::applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
   // Erase all loops in loop band that are inside of the pipelined loop.
   band.resize(pipelineLoc + 1);
 
-  auto parallel = false;
-  if (auto loopDirect = getLoopDirective(targetLoop))
-    parallel = loopDirect.getParallel();
-  setLoopDirective(targetLoop, true, targetII, false, false, parallel);
+  setLoopDirective(targetLoop, true, targetII, false, false);
 
   // All outer loops that perfect nest the pipelined loop can be flattened.
   auto currentLoop = targetLoop;
@@ -43,9 +45,7 @@ bool scalehls::applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
 
       if (canFlatten) {
         currentLoop = outerLoop;
-        if (auto loopDirect = getLoopDirective(outerLoop))
-          parallel = loopDirect.getParallel();
-        setLoopDirective(outerLoop, false, 1, false, true, parallel);
+        setLoopDirective(outerLoop, false, 1, false, true);
         continue;
       }
     }
