@@ -103,6 +103,68 @@ struct AllocaDemotePattern : public OpRewritePattern<memref::AllocaOp> {
 };
 } // namespace
 
+namespace {
+/// Simple arith.addi to affine.apply raising that only supports dim + dim or
+/// dim + constant.
+struct AddIRaisePattern : public OpRewritePattern<arith::AddIOp> {
+  using OpRewritePattern<arith::AddIOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(arith::AddIOp add,
+                                PatternRewriter &r) const override {
+    r.setInsertionPoint(add);
+
+    if (isValidDim(add.getLhs()) && isValidDim(add.getRhs())) {
+      r.replaceOpWithNewOp<mlir::AffineApplyOp>(
+          add, r.getAffineDimExpr(0) + r.getAffineDimExpr(1),
+          ValueRange({add.getLhs(), add.getRhs()}));
+      return success();
+    }
+
+    if (auto rhs = add.getRhs().getDefiningOp<arith::ConstantIndexOp>();
+        isValidDim(add.getLhs())) {
+      r.replaceOpWithNewOp<mlir::AffineApplyOp>(
+          add, r.getAffineDimExpr(0) + rhs.value(), add.getLhs());
+      return success();
+    }
+
+    if (auto lhs = add.getLhs().getDefiningOp<arith::ConstantIndexOp>();
+        isValidDim(add.getRhs())) {
+      r.replaceOpWithNewOp<mlir::AffineApplyOp>(
+          add, lhs.value() + r.getAffineDimExpr(0), add.getRhs());
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
+/// Simple arith.muli to affine.apply raising that only supports dim * constant.
+struct MulIRaisePattern : public OpRewritePattern<arith::MulIOp> {
+  using OpRewritePattern<arith::MulIOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(arith::MulIOp mul,
+                                PatternRewriter &r) const override {
+    r.setInsertionPoint(mul);
+
+    if (auto rhs = mul.getRhs().getDefiningOp<arith::ConstantIndexOp>();
+        isValidDim(mul.getLhs())) {
+      r.replaceOpWithNewOp<mlir::AffineApplyOp>(
+          mul, r.getAffineDimExpr(0) * rhs.value(), mul.getLhs());
+      return success();
+    }
+
+    if (auto lhs = mul.getLhs().getDefiningOp<arith::ConstantIndexOp>();
+        isValidDim(mul.getRhs())) {
+      r.replaceOpWithNewOp<mlir::AffineApplyOp>(
+          mul, lhs.value() * r.getAffineDimExpr(0), mul.getRhs());
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
 bool scalehls::applyFuncPreprocess(FuncOp func, bool isTopFunc) {
   auto builder = OpBuilder(func);
   auto context = func.getContext();
@@ -140,6 +202,8 @@ bool scalehls::applyFuncPreprocess(FuncOp func, bool isTopFunc) {
   mlir::RewritePatternSet patterns(context);
   patterns.add<MemrefLoadRaisePattern>(context);
   patterns.add<MemrefStoreRaisePattern>(context);
+  patterns.add<AddIRaisePattern>(context);
+  patterns.add<MulIRaisePattern>(context);
   patterns.add<GetGlobalConvertPattern>(context);
   vector::populateVectorTransferLoweringPatterns(patterns);
   patterns.add<AffineStoreUndefFoldPattern>(context);
