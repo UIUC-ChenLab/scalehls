@@ -20,23 +20,27 @@ struct MultiProducerRemovePattern : public OpRewritePattern<DataflowNodeOp> {
   LogicalResult matchAndRewrite(DataflowNodeOp node,
                                 PatternRewriter &rewriter) const override {
     auto loc = rewriter.getUnknownLoc();
-    auto output = node.getOutputOp();
 
+    // The rationale here is if a memref is an output value of the current node
+    // while defined by another node in the same block, which means the memref
+    // is updated by both dataflow nodes, then we must create an explicit memref
+    // copy to avoid the multi-producer violation.
     bool hasChanged = false;
-    for (auto operand : output.getOperands())
-      if (auto memrefType = operand.getType().dyn_cast<MemRefType>()) {
-        if (!operand.getDefiningOp<DataflowNodeOp>())
-          continue;
+    for (auto outputValue : node.getOutputValues()) {
+      auto memrefType = outputValue.getType().dyn_cast<MemRefType>();
+      auto defNode = outputValue.getDefiningOp<DataflowNodeOp>();
 
+      if (memrefType && defNode && defNode->getBlock() == node->getBlock()) {
         rewriter.setInsertionPointToStart(node.getBody());
         auto buffer = rewriter.create<memref::AllocOp>(loc, memrefType);
-        operand.replaceUsesWithIf(buffer, [&](OpOperand &use) {
+        outputValue.replaceUsesWithIf(buffer, [&](OpOperand &use) {
           return node->isProperAncestor(use.getOwner());
         });
 
-        rewriter.create<memref::CopyOp>(loc, operand, buffer);
+        rewriter.create<memref::CopyOp>(loc, outputValue, buffer);
         hasChanged = true;
       }
+    }
     return success(hasChanged);
   }
 };
