@@ -1747,20 +1747,20 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
   if (kind != MemoryKind::DRAM && !isFullyPartitioned(type)) {
     emitPragmaFlag = true;
 
-    indent() << "#pragma HLS bind_storage";
+    indent() << "#pragma HLS resource";
     os << " variable=";
     emitValue(memref);
 
-    os << " type=";
+    os << " core=";
     if (kind == MemoryKind::BRAM_1P)
-      os << "ram_1p";
+      os << "ram_1p_bram";
     else if (kind == MemoryKind::BRAM_S2P)
-      os << "ram_s2p";
+      os << "ram_s2p_bram";
     else if (kind == MemoryKind::BRAM_T2P)
-      os << "ram_t2p";
+      os << "ram_t2p_bram";
     else
-      os << "ram_s2p";
-    os << " impl=auto\n";
+      os << "ram_s2p_bram";
+    os << "\n";
   }
 
   // Emit an empty line.
@@ -1774,7 +1774,7 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
   if (hasTopFuncAttr(func)) {
     indent() << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
 
-    for (auto &port : portList) {
+    /*for (auto &port : portList) {
       // Array ports and scalar ports are handled separately. Here, we only
       // handle MemRef types since we assume the IR has be fully bufferized.
       if (auto memrefType = port.getType().dyn_cast<MemRefType>()) {
@@ -1812,15 +1812,15 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
         os << name;
         os << " bundle=ctrl\n";
       }
-    }
+    }*/
 
     // An empty line.
     os << "\n";
 
     // Emit other pragmas for function ports.
-    // for (auto &port : portList)
-    //  if (port.getType().isa<MemRefType>())
-    //    emitArrayDirectives(port);
+    for (auto &port : portList)
+      if (port.getType().isa<MemRefType>())
+        emitArrayDirectives(port);
   }
 
   auto funcDirect = getFuncDirective(func);
