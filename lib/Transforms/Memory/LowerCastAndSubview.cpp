@@ -30,9 +30,9 @@ struct LowerCastAndSubview
       auto buffer = builder.create<memref::AllocOp>(
           loc, cast.dest().getType().dyn_cast<MemRefType>());
       builder.setInsertionPointAfter(buffer);
-      auto copy = builder.create<memref::CopyOp>(loc, cast.dest(), buffer);
+      auto copy = builder.create<memref::CopyOp>(loc, cast.source(), buffer);
       cast.replaceAllUsesWith(copy.target());
-      copy.sourceMutable().assign(cast.dest());
+      cast->erase();
     }
 
     for (auto subview : module.getOps<memref::SubViewOp>()) {
