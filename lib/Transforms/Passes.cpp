@@ -248,7 +248,6 @@ void scalehls::registerScaleHLSConvertTosaToHLS() {
 
         // Dataflow and Linalg lowering.
         pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
-        pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
         pm.addPass(memref::createFoldSubViewOpsPass());
         pm.addPass(scalehls::createLowerCastAndSubviewPass());
         pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
@@ -256,11 +255,16 @@ void scalehls::registerScaleHLSConvertTosaToHLS() {
         pm.addPass(mlir::createAffineLoopNormalizePass());
         pm.addPass(mlir::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
+        pm.addPass(scalehls::createLowerCastAndSubviewPass());
+
+        // Create runtime components.
+        pm.addPass(scalehls::createCreateRuntimeMainPass(opts.hlsTopFunc));
+        // pm.addPass(scalehls::createCreateAxiInterfacePass());
 
         // Affine loop perfectization.
-        pm.addPass(scalehls::createCreateRuntimeMainPass(opts.hlsTopFunc));
         pm.addPass(scalehls::createFuncPreprocessPass(opts.hlsTopFunc));
         pm.addPass(scalehls::createMaterializeReductionPass());
+        pm.addPass(bufferization::createBufferLoopHoistingPass());
         pm.addPass(scalehls::createAffineLoopPerfectionPass());
         pm.addPass(mlir::createAffineScalarReplacementPass());
         pm.addPass(scalehls::createRemoveVariableBoundPass());
@@ -285,6 +289,10 @@ struct ScaleHLSApplyDSEResultsOptions
   Option<std::string> hlsTopFunc{
       *this, "top-func", llvm::cl::init("main"),
       llvm::cl::desc("Specify the top function of the design")};
+
+  Option<std::string> ILPSolution{
+      *this, "ilp-solution", llvm::cl::init("./ilp_solution.json"),
+      llvm::cl::desc("File path: optimization solution found by ILP")};
 };
 } // namespace
 
@@ -293,9 +301,9 @@ void scalehls::registerScaleHLSApplyDSEResults() {
       "scalehls-apply-dse-results", "Apply DSE results to the design",
       [](OpPassManager &pm, const ScaleHLSApplyDSEResultsOptions &opts) {
         // Directive-level optimization.
+        pm.addPass(scalehls::createApplyILPSolutionPass(opts.ILPSolution));
         pm.addPass(scalehls::createLoopPipeliningPass());
         pm.addPass(scalehls::createArrayPartitionPass());
-        pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
         pm.addPass(scalehls::createCreateHLSPrimitivePass());
         pm.addPass(mlir::createCSEPass());
         pm.addPass(mlir::createCanonicalizerPass());

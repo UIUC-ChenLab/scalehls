@@ -35,6 +35,18 @@ def DesignSpaceExplore : Pass<"scalehls-dse", "ModuleOp"> {
   ];
 }
 
+def ApplyILPSolution : Pass<"scalehls-apply-ilp-solution", "ModuleOp"> {
+  let summary = "Apply optimization solution found by ILP";
+  let description = [{}];
+  let constructor = "mlir::scalehls::createApplyILPSolutionPass()";
+
+  let options = [
+    Option<"ILPSolution", "ilp-solution", "std::string",
+           /*default=*/"\"./\"",
+           "File path: optimization solution found by ILP">
+  ];
+}
+
 def FuncPreprocess : Pass<"scalehls-func-preprocess", "func::FuncOp"> {
   let summary = "Preprocess the functions subsequent ScaleHLS optimizations";
   let constructor = "mlir::scalehls::createFuncPreprocessPass()";

@@ -29,6 +29,8 @@ void registerTransformsPasses();
 std::unique_ptr<Pass>
 createDesignSpaceExplorePass(std::string dseTargetSpec = "");
 std::unique_ptr<Pass>
+createApplyILPSolutionPass(std::string dseILPSolution = "");
+std::unique_ptr<Pass>
 createFuncPreprocessPass(std::string hlsTopFunc = "forward");
 
 /// Dataflow-related passes.

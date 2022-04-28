@@ -32,6 +32,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Memory/SimplifyMemrefAccess.cpp
   Runtime/CreateAxiInterface.cpp
   Runtime/CreateRuntimeMain.cpp
+  ApplyILPSolution.cpp
   DesignSpaceExplore.cpp
   FuncPreprocess.cpp
   Passes.cpp
