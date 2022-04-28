@@ -11,6 +11,7 @@
 #include "mlir/IR/Dominance.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Dialect/HLS/HLS.h"
+#include "scalehls/Support/Utils.h"
 #include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
@@ -25,7 +26,7 @@ struct AllocOpRewritePattern : public OpRewritePattern<memref::AllocOp> {
 
   LogicalResult matchAndRewrite(memref::AllocOp alloc,
                                 PatternRewriter &rewriter) const override {
-    auto getCopyUser = [&]() {
+    /*auto getCopyUser = [&]() {
       for (auto user : alloc->getUsers())
         if (auto copyUser = dyn_cast<memref::CopyOp>(user))
           return copyUser;
@@ -35,36 +36,48 @@ struct AllocOpRewritePattern : public OpRewritePattern<memref::AllocOp> {
     // If the current alloc is not used by any copy, return failure.
     auto copy = getCopyUser();
     if (!copy)
+      return failure();*/
+
+    // Allows this pass to handle multiple CopyOps for single AllocOp
+    auto copies = SmallVector<memref::CopyOp>();
+    for (auto user : alloc->getUsers())
+      if (auto copyUser = dyn_cast<memref::CopyOp>(user)) {
+        copies.push_back(copyUser);
+      }
+    if (copies.size() == 0)
       return failure();
 
-    // If the current alloc dominates another alloc, return failure.
-    auto anotherMemref = alloc.memref() == copy.getSource() ? copy.getTarget()
-                                                            : copy.getSource();
-    if (auto anotherAlloc = anotherMemref.getDefiningOp())
-      if (!isa<memref::AllocOp>(anotherAlloc) ||
-          DT.dominates(alloc.getOperation(), anotherAlloc))
-        return failure();
-    if (alloc.getType().getMemorySpaceAsInt() !=
-        anotherMemref.getType().cast<MemRefType>().getMemorySpaceAsInt())
-      return failure();
+    for (auto copy : copies) {
+      // If the current alloc dominates another alloc, return failure.
+      auto anotherMemref = alloc.memref() == copy.getSource()
+                               ? copy.getTarget()
+                               : copy.getSource();
+      if (auto anotherAlloc = anotherMemref.getDefiningOp())
+        if (!isa<memref::AllocOp>(anotherAlloc) ||
+            DT.dominates(alloc.getOperation(), anotherAlloc))
+          continue;
+      if (alloc.getType().getMemorySpaceAsInt() !=
+          anotherMemref.getType().cast<MemRefType>().getMemorySpaceAsInt())
+        continue;
 
-    // If the source memory is used after the copy op, we cannot eliminate the
-    // target memory. This is conservative?
-    if (llvm::any_of(copy.getSource().getUsers(), [&](Operation *user) {
-          return DT.properlyDominates(copy, user);
-        }))
-      return failure();
+      // If the source memory is used after the copy op, we cannot eliminate the
+      // target memory. This is conservative?
+      if (llvm::any_of(copy.getSource().getUsers(), [&](Operation *user) {
+            return DT.properlyDominates(copy, user);
+          }))
+        continue;
 
-    // If the target memory is used before the copy op, we cannot eliminate
-    // the target memory. This is conservative?
-    if (llvm::any_of(copy.getTarget().getUsers(), [&](Operation *user) {
-          return DT.properlyDominates(user, copy);
-        }))
-      return failure();
+      // If the target memory is used before the copy op, we cannot eliminate
+      // the target memory. This is conservative?
+      if (llvm::any_of(copy.getTarget().getUsers(), [&](Operation *user) {
+            return DT.properlyDominates(user, copy);
+          }))
+        continue;
 
-    rewriter.replaceOp(alloc, anotherMemref);
-    rewriter.eraseOp(copy);
-
+      rewriter.replaceOp(alloc, anotherMemref);
+      rewriter.eraseOp(copy);
+      return success();
+    }
     return success();
   }
 
