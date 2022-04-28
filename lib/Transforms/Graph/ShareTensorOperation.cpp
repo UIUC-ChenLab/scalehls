@@ -433,7 +433,7 @@ bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
         sharedHelper = item.first;
       }
     }
-    if (maxCount > 0) {
+    if (maxCount > 1) {
       countMap.erase(sharedHelper);
       auto functionName = "shared_function_" + std::to_string(i);
       auto newFuncOp = createSharedFunction(module, sharedHelper, functionName);
