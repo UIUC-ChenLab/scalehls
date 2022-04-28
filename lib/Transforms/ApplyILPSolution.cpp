@@ -4,6 +4,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/Support/FileUtilities.h"
 #include "scalehls/Support/Utils.h"
 #include "scalehls/Transforms/Passes.h"
@@ -24,6 +28,7 @@ struct ApplyILPSolution : public ApplyILPSolutionBase<ApplyILPSolution> {
 
   void runOnOperation() override {
     auto module = getOperation();
+    auto builder = OpBuilder(module);
 
     std::string errorMessage;
     auto solutionFile = mlir::openInputFile(ILPSolution, &errorMessage);
@@ -67,10 +72,33 @@ struct ApplyILPSolution : public ApplyILPSolutionBase<ApplyILPSolution> {
       }
     }
     applyAutoArrayPartition(getRuntimeFunc(module));
+
+    for (auto op : getTopFunc(module).getOps<func::CallOp>()) {
+      auto call = dyn_cast<func::CallOp>(*op);
+      auto callee =
+          SymbolTable::lookupNearestSymbolFrom(call, call.getCalleeAttr());
+      auto subFunc = dyn_cast<FuncOp>(callee);
+
+      for (unsigned i = 0; i < call.getOperands().size(); i++) {
+        auto argumentType = subFunc.getFunctionType().getInputs()[i];
+        auto operandType = call.getOperands()[i].getType();
+        if (argumentType != operandType) {
+          builder.setInsertionPoint(call);
+          auto operand = call.getOperands()[i];
+          auto buffer = builder.create<memref::AllocOp>(
+              call.getLoc(), argumentType.dyn_cast<MemRefType>());
+          builder.create<memref::CopyOp>(call.getLoc(), operand, buffer);
+          call.operandsMutable().slice(i, 1).assign(buffer);
+          builder.setInsertionPointAfter(call);
+          builder.create<memref::CopyOp>(call.getLoc(), buffer, operand);
+        }
+      }
+    }
   }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createApplyILPSolutionPass(std::string dseILPSolution) {
+std::unique_ptr<Pass>
+scalehls::createApplyILPSolutionPass(std::string dseILPSolution) {
   return std::make_unique<ApplyILPSolution>(dseILPSolution);
 }

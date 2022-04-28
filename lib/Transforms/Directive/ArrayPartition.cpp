@@ -347,6 +347,12 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
   // the "partitionsMap".
   llvm::SmallDenseMap<FuncOp, unsigned> funcMap;
 
+  /*llvm::SmallVector<Operation *> calls;
+  for (auto call : func.getOps<func::CallOp>())
+    calls.push_back(call);
+  */
+  //for (auto call = calls.rbegin(); call != calls.rend(); call++) {
+  //  func::CallOp op = dyn_cast<func::CallOp>(**call);
   func.walk([&](func::CallOp op) {
     auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCalleeAttr());
     auto subFunc = dyn_cast<FuncOp>(callee);

@@ -248,6 +248,7 @@ void scalehls::registerScaleHLSConvertTosaToHLS() {
 
         // Dataflow and Linalg lowering.
         pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
+        pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
         pm.addPass(memref::createFoldSubViewOpsPass());
         pm.addPass(scalehls::createLowerCastAndSubviewPass());
         pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
