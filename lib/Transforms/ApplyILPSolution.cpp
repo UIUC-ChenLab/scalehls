@@ -8,7 +8,9 @@
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
+#include "mlir/IR/Dominance.h"
 #include "mlir/Support/FileUtilities.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Support/Utils.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -94,6 +96,72 @@ struct ApplyILPSolution : public ApplyILPSolutionBase<ApplyILPSolution> {
         }
       }
     }
+
+    // Prevent generated CopyOps to be removed by ConvertCopyToAffineLoops
+    // If removed, function argument type mismatch occurs
+    auto DT = DominanceInfo(module);
+    SmallVector<Operation *, 32> opToErase;
+    for (auto op : getTopFunc(module).getOps<memref::AllocOp>()) {
+      auto alloc = dyn_cast<memref::AllocOp>(*op);
+      auto getCopyUser = [&]() {
+        for (auto user : alloc->getUsers())
+          if (auto copyUser = dyn_cast<memref::CopyOp>(user))
+            return copyUser;
+        return memref::CopyOp();
+      };
+
+      // If the current alloc is not used by any copy, return failure.
+      auto copy = getCopyUser();
+      if (!copy)
+        continue;
+
+      // If the current alloc dominates another alloc, return failure.
+      auto anotherMemref = alloc.memref() == copy.getSource()
+                               ? copy.getTarget()
+                               : copy.getSource();
+      if (auto anotherAlloc = anotherMemref.getDefiningOp())
+        if (!isa<memref::AllocOp>(anotherAlloc) ||
+            DT.dominates(alloc.getOperation(), anotherAlloc))
+          continue;
+      if (alloc.getType().getMemorySpaceAsInt() !=
+          anotherMemref.getType().cast<MemRefType>().getMemorySpaceAsInt())
+        continue;
+
+      // If the source memory is used after the copy op, we cannot eliminate the
+      // target memory. This is conservative?
+      if (llvm::any_of(copy.getSource().getUsers(), [&](Operation *user) {
+            return DT.properlyDominates(copy, user);
+          }))
+        continue;
+
+      // If the target memory is used before the copy op, we cannot eliminate
+      // the target memory. This is conservative?
+      if (llvm::any_of(copy.getTarget().getUsers(), [&](Operation *user) {
+            return DT.properlyDominates(user, copy);
+          }))
+        continue;
+
+      bool callExists = false;
+      for (auto user : copy.getSource().getUsers()) {
+        if (auto callUser = dyn_cast<func::CallOp>(user)) {
+          callExists = true;
+        }
+      }
+      if (!callExists) {
+        builder.setInsertionPoint(anotherMemref.getDefiningOp());
+        auto newAlloc =
+            dyn_cast<memref::AllocOp>(builder.insert(alloc.clone()));
+        anotherMemref.replaceAllUsesWith(newAlloc.memref());
+        alloc.replaceAllUsesWith(newAlloc.memref());
+        opToErase.push_back(anotherMemref.getDefiningOp());
+        opToErase.push_back(alloc);
+        opToErase.push_back(copy);
+      }
+    }
+
+    // Erase all ops on the list.
+    for (auto op : opToErase)
+      op->erase();
   }
 };
 } // namespace

@@ -303,6 +303,7 @@ void scalehls::registerScaleHLSApplyDSEResults() {
       [](OpPassManager &pm, const ScaleHLSApplyDSEResultsOptions &opts) {
         // Directive-level optimization.
         pm.addPass(scalehls::createApplyILPSolutionPass(opts.ILPSolution));
+        pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
         pm.addPass(scalehls::createLoopPipeliningPass());
         pm.addPass(scalehls::createArrayPartitionPass());
         pm.addPass(scalehls::createCreateHLSPrimitivePass());
