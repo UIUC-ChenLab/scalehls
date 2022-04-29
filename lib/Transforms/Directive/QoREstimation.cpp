@@ -426,8 +426,9 @@ bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
   // Set an attribute indicating the trip count. For now, we assume all loops
   // have static loop bound.
   auto optionalTripCount = getAverageTripCount(op);
+  // If not static, use maximum trip count.
   if (!optionalTripCount)
-    return false;
+    optionalTripCount = getMaximumTripCount(op);
   auto tripCount = optionalTripCount.getValue();
 
   // Estimate the contained loop block.
@@ -729,6 +730,7 @@ TimingAttr ScaleHLSEstimator::estimateBlock(Block &block, int64_t begin) {
     if (dispatchVisitor(op, opBegin))
       opEnd = max(opEnd, getTiming(op).getEnd());
     else {
+      op->dump();
       op->emitError("Failed to estimate op");
       return TimingAttr();
     }
