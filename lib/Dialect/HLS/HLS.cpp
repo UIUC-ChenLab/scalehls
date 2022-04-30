@@ -194,11 +194,16 @@ struct OutputSimplifyPattern : public OpRewritePattern<DataflowNodeOp> {
     SmallVector<Value, 4> outputValues;
     SmallVector<Value, 4> resultsToReplace;
     for (auto result : node.getResults()) {
-      if (result.use_empty()) {
+      auto value = output.getOperand(result.getResultNumber());
+
+      // Note that we always keep non-local memref outputs that are updated in
+      // the node even if they are not used.
+      if (result.use_empty() && (!value.getType().isa<MemRefType>() ||
+                                 value.getDefiningOp<memref::AllocOp>())) {
         hasUnusedResult = true;
         continue;
       }
-      outputValues.push_back(output.getOperand(result.getResultNumber()));
+      outputValues.push_back(value);
       resultsToReplace.push_back(result);
     }
 
@@ -301,6 +306,13 @@ LogicalResult DataflowOutputOp::verify() {
   if (getOperandTypes() !=
       (*this)->getParentOfType<DataflowNodeOp>().getResultTypes())
     return emitOpError("output type doesn't align with node type");
+
+  llvm::SmallDenseSet<Value, 4> outputs(operand_begin(), operand_end());
+  auto node = (*this)->getParentOfType<DataflowNodeOp>();
+  for (auto value : node.getOutputValues())
+    if (!outputs.count(value) && value.getType().isa<MemRefType>() &&
+        !value.getDefiningOp<memref::AllocOp>())
+      return emitOpError("updated memref is an output");
   return success();
 }
 
