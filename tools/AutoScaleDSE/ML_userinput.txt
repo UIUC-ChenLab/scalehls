@@ -1,0 +1,81 @@
+#target_source_file_location = ../../samples/AutoScaleHLS_tests/resnet18_shls.cpp
+#top_function = main_graph
+
+#target_source_file_location = ../../samples/AutoScaleHLS_tests/lenet_mine/lenet_top.c
+#top_function = lenet_accelerator
+
+#target_source_file_location = test.c
+#top_function = dataflow7
+
+###################################################################################
+##############################Polybench############################################
+###################################################################################
+
+#target_source_file_location = ../../samples/polybench/gemm/test_gemm.c
+#top_function = test_gemm
+
+#target_source_file_location = ../../samples/polybench2/2mm.c
+#top_function = kernel_2mm
+
+#target_source_file_location = ../../samples/polybench2/3mm_test.c
+#top_function = kernel_3mm
+
+#target_source_file_location = ../../samples/polybench2/atax.c
+#top_function = kernel_atax
+
+#target_source_file_location = ../../samples/polybench2/bicg.c
+#top_function = kernel_bicg
+
+#target_source_file_location = ../../samples/polybench2/doitgen.c
+#top_function = kernel_doitgen
+
+#target_source_file_location = ../../samples/polybench2/mvt.c
+#top_function = kernel_mvt
+
+###################################################################################
+##############################rosetta##############################################
+###################################################################################
+
+#target_source_file_location = ../../samples/rosetta/spam-filter/sgd_sw_raw.c
+#target_source_file_location = ../../samples/rosetta/spam-filter/sgd_sw.c
+#top_function = SgdLR_sw
+
+#target_source_file_location = ../../samples/rosetta/digit-recognition/digitrec_sw_raw.c
+#top_function = DigitRec_sw
+
+###################################################################################
+##############################MachSuit#############################################
+###################################################################################
+
+target_source_file_location = ../../samples/machsuite/backprop/backprop_inde.c
+top_function = backprop
+
+###################################################################################
+##############################pylog################################################
+###################################################################################
+
+#target_source_file_location = ../../samples/Pylog/canny_detection.c
+#top_function = canny_detection
+
+###################################################################################
+##############################hardware-constraints#################################
+###################################################################################
+
+part = xc7k70tfbv676-1
+#part = xc7z045-ffg900-2
+
+# Extra file locations -> remove default keyword
+add_files default
+
+#template
+open_solution "solution1"
+set_part { {{part}} }
+create_clock -period 10 -name default
+source {{ directives_path }}
+{% if synth %}
+csynth_design
+{% endif %}
+{%- if cosim -%}
+cosim_design -O -reduce_diskspace
+{% endif %}
+exit
