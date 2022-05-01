@@ -1766,8 +1766,8 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
   }
 
   // Emit an empty line.
-  if (emitPragmaFlag)
-    os << "\n";
+  // if (emitPragmaFlag)
+  //  os << "\n";
 }
 
 void ModuleEmitter::emitFunctionDirectives(FuncOp func,
