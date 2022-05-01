@@ -730,7 +730,6 @@ TimingAttr ScaleHLSEstimator::estimateBlock(Block &block, int64_t begin) {
     if (dispatchVisitor(op, opBegin))
       opEnd = max(opEnd, getTiming(op).getEnd());
     else {
-      op->dump();
       op->emitError("Failed to estimate op");
       return TimingAttr();
     }
@@ -818,11 +817,15 @@ ResourceAttr ScaleHLSEstimator::calculateResource(Operation *funcOrLoop) {
   int64_t dspNum = 0;
   int64_t bramNum = 0;
   funcOrLoop->walk([&](Operation *op) {
-    if (isa<func::CallOp>(op) || isNoTouch(op)) {
+    if (isa<func::CallOp>(op)) {
       // TODO: For now, we consider the resource utilization of sub-fuctions are
       // static and not shareable. But actually this is not the truth. The
       // resource can be shared between different sub-functions to some extent,
       // whose shareing scheme has not been characterized by the estimator.
+      // if (auto resource = getResource(op))
+      //  dspNum += resource.getDsp();
+
+    } else if (isNoTouch(op)) {
       if (auto resource = getResource(op))
         dspNum += resource.getDsp();
 
