@@ -287,10 +287,6 @@ void scalehls::registerScaleHLSConvertTosaToHLS() {
 namespace {
 struct ScaleHLSApplyDSEResultsOptions
     : public PassPipelineOptions<ScaleHLSApplyDSEResultsOptions> {
-  Option<std::string> hlsTopFunc{
-      *this, "top-func", llvm::cl::init("main"),
-      llvm::cl::desc("Specify the top function of the design")};
-
   Option<std::string> ILPSolution{
       *this, "ilp-solution", llvm::cl::init("./ilp_solution.json"),
       llvm::cl::desc("File path: optimization solution found by ILP")};
