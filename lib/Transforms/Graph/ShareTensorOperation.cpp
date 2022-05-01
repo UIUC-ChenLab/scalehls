@@ -207,8 +207,6 @@ static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
                             FuncOp newFuncOp) {
   auto builder = OpBuilder(module);
 
-  // Traverse the entire module and count all the convolutions.
-  auto funcs = module.getOps<FuncOp>();
   // Shared convolution
   ConvHelper SharedHelper = ConvHelper(sharedConv);
   // Shared function name
@@ -217,18 +215,45 @@ static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
   SmallVector<Operation *, 32> opToErase;
 
   // Convert matching convolutions into CallOp to shared function.
-  for (auto func : funcs) {
+  for (auto func : module.getOps<FuncOp>()) {
     if (func->getAttr("shared"))
       continue;
 
     func.walk([&](tosa::Conv2DOp Conv2DOp) {
-      ConvHelper CurrHelper = ConvHelper(Conv2DOp);
-      if (!CurrHelper.equalAttr(SharedHelper))
-        return;
-
-      opToErase.push_back(Conv2DOp);
-      builder.setInsertionPoint(Conv2DOp);
       auto loc = Conv2DOp.getLoc();
+      ConvHelper CurrHelper = ConvHelper(Conv2DOp);
+
+      if (!CurrHelper.equalAttr(SharedHelper)) {
+        // Move results to off-chip
+        auto outType = Conv2DOp.output().getType().dyn_cast<RankedTensorType>();
+        auto outMemrefArg = func.front().addArgument(
+            MemRefType::get(outType.getShape(), outType.getElementType()), loc);
+        func.setType(builder.getFunctionType(
+            func.front().getArgumentTypes(),
+            func.back().getTerminator()->getOperandTypes()));
+
+        builder.setInsertionPointAfter(Conv2DOp);
+        auto newOp = builder.insert(Conv2DOp.clone());
+        auto newConv2DOp = dyn_cast<tosa::Conv2DOp>(newOp);
+
+        // Bufferize result to memref
+        auto outMemref = builder.create<bufferization::ToMemrefOp>(
+            loc, MemRefType::get(outType.getShape(), outType.getElementType()),
+            newConv2DOp.output());
+
+        // Copy to sliced output
+        builder.create<memref::CopyOp>(loc, outMemref, outMemrefArg);
+
+        // Create final output tensor
+        auto outTensor =
+            builder
+                .create<bufferization::ToTensorOp>(loc, outType, outMemrefArg)
+                .result();
+
+        opToErase.push_back(Conv2DOp);
+        Conv2DOp.replaceAllUsesWith(outTensor);
+        return;
+      }
 
       int64_t outChDiv = (CurrHelper.outCh() + SharedHelper.outCh() - 1) /
                          SharedHelper.outCh();
@@ -238,6 +263,7 @@ static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
                           SharedHelper.inSize();
 
       // Define zero bias if more than 1 input channel divs
+      builder.setInsertionPoint(Conv2DOp);
       Value zeroBias;
       if (inChDiv > 1) {
         auto biasTensor =
@@ -248,10 +274,13 @@ static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
         zeroBias = builder.create<tosa::ConstOp>(loc, biasType, biasAttr);
       }
 
-      // Output MemRef object
+      // Output MemRef object allocated off-chip
       auto outType = Conv2DOp.output().getType().dyn_cast<RankedTensorType>();
-      auto outMemref = builder.create<memref::AllocOp>(
-          loc, MemRefType::get(outType.getShape(), outType.getElementType()));
+      auto outMemref = func.front().addArgument(
+          MemRefType::get(outType.getShape(), outType.getElementType()), loc);
+      func.setType(builder.getFunctionType(
+          func.front().getArgumentTypes(),
+          func.back().getTerminator()->getOperandTypes()));
 
       // Create output channel loop
       auto outChLoop = builder.create<AffineForOp>(loc, 0, outChDiv, 1);
@@ -406,6 +435,7 @@ static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
           builder.create<bufferization::ToTensorOp>(loc, outType, outMemref)
               .result();
 
+      opToErase.push_back(Conv2DOp);
       Conv2DOp.replaceAllUsesWith(outTensor);
     });
   }
@@ -422,19 +452,16 @@ bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
   DenseMap<ConvHelper, std::pair<ConvHelper, unsigned>> countMap;
 
   // Traverse the entire module and count all the convolutions.
-  auto funcs = module.getOps<FuncOp>();
-  for (auto func : funcs) {
-    func.walk([&](Operation *op) {
-      if (auto Conv2DOp = dyn_cast<tosa::Conv2DOp>(op)) {
-        ConvHelper info = ConvHelper(Conv2DOp);
-        if (!countMap.count(info)) {
-          countMap[info] = std::pair<ConvHelper, unsigned>(info, 1);
-        } else {
-          info.takeSmallerDim(countMap[info].first);
-          auto currCount = countMap[info].second;
-          countMap.erase(info);
-          countMap[info] = std::pair<ConvHelper, unsigned>(info, currCount + 1);
-        }
+  for (auto func : module.getOps<FuncOp>()) {
+    func.walk([&](tosa::Conv2DOp Conv2DOp) {
+      ConvHelper info = ConvHelper(Conv2DOp);
+      if (!countMap.count(info)) {
+        countMap[info] = std::pair<ConvHelper, unsigned>(info, 1);
+      } else {
+        info.takeSmallerDim(countMap[info].first);
+        auto currCount = countMap[info].second;
+        countMap.erase(info);
+        countMap[info] = std::pair<ConvHelper, unsigned>(info, currCount + 1);
       }
     });
   }
