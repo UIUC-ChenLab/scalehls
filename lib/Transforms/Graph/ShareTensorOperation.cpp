@@ -222,39 +222,6 @@ static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
     func.walk([&](tosa::Conv2DOp Conv2DOp) {
       auto loc = Conv2DOp.getLoc();
       ConvHelper CurrHelper = ConvHelper(Conv2DOp);
-
-      if (!CurrHelper.equalAttr(SharedHelper)) {
-        // Move results to off-chip
-        auto outType = Conv2DOp.output().getType().dyn_cast<RankedTensorType>();
-        auto outMemrefArg = func.front().addArgument(
-            MemRefType::get(outType.getShape(), outType.getElementType()), loc);
-        func.setType(builder.getFunctionType(
-            func.front().getArgumentTypes(),
-            func.back().getTerminator()->getOperandTypes()));
-
-        builder.setInsertionPointAfter(Conv2DOp);
-        auto newOp = builder.insert(Conv2DOp.clone());
-        auto newConv2DOp = dyn_cast<tosa::Conv2DOp>(newOp);
-
-        // Bufferize result to memref
-        auto outMemref = builder.create<bufferization::ToMemrefOp>(
-            loc, MemRefType::get(outType.getShape(), outType.getElementType()),
-            newConv2DOp.output());
-
-        // Copy to sliced output
-        builder.create<memref::CopyOp>(loc, outMemref, outMemrefArg);
-
-        // Create final output tensor
-        auto outTensor =
-            builder
-                .create<bufferization::ToTensorOp>(loc, outType, outMemrefArg)
-                .result();
-
-        opToErase.push_back(Conv2DOp);
-        Conv2DOp.replaceAllUsesWith(outTensor);
-        return;
-      }
-
       int64_t outChDiv = (CurrHelper.outCh() + SharedHelper.outCh() - 1) /
                          SharedHelper.outCh();
       int64_t inChDiv =
@@ -274,13 +241,25 @@ static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
         zeroBias = builder.create<tosa::ConstOp>(loc, biasType, biasAttr);
       }
 
-      // Output MemRef object allocated off-chip
-      auto outType = Conv2DOp.output().getType().dyn_cast<RankedTensorType>();
-      auto outMemref = func.front().addArgument(
-          MemRefType::get(outType.getShape(), outType.getElementType()), loc);
-      func.setType(builder.getFunctionType(
-          func.front().getArgumentTypes(),
-          func.back().getTerminator()->getOperandTypes()));
+      // Output MemRef object allocated off-chip and original buffers
+      bufferization::ToMemrefOp outMemref;
+      for (auto user : Conv2DOp.output().getUsers()) {
+        if (auto memref = dyn_cast<bufferization::ToMemrefOp>(user)) {
+          outMemref = memref;
+        }
+      }
+      memref::CopyOp outCopy;
+      for (auto user : outMemref.memref().getUsers()) {
+        if (auto copy = dyn_cast<memref::CopyOp>(user)) {
+          outCopy = copy;
+        }
+      }
+      bufferization::ToTensorOp outTensor;
+      for (auto user : outCopy.target().getUsers()) {
+        if (auto copy = dyn_cast<bufferization::ToTensorOp>(user)) {
+          outTensor = copy;
+        }
+      }
 
       // Create output channel loop
       auto outChLoop = builder.create<AffineForOp>(loc, 0, outChDiv, 1);
@@ -424,19 +403,14 @@ static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
           {builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1),
            builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1)});
       auto subviewOut = builder.create<memref::SubViewOp>(
-          loc, outMemref, bufOffset, bufSize, bufStride);
+          loc, outCopy.target(), bufOffset, bufSize, bufStride);
 
       // Copy to sliced output
       builder.create<memref::CopyOp>(loc, slicedOutMemref, subviewOut);
 
-      // Convert final output back to tensor
-      builder.setInsertionPoint(Conv2DOp);
-      auto outTensor =
-          builder.create<bufferization::ToTensorOp>(loc, outType, outMemref)
-              .result();
-
+      opToErase.push_back(outCopy);
+      opToErase.push_back(outMemref);
       opToErase.push_back(Conv2DOp);
-      Conv2DOp.replaceAllUsesWith(outTensor);
     });
   }
 
@@ -448,6 +422,48 @@ static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
 }
 
 bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
+  auto builder = OpBuilder(module);
+
+  // Move all hidden features to off-chip buffer
+  SmallVector<Operation *, 32> opToErase;
+  for (auto func : module.getOps<FuncOp>()) {
+    func.walk([&](tosa::Conv2DOp Conv2DOp) {
+      auto loc = Conv2DOp.getLoc();
+
+      // Move results to off-chip
+      auto outType = Conv2DOp.output().getType().dyn_cast<RankedTensorType>();
+      auto outMemrefArg = func.front().addArgument(
+          MemRefType::get(outType.getShape(), outType.getElementType()), loc);
+      func.setType(builder.getFunctionType(
+          func.front().getArgumentTypes(),
+          func.back().getTerminator()->getOperandTypes()));
+
+      builder.setInsertionPointAfter(Conv2DOp);
+      auto newOp = builder.insert(Conv2DOp.clone());
+      auto newConv2DOp = dyn_cast<tosa::Conv2DOp>(newOp);
+
+      // Bufferize result to memref
+      auto outMemref = builder.create<bufferization::ToMemrefOp>(
+          loc, MemRefType::get(outType.getShape(), outType.getElementType()),
+          newConv2DOp.output());
+
+      // Copy to sliced output
+      builder.create<memref::CopyOp>(loc, outMemref, outMemrefArg);
+
+      // Create final output tensor
+      auto outTensor =
+          builder.create<bufferization::ToTensorOp>(loc, outType, outMemrefArg)
+              .result();
+
+      opToErase.push_back(Conv2DOp);
+      Conv2DOp.replaceAllUsesWith(outTensor);
+      return;
+    });
+  }
+  // Erase all ops on the list.
+  for (auto op : opToErase)
+    op->erase();
+
   // Count the number of each shape of convolution.
   DenseMap<ConvHelper, std::pair<ConvHelper, unsigned>> countMap;
 
@@ -466,8 +482,9 @@ bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
     });
   }
 
-  // Find the types of convolutions that happen frequently.
-  ConvHelper sharedHelper = ConvHelper();
+  // Find the types of convolutions that happen frequently and replace it with
+  // shared function
+  ConvHelper sharedHelper;
   for (unsigned i = 0; i < numTargets; i++) {
     unsigned maxCount = 0;
     for (auto item : countMap) {
@@ -476,7 +493,7 @@ bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
         sharedHelper = item.first;
       }
     }
-    if (maxCount > 1) {
+    if (maxCount != 0) {
       countMap.erase(sharedHelper);
       auto functionName = "shared_function_" + std::to_string(i);
       auto newFuncOp = createSharedFunction(module, sharedHelper, functionName);
