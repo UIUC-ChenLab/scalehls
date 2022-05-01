@@ -1776,7 +1776,7 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
   if (hasTopFuncAttr(func)) {
     indent() << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
 
-    /*for (auto &port : portList) {
+    for (auto &port : portList) {
       // Array ports and scalar ports are handled separately. Here, we only
       // handle MemRef types since we assume the IR has be fully bufferized.
       if (auto memrefType = port.getType().dyn_cast<MemRefType>()) {
@@ -1784,12 +1784,10 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
         if (!isFullyPartitioned(memrefType)) {
           indent() << "#pragma HLS interface";
           // For now, we set the offset of all m_axi interfaces as slave.
+          // Force all top function arguments as DRAM
           auto kind = MemoryKind(memrefType.getMemorySpaceAsInt());
-          if (kind == MemoryKind::DRAM) {
-            os << " m_axi offset=slave bundle=";
-            emitValue(port);
-          } else
-            os << " bram";
+          os << " m_axi offset=slave bundle=";
+          emitValue(port);
 
           os << " port=";
           emitValue(port);
@@ -1813,16 +1811,19 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
           name.erase(name.begin());
         os << name;
         os << " bundle=ctrl\n";
+
+        // An empty line.
+        os << "\n";
+
+        // Emit other pragmas for function ports.
+        for (auto &port : portList)
+          if (port.getType().isa<MemRefType>())
+            emitArrayDirectives(port);
       }
-    }*/
+    }
 
     // An empty line.
     os << "\n";
-
-    // Emit other pragmas for function ports.
-    for (auto &port : portList)
-      if (port.getType().isa<MemRefType>())
-        emitArrayDirectives(port);
   }
 
   auto funcDirect = getFuncDirective(func);
