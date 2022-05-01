@@ -222,6 +222,10 @@ static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
     func.walk([&](tosa::Conv2DOp Conv2DOp) {
       auto loc = Conv2DOp.getLoc();
       ConvHelper CurrHelper = ConvHelper(Conv2DOp);
+
+      if (!CurrHelper.equalAttr(SharedHelper))
+        return;
+
       int64_t outChDiv = (CurrHelper.outCh() + SharedHelper.outCh() - 1) /
                          SharedHelper.outCh();
       int64_t inChDiv =
