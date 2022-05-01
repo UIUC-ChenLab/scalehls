@@ -24,7 +24,7 @@ struct LowerCastAndSubview
     auto module = getOperation();
     auto builder = OpBuilder(module);
 
-    for (auto cast : module.getOps<memref::CastOp>()) {
+    module.walk([&](memref::CastOp cast) {
       auto loc = cast.getLoc();
       builder.setInsertionPointAfter(cast);
       auto buffer = builder.create<memref::AllocOp>(
@@ -33,18 +33,20 @@ struct LowerCastAndSubview
       auto copy = builder.create<memref::CopyOp>(loc, cast.source(), buffer);
       cast.replaceAllUsesWith(copy.target());
       cast->erase();
-    }
+    });
 
-    for (auto subview : module.getOps<memref::SubViewOp>()) {
+    module.walk([&](memref::SubViewOp subview) {
       auto loc = subview.getLoc();
       builder.setInsertionPointAfter(subview);
-      auto buffer = builder.create<memref::AllocOp>(
-          loc, subview.result().getType().dyn_cast<MemRefType>());
+      auto memrefType = subview.result().getType().dyn_cast<MemRefType>();
+      auto dropLayout =
+          MemRefType::get(memrefType.getShape(), memrefType.getElementType());
+      auto buffer = builder.create<memref::AllocOp>(loc, dropLayout);
       builder.setInsertionPointAfter(buffer);
       auto copy = builder.create<memref::CopyOp>(loc, subview.result(), buffer);
       subview.replaceAllUsesWith(copy.target());
       copy.sourceMutable().assign(subview.result());
-    }
+    });
   }
 };
 } // namespace
