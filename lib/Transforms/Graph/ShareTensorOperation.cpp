@@ -14,78 +14,69 @@ using namespace scalehls;
 using namespace hls;
 
 struct ConvHelper {
-  tosa::Conv2DOp op;
-  int64_t newinCh;
-  int64_t newOutCh;
-  int64_t newInSize;
+  int64_t inCh;
+  int64_t inSize;
+  int64_t outCh;
+  int64_t outSize;
+  int64_t kernelSize;
+  int64_t pad;
+  int64_t stride;
+  int64_t dilation;
 
-  ConvHelper() {}
-
-  ConvHelper(tosa::Conv2DOp convOp) {
-    op = convOp;
-    if (!this->isEmptyKey() && !this->isTombstoneKey()) {
-      newinCh = this->inCh();
-      newOutCh = this->outCh();
-      newInSize = this->inSize();
-    }
+  ConvHelper() {
+    inCh = 0;
+    inSize = 0;
+    outCh = 0;
+    outSize = 0;
+    kernelSize = 0;
+    pad = 0;
+    stride = 0;
+    dilation = 0;
   }
 
-  ArrayRef<int64_t> inShape() {
-    auto input = op.getOperand(0);
-    return input.getType().cast<RankedTensorType>().getShape();
+  ConvHelper(int64_t _inCh, int64_t _inSize, int64_t _outCh, int64_t _outSize,
+             int64_t _kernelSize, int64_t _pad, int64_t _stride,
+             int64_t _dilation) {
+    inCh = _inCh;
+    inSize = _inSize;
+    outCh = _outCh;
+    outSize = _outSize;
+    kernelSize = _kernelSize;
+    pad = _pad;
+    stride = _stride;
+    dilation = _dilation;
   }
 
-  ArrayRef<int64_t> outShape() {
-    auto output = op.getResult();
-    return output.getType().cast<RankedTensorType>().getShape();
-  }
-
-  ArrayRef<int64_t> weightShape() {
-    auto weight = op.getOperand(1);
-    return weight.getType().cast<RankedTensorType>().getShape();
-  }
-
-  int64_t outCh() {
-    auto shape = this->weightShape();
-    return shape[0];
-  }
-
-  int64_t inCh() {
-    auto shape = this->weightShape();
-    return shape[3];
-  }
-
-  int64_t kernelSize() {
-    auto shape = this->weightShape();
-    return shape[1];
-  }
-
-  int64_t inSize() {
-    auto shape = this->inShape();
-    return shape[1];
-  }
-
-  int64_t outSize() {
-    auto shape = this->outShape();
-    return shape[1];
+  ConvHelper(tosa::Conv2DOp op) {
+    auto inType = op.input().getType().cast<RankedTensorType>();
+    inSize = inType.getShape()[1];
+    auto weightType = op.weight().getType().cast<RankedTensorType>();
+    inCh = weightType.getShape()[3];
+    outCh = weightType.getShape()[0];
+    auto outType = op.output().getType().cast<RankedTensorType>();
+    outSize = outType.getShape()[1];
+    kernelSize = weightType.getShape()[1];
+    pad = op.pad()[0].dyn_cast<IntegerAttr>().getInt();
+    stride = op.stride()[0].dyn_cast<IntegerAttr>().getInt();
+    dilation = op.dilation()[0].dyn_cast<IntegerAttr>().getInt();
   }
 
   bool equalAttr(ConvHelper &rhs) {
-    return (op.pad() == rhs.op.pad()) && (op.stride() == rhs.op.stride()) &&
-           (op.dilation() == rhs.op.dilation()) &&
-           (this->kernelSize() == rhs.kernelSize());
+    return (pad == rhs.pad) && (stride == rhs.stride) &&
+           (dilation == rhs.dilation) && (kernelSize == rhs.kernelSize);
   }
 
   bool equalShape(ConvHelper &rhs) {
-    return (this->inShape() == rhs.inShape()) &&
-           (this->outShape() == rhs.outShape()) &&
-           (this->weightShape() == rhs.weightShape());
+    return (inSize == rhs.inSize) && (outSize == rhs.outSize) &&
+           (inCh == rhs.inCh) && (outCh == rhs.outCh) &&
+           (kernelSize == rhs.kernelSize);
   }
 
   void takeSmallerDim(ConvHelper &rhs) {
-    newinCh = newinCh < rhs.newinCh ? newinCh : rhs.newinCh;
-    newOutCh = newOutCh < rhs.newOutCh ? newOutCh : rhs.newOutCh;
-    newInSize = newInSize < rhs.newInSize ? newInSize : rhs.newInSize;
+    inCh = inCh < rhs.inCh ? inCh : rhs.inCh;
+    outCh = outCh < rhs.outCh ? outCh : rhs.outCh;
+    inSize = inSize < rhs.inSize ? inSize : rhs.inSize;
+    outSize = inSize < rhs.inSize ? outSize : rhs.outSize;
   }
 
   bool operator==(ConvHelper &rhs) {
@@ -95,16 +86,25 @@ struct ConvHelper {
       }
       return false;
     }
-
     if (this->isTombstoneKey() || rhs.isTombstoneKey()) {
       if (this->isTombstoneKey() && rhs.isTombstoneKey()) {
         return true;
       }
       return false;
     }
-
-    // return this->equalAttr(rhs) && this->equalShape(rhs);
     return this->equalAttr(rhs);
+  }
+
+  unsigned getHashValue() const {
+    unsigned hash = inCh * 37U;
+    hash = (hash + inSize) * 37U;
+    hash = (hash + outCh) * 37U;
+    hash = (hash + outSize) * 37U;
+    hash = (hash + kernelSize) * 37U;
+    hash = (hash + pad) * 37U;
+    hash = (hash + stride) * 37U;
+    hash = (hash + dilation) * 37U;
+    return hash;
   }
 
   bool operator<(const ConvHelper &rhs) const {
@@ -113,65 +113,62 @@ struct ConvHelper {
     if (lhs == rhsCopy) {
       return false;
     } else {
-      return (this->op < rhs.op);
+      return (this->getHashValue() < rhs.getHashValue());
     }
   }
-
   bool isEmptyKey() {
-    void *pointer = llvm::DenseMapInfo<void *>::getEmptyKey();
-    return tosa::Conv2DOp::getFromOpaquePointer(pointer) == op;
+    int64_t emptyKey = (1UL << (sizeof(int64_t) * 8 - 1)) - 1UL;
+    return (inCh == emptyKey) && (inSize == emptyKey) && (outCh == emptyKey) &&
+           (outSize == emptyKey) && (kernelSize == emptyKey) &&
+           (pad == emptyKey) && (stride == emptyKey) && (dilation == emptyKey);
   }
-
   bool isTombstoneKey() {
-    void *pointer = llvm::DenseMapInfo<void *>::getTombstoneKey();
-    return tosa::Conv2DOp::getFromOpaquePointer(pointer) == op;
+    int64_t tombstoneKey = (1UL << (sizeof(int64_t) * 8 - 1)) - 1UL - 1L;
+    return (inCh == tombstoneKey) && (inSize == tombstoneKey) &&
+           (outCh == tombstoneKey) && (outSize == tombstoneKey) &&
+           (kernelSize == tombstoneKey) && (pad == tombstoneKey) &&
+           (stride == tombstoneKey) && (dilation == tombstoneKey);
   }
 };
 
 namespace llvm {
 template <> struct DenseMapInfo<ConvHelper> {
   static ConvHelper getEmptyKey() {
-    void *pointer = llvm::DenseMapInfo<void *>::getEmptyKey();
-    return ConvHelper(tosa::Conv2DOp::getFromOpaquePointer(pointer));
+    int64_t emptyKey = (1UL << (sizeof(int64_t) * 8 - 1)) - 1UL;
+    return ConvHelper{emptyKey, emptyKey, emptyKey, emptyKey,
+                      emptyKey, emptyKey, emptyKey, emptyKey};
   }
   static ConvHelper getTombstoneKey() {
-    void *pointer = llvm::DenseMapInfo<void *>::getTombstoneKey();
-    return ConvHelper(tosa::Conv2DOp::getFromOpaquePointer(pointer));
+    int64_t tombstoneKey = (1UL << (sizeof(int64_t) * 8 - 1)) - 1UL - 1L;
+    return ConvHelper{tombstoneKey, tombstoneKey, tombstoneKey, tombstoneKey,
+                      tombstoneKey, tombstoneKey, tombstoneKey, tombstoneKey};
   }
-  static unsigned getHashValue(ConvHelper Val) {
-    return 0; // mlir::hash_value(Val.op);
-  }
+  static unsigned getHashValue(ConvHelper Val) { return 0; }
   static bool isEqual(ConvHelper LHS, ConvHelper RHS) { return LHS == RHS; }
 };
 } // namespace llvm
 
-static FuncOp createSharedFunction(ModuleOp module, ConvHelper &sharedHelper,
+static FuncOp createSharedFunction(ModuleOp module, ConvHelper sharedHelper,
                                    StringRef functionName) {
   auto builder = OpBuilder(module);
-  auto sharedConv = sharedHelper.op;
 
-  // Create a function that contains the most frequent convolution.
+  // Create a shared function that contains sharedHelper's convolution
   SmallVector<Type, 16> inputTypes;
-  auto inputShape =
-      ArrayRef<int64_t>({1, sharedHelper.newInSize, sharedHelper.newInSize,
-                         sharedHelper.newinCh});
+  auto inputShape = ArrayRef<int64_t>(
+      {1, sharedHelper.inSize, sharedHelper.inSize, sharedHelper.inCh});
   auto inputType = RankedTensorType::get((inputShape), builder.getF32Type());
   inputTypes.push_back(inputType);
   auto weightShape =
-      ArrayRef<int64_t>({sharedHelper.newOutCh, sharedHelper.kernelSize(),
-                         sharedHelper.kernelSize(), sharedHelper.newinCh});
+      ArrayRef<int64_t>({sharedHelper.outCh, sharedHelper.kernelSize,
+                         sharedHelper.kernelSize, sharedHelper.inCh});
   auto weightType = RankedTensorType::get((weightShape), builder.getF32Type());
   inputTypes.push_back(weightType);
-  auto biasShape = ArrayRef<int64_t>({sharedHelper.newOutCh});
+  auto biasShape = ArrayRef<int64_t>({sharedHelper.outCh});
   auto biasType = RankedTensorType::get((biasShape), builder.getF32Type());
   inputTypes.push_back(biasType);
 
-  auto resultSize =
-      (sharedHelper.newInSize - sharedHelper.kernelSize() +
-       sharedConv.pad()[0].dyn_cast<IntegerAttr>().getInt() * 2 + 1) /
-      sharedConv.stride()[0].dyn_cast<IntegerAttr>().getInt();
-  auto resultShape =
-      ArrayRef<int64_t>({1, resultSize, resultSize, sharedHelper.newOutCh});
+  auto resultShape = ArrayRef<int64_t>(
+      {1, sharedHelper.outSize, sharedHelper.outSize, sharedHelper.outCh});
   auto resultType = RankedTensorType::get((resultShape), builder.getF32Type());
 
   auto newType = builder.getFunctionType(inputTypes, resultType);
@@ -189,13 +186,16 @@ static FuncOp createSharedFunction(ModuleOp module, ConvHelper &sharedHelper,
   auto weight = entryBlock->getArgument(1);
   auto bias = entryBlock->getArgument(2);
   auto outputType = newFuncOp.getResultTypes()[0];
-  auto pad = sharedConv.pad();
-  auto stride = sharedConv.stride();
-  auto dilation = sharedConv.dilation();
+  // auto pad = builder.getI64ArrayAttr({0, 0, 0, 0});
+  auto pad = builder.getI64ArrayAttr(
+      {sharedHelper.pad, sharedHelper.pad, sharedHelper.pad, sharedHelper.pad});
+  auto stride =
+      builder.getI64ArrayAttr({sharedHelper.stride, sharedHelper.stride});
+  auto dilation =
+      builder.getI64ArrayAttr({sharedHelper.dilation, sharedHelper.dilation});
   auto newConvOp =
       builder.create<tosa::Conv2DOp>(builder.getUnknownLoc(), outputType, input,
                                      weight, bias, pad, stride, dilation);
-  sharedHelper.op = newConvOp;
 
   // Create ReturnOp inside the created function/
   builder.create<func::ReturnOp>(builder.getUnknownLoc(), newConvOp.output());
@@ -203,12 +203,10 @@ static FuncOp createSharedFunction(ModuleOp module, ConvHelper &sharedHelper,
   return newFuncOp;
 }
 
-static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
+static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
                             FuncOp newFuncOp) {
   auto builder = OpBuilder(module);
 
-  // Shared convolution
-  ConvHelper SharedHelper = ConvHelper(sharedConv);
   // Shared function name
   auto functionName = newFuncOp->getAttr("name").dyn_cast<StringAttr>();
   // Record ops to be erased.
@@ -221,27 +219,26 @@ static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
 
     func.walk([&](tosa::Conv2DOp Conv2DOp) {
       auto loc = Conv2DOp.getLoc();
-      ConvHelper CurrHelper = ConvHelper(Conv2DOp);
+      ConvHelper currHelper = ConvHelper(Conv2DOp);
 
-      if (!CurrHelper.equalAttr(SharedHelper))
+      if (!currHelper.equalAttr(sharedHelper))
         return;
 
-      int64_t outChDiv = (CurrHelper.outCh() + SharedHelper.outCh() - 1) /
-                         SharedHelper.outCh();
+      int64_t outChDiv =
+          (currHelper.outCh + sharedHelper.outCh - 1) / sharedHelper.outCh;
       int64_t inChDiv =
-          (CurrHelper.inCh() + SharedHelper.inCh() - 1) / SharedHelper.inCh();
-      int64_t inSizeDiv = (CurrHelper.inSize() + SharedHelper.inSize() - 1) /
-                          SharedHelper.inSize();
+          (currHelper.inCh + sharedHelper.inCh - 1) / sharedHelper.inCh;
+      int64_t inSizeDiv =
+          (currHelper.inSize + sharedHelper.inSize - 1) / sharedHelper.inSize;
 
       // Define zero bias if more than 1 input channel divs
       builder.setInsertionPoint(Conv2DOp);
       Value zeroBias;
       if (inChDiv > 1) {
-        auto biasTensor =
-            RankedTensorType::get(SharedHelper.outCh(), builder.getF32Type());
+        auto biasType =
+            RankedTensorType::get(sharedHelper.outCh, builder.getF32Type());
         auto biasAttr = DenseFPElementsAttr::get(
-            biasTensor, std::vector<float>(SharedHelper.outCh()));
-        auto biasType = SharedHelper.op.getOperand(2).getType();
+            biasType, std::vector<float>(sharedHelper.outCh));
         zeroBias = builder.create<tosa::ConstOp>(loc, biasType, biasAttr);
       }
 
@@ -273,7 +270,7 @@ static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
               .create<AffineApplyOp>(
                   loc,
                   AffineMap::get(
-                      1, 0, builder.getAffineDimExpr(0) * SharedHelper.outCh()),
+                      1, 0, builder.getAffineDimExpr(0) * sharedHelper.outCh),
                   outChLoop.getInductionVar())
               .getODSResults(0)[0];
 
@@ -285,101 +282,102 @@ static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
               .create<AffineApplyOp>(
                   loc,
                   AffineMap::get(
-                      1, 0, builder.getAffineDimExpr(0) * SharedHelper.inCh()),
+                      1, 0, builder.getAffineDimExpr(0) * sharedHelper.inCh),
                   inChLoop.getInductionVar())
               .getODSResults(0)[0];
 
       // Create width loop
       auto widthLoop = builder.create<AffineForOp>(loc, 0, inSizeDiv, 1);
       builder.setInsertionPointToStart(widthLoop.getBody());
-      auto inWidth = builder
-                         .create<AffineApplyOp>(
-                             loc,
-                             AffineMap::get(1, 0,
-                                            builder.getAffineDimExpr(0) *
-                                                SharedHelper.inSize()),
-                             widthLoop.getInductionVar())
-                         .getODSResults(0)[0];
-      auto outWidth = builder
-                          .create<AffineApplyOp>(
-                              loc,
-                              AffineMap::get(1, 0,
-                                             builder.getAffineDimExpr(0) *
-                                                 SharedHelper.outSize()),
-                              widthLoop.getInductionVar())
-                          .getODSResults(0)[0];
+      auto inWidth =
+          builder
+              .create<AffineApplyOp>(
+                  loc,
+                  AffineMap::get(
+                      1, 0, builder.getAffineDimExpr(0) * sharedHelper.inSize),
+                  widthLoop.getInductionVar())
+              .getODSResults(0)[0];
+      auto outWidth =
+          builder
+              .create<AffineApplyOp>(
+                  loc,
+                  AffineMap::get(
+                      1, 0, builder.getAffineDimExpr(0) * sharedHelper.outSize),
+                  widthLoop.getInductionVar())
+              .getODSResults(0)[0];
 
       // Create height loop
       auto heightLoop = builder.create<AffineForOp>(loc, 0, inSizeDiv, 1);
       builder.setInsertionPointToStart(heightLoop.getBody());
-      auto inHeight = builder
-                          .create<AffineApplyOp>(
-                              loc,
-                              AffineMap::get(1, 0,
-                                             builder.getAffineDimExpr(0) *
-                                                 SharedHelper.inSize()),
-                              heightLoop.getInductionVar())
-                          .getODSResults(0)[0];
-      auto outHeight = builder
-                           .create<AffineApplyOp>(
-                               loc,
-                               AffineMap::get(1, 0,
-                                              builder.getAffineDimExpr(0) *
-                                                  SharedHelper.outSize()),
-                               heightLoop.getInductionVar())
-                           .getODSResults(0)[0];
+      auto inHeight =
+          builder
+              .create<AffineApplyOp>(
+                  loc,
+                  AffineMap::get(
+                      1, 0, builder.getAffineDimExpr(0) * sharedHelper.inSize),
+                  heightLoop.getInductionVar())
+              .getODSResults(0)[0];
+      auto outHeight =
+          builder
+              .create<AffineApplyOp>(
+                  loc,
+                  AffineMap::get(
+                      1, 0, builder.getAffineDimExpr(0) * sharedHelper.outSize),
+                  heightLoop.getInductionVar())
+              .getODSResults(0)[0];
 
       // Slice inputs
       auto bufOffset = ArrayRef<OpFoldResult>(
           {builder.getI64IntegerAttr(0), inWidth, inHeight, inCh});
       auto bufSize = ArrayRef<OpFoldResult>(
           {builder.getI64IntegerAttr(1),
-           builder.getI64IntegerAttr(SharedHelper.inSize()),
-           builder.getI64IntegerAttr(SharedHelper.inSize()),
-           builder.getI64IntegerAttr(SharedHelper.inCh())});
+           builder.getI64IntegerAttr(sharedHelper.inSize),
+           builder.getI64IntegerAttr(sharedHelper.inSize),
+           builder.getI64IntegerAttr(sharedHelper.inCh)});
       auto bufStride = ArrayRef<OpFoldResult>(
           {builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1),
            builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1)});
       auto slicedInput =
           builder
-              .create<tensor::ExtractSliceOp>(loc, Conv2DOp->getOperand(0),
-                                              bufOffset, bufSize, bufStride)
+              .create<tensor::ExtractSliceOp>(loc, Conv2DOp.input(), bufOffset,
+                                              bufSize, bufStride)
               .result();
 
       // Slice weights
       bufOffset = ArrayRef<OpFoldResult>({outCh, builder.getI64IntegerAttr(0),
                                           builder.getI64IntegerAttr(0), inCh});
       bufSize = ArrayRef<OpFoldResult>(
-          {builder.getI64IntegerAttr(SharedHelper.outCh()),
-           builder.getI64IntegerAttr(SharedHelper.kernelSize()),
-           builder.getI64IntegerAttr(SharedHelper.kernelSize()),
-           builder.getI64IntegerAttr(SharedHelper.inCh())});
+          {builder.getI64IntegerAttr(sharedHelper.outCh),
+           builder.getI64IntegerAttr(sharedHelper.kernelSize),
+           builder.getI64IntegerAttr(sharedHelper.kernelSize),
+           builder.getI64IntegerAttr(sharedHelper.inCh)});
       bufStride = ArrayRef<OpFoldResult>(
           {builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1),
            builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1)});
       auto slicedWeight =
           builder
-              .create<tensor::ExtractSliceOp>(loc, Conv2DOp->getOperand(1),
-                                              bufOffset, bufSize, bufStride)
+              .create<tensor::ExtractSliceOp>(loc, Conv2DOp.weight(), bufOffset,
+                                              bufSize, bufStride)
               .result();
 
       // Slice biases
       bufOffset = ArrayRef<OpFoldResult>({outCh});
       bufSize = ArrayRef<OpFoldResult>(
-          {builder.getI64IntegerAttr(SharedHelper.outCh())});
+          {builder.getI64IntegerAttr(sharedHelper.outCh)});
       bufStride = ArrayRef<OpFoldResult>({builder.getI64IntegerAttr(1)});
       auto slicedBias =
           builder
-              .create<tensor::ExtractSliceOp>(loc, Conv2DOp->getOperand(2),
-                                              bufOffset, bufSize, bufStride)
+              .create<tensor::ExtractSliceOp>(loc, Conv2DOp.bias(), bufOffset,
+                                              bufSize, bufStride)
               .result();
 
       // Call function
       auto operands = {slicedInput, slicedWeight, slicedBias};
+      auto outType = RankedTensorType::get(
+          {1, sharedHelper.outSize, sharedHelper.outSize, sharedHelper.outCh},
+          builder.getF32Type());
       auto slicedOutTensor =
-          builder
-              .create<func::CallOp>(loc, functionName,
-                                    SharedHelper.op->getResultTypes(), operands)
+          builder.create<func::CallOp>(loc, functionName, outType, operands)
               .getODSResults(0)[0];
       auto count = newFuncOp->getAttr("count").dyn_cast<IntegerAttr>().getInt();
       newFuncOp->setAttr(
@@ -400,9 +398,9 @@ static bool replaceFunction(ModuleOp module, tosa::Conv2DOp sharedConv,
           {builder.getI64IntegerAttr(0), outWidth, outHeight, outCh});
       bufSize = ArrayRef<OpFoldResult>(
           {builder.getI64IntegerAttr(1),
-           builder.getI64IntegerAttr(SharedHelper.outSize()),
-           builder.getI64IntegerAttr(SharedHelper.outSize()),
-           builder.getI64IntegerAttr(SharedHelper.outCh())});
+           builder.getI64IntegerAttr(sharedHelper.outSize),
+           builder.getI64IntegerAttr(sharedHelper.outSize),
+           builder.getI64IntegerAttr(sharedHelper.outCh)});
       bufStride = ArrayRef<OpFoldResult>(
           {builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1),
            builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1)});
@@ -501,7 +499,7 @@ bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
       countMap.erase(sharedHelper);
       auto functionName = "shared_function_" + std::to_string(i);
       auto newFuncOp = createSharedFunction(module, sharedHelper, functionName);
-      replaceFunction(module, sharedHelper.op, newFuncOp);
+      replaceFunction(module, sharedHelper, newFuncOp);
     }
   }
 
