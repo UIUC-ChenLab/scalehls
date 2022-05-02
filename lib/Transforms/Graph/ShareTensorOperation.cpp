@@ -241,7 +241,7 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
         zeroBias = builder.create<tosa::ConstOp>(loc, biasType, biasAttr);
       }
 
-      // Output MemRef object allocated off-chip and original buffers
+      // Input MemRef object allocated off-chip
       bufferization::ToTensorOp inTensor;
       if (Conv2DOp.input().getDefiningOp()) {
         if (auto tensor = dyn_cast<bufferization::ToTensorOp>(
@@ -250,6 +250,8 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
         }
       }
       Value inTensorValue = Conv2DOp.input();
+
+      // Output MemRef object allocated off-chip
       bufferization::ToMemrefOp outMemref;
       for (auto user : Conv2DOp.output().getUsers()) {
         if (auto memref = dyn_cast<bufferization::ToMemrefOp>(user)) {
@@ -335,19 +337,16 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
                   heightLoop.getInductionVar())
               .getODSResults(0)[0];
 
-      // Slice inputs
+      // Modify tensor shape if necessary
       memref::SubViewOp inSubview;
       if (auto inSubview =
-              dyn_cast<memref::SubViewOp>(inTensor.result().getDefiningOp())) {
+              dyn_cast<memref::SubViewOp>(inTensor.memref().getDefiningOp())) {
         auto inArg = inSubview.source();
-        opToErase.push_back(inTensor);
-        opToErase.push_back(inSubview);
         inTensorValue =
-            builder
-                .create<bufferization::ToTensorOp>(loc, inArg.getType(), inArg)
-                .result();
+            builder.create<bufferization::ToTensorOp>(loc, inArg).result();
       }
 
+      // Slice inputs
       auto bufOffset = ArrayRef<OpFoldResult>(
           {builder.getI64IntegerAttr(0), inWidth, inHeight, inCh});
       auto bufSize = ArrayRef<OpFoldResult>(
@@ -436,6 +435,8 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
       opToErase.push_back(outCopy);
       opToErase.push_back(outMemref);
       opToErase.push_back(Conv2DOp);
+      if (inSubview)
+        opToErase.push_back(inTensor);
     });
   }
 
@@ -521,9 +522,6 @@ bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
 
         // Copy original input to the new input
         builder.create<memref::CopyOp>(loc, inMemref, inSubview);
-
-        inSubview = builder.create<memref::SubViewOp>(
-            loc, inMemrefArg, bufOffset, bufSize, bufStride);
 
         // Change the new input to tensor
         auto inTensor = builder
