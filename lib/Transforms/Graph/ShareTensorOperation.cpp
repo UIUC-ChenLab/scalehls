@@ -242,14 +242,24 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
       }
 
       // Input MemRef object allocated off-chip
+      Value inTensorValue = Conv2DOp.input();
       bufferization::ToTensorOp inTensor;
       if (Conv2DOp.input().getDefiningOp()) {
         if (auto tensor = dyn_cast<bufferization::ToTensorOp>(
-                Conv2DOp.input().getDefiningOp())) {
+                inTensorValue.getDefiningOp())) {
           inTensor = tensor;
         }
       }
-      Value inTensorValue = Conv2DOp.input();
+
+      // Modify ToTensorOp of shape changes
+      memref::SubViewOp inSubview;
+      if (auto subview =
+              dyn_cast<memref::SubViewOp>(inTensor.memref().getDefiningOp())) {
+        inSubview = subview;
+        auto inArg = inSubview.source();
+        inTensorValue =
+            builder.create<bufferization::ToTensorOp>(loc, inArg).result();
+      }
 
       // Output MemRef object allocated off-chip
       bufferization::ToMemrefOp outMemref;
@@ -336,15 +346,6 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
                       1, 0, builder.getAffineDimExpr(0) * sharedHelper.outSize),
                   heightLoop.getInductionVar())
               .getODSResults(0)[0];
-
-      // Modify tensor shape if necessary
-      memref::SubViewOp inSubview;
-      if (auto inSubview =
-              dyn_cast<memref::SubViewOp>(inTensor.memref().getDefiningOp())) {
-        auto inArg = inSubview.source();
-        inTensorValue =
-            builder.create<bufferization::ToTensorOp>(loc, inArg).result();
-      }
 
       // Slice inputs
       auto bufOffset = ArrayRef<OpFoldResult>(
@@ -435,8 +436,7 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
       opToErase.push_back(outCopy);
       opToErase.push_back(outMemref);
       opToErase.push_back(Conv2DOp);
-      if (inSubview)
-        opToErase.push_back(inTensor);
+      opToErase.push_back(inTensor);
     });
   }
 
@@ -503,7 +503,7 @@ bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
                     Conv2DOp.input())
                 .memref();
 
-        // Create a subview for the argument
+        // Create a subview for the argument (copy to buffer)
         auto bufOffset =
             ArrayRef<OpFoldResult>({builder.getI64IntegerAttr(0),
                                     builder.getI64IntegerAttr(helper.pad),
@@ -524,22 +524,25 @@ bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
         builder.create<memref::CopyOp>(loc, inMemref, inSubview);
 
         // Change the new input to tensor
-        auto inTensor = builder
-                            .create<bufferization::ToTensorOp>(
-                                loc,
-                                RankedTensorType::get(inType.getShape(),
-                                                      inType.getElementType()),
-                                inSubview)
-                            .result();
+        auto inTensor =
+            builder.create<bufferization::ToTensorOp>(loc, inSubview).result();
 
         Conv2DOp.inputMutable().slice(0, 1).assign(inTensor);
         firstConv = false;
       }
 
+      // Get the padding of next convolution if there is one
+      auto nextPad = 0;
+      for (auto user : Conv2DOp.output().getUsers()) {
+        if (auto nextConv = dyn_cast<tosa::Conv2DOp>(user)) {
+          nextPad = ConvHelper(nextConv).pad;
+        }
+      }
+
       // Move results to off-chip
       auto outType = Conv2DOp.output().getType().dyn_cast<RankedTensorType>();
-      ArrayRef<int64_t> newOutShape = {1, helper.outSize + 2 * helper.pad,
-                                       helper.outSize + 2 * helper.pad,
+      ArrayRef<int64_t> newOutShape = {1, helper.outSize + 2 * nextPad,
+                                       helper.outSize + 2 * nextPad,
                                        helper.outCh};
       auto outMemrefArg = func.front().addArgument(
           MemRefType::get(newOutShape, outType.getElementType()), loc);
@@ -556,11 +559,10 @@ bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
           loc, MemRefType::get(outType.getShape(), outType.getElementType()),
           newConv2DOp.output());
 
-      // Subview output memref for padding
+      // Create a subview for the argument (copy to buffer)
       auto bufOffset = ArrayRef<OpFoldResult>(
-          {builder.getI64IntegerAttr(0), builder.getI64IntegerAttr(helper.pad),
-           builder.getI64IntegerAttr(helper.pad),
-           builder.getI64IntegerAttr(0)});
+          {builder.getI64IntegerAttr(0), builder.getI64IntegerAttr(nextPad),
+           builder.getI64IntegerAttr(nextPad), builder.getI64IntegerAttr(0)});
       auto bufSize =
           ArrayRef<OpFoldResult>({builder.getI64IntegerAttr(1),
                                   builder.getI64IntegerAttr(helper.outSize),
@@ -577,14 +579,14 @@ bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
 
       // Create final output tensor
       auto outTensor =
-          builder.create<bufferization::ToTensorOp>(loc, outType, subview)
-              .result();
+          builder.create<bufferization::ToTensorOp>(loc, subview).result();
 
       opToErase.push_back(Conv2DOp);
       Conv2DOp.replaceAllUsesWith(outTensor);
       return;
     });
   }
+
   // Erase all ops on the list.
   for (auto op : opToErase)
     op->erase();
@@ -607,6 +609,18 @@ bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
       replaceFunction(module, sharedHelper, newFuncOp);
     }
   }
+
+  // Remove all unnecessary subviews
+  opToErase = SmallVector<Operation *, 32>();
+  for (auto func : module.getOps<FuncOp>()) {
+    func.walk([&](memref::SubViewOp subview) {
+      if (subview.result().getUsers().empty()) {
+        opToErase.push_back(subview);
+      }
+    });
+  }
+  for (auto op : opToErase)
+    op->erase();
 
   return true;
 }
