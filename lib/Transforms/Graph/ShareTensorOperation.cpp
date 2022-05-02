@@ -574,6 +574,60 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
   return true;
 }
 
+static bool postProcess(ModuleOp module) {
+  auto builder = OpBuilder(module);
+
+  // Remove padding for unshared convolutions
+  SmallVector<Operation *, 32> opToErase;
+  for (auto func : module.getOps<FuncOp>()) {
+    if (!func->getAttr("shared")) {
+      func.walk([&](tosa::Conv2DOp Conv2DOp) {
+        // Create a new ToTensorOp with padding
+        auto inTensor = dyn_cast<bufferization::ToTensorOp>(
+            Conv2DOp.input().getDefiningOp());
+        auto subview =
+            dyn_cast<memref::SubViewOp>(inTensor.memref().getDefiningOp());
+        auto memrefArg = subview.source();
+        builder.setInsertionPointAfter(inTensor);
+        auto newInTensor = builder.create<bufferization::ToTensorOp>(
+            inTensor.getLoc(), memrefArg);
+        inTensor.result().replaceAllUsesWith(newInTensor.result());
+        opToErase.push_back(inTensor);
+
+        // Create a new Conv2DOp without padding
+        auto input = Conv2DOp.input();
+        auto weight = Conv2DOp.weight();
+        auto bias = Conv2DOp.bias();
+        auto outputType = Conv2DOp.output().getType();
+        auto pad = builder.getI64ArrayAttr({0, 0, 0, 0});
+        auto stride = Conv2DOp.stride();
+        auto dilation = Conv2DOp.dilation();
+        auto newConvOp =
+            builder.create<tosa::Conv2DOp>(Conv2DOp.getLoc(), outputType, input,
+                                           weight, bias, pad, stride, dilation);
+        Conv2DOp.output().replaceAllUsesWith(newConvOp.output());
+        opToErase.push_back(Conv2DOp);
+      });
+    }
+  }
+  for (auto op : opToErase)
+    op->erase();
+
+  // Remove all unnecessary subviews
+  opToErase = SmallVector<Operation *, 32>();
+  for (auto func : module.getOps<FuncOp>()) {
+    func.walk([&](memref::SubViewOp subview) {
+      if (subview.result().getUsers().empty()) {
+        opToErase.push_back(subview);
+      }
+    });
+  }
+  for (auto op : opToErase)
+    op->erase();
+
+  return true;
+}
+
 bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
   // Count the number of each shape of convolution.
   DenseMap<ConvHelper, std::pair<ConvHelper, unsigned>> countMap;
@@ -615,19 +669,7 @@ bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
     }
   }
 
-  // Remove padding for unshared convolutions
-
-  // Remove all unnecessary subviews
-  SmallVector<Operation *, 32> opToErase;
-  for (auto func : module.getOps<FuncOp>()) {
-    func.walk([&](memref::SubViewOp subview) {
-      if (subview.result().getUsers().empty()) {
-        opToErase.push_back(subview);
-      }
-    });
-  }
-  for (auto op : opToErase)
-    op->erase();
+  postProcess(module);
 
   return true;
 }
