@@ -155,7 +155,8 @@ static FuncOp createSharedFunction(ModuleOp module, ConvHelper sharedHelper,
   // Create a shared function that contains sharedHelper's convolution
   SmallVector<Type, 16> inputTypes;
   auto inputShape = ArrayRef<int64_t>(
-      {1, sharedHelper.inSize, sharedHelper.inSize, sharedHelper.inCh});
+      {1, sharedHelper.inSize + sharedHelper.pad * 2,
+       sharedHelper.inSize + sharedHelper.pad * 2, sharedHelper.inCh});
   auto inputType = RankedTensorType::get((inputShape), builder.getF32Type());
   inputTypes.push_back(inputType);
   auto weightShape =
@@ -186,9 +187,7 @@ static FuncOp createSharedFunction(ModuleOp module, ConvHelper sharedHelper,
   auto weight = entryBlock->getArgument(1);
   auto bias = entryBlock->getArgument(2);
   auto outputType = newFuncOp.getResultTypes()[0];
-  // auto pad = builder.getI64ArrayAttr({0, 0, 0, 0});
-  auto pad = builder.getI64ArrayAttr(
-      {sharedHelper.pad, sharedHelper.pad, sharedHelper.pad, sharedHelper.pad});
+  auto pad = builder.getI64ArrayAttr({0, 0, 0, 0});
   auto stride =
       builder.getI64ArrayAttr({sharedHelper.stride, sharedHelper.stride});
   auto dilation =
@@ -243,6 +242,14 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
       }
 
       // Output MemRef object allocated off-chip and original buffers
+      bufferization::ToTensorOp inTensor;
+      if (Conv2DOp.input().getDefiningOp()) {
+        if (auto tensor = dyn_cast<bufferization::ToTensorOp>(
+                Conv2DOp.input().getDefiningOp())) {
+          inTensor = tensor;
+        }
+      }
+      Value inTensorValue = Conv2DOp.input();
       bufferization::ToMemrefOp outMemref;
       for (auto user : Conv2DOp.output().getUsers()) {
         if (auto memref = dyn_cast<bufferization::ToMemrefOp>(user)) {
@@ -255,10 +262,12 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
           outCopy = copy;
         }
       }
+      auto outSubview =
+          dyn_cast<memref::SubViewOp>(outCopy.target().getDefiningOp());
       bufferization::ToTensorOp outTensor;
-      for (auto user : outCopy.target().getUsers()) {
-        if (auto copy = dyn_cast<bufferization::ToTensorOp>(user)) {
-          outTensor = copy;
+      for (auto user : outSubview.source().getUsers()) {
+        if (auto tensor = dyn_cast<bufferization::ToTensorOp>(user)) {
+          outTensor = tensor;
         }
       }
 
@@ -327,19 +336,33 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
               .getODSResults(0)[0];
 
       // Slice inputs
+      memref::SubViewOp inSubview;
+      if (auto inSubview =
+              dyn_cast<memref::SubViewOp>(inTensor.result().getDefiningOp())) {
+        auto inArg = inSubview.source();
+        opToErase.push_back(inTensor);
+        opToErase.push_back(inSubview);
+        inTensorValue =
+            builder
+                .create<bufferization::ToTensorOp>(loc, inArg.getType(), inArg)
+                .result();
+      }
+
       auto bufOffset = ArrayRef<OpFoldResult>(
           {builder.getI64IntegerAttr(0), inWidth, inHeight, inCh});
       auto bufSize = ArrayRef<OpFoldResult>(
           {builder.getI64IntegerAttr(1),
-           builder.getI64IntegerAttr(sharedHelper.inSize),
-           builder.getI64IntegerAttr(sharedHelper.inSize),
+           builder.getI64IntegerAttr(sharedHelper.inSize +
+                                     sharedHelper.pad * 2),
+           builder.getI64IntegerAttr(sharedHelper.inSize +
+                                     sharedHelper.pad * 2),
            builder.getI64IntegerAttr(sharedHelper.inCh)});
       auto bufStride = ArrayRef<OpFoldResult>(
           {builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1),
            builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1)});
       auto slicedInput =
           builder
-              .create<tensor::ExtractSliceOp>(loc, Conv2DOp.input(), bufOffset,
+              .create<tensor::ExtractSliceOp>(loc, inTensorValue, bufOffset,
                                               bufSize, bufStride)
               .result();
 
@@ -405,7 +428,7 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
           {builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1),
            builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1)});
       auto subviewOut = builder.create<memref::SubViewOp>(
-          loc, outCopy.target(), bufOffset, bufSize, bufStride);
+          loc, outSubview.source(), bufOffset, bufSize, bufStride);
 
       // Copy to sliced output
       builder.create<memref::CopyOp>(loc, slicedOutMemref, subviewOut);
@@ -426,16 +449,102 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
 bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
   auto builder = OpBuilder(module);
 
+  // Count the number of each shape of convolution.
+  DenseMap<ConvHelper, std::pair<ConvHelper, unsigned>> countMap;
+
+  // Traverse the entire module and count all the convolutions.
+  for (auto func : module.getOps<FuncOp>()) {
+    func.walk([&](tosa::Conv2DOp Conv2DOp) {
+      ConvHelper helper = ConvHelper(Conv2DOp);
+      if (!countMap.count(helper)) {
+        countMap[helper] = std::pair<ConvHelper, unsigned>(helper, 1);
+      } else {
+        helper.takeSmallerDim(countMap[helper].first);
+        auto currCount = countMap[helper].second;
+        countMap.erase(helper);
+        countMap[helper] =
+            std::pair<ConvHelper, unsigned>(helper, currCount + 1);
+      }
+    });
+  }
+
   // Move all hidden features to off-chip buffer
   SmallVector<Operation *, 32> opToErase;
+  bool firstConv = true;
   for (auto func : module.getOps<FuncOp>()) {
     func.walk([&](tosa::Conv2DOp Conv2DOp) {
       auto loc = Conv2DOp.getLoc();
+      ConvHelper helper = ConvHelper(Conv2DOp);
+
+      // If first conv, create memref copy for future padding
+      if (firstConv) {
+        builder.setInsertionPoint(Conv2DOp);
+
+        auto origInArg = Conv2DOp.input();
+
+        // Create a new function argument
+        auto inType = origInArg.getType().dyn_cast<RankedTensorType>();
+        ArrayRef<int64_t> newInShape = {1, helper.outSize + 2 * helper.pad,
+                                        helper.outSize + 2 * helper.pad,
+                                        helper.outCh};
+        auto inMemrefArg = func.front().addArgument(
+            MemRefType::get(newInShape, inType.getElementType()), loc);
+        func.setType(builder.getFunctionType(
+            func.front().getArgumentTypes(),
+            func.back().getTerminator()->getOperandTypes()));
+
+        // Change the original input to memref
+        auto inMemref =
+            builder
+                .create<bufferization::ToMemrefOp>(
+                    loc,
+                    MemRefType::get(inType.getShape(), inType.getElementType()),
+                    Conv2DOp.input())
+                .memref();
+
+        // Create a subview for the argument
+        auto bufOffset =
+            ArrayRef<OpFoldResult>({builder.getI64IntegerAttr(0),
+                                    builder.getI64IntegerAttr(helper.pad),
+                                    builder.getI64IntegerAttr(helper.pad),
+                                    builder.getI64IntegerAttr(0)});
+        auto bufSize =
+            ArrayRef<OpFoldResult>({builder.getI64IntegerAttr(1),
+                                    builder.getI64IntegerAttr(helper.inSize),
+                                    builder.getI64IntegerAttr(helper.inSize),
+                                    builder.getI64IntegerAttr(helper.inCh)});
+        auto bufStride = ArrayRef<OpFoldResult>(
+            {builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1),
+             builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1)});
+        auto inSubview = builder.create<memref::SubViewOp>(
+            loc, inMemrefArg, bufOffset, bufSize, bufStride);
+
+        // Copy original input to the new input
+        builder.create<memref::CopyOp>(loc, inMemref, inSubview);
+
+        inSubview = builder.create<memref::SubViewOp>(
+            loc, inMemrefArg, bufOffset, bufSize, bufStride);
+
+        // Change the new input to tensor
+        auto inTensor = builder
+                            .create<bufferization::ToTensorOp>(
+                                loc,
+                                RankedTensorType::get(inType.getShape(),
+                                                      inType.getElementType()),
+                                inSubview)
+                            .result();
+
+        Conv2DOp.inputMutable().slice(0, 1).assign(inTensor);
+        firstConv = false;
+      }
 
       // Move results to off-chip
       auto outType = Conv2DOp.output().getType().dyn_cast<RankedTensorType>();
+      ArrayRef<int64_t> newOutShape = {1, helper.outSize + 2 * helper.pad,
+                                       helper.outSize + 2 * helper.pad,
+                                       helper.outCh};
       auto outMemrefArg = func.front().addArgument(
-          MemRefType::get(outType.getShape(), outType.getElementType()), loc);
+          MemRefType::get(newOutShape, outType.getElementType()), loc);
       func.setType(builder.getFunctionType(
           func.front().getArgumentTypes(),
           func.back().getTerminator()->getOperandTypes()));
@@ -449,12 +558,28 @@ bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
           loc, MemRefType::get(outType.getShape(), outType.getElementType()),
           newConv2DOp.output());
 
+      // Subview output memref for padding
+      auto bufOffset = ArrayRef<OpFoldResult>(
+          {builder.getI64IntegerAttr(0), builder.getI64IntegerAttr(helper.pad),
+           builder.getI64IntegerAttr(helper.pad),
+           builder.getI64IntegerAttr(0)});
+      auto bufSize =
+          ArrayRef<OpFoldResult>({builder.getI64IntegerAttr(1),
+                                  builder.getI64IntegerAttr(helper.outSize),
+                                  builder.getI64IntegerAttr(helper.outSize),
+                                  builder.getI64IntegerAttr(helper.outCh)});
+      auto bufStride = ArrayRef<OpFoldResult>(
+          {builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1),
+           builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1)});
+      auto subview = builder.create<memref::SubViewOp>(
+          loc, outMemrefArg, bufOffset, bufSize, bufStride);
+
       // Copy to sliced output
-      builder.create<memref::CopyOp>(loc, outMemref, outMemrefArg);
+      builder.create<memref::CopyOp>(loc, outMemref, subview);
 
       // Create final output tensor
       auto outTensor =
-          builder.create<bufferization::ToTensorOp>(loc, outType, outMemrefArg)
+          builder.create<bufferization::ToTensorOp>(loc, outType, subview)
               .result();
 
       opToErase.push_back(Conv2DOp);
@@ -465,24 +590,6 @@ bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
   // Erase all ops on the list.
   for (auto op : opToErase)
     op->erase();
-
-  // Count the number of each shape of convolution.
-  DenseMap<ConvHelper, std::pair<ConvHelper, unsigned>> countMap;
-
-  // Traverse the entire module and count all the convolutions.
-  for (auto func : module.getOps<FuncOp>()) {
-    func.walk([&](tosa::Conv2DOp Conv2DOp) {
-      ConvHelper info = ConvHelper(Conv2DOp);
-      if (!countMap.count(info)) {
-        countMap[info] = std::pair<ConvHelper, unsigned>(info, 1);
-      } else {
-        info.takeSmallerDim(countMap[info].first);
-        auto currCount = countMap[info].second;
-        countMap.erase(info);
-        countMap[info] = std::pair<ConvHelper, unsigned>(info, currCount + 1);
-      }
-    });
-  }
 
   // Find the types of convolutions that happen frequently and replace it with
   // shared function
