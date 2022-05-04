@@ -147,7 +147,7 @@ def ShareTensorOperation : Pass<"scalehls-share-tensor-operation", "ModuleOp"> {
   let constructor = "mlir::scalehls::createShareTensorOperationPass()";
 
   let options = [
-    Option<"numTargets", "num-targets", "unsigned", /*default=*/"1",
+    Option<"numTargets", "num-targets", "unsigned", /*default=*/"0",
            "Number of shared functions to be generated">
   ];
 }
