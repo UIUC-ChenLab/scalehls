@@ -164,10 +164,10 @@ static bool createOffChipBuffers(ModuleOp module) {
       if (firstConv) {
         builder.setInsertionPoint(Conv2DOp);
 
-        auto origInArg = Conv2DOp.input();
+        auto firstInput = Conv2DOp.input();
 
         // Create a new function argument
-        auto inType = origInArg.getType().dyn_cast<RankedTensorType>();
+        auto inType = firstInput.getType().dyn_cast<RankedTensorType>();
         ArrayRef<int64_t> newInShape = {1, helper.outSize + 2 * helper.pad,
                                         helper.outSize + 2 * helper.pad,
                                         helper.outCh};
@@ -294,10 +294,6 @@ static FuncOp createSharedFunction(ModuleOp module, ConvHelper sharedHelper,
   auto weightType = MemRefType::get((weightShape), builder.getF32Type());
   inputTypes.push_back(weightType);
 
-  auto biasShape = ArrayRef<int64_t>({sharedHelper.outCh});
-  auto biasType = MemRefType::get((biasShape), builder.getF32Type());
-  inputTypes.push_back(biasType);
-
   auto resultShape = ArrayRef<int64_t>(
       {1, sharedHelper.outSize, sharedHelper.outSize, sharedHelper.outCh});
   auto resultType = MemRefType::get((resultShape), builder.getF32Type());
@@ -317,31 +313,9 @@ static FuncOp createSharedFunction(ModuleOp module, ConvHelper sharedHelper,
   // Get parameters
   auto input = entryBlock->getArgument(0);
   auto weight = entryBlock->getArgument(1);
-  auto bias = entryBlock->getArgument(2);
-  auto output = entryBlock->getArgument(3);
-
-  // Create linalg generic for setting up output buffer
-  auto map0 =
-      AffineMap::get(4, 0, {builder.getAffineDimExpr(3)}, builder.getContext());
-  auto map1 =
-      AffineMap::get(4, 0,
-                     {builder.getAffineDimExpr(0), builder.getAffineDimExpr(1),
-                      builder.getAffineDimExpr(2), builder.getAffineDimExpr(3)},
-                     builder.getContext());
-  auto parallel = StringRef("parallel");
-  auto generic = builder.create<linalg::GenericOp>(
-      builder.getUnknownLoc(), ValueRange({bias}), ValueRange({output}),
-      ArrayRef({map0, map1}),
-      ArrayRef({parallel, parallel, parallel, parallel}));
-  auto entry = builder.createBlock(&generic.getBodyRegion());
-  auto biasArg =
-      entry->addArgument(biasType.getElementType(), builder.getUnknownLoc());
-  entry->addArgument(resultType.getElementType(), builder.getUnknownLoc());
-  builder.setInsertionPointToEnd(entry);
-  builder.create<linalg::YieldOp>(builder.getUnknownLoc(), biasArg);
+  auto output = entryBlock->getArgument(2);
 
   // Create a linalg convolution
-  builder.setInsertionPointAfter(generic);
   auto stride = NamedAttribute(
       builder.getStringAttr("stride"),
       builder.getI64TensorAttr({sharedHelper.stride, sharedHelper.stride}));
@@ -403,23 +377,6 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
                                 builder.getF32Type()))
             .memref();
 
-    // Instantiate a buffer for bias of shared function
-    auto biasBuffer =
-        builder
-            .create<memref::AllocOp>(
-                func.getLoc(),
-                MemRefType::get({sharedHelper.outCh}, builder.getF32Type()))
-            .memref();
-
-    /*auto weightMap = builder.create<AffineApplyOp>(
-        func.getLoc(),
-        AffineMap::get(
-            4, 0,
-            {builder.getAffineDimExpr(1), builder.getAffineDimExpr(2),
-             builder.getAffineDimExpr(3), builder.getAffineDimExpr(0)},
-            builder.getContext()),
-        weightBuffer);*/
-
     func.walk([&](tosa::Conv2DOp Conv2DOp) {
       auto loc = Conv2DOp.getLoc();
       ConvHelper currHelper = ConvHelper(Conv2DOp);
@@ -434,17 +391,6 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
       int64_t inSizeDiv =
           (currHelper.inSize + sharedHelper.inSize - 1) / sharedHelper.inSize;
 
-      // Define zero bias if more than 1 input channel divs
-      builder.setInsertionPoint(Conv2DOp);
-      Value zeroBias;
-      if (inChDiv > 1) {
-        auto biasType =
-            RankedTensorType::get(sharedHelper.outCh, builder.getF32Type());
-        auto biasAttr = DenseFPElementsAttr::get(
-            biasType, std::vector<float>(sharedHelper.outCh));
-        zeroBias = builder.create<tosa::ConstOp>(loc, biasType, biasAttr);
-      }
-
       // Input MemRef object allocated off-chip
       Value inTensorValue = Conv2DOp.input();
       bufferization::ToTensorOp inTensor;
@@ -458,7 +404,7 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
       // Modify ToTensorOp of shape changes
       auto inSubview =
           dyn_cast<memref::SubViewOp>(inTensor.memref().getDefiningOp());
-      auto inArg = inSubview.source();
+      auto inArgument = inSubview.source();
 
       // Output MemRef object allocated off-chip
       bufferization::ToMemrefOp outMemref;
@@ -483,12 +429,39 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
       }
 
       // Find the padding of next convolution operation
-      auto outArg = outSubview.source();
-      int64_t nextPad = (outArg.getType().dyn_cast<MemRefType>().getShape()[1] -
-                         currHelper.outSize) /
-                        2;
+      auto outArgument = outSubview.source();
+      int64_t nextPad =
+          (outArgument.getType().dyn_cast<MemRefType>().getShape()[1] -
+           currHelper.outSize) /
+          2;
+
+      // Create linalg generic for setting up output as bias
+      builder.setInsertionPoint(Conv2DOp);
+      auto biasMemref = builder.create<bufferization::ToMemrefOp>(
+          loc, MemRefType::get({currHelper.outCh}, builder.getF32Type()),
+          Conv2DOp.bias());
+      auto biasMap = AffineMap::get(4, 0, {builder.getAffineDimExpr(3)},
+                                    builder.getContext());
+      auto normalMap = AffineMap::get(
+          4, 0,
+          {builder.getAffineDimExpr(0), builder.getAffineDimExpr(1),
+           builder.getAffineDimExpr(2), builder.getAffineDimExpr(3)},
+          builder.getContext());
+      auto parallel = StringRef("parallel");
+      auto inputGeneric = builder.create<linalg::GenericOp>(
+          loc, ValueRange({biasMemref}), ValueRange({outArgument}),
+          ArrayRef({biasMap, normalMap}),
+          ArrayRef({parallel, parallel, parallel, parallel}));
+      auto inputGenericEntry =
+          builder.createBlock(&inputGeneric.getBodyRegion());
+      auto inputGenericArg0 =
+          inputGenericEntry->addArgument(builder.getF32Type(), loc);
+      inputGenericEntry->addArgument(builder.getF32Type(), loc);
+      builder.setInsertionPointToEnd(inputGenericEntry);
+      builder.create<linalg::YieldOp>(loc, inputGenericArg0);
 
       // Create output channel loop
+      builder.setInsertionPointAfter(inputGeneric);
       auto outChLoop = builder.create<AffineForOp>(loc, 0, outChDiv, 1);
       builder.setInsertionPointToStart(outChLoop.getBody());
       auto outCh =
@@ -568,8 +541,8 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
           {builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1),
            builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1)});
       auto slicedInput = builder
-                             .create<memref::SubViewOp>(loc, inArg, bufOffset,
-                                                        bufSize, bufStride)
+                             .create<memref::SubViewOp>(
+                                 loc, inArgument, bufOffset, bufSize, bufStride)
                              .result();
       builder.create<memref::CopyOp>(loc, slicedInput, inputBuffer);
 
@@ -597,44 +570,26 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
               .result();
 
       // Reshape weight appropriately
-      auto map0 = AffineMap::get(
+      auto weightMap = AffineMap::get(
           4, 0,
           {builder.getAffineDimExpr(3), builder.getAffineDimExpr(0),
            builder.getAffineDimExpr(1), builder.getAffineDimExpr(2)},
           builder.getContext());
-      auto map1 = AffineMap::get(
-          4, 0,
-          {builder.getAffineDimExpr(0), builder.getAffineDimExpr(1),
-           builder.getAffineDimExpr(2), builder.getAffineDimExpr(3)},
-          builder.getContext());
-      auto parallel = StringRef("parallel");
-      auto generic = builder.create<linalg::GenericOp>(
+      auto weightGeneric = builder.create<linalg::GenericOp>(
           loc, ValueRange({slicedWeight}), ValueRange({weightBuffer}),
-          ArrayRef({map0, map1}),
+          ArrayRef({weightMap, normalMap}),
           ArrayRef({parallel, parallel, parallel, parallel}));
-      auto entry = builder.createBlock(&generic.getBodyRegion());
-      auto inputArg = entry->addArgument(builder.getF32Type(), loc);
-      entry->addArgument(builder.getF32Type(), loc);
-      builder.setInsertionPointToEnd(entry);
-      builder.create<linalg::YieldOp>(loc, inputArg);
-
-      // Slice biases
-      builder.setInsertionPointAfter(generic);
-      auto biasMemref = builder.create<bufferization::ToMemrefOp>(
-          loc, MemRefType::get({currHelper.outCh}, builder.getF32Type()),
-          Conv2DOp.bias());
-      bufOffset = ArrayRef<OpFoldResult>({outCh});
-      bufSize = ArrayRef<OpFoldResult>(
-          {builder.getI64IntegerAttr(sharedHelper.outCh)});
-      bufStride = ArrayRef<OpFoldResult>({builder.getI64IntegerAttr(1)});
-      auto slicedBias = builder
-                            .create<memref::SubViewOp>(
-                                loc, biasMemref, bufOffset, bufSize, bufStride)
-                            .result();
-      builder.create<memref::CopyOp>(loc, slicedBias, biasBuffer);
+      auto weightGenericEntry =
+          builder.createBlock(&weightGeneric.getBodyRegion());
+      auto weightGenericArg0 =
+          weightGenericEntry->addArgument(builder.getF32Type(), loc);
+      weightGenericEntry->addArgument(builder.getF32Type(), loc);
+      builder.setInsertionPointToEnd(weightGenericEntry);
+      builder.create<linalg::YieldOp>(loc, weightGenericArg0);
 
       // Call function
-      auto operands = {inputBuffer, weightBuffer, biasBuffer, outputBuffer};
+      builder.setInsertionPointAfter(weightGeneric);
+      auto operands = {inputBuffer, weightBuffer, outputBuffer};
       builder.create<func::CallOp>(loc, functionName, TypeRange(), operands);
       auto count = newFuncOp->getAttr("count").dyn_cast<IntegerAttr>().getInt();
       newFuncOp->setAttr(
@@ -652,11 +607,24 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
       bufStride = ArrayRef<OpFoldResult>(
           {builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1),
            builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1)});
-      auto subviewOut = builder.create<memref::SubViewOp>(
+      auto slicedOutput = builder.create<memref::SubViewOp>(
           loc, outSubview.source(), bufOffset, bufSize, bufStride);
 
-      // Copy to sliced output
-      builder.create<memref::CopyOp>(loc, outputBuffer, subviewOut);
+      // Add to sliced output
+      auto outputGeneric = builder.create<linalg::GenericOp>(
+          loc, ValueRange({outputBuffer}), ValueRange({slicedOutput}),
+          ArrayRef({normalMap, normalMap}),
+          ArrayRef({parallel, parallel, parallel, parallel}));
+      auto outputGenericEntry =
+          builder.createBlock(&outputGeneric.getBodyRegion());
+      auto outputGenericArg0 =
+          outputGenericEntry->addArgument(builder.getF32Type(), loc);
+      auto outputGenericArg1 =
+          outputGenericEntry->addArgument(builder.getF32Type(), loc);
+      builder.setInsertionPointToEnd(outputGenericEntry);
+      auto outputGenericAdd = builder.create<arith::AddFOp>(
+          loc, builder.getF32Type(), outputGenericArg0, outputGenericArg1);
+      builder.create<linalg::YieldOp>(loc, outputGenericAdd.getResult());
 
       opToErase.push_back(outCopy);
       opToErase.push_back(outMemref);
