@@ -305,6 +305,7 @@ static FuncOp createSharedFunction(ModuleOp module, ConvHelper sharedHelper,
   auto newFuncOp =
       builder.create<FuncOp>(builder.getUnknownLoc(), functionName, newType);
   newFuncOp->setAttr("shared", UnitAttr::get(newFuncOp->getContext()));
+  newFuncOp->setAttr("convolution", UnitAttr::get(newFuncOp->getContext()));
   newFuncOp->setAttr("name", builder.getStringAttr(functionName));
   newFuncOp->setAttr("count", builder.getI64IntegerAttr(0));
   auto entryBlock = newFuncOp.addEntryBlock();

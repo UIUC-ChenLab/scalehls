@@ -88,9 +88,13 @@ LoopDesignSpace::LoopDesignSpace(FuncOp func, AffineLoopBand &band,
     unsigned tripCount = optionalTripCount.getValue();
     tripCountList.push_back(tripCount);
 
+    unsigned maxUnroll = tripCount;
+    if (loop->getAttr("maxUnroll"))
+      maxUnroll = loop->getAttr("maxUnroll").dyn_cast<IntegerAttr>().getInt();
+
     SmallVector<unsigned, 8> validSizes;
     unsigned size = 1;
-    while (size <= std::min(tripCount, maxLoopParallel)) {
+    while (size <= std::min({tripCount, maxLoopParallel, maxUnroll})) {
       // Push back the current size.
       validSizes.push_back(size);
 
@@ -901,6 +905,20 @@ struct DesignSpaceExplore : public DesignSpaceExploreBase<DesignSpaceExplore> {
     for (auto func : module.getOps<FuncOp>()) {
       if (forSharedFuncs) {
         if (func->getAttr("shared")) {
+          if (func->getAttr("convolution")) {
+            AffineLoopBands loopBands;
+            getLoopBands(func.front(), loopBands);
+            assert(loopBands.size() == 1 && loopBands[0].size() == 6 &&
+                   "Invalid loop band size of convolution");
+            ArrayRef<int64_t> noSearch = {0, 1, 3, 4};
+            for (auto i : noSearch) {
+              loopBands[0][i]->setAttr(
+                  "maxUnroll",
+                  IntegerAttr::get(IntegerType::get(module.getContext(), 32),
+                                   1));
+            }
+          }
+
           explorer.applyDesignSpaceExplore(
               func, directiveOnly, /*searchOnly*/ true, outputPath, csvPath);
           applyAutoArrayPartition(getRuntimeFunc(module));
