@@ -149,10 +149,10 @@ template <> struct DenseMapInfo<ConvHelper> {
 };
 } // namespace llvm
 
-static bool createOffChipBuffers(ModuleOp module) {
+static bool preProcess(ModuleOp module) {
   auto builder = OpBuilder(module);
 
-  // Move all hidden features to off-chip buffer
+  // Move all hidden features to off-chip buffer and remove paddings
   SmallVector<Operation *, 32> opToErase;
   bool firstConv = true;
   for (auto func : module.getOps<FuncOp>()) {
@@ -208,7 +208,8 @@ static bool createOffChipBuffers(ModuleOp module) {
 
         // Change the new input to tensor
         auto inTensor =
-            builder.create<bufferization::ToTensorOp>(loc, inSubview).result();
+            builder.create<bufferization::ToTensorOp>(loc, inMemrefArg)
+                .result();
 
         Conv2DOp.inputMutable().slice(0, 1).assign(inTensor);
         firstConv = false;
@@ -233,16 +234,19 @@ static bool createOffChipBuffers(ModuleOp module) {
           func.front().getArgumentTypes(),
           func.back().getTerminator()->getOperandTypes()));
 
+      // Create a new convolution without padding
       builder.setInsertionPointAfter(Conv2DOp);
-      auto newOp = builder.insert(Conv2DOp.clone());
-      auto newConv2DOp = dyn_cast<tosa::Conv2DOp>(newOp);
+      auto newConv2DOp = builder.create<tosa::Conv2DOp>(
+          loc, Conv2DOp.output().getType(), Conv2DOp.input(), Conv2DOp.weight(),
+          Conv2DOp.bias(), builder.getI64ArrayAttr({0, 0, 0, 0}),
+          Conv2DOp.stride(), Conv2DOp.dilation());
 
       // Bufferize result to memref
       auto outMemref = builder.create<bufferization::ToMemrefOp>(
           loc, MemRefType::get(outType.getShape(), outType.getElementType()),
           newConv2DOp.output());
 
-      // Create a subview for the argument if necessary (copy to buffer)
+      // Create a subview for the output argument if necessary
       auto bufOffset = ArrayRef<OpFoldResult>(
           {builder.getI64IntegerAttr(0), builder.getI64IntegerAttr(nextPad),
            builder.getI64IntegerAttr(nextPad), builder.getI64IntegerAttr(0)});
@@ -262,7 +266,7 @@ static bool createOffChipBuffers(ModuleOp module) {
 
       // Create final output tensor
       auto outTensor =
-          builder.create<bufferization::ToTensorOp>(loc, subview).result();
+          builder.create<bufferization::ToTensorOp>(loc, outMemrefArg).result();
 
       opToErase.push_back(Conv2DOp);
       Conv2DOp.replaceAllUsesWith(outTensor);
@@ -403,9 +407,7 @@ static bool replaceFunction(ModuleOp module, ConvHelper sharedHelper,
       }
 
       // Modify ToTensorOp of shape changes
-      auto inSubview =
-          dyn_cast<memref::SubViewOp>(inTensor.memref().getDefiningOp());
-      auto inArgument = inSubview.source();
+      auto inArgument = inTensor.memref();
 
       // Output MemRef object allocated off-chip
       bufferization::ToMemrefOp outMemref;
@@ -680,21 +682,6 @@ static bool postProcess(ModuleOp module) {
   for (auto op : opToErase)
     op->erase();
 
-  // Prevent additional copying for final features
-  for (auto func : module.getOps<FuncOp>()) {
-    if (!func->getAttr("shared")) {
-      func.walk([&](func::ReturnOp ReturnOp) {
-        for (auto operand : ReturnOp.operands()) {
-          auto toTensor =
-              dyn_cast<bufferization::ToTensorOp>(operand.getDefiningOp());
-          auto subview =
-              dyn_cast<memref::SubViewOp>(toTensor.memref().getDefiningOp());
-          toTensor.memref().replaceAllUsesWith(subview.source());
-        }
-      });
-    }
-  }
-
   // Remove all unnecessary subviews
   opToErase = SmallVector<Operation *, 32>();
   for (auto func : module.getOps<FuncOp>()) {
@@ -711,9 +698,10 @@ static bool postProcess(ModuleOp module) {
 }
 
 bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
+  preProcess(module);
+
   // Count the number of each shape of convolution.
   DenseMap<ConvHelper, std::pair<ConvHelper, unsigned>> countMap;
-
   // Traverse the entire module and count all the convolutions.
   for (auto func : module.getOps<FuncOp>()) {
     func.walk([&](tosa::Conv2DOp Conv2DOp) {
@@ -729,8 +717,6 @@ bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
       }
     });
   }
-
-  createOffChipBuffers(module);
 
   // Find the types of convolutions that happen frequently and replace it with
   // shared function
