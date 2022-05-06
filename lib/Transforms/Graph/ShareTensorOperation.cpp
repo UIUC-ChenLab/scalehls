@@ -7,6 +7,7 @@
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
+#include "mlir/Pass/PassManager.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
@@ -166,10 +167,111 @@ public:
   static bool classof(const OpHelper *op) { return true; }
 };
 
+static bool cleanupTosaCode(ModuleOp module) {
+  auto builder = OpBuilder(module);
+
+  PassManager pm(module.getContext(), "module.module");
+  pm.addPass(createAffineStoreForwardPass());
+
+  // Record ops to be erased.
+  SmallVector<Operation *, 32> opToErase;
+
+  for (auto func : module.getOps<FuncOp>()) {
+    for (auto constOp : func.getOps<tosa::ConstOp>()) {
+      auto loc = constOp.getLoc();
+
+      auto constType = constOp.output().getType().dyn_cast<RankedTensorType>();
+      auto elementType = constType.getElementType();
+      if (elementType == builder.getF32Type()) {
+        // Create a new function argument
+        auto constArg = func.front().addArgument(constType, loc);
+        func.setType(builder.getFunctionType(
+            func.front().getArgumentTypes(),
+            func.back().getTerminator()->getOperandTypes()));
+
+        constOp.output().replaceAllUsesWith(constArg);
+        opToErase.push_back(constOp);
+      }
+    }
+
+    for (auto transposeOp : func.getOps<tosa::TransposeOp>()) {
+      auto loc = transposeOp.getLoc();
+
+      if (!transposeOp.input1().getDefiningOp()) {
+        auto idx = 0;
+        Value transposeArg;
+        for (auto arg : func.front().getArguments()) {
+          if (arg == transposeOp.input1()) {
+            transposeArg =
+                func.front().addArgument(transposeOp.output().getType(), loc);
+            transposeOp.input1().replaceAllUsesWith(transposeArg);
+            func.front().eraseArgument(idx);
+            break;
+          }
+          idx++;
+        }
+
+        func.setType(builder.getFunctionType(
+            func.front().getArgumentTypes(),
+            func.back().getTerminator()->getOperandTypes()));
+
+        transposeOp.output().replaceAllUsesWith(transposeArg);
+        opToErase.push_back(transposeOp);
+        opToErase.push_back(transposeOp.perms().getDefiningOp());
+      } else {
+        for (auto user : transposeOp.output().getUsers()) {
+          if (auto reshapeOp = dyn_cast<tosa::ReshapeOp>(user)) {
+            builder.setInsertionPointAfter(transposeOp);
+            auto newReshapeOp = builder.create<tosa::ReshapeOp>(
+                loc, reshapeOp.output().getType(), transposeOp.input1(),
+                reshapeOp.new_shape());
+
+            reshapeOp.output().replaceAllUsesWith(newReshapeOp.output());
+            opToErase.push_back(reshapeOp);
+            opToErase.push_back(transposeOp);
+            opToErase.push_back(transposeOp.perms().getDefiningOp());
+          }
+        }
+      }
+    }
+  }
+
+  // Erase all ops on the list.
+  for (auto op : opToErase)
+    op->erase();
+
+  // Order function arguments
+  for (auto func : module.getOps<FuncOp>()) {
+    auto numArguments = func.getNumArguments();
+
+    func.walk([&](Operation *op) {
+      for (auto operand : op->getOperands()) {
+        if (!operand.getDefiningOp()) {
+          auto newArgument =
+              func.front().addArgument(operand.getType(), func.getLoc());
+          operand.replaceAllUsesWith(newArgument);
+        }
+      }
+    });
+
+    for (unsigned idx = 0; idx < numArguments; idx++) {
+      func.front().eraseArgument(0);
+    }
+
+    func.setType(builder.getFunctionType(
+        func.front().getArgumentTypes(),
+        func.back().getTerminator()->getOperandTypes()));
+  }
+
+  return true;
+}
+
 static bool createBufferAndRemovePadding(ModuleOp module) {
   auto builder = OpBuilder(module);
 
+  // Record ops to be erased.
   SmallVector<Operation *, 32> opToErase;
+
   for (auto func : module.getOps<FuncOp>()) {
     func.walk([&](Operation *op) {
       auto loc = op->getLoc();
@@ -280,6 +382,38 @@ static bool createBufferAndRemovePadding(ModuleOp module) {
 
         reluNOp.output().replaceAllUsesWith(newReluNOp.output());
         opToErase.push_back(reluNOp);
+      }
+
+      else if (auto clampOp = dyn_cast<tosa::ClampOp>(op)) {
+        // Create a new function argument
+        auto inType = clampOp.input().getType().dyn_cast<RankedTensorType>();
+        auto inMemrefArg = func.front().addArgument(
+            MemRefType::get(inType.getShape(), inType.getElementType()), loc);
+        func.setType(builder.getFunctionType(
+            func.front().getArgumentTypes(),
+            func.back().getTerminator()->getOperandTypes()));
+
+        // Change the original input to memref
+        builder.setInsertionPoint(clampOp);
+        auto inToMemref = builder.create<bufferization::ToMemrefOp>(
+            loc, MemRefType::get(inType.getShape(), inType.getElementType()),
+            clampOp.input());
+
+        // Copy original input to the new input
+        builder.create<memref::CopyOp>(loc, inToMemref, inMemrefArg);
+
+        // Change the new input to tensor
+        auto inToTensor =
+            builder.create<bufferization::ToTensorOp>(loc, inMemrefArg);
+
+        // Create a new clamp
+        auto newClampOp = builder.create<tosa::ClampOp>(
+            loc, clampOp.output().getType(), inToTensor.result(),
+            clampOp.min_int(), clampOp.max_int(), clampOp.min_fp(),
+            clampOp.max_fp());
+
+        clampOp.output().replaceAllUsesWith(newClampOp.output());
+        opToErase.push_back(clampOp);
       }
 
       else if (auto maxPool2dOp = dyn_cast<tosa::MaxPool2dOp>(op)) {
@@ -515,7 +649,7 @@ static bool createBufferAndRemovePadding(ModuleOp module) {
         auto inToTensor =
             builder.create<bufferization::ToTensorOp>(loc, inMemrefArg);
 
-        // Create a new reshape
+        // Create a new fc
         auto newFullyConnectedOp = builder.create<tosa::FullyConnectedOp>(
             loc, fullyConnectedOp.output().getType(), inToTensor.result(),
             fullyConnectedOp.weight(), fullyConnectedOp.bias());
@@ -523,6 +657,36 @@ static bool createBufferAndRemovePadding(ModuleOp module) {
         fullyConnectedOp.output().replaceAllUsesWith(
             newFullyConnectedOp.output());
         opToErase.push_back(fullyConnectedOp);
+      }
+
+      else if (auto matMulOp = dyn_cast<tosa::MatMulOp>(op)) {
+        // Create a new function argument
+        auto inType = matMulOp.a().getType().dyn_cast<RankedTensorType>();
+        auto inMemrefArg = func.front().addArgument(
+            MemRefType::get(inType.getShape(), inType.getElementType()), loc);
+        func.setType(builder.getFunctionType(
+            func.front().getArgumentTypes(),
+            func.back().getTerminator()->getOperandTypes()));
+
+        // Change the original input to memref
+        builder.setInsertionPoint(matMulOp);
+        auto inToMemref = builder.create<bufferization::ToMemrefOp>(
+            loc, MemRefType::get(inType.getShape(), inType.getElementType()),
+            matMulOp.a());
+
+        // Copy original input to the new input
+        builder.create<memref::CopyOp>(loc, inToMemref, inMemrefArg);
+
+        // Change the new input to tensor
+        auto inToTensor =
+            builder.create<bufferization::ToTensorOp>(loc, inMemrefArg);
+
+        // Create a new matmul
+        auto newMatMulOp = builder.create<tosa::MatMulOp>(
+            loc, matMulOp.c().getType(), inToTensor.result(), matMulOp.b());
+
+        matMulOp.c().replaceAllUsesWith(newMatMulOp.c());
+        opToErase.push_back(matMulOp);
       }
 
       else if (auto returnOp = dyn_cast<func::ReturnOp>(op)) {
@@ -912,7 +1076,9 @@ static bool lowerRemainingTosaOps(ModuleOp module) {
       auto loc = op->getLoc();
 
       if (auto conv2DOp = dyn_cast<tosa::Conv2DOp>(op)) {
-      } else if (auto reluNOp = dyn_cast<tosa::ReluNOp>(op)) {
+      }
+
+      else if (auto reluNOp = dyn_cast<tosa::ReluNOp>(op)) {
         // Input MemRef object allocated off-chip
         bufferization::ToTensorOp inToTensor;
         if (reluNOp.input().getDefiningOp()) {
@@ -989,6 +1155,84 @@ static bool lowerRemainingTosaOps(ModuleOp module) {
         opToErase.push_back(reluNOp);
         opToErase.push_back(inToTensor);
       }
+
+      else if (auto clampOp = dyn_cast<tosa::ClampOp>(op)) {
+        // Input MemRef object allocated off-chip
+        bufferization::ToTensorOp inToTensor;
+        if (clampOp.input().getDefiningOp()) {
+          if (auto toTensor = dyn_cast<bufferization::ToTensorOp>(
+                  clampOp.input().getDefiningOp())) {
+            inToTensor = toTensor;
+          }
+        }
+        auto inMemref = inToTensor.memref();
+
+        // Output MemRef object allocated off-chip
+        bufferization::ToMemrefOp outToMemref;
+        for (auto user : clampOp.output().getUsers()) {
+          if (auto toMemref = dyn_cast<bufferization::ToMemrefOp>(user)) {
+            outToMemref = toMemref;
+          }
+        }
+        memref::CopyOp outCopy;
+        for (auto user : outToMemref.memref().getUsers()) {
+          if (auto copy = dyn_cast<memref::CopyOp>(user)) {
+            outCopy = copy;
+          }
+        }
+        Value outMemref = outCopy.target();
+        Value outMemrefArg = outMemref;
+        memref::SubViewOp outSubview;
+        if (outMemref.getDefiningOp()) {
+          auto subview = dyn_cast<memref::SubViewOp>(outMemref.getDefiningOp());
+          outMemrefArg = subview.source();
+
+          builder.setInsertionPoint(clampOp);
+          auto outSubview =
+              dyn_cast<memref::SubViewOp>(builder.insert(subview.clone()));
+          subview.result().replaceAllUsesWith(outSubview.result());
+          outMemref = outSubview.result();
+          opToErase.push_back(subview);
+        }
+
+        // Create linalg generic for clamp
+        auto inputElementType = clampOp.input()
+                                    .getType()
+                                    .dyn_cast<RankedTensorType>()
+                                    .getElementType();
+        auto outputElementType = clampOp.output()
+                                     .getType()
+                                     .dyn_cast<RankedTensorType>()
+                                     .getElementType();
+        auto zeroConstant =
+            builder.create<arith::ConstantOp>(loc, clampOp.min_fpAttr());
+        auto normalMap = AffineMap::get(
+            4, 0,
+            {builder.getAffineDimExpr(0), builder.getAffineDimExpr(1),
+             builder.getAffineDimExpr(2), builder.getAffineDimExpr(3)},
+            builder.getContext());
+        auto parallel = StringRef("parallel");
+        auto clampGeneric = builder.create<linalg::GenericOp>(
+            loc, ValueRange({inMemref}), ValueRange({outMemref}),
+            ArrayRef({normalMap, normalMap}),
+            ArrayRef({parallel, parallel, parallel, parallel}));
+        auto clampGenericEntry =
+            builder.createBlock(&clampGeneric.getBodyRegion());
+        auto clampGenericArg0 =
+            clampGenericEntry->addArgument(inputElementType, loc);
+        clampGenericEntry->addArgument(outputElementType, loc);
+        builder.setInsertionPointToEnd(clampGenericEntry);
+        auto clampGenericCmpF = builder.create<arith::CmpFOp>(
+            loc, arith::CmpFPredicate::OLT, clampGenericArg0, zeroConstant);
+        auto clampGenericSelect = builder.create<arith::SelectOp>(
+            loc, clampGenericCmpF.getResult(), zeroConstant, clampGenericArg0);
+        builder.create<linalg::YieldOp>(loc, clampGenericSelect.getResult());
+
+        opToErase.push_back(outCopy);
+        opToErase.push_back(outToMemref);
+        opToErase.push_back(clampOp);
+        opToErase.push_back(inToTensor);
+      }
     });
   }
 
@@ -1000,6 +1244,7 @@ static bool lowerRemainingTosaOps(ModuleOp module) {
 }
 
 bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
+  cleanupTosaCode(module);
   createBufferAndRemovePadding(module);
 
   // Count the number of each shape of convolution.

@@ -51,10 +51,9 @@ struct ApplyILPSolution : public ApplyILPSolutionBase<ApplyILPSolution> {
                       "something else\n";
       return signalPassFailure();
     }
-    for (auto func : module.getOps<FuncOp>()) {
+    for (auto func : module.getOps<func::FuncOp>()) {
       if (func->getAttr("shared")) {
-        auto funcObj = solutionObj->getObject(
-            func->getAttr("name").dyn_cast<StringAttr>());
+        auto funcObj = solutionObj->getObject(func.getSymName());
         auto strategy = *funcObj->getArray("strategy");
 
         AffineLoopBands bands;
