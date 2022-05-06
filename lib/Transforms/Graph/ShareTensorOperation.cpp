@@ -177,46 +177,68 @@ static bool createBufferAndRemovePadding(ModuleOp module) {
       if (auto conv2DOp = dyn_cast<tosa::Conv2DOp>(op)) {
         ConvOpHelper helper = ConvOpHelper(conv2DOp);
 
-        // Create a new function argument
-        auto inType = conv2DOp.input().getType().dyn_cast<RankedTensorType>();
-        ArrayRef<int64_t> newInShape = {
-            helper.batchSize, helper.inSize + 2 * helper.pad,
-            helper.inSize + 2 * helper.pad, helper.inCh};
-        auto inMemrefArg = func.front().addArgument(
-            MemRefType::get(newInShape, inType.getElementType()), loc);
-        func.setType(builder.getFunctionType(
-            func.front().getArgumentTypes(),
-            func.back().getTerminator()->getOperandTypes()));
+        // Check if there already is a memref for the input
+        bool argExists = false;
+        bufferization::ToMemrefOp inToMemref;
+        for (auto user : conv2DOp.input().getUsers()) {
+          if (auto toMemref = dyn_cast<bufferization::ToMemrefOp>(user)) {
+            argExists = true;
+            inToMemref = toMemref;
+          }
+        }
 
-        // Change the original input to memref
-        builder.setInsertionPoint(conv2DOp);
-        auto inToMemref = builder.create<bufferization::ToMemrefOp>(
-            loc, MemRefType::get(inType.getShape(), inType.getElementType()),
-            conv2DOp.input());
+        // If there is already a memref for the input, use it instead
+        bufferization::ToTensorOp inToTensor;
+        if (argExists) {
+          for (auto user : inToMemref.memref().getUsers()) {
+            if (auto copy = dyn_cast<memref::CopyOp>(user)) {
+              // Change the new input to tensor
+              inToTensor =
+                  builder.create<bufferization::ToTensorOp>(loc, copy.target());
+            }
+          }
+        } else {
+          // Create a new function argument
+          auto inType = conv2DOp.input().getType().dyn_cast<RankedTensorType>();
+          ArrayRef<int64_t> newInShape = {
+              helper.batchSize, helper.inSize + 2 * helper.pad,
+              helper.inSize + 2 * helper.pad, helper.inCh};
+          auto inMemrefArg = func.front().addArgument(
+              MemRefType::get(newInShape, inType.getElementType()), loc);
+          func.setType(builder.getFunctionType(
+              func.front().getArgumentTypes(),
+              func.back().getTerminator()->getOperandTypes()));
 
-        // Create a subview for the argument (copy to buffer)
-        auto offset =
-            ArrayRef<OpFoldResult>({builder.getI64IntegerAttr(0),
-                                    builder.getI64IntegerAttr(helper.pad),
-                                    builder.getI64IntegerAttr(helper.pad),
-                                    builder.getI64IntegerAttr(0)});
-        auto size =
-            ArrayRef<OpFoldResult>({builder.getI64IntegerAttr(helper.batchSize),
-                                    builder.getI64IntegerAttr(helper.inSize),
-                                    builder.getI64IntegerAttr(helper.inSize),
-                                    builder.getI64IntegerAttr(helper.inCh)});
-        auto stride = ArrayRef<OpFoldResult>(
-            {builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1),
-             builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1)});
-        auto inSubview = builder.create<memref::SubViewOp>(
-            loc, inMemrefArg, offset, size, stride);
+          // Change the original input to memref
+          builder.setInsertionPoint(conv2DOp);
+          inToMemref = builder.create<bufferization::ToMemrefOp>(
+              loc, MemRefType::get(inType.getShape(), inType.getElementType()),
+              conv2DOp.input());
 
-        // Copy original input to the new input
-        builder.create<memref::CopyOp>(loc, inToMemref, inSubview);
+          // Create a subview for the argument (copy to buffer)
+          auto offset =
+              ArrayRef<OpFoldResult>({builder.getI64IntegerAttr(0),
+                                      builder.getI64IntegerAttr(helper.pad),
+                                      builder.getI64IntegerAttr(helper.pad),
+                                      builder.getI64IntegerAttr(0)});
+          auto size = ArrayRef<OpFoldResult>(
+              {builder.getI64IntegerAttr(helper.batchSize),
+               builder.getI64IntegerAttr(helper.inSize),
+               builder.getI64IntegerAttr(helper.inSize),
+               builder.getI64IntegerAttr(helper.inCh)});
+          auto stride = ArrayRef<OpFoldResult>(
+              {builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1),
+               builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1)});
+          auto inSubview = builder.create<memref::SubViewOp>(
+              loc, inMemrefArg, offset, size, stride);
 
-        // Change the new input to tensor
-        auto inToTensor =
-            builder.create<bufferization::ToTensorOp>(loc, inMemrefArg);
+          // Copy original input to the new input
+          builder.create<memref::CopyOp>(loc, inToMemref, inSubview);
+
+          // Change the new input to tensor
+          inToTensor =
+              builder.create<bufferization::ToTensorOp>(loc, inMemrefArg);
+        }
 
         // Create a new convolution without padding
         auto newConv2DOp = builder.create<tosa::Conv2DOp>(
@@ -386,26 +408,49 @@ static bool createBufferAndRemovePadding(ModuleOp module) {
         auto in1ToTensor =
             builder.create<bufferization::ToTensorOp>(loc, in1MemrefArg);
 
-        // Create a new function argument for input 2
-        auto in2Type = addOp.input2().getType().dyn_cast<RankedTensorType>();
-        auto in2MemrefArg = func.front().addArgument(
-            MemRefType::get(in2Type.getShape(), in2Type.getElementType()), loc);
-        func.setType(builder.getFunctionType(
-            func.front().getArgumentTypes(),
-            func.back().getTerminator()->getOperandTypes()));
+        // Create a new function argument for input 2 if there is not already
+        // one
+        bool argExists = false;
+        Value in2Memref;
+        for (auto user : addOp.input2().getUsers()) {
+          if (auto toMemref = dyn_cast<bufferization::ToMemrefOp>(user)) {
+            in2Memref = toMemref.memref();
+            argExists = true;
+          }
+        }
 
-        // Change the original input to memref
-        builder.setInsertionPoint(addOp);
-        auto in2ToMemref = builder.create<bufferization::ToMemrefOp>(
-            loc, MemRefType::get(in2Type.getShape(), in2Type.getElementType()),
-            addOp.input2());
+        bufferization::ToTensorOp in2ToTensor;
+        if (argExists) {
+          for (auto user : in2Memref.getUsers()) {
+            if (auto copy = dyn_cast<memref::CopyOp>(user)) {
+              // Change the new input to tensor
+              in2ToTensor =
+                  builder.create<bufferization::ToTensorOp>(loc, copy.target());
+            }
+          }
+        } else {
+          auto in2Type = addOp.input2().getType().dyn_cast<RankedTensorType>();
+          auto in2MemrefArg = func.front().addArgument(
+              MemRefType::get(in2Type.getShape(), in2Type.getElementType()),
+              loc);
+          func.setType(builder.getFunctionType(
+              func.front().getArgumentTypes(),
+              func.back().getTerminator()->getOperandTypes()));
 
-        // Copy original input to the new input
-        builder.create<memref::CopyOp>(loc, in2ToMemref, in2MemrefArg);
+          // Change the original input to memref
+          builder.setInsertionPoint(addOp);
+          auto in2ToMemref = builder.create<bufferization::ToMemrefOp>(
+              loc,
+              MemRefType::get(in2Type.getShape(), in2Type.getElementType()),
+              addOp.input2());
 
-        // Change the new input to tensor
-        auto in2ToTensor =
-            builder.create<bufferization::ToTensorOp>(loc, in2MemrefArg);
+          // Copy original input to the new input
+          builder.create<memref::CopyOp>(loc, in2ToMemref, in2MemrefArg);
+
+          // Change the new input to tensor
+          in2ToTensor =
+              builder.create<bufferization::ToTensorOp>(loc, in2MemrefArg);
+        }
 
         // Create a new add
         auto newAddOp = builder.create<tosa::AddOp>(
@@ -685,8 +730,8 @@ static bool replaceFunction(ModuleOp module, ConvOpHelper sharedHelper,
           ArrayRef({parallel, parallel, parallel, parallel}));
       auto biasGenericEntry = builder.createBlock(&biasGeneric.getBodyRegion());
       auto biasGenericArg0 =
-          biasGenericEntry->addArgument(builder.getF32Type(), loc);
-      biasGenericEntry->addArgument(builder.getF32Type(), loc);
+          biasGenericEntry->addArgument(sharedHelper.biasType, loc);
+      biasGenericEntry->addArgument(sharedHelper.outputType, loc);
       builder.setInsertionPointToEnd(biasGenericEntry);
       builder.create<linalg::YieldOp>(loc, biasGenericArg0);
 
@@ -795,8 +840,8 @@ static bool replaceFunction(ModuleOp module, ConvOpHelper sharedHelper,
       auto weightGenericEntry =
           builder.createBlock(&weightGeneric.getBodyRegion());
       auto weightGenericArg0 =
-          weightGenericEntry->addArgument(builder.getF32Type(), loc);
-      weightGenericEntry->addArgument(builder.getF32Type(), loc);
+          weightGenericEntry->addArgument(sharedHelper.weightType, loc);
+      weightGenericEntry->addArgument(sharedHelper.weightType, loc);
       builder.setInsertionPointToEnd(weightGenericEntry);
       builder.create<linalg::YieldOp>(loc, weightGenericArg0);
 
@@ -831,12 +876,12 @@ static bool replaceFunction(ModuleOp module, ConvOpHelper sharedHelper,
       auto outputGenericEntry =
           builder.createBlock(&outputGeneric.getBodyRegion());
       auto outputGenericArg0 =
-          outputGenericEntry->addArgument(builder.getF32Type(), loc);
+          outputGenericEntry->addArgument(sharedHelper.outputType, loc);
       auto outputGenericArg1 =
-          outputGenericEntry->addArgument(builder.getF32Type(), loc);
+          outputGenericEntry->addArgument(sharedHelper.outputType, loc);
       builder.setInsertionPointToEnd(outputGenericEntry);
       auto outputGenericAdd = builder.create<arith::AddFOp>(
-          loc, builder.getF32Type(), outputGenericArg0, outputGenericArg1);
+          loc, sharedHelper.outputType, outputGenericArg0, outputGenericArg1);
       builder.create<linalg::YieldOp>(loc, outputGenericAdd.getResult());
 
       opToErase.push_back(outCopy);
@@ -853,16 +898,23 @@ static bool replaceFunction(ModuleOp module, ConvOpHelper sharedHelper,
   return true;
 }
 
-static bool lowerRemainingTosaOp(ModuleOp module) {
+static bool lowerRemainingTosaOps(ModuleOp module) {
+  auto builder = OpBuilder(module);
+
+  // Record ops to be erased.
+  SmallVector<Operation *, 32> opToErase;
+
   for (auto func : module.getOps<FuncOp>()) {
     if (func->getAttr("shared"))
       continue;
 
     func.walk([&](Operation *op) {
+      auto loc = op->getLoc();
+
       if (auto conv2DOp = dyn_cast<tosa::Conv2DOp>(op)) {
       } else if (auto reluNOp = dyn_cast<tosa::ReluNOp>(op)) {
         // Input MemRef object allocated off-chip
-        /*bufferization::ToTensorOp inToTensor;
+        bufferization::ToTensorOp inToTensor;
         if (reluNOp.input().getDefiningOp()) {
           if (auto toTensor = dyn_cast<bufferization::ToTensorOp>(
                   reluNOp.input().getDefiningOp())) {
@@ -885,21 +937,64 @@ static bool lowerRemainingTosaOp(ModuleOp module) {
           }
         }
         Value outMemref = outCopy.target();
+        Value outMemrefArg = outMemref;
         memref::SubViewOp outSubview;
         if (outMemref.getDefiningOp()) {
           auto subview = dyn_cast<memref::SubViewOp>(outMemref.getDefiningOp());
-          outMemref = subview.source();
-          outSubview = subview;
+          outMemrefArg = subview.source();
+
+          builder.setInsertionPoint(reluNOp);
+          auto outSubview =
+              dyn_cast<memref::SubViewOp>(builder.insert(subview.clone()));
+          subview.result().replaceAllUsesWith(outSubview.result());
+          outMemref = outSubview.result();
+          opToErase.push_back(subview);
         }
 
-        // Find the padding of the output memref
-        int64_t nextPad =
-            (outMemref.getType().dyn_cast<MemRefType>().getShape()[1] -
-             currHelper.outSize) /
-            2;*/
+        // Create linalg generic for relu
+        auto inputElementType = reluNOp.input()
+                                    .getType()
+                                    .dyn_cast<RankedTensorType>()
+                                    .getElementType();
+        auto outputElementType = reluNOp.output()
+                                     .getType()
+                                     .dyn_cast<RankedTensorType>()
+                                     .getElementType();
+        auto zeroConstant =
+            builder.create<arith::ConstantOp>(loc, builder.getF32FloatAttr(0));
+        auto normalMap = AffineMap::get(
+            4, 0,
+            {builder.getAffineDimExpr(0), builder.getAffineDimExpr(1),
+             builder.getAffineDimExpr(2), builder.getAffineDimExpr(3)},
+            builder.getContext());
+        auto parallel = StringRef("parallel");
+        auto reluGeneric = builder.create<linalg::GenericOp>(
+            loc, ValueRange({inMemref}), ValueRange({outMemref}),
+            ArrayRef({normalMap, normalMap}),
+            ArrayRef({parallel, parallel, parallel, parallel}));
+        auto reluGenericEntry =
+            builder.createBlock(&reluGeneric.getBodyRegion());
+        auto reluGenericArg0 =
+            reluGenericEntry->addArgument(inputElementType, loc);
+        reluGenericEntry->addArgument(outputElementType, loc);
+        builder.setInsertionPointToEnd(reluGenericEntry);
+        auto reluGenericCmpF = builder.create<arith::CmpFOp>(
+            loc, arith::CmpFPredicate::OLT, reluGenericArg0, zeroConstant);
+        auto reluGenericSelect = builder.create<arith::SelectOp>(
+            loc, reluGenericCmpF.getResult(), zeroConstant, reluGenericArg0);
+        builder.create<linalg::YieldOp>(loc, reluGenericSelect.getResult());
+
+        opToErase.push_back(outCopy);
+        opToErase.push_back(outToMemref);
+        opToErase.push_back(reluNOp);
+        opToErase.push_back(inToTensor);
       }
     });
   }
+
+  // Erase all ops on the list.
+  for (auto op : opToErase)
+    op->erase();
 
   return true;
 }
@@ -955,7 +1050,7 @@ bool scalehls::applyShareTensorOperation(ModuleOp module, unsigned numTargets) {
     }
   }
 
-  lowerRemainingTosaOp(module);
+  lowerRemainingTosaOps(module);
   return true;
 }
 
