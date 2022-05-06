@@ -89,7 +89,7 @@ LoopDesignSpace::LoopDesignSpace(FuncOp func, AffineLoopBand &band,
     tripCountList.push_back(tripCount);
 
     unsigned maxUnroll = tripCount;
-    if (loop->getAttr("maxUnroll"))
+    if (loop->hasAttr("maxUnroll"))
       maxUnroll = loop->getAttr("maxUnroll").dyn_cast<IntegerAttr>().getInt();
 
     SmallVector<unsigned, 8> validSizes;
@@ -905,12 +905,18 @@ struct DesignSpaceExplore : public DesignSpaceExploreBase<DesignSpaceExplore> {
     for (auto func : module.getOps<FuncOp>()) {
       if (forSharedFuncs) {
         if (func->getAttr("shared")) {
-          if (func->getAttr("convolution")) {
+          if (func->getAttr("type").dyn_cast<StringAttr>().str() ==
+              "convolution") {
             AffineLoopBands loopBands;
             getLoopBands(func.front(), loopBands);
-            assert(loopBands.size() == 1 && loopBands[0].size() == 6 &&
+            assert(loopBands.size() == 1 &&
                    "Invalid loop band size of convolution");
-            ArrayRef<int64_t> noSearch = {0, 1, 3, 4};
+            ArrayRef<int64_t> noSearch;
+            if (loopBands[0].size() == 6) {
+              noSearch = {0, 1, 3, 4};
+            } else if (loopBands[0].size() == 4) {
+              noSearch = {0, 1};
+            }
             for (auto i : noSearch) {
               loopBands[0][i]->setAttr(
                   "maxUnroll",
