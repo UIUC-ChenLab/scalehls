@@ -136,21 +136,40 @@ def TosaToLinalgCleanup :
   let constructor = "mlir::scalehls::createTosaToLinalgCleanupPass()";
 }
 
-def ShareTensorOperation : Pass<"scalehls-share-tensor-operation", "ModuleOp"> {
-  let summary = "Share kernels for repetitive tensor operations";
-  let description = [{
-    This share-tensor-operation pass will analyze all tensor operations to see 
-    if there are any operations with exact same computation, and make them call 
-    a single function so that the operation is only instantiated once. 
-  }];
+def TosaConstToArgument :
+      Pass<"scalehls-tosa-const-to-argument", "ModuleOp"> {
+  let summary = "Move tosa constants to function arguments";
+  let constructor = "mlir::scalehls::createTosaConstToArgumentPass()";
+}
 
-  let constructor = "mlir::scalehls::createShareTensorOperationPass()";
+def CreatePaddedBuffer :
+      Pass<"scalehls-create-padded-buffer", "ModuleOp"> {
+  let summary = "Create intermediate buffers DRAM with paddings inserted";
+  let constructor = "mlir::scalehls::createCreatePaddedBufferPass()";
+}
+
+def SharedTilingOptions :
+      Pass<"scalehls-shared-tiling-options", "ModuleOp"> {
+  let summary = "Create differently tiled shared functions";
+  let constructor = "mlir::scalehls::createSharedTilingOptionsPass()";
 
   let options = [
     Option<"numTargets", "num-targets", "unsigned", /*default=*/"0",
            "Number of shared functions to be generated">
   ];
 }
+
+def ReplaceTensorOperation : Pass<"scalehls-replace-tensor-operation", "ModuleOp"> {
+  let summary = "Replace tensor operations with shared functions";
+  let constructor = "mlir::scalehls::createReplaceTensorOperationPass()";
+}
+
+def TosaToLinalgNoBuffer :
+      Pass<"scalehls-tosa-to-linalg-no-buffer", "ModuleOp"> {
+  let summary = "Lower tosa to linalg without intermediate buffer";
+  let constructor = "mlir::scalehls::createTosaToLinalgNoBufferPass()";
+}
+
 
 //===----------------------------------------------------------------------===//
 // Runtime-related Passes

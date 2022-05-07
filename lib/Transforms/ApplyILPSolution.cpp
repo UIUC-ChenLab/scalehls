@@ -72,8 +72,34 @@ struct ApplyILPSolution : public ApplyILPSolutionBase<ApplyILPSolution> {
         applyOptStrategy(func, tileLists, targetIIs);
       }
     }
-    applyAutoArrayPartition(getRuntimeFunc(module));
 
+    // Pipeline top function
+    auto topFunc = getTopFunc(module);
+    AffineLoopBands targetBands;
+    getLoopBands(topFunc.front(), targetBands);
+    // Apply loop pipelining to corresponding level of each innermost loop.
+    for (auto &band : targetBands) {
+      auto currentLoop = band.back();
+      unsigned loopLevel = 0;
+      while (true) {
+        auto parentLoop = currentLoop->getParentOfType<AffineForOp>();
+
+        // If meet the outermost loop, pipeline the current loop.
+        if (!parentLoop || 0 == loopLevel) {
+          applyLoopPipelining(band, band.size() - loopLevel - 1, 1);
+          break;
+        }
+
+        // Move to the next loop level.
+        currentLoop = parentLoop;
+        ++loopLevel;
+      }
+    }
+
+    // Array partition top function
+    applyAutoArrayPartition(topFunc);
+
+    // Add copy when there is function output->input type mismatch
     for (auto op : getTopFunc(module).getOps<func::CallOp>()) {
       auto call = dyn_cast<func::CallOp>(*op);
       auto callee =

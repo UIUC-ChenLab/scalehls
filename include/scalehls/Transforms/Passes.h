@@ -48,6 +48,11 @@ std::unique_ptr<Pass> createTosaFakeQuantizePass();
 std::unique_ptr<Pass> createTosaSimplifyGraphPass();
 std::unique_ptr<Pass> createTosaNodeFusionPass();
 std::unique_ptr<Pass> createTosaToLinalgCleanupPass();
+std::unique_ptr<Pass> createTosaConstToArgumentPass();
+std::unique_ptr<Pass> createCreatePaddedBufferPass();
+std::unique_ptr<Pass> createSharedTilingOptionsPass();
+std::unique_ptr<Pass> createReplaceTensorOperationPass();
+std::unique_ptr<Pass> createTosaToLinalgNoBufferPass();
 
 /// Runtime-related passes.
 std::unique_ptr<Pass> createCreateAxiInterfacePass();

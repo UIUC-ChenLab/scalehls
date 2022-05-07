@@ -1705,11 +1705,7 @@ void ModuleEmitter::emitLoopDirectives(Operation *op) {
 }
 
 void ModuleEmitter::emitLoopTripCount(AffineForOp op) {
-  if (getConstantTripCount(op)) {
-    indent();
-    os << "#pragma HLS loop_tripcount max=" << getConstantTripCount(op)
-       << " min=" << getConstantTripCount(op) << "\n";
-  } else {
+  if (!getConstantTripCount(op)) {
     indent();
     os << "#pragma HLS loop_tripcount max=" << getMaximumTripCount(op) << "\n";
   }

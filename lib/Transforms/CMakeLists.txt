@@ -10,9 +10,13 @@ add_mlir_library(MLIRScaleHLSTransforms
   Directive/FuncPipelining.cpp
   Directive/LoopPipelining.cpp
   Directive/QoREstimation.cpp
-  Graph/ShareTensorOperation.cpp
+  Graph/CreatePaddedBuffer.cpp
+  Graph/ReplaceTensorOperation.cpp
+  Graph/SharedTilingOptions.cpp
+  Graph/TosaConstToArgument.cpp
   Graph/TosaFakeQuantize.cpp
   Graph/TosaToLinalgCleanup.cpp
+  Graph/TosaToLinalgNoBuffer.cpp
   Graph/TosaSimplifyGraph.cpp
   Graph/TosaNodeFusion.cpp
   Loop/AffineLoopOrderOpt.cpp

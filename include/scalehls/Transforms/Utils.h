@@ -71,9 +71,6 @@ bool applyOptStrategy(AffineLoopBand &band, func::FuncOp func,
 bool applyOptStrategy(func::FuncOp func, ArrayRef<TileList> tileLists,
                       ArrayRef<unsigned> targetIIs);
 
-/// Apply tensor operation optimization.
-bool applyShareTensorOperation(ModuleOp module, unsigned numTargets);
-
 /// Fuse the given operations into a new dataflow node. The fused node will be
 /// created before the first operation and each operation will be inserted in
 /// order. This method always succeeds.
