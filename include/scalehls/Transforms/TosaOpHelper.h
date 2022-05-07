@@ -67,20 +67,7 @@ public:
     dilation = 0;
   }
 
-  ConvOpHelper(const ConvOpHelper &other) {
-    batchSize = other.batchSize;
-    inCh = other.inCh;
-    inWH = other.inWH;
-    outCh = other.outCh;
-    outWH = other.outWH;
-    kernelSize = other.kernelSize;
-    pad = other.pad;
-    stride = other.stride;
-    dilation = other.dilation;
-    inputType = other.inputType;
-    weightType = other.weightType;
-    outputType = other.outputType;
-  }
+  ConvOpHelper(const ConvOpHelper &other) { *this = other; }
 
   ConvOpHelper(int64_t _batchSize, int64_t _inCh, int64_t _inWH, int64_t _outCh,
                int64_t _outWH, int64_t _kernelSize, int64_t _pad,
@@ -116,6 +103,22 @@ public:
   }
 
   bool operator==(ConvOpHelper &rhs) { return this->equalAttr(rhs); }
+
+  ConvOpHelper &operator=(const ConvOpHelper &other) {
+    batchSize = other.batchSize;
+    inCh = other.inCh;
+    inWH = other.inWH;
+    outCh = other.outCh;
+    outWH = other.outWH;
+    kernelSize = other.kernelSize;
+    pad = other.pad;
+    stride = other.stride;
+    dilation = other.dilation;
+    inputType = other.inputType;
+    weightType = other.weightType;
+    outputType = other.outputType;
+    return *this;
+  }
 
   bool equalAttr(ConvOpHelper &rhs) {
     return (pad == rhs.pad) && (stride == rhs.stride) &&

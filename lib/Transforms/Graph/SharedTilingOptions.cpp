@@ -16,6 +16,20 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+static SmallVector<ConvOpHelper, 32>
+exploreTilingStrategy(ModuleOp module,
+                      SmallVector<OpHelper *, 32> convOpHelpers) {
+  SmallVector<ConvOpHelper, 32> tilingOptions;
+  ConvOpHelper finalTiling =
+      ConvOpHelper(*dyn_cast<ConvOpHelper>(convOpHelpers[0]));
+  for (auto helper : convOpHelpers) {
+    finalTiling.takeSmallerDim(*dyn_cast<ConvOpHelper>(helper));
+  }
+  tilingOptions.push_back(finalTiling);
+
+  return tilingOptions;
+}
+
 static FuncOp createSharedConvolution(ModuleOp module, ConvOpHelper helper,
                                       StringRef functionName) {
   auto builder = OpBuilder(module);
@@ -112,13 +126,14 @@ static bool applySharedTilingOptions(ModuleOp module, unsigned numTargets) {
       break;
     else {
       if (auto convOpHelper = dyn_cast<ConvOpHelper>(opHelper)) {
-        auto finalConvOpHelper = ConvOpHelper(*convOpHelper);
-        for (auto helper : countMap[*opHelper]) {
-          finalConvOpHelper.takeSmallerDim(*dyn_cast<ConvOpHelper>(helper));
-        }
+        SmallVector<ConvOpHelper> tilingOptions =
+            exploreTilingStrategy(module, countMap[*opHelper]);
         countMap.erase(*opHelper);
-        auto functionName = "shared_function_" + std::to_string(i);
-        createSharedConvolution(module, finalConvOpHelper, functionName);
+        for (unsigned j = 0; j < tilingOptions.size(); j++) {
+          auto functionName =
+              "shared_function_" + std::to_string(i) + "_" + std::to_string(j);
+          createSharedConvolution(module, tilingOptions[j], functionName);
+        }
       }
     }
   }
