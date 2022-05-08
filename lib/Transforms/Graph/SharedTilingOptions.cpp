@@ -58,7 +58,7 @@ static FuncOp createSharedConvolution(ModuleOp module, ConvOpHelper helper,
       builder.create<FuncOp>(builder.getUnknownLoc(), functionName, newType);
   newFuncOp->setAttr("shared", builder.getUnitAttr());
   newFuncOp->setAttr("type", builder.getStringAttr("convolution"));
-  newFuncOp->setAttr("count", builder.getI64IntegerAttr(0));
+
   newFuncOp->setAttr("batchSize", builder.getI64IntegerAttr(helper.batchSize));
   newFuncOp->setAttr("inCh", builder.getI64IntegerAttr(helper.inCh));
   newFuncOp->setAttr("inWH", builder.getI64IntegerAttr(helper.inWH));
@@ -91,6 +91,35 @@ static FuncOp createSharedConvolution(ModuleOp module, ConvOpHelper helper,
 
   builder.create<func::ReturnOp>(builder.getUnknownLoc());
   return newFuncOp;
+}
+
+static bool recordCount(ModuleOp module, ConvOpHelper sharedHelper,
+                        FuncOp funcOp) {
+  auto builder = OpBuilder(module);
+
+  int64_t count = 0;
+  for (auto func : module.getOps<FuncOp>()) {
+    if (func->getAttr("shared"))
+      continue;
+
+    func.walk([&](tosa::Conv2DOp conv2DOp) {
+      ConvOpHelper currHelper = ConvOpHelper(conv2DOp);
+
+      if (!currHelper.equalAttr(sharedHelper))
+        return;
+
+      int64_t outChDiv =
+          (currHelper.outCh + sharedHelper.outCh - 1) / sharedHelper.outCh;
+      int64_t inChDiv =
+          (currHelper.inCh + sharedHelper.inCh - 1) / sharedHelper.inCh;
+      int64_t inWHDiv =
+          (currHelper.inWH + sharedHelper.inWH - 1) / sharedHelper.inWH;
+      count += outChDiv * inChDiv * inWHDiv * inWHDiv;
+    });
+  }
+  funcOp->setAttr("count", builder.getI64IntegerAttr(count));
+
+  return true;
 }
 
 static bool applySharedTilingOptions(ModuleOp module, unsigned numTargets) {
@@ -132,7 +161,9 @@ static bool applySharedTilingOptions(ModuleOp module, unsigned numTargets) {
         for (unsigned j = 0; j < tilingOptions.size(); j++) {
           auto functionName =
               "shared_function_" + std::to_string(i) + "_" + std::to_string(j);
-          createSharedConvolution(module, tilingOptions[j], functionName);
+          auto newFunction =
+              createSharedConvolution(module, tilingOptions[j], functionName);
+          recordCount(module, tilingOptions[j], newFunction);
         }
       }
     }
