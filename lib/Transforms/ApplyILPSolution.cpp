@@ -30,7 +30,6 @@ struct ApplyILPSolution : public ApplyILPSolutionBase<ApplyILPSolution> {
 
   void runOnOperation() override {
     auto module = getOperation();
-    auto builder = OpBuilder(module);
 
     std::string errorMessage;
     auto solutionFile = mlir::openInputFile(ILPSolution, &errorMessage);
@@ -74,9 +73,8 @@ struct ApplyILPSolution : public ApplyILPSolutionBase<ApplyILPSolution> {
     }
 
     // Pipeline top function
-    auto topFunc = getTopFunc(module);
     AffineLoopBands targetBands;
-    getLoopBands(topFunc.front(), targetBands);
+    getLoopBands(getTopFunc(module).front(), targetBands);
     // Apply loop pipelining to corresponding level of each innermost loop.
     for (auto &band : targetBands) {
       auto currentLoop = band.back();
@@ -96,97 +94,8 @@ struct ApplyILPSolution : public ApplyILPSolutionBase<ApplyILPSolution> {
       }
     }
 
-    // Array partition top function
-    applyAutoArrayPartition(topFunc);
-
-    // Add copy when there is function output->input type mismatch
-    for (auto op : getTopFunc(module).getOps<func::CallOp>()) {
-      auto call = dyn_cast<func::CallOp>(*op);
-      auto callee =
-          SymbolTable::lookupNearestSymbolFrom(call, call.getCalleeAttr());
-      auto subFunc = dyn_cast<FuncOp>(callee);
-
-      for (unsigned i = 0; i < call.getOperands().size(); i++) {
-        auto argumentType = subFunc.getFunctionType().getInputs()[i];
-        auto operandType = call.getOperands()[i].getType();
-        if (argumentType != operandType) {
-          builder.setInsertionPoint(call);
-          auto operand = call.getOperands()[i];
-          auto buffer = builder.create<memref::AllocOp>(
-              call.getLoc(), argumentType.dyn_cast<MemRefType>());
-          builder.create<memref::CopyOp>(call.getLoc(), operand, buffer);
-          call.operandsMutable().slice(i, 1).assign(buffer);
-          builder.setInsertionPointAfter(call);
-          builder.create<memref::CopyOp>(call.getLoc(), buffer, operand);
-        }
-      }
-    }
-
-    // Prevent generated CopyOps to be removed by ConvertCopyToAffineLoops
-    // If removed, function argument type mismatch occurs
-    auto DT = DominanceInfo(module);
-    SmallVector<Operation *, 32> opToErase;
-    for (auto op : getTopFunc(module).getOps<memref::AllocOp>()) {
-      auto alloc = dyn_cast<memref::AllocOp>(*op);
-      auto getCopyUser = [&]() {
-        for (auto user : alloc->getUsers())
-          if (auto copyUser = dyn_cast<memref::CopyOp>(user))
-            return copyUser;
-        return memref::CopyOp();
-      };
-
-      // If the current alloc is not used by any copy, return failure.
-      auto copy = getCopyUser();
-      if (!copy)
-        continue;
-
-      // If the current alloc dominates another alloc, return failure.
-      auto anotherMemref = alloc.memref() == copy.getSource()
-                               ? copy.getTarget()
-                               : copy.getSource();
-      if (auto anotherAlloc = anotherMemref.getDefiningOp())
-        if (!isa<memref::AllocOp>(anotherAlloc) ||
-            DT.dominates(alloc.getOperation(), anotherAlloc))
-          continue;
-      if (alloc.getType().getMemorySpaceAsInt() !=
-          anotherMemref.getType().cast<MemRefType>().getMemorySpaceAsInt())
-        continue;
-
-      // If the source memory is used after the copy op, we cannot eliminate the
-      // target memory. This is conservative?
-      if (llvm::any_of(copy.getSource().getUsers(), [&](Operation *user) {
-            return DT.properlyDominates(copy, user);
-          }))
-        continue;
-
-      // If the target memory is used before the copy op, we cannot eliminate
-      // the target memory. This is conservative?
-      if (llvm::any_of(copy.getTarget().getUsers(), [&](Operation *user) {
-            return DT.properlyDominates(user, copy);
-          }))
-        continue;
-
-      bool callExists = false;
-      for (auto user : copy.getSource().getUsers()) {
-        if (auto callUser = dyn_cast<func::CallOp>(user)) {
-          callExists = true;
-        }
-      }
-      if (!callExists) {
-        builder.setInsertionPoint(anotherMemref.getDefiningOp());
-        auto newAlloc =
-            dyn_cast<memref::AllocOp>(builder.insert(alloc.clone()));
-        anotherMemref.replaceAllUsesWith(newAlloc.memref());
-        alloc.replaceAllUsesWith(newAlloc.memref());
-        opToErase.push_back(anotherMemref.getDefiningOp());
-        opToErase.push_back(alloc);
-        opToErase.push_back(copy);
-      }
-    }
-
-    // Erase all ops on the list.
-    for (auto op : opToErase)
-      op->erase();
+    // Array partition to runtime main
+    applyAutoArrayPartition(getRuntimeFunc(module));
   }
 };
 } // namespace

@@ -927,7 +927,6 @@ struct DesignSpaceExplore : public DesignSpaceExploreBase<DesignSpaceExplore> {
 
           explorer.applyDesignSpaceExplore(
               func, directiveOnly, /*searchOnly*/ true, outputPath, csvPath);
-          applyAutoArrayPartition(getRuntimeFunc(module));
         }
       } else {
         if (hasTopFuncAttr(func))
