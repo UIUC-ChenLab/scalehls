@@ -33,6 +33,8 @@ static bool applyTosaToLinalgNoBuffer(ModuleOp module) {
       }
 
       else if (auto reluNOp = dyn_cast<tosa::ReluNOp>(op)) {
+        builder.setInsertionPoint(reluNOp);
+
         // Input MemRef object allocated off-chip
         bufferization::ToTensorOp inToTensor;
         if (reluNOp.input().getDefiningOp()) {
@@ -63,7 +65,6 @@ static bool applyTosaToLinalgNoBuffer(ModuleOp module) {
           auto subview = dyn_cast<memref::SubViewOp>(outMemref.getDefiningOp());
           outMemrefArg = subview.source();
 
-          builder.setInsertionPoint(reluNOp);
           auto outSubview =
               dyn_cast<memref::SubViewOp>(builder.insert(subview.clone()));
           subview.result().replaceAllUsesWith(outSubview.result());
@@ -111,6 +112,8 @@ static bool applyTosaToLinalgNoBuffer(ModuleOp module) {
       }
 
       else if (auto clampOp = dyn_cast<tosa::ClampOp>(op)) {
+        builder.setInsertionPoint(clampOp);
+
         // Input MemRef object allocated off-chip
         bufferization::ToTensorOp inToTensor;
         if (clampOp.input().getDefiningOp()) {
@@ -141,7 +144,6 @@ static bool applyTosaToLinalgNoBuffer(ModuleOp module) {
           auto subview = dyn_cast<memref::SubViewOp>(outMemref.getDefiningOp());
           outMemrefArg = subview.source();
 
-          builder.setInsertionPoint(clampOp);
           auto outSubview =
               dyn_cast<memref::SubViewOp>(builder.insert(subview.clone()));
           subview.result().replaceAllUsesWith(outSubview.result());
