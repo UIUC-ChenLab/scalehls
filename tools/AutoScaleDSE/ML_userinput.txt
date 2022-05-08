@@ -17,8 +17,8 @@
 #target_source_file_location = ../../samples/polybench2/2mm.c
 #top_function = kernel_2mm
 
-#target_source_file_location = ../../samples/polybench2/3mm_test.c
-#top_function = kernel_3mm
+target_source_file_location = ../../samples/polybench2/3mm.c
+top_function = kernel_3mm
 
 #target_source_file_location = ../../samples/polybench2/atax.c
 #top_function = kernel_atax
@@ -31,6 +31,9 @@
 
 #target_source_file_location = ../../samples/polybench2/mvt.c
 #top_function = kernel_mvt
+
+#target_source_file_location = ../../samples/polybench2/correlation.c
+#top_function = kernel_correlation
 
 ###################################################################################
 ##############################rosetta##############################################
@@ -47,8 +50,8 @@
 ##############################MachSuit#############################################
 ###################################################################################
 
-target_source_file_location = ../../samples/machsuite/backprop/backprop_inde.c
-top_function = backprop
+#target_source_file_location = ../../samples/machsuite/backprop/backprop_inde.c
+#top_function = backprop
 
 ###################################################################################
 ##############################pylog################################################

@@ -19,6 +19,7 @@ from lib import DSEinputparse as INPAR
 from lib import pyScaleHLS as PYSHLS
 from lib import DSE_main as DMain
 from lib import dsepattern as DPAT
+from lib import sdse_finegrain as SDSEFG
 
 def print_optknobs(opt_knobs, opt_knob_names):
     for i in range(len(opt_knobs) - 1):
@@ -169,10 +170,18 @@ def main():
     val = ""
     while val == "":
         val = input("What ScaleHLS optimizations? (Manual(M) / ScaleHLS+DSE+ML(S) / AutoScaleDSE(A) / None(N))\n")
-        if((val == "DSE") or (val == "S") or (val == "s")):
-            PYSHLS.scalehls_dse(tar_dir, source_file, inputtop)
-            func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_DSE_out.cpp", "/ML_in.cpp", inputtop, sdse=True)
+        if((val == "SDSE") or (val == "S") or (val == "s")):
+            
+            refactored_dseconfig = INPAR.preproccess(tar_dir, source_file, dse_target, inputtop)
+            PYSHLS.scalehls_dse_top(tar_dir, source_file, refactored_dseconfig, inputtop)
+
+            func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/scalehls_dse_temp/ScaleHLS_DSE_out.cpp", "/ML_in.cpp", inputtop, sdse=False)
+            
+            
+            
             sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)
+
+            
         elif((val == "Manual") or (val == "M") or (val == "m")):
             opt_knobs, opt_knob_names = PYSHLS.ScaleHLSopt(source_file, inputtop, tar_dir + "/ScaleHLS_opted.c")   
             print_optknobs(opt_knobs, opt_knob_names)
@@ -194,15 +203,15 @@ def main():
             func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, source_file, "/ML_in.cpp", inputtop)            
             sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)    
 
-# ###############################################################################################################    
-    isbreak = input("\n\nBreak\n")
-###############################################################################################################
-
     #create paramfile
     INPAR.create_params(tar_dir, var_forlist, var_arraylist_sized)
 
     #create template
     INPAR.create_template(tar_dir, source_file, inputfiles, template)
+
+###############################################################################################################    
+    isbreak = input("\n\nBreak\n")
+###############################################################################################################
 
     #Create Random Training Set
     val = ""

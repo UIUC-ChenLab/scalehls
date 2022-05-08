@@ -2,7 +2,7 @@
     "__output_num": "The number of output designs",
     "output_num": 1,
     "__max_init_parallel": "The maximum loop parallelism in the initial sampling",
-    "max_init_parallel": 64,
+    "max_init_parallel": 32,
     "__max_expl_parallel": "The maximum loop parallelism in the exploration",
     "max_expl_parallel": 128,
     "__max_loop_parallel": "The maximum unroll factor of each loop",
