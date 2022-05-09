@@ -155,13 +155,22 @@ def SharedTilingOptions :
 
   let options = [
     Option<"numTargets", "num-targets", "unsigned", /*default=*/"0",
-           "Number of shared functions to be generated">
+           "Number of shared functions to be generated">,
+    Option<"outputPath", "output-path", "std::string",
+           /*default=*/"\"./\"",
+           "File path: the path for dumping the MLIR of pareto design points">
   ];
 }
 
 def ReplaceTensorOperation : Pass<"scalehls-replace-tensor-operation", "ModuleOp"> {
   let summary = "Replace tensor operations with shared functions";
   let constructor = "mlir::scalehls::createReplaceTensorOperationPass()";
+  
+  let options = [
+    Option<"ILPSolution", "ilp-solution", "std::string",
+           /*default=*/"\"./\"",
+           "File path: optimization solution found by ILP">
+  ];
 }
 
 def TosaToLinalgNoBuffer :

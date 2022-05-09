@@ -8,9 +8,12 @@
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Support/FileUtilities.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/TosaOpHelper.h"
 #include "scalehls/Transforms/Utils.h"
+#include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/ToolOutputFile.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -25,6 +28,10 @@ exploreTilingStrategy(ModuleOp module,
   for (auto helper : convOpHelpers) {
     finalTiling.takeSmallerDim(*dyn_cast<ConvOpHelper>(helper));
   }
+  tilingOptions.push_back(finalTiling);
+
+  // Create another tiling
+  finalTiling.inCh = finalTiling.inCh / 2;
   tilingOptions.push_back(finalTiling);
 
   return tilingOptions;
@@ -54,8 +61,8 @@ static FuncOp createSharedConvolution(ModuleOp module, ConvOpHelper helper,
   // Define function
   auto newType = builder.getFunctionType(inputTypes, TypeRange());
   builder.setInsertionPointToStart(module.getBody());
-  auto newFuncOp =
-      builder.create<FuncOp>(builder.getUnknownLoc(), functionName, newType);
+  auto newFuncOp = builder.create<func::FuncOp>(builder.getUnknownLoc(),
+                                                functionName, newType);
   newFuncOp->setAttr("shared", builder.getUnitAttr());
   newFuncOp->setAttr("type", builder.getStringAttr("convolution"));
 
@@ -93,10 +100,18 @@ static FuncOp createSharedConvolution(ModuleOp module, ConvOpHelper helper,
   return newFuncOp;
 }
 
-static bool recordCount(ModuleOp module, ConvOpHelper sharedHelper,
-                        FuncOp funcOp) {
-  auto builder = OpBuilder(module);
+static std::pair<int64_t, int64_t>
+recordSizeAndCount(ModuleOp module, ConvOpHelper sharedHelper) {
+  // Compute the size of buffers required
+  int64_t inputSize = sharedHelper.batchSize * sharedHelper.inCh *
+                      sharedHelper.inWH * sharedHelper.inWH;
+  int64_t weightSize = sharedHelper.inCh * sharedHelper.outCh *
+                       sharedHelper.kernelSize * sharedHelper.kernelSize;
+  int64_t outputSize = sharedHelper.batchSize * sharedHelper.outCh *
+                       sharedHelper.outWH * sharedHelper.outWH;
+  int64_t size = inputSize + weightSize + outputSize;
 
+  // Compute the number of times the shared function is called
   int64_t count = 0;
   for (auto func : module.getOps<FuncOp>()) {
     if (func->getAttr("shared"))
@@ -117,12 +132,38 @@ static bool recordCount(ModuleOp module, ConvOpHelper sharedHelper,
       count += outChDiv * inChDiv * inWHDiv * inWHDiv;
     });
   }
-  funcOp->setAttr("count", builder.getI64IntegerAttr(count));
 
-  return true;
+  return std::pair<int64_t, int64_t>(size, count);
 }
 
-static bool applySharedTilingOptions(ModuleOp module, unsigned numTargets) {
+static void dumpTilingOptions(
+    SmallVector<std::tuple<std::string, int64_t, int64_t>> tilingList,
+    StringRef csvFilePath) {
+  std::string errorMessage;
+  auto csvFile = mlir::openOutputFile(csvFilePath, &errorMessage);
+  if (!csvFile)
+    return;
+  auto &os = csvFile->os();
+
+  // Print header row.
+  os << "name,size,count\n";
+
+  // Print tiling options
+  for (auto tiling : tilingList) {
+    std::string name;
+    int64_t count;
+    int64_t size;
+    std::tie(name, count, size) = tiling;
+    os << name << "," << count << "," << size << "\n";
+  }
+
+  csvFile->keep();
+}
+
+static bool applySharedTilingOptions(ModuleOp module, unsigned numTargets,
+                                     StringRef outputPath) {
+  auto builder = OpBuilder(module);
+
   // Count the number of each shape of convolution.
   DenseMap<OpHelper, SmallVector<OpHelper *, 32>> countMap;
   // Traverse the entire module and count all the convolutions.
@@ -140,8 +181,8 @@ static bool applySharedTilingOptions(ModuleOp module, unsigned numTargets) {
     });
   }
 
-  // Find the types of convolutions that happen frequently and create functions
-  // with different tilings
+  // Find the types of convolutions that happen frequently and create
+  // functions with different tilings
   OpHelper *opHelper;
   for (unsigned i = 0; i < numTargets || numTargets == 0; i++) {
     unsigned maxCount = 0;
@@ -158,13 +199,23 @@ static bool applySharedTilingOptions(ModuleOp module, unsigned numTargets) {
         SmallVector<ConvOpHelper> tilingOptions =
             exploreTilingStrategy(module, countMap[*opHelper]);
         countMap.erase(*opHelper);
+        SmallVector<std::tuple<std::string, int64_t, int64_t>> tilingList;
         for (unsigned j = 0; j < tilingOptions.size(); j++) {
           auto functionName =
               "shared_function_" + std::to_string(i) + "_" + std::to_string(j);
-          auto newFunction =
+          auto newFuncOp =
               createSharedConvolution(module, tilingOptions[j], functionName);
-          recordCount(module, tilingOptions[j], newFunction);
+          auto sizeCount = recordSizeAndCount(module, tilingOptions[j]);
+          newFuncOp->setAttr("size",
+                             builder.getI64IntegerAttr(sizeCount.first));
+          newFuncOp->setAttr("count",
+                             builder.getI64IntegerAttr(sizeCount.second));
+          tilingList.push_back(
+              std::make_tuple(functionName, sizeCount.first, sizeCount.second));
         }
+        auto csvFilePath = outputPath.str() + "shared_function_" +
+                           std::to_string(i) + "_tiling.csv";
+        dumpTilingOptions(tilingList, csvFilePath);
       }
     }
   }
@@ -177,7 +228,7 @@ struct SharedTilingOptions
     : public SharedTilingOptionsBase<SharedTilingOptions> {
   void runOnOperation() override {
     auto module = getOperation();
-    applySharedTilingOptions(module, numTargets);
+    applySharedTilingOptions(module, numTargets, outputPath);
   }
 };
 } // namespace

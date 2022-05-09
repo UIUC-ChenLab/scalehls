@@ -7,10 +7,17 @@
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
+#include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Support/FileUtilities.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/TosaOpHelper.h"
 #include "scalehls/Transforms/Utils.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/JSON.h"
+#include "llvm/Support/MemoryBuffer.h"
+
+#define DEBUG_TYPE "scalehls"
 
 using namespace mlir;
 using namespace scalehls;
@@ -241,10 +248,6 @@ static bool replaceFunction(ModuleOp module, ConvOpHelper sharedHelper,
       builder.setInsertionPointAfter(weightGeneric);
       auto operands = {inputBuffer, weightBuffer, outputBuffer};
       builder.create<func::CallOp>(loc, funcOp, operands);
-      auto count = funcOp->getAttr("count").dyn_cast<IntegerAttr>().getInt();
-      funcOp->setAttr("count",
-                      builder.getI64IntegerAttr(count + outChDiv * inChDiv *
-                                                            inWHDiv * inWHDiv));
 
       // Create a subview of the final output memref
       bufOffset = ArrayRef<OpFoldResult>(
@@ -290,39 +293,60 @@ static bool replaceFunction(ModuleOp module, ConvOpHelper sharedHelper,
   return true;
 }
 
-static bool applyReplaceTensorOperation(ModuleOp module) {
-  // Count the number of each shape of convolution.
-  DenseMap<OpHelper, SmallVector<OpHelper *, 32>> countMap;
-  // Traverse the entire module and count all the convolutions.
+static bool
+applyReplaceTensorOperation(ModuleOp module,
+                            SmallVector<std::string> selectedFunctions) {
+  // Record ops to be erased.
+  SmallVector<Operation *, 32> opToErase;
+
+  // Traverse the entire module and replace ops with shared functions.
   for (auto func : module.getOps<FuncOp>()) {
     if (!func->getAttr("shared"))
       continue;
 
-    if (func->getAttr("type").dyn_cast<StringAttr>().str() == "convolution") {
-      auto batchSize =
-          func->getAttr("batchSize").dyn_cast<IntegerAttr>().getInt();
-      auto inCh = func->getAttr("inCh").dyn_cast<IntegerAttr>().getInt();
-      auto inWH = func->getAttr("inWH").dyn_cast<IntegerAttr>().getInt();
-      auto outCh = func->getAttr("outCh").dyn_cast<IntegerAttr>().getInt();
-      auto outWH = func->getAttr("outWH").dyn_cast<IntegerAttr>().getInt();
-      auto kernelSize =
-          func->getAttr("kernelSize").dyn_cast<IntegerAttr>().getInt();
-      auto pad = func->getAttr("pad").dyn_cast<IntegerAttr>().getInt();
-      auto stride = func->getAttr("stride").dyn_cast<IntegerAttr>().getInt();
-      auto dilation =
-          func->getAttr("dilation").dyn_cast<IntegerAttr>().getInt();
-      auto convOpHelper = ConvOpHelper(batchSize, inCh, inWH, outCh, outWH,
-                                       kernelSize, pad, stride, dilation);
-      convOpHelper.inputType =
-          func.getArgumentTypes()[0].dyn_cast<MemRefType>().getElementType();
-      convOpHelper.weightType =
-          func.getArgumentTypes()[1].dyn_cast<MemRefType>().getElementType();
-      convOpHelper.outputType =
-          func.getArgumentTypes()[2].dyn_cast<MemRefType>().getElementType();
+    bool selected = false;
+    for (auto selectedFunction : selectedFunctions) {
+      if (func.getSymName().str() == selectedFunction) {
+        selected = true;
+        break;
+      }
+    }
 
-      replaceFunction(module, convOpHelper, func);
+    if (selected) {
+      // Replace conv ops if selected
+      if (func->getAttr("type").dyn_cast<StringAttr>().str() == "convolution") {
+        auto batchSize =
+            func->getAttr("batchSize").dyn_cast<IntegerAttr>().getInt();
+        auto inCh = func->getAttr("inCh").dyn_cast<IntegerAttr>().getInt();
+        auto inWH = func->getAttr("inWH").dyn_cast<IntegerAttr>().getInt();
+        auto outCh = func->getAttr("outCh").dyn_cast<IntegerAttr>().getInt();
+        auto outWH = func->getAttr("outWH").dyn_cast<IntegerAttr>().getInt();
+        auto kernelSize =
+            func->getAttr("kernelSize").dyn_cast<IntegerAttr>().getInt();
+        auto pad = func->getAttr("pad").dyn_cast<IntegerAttr>().getInt();
+        auto stride = func->getAttr("stride").dyn_cast<IntegerAttr>().getInt();
+        auto dilation =
+            func->getAttr("dilation").dyn_cast<IntegerAttr>().getInt();
+        auto convOpHelper = ConvOpHelper(batchSize, inCh, inWH, outCh, outWH,
+                                         kernelSize, pad, stride, dilation);
+        convOpHelper.inputType =
+            func.getArgumentTypes()[0].dyn_cast<MemRefType>().getElementType();
+        convOpHelper.weightType =
+            func.getArgumentTypes()[1].dyn_cast<MemRefType>().getElementType();
+        convOpHelper.outputType =
+            func.getArgumentTypes()[2].dyn_cast<MemRefType>().getElementType();
+
+        replaceFunction(module, convOpHelper, func);
+      }
+    } else {
+      // Remove function if not selected
+      opToErase.push_back(func);
     }
   }
+
+  // Erase all ops on the list.
+  for (auto op : opToErase)
+    op->erase();
 
   return true;
 }
@@ -332,7 +356,34 @@ struct ReplaceTensorOperation
     : public ReplaceTensorOperationBase<ReplaceTensorOperation> {
   void runOnOperation() override {
     auto module = getOperation();
-    applyReplaceTensorOperation(module);
+
+    std::string errorMessage;
+    auto solutionFile = mlir::openInputFile(ILPSolution, &errorMessage);
+    if (!solutionFile) {
+      llvm::errs() << errorMessage << "\n";
+      return signalPassFailure();
+    }
+
+    // Parse JSON File into memory.
+    auto solution = llvm::json::parse(solutionFile->getBuffer());
+    if (!solution) {
+      llvm::errs() << "failed to parse the ILP strategy json file\n";
+      return signalPassFailure();
+    }
+    auto solutionObj = solution.get().getAsObject();
+    if (!solutionObj) {
+      llvm::errs() << "support an object in the ILP strategy json file, found "
+                      "something else\n";
+      return signalPassFailure();
+    }
+
+    SmallVector<std::string> selectedFunctions;
+    auto solutionArray = solutionObj->getArray("selected");
+    for (auto selected : *solutionArray) {
+      selectedFunctions.push_back(selected.getAsString().getValueOr("").str());
+    }
+
+    applyReplaceTensorOperation(module, selectedFunctions);
   }
 };
 } // namespace
