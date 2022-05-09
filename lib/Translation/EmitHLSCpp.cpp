@@ -1780,10 +1780,13 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
         if (!isFullyPartitioned(memrefType)) {
           indent() << "#pragma HLS interface";
           // For now, we set the offset of all m_axi interfaces as slave.
-          // Force all top function arguments as DRAM
+          // For now, we set the offset of all m_axi interfaces as slave.
           auto kind = MemoryKind(memrefType.getMemorySpaceAsInt());
-          os << " m_axi offset=slave bundle=";
-          emitValue(port);
+          if (kind == MemoryKind::DRAM) {
+            os << " m_axi offset=slave bundle=";
+            emitValue(port);
+          } else
+            os << " bram";
 
           os << " port=";
           emitValue(port);
