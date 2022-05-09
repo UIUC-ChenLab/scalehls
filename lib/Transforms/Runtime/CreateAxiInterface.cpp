@@ -63,7 +63,7 @@ struct CreateAxiInterface
     // in the top function to the runtime function. As each AXI interface only
     // has one read and one write channel, we need to avoid interface conflicts
     // by analyzing the memroy access pattern of sub-functions.
-    SmallVector<Value, 32> inputs(call.getOperands());
+    /*SmallVector<Value, 32> inputs(call.getOperands());
     for (auto &op : llvm::make_early_inc_range(func.front())) {
       if (!isa<memref::AllocOp, PrimBufferOp, PrimConstOp>(op))
         continue;
@@ -116,7 +116,7 @@ struct CreateAxiInterface
                                                 func.getResultTypes(), inputs);
     call.replaceAllUsesWith(newCall);
     call.erase();
-    func.setType(newCall.getCalleeType());
+    func.setType(newCall.getCalleeType());*/
 
     // Convert each memory in the runtime function to DRAM type.
     for (auto arg : runtime.getArguments())

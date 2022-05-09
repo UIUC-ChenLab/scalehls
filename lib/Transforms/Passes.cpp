@@ -260,7 +260,7 @@ void scalehls::registerScaleHLSConvertTosaToHLS() {
 
         // Create runtime components.
         pm.addPass(scalehls::createCreateRuntimeMainPass(opts.hlsTopFunc));
-        // pm.addPass(scalehls::createCreateAxiInterfacePass());
+        pm.addPass(scalehls::createCreateAxiInterfacePass());
 
         // Affine loop perfectization.
         pm.addPass(scalehls::createFuncPreprocessPass(opts.hlsTopFunc));
