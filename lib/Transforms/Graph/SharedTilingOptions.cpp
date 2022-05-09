@@ -31,7 +31,8 @@ exploreTilingStrategy(ModuleOp module,
   tilingOptions.push_back(finalTiling);
 
   // Create another tiling
-  finalTiling.inCh = finalTiling.inCh / 2;
+  finalTiling.outWH += finalTiling.outWH;
+  finalTiling.inWH += finalTiling.outWH;
   tilingOptions.push_back(finalTiling);
 
   return tilingOptions;

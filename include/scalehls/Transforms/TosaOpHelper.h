@@ -131,8 +131,8 @@ public:
     else if (rhs.inCh != 3)
       inCh = inCh < rhs.inCh ? inCh : rhs.inCh;
     outCh = outCh < rhs.outCh ? outCh : rhs.outCh;
-    inWH = inWH < rhs.inWH ? inWH : rhs.inWH;
-    outWH = inWH < rhs.inWH ? outWH : rhs.outWH;
+    inWH = outWH < rhs.outWH ? inWH : rhs.inWH;
+    outWH = outWH < rhs.outWH ? outWH : rhs.outWH;
   }
 
   unsigned getHashValue() const {

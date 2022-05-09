@@ -71,8 +71,8 @@ static bool replaceFunction(ModuleOp module, ConvOpHelper sharedHelper,
           (currHelper.outCh + sharedHelper.outCh - 1) / sharedHelper.outCh;
       int64_t inChDiv =
           (currHelper.inCh + sharedHelper.inCh - 1) / sharedHelper.inCh;
-      int64_t inWHDiv =
-          (currHelper.inWH + sharedHelper.inWH - 1) / sharedHelper.inWH;
+      int64_t WHDiv =
+          (currHelper.outWH + sharedHelper.outWH - 1) / sharedHelper.outWH;
 
       // Input MemRef object allocated off-chip
       bufferization::ToTensorOp inToTensor;
@@ -159,11 +159,13 @@ static bool replaceFunction(ModuleOp module, ConvOpHelper sharedHelper,
       auto inCh = inChApply.getODSResults(0)[0];
 
       // Create width loop
-      auto widthLoop = builder.create<AffineForOp>(loc, 0, inWHDiv, 1);
+      auto widthLoop = builder.create<AffineForOp>(loc, 0, WHDiv, 1);
       builder.setInsertionPointToStart(widthLoop.getBody());
       auto inWidthApply = builder.create<AffineApplyOp>(
           loc,
-          AffineMap::get(1, 0, builder.getAffineDimExpr(0) * sharedHelper.inWH),
+          AffineMap::get(1, 0,
+                         builder.getAffineDimExpr(0) * sharedHelper.outWH *
+                             sharedHelper.stride),
           widthLoop.getInductionVar());
       auto inWidth = inWidthApply.getODSResults(0)[0];
       auto outWidthApply = builder.create<AffineApplyOp>(
@@ -174,11 +176,13 @@ static bool replaceFunction(ModuleOp module, ConvOpHelper sharedHelper,
       auto outWidth = outWidthApply.getODSResults(0)[0];
 
       // Create height loop
-      auto heightLoop = builder.create<AffineForOp>(loc, 0, inWHDiv, 1);
+      auto heightLoop = builder.create<AffineForOp>(loc, 0, WHDiv, 1);
       builder.setInsertionPointToStart(heightLoop.getBody());
       auto inHeightApply = builder.create<AffineApplyOp>(
           loc,
-          AffineMap::get(1, 0, builder.getAffineDimExpr(0) * sharedHelper.inWH),
+          AffineMap::get(1, 0,
+                         builder.getAffineDimExpr(0) * sharedHelper.outWH *
+                             sharedHelper.stride),
           heightLoop.getInductionVar());
       auto inHeight = inHeightApply.getODSResults(0)[0];
       auto outHeightApply = builder.create<AffineApplyOp>(
@@ -193,8 +197,8 @@ static bool replaceFunction(ModuleOp module, ConvOpHelper sharedHelper,
           {builder.getI64IntegerAttr(0), inWidth, inHeight, inCh});
       auto bufSize = ArrayRef<OpFoldResult>(
           {builder.getI64IntegerAttr(sharedHelper.batchSize),
-           builder.getI64IntegerAttr(sharedHelper.inWH + sharedHelper.pad * 2),
-           builder.getI64IntegerAttr(sharedHelper.inWH + sharedHelper.pad * 2),
+           builder.getI64IntegerAttr(sharedHelper.inWH),
+           builder.getI64IntegerAttr(sharedHelper.inWH),
            builder.getI64IntegerAttr(sharedHelper.inCh)});
       auto bufStride = ArrayRef<OpFoldResult>(
           {builder.getI64IntegerAttr(1), builder.getI64IntegerAttr(1),
