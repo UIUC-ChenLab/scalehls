@@ -19,13 +19,14 @@ using TileConfig = unsigned;
 //===----------------------------------------------------------------------===//
 
 struct LoopDesignPoint {
-  explicit LoopDesignPoint(int64_t latency, int64_t dspNum,
+  explicit LoopDesignPoint(int64_t latency, int64_t dspNum, int64_t bramNum,
                            TileConfig tileConfig, unsigned targetII)
-      : latency(latency), dspNum(dspNum), tileConfig(tileConfig),
-        targetII(targetII) {}
+      : latency(latency), dspNum(dspNum), bramNum(bramNum),
+        tileConfig(tileConfig), targetII(targetII) {}
 
   int64_t latency;
   int64_t dspNum;
+  int64_t bramNum;
 
   TileConfig tileConfig;
   unsigned targetII;
@@ -110,14 +111,27 @@ struct FuncDesignPoint {
     loopDesignPoints.push_back(point);
   }
 
+  explicit FuncDesignPoint(int64_t latency, int64_t dspNum, int64_t bramNum,
+                           LoopDesignPoint point)
+      : latency(latency), dspNum(dspNum), bramNum(bramNum) {
+    loopDesignPoints.push_back(point);
+  }
+
   explicit FuncDesignPoint(int64_t latency, int64_t dspNum,
                            SmallVector<LoopDesignPoint, 4> &points)
       : latency(latency), dspNum(dspNum) {
     loopDesignPoints = points;
   }
 
+  explicit FuncDesignPoint(int64_t latency, int64_t dspNum, int64_t bramNum,
+                           SmallVector<LoopDesignPoint, 4> &points)
+      : latency(latency), dspNum(dspNum), bramNum(bramNum) {
+    loopDesignPoints = points;
+  }
+
   int64_t latency;
   int64_t dspNum;
+  int64_t bramNum;
 
   SmallVector<LoopDesignPoint, 4> loopDesignPoints;
 };
@@ -142,6 +156,8 @@ public:
 
   void dumpFuncDesignSpace(StringRef csvFilePath);
   bool exportParetoDesigns(unsigned outputNum, StringRef outputRootPath);
+
+  int64_t getBram(SmallVector<LoopDesignPoint, 4> loopDesignPoints);
 
   SmallVector<FuncDesignPoint, 16> paretoPoints;
 

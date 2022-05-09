@@ -826,8 +826,10 @@ ResourceAttr ScaleHLSEstimator::calculateResource(Operation *funcOrLoop) {
       //  dspNum += resource.getDsp();
 
     } else if (isNoTouch(op)) {
-      if (auto resource = getResource(op))
+      if (auto resource = getResource(op)) {
         dspNum += resource.getDsp();
+        bramNum += resource.getBram();
+      }
 
     } else if (isa<memref::AllocaOp, memref::AllocOp>(op)) {
       auto memrefType = op->getResult(0).getType().cast<MemRefType>();

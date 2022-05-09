@@ -248,13 +248,34 @@ bool LoopDesignSpace::evaluateTileConfig(TileConfig config) {
   assert(info && resource && "loop info or resource is not estimated");
   auto totalDsp = resource.getDsp() * info.getMinII();
 
+  auto bramNum = 0;
+  // Compute the number of brams for function arguments
+  for (auto arg : func.front().getArguments()) {
+    auto memrefType = arg.getType().cast<MemRefType>();
+    if (memrefType.getNumElements() > 1) {
+      auto partitionNum = getPartitionFactors(memrefType);
+      auto storageType = MemoryKind(memrefType.getMemorySpaceAsInt());
+
+      // TODO: Support URAM and interface BRAMs?
+      if (storageType == MemoryKind::BRAM_1P ||
+          storageType == MemoryKind::BRAM_S2P ||
+          storageType == MemoryKind::BRAM_T2P) {
+        // Multiply bit width of type.
+        // TODO: handle index types.
+        int64_t memrefSize = memrefType.getElementTypeBitWidth() *
+                             memrefType.getNumElements() / partitionNum;
+        bramNum += ((memrefSize + 18000 - 1) / 18000) * partitionNum;
+      }
+    }
+  }
+
   // Improve target II until II is equal to iteration latency. Note that when II
   // equal to iteration latency, the pipeline pragma is similar to a region
   // fully unroll pragma which unrolls all contained loops.
   for (auto tmpII = info.getMinII(); tmpII <= info.getIterLatency(); ++tmpII) {
     auto tmpDspNum = totalDsp / tmpII + 1;
     auto tmpLatency = info.getIterLatency() + tmpII * (iterNum - 1) + 2;
-    auto point = LoopDesignPoint(tmpLatency, tmpDspNum, config, tmpII);
+    auto point = LoopDesignPoint(tmpLatency, tmpDspNum, bramNum, config, tmpII);
 
     allPoints.push_back(point);
     if (tmpDspNum <= maxDspNum)
@@ -416,7 +437,7 @@ void FuncDesignSpace::dumpFuncDesignSpace(StringRef csvFilePath) {
       os << "b" << i << "l" << j << ",";
     os << "b" << i << "ii,";
   }
-  os << "cycle,dsp,type\n";
+  os << "cycle,dsp,bram,type\n";
 
   // Print pareto design points.
   for (auto &funcPoint : paretoPoints) {
@@ -428,7 +449,8 @@ void FuncDesignSpace::dumpFuncDesignSpace(StringRef csvFilePath) {
         os << size << ",";
       os << loopPoint.targetII << ",";
     }
-    os << funcPoint.latency << "," << funcPoint.dspNum << ",pareto\n";
+    os << funcPoint.latency << "," << funcPoint.dspNum << ","
+       << funcPoint.bramNum << ",pareto\n";
   }
 
   csvFile->keep();
@@ -445,13 +467,14 @@ void FuncDesignSpace::combLoopDesignSpaces() {
     // Annotate the first loop.
     auto loop = targetLoops[0];
     setTiming(loop, -1, -1, loopPoint.latency, -1);
-    setResource(loop, -1, loopPoint.dspNum, -1);
+    setResource(loop, -1, loopPoint.dspNum, loopPoint.bramNum);
 
     // Estimate the function and generate a new function design point.
     estimator.estimateFunc(func);
     auto latency = getTiming(func).getLatency();
     auto dspNum = getResource(func).getDsp();
-    auto funcPoint = FuncDesignPoint(latency, dspNum, loopPoint);
+    auto bramNum = getResource(func).getBram();
+    auto funcPoint = FuncDesignPoint(latency, dspNum, bramNum, loopPoint);
 
     paretoPoints.push_back(funcPoint);
   }
@@ -473,7 +496,7 @@ void FuncDesignSpace::combLoopDesignSpaces() {
         auto &oldLoopPoint = funcPoint.loopDesignPoints[ii];
         auto oldLoop = targetLoops[ii];
         setTiming(oldLoop, -1, -1, oldLoopPoint.latency, -1);
-        setResource(oldLoop, -1, oldLoopPoint.dspNum, -1);
+        setResource(oldLoop, -1, oldLoopPoint.dspNum, oldLoopPoint.bramNum);
       }
 
       // Traverse all design points of the NEW loop.
@@ -481,7 +504,7 @@ void FuncDesignSpace::combLoopDesignSpaces() {
         // Annotate the new loop,
         auto loop = targetLoops[i];
         setTiming(loop, -1, -1, loopPoint.latency, -1);
-        setResource(loop, -1, loopPoint.dspNum, -1);
+        setResource(loop, -1, loopPoint.dspNum, loopPoint.bramNum);
 
         // Estimate the function and generate a new function design point.
         auto loopPoints = funcPoint.loopDesignPoints;
@@ -490,7 +513,9 @@ void FuncDesignSpace::combLoopDesignSpaces() {
         estimator.estimateFunc(func);
         auto latency = getTiming(func).getLatency();
         auto dspNum = getResource(func).getDsp();
-        auto newFuncPoint = FuncDesignPoint(latency, dspNum, loopPoints);
+        auto bramNum = getResource(func).getBram();
+        auto newFuncPoint =
+            FuncDesignPoint(latency, dspNum, bramNum, loopPoints);
 
         newParetoPoints.push_back(newFuncPoint);
       }
