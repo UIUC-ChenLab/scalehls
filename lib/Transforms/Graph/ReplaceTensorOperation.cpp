@@ -299,7 +299,10 @@ static bool replaceFunction(ModuleOp module, ConvOpHelper sharedHelper,
 
 static bool
 applyReplaceTensorOperation(ModuleOp module,
-                            SmallVector<std::string> selectedFunctions) {
+                            SmallVector<std::string> selectedFunctions,
+                            bool dse, llvm::json::Object *solutionObj) {
+  auto builder = OpBuilder(module);
+
   // Record ops to be erased.
   SmallVector<Operation *, 32> opToErase;
 
@@ -341,6 +344,26 @@ applyReplaceTensorOperation(ModuleOp module,
             func.getArgumentTypes()[2].dyn_cast<MemRefType>().getElementType();
 
         replaceFunction(module, convOpHelper, func);
+
+        if (!dse) {
+          auto funcObj = solutionObj->getObject(func.getSymName());
+          auto strategy = *funcObj->getArray("strategy");
+          auto unrollFactor = strategy[0].getAsInteger().getValueOr(1);
+          AffineLoopBands bands;
+          getLoopBands(func.front(), bands);
+
+          if (convOpHelper.outCh < unrollFactor) {
+            bands[0][3]->setAttr("unroll",
+                                 builder.getI64IntegerAttr(convOpHelper.outCh));
+            bands[0][6]->setAttr("unroll",
+                                 builder.getI64IntegerAttr(
+                                     (unrollFactor + convOpHelper.outCh - 1) /
+                                     convOpHelper.outCh));
+          } else {
+            bands[0][3]->setAttr("unroll",
+                                 builder.getI64IntegerAttr(unrollFactor));
+          }
+        }
       }
     } else {
       // Remove function if not selected
@@ -387,7 +410,10 @@ struct ReplaceTensorOperation
       selectedFunctions.push_back(selected.getAsString().getValueOr("").str());
     }
 
-    applyReplaceTensorOperation(module, selectedFunctions);
+    SmallVector<int64_t> unrolls;
+    auto dse = solutionObj->getBoolean("dse").getValueOr(true);
+
+    applyReplaceTensorOperation(module, selectedFunctions, dse, solutionObj);
   }
 };
 } // namespace

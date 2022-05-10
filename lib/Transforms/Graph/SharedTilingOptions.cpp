@@ -19,6 +19,10 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+int64_t getInWH(int64_t outWH, int64_t stride, int64_t kernelSize) {
+  return (outWH - 1) * stride + kernelSize;
+}
+
 static SmallVector<ConvOpHelper, 32>
 exploreTilingStrategy(ModuleOp module,
                       SmallVector<OpHelper *, 32> convOpHelpers) {
@@ -28,11 +32,12 @@ exploreTilingStrategy(ModuleOp module,
   for (auto helper : convOpHelpers) {
     finalTiling.takeSmallerDim(*dyn_cast<ConvOpHelper>(helper));
   }
+  finalTiling.getCorrectInWH();
   tilingOptions.push_back(finalTiling);
 
   // Create another tiling
   finalTiling.outWH += finalTiling.outWH;
-  finalTiling.inWH += finalTiling.outWH;
+  finalTiling.getCorrectInWH();
   tilingOptions.push_back(finalTiling);
 
   return tilingOptions;
@@ -101,7 +106,7 @@ static FuncOp createSharedConvolution(ModuleOp module, ConvOpHelper helper,
   return newFuncOp;
 }
 
-static std::pair<int64_t, int64_t>
+static std::tuple<int64_t, int64_t, int64_t>
 recordSizeAndCount(ModuleOp module, ConvOpHelper sharedHelper) {
   // Compute the size of buffers required
   int64_t inputSize = sharedHelper.batchSize * sharedHelper.inCh *
@@ -128,18 +133,22 @@ recordSizeAndCount(ModuleOp module, ConvOpHelper sharedHelper) {
           (currHelper.outCh + sharedHelper.outCh - 1) / sharedHelper.outCh;
       int64_t inChDiv =
           (currHelper.inCh + sharedHelper.inCh - 1) / sharedHelper.inCh;
-      int64_t inWHDiv =
-          (currHelper.inWH + sharedHelper.inWH - 1) / sharedHelper.inWH;
-      count += outChDiv * inChDiv * inWHDiv * inWHDiv;
+      int64_t WHDiv =
+          (currHelper.outWH + sharedHelper.outWH - 1) / sharedHelper.outWH;
+      count += outChDiv * inChDiv * WHDiv * WHDiv;
     });
   }
 
-  return std::pair<int64_t, int64_t>(size, count);
+  int64_t cycle = sharedHelper.batchSize * sharedHelper.inCh *
+                  sharedHelper.outWH * sharedHelper.outWH * sharedHelper.outCh *
+                  sharedHelper.kernelSize * sharedHelper.kernelSize;
+
+  return std::tuple<int64_t, int64_t, int64_t>(size, count, cycle);
 }
 
 static void dumpTilingOptions(
-    SmallVector<std::tuple<std::string, int64_t, int64_t>> tilingList,
-    StringRef csvFilePath) {
+    SmallVector<std::tuple<std::string, int64_t, int64_t, int64_t>> tilingList,
+    ConvOpHelper helper, StringRef csvFilePath) {
   std::string errorMessage;
   auto csvFile = mlir::openOutputFile(csvFilePath, &errorMessage);
   if (!csvFile)
@@ -147,15 +156,15 @@ static void dumpTilingOptions(
   auto &os = csvFile->os();
 
   // Print header row.
-  os << "name,size,count\n";
+  os << "name,size,count,cycle,batchSize,inCh,inWH,outCh,outWH,kernelSize\n";
 
   // Print tiling options
   for (auto tiling : tilingList) {
-    std::string name;
-    int64_t count;
-    int64_t size;
-    std::tie(name, count, size) = tiling;
-    os << name << "," << count << "," << size << "\n";
+    auto [name, count, size, cycle] = tiling;
+    os << name << "," << count << "," << size << "," << cycle << ","
+       << helper.batchSize << "," << helper.inCh << "," << helper.inWH << ","
+       << helper.outCh << "," << helper.outWH << "," << helper.kernelSize
+       << "\n";
   }
 
   csvFile->keep();
@@ -200,23 +209,24 @@ static bool applySharedTilingOptions(ModuleOp module, unsigned numTargets,
         SmallVector<ConvOpHelper> tilingOptions =
             exploreTilingStrategy(module, countMap[*opHelper]);
         countMap.erase(*opHelper);
-        SmallVector<std::tuple<std::string, int64_t, int64_t>> tilingList;
+        SmallVector<std::tuple<std::string, int64_t, int64_t, int64_t>>
+            tilingList;
         for (unsigned j = 0; j < tilingOptions.size(); j++) {
           auto functionName =
               "shared_function_" + std::to_string(i) + "_" + std::to_string(j);
           auto newFuncOp =
               createSharedConvolution(module, tilingOptions[j], functionName);
-          auto sizeCount = recordSizeAndCount(module, tilingOptions[j]);
-          newFuncOp->setAttr("size",
-                             builder.getI64IntegerAttr(sizeCount.first));
-          newFuncOp->setAttr("count",
-                             builder.getI64IntegerAttr(sizeCount.second));
+          auto [size, count, cycle] =
+              recordSizeAndCount(module, tilingOptions[j]);
+          newFuncOp->setAttr("size", builder.getI64IntegerAttr(size));
+          newFuncOp->setAttr("count", builder.getI64IntegerAttr(count));
+          newFuncOp->setAttr("cycle", builder.getI64IntegerAttr(cycle));
           tilingList.push_back(
-              std::make_tuple(functionName, sizeCount.first, sizeCount.second));
+              std::make_tuple(functionName, size, count, cycle));
         }
         auto csvFilePath = outputPath.str() + "shared_function_" +
                            std::to_string(i) + "_tiling.csv";
-        dumpTilingOptions(tilingList, csvFilePath);
+        dumpTilingOptions(tilingList, *convOpHelper, csvFilePath);
       }
     }
   }

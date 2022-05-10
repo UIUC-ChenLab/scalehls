@@ -135,12 +135,9 @@ public:
     outWH = outWH < rhs.outWH ? outWH : rhs.outWH;
   }
 
-  unsigned getHashValue() const {
-    auto hash = kernelSize * 37U;
-    hash = (hash + pad) * 37U;
-    hash = (hash + stride) * 37U;
-    hash = (hash + dilation) * 37U;
-    return hash;
+  int64_t getCorrectInWH() {
+    inWH = (outWH - 1) * stride + kernelSize;
+    return inWH;
   }
 
   static unsigned getHashValue(int64_t _kernelSize, int64_t _pad,

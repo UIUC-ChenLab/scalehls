@@ -50,23 +50,54 @@ struct ApplyILPSolution : public ApplyILPSolutionBase<ApplyILPSolution> {
                       "something else\n";
       return signalPassFailure();
     }
+    auto dse = solutionObj->getBoolean("dse").getValueOr(true);
+
     for (auto func : module.getOps<func::FuncOp>()) {
       if (func->getAttr("shared")) {
-        auto funcObj = solutionObj->getObject(func.getSymName());
-        auto strategy = *funcObj->getArray("strategy");
-
-        AffineLoopBands bands;
-        getLoopBands(func.front(), bands);
         SmallVector<TileList> tileLists;
         SmallVector<unsigned> targetIIs;
-        unsigned idx = 0;
-        for (unsigned i = 0, e = bands.size(); i < e; ++i) {
-          TileList tileList;
-          for (unsigned j = 0; j < bands[i].size(); j++) {
-            tileList.push_back(strategy[idx++].getAsUINT64().getValueOr(1));
+
+        if (dse) {
+          auto funcObj = solutionObj->getObject(func.getSymName());
+          auto strategy = *funcObj->getArray("strategy");
+
+          AffineLoopBands bands;
+          getLoopBands(func.front(), bands);
+          unsigned idx = 0;
+          for (unsigned i = 0, e = bands.size(); i < e; ++i) {
+            TileList tileList;
+            for (unsigned j = 0; j < bands[i].size(); j++) {
+              tileList.push_back(strategy[idx++].getAsUINT64().getValueOr(1));
+            }
+            tileLists.push_back(tileList);
+            targetIIs.push_back(strategy[idx++].getAsUINT64().getValueOr(1));
           }
-          tileLists.push_back(tileList);
-          targetIIs.push_back(strategy[idx++].getAsUINT64().getValueOr(1));
+        } else {
+          // Apply base optimizations for loops
+          AffineLoopBands bands;
+          getLoopBands(func.front(), bands);
+          for (auto band : bands) {
+            applyAffineLoopPerfection(band);
+            applyAffineLoopOrderOpt(band);
+            applyRemoveVariableBound(band);
+          }
+
+          getLoopBands(func.front(), bands);
+          // Follow the tiling strategy set by ReplaceTensorOperation
+          for (unsigned i = 0, e = bands.size(); i < e; ++i) {
+            TileList tileList;
+            for (unsigned j = 0; j < bands[i].size(); j++) {
+              if (bands[i][j]->hasAttr("unroll"))
+                tileList.push_back(bands[i][j]
+                                       ->getAttr("unroll")
+                                       .dyn_cast<IntegerAttr>()
+                                       .getInt());
+              else
+                tileList.push_back(1);
+            }
+            tileLists.push_back(tileList);
+            targetIIs.push_back(1);
+          }
         }
         applyOptStrategy(func, tileLists, targetIIs);
       }
