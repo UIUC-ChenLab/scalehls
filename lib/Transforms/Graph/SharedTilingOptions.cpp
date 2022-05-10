@@ -24,21 +24,70 @@ int64_t getInWH(int64_t outWH, int64_t stride, int64_t kernelSize) {
 }
 
 static SmallVector<ConvOpHelper, 32>
-exploreTilingStrategy(ModuleOp module,
-                      SmallVector<OpHelper *, 32> convOpHelpers) {
+exploreTilingStrategy(ModuleOp module, SmallVector<OpHelper *, 32> opHelpers) {
   SmallVector<ConvOpHelper, 32> tilingOptions;
-  ConvOpHelper finalTiling =
-      ConvOpHelper(*dyn_cast<ConvOpHelper>(convOpHelpers[0]));
-  for (auto helper : convOpHelpers) {
-    finalTiling.takeSmallerDim(*dyn_cast<ConvOpHelper>(helper));
-  }
-  finalTiling.getCorrectInWH();
-  tilingOptions.push_back(finalTiling);
 
-  // Create another tiling
-  finalTiling.outWH += finalTiling.outWH;
-  finalTiling.getCorrectInWH();
-  tilingOptions.push_back(finalTiling);
+  SmallVector<ConvOpHelper, 32> convOpHelpers;
+  for (auto helper : opHelpers) {
+    convOpHelpers.push_back(*dyn_cast<ConvOpHelper>(helper));
+  }
+
+  ConvOpHelper finalTiling = ConvOpHelper(convOpHelpers[0]);
+  for (auto helper : convOpHelpers) {
+    finalTiling.takeSmallerDim(helper);
+  }
+  // finalTiling.getCorrectInWH();
+  // tilingOptions.push_back(finalTiling);
+
+  // Get maximum dimensions of all
+  auto maxInCh = 0;
+  auto maxOutCh = 0;
+  auto maxOutWH = 0;
+  for (auto helper : convOpHelpers) {
+    if (helper.inCh > maxInCh) {
+      maxInCh = helper.inCh;
+    }
+    if (helper.outCh > maxOutCh) {
+      maxOutCh = helper.outCh;
+    }
+    if (helper.outWH > maxOutWH) {
+      maxOutWH = helper.outWH;
+    }
+  }
+
+  // Find how many computations are performed extra
+  SmallVector<int64_t> lostComputes;
+  lostComputes.push_back(0);
+  for (auto outWH = 1; outWH <= maxOutWH; outWH++) {
+    int64_t lostCompute = 0;
+    for (auto helper : convOpHelpers) {
+      auto outWHDiv = (helper.outWH + outWH - 1) / outWH;
+      lostCompute += ((outWHDiv * outWH) * (outWHDiv * outWH)) -
+                     (helper.outWH * helper.outWH);
+    }
+    lostComputes.push_back(lostCompute);
+  }
+
+  unsigned numOptions = 20;
+  SmallVector<int64_t> outWHOptions;
+  for (unsigned i = 0; i < numOptions; i++) {
+    auto minLostCompute = lostComputes[1];
+    auto minOutWH = 1;
+    for (auto outWH = 2; outWH <= maxOutWH; outWH++) {
+      if (minLostCompute > lostComputes[outWH]) {
+        minLostCompute = lostComputes[outWH];
+        minOutWH = outWH;
+      }
+    }
+    outWHOptions.push_back(minOutWH);
+    lostComputes[minOutWH] = INT_MAX;
+  }
+
+  for (unsigned i = 0; i < numOptions; i++) {
+    finalTiling.outWH = outWHOptions[i];
+    finalTiling.getCorrectInWH();
+    tilingOptions.push_back(finalTiling);
+  }
 
   return tilingOptions;
 }
@@ -148,7 +197,7 @@ recordSizeAndCount(ModuleOp module, ConvOpHelper sharedHelper) {
 
 static void dumpTilingOptions(
     SmallVector<std::tuple<std::string, int64_t, int64_t, int64_t>> tilingList,
-    ConvOpHelper helper, StringRef csvFilePath) {
+    SmallVector<ConvOpHelper> tilingHelpers, StringRef csvFilePath) {
   std::string errorMessage;
   auto csvFile = mlir::openOutputFile(csvFilePath, &errorMessage);
   if (!csvFile)
@@ -159,7 +208,9 @@ static void dumpTilingOptions(
   os << "name,size,count,cycle,batchSize,inCh,inWH,outCh,outWH,kernelSize\n";
 
   // Print tiling options
-  for (auto tiling : tilingList) {
+  for (unsigned i = 0; i < tilingHelpers.size(); i++) {
+    auto tiling = tilingList[i];
+    auto helper = tilingHelpers[i];
     auto [name, count, size, cycle] = tiling;
     os << name << "," << count << "," << size << "," << cycle << ","
        << helper.batchSize << "," << helper.inCh << "," << helper.inWH << ","
@@ -206,18 +257,18 @@ static bool applySharedTilingOptions(ModuleOp module, unsigned numTargets,
       break;
     else {
       if (auto convOpHelper = dyn_cast<ConvOpHelper>(opHelper)) {
-        SmallVector<ConvOpHelper> tilingOptions =
+        SmallVector<ConvOpHelper> tilingHelpers =
             exploreTilingStrategy(module, countMap[*opHelper]);
         countMap.erase(*opHelper);
         SmallVector<std::tuple<std::string, int64_t, int64_t, int64_t>>
             tilingList;
-        for (unsigned j = 0; j < tilingOptions.size(); j++) {
+        for (unsigned j = 0; j < tilingHelpers.size(); j++) {
           auto functionName =
               "shared_function_" + std::to_string(i) + "_" + std::to_string(j);
           auto newFuncOp =
-              createSharedConvolution(module, tilingOptions[j], functionName);
+              createSharedConvolution(module, tilingHelpers[j], functionName);
           auto [size, count, cycle] =
-              recordSizeAndCount(module, tilingOptions[j]);
+              recordSizeAndCount(module, tilingHelpers[j]);
           newFuncOp->setAttr("size", builder.getI64IntegerAttr(size));
           newFuncOp->setAttr("count", builder.getI64IntegerAttr(count));
           newFuncOp->setAttr("cycle", builder.getI64IntegerAttr(cycle));
@@ -226,7 +277,7 @@ static bool applySharedTilingOptions(ModuleOp module, unsigned numTargets,
         }
         auto csvFilePath = outputPath.str() + "shared_function_" +
                            std::to_string(i) + "_tiling.csv";
-        dumpTilingOptions(tilingList, *convOpHelper, csvFilePath);
+        dumpTilingOptions(tilingList, tilingHelpers, csvFilePath);
       }
     }
   }
