@@ -348,21 +348,15 @@ applyReplaceTensorOperation(ModuleOp module,
         if (!dse) {
           auto funcObj = solutionObj->getObject(func.getSymName());
           auto strategy = *funcObj->getArray("strategy");
-          auto unrollFactor = strategy[0].getAsInteger().getValueOr(1);
+          auto inChUnrollFactor = strategy[0].getAsInteger().getValueOr(1);
+          auto outChUnrollFactor = strategy[1].getAsInteger().getValueOr(1);
           AffineLoopBands bands;
           getLoopBands(func.front(), bands);
 
-          if (convOpHelper.outCh < unrollFactor) {
-            bands[0][3]->setAttr("unroll",
-                                 builder.getI64IntegerAttr(convOpHelper.outCh));
-            bands[0][6]->setAttr("unroll",
-                                 builder.getI64IntegerAttr(
-                                     (unrollFactor + convOpHelper.outCh - 1) /
-                                     convOpHelper.outCh));
-          } else {
-            bands[0][3]->setAttr("unroll",
-                                 builder.getI64IntegerAttr(unrollFactor));
-          }
+          bands[0][3]->setAttr("unroll",
+                               builder.getI64IntegerAttr(outChUnrollFactor));
+          bands[0][6]->setAttr("unroll",
+                               builder.getI64IntegerAttr(inChUnrollFactor));
         }
       }
     } else {
