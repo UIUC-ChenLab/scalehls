@@ -24,8 +24,7 @@ int64_t getInWH(int64_t outWH, int64_t stride, int64_t kernelSize) {
 }
 
 static SmallVector<ConvOpHelper, 32>
-exploreTilingStrategy(ModuleOp module, SmallVector<OpHelper *, 32> opHelpers,
-                      unsigned numTilings) {
+exploreTilingStrategy(ModuleOp module, SmallVector<OpHelper *, 32> opHelpers) {
   SmallVector<ConvOpHelper, 32> tilingOptions;
 
   SmallVector<ConvOpHelper, 32> convOpHelpers;
@@ -37,6 +36,8 @@ exploreTilingStrategy(ModuleOp module, SmallVector<OpHelper *, 32> opHelpers,
   for (auto helper : convOpHelpers) {
     finalTiling.takeSmallerDim(helper);
   }
+
+  auto minTile = 16;
 
   // Get maximum dimensions of all
   auto maxInCh = 0;
@@ -71,17 +72,29 @@ exploreTilingStrategy(ModuleOp module, SmallVector<OpHelper *, 32> opHelpers,
 
   // Find the outWH values with minimum lost computations
   SmallVector<int64_t> outWHOptions;
-  for (unsigned i = 0; i < numTilings; i++) {
-    auto minLostCompute = lostComputes[1];
-    auto minOutWH = 1;
-    for (auto outWH = 2; outWH <= maxOutWH; outWH++) {
-      if (minLostCompute >= lostComputes[outWH]) {
-        minLostCompute = lostComputes[outWH];
-        minOutWH = outWH;
-      }
+  int64_t gcd = 1;
+  for (unsigned outWH = maxOutWH; outWH >= 1; outWH--) {
+    if (lostComputes[outWH] == 0) {
+      gcd = outWH;
+      break;
     }
-    outWHOptions.push_back(minOutWH);
-    lostComputes[minOutWH] = INT_MAX;
+  }
+
+  // Add divisors of GCD
+  if (gcd < minTile) {
+    gcd = minTile;
+  }
+  for (unsigned outWH = gcd; outWH >= 1; outWH--) {
+    if (gcd % outWH == 0) {
+      outWHOptions.push_back(outWH);
+    }
+  }
+
+  // Add tiles larger than GCD
+  for (auto outWH = gcd + 1; outWH <= maxOutWH; outWH++) {
+    if (lostComputes[outWH] < lostComputes[outWH - 1]) {
+      outWHOptions.push_back(outWH);
+    }
   }
 
   // Find the best outCh
@@ -91,7 +104,7 @@ exploreTilingStrategy(ModuleOp module, SmallVector<OpHelper *, 32> opHelpers,
   for (auto outCh = 1; outCh <= maxOutCh; outCh++) {
     int64_t lostCompute = 0;
     for (auto helper : convOpHelpers) {
-      auto outChDiv = (helper.outCh + outCh - 1) / outCh;
+      int64_t outChDiv = (helper.outCh + outCh - 1) / outCh;
       lostCompute += (outChDiv * outCh - helper.outCh) * helper.kernelSize *
                      helper.kernelSize * helper.inCh * helper.outWH *
                      helper.outWH;
@@ -101,17 +114,29 @@ exploreTilingStrategy(ModuleOp module, SmallVector<OpHelper *, 32> opHelpers,
 
   // Find the outCh values with minimum lost computations
   SmallVector<int64_t> outChOptions;
-  for (unsigned i = 0; i < numTilings; i++) {
-    auto minLostCompute = lostComputes[1];
-    auto minOutCh = 1;
-    for (auto outCh = 2; outCh <= maxOutCh; outCh++) {
-      if (minLostCompute >= lostComputes[outCh]) {
-        minLostCompute = lostComputes[outCh];
-        minOutCh = outCh;
-      }
+  gcd = 1;
+  for (unsigned outCh = maxOutCh; outCh >= 1; outCh--) {
+    if (lostComputes[outCh] == 0) {
+      gcd = outCh;
+      break;
     }
-    outChOptions.push_back(minOutCh);
-    lostComputes[minOutCh] = INT_MAX;
+  }
+
+  // Add divisors of GCD
+  if (gcd < minTile) {
+    gcd = minTile;
+  }
+  for (unsigned outCh = gcd; outCh >= 1; outCh--) {
+    if (gcd % outCh == 0) {
+      outChOptions.push_back(outCh);
+    }
+  }
+
+  // Add tiles larger than GCD
+  for (auto outCh = gcd + 1; outCh <= maxOutCh; outCh++) {
+    if (lostComputes[outCh] < lostComputes[outCh - 1]) {
+      outChOptions.push_back(outCh);
+    }
   }
 
   // Find the best inCh
@@ -131,25 +156,37 @@ exploreTilingStrategy(ModuleOp module, SmallVector<OpHelper *, 32> opHelpers,
 
   // Find the inCh values with minimum lost computations
   SmallVector<int64_t> inChOptions;
-  for (unsigned i = 0; i < numTilings; i++) {
-    auto minLostCompute = lostComputes[1];
-    auto minInCh = 1;
-    for (auto inCh = 2; inCh <= maxInCh; inCh++) {
-      if (minLostCompute >= lostComputes[inCh]) {
-        minLostCompute = lostComputes[inCh];
-        minInCh = inCh;
-      }
+  gcd = 1;
+  for (unsigned inCh = maxInCh; inCh >= 1; inCh--) {
+    if (lostComputes[inCh] == 0) {
+      gcd = inCh;
+      break;
     }
-    inChOptions.push_back(minInCh);
-    lostComputes[minInCh] = INT_MAX;
+  }
+
+  // Add divisors of GCD
+  if (gcd < minTile) {
+    gcd = minTile;
+  }
+  for (unsigned inCh = gcd; inCh >= 1; inCh--) {
+    if (gcd % inCh == 0) {
+      inChOptions.push_back(inCh);
+    }
+  }
+
+  // Add tiles larger than GCD
+  for (auto inCh = gcd + 1; inCh <= maxInCh; inCh++) {
+    if (lostComputes[inCh] < lostComputes[inCh - 1]) {
+      inChOptions.push_back(inCh);
+    }
   }
 
   // Record all possible configuartions
-  for (unsigned i = 0; i < numTilings; i++) {
-    for (unsigned j = 0; j < numTilings; j++) {
-      for (unsigned k = 0; k < numTilings; k++) {
+  for (unsigned i = 0; i < outChOptions.size(); i++) {
+    for (unsigned j = 0; j < inChOptions.size(); j++) {
+      for (unsigned k = 0; k < outWHOptions.size(); k++) {
         finalTiling.outCh = outChOptions[i];
-        finalTiling.inCh = outChOptions[j];
+        finalTiling.inCh = inChOptions[j];
         finalTiling.outWH = outWHOptions[k];
         finalTiling.getCorrectInWH();
         tilingOptions.push_back(finalTiling);
@@ -280,8 +317,8 @@ static void dumpTilingOptions(
   for (unsigned i = 0; i < tilingHelpers.size(); i++) {
     auto tiling = tilingList[i];
     auto helper = tilingHelpers[i];
-    auto [name, count, size, cycle] = tiling;
-    os << name << "," << count << "," << size << "," << cycle << ","
+    auto [name, size, count, cycle] = tiling;
+    os << name << "," << size << "," << count << "," << cycle << ","
        << helper.batchSize << "," << helper.inCh << "," << helper.inWH << ","
        << helper.outCh << "," << helper.outWH << "," << helper.kernelSize
        << "\n";
@@ -291,7 +328,6 @@ static void dumpTilingOptions(
 }
 
 static bool applySharedTilingOptions(ModuleOp module, unsigned numTargets,
-                                     unsigned numTilings,
                                      StringRef outputPath) {
   auto builder = OpBuilder(module);
 
@@ -328,7 +364,7 @@ static bool applySharedTilingOptions(ModuleOp module, unsigned numTargets,
     else {
       if (auto convOpHelper = dyn_cast<ConvOpHelper>(opHelper)) {
         SmallVector<ConvOpHelper> tilingHelpers =
-            exploreTilingStrategy(module, countMap[*opHelper], numTilings);
+            exploreTilingStrategy(module, countMap[*opHelper]);
         countMap.erase(*opHelper);
         SmallVector<std::tuple<std::string, int64_t, int64_t, int64_t>>
             tilingList;
@@ -360,7 +396,7 @@ struct SharedTilingOptions
     : public SharedTilingOptionsBase<SharedTilingOptions> {
   void runOnOperation() override {
     auto module = getOperation();
-    applySharedTilingOptions(module, numTargets, numTilings, outputPath);
+    applySharedTilingOptions(module, numTargets, outputPath);
   }
 };
 } // namespace

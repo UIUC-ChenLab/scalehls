@@ -156,8 +156,6 @@ def SharedTilingOptions :
   let options = [
     Option<"numTargets", "num-targets", "unsigned", /*default=*/"0",
            "Number of shared functions to be generated">,
-    Option<"numTilings", "num-tilings", "unsigned", /*default=*/"1",
-           "Number of tiling options for each dimension of tiling">,
     Option<"outputPath", "output-path", "std::string",
            /*default=*/"\"./\"",
            "File path: the path for dumping the MLIR of pareto design points">
