@@ -1782,10 +1782,9 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
           // For now, we set the offset of all m_axi interfaces as slave.
           // For now, we set the offset of all m_axi interfaces as slave.
           auto kind = MemoryKind(memrefType.getMemorySpaceAsInt());
-          if (kind == MemoryKind::DRAM) {
-            os << " m_axi offset=slave bundle=";
-            emitValue(port);
-          } else
+          if (kind == MemoryKind::DRAM)
+            os << " m_axi offset=slave bundle=inout";
+          else
             os << " bram";
 
           os << " port=";
