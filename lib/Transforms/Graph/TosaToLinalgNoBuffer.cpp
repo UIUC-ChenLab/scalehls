@@ -30,6 +30,129 @@ static bool applyTosaToLinalgNoBuffer(ModuleOp module) {
       auto loc = op->getLoc();
 
       if (auto conv2DOp = dyn_cast<tosa::Conv2DOp>(op)) {
+        builder.setInsertionPoint(conv2DOp);
+        auto helper = ConvOpHelper(conv2DOp);
+
+        // Input MemRef object allocated off-chip
+        bufferization::ToTensorOp inToTensor;
+        if (conv2DOp.input().getDefiningOp()) {
+          if (auto toTensor = dyn_cast<bufferization::ToTensorOp>(
+                  conv2DOp.input().getDefiningOp())) {
+            inToTensor = toTensor;
+          }
+        }
+        auto inMemref = inToTensor.memref();
+
+        // Output MemRef object allocated off-chip
+        bufferization::ToMemrefOp outToMemref;
+        for (auto user : conv2DOp.output().getUsers()) {
+          if (auto toMemref = dyn_cast<bufferization::ToMemrefOp>(user)) {
+            outToMemref = toMemref;
+          }
+        }
+        memref::CopyOp outCopy;
+        for (auto user : outToMemref.memref().getUsers()) {
+          if (auto copy = dyn_cast<memref::CopyOp>(user)) {
+            outCopy = copy;
+          }
+        }
+        Value outMemref = outCopy.target();
+        Value outMemrefArg = outMemref;
+        memref::SubViewOp outSubview;
+        if (outMemref.getDefiningOp()) {
+          auto subview = dyn_cast<memref::SubViewOp>(outMemref.getDefiningOp());
+          outMemrefArg = subview.source();
+
+          auto outSubview =
+              dyn_cast<memref::SubViewOp>(builder.insert(subview.clone()));
+          subview.result().replaceAllUsesWith(outSubview.result());
+          outMemref = outSubview.result();
+          opToErase.push_back(subview);
+        }
+
+        // Instantiate a buffer for weight of shared function
+        auto newWeightType = MemRefType::get(
+            {helper.kernelSize, helper.kernelSize, helper.inCh, helper.outCh},
+            helper.weightType);
+        auto weightBuffer = func.front().addArgument(newWeightType, loc);
+        func.setType(builder.getFunctionType(
+            func.front().getArgumentTypes(),
+            func.back().getTerminator()->getOperandTypes()));
+
+        // Convert weight to memref
+        auto weightToMemref = builder.create<bufferization::ToMemrefOp>(
+            loc,
+            MemRefType::get({helper.outCh, helper.kernelSize, helper.kernelSize,
+                             helper.inCh},
+                            helper.weightType),
+            conv2DOp.weight());
+        auto weightMemref = weightToMemref.memref();
+
+        // Reshape weight appropriately
+        auto weightMap = AffineMap::get(
+            4, 0,
+            {builder.getAffineDimExpr(3), builder.getAffineDimExpr(0),
+             builder.getAffineDimExpr(1), builder.getAffineDimExpr(2)},
+            builder.getContext());
+        auto normalMap = AffineMap::get(
+            4, 0,
+            {builder.getAffineDimExpr(0), builder.getAffineDimExpr(1),
+             builder.getAffineDimExpr(2), builder.getAffineDimExpr(3)},
+            builder.getContext());
+        auto parallel = StringRef("parallel");
+        auto weightGeneric = builder.create<linalg::GenericOp>(
+            loc, ValueRange({weightMemref}), ValueRange({weightBuffer}),
+            ArrayRef({weightMap, normalMap}),
+            ArrayRef({parallel, parallel, parallel, parallel}));
+        auto weightGenericEntry =
+            builder.createBlock(&weightGeneric.getBodyRegion());
+        auto weightGenericArg0 =
+            weightGenericEntry->addArgument(helper.weightType, loc);
+        weightGenericEntry->addArgument(helper.weightType, loc);
+        builder.setInsertionPointToEnd(weightGenericEntry);
+        builder.create<linalg::YieldOp>(loc, weightGenericArg0);
+
+        // Create a linalg convolution
+        auto stride = NamedAttribute(
+            builder.getStringAttr("strides"),
+            builder.getI64TensorAttr({helper.stride, helper.stride}));
+        auto dilation = NamedAttribute(
+            builder.getStringAttr("dilations"),
+            builder.getI64TensorAttr({helper.dilation, helper.dilation}));
+        builder.setInsertionPointAfter(weightGeneric);
+        builder.create<linalg::Conv2DNhwcHwcfOp>(
+            builder.getUnknownLoc(), ValueRange({inMemref, weightBuffer}),
+            ValueRange({outMemref}), ArrayRef({stride, dilation}));
+
+        // Create linalg generic for adding bias
+        auto biasType = conv2DOp.bias().getType().dyn_cast<RankedTensorType>();
+        auto biasToMemref = builder.create<bufferization::ToMemrefOp>(
+            loc,
+            MemRefType::get(biasType.getShape(), biasType.getElementType()),
+            conv2DOp.bias());
+        auto biasMemref = biasToMemref.memref();
+        auto biasMap = AffineMap::get(4, 0, {builder.getAffineDimExpr(3)},
+                                      builder.getContext());
+        auto outputGeneric = builder.create<linalg::GenericOp>(
+            loc, ValueRange({outMemref, biasMemref}), ValueRange({outMemref}),
+            ArrayRef({normalMap, biasMap, normalMap}),
+            ArrayRef({parallel, parallel, parallel, parallel}));
+        auto outputGenericEntry =
+            builder.createBlock(&outputGeneric.getBodyRegion());
+        auto outputGenericArg0 =
+            outputGenericEntry->addArgument(helper.outputType, loc);
+        auto outputGenericArg1 =
+            outputGenericEntry->addArgument(biasType.getElementType(), loc);
+        outputGenericEntry->addArgument(helper.outputType, loc);
+        builder.setInsertionPointToEnd(outputGenericEntry);
+        auto outputGenericAdd = builder.create<arith::AddFOp>(
+            loc, helper.outputType, outputGenericArg0, outputGenericArg1);
+        builder.create<linalg::YieldOp>(loc, outputGenericAdd.getResult());
+
+        opToErase.push_back(outCopy);
+        opToErase.push_back(outToMemref);
+        opToErase.push_back(conv2DOp);
+        opToErase.push_back(inToTensor);
       }
 
       else if (auto reluNOp = dyn_cast<tosa::ReluNOp>(op)) {
