@@ -18,8 +18,8 @@ from lib import RandInit as RT
 from lib import DSEinputparse as INPAR
 from lib import pyScaleHLS as PYSHLS
 from lib import DSE_main as DMain
-from lib import dsepattern as DPAT
-from lib import sdse_finegrain as SDSEFG
+from lib import small_AutoScaleDSE as sASDSE
+from lib import large_AutoScaleDSE as DPAT
 
 def print_optknobs(opt_knobs, opt_knob_names):
     for i in range(len(opt_knobs) - 1):
@@ -166,48 +166,58 @@ def main():
     #     json.dump(data, f)    
     ###############json
 
+    #create template
+    INPAR.create_template(tar_dir, source_file, inputfiles, template)
+
     #scaleHLS manual optimization
     val = ""
+    yn = ""
     while val == "":
         val = input("What ScaleHLS optimizations? (Manual(M) / ScaleHLS+DSE+ML(S) / AutoScaleDSE(A) / None(N))\n")
-        if((val == "SDSE") or (val == "S") or (val == "s")):
-            
+
+    if((val == "SDSE") or (val == "S") or (val == "s")):
+        while yn == "":
+            yn = input("Run ScaleHLS DSE? Yes(Y) if initial instance. No(N) if restarting. (Note SDSE is not always deterministic) \n")
+        if((yn == "No") or (yn == "N") or (yn == "n")):
+            None
+        else:                
             refactored_dseconfig = INPAR.preproccess(tar_dir, source_file, dse_target, inputtop)
-            PYSHLS.scalehls_dse_top(tar_dir, source_file, refactored_dseconfig, inputtop)
+            sASDSE.scalehls_dse_top(tar_dir, source_file, refactored_dseconfig, inputpart, inputtop)
 
-            func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/scalehls_dse_temp/ScaleHLS_DSE_out.cpp", "/ML_in.cpp", inputtop, sdse=False)
-            
-            
-            
-            sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)
+        # sdse_var_part = INPAR.read_sdse_arrpart(tar_dir + '/scalehls_dse_temp/' + 'ScaleHLS_DSE_out.cpp', inputtop)            
+        func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/Small_AScaleDSE_out.cpp", "/ML_in.cpp", inputtop, sdse=True, sdse_arr=True)
+        # multiloop arrays
+        var_arraylist_sized = INPAR.get_dependent_arrays(var_arraylist_sized)
+        INPAR.remove_multiloop_arrays_sdse_parti(tar_dir, "/ML_in.cpp", var_arraylist_sized)
+        # print data and get hottest loop
+        sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)            
+    elif((val == "Manual") or (val == "M") or (val == "m")):
+        opt_knobs, opt_knob_names = PYSHLS.ScaleHLSopt(source_file, inputtop, tar_dir + "/ScaleHLS_opted.c")   
+        print_optknobs(opt_knobs, opt_knob_names)
+        func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_opted.c", "/ML_in.cpp", inputtop)
+        sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)
+    elif((val == "Auto") or (val == "A") or (val == "a")):
+        func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, source_file,  "/ref_design.c", inputtop)                        
+        sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)
+        sdse_var_part_list = DPAT.graph_algorithm(tar_dir, dse_target, sortedarray, func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)
+        
+        for item in sdse_var_part_list:
+            print(item)
+        var_arraylist_sized, array_tree_list = INPAR.asdse_get_knobs(tar_dir + "/ML_in.cpp", inputtop, sdse_var_part_list)
+        # array for only the top function
+        # print("\n Top function Arrays")
+        # print(var_arraylist_sized)
+        var_forlist = []
+    elif((val == "None") or (val == "N") or (val == "n")):
+        func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, source_file, "/ML_in.cpp", inputtop)            
+        sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)    
 
-            
-        elif((val == "Manual") or (val == "M") or (val == "m")):
-            opt_knobs, opt_knob_names = PYSHLS.ScaleHLSopt(source_file, inputtop, tar_dir + "/ScaleHLS_opted.c")   
-            print_optknobs(opt_knobs, opt_knob_names)
-            func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/ScaleHLS_opted.c", "/ML_in.cpp", inputtop)
-            sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)
-        elif((val == "Auto") or (val == "A") or (val == "a")):
-            func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, source_file,  "/ref_design.c", inputtop)                        
-            sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)
-            sdse_var_part_list = DPAT.graph_algorithm(tar_dir, dse_target, sortedarray, func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)
-            
-            for item in sdse_var_part_list:
-                print(item)
-            var_arraylist_sized, array_tree_list = INPAR.asdse_get_knobs(tar_dir + "/ML_in.cpp", inputtop, sdse_var_part_list)
-            # array for only the top function
-            # print("\n Top function Arrays")
-            # print(var_arraylist_sized)
-            var_forlist = []
-        elif((val == "None") or (val == "N") or (val == "n")):
-            func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, source_file, "/ML_in.cpp", inputtop)            
-            sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)    
+###############################################################################################################    
+    isbreak = input("\n\nBreak\n")
+###############################################################################################################
 
     #create paramfile
     INPAR.create_params(tar_dir, var_forlist, var_arraylist_sized)
-
-    #create template
-    INPAR.create_template(tar_dir, source_file, inputfiles, template)
 
 ###############################################################################################################    
     isbreak = input("\n\nBreak\n")

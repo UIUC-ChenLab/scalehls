@@ -1,0 +1,33 @@
+<AutoPilot:ProjectResources xmlns:AutoPilot="com.autoesl.autopilot.ui.directiveView">
+    <sourceFile name="">
+        <directive functionName="kernel_3mm" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="v4" positionalBoolean="4"/>
+                <option name="complete" value="" positionalBoolean="type"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+        <directive functionName="kernel_3mm" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="v4" positionalBoolean="4"/>
+                <option name="complete" value="" positionalBoolean="type"/>
+                <option name="dim" value="2"/>
+            </pragma>
+        </directive>
+        <directive functionName="kernel_3mm" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="v5" positionalBoolean="4"/>
+                <option name="complete" value="" positionalBoolean="type"/>
+                <option name="dim" value="1"/>
+            </pragma>
+        </directive>
+        <directive functionName="kernel_3mm" label="" functionLabel="">
+            <pragma name="ARRAY_PARTITION">
+                <option name="variable" value="v5" positionalBoolean="4"/>
+                <option name="complete" value="" positionalBoolean="type"/>
+                <option name="dim" value="2"/>
+            </pragma>
+        </directive>
+    </sourceFile>
+</AutoPilot:ProjectResources>
+

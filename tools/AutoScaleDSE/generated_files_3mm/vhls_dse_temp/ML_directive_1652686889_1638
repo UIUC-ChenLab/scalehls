@@ -1,0 +1,4 @@
+set_directive_array_partition -type complete -dim 1 kernel_3mm v4
+set_directive_array_partition -type complete -dim 2 kernel_3mm v4
+set_directive_array_partition -type complete -dim 1 kernel_3mm v5
+set_directive_array_partition -type complete -dim 2 kernel_3mm v5

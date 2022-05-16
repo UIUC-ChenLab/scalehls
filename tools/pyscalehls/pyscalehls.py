@@ -77,7 +77,7 @@ def main():
             scalehls.loop_tiling(band, factors)
 
             # Apply loop pipelining. All loops inside of the pipelined loop are fully unrolled.
-            scalehls.loop_pipelining(band, 2, 3)  # targetII = 3
+            # scalehls.loop_pipelining(band, 2, 3)  # targetII = 3
 
         # Traverse all arrays in the function.
         # arrays = scalehls.ArrayList(func)
@@ -96,10 +96,12 @@ def main():
         scalehls.memory_opts(func)
 
         # Apply suitable array partition strategies through analyzing the array access pattern.
-        scalehls.auto_array_partition(func)
+        # scalehls.auto_array_partition(func)
 
     # Emit optimized MLIR to HLS C++.
-    buf = io.StringIO()
+    print(mod)
+
+    buf = io.StringIO()    
     scalehls.emit_hlscpp(mod, buf)
     buf.seek(0)
     if opts.output:

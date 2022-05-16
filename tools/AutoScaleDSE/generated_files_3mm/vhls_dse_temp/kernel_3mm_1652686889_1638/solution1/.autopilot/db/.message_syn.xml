@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Messages>
+	<Message severity="INFO" prefix="[SCHED 204-61]" key="SCHED_PIPELINING_STATUS_631" tag="SCHEDULE" content="Option &apos;relax_ii_for_timing&apos; is enabled, will increase II to preserve clock frequency constraints."/>
+	<Message severity="INFO" prefix="[HLS 200-10]" key="HLS_10_1312" tag="" content="Analyzing design file &apos;../ML_in.cpp&apos; ..."/>
+	<Message severity="INFO" prefix="[HLS 200-111]" key="HLS_111_965" tag="" content="Finished Linking Time (s): cpu = 00:00:53 ; elapsed = 00:00:55 . Memory (MB): peak = 863.969 ; gain = 459.035 ; free physical = 4000 ; free virtual = 13270"/>
+	<Message severity="INFO" prefix="[HLS 200-111]" key="HLS_111_965" tag="" content="Finished Checking Pragmas Time (s): cpu = 00:00:53 ; elapsed = 00:00:55 . Memory (MB): peak = 863.969 ; gain = 459.035 ; free physical = 4000 ; free virtual = 13270"/>
+	<Message severity="INFO" prefix="[HLS 200-10]" key="HLS_10_1467" tag="" content="Starting code transformations ..."/>
+	<Message severity="INFO" prefix="[HLS 200-111]" key="HLS_111_965" tag="" content="Finished Standard Transforms Time (s): cpu = 00:00:54 ; elapsed = 00:00:56 . Memory (MB): peak = 863.969 ; gain = 459.035 ; free physical = 3996 ; free virtual = 13266"/>
+	<Message severity="INFO" prefix="[HLS 200-10]" key="HLS_10_1472" tag="" content="Checking synthesizability ..."/>
+	<Message severity="INFO" prefix="[HLS 200-111]" key="HLS_111_965" tag="" content="Finished Checking Synthesizability Time (s): cpu = 00:00:54 ; elapsed = 00:00:56 . Memory (MB): peak = 863.969 ; gain = 459.035 ; free physical = 3996 ; free virtual = 13266"/>
+	<Message severity="WARNING" prefix="[XFORM 203-104]" key="XFORM_PARTITION_VAR_INDEX_118" tag="ARRAY,SDX_ARRAY" content="Completely partitioning array &apos;v4&apos; (../ML_in.cpp:25) accessed through non-constant indices on dimension 1 (../ML_in.cpp:1172:48), which may result in long runtime and suboptimal QoR due to large multiplexers. Please consider wrapping the array access into a function or using a register file core instead."/>
+	<Message severity="INFO" prefix="[XFORM 203-101]" key="XFORM_PARTITION_STATUS_116" tag="" content="Partitioning array &apos;v4&apos; (../ML_in.cpp:25) in dimension 1 completely."/>
+	<Message severity="WARNING" prefix="[XFORM 203-104]" key="XFORM_PARTITION_VAR_INDEX_118" tag="ARRAY,SDX_ARRAY" content="Completely partitioning array &apos;v5&apos; (../ML_in.cpp:26) accessed through non-constant indices on dimension 1 (../ML_in.cpp:394:2), which may result in long runtime and suboptimal QoR due to large multiplexers. Please consider wrapping the array access into a function or using a register file core instead."/>
+	<Message severity="INFO" prefix="[XFORM 203-101]" key="XFORM_PARTITION_STATUS_116" tag="" content="Partitioning array &apos;v5&apos; (../ML_in.cpp:26) in dimension 1 completely."/>
+	<Message severity="INFO" prefix="[XFORM 203-101]" key="XFORM_PARTITION_STATUS_109" tag="" content="Partitioning array &apos;v0&apos; (../ML_in.cpp:21) in dimension 1 with a cyclic factor 8."/>
+	<Message severity="INFO" prefix="[XFORM 203-101]" key="XFORM_PARTITION_STATUS_109" tag="" content="Partitioning array &apos;v1&apos; (../ML_in.cpp:22) in dimension 1 with a cyclic factor 3."/>
+	<Message severity="INFO" prefix="[XFORM 203-101]" key="XFORM_PARTITION_STATUS_109" tag="" content="Partitioning array &apos;v2&apos; (../ML_in.cpp:23) in dimension 1 with a cyclic factor 10."/>
+	<Message severity="INFO" prefix="[XFORM 203-101]" key="XFORM_PARTITION_STATUS_109" tag="" content="Partitioning array &apos;v3&apos; (../ML_in.cpp:24) in dimension 1 with a cyclic factor 2."/>
+	<Message severity="INFO" prefix="[XFORM 203-101]" key="XFORM_PARTITION_STATUS_109" tag="" content="Partitioning array &apos;v6&apos; (../ML_in.cpp:27) in dimension 1 with a cyclic factor 8."/>
+	<Message severity="INFO" prefix="[XFORM 203-101]" key="XFORM_PARTITION_STATUS_116" tag="" content="Partitioning array &apos;v4&apos; (../ML_in.cpp:25) in dimension 2 completely."/>
+	<Message severity="INFO" prefix="[XFORM 203-101]" key="XFORM_PARTITION_STATUS_116" tag="" content="Partitioning array &apos;v5&apos; (../ML_in.cpp:26) in dimension 2 completely."/>
+	<Message severity="INFO" prefix="[XFORM 203-101]" key="XFORM_PARTITION_STATUS_109" tag="" content="Partitioning array &apos;v0&apos; (../ML_in.cpp:21) in dimension 2 with a cyclic factor 3."/>
+	<Message severity="INFO" prefix="[XFORM 203-101]" key="XFORM_PARTITION_STATUS_109" tag="" content="Partitioning array &apos;v1&apos; (../ML_in.cpp:22) in dimension 2 with a cyclic factor 2."/>
+	<Message severity="INFO" prefix="[XFORM 203-101]" key="XFORM_PARTITION_STATUS_109" tag="" content="Partitioning array &apos;v2&apos; (../ML_in.cpp:23) in dimension 2 with a cyclic factor 2."/>
+	<Message severity="INFO" prefix="[XFORM 203-101]" key="XFORM_PARTITION_STATUS_109" tag="" content="Partitioning array &apos;v3&apos; (../ML_in.cpp:24) in dimension 2 with a cyclic factor 2."/>
+	<Message severity="INFO" prefix="[XFORM 203-101]" key="XFORM_PARTITION_STATUS_109" tag="" content="Partitioning array &apos;v6&apos; (../ML_in.cpp:27) in dimension 2 with a cyclic factor 10."/>
+	<Message severity="INFO" prefix="[HLS 200-111]" key="HLS_111_965" tag="" content="Finished Pre-synthesis Time (s): cpu = 00:08:21 ; elapsed = 00:08:23 . Memory (MB): peak = 1567.969 ; gain = 1163.035 ; free physical = 3474 ; free virtual = 12747"/>
+	<Message severity="INFO" prefix="[XFORM 203-541]" key="XFORM_LOOPFLAT_STATUS_218" tag="" content="Flattening a loop nest &apos;Loop1&apos; (../ML_in.cpp:48:47) in function &apos;kernel_3mm&apos;."/>
+	<Message severity="INFO" prefix="[XFORM 203-541]" key="XFORM_LOOPFLAT_STATUS_218" tag="" content="Flattening a loop nest &apos;Loop0&apos; (../ML_in.cpp:47:45) in function &apos;kernel_3mm&apos;."/>
+	<Message severity="INFO" prefix="[XFORM 203-541]" key="XFORM_LOOPFLAT_STATUS_218" tag="" content="Flattening a loop nest &apos;Loop4&apos; (../ML_in.cpp:391:53) in function &apos;kernel_3mm&apos;."/>
+	<Message severity="INFO" prefix="[XFORM 203-541]" key="XFORM_LOOPFLAT_STATUS_218" tag="" content="Flattening a loop nest &apos;Loop3&apos; (../ML_in.cpp:390:52) in function &apos;kernel_3mm&apos;."/>
+	<Message severity="INFO" prefix="[XFORM 203-541]" key="XFORM_LOOPFLAT_STATUS_218" tag="" content="Flattening a loop nest &apos;Loop7&apos; (../ML_in.cpp:678:53) in function &apos;kernel_3mm&apos;."/>
+	<Message severity="INFO" prefix="[XFORM 203-541]" key="XFORM_LOOPFLAT_STATUS_218" tag="" content="Flattening a loop nest &apos;Loop6&apos; (../ML_in.cpp:677:52) in function &apos;kernel_3mm&apos;."/>
+	<Message severity="ERROR" prefix="[HLS 200-70]" key="HLS_70_1855" tag="" content="Failed building synthesis data model."/>
+</Messages>

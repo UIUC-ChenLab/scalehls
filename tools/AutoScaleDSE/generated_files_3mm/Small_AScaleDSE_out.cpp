@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <string.h>
 
+using namespace std;
 
 /// This is top function.
 void kernel_3mm(
@@ -26,27 +27,46 @@ void kernel_3mm(
   float v5[50][70],
   float v6[40][70]
 ) {	// L9
+  #pragma HLS interface s_axilite port=return bundle=ctrl
+  #pragma HLS interface bram port=v0
+  #pragma HLS interface bram port=v1
+  #pragma HLS interface bram port=v2
+  #pragma HLS interface bram port=v3
+  #pragma HLS interface bram port=v4
+  #pragma HLS interface bram port=v5
+  #pragma HLS interface bram port=v6
 
   #pragma HLS array_partition variable=v0 cyclic factor=8 dim=1
   #pragma HLS array_partition variable=v0 cyclic factor=3 dim=2
+  #pragma HLS resource variable=v0 core=ram_s2p_bram
 
   #pragma HLS array_partition variable=v1 cyclic factor=3 dim=1
   #pragma HLS array_partition variable=v1 cyclic factor=2 dim=2
+  #pragma HLS resource variable=v1 core=ram_s2p_bram
 
   #pragma HLS array_partition variable=v2 cyclic factor=10 dim=1
   #pragma HLS array_partition variable=v2 cyclic factor=2 dim=2
+  #pragma HLS resource variable=v2 core=ram_s2p_bram
 
   #pragma HLS array_partition variable=v3 cyclic factor=2 dim=1
   #pragma HLS array_partition variable=v3 cyclic factor=2 dim=2
+  #pragma HLS resource variable=v3 core=ram_s2p_bram
 
+  #pragma HLS array_partition variable=v4 cyclic factor=8 dim=1
+  #pragma HLS array_partition variable=v4 cyclic factor=2 dim=2
+  #pragma HLS resource variable=v4 core=ram_s2p_bram
 
+  #pragma HLS array_partition variable=v5 cyclic factor=10 dim=1
+  #pragma HLS array_partition variable=v5 cyclic factor=10 dim=2
+  #pragma HLS resource variable=v5 core=ram_s2p_bram
 
   #pragma HLS array_partition variable=v6 cyclic factor=8 dim=1
   #pragma HLS array_partition variable=v6 cyclic factor=10 dim=2
+  #pragma HLS resource variable=v6 core=ram_s2p_bram
 
-  Loop0: for (int v7 = 0; v7 < 20; v7 += 1) {	// L11
-    Loop1: for (int v8 = 0; v8 < 5; v8 += 1) {	// L12
-      Loop2: for (int v9 = 0; v9 < 25; v9 += 1) {	// L13
+  for (int v7 = 0; v7 < 20; v7 += 1) {	// L11
+    for (int v8 = 0; v8 < 5; v8 += 1) {	// L12
+      for (int v9 = 0; v9 < 25; v9 += 1) {	// L13
 #pragma HLS pipeline II=1
         v4[(v8 * 8)][(v9 * 2)] = 0.000000;	// L14
         float v10 = v0[(v8 * 8)][(v7 * 3)];	// L15
@@ -387,9 +407,9 @@ void kernel_3mm(
       }
     }
   }
-  Loop3: for (int v250 = 0; v250 < 40; v250 += 1) {	// L353
-    Loop4: for (int v251 = 0; v251 < 5; v251 += 1) {	// L354
-      Loop5: for (int v252 = 0; v252 < 35; v252 += 1) {	// L355
+  for (int v250 = 0; v250 < 40; v250 += 1) {	// L353
+    for (int v251 = 0; v251 < 5; v251 += 1) {	// L354
+      for (int v252 = 0; v252 < 35; v252 += 1) {	// L355
 #pragma HLS pipeline II=1
         v5[(v251 * 10)][(v252 * 2)] = 0.000000;	// L356
         float v253 = v2[(v251 * 10)][(v250 * 2)];	// L357
@@ -674,9 +694,9 @@ void kernel_3mm(
       }
     }
   }
-  Loop6: for (int v453 = 0; v453 < 50; v453 += 1) {	// L639
-    Loop7: for (int v454 = 0; v454 < 5; v454 += 1) {	// L640
-      Loop8: for (int v455 = 0; v455 < 7; v455 += 1) {	// L641
+  for (int v453 = 0; v453 < 50; v453 += 1) {	// L639
+    for (int v454 = 0; v454 < 5; v454 += 1) {	// L640
+      for (int v455 = 0; v455 < 7; v455 += 1) {	// L641
 #pragma HLS pipeline II=2
         v6[(v454 * 8)][(v455 * 10)] = 0.000000;	// L642
         float v456 = v4[(v454 * 8)][v453];	// L643

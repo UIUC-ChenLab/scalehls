@@ -218,6 +218,16 @@ def get_perf (template_path, directives_path, top_function, part, parameters, pr
     #     print("Error: %s : %s" % (os.file_path, e.strerror))
     
     # put the data into the dictionary to be converted to a dataframe (with a single row)
+    # create container for results if parameter is None
+    if parameters == None:
+        parameters = {'latency':None, 
+        'dsp_perc':None, 
+        'ff_perc':None, 
+        'lut_perc':None, 
+        'bram_perc':None,
+        'is_feasible':None,
+        'is_error':None}
+
     parameters.update({'latency':avg_latency, 
                        'dsp_perc':dsp_perc, 
                        'ff_perc':ff_perc, 

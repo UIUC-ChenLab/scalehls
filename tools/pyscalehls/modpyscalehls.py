@@ -5,6 +5,7 @@ import argparse
 import shutil
 import io
 from subprocess import PIPE, run
+import subprocess
 import scalehls
 import mlir.ir
 from mlir.dialects import func as func_dialect
@@ -37,7 +38,6 @@ def main():
     p1 = subprocess.Popen(['mlir-clang', opts.input, '-function=' + opts.function, '-memref-fullrank', '-raise-scf-to-affine', '-S'], stdout=subprocess.PIPE, stderr=PIPE, universal_newlines=True)                          
     p2 = subprocess.run(['scalehls-opt', '-allow-unregistered-dialect'], stdin=p1.stdout, stdout=subprocess.PIPE, stderr=PIPE, universal_newlines=True)                  
     fin = p2.stdout
-    print(fin)
     # fin = p1.stdout
 
     # Parse MLIR into memory.
@@ -78,15 +78,19 @@ def main():
 
             print("test")
             # factors = np.ones(band.depth, dtype=int)
-            # list_ts = [[1, 16], [8], [1, 16], [8], [8, 16], [8], [1, 16], [8], [4, 3], [1], [8, 3], [1]]
-            list_ts = [[8, 15]]
+            # list_ts = [[3, 8, 2], [1, 5, 14], [1, 4, 14]]
+            # list_ts = [[1, 8, 10], [1, 2, 10], [1, 10, 10]]
+            list_ts = [[1, 5, 10], [1, 8, 14]]
             factors = np.array(list_ts[band_count])
             print(factors)
             loc = scalehls.loop_tiling(band, factors) # simplify = True
 
-            # Apply loop pipelining. All loops inside of the pipelined loop are fully unrolled.
+            pipelineii = [1, 1]
 
-            # scalehls.loop_pipelining(band, loc, 3)  # targetII = 3
+            # Apply loop pipelining. All loops inside of the pipelined loop are fully unrolled.
+            scalehls.loop_pipelining(band, loc+1, pipelineii[band_count])  # targetII = 3
+
+            band_count += 1
 
         # Traverse all arrays in the function.
         # arrays = scalehls.ArrayList(func)
@@ -107,8 +111,13 @@ def main():
         # Apply suitable array partition strategies through analyzing the array access pattern.
         # scalehls.auto_array_partition(func)
 
+    # Write mlir
+    with open("inter.mlir", "w") as f:
+        print(mod, file = f)
+    f.close()
+
     # Emit optimized MLIR to HLS C++.
-    buf = io.StringIO()
+    buf = io.StringIO()    
     scalehls.emit_hlscpp(mod, buf)
     buf.seek(0)
     if opts.output:
@@ -117,6 +126,17 @@ def main():
         fout.close()
     else:
         print(buf.read())
+
+    with open('pyout.mlir', 'wb') as fout:
+        subprocess.run(['scalehls-opt', 'inter.mlir', '-scalehls-loop-pipelining','-scalehls-func-preprocess=top-func=kernel_3mm', '-scalehls-array-partition'], 
+                            stdout=fout)
+
+    # p1 = subprocess.Popen(['scalehls-opt', 'inter.mlir', '-canonicalize','-scalehls-func-preprocess=top-func=kernel_3mm', '-scalehls-array-partition'], 
+    #                         stdout=subprocess.PIPE)
+    # with open('pyout.cpp', 'wb') as fout:
+    #     subprocess.run(['scalehls-translate', '-emit-hlscpp'], stdin=p1.stdout, stdout=fout)
+
+
 
 
 if __name__ == '__main__':

@@ -1,0 +1,13 @@
+open_project {{ project_name }}
+set_top {{ top_function }}
+add_files tiled_target.cpp
+open_solution "solution1"
+set_part { {{part}} }
+create_clock -period 10 -name default
+{% if synth %}
+csynth_design
+{% endif %}
+{%- if cosim -%}
+cosim_design -O -reduce_diskspace
+{% endif %}
+exit

@@ -1,4 +1,4 @@
-func @kernel_3mm(%arg0: memref<40x60xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 3, d0 floordiv 8, d1 floordiv 3)>>, %arg1: memref<60x50xf32, affine_map<(d0, d1) -> (d0 mod 3, d1 mod 2, d0 floordiv 3, d1 floordiv 2)>>, %arg2: memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>, %arg3: memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 2, d0 floordiv 2, d1 floordiv 2)>>, %arg4: memref<40x50xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 2, d0 floordiv 8, d1 floordiv 2)>>, %arg5: memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>, %arg6: memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>) attributes {llvm.linkage = #llvm.linkage<external>, resource = #hls.r<lut=0, dsp=240, bram=0>, timing = #hls.t<0 -> 20055, 20055, 20055>, top_func} {
+func @kernel_3mm(%arg0: memref<40x60xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 3, d0 floordiv 8, d1 floordiv 3)>>, %arg1: memref<60x50xf32, affine_map<(d0, d1) -> (d0 mod 3, d1 mod 2, d0 floordiv 3, d1 floordiv 2)>>, %arg2: memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 2, d0 floordiv 2, d1 floordiv 2)>>, %arg3: memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>, %arg4: memref<40x50xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 2, d0 floordiv 8, d1 floordiv 2)>>, %arg5: memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>, %arg6: memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>) attributes {llvm.linkage = #llvm.linkage<external>, resource = #hls.r<lut=0, dsp=240, bram=0>, timing = #hls.t<0 -> 13055, 13055, 13055>, top_func} {
   %cst = arith.constant {timing = #hls.t<0 -> 0, 0, 0>} 0.000000e+00 : f32
   affine.for %arg7 = 0 to 20 {
     affine.for %arg8 = 0 to 5 {
@@ -241,264 +241,264 @@ func @kernel_3mm(%arg0: memref<40x60xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 m
         %156 = arith.mulf %153, %120 {timing = #hls.t<12 -> 16, 4, 1>} : f32
         %157 = arith.addf %115, %156 {timing = #hls.t<16 -> 21, 5, 1>} : f32
         affine.store %157, %arg4[%arg8 * 8 + 7, %arg9 * 2 + 1] {partition_indices = [7, 1], timing = #hls.t<21 -> 22, 1, 1>} : memref<40x50xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 2, d0 floordiv 8, d1 floordiv 2)>>
-      } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, loop_info = #hls.l<flattenTripCount=25, iterLatency=22, minII=1>, parallel, timing = #hls.t<17530 -> 17578, 48, 48>}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, loop_info = #hls.l<flattenTripCount=125, iterLatency=22, minII=1>, parallel, timing = #hls.t<17530 -> 17678, 148, 148>}
+      } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, loop_info = #hls.l<flattenTripCount=25, iterLatency=22, minII=1>, parallel, timing = #hls.t<10530 -> 10578, 48, 48>}
+    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, loop_info = #hls.l<flattenTripCount=125, iterLatency=22, minII=1>, parallel, timing = #hls.t<10530 -> 10678, 148, 148>}
   } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, loop_info = #hls.l<flattenTripCount=2500, iterLatency=22, minII=1>, timing = #hls.t<0 -> 2523, 2523, 2523>}
   affine.for %arg7 = 0 to 40 {
-    affine.for %arg8 = 0 to 5 {
-      affine.for %arg9 = 0 to 35 {
-        %0 = affine.load %arg2[%arg8 * 10, %arg7 * 2] {partition_indices = [0, 0], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %1 = affine.load %arg3[%arg7 * 2, %arg9 * 2] {partition_indices = [0, 0], timing = #hls.t<0 -> 2, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 2, d0 floordiv 2, d1 floordiv 2)>>
+    affine.for %arg8 = 0 to 25 {
+      affine.for %arg9 = 0 to 7 {
+        %0 = affine.load %arg2[%arg8 * 2, %arg7 * 2] {partition_indices = [0, 0], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 2, d0 floordiv 2, d1 floordiv 2)>>
+        %1 = affine.load %arg3[%arg7 * 2, %arg9 * 10] {partition_indices = [0, 0], timing = #hls.t<0 -> 2, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
         %2 = arith.mulf %0, %1 {timing = #hls.t<2 -> 6, 4, 1>} : f32
-        %3 = affine.load %arg5[%arg8 * 10, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [0, -1], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
+        %3 = affine.load %arg5[%arg8 * 2, %arg9 * 10] {partition_indices = [0, 0], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
         %4 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
           affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
         } else {
           affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %3 : f32
         } {timing = #hls.t<6 -> 6, 0, 0>}
         %5 = arith.addf %4, %2 {timing = #hls.t<6 -> 11, 5, 1>} : f32
-        %6 = affine.load %arg3[%arg7 * 2, %arg9 * 2 + 1] {partition_indices = [0, 1], timing = #hls.t<1 -> 3, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 2, d0 floordiv 2, d1 floordiv 2)>>
-        %7 = arith.mulf %0, %6 {timing = #hls.t<3 -> 7, 4, 1>} : f32
-        %8 = affine.load %arg5[%arg8 * 10, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [0, -1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
+        %6 = affine.load %arg3[%arg7 * 2, %arg9 * 10 + 1] {partition_indices = [0, 1], timing = #hls.t<0 -> 2, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %7 = arith.mulf %0, %6 {timing = #hls.t<2 -> 6, 4, 1>} : f32
+        %8 = affine.load %arg5[%arg8 * 2, %arg9 * 10 + 1] {partition_indices = [0, 1], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
         %9 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %cst : f32
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
         } else {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %8 : f32
-        } {timing = #hls.t<7 -> 7, 0, 0>}
-        %10 = arith.addf %9, %7 {timing = #hls.t<7 -> 12, 5, 1>} : f32
-        %11 = affine.load %arg2[%arg8 * 10 + 1, %arg7 * 2] {partition_indices = [1, 0], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %12 = arith.mulf %11, %1 {timing = #hls.t<2 -> 6, 4, 1>} : f32
-        %13 = affine.load %arg5[%arg8 * 10 + 1, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [1, -1], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %8 : f32
+        } {timing = #hls.t<6 -> 6, 0, 0>}
+        %10 = arith.addf %9, %7 {timing = #hls.t<6 -> 11, 5, 1>} : f32
+        %11 = affine.load %arg3[%arg7 * 2, %arg9 * 10 + 2] {partition_indices = [0, 2], timing = #hls.t<0 -> 2, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %12 = arith.mulf %0, %11 {timing = #hls.t<2 -> 6, 4, 1>} : f32
+        %13 = affine.load %arg5[%arg8 * 2, %arg9 * 10 + 2] {partition_indices = [0, 2], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
         %14 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
           affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
         } else {
           affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %13 : f32
         } {timing = #hls.t<6 -> 6, 0, 0>}
         %15 = arith.addf %14, %12 {timing = #hls.t<6 -> 11, 5, 1>} : f32
-        %16 = arith.mulf %11, %6 {timing = #hls.t<3 -> 7, 4, 1>} : f32
-        %17 = affine.load %arg5[%arg8 * 10 + 1, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [1, -1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %18 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %cst : f32
-        } else {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %17 : f32
-        } {timing = #hls.t<7 -> 7, 0, 0>}
-        %19 = arith.addf %18, %16 {timing = #hls.t<7 -> 12, 5, 1>} : f32
-        %20 = affine.load %arg2[%arg8 * 10 + 2, %arg7 * 2] {partition_indices = [2, 0], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %21 = arith.mulf %20, %1 {timing = #hls.t<2 -> 6, 4, 1>} : f32
-        %22 = affine.load %arg5[%arg8 * 10 + 2, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [2, -1], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %23 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
+        %16 = affine.load %arg3[%arg7 * 2, %arg9 * 10 + 3] {partition_indices = [0, 3], timing = #hls.t<0 -> 2, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %17 = arith.mulf %0, %16 {timing = #hls.t<2 -> 6, 4, 1>} : f32
+        %18 = affine.load %arg5[%arg8 * 2, %arg9 * 10 + 3] {partition_indices = [0, 3], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %19 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
           affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
         } else {
-          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %22 : f32
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %18 : f32
         } {timing = #hls.t<6 -> 6, 0, 0>}
-        %24 = arith.addf %23, %21 {timing = #hls.t<6 -> 11, 5, 1>} : f32
-        %25 = arith.mulf %20, %6 {timing = #hls.t<3 -> 7, 4, 1>} : f32
-        %26 = affine.load %arg5[%arg8 * 10 + 2, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [2, -1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %27 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %cst : f32
-        } else {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %26 : f32
-        } {timing = #hls.t<7 -> 7, 0, 0>}
-        %28 = arith.addf %27, %25 {timing = #hls.t<7 -> 12, 5, 1>} : f32
-        %29 = affine.load %arg2[%arg8 * 10 + 3, %arg7 * 2] {partition_indices = [3, 0], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %30 = arith.mulf %29, %1 {timing = #hls.t<2 -> 6, 4, 1>} : f32
-        %31 = affine.load %arg5[%arg8 * 10 + 3, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [3, -1], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %32 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
+        %20 = arith.addf %19, %17 {timing = #hls.t<6 -> 11, 5, 1>} : f32
+        %21 = affine.load %arg3[%arg7 * 2, %arg9 * 10 + 4] {partition_indices = [0, 4], timing = #hls.t<0 -> 2, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %22 = arith.mulf %0, %21 {timing = #hls.t<2 -> 6, 4, 1>} : f32
+        %23 = affine.load %arg5[%arg8 * 2, %arg9 * 10 + 4] {partition_indices = [0, 4], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %24 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
           affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
         } else {
-          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %31 : f32
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %23 : f32
         } {timing = #hls.t<6 -> 6, 0, 0>}
-        %33 = arith.addf %32, %30 {timing = #hls.t<6 -> 11, 5, 1>} : f32
-        %34 = arith.mulf %29, %6 {timing = #hls.t<3 -> 7, 4, 1>} : f32
-        %35 = affine.load %arg5[%arg8 * 10 + 3, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [3, -1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %36 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %cst : f32
-        } else {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %35 : f32
-        } {timing = #hls.t<7 -> 7, 0, 0>}
-        %37 = arith.addf %36, %34 {timing = #hls.t<7 -> 12, 5, 1>} : f32
-        %38 = affine.load %arg2[%arg8 * 10 + 4, %arg7 * 2] {partition_indices = [4, 0], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %39 = arith.mulf %38, %1 {timing = #hls.t<2 -> 6, 4, 1>} : f32
-        %40 = affine.load %arg5[%arg8 * 10 + 4, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [4, -1], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %41 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
+        %25 = arith.addf %24, %22 {timing = #hls.t<6 -> 11, 5, 1>} : f32
+        %26 = affine.load %arg3[%arg7 * 2, %arg9 * 10 + 5] {partition_indices = [0, 5], timing = #hls.t<0 -> 2, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %27 = arith.mulf %0, %26 {timing = #hls.t<2 -> 6, 4, 1>} : f32
+        %28 = affine.load %arg5[%arg8 * 2, %arg9 * 10 + 5] {partition_indices = [0, 5], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %29 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
           affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
         } else {
-          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %40 : f32
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %28 : f32
         } {timing = #hls.t<6 -> 6, 0, 0>}
-        %42 = arith.addf %41, %39 {timing = #hls.t<6 -> 11, 5, 1>} : f32
-        %43 = arith.mulf %38, %6 {timing = #hls.t<3 -> 7, 4, 1>} : f32
-        %44 = affine.load %arg5[%arg8 * 10 + 4, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [4, -1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %45 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %cst : f32
-        } else {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %44 : f32
-        } {timing = #hls.t<7 -> 7, 0, 0>}
-        %46 = arith.addf %45, %43 {timing = #hls.t<7 -> 12, 5, 1>} : f32
-        %47 = affine.load %arg2[%arg8 * 10 + 5, %arg7 * 2] {partition_indices = [5, 0], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %48 = arith.mulf %47, %1 {timing = #hls.t<2 -> 6, 4, 1>} : f32
-        %49 = affine.load %arg5[%arg8 * 10 + 5, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [5, -1], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %50 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
+        %30 = arith.addf %29, %27 {timing = #hls.t<6 -> 11, 5, 1>} : f32
+        %31 = affine.load %arg3[%arg7 * 2, %arg9 * 10 + 6] {partition_indices = [0, 6], timing = #hls.t<0 -> 2, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %32 = arith.mulf %0, %31 {timing = #hls.t<2 -> 6, 4, 1>} : f32
+        %33 = affine.load %arg5[%arg8 * 2, %arg9 * 10 + 6] {partition_indices = [0, 6], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %34 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
           affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
         } else {
-          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %49 : f32
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %33 : f32
         } {timing = #hls.t<6 -> 6, 0, 0>}
-        %51 = arith.addf %50, %48 {timing = #hls.t<6 -> 11, 5, 1>} : f32
-        %52 = arith.mulf %47, %6 {timing = #hls.t<3 -> 7, 4, 1>} : f32
-        %53 = affine.load %arg5[%arg8 * 10 + 5, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [5, -1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
+        %35 = arith.addf %34, %32 {timing = #hls.t<6 -> 11, 5, 1>} : f32
+        %36 = affine.load %arg3[%arg7 * 2, %arg9 * 10 + 7] {partition_indices = [0, 7], timing = #hls.t<0 -> 2, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %37 = arith.mulf %0, %36 {timing = #hls.t<2 -> 6, 4, 1>} : f32
+        %38 = affine.load %arg5[%arg8 * 2, %arg9 * 10 + 7] {partition_indices = [0, 7], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %39 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
+        } else {
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %38 : f32
+        } {timing = #hls.t<6 -> 6, 0, 0>}
+        %40 = arith.addf %39, %37 {timing = #hls.t<6 -> 11, 5, 1>} : f32
+        %41 = affine.load %arg3[%arg7 * 2, %arg9 * 10 + 8] {partition_indices = [0, 8], timing = #hls.t<0 -> 2, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %42 = arith.mulf %0, %41 {timing = #hls.t<2 -> 6, 4, 1>} : f32
+        %43 = affine.load %arg5[%arg8 * 2, %arg9 * 10 + 8] {partition_indices = [0, 8], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %44 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
+        } else {
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %43 : f32
+        } {timing = #hls.t<6 -> 6, 0, 0>}
+        %45 = arith.addf %44, %42 {timing = #hls.t<6 -> 11, 5, 1>} : f32
+        %46 = affine.load %arg3[%arg7 * 2, %arg9 * 10 + 9] {partition_indices = [0, 9], timing = #hls.t<0 -> 2, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %47 = arith.mulf %0, %46 {timing = #hls.t<2 -> 6, 4, 1>} : f32
+        %48 = affine.load %arg5[%arg8 * 2, %arg9 * 10 + 9] {partition_indices = [0, 9], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %49 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
+        } else {
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %48 : f32
+        } {timing = #hls.t<6 -> 6, 0, 0>}
+        %50 = arith.addf %49, %47 {timing = #hls.t<6 -> 11, 5, 1>} : f32
+        %51 = affine.load %arg2[%arg8 * 2 + 1, %arg7 * 2] {partition_indices = [1, 0], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 2, d0 floordiv 2, d1 floordiv 2)>>
+        %52 = arith.mulf %51, %1 {timing = #hls.t<2 -> 6, 4, 1>} : f32
+        %53 = affine.load %arg5[%arg8 * 2 + 1, %arg9 * 10] {partition_indices = [1, 0], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
         %54 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %cst : f32
-        } else {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %53 : f32
-        } {timing = #hls.t<7 -> 7, 0, 0>}
-        %55 = arith.addf %54, %52 {timing = #hls.t<7 -> 12, 5, 1>} : f32
-        %56 = affine.load %arg2[%arg8 * 10 + 6, %arg7 * 2] {partition_indices = [6, 0], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %57 = arith.mulf %56, %1 {timing = #hls.t<2 -> 6, 4, 1>} : f32
-        %58 = affine.load %arg5[%arg8 * 10 + 6, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [6, -1], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %59 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
           affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
         } else {
-          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %58 : f32
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %53 : f32
         } {timing = #hls.t<6 -> 6, 0, 0>}
-        %60 = arith.addf %59, %57 {timing = #hls.t<6 -> 11, 5, 1>} : f32
-        %61 = arith.mulf %56, %6 {timing = #hls.t<3 -> 7, 4, 1>} : f32
-        %62 = affine.load %arg5[%arg8 * 10 + 6, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [6, -1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %63 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %cst : f32
-        } else {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %62 : f32
-        } {timing = #hls.t<7 -> 7, 0, 0>}
-        %64 = arith.addf %63, %61 {timing = #hls.t<7 -> 12, 5, 1>} : f32
-        %65 = affine.load %arg2[%arg8 * 10 + 7, %arg7 * 2] {partition_indices = [7, 0], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %66 = arith.mulf %65, %1 {timing = #hls.t<2 -> 6, 4, 1>} : f32
-        %67 = affine.load %arg5[%arg8 * 10 + 7, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [7, -1], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %68 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
+        %55 = arith.addf %54, %52 {timing = #hls.t<6 -> 11, 5, 1>} : f32
+        %56 = arith.mulf %51, %6 {timing = #hls.t<2 -> 6, 4, 1>} : f32
+        %57 = affine.load %arg5[%arg8 * 2 + 1, %arg9 * 10 + 1] {partition_indices = [1, 1], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %58 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
           affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
         } else {
-          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %67 : f32
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %57 : f32
         } {timing = #hls.t<6 -> 6, 0, 0>}
-        %69 = arith.addf %68, %66 {timing = #hls.t<6 -> 11, 5, 1>} : f32
-        %70 = arith.mulf %65, %6 {timing = #hls.t<3 -> 7, 4, 1>} : f32
-        %71 = affine.load %arg5[%arg8 * 10 + 7, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [7, -1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %72 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %cst : f32
-        } else {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %71 : f32
-        } {timing = #hls.t<7 -> 7, 0, 0>}
-        %73 = arith.addf %72, %70 {timing = #hls.t<7 -> 12, 5, 1>} : f32
-        %74 = affine.load %arg2[%arg8 * 10 + 8, %arg7 * 2] {partition_indices = [8, 0], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %75 = arith.mulf %74, %1 {timing = #hls.t<2 -> 6, 4, 1>} : f32
-        %76 = affine.load %arg5[%arg8 * 10 + 8, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [8, -1], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %77 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
+        %59 = arith.addf %58, %56 {timing = #hls.t<6 -> 11, 5, 1>} : f32
+        %60 = arith.mulf %51, %11 {timing = #hls.t<2 -> 6, 4, 1>} : f32
+        %61 = affine.load %arg5[%arg8 * 2 + 1, %arg9 * 10 + 2] {partition_indices = [1, 2], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %62 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
           affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
         } else {
-          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %76 : f32
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %61 : f32
         } {timing = #hls.t<6 -> 6, 0, 0>}
-        %78 = arith.addf %77, %75 {timing = #hls.t<6 -> 11, 5, 1>} : f32
-        %79 = arith.mulf %74, %6 {timing = #hls.t<3 -> 7, 4, 1>} : f32
-        %80 = affine.load %arg5[%arg8 * 10 + 8, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [8, -1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %81 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %cst : f32
+        %63 = arith.addf %62, %60 {timing = #hls.t<6 -> 11, 5, 1>} : f32
+        %64 = arith.mulf %51, %16 {timing = #hls.t<2 -> 6, 4, 1>} : f32
+        %65 = affine.load %arg5[%arg8 * 2 + 1, %arg9 * 10 + 3] {partition_indices = [1, 3], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %66 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
         } else {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %80 : f32
-        } {timing = #hls.t<7 -> 7, 0, 0>}
-        %82 = arith.addf %81, %79 {timing = #hls.t<7 -> 12, 5, 1>} : f32
-        %83 = affine.load %arg2[%arg8 * 10 + 9, %arg7 * 2] {partition_indices = [9, 0], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %84 = arith.mulf %83, %1 {timing = #hls.t<2 -> 6, 4, 1>} : f32
-        %85 = affine.load %arg5[%arg8 * 10 + 9, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [9, -1], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %65 : f32
+        } {timing = #hls.t<6 -> 6, 0, 0>}
+        %67 = arith.addf %66, %64 {timing = #hls.t<6 -> 11, 5, 1>} : f32
+        %68 = arith.mulf %51, %21 {timing = #hls.t<2 -> 6, 4, 1>} : f32
+        %69 = affine.load %arg5[%arg8 * 2 + 1, %arg9 * 10 + 4] {partition_indices = [1, 4], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %70 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
+        } else {
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %69 : f32
+        } {timing = #hls.t<6 -> 6, 0, 0>}
+        %71 = arith.addf %70, %68 {timing = #hls.t<6 -> 11, 5, 1>} : f32
+        %72 = arith.mulf %51, %26 {timing = #hls.t<2 -> 6, 4, 1>} : f32
+        %73 = affine.load %arg5[%arg8 * 2 + 1, %arg9 * 10 + 5] {partition_indices = [1, 5], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %74 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
+        } else {
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %73 : f32
+        } {timing = #hls.t<6 -> 6, 0, 0>}
+        %75 = arith.addf %74, %72 {timing = #hls.t<6 -> 11, 5, 1>} : f32
+        %76 = arith.mulf %51, %31 {timing = #hls.t<2 -> 6, 4, 1>} : f32
+        %77 = affine.load %arg5[%arg8 * 2 + 1, %arg9 * 10 + 6] {partition_indices = [1, 6], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %78 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
+        } else {
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %77 : f32
+        } {timing = #hls.t<6 -> 6, 0, 0>}
+        %79 = arith.addf %78, %76 {timing = #hls.t<6 -> 11, 5, 1>} : f32
+        %80 = arith.mulf %51, %36 {timing = #hls.t<2 -> 6, 4, 1>} : f32
+        %81 = affine.load %arg5[%arg8 * 2 + 1, %arg9 * 10 + 7] {partition_indices = [1, 7], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %82 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
+        } else {
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %81 : f32
+        } {timing = #hls.t<6 -> 6, 0, 0>}
+        %83 = arith.addf %82, %80 {timing = #hls.t<6 -> 11, 5, 1>} : f32
+        %84 = arith.mulf %51, %41 {timing = #hls.t<2 -> 6, 4, 1>} : f32
+        %85 = affine.load %arg5[%arg8 * 2 + 1, %arg9 * 10 + 8] {partition_indices = [1, 8], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
         %86 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
           affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
         } else {
           affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %85 : f32
         } {timing = #hls.t<6 -> 6, 0, 0>}
         %87 = arith.addf %86, %84 {timing = #hls.t<6 -> 11, 5, 1>} : f32
-        %88 = arith.mulf %83, %6 {timing = #hls.t<3 -> 7, 4, 1>} : f32
-        %89 = affine.load %arg5[%arg8 * 10 + 9, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [9, -1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
+        %88 = arith.mulf %51, %46 {timing = #hls.t<2 -> 6, 4, 1>} : f32
+        %89 = affine.load %arg5[%arg8 * 2 + 1, %arg9 * 10 + 9] {partition_indices = [1, 9], timing = #hls.t<4 -> 6, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
         %90 = affine.if affine_set<(d0) : (d0 * 2 == 0)>(%arg7) -> f32 {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %cst : f32
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %cst : f32
         } else {
-          affine.yield {timing = #hls.t<7 -> 7, 0, 0>} %89 : f32
-        } {timing = #hls.t<7 -> 7, 0, 0>}
-        %91 = arith.addf %90, %88 {timing = #hls.t<7 -> 12, 5, 1>} : f32
-        %92 = affine.load %arg2[%arg8 * 10, %arg7 * 2 + 1] {partition_indices = [0, 1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %93 = affine.load %arg3[%arg7 * 2 + 1, %arg9 * 2] {partition_indices = [1, 0], timing = #hls.t<5 -> 7, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 2, d0 floordiv 2, d1 floordiv 2)>>
+          affine.yield {timing = #hls.t<6 -> 6, 0, 0>} %89 : f32
+        } {timing = #hls.t<6 -> 6, 0, 0>}
+        %91 = arith.addf %90, %88 {timing = #hls.t<6 -> 11, 5, 1>} : f32
+        %92 = affine.load %arg2[%arg8 * 2, %arg7 * 2 + 1] {partition_indices = [0, 1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 2, d0 floordiv 2, d1 floordiv 2)>>
+        %93 = affine.load %arg3[%arg7 * 2 + 1, %arg9 * 10] {partition_indices = [1, 0], timing = #hls.t<5 -> 7, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
         %94 = arith.mulf %92, %93 {timing = #hls.t<7 -> 11, 4, 1>} : f32
         %95 = arith.addf %5, %94 {timing = #hls.t<11 -> 16, 5, 1>} : f32
-        affine.store %95, %arg5[%arg8 * 10, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [0, -1], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %96 = affine.load %arg3[%arg7 * 2 + 1, %arg9 * 2 + 1] {partition_indices = [1, 1], timing = #hls.t<6 -> 8, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 2, d0 floordiv 2, d1 floordiv 2)>>
-        %97 = arith.mulf %92, %96 {timing = #hls.t<8 -> 12, 4, 1>} : f32
-        %98 = arith.addf %10, %97 {timing = #hls.t<12 -> 17, 5, 1>} : f32
-        affine.store %98, %arg5[%arg8 * 10, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [0, -1], timing = #hls.t<17 -> 18, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %99 = affine.load %arg2[%arg8 * 10 + 1, %arg7 * 2 + 1] {partition_indices = [1, 1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %100 = arith.mulf %99, %93 {timing = #hls.t<7 -> 11, 4, 1>} : f32
+        affine.store %95, %arg5[%arg8 * 2, %arg9 * 10] {partition_indices = [0, 0], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %96 = affine.load %arg3[%arg7 * 2 + 1, %arg9 * 10 + 1] {partition_indices = [1, 1], timing = #hls.t<5 -> 7, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %97 = arith.mulf %92, %96 {timing = #hls.t<7 -> 11, 4, 1>} : f32
+        %98 = arith.addf %10, %97 {timing = #hls.t<11 -> 16, 5, 1>} : f32
+        affine.store %98, %arg5[%arg8 * 2, %arg9 * 10 + 1] {partition_indices = [0, 1], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %99 = affine.load %arg3[%arg7 * 2 + 1, %arg9 * 10 + 2] {partition_indices = [1, 2], timing = #hls.t<5 -> 7, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %100 = arith.mulf %92, %99 {timing = #hls.t<7 -> 11, 4, 1>} : f32
         %101 = arith.addf %15, %100 {timing = #hls.t<11 -> 16, 5, 1>} : f32
-        affine.store %101, %arg5[%arg8 * 10 + 1, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [1, -1], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %102 = arith.mulf %99, %96 {timing = #hls.t<8 -> 12, 4, 1>} : f32
-        %103 = arith.addf %19, %102 {timing = #hls.t<12 -> 17, 5, 1>} : f32
-        affine.store %103, %arg5[%arg8 * 10 + 1, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [1, -1], timing = #hls.t<17 -> 18, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %104 = affine.load %arg2[%arg8 * 10 + 2, %arg7 * 2 + 1] {partition_indices = [2, 1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %105 = arith.mulf %104, %93 {timing = #hls.t<7 -> 11, 4, 1>} : f32
-        %106 = arith.addf %24, %105 {timing = #hls.t<11 -> 16, 5, 1>} : f32
-        affine.store %106, %arg5[%arg8 * 10 + 2, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [2, -1], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %107 = arith.mulf %104, %96 {timing = #hls.t<8 -> 12, 4, 1>} : f32
-        %108 = arith.addf %28, %107 {timing = #hls.t<12 -> 17, 5, 1>} : f32
-        affine.store %108, %arg5[%arg8 * 10 + 2, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [2, -1], timing = #hls.t<17 -> 18, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %109 = affine.load %arg2[%arg8 * 10 + 3, %arg7 * 2 + 1] {partition_indices = [3, 1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %110 = arith.mulf %109, %93 {timing = #hls.t<7 -> 11, 4, 1>} : f32
-        %111 = arith.addf %33, %110 {timing = #hls.t<11 -> 16, 5, 1>} : f32
-        affine.store %111, %arg5[%arg8 * 10 + 3, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [3, -1], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %112 = arith.mulf %109, %96 {timing = #hls.t<8 -> 12, 4, 1>} : f32
-        %113 = arith.addf %37, %112 {timing = #hls.t<12 -> 17, 5, 1>} : f32
-        affine.store %113, %arg5[%arg8 * 10 + 3, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [3, -1], timing = #hls.t<17 -> 18, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %114 = affine.load %arg2[%arg8 * 10 + 4, %arg7 * 2 + 1] {partition_indices = [4, 1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %115 = arith.mulf %114, %93 {timing = #hls.t<7 -> 11, 4, 1>} : f32
-        %116 = arith.addf %42, %115 {timing = #hls.t<11 -> 16, 5, 1>} : f32
-        affine.store %116, %arg5[%arg8 * 10 + 4, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [4, -1], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %117 = arith.mulf %114, %96 {timing = #hls.t<8 -> 12, 4, 1>} : f32
-        %118 = arith.addf %46, %117 {timing = #hls.t<12 -> 17, 5, 1>} : f32
-        affine.store %118, %arg5[%arg8 * 10 + 4, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [4, -1], timing = #hls.t<17 -> 18, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %119 = affine.load %arg2[%arg8 * 10 + 5, %arg7 * 2 + 1] {partition_indices = [5, 1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %120 = arith.mulf %119, %93 {timing = #hls.t<7 -> 11, 4, 1>} : f32
-        %121 = arith.addf %51, %120 {timing = #hls.t<11 -> 16, 5, 1>} : f32
-        affine.store %121, %arg5[%arg8 * 10 + 5, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [5, -1], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %122 = arith.mulf %119, %96 {timing = #hls.t<8 -> 12, 4, 1>} : f32
-        %123 = arith.addf %55, %122 {timing = #hls.t<12 -> 17, 5, 1>} : f32
-        affine.store %123, %arg5[%arg8 * 10 + 5, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [5, -1], timing = #hls.t<17 -> 18, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %124 = affine.load %arg2[%arg8 * 10 + 6, %arg7 * 2 + 1] {partition_indices = [6, 1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %125 = arith.mulf %124, %93 {timing = #hls.t<7 -> 11, 4, 1>} : f32
-        %126 = arith.addf %60, %125 {timing = #hls.t<11 -> 16, 5, 1>} : f32
-        affine.store %126, %arg5[%arg8 * 10 + 6, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [6, -1], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %127 = arith.mulf %124, %96 {timing = #hls.t<8 -> 12, 4, 1>} : f32
-        %128 = arith.addf %64, %127 {timing = #hls.t<12 -> 17, 5, 1>} : f32
-        affine.store %128, %arg5[%arg8 * 10 + 6, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [6, -1], timing = #hls.t<17 -> 18, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %129 = affine.load %arg2[%arg8 * 10 + 7, %arg7 * 2 + 1] {partition_indices = [7, 1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %130 = arith.mulf %129, %93 {timing = #hls.t<7 -> 11, 4, 1>} : f32
-        %131 = arith.addf %69, %130 {timing = #hls.t<11 -> 16, 5, 1>} : f32
-        affine.store %131, %arg5[%arg8 * 10 + 7, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [7, -1], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %132 = arith.mulf %129, %96 {timing = #hls.t<8 -> 12, 4, 1>} : f32
-        %133 = arith.addf %73, %132 {timing = #hls.t<12 -> 17, 5, 1>} : f32
-        affine.store %133, %arg5[%arg8 * 10 + 7, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [7, -1], timing = #hls.t<17 -> 18, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %134 = affine.load %arg2[%arg8 * 10 + 8, %arg7 * 2 + 1] {partition_indices = [8, 1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %135 = arith.mulf %134, %93 {timing = #hls.t<7 -> 11, 4, 1>} : f32
-        %136 = arith.addf %78, %135 {timing = #hls.t<11 -> 16, 5, 1>} : f32
-        affine.store %136, %arg5[%arg8 * 10 + 8, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [8, -1], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %137 = arith.mulf %134, %96 {timing = #hls.t<8 -> 12, 4, 1>} : f32
-        %138 = arith.addf %82, %137 {timing = #hls.t<12 -> 17, 5, 1>} : f32
-        affine.store %138, %arg5[%arg8 * 10 + 8, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [8, -1], timing = #hls.t<17 -> 18, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %139 = affine.load %arg2[%arg8 * 10 + 9, %arg7 * 2 + 1] {partition_indices = [9, 1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 2, d0 floordiv 10, d1 floordiv 2)>>
-        %140 = arith.mulf %139, %93 {timing = #hls.t<7 -> 11, 4, 1>} : f32
+        affine.store %101, %arg5[%arg8 * 2, %arg9 * 10 + 2] {partition_indices = [0, 2], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %102 = affine.load %arg3[%arg7 * 2 + 1, %arg9 * 10 + 3] {partition_indices = [1, 3], timing = #hls.t<5 -> 7, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %103 = arith.mulf %92, %102 {timing = #hls.t<7 -> 11, 4, 1>} : f32
+        %104 = arith.addf %20, %103 {timing = #hls.t<11 -> 16, 5, 1>} : f32
+        affine.store %104, %arg5[%arg8 * 2, %arg9 * 10 + 3] {partition_indices = [0, 3], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %105 = affine.load %arg3[%arg7 * 2 + 1, %arg9 * 10 + 4] {partition_indices = [1, 4], timing = #hls.t<5 -> 7, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %106 = arith.mulf %92, %105 {timing = #hls.t<7 -> 11, 4, 1>} : f32
+        %107 = arith.addf %25, %106 {timing = #hls.t<11 -> 16, 5, 1>} : f32
+        affine.store %107, %arg5[%arg8 * 2, %arg9 * 10 + 4] {partition_indices = [0, 4], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %108 = affine.load %arg3[%arg7 * 2 + 1, %arg9 * 10 + 5] {partition_indices = [1, 5], timing = #hls.t<5 -> 7, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %109 = arith.mulf %92, %108 {timing = #hls.t<7 -> 11, 4, 1>} : f32
+        %110 = arith.addf %30, %109 {timing = #hls.t<11 -> 16, 5, 1>} : f32
+        affine.store %110, %arg5[%arg8 * 2, %arg9 * 10 + 5] {partition_indices = [0, 5], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %111 = affine.load %arg3[%arg7 * 2 + 1, %arg9 * 10 + 6] {partition_indices = [1, 6], timing = #hls.t<5 -> 7, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %112 = arith.mulf %92, %111 {timing = #hls.t<7 -> 11, 4, 1>} : f32
+        %113 = arith.addf %35, %112 {timing = #hls.t<11 -> 16, 5, 1>} : f32
+        affine.store %113, %arg5[%arg8 * 2, %arg9 * 10 + 6] {partition_indices = [0, 6], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %114 = affine.load %arg3[%arg7 * 2 + 1, %arg9 * 10 + 7] {partition_indices = [1, 7], timing = #hls.t<5 -> 7, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %115 = arith.mulf %92, %114 {timing = #hls.t<7 -> 11, 4, 1>} : f32
+        %116 = arith.addf %40, %115 {timing = #hls.t<11 -> 16, 5, 1>} : f32
+        affine.store %116, %arg5[%arg8 * 2, %arg9 * 10 + 7] {partition_indices = [0, 7], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %117 = affine.load %arg3[%arg7 * 2 + 1, %arg9 * 10 + 8] {partition_indices = [1, 8], timing = #hls.t<5 -> 7, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %118 = arith.mulf %92, %117 {timing = #hls.t<7 -> 11, 4, 1>} : f32
+        %119 = arith.addf %45, %118 {timing = #hls.t<11 -> 16, 5, 1>} : f32
+        affine.store %119, %arg5[%arg8 * 2, %arg9 * 10 + 8] {partition_indices = [0, 8], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %120 = affine.load %arg3[%arg7 * 2 + 1, %arg9 * 10 + 9] {partition_indices = [1, 9], timing = #hls.t<5 -> 7, 2, 1>} : memref<80x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %121 = arith.mulf %92, %120 {timing = #hls.t<7 -> 11, 4, 1>} : f32
+        %122 = arith.addf %50, %121 {timing = #hls.t<11 -> 16, 5, 1>} : f32
+        affine.store %122, %arg5[%arg8 * 2, %arg9 * 10 + 9] {partition_indices = [0, 9], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %123 = affine.load %arg2[%arg8 * 2 + 1, %arg7 * 2 + 1] {partition_indices = [1, 1], timing = #hls.t<5 -> 7, 2, 1>} : memref<50x80xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 2, d0 floordiv 2, d1 floordiv 2)>>
+        %124 = arith.mulf %123, %93 {timing = #hls.t<7 -> 11, 4, 1>} : f32
+        %125 = arith.addf %55, %124 {timing = #hls.t<11 -> 16, 5, 1>} : f32
+        affine.store %125, %arg5[%arg8 * 2 + 1, %arg9 * 10] {partition_indices = [1, 0], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %126 = arith.mulf %123, %96 {timing = #hls.t<7 -> 11, 4, 1>} : f32
+        %127 = arith.addf %59, %126 {timing = #hls.t<11 -> 16, 5, 1>} : f32
+        affine.store %127, %arg5[%arg8 * 2 + 1, %arg9 * 10 + 1] {partition_indices = [1, 1], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %128 = arith.mulf %123, %99 {timing = #hls.t<7 -> 11, 4, 1>} : f32
+        %129 = arith.addf %63, %128 {timing = #hls.t<11 -> 16, 5, 1>} : f32
+        affine.store %129, %arg5[%arg8 * 2 + 1, %arg9 * 10 + 2] {partition_indices = [1, 2], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %130 = arith.mulf %123, %102 {timing = #hls.t<7 -> 11, 4, 1>} : f32
+        %131 = arith.addf %67, %130 {timing = #hls.t<11 -> 16, 5, 1>} : f32
+        affine.store %131, %arg5[%arg8 * 2 + 1, %arg9 * 10 + 3] {partition_indices = [1, 3], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %132 = arith.mulf %123, %105 {timing = #hls.t<7 -> 11, 4, 1>} : f32
+        %133 = arith.addf %71, %132 {timing = #hls.t<11 -> 16, 5, 1>} : f32
+        affine.store %133, %arg5[%arg8 * 2 + 1, %arg9 * 10 + 4] {partition_indices = [1, 4], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %134 = arith.mulf %123, %108 {timing = #hls.t<7 -> 11, 4, 1>} : f32
+        %135 = arith.addf %75, %134 {timing = #hls.t<11 -> 16, 5, 1>} : f32
+        affine.store %135, %arg5[%arg8 * 2 + 1, %arg9 * 10 + 5] {partition_indices = [1, 5], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %136 = arith.mulf %123, %111 {timing = #hls.t<7 -> 11, 4, 1>} : f32
+        %137 = arith.addf %79, %136 {timing = #hls.t<11 -> 16, 5, 1>} : f32
+        affine.store %137, %arg5[%arg8 * 2 + 1, %arg9 * 10 + 6] {partition_indices = [1, 6], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %138 = arith.mulf %123, %114 {timing = #hls.t<7 -> 11, 4, 1>} : f32
+        %139 = arith.addf %83, %138 {timing = #hls.t<11 -> 16, 5, 1>} : f32
+        affine.store %139, %arg5[%arg8 * 2 + 1, %arg9 * 10 + 7] {partition_indices = [1, 7], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %140 = arith.mulf %123, %117 {timing = #hls.t<7 -> 11, 4, 1>} : f32
         %141 = arith.addf %87, %140 {timing = #hls.t<11 -> 16, 5, 1>} : f32
-        affine.store %141, %arg5[%arg8 * 10 + 9, %arg9 * 2] {max_mux_size = 10 : i64, partition_indices = [9, -1], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-        %142 = arith.mulf %139, %96 {timing = #hls.t<8 -> 12, 4, 1>} : f32
-        %143 = arith.addf %91, %142 {timing = #hls.t<12 -> 17, 5, 1>} : f32
-        affine.store %143, %arg5[%arg8 * 10 + 9, %arg9 * 2 + 1] {max_mux_size = 10 : i64, partition_indices = [9, -1], timing = #hls.t<17 -> 18, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
-      } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, loop_info = #hls.l<flattenTripCount=35, iterLatency=18, minII=2>, parallel, timing = #hls.t<3512 -> 3600, 88, 88>}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, loop_info = #hls.l<flattenTripCount=175, iterLatency=18, minII=2>, parallel, timing = #hls.t<3512 -> 3880, 368, 368>}
-  } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, loop_info = #hls.l<flattenTripCount=7000, iterLatency=18, minII=2>, timing = #hls.t<2523 -> 16541, 14018, 14018>}
+        affine.store %141, %arg5[%arg8 * 2 + 1, %arg9 * 10 + 8] {partition_indices = [1, 8], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+        %142 = arith.mulf %123, %120 {timing = #hls.t<7 -> 11, 4, 1>} : f32
+        %143 = arith.addf %91, %142 {timing = #hls.t<11 -> 16, 5, 1>} : f32
+        affine.store %143, %arg5[%arg8 * 2 + 1, %arg9 * 10 + 9] {partition_indices = [1, 9], timing = #hls.t<16 -> 17, 1, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
+      } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, loop_info = #hls.l<flattenTripCount=7, iterLatency=17, minII=1>, parallel, timing = #hls.t<3512 -> 3537, 25, 25>}
+    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, loop_info = #hls.l<flattenTripCount=175, iterLatency=17, minII=1>, parallel, timing = #hls.t<3512 -> 3705, 193, 193>}
+  } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, loop_info = #hls.l<flattenTripCount=7000, iterLatency=17, minII=1>, timing = #hls.t<2523 -> 9541, 7018, 7018>}
   affine.for %arg7 = 0 to 50 {
     affine.for %arg8 = 0 to 5 {
       affine.for %arg9 = 0 to 7 {
         %0 = affine.load %arg4[%arg8 * 8, %arg7] {max_mux_size = 2 : i64, partition_indices = [0, -1], timing = #hls.t<0 -> 2, 2, 1>} : memref<40x50xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 2, d0 floordiv 8, d1 floordiv 2)>>
-        %1 = affine.load %arg5[%arg7, %arg9 * 10] {max_mux_size = 10 : i64, partition_indices = [-1, 0], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
+        %1 = affine.load %arg5[%arg7, %arg9 * 10] {max_mux_size = 2 : i64, partition_indices = [-1, 0], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
         %2 = arith.mulf %0, %1 {timing = #hls.t<2 -> 6, 4, 1>} : f32
         %3 = affine.load %arg6[%arg8 * 8, %arg9 * 10] {partition_indices = [0, 0], timing = #hls.t<4 -> 6, 2, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
         %4 = affine.if affine_set<(d0) : (d0 == 0)>(%arg7) -> f32 {
@@ -508,7 +508,7 @@ func @kernel_3mm(%arg0: memref<40x60xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 m
         } {timing = #hls.t<6 -> 6, 0, 0>}
         %5 = arith.addf %4, %2 {timing = #hls.t<6 -> 11, 5, 1>} : f32
         affine.store %5, %arg6[%arg8 * 8, %arg9 * 10] {partition_indices = [0, 0], timing = #hls.t<11 -> 12, 1, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
-        %6 = affine.load %arg5[%arg7, %arg9 * 10 + 1] {max_mux_size = 10 : i64, partition_indices = [-1, 1], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
+        %6 = affine.load %arg5[%arg7, %arg9 * 10 + 1] {max_mux_size = 2 : i64, partition_indices = [-1, 1], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
         %7 = arith.mulf %0, %6 {timing = #hls.t<2 -> 6, 4, 1>} : f32
         %8 = affine.load %arg6[%arg8 * 8, %arg9 * 10 + 1] {partition_indices = [0, 1], timing = #hls.t<4 -> 6, 2, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
         %9 = affine.if affine_set<(d0) : (d0 == 0)>(%arg7) -> f32 {
@@ -518,7 +518,7 @@ func @kernel_3mm(%arg0: memref<40x60xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 m
         } {timing = #hls.t<6 -> 6, 0, 0>}
         %10 = arith.addf %9, %7 {timing = #hls.t<6 -> 11, 5, 1>} : f32
         affine.store %10, %arg6[%arg8 * 8, %arg9 * 10 + 1] {partition_indices = [0, 1], timing = #hls.t<11 -> 12, 1, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
-        %11 = affine.load %arg5[%arg7, %arg9 * 10 + 2] {max_mux_size = 10 : i64, partition_indices = [-1, 2], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
+        %11 = affine.load %arg5[%arg7, %arg9 * 10 + 2] {max_mux_size = 2 : i64, partition_indices = [-1, 2], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
         %12 = arith.mulf %0, %11 {timing = #hls.t<2 -> 6, 4, 1>} : f32
         %13 = affine.load %arg6[%arg8 * 8, %arg9 * 10 + 2] {partition_indices = [0, 2], timing = #hls.t<4 -> 6, 2, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
         %14 = affine.if affine_set<(d0) : (d0 == 0)>(%arg7) -> f32 {
@@ -528,7 +528,7 @@ func @kernel_3mm(%arg0: memref<40x60xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 m
         } {timing = #hls.t<6 -> 6, 0, 0>}
         %15 = arith.addf %14, %12 {timing = #hls.t<6 -> 11, 5, 1>} : f32
         affine.store %15, %arg6[%arg8 * 8, %arg9 * 10 + 2] {partition_indices = [0, 2], timing = #hls.t<11 -> 12, 1, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
-        %16 = affine.load %arg5[%arg7, %arg9 * 10 + 3] {max_mux_size = 10 : i64, partition_indices = [-1, 3], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
+        %16 = affine.load %arg5[%arg7, %arg9 * 10 + 3] {max_mux_size = 2 : i64, partition_indices = [-1, 3], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
         %17 = arith.mulf %0, %16 {timing = #hls.t<2 -> 6, 4, 1>} : f32
         %18 = affine.load %arg6[%arg8 * 8, %arg9 * 10 + 3] {partition_indices = [0, 3], timing = #hls.t<4 -> 6, 2, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
         %19 = affine.if affine_set<(d0) : (d0 == 0)>(%arg7) -> f32 {
@@ -538,7 +538,7 @@ func @kernel_3mm(%arg0: memref<40x60xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 m
         } {timing = #hls.t<6 -> 6, 0, 0>}
         %20 = arith.addf %19, %17 {timing = #hls.t<6 -> 11, 5, 1>} : f32
         affine.store %20, %arg6[%arg8 * 8, %arg9 * 10 + 3] {partition_indices = [0, 3], timing = #hls.t<11 -> 12, 1, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
-        %21 = affine.load %arg5[%arg7, %arg9 * 10 + 4] {max_mux_size = 10 : i64, partition_indices = [-1, 4], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
+        %21 = affine.load %arg5[%arg7, %arg9 * 10 + 4] {max_mux_size = 2 : i64, partition_indices = [-1, 4], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
         %22 = arith.mulf %0, %21 {timing = #hls.t<2 -> 6, 4, 1>} : f32
         %23 = affine.load %arg6[%arg8 * 8, %arg9 * 10 + 4] {partition_indices = [0, 4], timing = #hls.t<4 -> 6, 2, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
         %24 = affine.if affine_set<(d0) : (d0 == 0)>(%arg7) -> f32 {
@@ -548,7 +548,7 @@ func @kernel_3mm(%arg0: memref<40x60xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 m
         } {timing = #hls.t<6 -> 6, 0, 0>}
         %25 = arith.addf %24, %22 {timing = #hls.t<6 -> 11, 5, 1>} : f32
         affine.store %25, %arg6[%arg8 * 8, %arg9 * 10 + 4] {partition_indices = [0, 4], timing = #hls.t<11 -> 12, 1, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
-        %26 = affine.load %arg5[%arg7, %arg9 * 10 + 5] {max_mux_size = 10 : i64, partition_indices = [-1, 5], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
+        %26 = affine.load %arg5[%arg7, %arg9 * 10 + 5] {max_mux_size = 2 : i64, partition_indices = [-1, 5], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
         %27 = arith.mulf %0, %26 {timing = #hls.t<2 -> 6, 4, 1>} : f32
         %28 = affine.load %arg6[%arg8 * 8, %arg9 * 10 + 5] {partition_indices = [0, 5], timing = #hls.t<4 -> 6, 2, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
         %29 = affine.if affine_set<(d0) : (d0 == 0)>(%arg7) -> f32 {
@@ -558,7 +558,7 @@ func @kernel_3mm(%arg0: memref<40x60xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 m
         } {timing = #hls.t<6 -> 6, 0, 0>}
         %30 = arith.addf %29, %27 {timing = #hls.t<6 -> 11, 5, 1>} : f32
         affine.store %30, %arg6[%arg8 * 8, %arg9 * 10 + 5] {partition_indices = [0, 5], timing = #hls.t<11 -> 12, 1, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
-        %31 = affine.load %arg5[%arg7, %arg9 * 10 + 6] {max_mux_size = 10 : i64, partition_indices = [-1, 6], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
+        %31 = affine.load %arg5[%arg7, %arg9 * 10 + 6] {max_mux_size = 2 : i64, partition_indices = [-1, 6], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
         %32 = arith.mulf %0, %31 {timing = #hls.t<2 -> 6, 4, 1>} : f32
         %33 = affine.load %arg6[%arg8 * 8, %arg9 * 10 + 6] {partition_indices = [0, 6], timing = #hls.t<4 -> 6, 2, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
         %34 = affine.if affine_set<(d0) : (d0 == 0)>(%arg7) -> f32 {
@@ -568,7 +568,7 @@ func @kernel_3mm(%arg0: memref<40x60xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 m
         } {timing = #hls.t<6 -> 6, 0, 0>}
         %35 = arith.addf %34, %32 {timing = #hls.t<6 -> 11, 5, 1>} : f32
         affine.store %35, %arg6[%arg8 * 8, %arg9 * 10 + 6] {partition_indices = [0, 6], timing = #hls.t<11 -> 12, 1, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
-        %36 = affine.load %arg5[%arg7, %arg9 * 10 + 7] {max_mux_size = 10 : i64, partition_indices = [-1, 7], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
+        %36 = affine.load %arg5[%arg7, %arg9 * 10 + 7] {max_mux_size = 2 : i64, partition_indices = [-1, 7], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
         %37 = arith.mulf %0, %36 {timing = #hls.t<2 -> 6, 4, 1>} : f32
         %38 = affine.load %arg6[%arg8 * 8, %arg9 * 10 + 7] {partition_indices = [0, 7], timing = #hls.t<4 -> 6, 2, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
         %39 = affine.if affine_set<(d0) : (d0 == 0)>(%arg7) -> f32 {
@@ -578,7 +578,7 @@ func @kernel_3mm(%arg0: memref<40x60xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 m
         } {timing = #hls.t<6 -> 6, 0, 0>}
         %40 = arith.addf %39, %37 {timing = #hls.t<6 -> 11, 5, 1>} : f32
         affine.store %40, %arg6[%arg8 * 8, %arg9 * 10 + 7] {partition_indices = [0, 7], timing = #hls.t<11 -> 12, 1, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
-        %41 = affine.load %arg5[%arg7, %arg9 * 10 + 8] {max_mux_size = 10 : i64, partition_indices = [-1, 8], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
+        %41 = affine.load %arg5[%arg7, %arg9 * 10 + 8] {max_mux_size = 2 : i64, partition_indices = [-1, 8], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
         %42 = arith.mulf %0, %41 {timing = #hls.t<2 -> 6, 4, 1>} : f32
         %43 = affine.load %arg6[%arg8 * 8, %arg9 * 10 + 8] {partition_indices = [0, 8], timing = #hls.t<4 -> 6, 2, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
         %44 = affine.if affine_set<(d0) : (d0 == 0)>(%arg7) -> f32 {
@@ -588,7 +588,7 @@ func @kernel_3mm(%arg0: memref<40x60xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 m
         } {timing = #hls.t<6 -> 6, 0, 0>}
         %45 = arith.addf %44, %42 {timing = #hls.t<6 -> 11, 5, 1>} : f32
         affine.store %45, %arg6[%arg8 * 8, %arg9 * 10 + 8] {partition_indices = [0, 8], timing = #hls.t<11 -> 12, 1, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
-        %46 = affine.load %arg5[%arg7, %arg9 * 10 + 9] {max_mux_size = 10 : i64, partition_indices = [-1, 9], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 10, d1 mod 10, d0 floordiv 10, d1 floordiv 10)>>
+        %46 = affine.load %arg5[%arg7, %arg9 * 10 + 9] {max_mux_size = 2 : i64, partition_indices = [-1, 9], timing = #hls.t<0 -> 2, 2, 1>} : memref<50x70xf32, affine_map<(d0, d1) -> (d0 mod 2, d1 mod 10, d0 floordiv 2, d1 floordiv 10)>>
         %47 = arith.mulf %0, %46 {timing = #hls.t<2 -> 6, 4, 1>} : f32
         %48 = affine.load %arg6[%arg8 * 8, %arg9 * 10 + 9] {partition_indices = [0, 9], timing = #hls.t<4 -> 6, 2, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
         %49 = affine.if affine_set<(d0) : (d0 == 0)>(%arg7) -> f32 {
@@ -1237,6 +1237,6 @@ func @kernel_3mm(%arg0: memref<40x60xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 m
         affine.store %337, %arg6[%arg8 * 8 + 7, %arg9 * 10 + 9] {partition_indices = [7, 9], timing = #hls.t<11 -> 12, 1, 1>} : memref<40x70xf32, affine_map<(d0, d1) -> (d0 mod 8, d1 mod 10, d0 floordiv 8, d1 floordiv 10)>>
       } {loop_directive = #hls.ld<pipeline=true, targetII=2, dataflow=false, flatten=false>, loop_info = #hls.l<flattenTripCount=7, iterLatency=12, minII=2>, parallel, timing = #hls.t<0 -> 26, 26, 26>}
     } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, loop_info = #hls.l<flattenTripCount=35, iterLatency=12, minII=2>, parallel, timing = #hls.t<0 -> 82, 82, 82>}
-  } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, loop_info = #hls.l<flattenTripCount=1750, iterLatency=12, minII=2>, timing = #hls.t<16541 -> 20053, 3512, 3512>}
-  return {timing = #hls.t<20053 -> 20053, 0, 0>}
+  } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, loop_info = #hls.l<flattenTripCount=1750, iterLatency=12, minII=2>, timing = #hls.t<9541 -> 13053, 3512, 3512>}
+  return {timing = #hls.t<13053 -> 13053, 0, 0>}
 }

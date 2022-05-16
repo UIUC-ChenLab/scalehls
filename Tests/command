@@ -1,0 +1,11 @@
+
+
+
+
+mlir-clang 3mm.c -function=kernel_3mm -S -memref-fullrank -raise-scf-to-affine | scalehls-opt -debug-only=scalehls -scalehls-dse-pipeline="top-func=kernel_3mm target-spec=./config.json" | scalehls-translate -emit-hlscpp > 3mm_dse.cpp
+
+mlir-clang gemm.c -function=test_gemm -S -memref-fullrank -raise-scf-to-affine | scalehls-opt -debug-only=scalehls -scalehls-dse-pipeline="top-func=test_gemm target-spec=./config.json" | scalehls-translate -emit-hlscpp > gemm_dse.cpp
+
+scalehls-opt in.mlir -scalehls-func-preprocess="top-func=kernel_3mm" -scalehls-array-partition | scalehls-translate -emit-hlscpp > 3mm_dse.cpp
+
+scalehls-opt 3mmopt.mlir -scalehls-func-preprocess="top-func=kernel_3mm"

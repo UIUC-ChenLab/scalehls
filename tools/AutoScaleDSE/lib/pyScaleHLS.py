@@ -9,43 +9,6 @@ import mlir.ir
 from mlir.dialects import builtin
 import numpy as np
 
-def scalehls_dse_top(dir, source_file, dsespec, inputtop):
-    print("Starting ScaleHLS DSE")
-
-    #scalehls dse temp directory
-    sdse_dir = dir + "/scalehls_dse_temp/"
-    if not(os.path.exists(sdse_dir)):
-        os.makedirs(sdse_dir)
-
-    inputfile = "scalehls_in.c"
-    sdse_input_file_loc = sdse_dir + inputfile
-    if not(os.path.exists(sdse_input_file_loc)):        
-        shutil.copy(source_file, sdse_input_file_loc)
-
-    os.chdir(sdse_dir)
-
-    snip_target = copy.deepcopy(dsespec)
-    with open('config.json', 'w') as f:
-        json.dump(snip_target, f)
-
-    run_scalehls_dse(inputfile, inputtop)
-
-    os.chdir("../..")
-    
-    print("Finished ScaleHLS DSE")
-
-def run_scalehls_dse(inputfile, inputtop):
-
-    targetspec = 'target-spec=config.json'
-
-    p1 = subprocess.Popen(['mlir-clang', inputfile, '-function=' + inputtop, '-memref-fullrank', '-raise-scf-to-affine', '-S'],
-                            stdout=subprocess.PIPE)                           
-    p2 = subprocess.Popen(['scalehls-opt', '-scalehls-dse-pipeline=top-func='+ inputtop + " " + targetspec, '-debug-only=scalehls'], 
-                            stdin=p1.stdout, stdout=subprocess.PIPE)
-
-    with open('ScaleHLS_DSE_out.cpp', 'wb') as fout:
-        subprocess.run(['scalehls-translate', '-emit-hlscpp'], stdin=p2.stdout, stdout=fout)
-
 def opts_menu():
     
     opt_knob = np.array(['none', 'none', 'none', 'none', 'none', 'none'])

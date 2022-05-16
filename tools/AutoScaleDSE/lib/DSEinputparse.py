@@ -131,6 +131,89 @@ def read_template():
     file.close()
     return template
 
+def get_dependent_arrays(var_arraylist_sized):
+    multiloop_arrays = []
+    for arr in var_arraylist_sized :
+        # get number of dependencies / start from end
+        numentr = len(arr)
+        for deploc in range(len(arr) - 1, -1, -1):
+            if arr[deploc] == 'dependencies':
+                if numentr > deploc + 2:
+                    multiloop_arrays.append(arr)
+
+    return multiloop_arrays
+
+def read_sdse_arrpart(sdsefile, topfuntion):
+    in_pattern = False
+    brace_count = 0
+
+    function_passed_val = []
+    function_declared_val = []
+    # get local array partition scheme
+    with open(sdsefile, 'r') as file:
+        for line in file:
+
+            #scope finder
+            if brace_count == 0: 
+                raw_scope = re.findall(r'(void|char|double|float|int|short)\s([A-Za-z_]+[A-Za-z_\d]*)(\s)?(\()', line)
+                if raw_scope:
+                    scope = raw_scope[0][1]
+                    if scope == topfuntion:
+                        in_pattern = True                        
+
+            if(re.findall('{', line)):
+                brace_count += 1
+
+            if(re.findall('}', line)):
+                if brace_count == 1:
+                    in_pattern = False
+                    brace_count -= 1
+                else:
+                    brace_count -= 1
+
+            # get sdse array partition scheme
+            if re.findall("#pragma HLS array_partition", line):
+                part_var = re.findall(r'variable\s?=\s?([A-Za-z_]+[A-Za-z_\d]*)\s', line)
+                part_scheme = re.findall(r'(cyclic|block|complete)', line)
+                part_factor = re.findall(r'factor\s?=\s?(\d+)\s', line)
+                part_dim = re.findall(r'dim\s?=\s?(\d+)\s?', line)
+                
+                # store scheme in list
+                for item in function_passed_val:
+                    if part_var[0] == item[1]:
+                        item.append(part_scheme[0])
+                        item.append(part_factor[0])
+                        item.append(part_dim[0])
+                for item in function_declared_val:
+                    if part_var[0] == item[1]:
+                        item.append(part_scheme[0])
+                        item.append(part_factor[0])
+                        item.append(part_dim[0])
+
+            # if in_pattern and brace_count > 0:
+            if in_pattern and brace_count == 0:
+                arr2part = re.findall(r'(int|float|double)\s([A-Za-z_]+[A-Za-z_\d]*)\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])+(,|;|\)|' ')', line)
+                if(arr2part):
+                    for item in arr2part:
+                        function_passed_val.append([scope, item[1]])                            
+            elif in_pattern and brace_count > 0:
+                arr2part = re.findall(r'(int|float|double)\s([A-Za-z_]+[A-Za-z_\d]*)\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])?\s?(\[.+\])+(,|;|\)|' ')', line)
+                if(arr2part):
+                    for item in arr2part:
+                        current_array = "".join(item[1:-1])
+                        array_sizeofdim = re.findall(r'\[(.+?)\]', current_array)
+                        array_dim = len(array_sizeofdim)
+                        # do not capture scalehls auto gen arrays which are a dummy array of dim1 size1
+                        if not(array_dim < 2 and int(array_sizeofdim[0]) < 2):
+                            function_declared_val.append([scope, item[1]])
+    file.close()
+
+    # 1st dim stores passed values second dim stores non passed values
+    sdse_var_part = [topfuntion, function_passed_val, function_declared_val]
+
+    return sdse_var_part
+
+
 def create_params(dir, var_forlist, var_arraylist_sized):
     paramfile = open (dir + "/ML_params.csv", 'w')
     paramfile.write("type,name,scope,range,dim\n")
@@ -306,11 +389,11 @@ def preproccess(tar_dir, source_file, dsespec, inputtop):
         max_loop_bound = 256
 
     refactored_config = copy.deepcopy(dsespec) 
-    refactored_config['max_init_parallel'] = max_loop_bound / 2
-    refactored_config['max_expl_parallel'] = max_loop_bound 
-    refactored_config['max_loop_parallel'] = max_loop_bound / 4
-    refactored_config['max_iter_num'] = int(refactored_config['max_iter_num'])
-    refactored_config['max_distance'] = int(refactored_config['max_distance'])
+    refactored_config['max_init_parallel'] = int(max_loop_bound)
+    refactored_config['max_expl_parallel'] = int(max_loop_bound * 1.5)
+    refactored_config['max_loop_parallel'] = int(max_loop_bound / 3)
+    refactored_config['max_iter_num'] = int(max_loop_bound / 3)
+    refactored_config['max_distance'] = int(max_loop_bound / 14)
     # with open('config.json', 'w') as f:
     #     json.dump(refactored_config, f)
 
@@ -318,7 +401,7 @@ def preproccess(tar_dir, source_file, dsespec, inputtop):
 
     return refactored_config
 
-def process_source_file(dir, inputfile, outfile, topfun, sdse=False):
+def process_source_file(dir, inputfile, outfile, topfun, sdse=False, sdse_arr=False):
     
     var_forlist_tree = []
     var_forlist_tree_popped = []
@@ -407,7 +490,10 @@ def process_source_file(dir, inputfile, outfile, topfun, sdse=False):
                 newfile.write(line)
             elif(re.findall(r'^(\s)*#pragma', line)): #ignore #pragma
                 if ((re.findall(r'^(\s)*#pragma HLS pipeline II', line)) and (sdse)):
-                    newfile.write("#pragma HLS pipeline\n")
+                    newfile.write(line)
+                    # newfile.write("#pragma HLS pipeline\n")
+                elif ((re.findall(r'^(\s)*#pragma HLS array_partition', line)) and (sdse_arr)):
+                    newfile.write(line)
                 else: 
                     None
             elif(re.findall(r'using namespace std;', line)): #ignore #pragma
@@ -618,6 +704,27 @@ def process_source_file(dir, inputfile, outfile, topfun, sdse=False):
         tree_list.append(mastertree)
     
     return var_func_names, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list
+
+def remove_multiloop_arrays_sdse_parti(dir, inputfile, var_arraylist_sized):
+
+    # store multilooop array names
+    mullooparrs = []
+    for arr in var_arraylist_sized:
+        mullooparrs.append(arr[2])
+
+    with open (dir + inputfile, 'r+') as file:
+        fileInmem = file.readlines()
+        file.seek(0)
+        for line in fileInmem:
+            if re.findall('#pragma HLS array_partition', line):
+                part_var = re.findall(r'variable\s?=\s?([A-Za-z_]+[A-Za-z_\d]*)\s', line)
+                if not(part_var[0] in mullooparrs):
+                    file.write(line)
+            else:
+                    file.write(line)
+        file.truncate()
+
+
 
 def asdse_get_knobs(inputfile, topfun, sdse_var_part_list):
 
