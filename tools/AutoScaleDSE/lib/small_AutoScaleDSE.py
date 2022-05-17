@@ -92,6 +92,17 @@ def combine_two_spaces_coprime(input1, input2, c1, c2):
                 if re.findall('l', space1.columns[lcols]):
                     productoftiles_space1 *= int(space1.iloc[i][lcols])
 
+            # store max tile per loop band
+            # band_max = -1
+            # space1_loopband_max_list = []
+            # for lcols in range(len(space1.iloc[i]) - 3):
+            #     if re.findall('ii', space1.columns[lcols]):
+            #         space1_loopband_max_list.append(band_max)
+            #         band_max = -1
+            #     if re.findall('l', space1.columns[lcols]):
+            #         if int(space1.iloc[i][lcols]) > band_max:
+            #             band_max = int(space1.iloc[i][lcols])
+
             #extract data from space 1
             for s1l in space1_looplables:                 
                 buffer_space1.append(space1.iloc[i][s1l])
@@ -106,9 +117,26 @@ def combine_two_spaces_coprime(input1, input2, c1, c2):
                     for lcols in range(len(space2.iloc[j]) - 3): #-3 for cycle/dsp/pare
                         if re.findall('l', space2.columns[lcols]):
                             productoftiles_space2 *= int(space2.iloc[j][lcols])
+                                
+                    # store max tile per loop band
+                    # band_max = -1
+                    # space2_loopband_max_list = []
+                    # for lcols in range(len(space2.iloc[i]) - 3):
+                    #     if re.findall('ii', space2.columns[lcols]):
+                    #         space2_loopband_max_list.append(band_max)
+                    #         band_max = -1
+                    #     if re.findall('l', space2.columns[lcols]):
+                    #         if int(space2.iloc[i][lcols]) > band_max:
+                    #             band_max = int(space2.iloc[i][lcols])
 
+                    # coprime_custom = False
+                    # for space1_loopmax in space1_loopband_max_list:
+                    #     for space2_loopmax in space2_loopband_max_list:
+                    #         if math.gcd(space1_loopmax, space2_loopmax) in [1, 2]:
+                    #             coprime_custom = True
+                    
                     coprime_custom = False
-                    if math.gcd(60,48) in [1, 2]:
+                    if math.gcd(productoftiles_space1, productoftiles_space2) in [1, 2]:
                         coprime_custom = True
                     
                     if coprime_custom == False:
@@ -307,7 +335,7 @@ def scalehls_dse_top(dir, source_file, dsespec, part, inputtop):
         json.dump(snip_target, f)
 
 ########################################################################################################
-    # run_scalehls_dse(inputfile, inputtop)
+    run_scalehls_dse(inputfile, inputtop)
 ########################################################################################################    
 
     # mark csv files with individual loop pareto spaces
@@ -381,10 +409,11 @@ def scalehls_dse_top(dir, source_file, dsespec, part, inputtop):
         elif result['is_feasible'] == False:
             # if desing is not vaild revert
             if result['is_error'] == True:
-                print('Vivado Point: Exit is_error')
-                break
+                # print('Vivado Point: Exit is_error')
+                dsp_target = pspace_dsp * 0.9
             # new target is the arithmatic mean
-            dsp_target = (pspace_dsp + valid_result_history[-1][1]) / 2
+            else:
+                dsp_target = (pspace_dsp + valid_result_history[-1][1]) / 2
 
     # get best
     min_laten = float('inf')

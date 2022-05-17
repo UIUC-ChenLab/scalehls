@@ -23,8 +23,8 @@ from mlir.dialects import func as func_dialect
 def eval_p_point(pspace, cols, opt_row_loc, part, topfunction):
     
     #scalehls dse temp directory
-    # project_ident = str(int(time.time()))+'_'+str(random.getrandbits(16))
-    project_ident = 'test'
+    project_ident = str(int(time.time()))+'_'+str(random.getrandbits(16))
+    # project_ident = 'test'
     eval_dir = "samplepspace/" + project_ident
     if not(os.path.exists(eval_dir)):
         os.makedirs(eval_dir)
@@ -42,15 +42,15 @@ def eval_p_point(pspace, cols, opt_row_loc, part, topfunction):
             tile_map.append(loop_band_tile)
             loop_band_tile = []
 
-    print("Evaluating Tile_strat", tile_map)
+    print("Evaluating Point:", opt_row_loc, tile_map)
     # print("pipe_map", pipe_map)
 
     pspace_row_buf = copy.deepcopy(pspace.iloc[opt_row_loc].values.tolist()) 
 
     os.chdir(eval_dir)
 
-    print(cols)
-    print(pspace_row_buf)
+    # print(cols)
+    # print(pspace_row_buf)
 
     apply_loop_ops_small(topfunction, tile_map, pipe_map)
 
@@ -63,12 +63,10 @@ def eval_p_point(pspace, cols, opt_row_loc, part, topfunction):
     os.chdir("../..")
 
     # remove the directory
-    # try:
-    #     shutil.rmtree(eval_dir)
-    # except OSError as e:
-    #     print("Error: %s : %s" % (os.dir_path, e.strerror))
-
-    print(os.getcwd())
+    try:
+        shutil.rmtree(eval_dir)
+    except OSError as e:
+        print("Error: %s : %s" % (os.dir_path, e.strerror))
 
     return pspace_row_buf
 
@@ -153,28 +151,28 @@ def apply_loop_ops_small(topfunction, tile_map, pipe_map):
                 loop_count = 0
     newfile.close()
 
+def record_dataframe(result):
+    global dataset
+
+    series_pspace_row_buf = pd.Series(result, index = dataset.columns)
+    dataset = dataset.append(series_pspace_row_buf, ignore_index=True)
+
+    dataset.to_csv('samplepspace/TruePspace.csv')
 
 def main():
-    pspace = pd.read_csv('samplepspace/combspace.csv', index_col=0)
+    pspace = pd.read_csv('samplepspace/combspace.csv', index_col=False)
     cols = list(pspace.columns.values)
     cols = cols + ['latency', 'dsp_perc', 'ff_perc', 'lut_perc', 'bram_perc', 'is_feasible', 'is_error']
     
     global dataset
     dataset = pd.DataFrame(columns=cols)
 
-    pspace_row_buf = eval_p_point(pspace, cols, 300, 'xc7z045-ffg900-2', 'kernel_3mm')
-    print(pspace_row_buf)
-
-    # with multiprocessing.Pool(processes=6) as pool:
-    #     for i in range(len(pspace)):
-    #         pool.apply_async(eval_p_point, args = (pspace, i, 'xc7z045-ffg900-2', 'kernel_3mm'),                                                                             
-                                                                            
-    #                                                                         callback = record_dataframe)
-    #     pool.close()
-    #     pool.join()        
-    # print("Finished Evaluation of {0} Randomly Generated Design Points".format(nub_of_init))
-
-
-
+    print("Generating True Pareto Space")
+    with multiprocessing.Pool(processes=6) as pool:
+        for i in range(len(pspace)):
+            pool.apply_async(eval_p_point, args = (pspace, cols, i, 'xc7z045-ffg900-2', 'kernel_3mm'), callback = record_dataframe)
+        pool.close()
+        pool.join()        
+    print("Finished Generating True Pareto Space")
 if __name__ == '__main__':
     main()
