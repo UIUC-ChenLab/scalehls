@@ -18,14 +18,6 @@ using namespace hls;
 static bool applyTosaConstToArgument(ModuleOp module) {
   auto builder = OpBuilder(module);
 
-  // Simplify redundant transposes
-  for (auto func : module.getOps<FuncOp>()) {
-    PassManager pm(func.getContext(), "func.func");
-    pm.addPass(createTosaSimplifyGraphPass());
-    if (failed(pm.run(func)))
-      return false;
-  }
-
   // Record ops to be erased.
   SmallVector<Operation *, 32> opToErase;
 
@@ -54,7 +46,6 @@ static bool applyTosaConstToArgument(ModuleOp module) {
 
         transposeOp.output().replaceAllUsesWith(transposeArg);
         opToErase.push_back(transposeOp);
-        opToErase.push_back(transposeOp.perms().getDefiningOp());
       } else {
         for (auto user : transposeOp.output().getUsers()) {
           if (auto reshapeOp = dyn_cast<tosa::ReshapeOp>(user)) {
@@ -66,7 +57,58 @@ static bool applyTosaConstToArgument(ModuleOp module) {
             reshapeOp.output().replaceAllUsesWith(newReshapeOp.output());
             opToErase.push_back(reshapeOp);
             opToErase.push_back(transposeOp);
-            opToErase.push_back(transposeOp.perms().getDefiningOp());
+          }
+        }
+      }
+    }
+
+    for (auto addOp : func.getOps<tosa::AddOp>()) {
+      auto loc = addOp.getLoc();
+
+      tosa::TransposeOp transposeOp1 =
+          dyn_cast<tosa::TransposeOp>(addOp.input1().getDefiningOp());
+      tosa::TransposeOp transposeOp2 =
+          dyn_cast<tosa::TransposeOp>(addOp.input2().getDefiningOp());
+
+      if (transposeOp1 && transposeOp2) {
+        for (auto addUser : addOp.output().getUsers()) {
+          if (auto clampOp = dyn_cast<tosa::ClampOp>(addUser)) {
+            for (auto clampUser : clampOp.output().getUsers()) {
+              if (auto transposeOpLast =
+                      dyn_cast<tosa::TransposeOp>(clampUser)) {
+                builder.setInsertionPointAfter(addOp);
+                auto newAddOp = builder.create<tosa::AddOp>(
+                    loc, transposeOp1.input1().getType(), transposeOp1.input1(),
+                    transposeOp2.input1());
+                auto newClampOp = builder.create<tosa::ClampOp>(
+                    loc, transposeOp1.input1().getType(), newAddOp.output(),
+                    clampOp.min_int(), clampOp.max_int(), clampOp.min_fp(),
+                    clampOp.max_fp());
+
+                for (auto user : transposeOp1.output().getUsers()) {
+                  if (auto transposeOp = dyn_cast<tosa::TransposeOp>(user)) {
+                    transposeOp.output().replaceAllUsesWith(
+                        transposeOp1.input1());
+                    opToErase.push_back(transposeOp);
+                  }
+                }
+                for (auto user : transposeOp2.output().getUsers()) {
+                  if (auto transposeOp = dyn_cast<tosa::TransposeOp>(user)) {
+                    transposeOp.output().replaceAllUsesWith(
+                        transposeOp2.input1());
+                    opToErase.push_back(transposeOp);
+                  }
+                }
+
+                transposeOpLast.output().replaceAllUsesWith(
+                    newClampOp.output());
+                opToErase.push_back(transposeOpLast);
+                opToErase.push_back(clampOp);
+                opToErase.push_back(addOp);
+                opToErase.push_back(transposeOp1);
+                opToErase.push_back(transposeOp2);
+              }
+            }
           }
         }
       }
@@ -82,13 +124,15 @@ static bool applyTosaConstToArgument(ModuleOp module) {
       auto loc = constOp.getLoc();
 
       // Create a new function argument
-      auto constType = constOp.output().getType().dyn_cast<RankedTensorType>();
-      auto constArg = func.front().addArgument(constType, loc);
-      func.setType(builder.getFunctionType(
-          func.front().getArgumentTypes(),
-          func.back().getTerminator()->getOperandTypes()));
+      if (!constOp.use_empty()) {
+        auto constType = constOp.output().getType().dyn_cast<RankedTensorType>();
+        auto constArg = func.front().addArgument(constType, loc);
+        func.setType(builder.getFunctionType(
+            func.front().getArgumentTypes(),
+            func.back().getTerminator()->getOperandTypes()));
 
-      constOp.output().replaceAllUsesWith(constArg);
+        constOp.output().replaceAllUsesWith(constArg);
+      }
       opToErase.push_back(constOp);
     }
   }
