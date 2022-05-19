@@ -103,28 +103,6 @@ struct ApplyILPSolution : public ApplyILPSolutionBase<ApplyILPSolution> {
       }
     }
 
-    // Pipeline top function
-    AffineLoopBands targetBands;
-    getLoopBands(getTopFunc(module).front(), targetBands);
-    // Apply loop pipelining to corresponding level of each innermost loop.
-    for (auto &band : targetBands) {
-      auto currentLoop = band.back();
-      unsigned loopLevel = 0;
-      while (true) {
-        auto parentLoop = currentLoop->getParentOfType<AffineForOp>();
-
-        // If meet the outermost loop, pipeline the current loop.
-        if (!parentLoop || 0 == loopLevel) {
-          applyLoopPipelining(band, band.size() - loopLevel - 1, 1);
-          break;
-        }
-
-        // Move to the next loop level.
-        currentLoop = parentLoop;
-        ++loopLevel;
-      }
-    }
-
     // Array partition to runtime main
     applyAutoArrayPartition(getRuntimeFunc(module));
   }
