@@ -367,6 +367,174 @@ static bool applyTosaToLinalgNoBuffer(ModuleOp module) {
         opToErase.push_back(clampOp);
         opToErase.push_back(inToTensor);
       }
+
+      else if (auto avgPool2DOp = dyn_cast<tosa::AvgPool2dOp>(op)) {
+        builder.setInsertionPoint(avgPool2DOp);
+
+        // Input MemRef object allocated off-chip
+        bufferization::ToTensorOp inToTensor;
+        if (avgPool2DOp.input().getDefiningOp()) {
+          if (auto toTensor = dyn_cast<bufferization::ToTensorOp>(
+                  avgPool2DOp.input().getDefiningOp())) {
+            inToTensor = toTensor;
+          }
+        }
+        auto inMemref = inToTensor.memref();
+
+        // Output MemRef object allocated off-chip
+        bufferization::ToMemrefOp outToMemref;
+        for (auto user : avgPool2DOp.output().getUsers()) {
+          if (auto toMemref = dyn_cast<bufferization::ToMemrefOp>(user)) {
+            outToMemref = toMemref;
+          }
+        }
+        memref::CopyOp outCopy;
+        for (auto user : outToMemref.memref().getUsers()) {
+          if (auto copy = dyn_cast<memref::CopyOp>(user)) {
+            outCopy = copy;
+          }
+        }
+        Value outMemref = outCopy.target();
+        Value outMemrefArg = outMemref;
+        memref::SubViewOp outSubview;
+        if (outMemref.getDefiningOp()) {
+          auto subview = dyn_cast<memref::SubViewOp>(outMemref.getDefiningOp());
+          outMemrefArg = subview.source();
+
+          auto outSubview =
+              dyn_cast<memref::SubViewOp>(builder.insert(subview.clone()));
+          subview.result().replaceAllUsesWith(outSubview.result());
+          outMemref = outSubview.result();
+          opToErase.push_back(subview);
+        }
+
+        // Create linalg pool sum
+        auto strideValue =
+            avgPool2DOp.stride()[0].dyn_cast<IntegerAttr>().getInt();
+        auto stride = NamedAttribute(
+            builder.getStringAttr("strides"),
+            builder.getI64VectorAttr({strideValue, strideValue}));
+        auto dilation = NamedAttribute(builder.getStringAttr("dilations"),
+                                       builder.getI64VectorAttr({1, 1}));
+        auto inputType =
+            avgPool2DOp.input().getType().dyn_cast<RankedTensorType>();
+        auto kernelValue =
+            avgPool2DOp.kernel()[0].dyn_cast<IntegerAttr>().getInt();
+        auto inputElementType = inputType.getElementType();
+        auto accumulator = builder.create<memref::AllocOp>(
+            loc, MemRefType::get(ArrayRef({kernelValue, kernelValue}),
+                                 inputElementType));
+        builder.create<linalg::PoolingNhwcSumOp>(
+            loc, ValueRange({inMemref, accumulator}), ValueRange({outMemref}),
+            ArrayRef({stride, dilation}));
+
+        // Create linalg generic for division
+        Value divConstant;
+        if (inputElementType == builder.getF32Type()) {
+          divConstant = builder.create<arith::ConstantOp>(
+              loc, builder.getF32FloatAttr(kernelValue * kernelValue));
+        } else {
+          divConstant = builder.create<arith::ConstantIntOp>(
+              loc, kernelValue * kernelValue,
+              inputElementType.getIntOrFloatBitWidth());
+        }
+        auto normalMap = AffineMap::get(
+            4, 0,
+            {builder.getAffineDimExpr(0), builder.getAffineDimExpr(1),
+             builder.getAffineDimExpr(2), builder.getAffineDimExpr(3)},
+            builder.getContext());
+        auto parallel = StringRef("parallel");
+        auto outputGeneric = builder.create<linalg::GenericOp>(
+            loc, ValueRange({outMemref}), ValueRange({outMemref}),
+            ArrayRef({normalMap, normalMap}),
+            ArrayRef({parallel, parallel, parallel, parallel}));
+        auto outputGenericEntry =
+            builder.createBlock(&outputGeneric.getBodyRegion());
+        auto outputGenericArg0 =
+            outputGenericEntry->addArgument(inputElementType, loc);
+        outputGenericEntry->addArgument(inputElementType, loc);
+        builder.setInsertionPointToEnd(outputGenericEntry);
+        Operation *outputGenericDiv;
+        if (inputElementType == builder.getF32Type()) {
+          outputGenericDiv = builder.create<arith::DivFOp>(
+              loc, inputElementType, outputGenericArg0, divConstant);
+        } else {
+          outputGenericDiv = builder.create<arith::DivSIOp>(
+              loc, inputElementType, outputGenericArg0, divConstant);
+        }
+        builder.create<linalg::YieldOp>(loc, outputGenericDiv->getResult(0));
+
+        opToErase.push_back(outCopy);
+        opToErase.push_back(outToMemref);
+        opToErase.push_back(avgPool2DOp);
+        opToErase.push_back(inToTensor);
+      }
+
+      else if (auto maxPool2DOp = dyn_cast<tosa::MaxPool2dOp>(op)) {
+        builder.setInsertionPoint(maxPool2DOp);
+
+        // Input MemRef object allocated off-chip
+        bufferization::ToTensorOp inToTensor;
+        if (maxPool2DOp.input().getDefiningOp()) {
+          if (auto toTensor = dyn_cast<bufferization::ToTensorOp>(
+                  maxPool2DOp.input().getDefiningOp())) {
+            inToTensor = toTensor;
+          }
+        }
+        auto inMemref = inToTensor.memref();
+
+        // Output MemRef object allocated off-chip
+        bufferization::ToMemrefOp outToMemref;
+        for (auto user : maxPool2DOp.output().getUsers()) {
+          if (auto toMemref = dyn_cast<bufferization::ToMemrefOp>(user)) {
+            outToMemref = toMemref;
+          }
+        }
+        memref::CopyOp outCopy;
+        for (auto user : outToMemref.memref().getUsers()) {
+          if (auto copy = dyn_cast<memref::CopyOp>(user)) {
+            outCopy = copy;
+          }
+        }
+        Value outMemref = outCopy.target();
+        Value outMemrefArg = outMemref;
+        memref::SubViewOp outSubview;
+        if (outMemref.getDefiningOp()) {
+          auto subview = dyn_cast<memref::SubViewOp>(outMemref.getDefiningOp());
+          outMemrefArg = subview.source();
+
+          auto outSubview =
+              dyn_cast<memref::SubViewOp>(builder.insert(subview.clone()));
+          subview.result().replaceAllUsesWith(outSubview.result());
+          outMemref = outSubview.result();
+          opToErase.push_back(subview);
+        }
+
+        // Create linalg pool max
+        auto strideValue =
+            maxPool2DOp.stride()[0].dyn_cast<IntegerAttr>().getInt();
+        auto stride = NamedAttribute(
+            builder.getStringAttr("strides"),
+            builder.getI64VectorAttr({strideValue, strideValue}));
+        auto dilation = NamedAttribute(builder.getStringAttr("dilations"),
+                                       builder.getI64VectorAttr({1, 1}));
+        auto inputType =
+            maxPool2DOp.input().getType().dyn_cast<RankedTensorType>();
+        auto kernelValue =
+            maxPool2DOp.kernel()[0].dyn_cast<IntegerAttr>().getInt();
+        auto inputElementType = inputType.getElementType();
+        auto accumulator = builder.create<memref::AllocOp>(
+            loc, MemRefType::get(ArrayRef({kernelValue, kernelValue}),
+                                 inputElementType));
+        builder.create<linalg::PoolingNhwcMaxOp>(
+            loc, ValueRange({inMemref, accumulator}), ValueRange({outMemref}),
+            ArrayRef({stride, dilation}));
+
+        opToErase.push_back(outCopy);
+        opToErase.push_back(outToMemref);
+        opToErase.push_back(maxPool2DOp);
+        opToErase.push_back(inToTensor);
+      }
     });
   }
 
