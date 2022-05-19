@@ -69,7 +69,8 @@ static bool applyTosaConstToArgument(ModuleOp module) {
           dyn_cast<tosa::TransposeOp>(addOp.input1().getDefiningOp());
       tosa::TransposeOp transposeOp2 =
           dyn_cast<tosa::TransposeOp>(addOp.input2().getDefiningOp());
-
+      tosa::ClampOp clampOp2 =
+          dyn_cast<tosa::ClampOp>(addOp.input2().getDefiningOp());
       if (transposeOp1 && transposeOp2) {
         for (auto addUser : addOp.output().getUsers()) {
           if (auto clampOp = dyn_cast<tosa::ClampOp>(addUser)) {
@@ -100,6 +101,7 @@ static bool applyTosaConstToArgument(ModuleOp module) {
                   }
                 }
 
+                clampOp.output().replaceAllUsesWith(newClampOp.output());
                 transposeOpLast.output().replaceAllUsesWith(
                     newClampOp.output());
                 opToErase.push_back(transposeOpLast);
@@ -107,6 +109,34 @@ static bool applyTosaConstToArgument(ModuleOp module) {
                 opToErase.push_back(addOp);
                 opToErase.push_back(transposeOp1);
                 opToErase.push_back(transposeOp2);
+              }
+            }
+          }
+        }
+      }
+
+      else if (transposeOp1 && clampOp2) {
+        for (auto addUser : addOp.output().getUsers()) {
+          if (auto clampOp = dyn_cast<tosa::ClampOp>(addUser)) {
+            for (auto clampUser : clampOp.output().getUsers()) {
+              if (auto transposeOpLast =
+                      dyn_cast<tosa::TransposeOp>(clampUser)) {
+                builder.setInsertionPointAfter(addOp);
+                auto newAddOp = builder.create<tosa::AddOp>(
+                    loc, transposeOp1.input1().getType(), transposeOp1.input1(),
+                    addOp.input2());
+                auto newClampOp = builder.create<tosa::ClampOp>(
+                    loc, transposeOp1.input1().getType(), newAddOp.output(),
+                    clampOp.min_int(), clampOp.max_int(), clampOp.min_fp(),
+                    clampOp.max_fp());
+
+                clampOp.output().replaceAllUsesWith(newClampOp.output());
+                transposeOpLast.output().replaceAllUsesWith(
+                    newClampOp.output());
+                opToErase.push_back(transposeOpLast);
+                opToErase.push_back(clampOp);
+                opToErase.push_back(addOp);
+                opToErase.push_back(transposeOp1);
               }
             }
           }
@@ -125,7 +155,8 @@ static bool applyTosaConstToArgument(ModuleOp module) {
 
       // Create a new function argument
       if (!constOp.use_empty()) {
-        auto constType = constOp.output().getType().dyn_cast<RankedTensorType>();
+        auto constType =
+            constOp.output().getType().dyn_cast<RankedTensorType>();
         auto constArg = func.front().addArgument(constType, loc);
         func.setType(builder.getFunctionType(
             func.front().getArgumentTypes(),
