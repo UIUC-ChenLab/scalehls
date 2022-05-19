@@ -279,9 +279,15 @@ static bool replaceFunction(ModuleOp module, ConvOpHelper sharedHelper,
       auto outputGenericArg1 =
           outputGenericEntry->addArgument(sharedHelper.outputType, loc);
       builder.setInsertionPointToEnd(outputGenericEntry);
-      auto outputGenericAdd = builder.create<arith::AddFOp>(
-          loc, sharedHelper.outputType, outputGenericArg0, outputGenericArg1);
-      builder.create<linalg::YieldOp>(loc, outputGenericAdd.getResult());
+      Operation *outputGenericAdd;
+      if (sharedHelper.outputType == builder.getF32Type()) {
+        outputGenericAdd = builder.create<arith::AddFOp>(
+            loc, sharedHelper.outputType, outputGenericArg0, outputGenericArg1);
+      } else {
+        outputGenericAdd = builder.create<arith::AddIOp>(
+            loc, sharedHelper.outputType, outputGenericArg0, outputGenericArg1);
+      }
+      builder.create<linalg::YieldOp>(loc, outputGenericAdd->getResult(0));
 
       opToErase.push_back(outCopy);
       opToErase.push_back(outToMemref);

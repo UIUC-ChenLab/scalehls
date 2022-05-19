@@ -89,11 +89,20 @@ static bool applyCreatePaddedBuffer(ModuleOp module) {
         }
 
         // Create a new convolution without padding
-        auto newConv2DOp = builder.create<tosa::Conv2DOp>(
-            loc, conv2DOp.output().getType(), inToTensor.result(),
-            conv2DOp.weight(), conv2DOp.bias(),
-            builder.getI64ArrayAttr({0, 0, 0, 0}), conv2DOp.stride(),
-            conv2DOp.dilation());
+        tosa::Conv2DOp newConv2DOp;
+        if (conv2DOp.quantization_info().hasValue()) {
+          newConv2DOp = builder.create<tosa::Conv2DOp>(
+              loc, conv2DOp.output().getType(), inToTensor.result(),
+              conv2DOp.weight(), conv2DOp.bias(),
+              builder.getI64ArrayAttr({0, 0, 0, 0}), conv2DOp.stride(),
+              conv2DOp.dilation(), *conv2DOp.quantization_info());
+        } else {
+          newConv2DOp = builder.create<tosa::Conv2DOp>(
+              loc, conv2DOp.output().getType(), inToTensor.result(),
+              conv2DOp.weight(), conv2DOp.bias(),
+              builder.getI64ArrayAttr({0, 0, 0, 0}), conv2DOp.stride(),
+              conv2DOp.dilation());
+        }
 
         conv2DOp.output().replaceAllUsesWith(newConv2DOp.output());
         opToErase.push_back(conv2DOp);

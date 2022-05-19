@@ -12,7 +12,7 @@ using namespace mlir;
 using namespace scalehls;
 
 static Type getQuantizeType(Type type) {
-  auto i8Type = IntegerType::get(type.getContext(), 8);
+  auto i8Type = IntegerType::get(type.getContext(), 16);
   if (type.isa<Float32Type>())
     return i8Type;
 

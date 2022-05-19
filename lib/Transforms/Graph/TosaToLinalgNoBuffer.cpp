@@ -145,9 +145,15 @@ static bool applyTosaToLinalgNoBuffer(ModuleOp module) {
             outputGenericEntry->addArgument(biasType.getElementType(), loc);
         outputGenericEntry->addArgument(helper.outputType, loc);
         builder.setInsertionPointToEnd(outputGenericEntry);
-        auto outputGenericAdd = builder.create<arith::AddFOp>(
-            loc, helper.outputType, outputGenericArg0, outputGenericArg1);
-        builder.create<linalg::YieldOp>(loc, outputGenericAdd.getResult());
+        Operation *outputGenericAdd;
+        if (helper.outputType == builder.getF32Type()) {
+          outputGenericAdd = builder.create<arith::AddFOp>(
+              loc, helper.outputType, outputGenericArg0, outputGenericArg1);
+        } else {
+          outputGenericAdd = builder.create<arith::AddIOp>(
+              loc, helper.outputType, outputGenericArg0, outputGenericArg1);
+        }
+        builder.create<linalg::YieldOp>(loc, outputGenericAdd->getResult(0));
 
         opToErase.push_back(outCopy);
         opToErase.push_back(outToMemref);
@@ -204,28 +210,52 @@ static bool applyTosaToLinalgNoBuffer(ModuleOp module) {
                                      .getType()
                                      .dyn_cast<RankedTensorType>()
                                      .getElementType();
-        auto zeroConstant =
-            builder.create<arith::ConstantOp>(loc, builder.getF32FloatAttr(0));
-        auto normalMap = AffineMap::get(
-            4, 0,
-            {builder.getAffineDimExpr(0), builder.getAffineDimExpr(1),
-             builder.getAffineDimExpr(2), builder.getAffineDimExpr(3)},
-            builder.getContext());
-        auto parallel = StringRef("parallel");
+        Value zeroConstant;
+        if (inputElementType == builder.getF32Type()) {
+          zeroConstant = builder.create<arith::ConstantOp>(
+              loc, builder.getF32FloatAttr(0));
+        } else {
+          zeroConstant = builder.create<arith::ConstantIntOp>(
+              loc, 0, inputElementType.getIntOrFloatBitWidth());
+        }
+        auto rank =
+            reluNOp.input().getType().dyn_cast<RankedTensorType>().getRank();
+        AffineMap normalMap;
+        ArrayRef<StringRef> iteratorType;
+        if (rank == 2) {
+          normalMap = AffineMap::get(
+              2, 0, {builder.getAffineDimExpr(0), builder.getAffineDimExpr(1)},
+              builder.getContext());
+          auto parallel = StringRef("parallel");
+          iteratorType = ArrayRef({parallel, parallel});
+        } else if (rank == 4) {
+          normalMap = AffineMap::get(
+              4, 0,
+              {builder.getAffineDimExpr(0), builder.getAffineDimExpr(1),
+               builder.getAffineDimExpr(2), builder.getAffineDimExpr(3)},
+              builder.getContext());
+          auto parallel = StringRef("parallel");
+          iteratorType = ArrayRef({parallel, parallel, parallel, parallel});
+        }
         auto reluGeneric = builder.create<linalg::GenericOp>(
             loc, ValueRange({inMemref}), ValueRange({outMemref}),
-            ArrayRef({normalMap, normalMap}),
-            ArrayRef({parallel, parallel, parallel, parallel}));
+            ArrayRef({normalMap, normalMap}), iteratorType);
         auto reluGenericEntry =
             builder.createBlock(&reluGeneric.getBodyRegion());
         auto reluGenericArg0 =
             reluGenericEntry->addArgument(inputElementType, loc);
         reluGenericEntry->addArgument(outputElementType, loc);
         builder.setInsertionPointToEnd(reluGenericEntry);
-        auto reluGenericCmpF = builder.create<arith::CmpFOp>(
-            loc, arith::CmpFPredicate::OLT, reluGenericArg0, zeroConstant);
+        Operation *reluGenericCmp;
+        if (inputElementType == builder.getF32Type()) {
+          reluGenericCmp = builder.create<arith::CmpFOp>(
+              loc, arith::CmpFPredicate::OLT, reluGenericArg0, zeroConstant);
+        } else {
+          reluGenericCmp = builder.create<arith::CmpIOp>(
+              loc, arith::CmpIPredicate::slt, reluGenericArg0, zeroConstant);
+        }
         auto reluGenericSelect = builder.create<arith::SelectOp>(
-            loc, reluGenericCmpF.getResult(), zeroConstant, reluGenericArg0);
+            loc, reluGenericCmp->getResult(0), zeroConstant, reluGenericArg0);
         builder.create<linalg::YieldOp>(loc, reluGenericSelect.getResult());
 
         opToErase.push_back(outCopy);
@@ -283,28 +313,53 @@ static bool applyTosaToLinalgNoBuffer(ModuleOp module) {
                                      .getType()
                                      .dyn_cast<RankedTensorType>()
                                      .getElementType();
-        auto zeroConstant =
-            builder.create<arith::ConstantOp>(loc, clampOp.min_fpAttr());
-        auto normalMap = AffineMap::get(
-            4, 0,
-            {builder.getAffineDimExpr(0), builder.getAffineDimExpr(1),
-             builder.getAffineDimExpr(2), builder.getAffineDimExpr(3)},
-            builder.getContext());
-        auto parallel = StringRef("parallel");
+        Value zeroConstant;
+        if (inputElementType == builder.getF32Type()) {
+          zeroConstant =
+              builder.create<arith::ConstantOp>(loc, clampOp.min_fpAttr());
+        } else {
+          zeroConstant = builder.create<arith::ConstantIntOp>(
+              loc, clampOp.min_intAttr().getValue().getSExtValue(),
+              inputElementType.getIntOrFloatBitWidth());
+        }
+        auto rank =
+            clampOp.input().getType().dyn_cast<RankedTensorType>().getRank();
+        AffineMap normalMap;
+        ArrayRef<StringRef> iteratorType;
+        if (rank == 2) {
+          normalMap = AffineMap::get(
+              2, 0, {builder.getAffineDimExpr(0), builder.getAffineDimExpr(1)},
+              builder.getContext());
+          auto parallel = StringRef("parallel");
+          iteratorType = ArrayRef({parallel, parallel});
+        } else if (rank == 4) {
+          normalMap = AffineMap::get(
+              4, 0,
+              {builder.getAffineDimExpr(0), builder.getAffineDimExpr(1),
+               builder.getAffineDimExpr(2), builder.getAffineDimExpr(3)},
+              builder.getContext());
+          auto parallel = StringRef("parallel");
+          iteratorType = ArrayRef({parallel, parallel, parallel, parallel});
+        }
         auto clampGeneric = builder.create<linalg::GenericOp>(
             loc, ValueRange({inMemref}), ValueRange({outMemref}),
-            ArrayRef({normalMap, normalMap}),
-            ArrayRef({parallel, parallel, parallel, parallel}));
+            ArrayRef({normalMap, normalMap}), iteratorType);
         auto clampGenericEntry =
             builder.createBlock(&clampGeneric.getBodyRegion());
         auto clampGenericArg0 =
             clampGenericEntry->addArgument(inputElementType, loc);
         clampGenericEntry->addArgument(outputElementType, loc);
         builder.setInsertionPointToEnd(clampGenericEntry);
-        auto clampGenericCmpF = builder.create<arith::CmpFOp>(
-            loc, arith::CmpFPredicate::OLT, clampGenericArg0, zeroConstant);
+        Operation *clampGenericCmp;
+        if (inputElementType == builder.getF32Type()) {
+          clampGenericCmp = builder.create<arith::CmpFOp>(
+              loc, arith::CmpFPredicate::OLT, clampGenericArg0, zeroConstant);
+        } else {
+          clampGenericCmp = builder.create<arith::CmpIOp>(
+              loc, arith::CmpIPredicate::slt, clampGenericArg0, zeroConstant);
+        }
         auto clampGenericSelect = builder.create<arith::SelectOp>(
-            loc, clampGenericCmpF.getResult(), zeroConstant, clampGenericArg0);
+            loc, clampGenericCmp->getResult(0), zeroConstant, clampGenericArg0);
         builder.create<linalg::YieldOp>(loc, clampGenericSelect.getResult());
 
         opToErase.push_back(outCopy);

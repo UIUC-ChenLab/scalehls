@@ -273,6 +273,7 @@ recordSizeAndCount(ModuleOp module, ConvOpHelper sharedHelper) {
 
   // Compute the number of times the shared function is called
   int64_t count = 0;
+  int64_t totalComp = 0;
   for (auto func : module.getOps<FuncOp>()) {
     if (func->getAttr("shared"))
       continue;
@@ -290,6 +291,9 @@ recordSizeAndCount(ModuleOp module, ConvOpHelper sharedHelper) {
       int64_t WHDiv =
           (currHelper.outWH + sharedHelper.outWH - 1) / sharedHelper.outWH;
       count += outChDiv * inChDiv * WHDiv * WHDiv;
+      totalComp += currHelper.batchSize * currHelper.outCh * currHelper.inCh *
+                   currHelper.outWH * currHelper.outWH * currHelper.kernelSize *
+                   currHelper.kernelSize;
     });
   }
 
@@ -310,7 +314,7 @@ static void dumpTilingOptions(
   auto &os = csvFile->os();
 
   // Print header row.
-  os << "name,size,count,cycle,batchSize,inCh,inWH,outCh,outWH,"
+  os << "name,size,count,cycle,dataSize,batchSize,inCh,inWH,outCh,outWH,"
         "kernelSize\n";
 
   // Print tiling options
@@ -319,9 +323,9 @@ static void dumpTilingOptions(
     auto helper = tilingHelpers[i];
     auto [name, size, count, cycle] = tiling;
     os << name << "," << size << "," << count << "," << cycle << ","
-       << helper.batchSize << "," << helper.inCh << "," << helper.inWH << ","
-       << helper.outCh << "," << helper.outWH << "," << helper.kernelSize
-       << "\n";
+       << helper.inputType.getIntOrFloatBitWidth() << "," << helper.batchSize
+       << "," << helper.inCh << "," << helper.inWH << "," << helper.outCh << ","
+       << helper.outWH << "," << helper.kernelSize << "\n";
   }
 
   csvFile->keep();
