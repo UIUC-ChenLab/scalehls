@@ -1772,6 +1772,7 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
   if (hasTopFuncAttr(func)) {
     indent() << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
 
+    auto idx = 0;
     for (auto &port : portList) {
       // Array ports and scalar ports are handled separately. Here, we only
       // handle MemRef types since we assume the IR has be fully bufferized.
@@ -1782,9 +1783,25 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
           // For now, we set the offset of all m_axi interfaces as slave.
           // For now, we set the offset of all m_axi interfaces as slave.
           auto kind = MemoryKind(memrefType.getMemorySpaceAsInt());
-          if (kind == MemoryKind::DRAM)
+          if (kind == MemoryKind::DRAM) {
             os << " m_axi offset=slave bundle=inout";
-          else
+
+            for (auto attr : func->getAttr("weights").dyn_cast<ArrayAttr>()) {
+              if (idx == attr.dyn_cast<IntegerAttr>().getInt()) {
+                os << "_weights";
+              }
+            }
+            for (auto attr : func->getAttr("biases").dyn_cast<ArrayAttr>()) {
+              if (idx == attr.dyn_cast<IntegerAttr>().getInt()) {
+                os << "_biases";
+              }
+            }
+            for (auto attr : func->getAttr("others").dyn_cast<ArrayAttr>()) {
+              if (idx == attr.dyn_cast<IntegerAttr>().getInt()) {
+                os << "_others";
+              }
+            }
+          } else
             os << " bram";
 
           os << " port=";
@@ -1818,6 +1835,7 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
           if (port.getType().isa<MemRefType>())
             emitArrayDirectives(port);
       }
+      idx++;
     }
 
     // An empty line.

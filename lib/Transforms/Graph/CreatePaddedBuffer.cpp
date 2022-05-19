@@ -485,6 +485,73 @@ static bool applyCreatePaddedBuffer(ModuleOp module) {
   for (auto op : opToErase)
     op->erase();
 
+  // Mark weights and bias in function signature
+  SmallVector<int64_t> weights;
+  SmallVector<int64_t> biases;
+  SmallVector<int64_t> others;
+  for (auto func : module.getOps<FuncOp>()) {
+    for (unsigned idx = 0; idx < func.getNumArguments(); idx++) {
+      auto arg = func.getArgument(idx);
+      for (auto user : arg.getUsers()) {
+        if (auto conv2DOp = dyn_cast<tosa::Conv2DOp>(user)) {
+          if (arg == conv2DOp.weight()) {
+            weights.push_back(idx);
+          } else if (arg == conv2DOp.bias()) {
+            biases.push_back(idx);
+          }
+          break;
+        }
+        if (auto matmulOp = dyn_cast<tosa::MatMulOp>(user)) {
+          if (arg == matmulOp.b()) {
+            weights.push_back(idx);
+          }
+          break;
+        }
+        if (auto addOp = dyn_cast<tosa::AddOp>(user)) {
+          if (arg == addOp.input2()) {
+            biases.push_back(idx);
+          }
+          break;
+        }
+        if (auto subviewOp = dyn_cast<memref::SubViewOp>(user)) {
+          for (auto subviewUser : subviewOp->getUsers()) {
+            if (auto copyOp = dyn_cast<memref::CopyOp>(subviewUser)) {
+              if (copyOp.source().getDefiningOp()) {
+                if (auto toMemrefOp = dyn_cast<bufferization::ToMemrefOp>(
+                        copyOp.source().getDefiningOp())) {
+                  if (toMemrefOp.tensor().getDefiningOp()) {
+                    if (auto maxpoolOp = dyn_cast<tosa::MaxPool2dOp>(
+                            toMemrefOp.tensor().getDefiningOp())) {
+                      others.push_back(idx);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        if (auto copyOp = dyn_cast<memref::CopyOp>(user)) {
+          if (auto toMemrefOp = dyn_cast<bufferization::ToMemrefOp>(
+                  copyOp.source().getDefiningOp())) {
+            if (toMemrefOp.tensor().getDefiningOp()) {
+              if (auto matmulOp = dyn_cast<tosa::MatMulOp>(
+                      toMemrefOp.tensor().getDefiningOp())) {
+                others.push_back(idx);
+              }
+              if (auto maxpoolOp = dyn_cast<tosa::MaxPool2dOp>(
+                      toMemrefOp.tensor().getDefiningOp())) {
+                others.push_back(idx);
+              }
+            }
+          }
+        }
+      }
+    }
+    func->setAttr("weights", builder.getI64ArrayAttr(weights));
+    func->setAttr("biases", builder.getI64ArrayAttr(biases));
+    func->setAttr("others", builder.getI64ArrayAttr(others));
+  }
+
   return true;
 }
 
