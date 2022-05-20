@@ -12,8 +12,11 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/TosaOpHelper.h"
 #include "scalehls/Transforms/Utils.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/ToolOutputFile.h"
+
+#define DEBUG_TYPE "scalehls"
 
 using namespace mlir;
 using namespace scalehls;
@@ -273,7 +276,6 @@ recordSizeAndCount(ModuleOp module, ConvOpHelper sharedHelper) {
 
   // Compute the number of times the shared function is called
   int64_t count = 0;
-  int64_t totalComp = 0;
   for (auto func : module.getOps<FuncOp>()) {
     if (func->getAttr("shared"))
       continue;
@@ -291,9 +293,6 @@ recordSizeAndCount(ModuleOp module, ConvOpHelper sharedHelper) {
       int64_t WHDiv =
           (currHelper.outWH + sharedHelper.outWH - 1) / sharedHelper.outWH;
       count += outChDiv * inChDiv * WHDiv * WHDiv;
-      totalComp += currHelper.batchSize * currHelper.outCh * currHelper.inCh *
-                   currHelper.outWH * currHelper.outWH * currHelper.kernelSize *
-                   currHelper.kernelSize;
     });
   }
 
@@ -331,9 +330,87 @@ static void dumpTilingOptions(
   csvFile->keep();
 }
 
+static void printTotalComputations(ModuleOp module) {
+  // Compute the number of times the shared function is called
+  int64_t totalComp = 0;
+  for (auto func : module.getOps<FuncOp>()) {
+    if (func->getAttr("shared"))
+      continue;
+
+    func.walk([&](tosa::Conv2DOp conv2DOp) {
+      ConvOpHelper currHelper = ConvOpHelper(conv2DOp);
+      auto comp = currHelper.batchSize * currHelper.outCh * currHelper.inCh *
+                  currHelper.outWH * currHelper.outWH * currHelper.kernelSize *
+                  currHelper.kernelSize * 2;
+      totalComp += comp;
+    });
+
+    func.walk([&](tosa::MatMulOp matmulOp) {
+      auto shape =
+          matmulOp.b().getType().dyn_cast<RankedTensorType>().getShape();
+      auto comp = 2;
+      for (auto dim : shape)
+        comp *= dim;
+      totalComp += comp;
+    });
+
+    func.walk([&](tosa::ClampOp clampOp) {
+      auto shape =
+          clampOp.input().getType().dyn_cast<RankedTensorType>().getShape();
+      auto comp = 1;
+      for (auto dim : shape)
+        comp *= dim;
+      totalComp += comp;
+    });
+
+    func.walk([&](tosa::AddOp addOp) {
+      auto shape =
+          addOp.input1().getType().dyn_cast<RankedTensorType>().getShape();
+      auto comp = 1;
+      for (auto dim : shape)
+        comp *= dim;
+      totalComp += comp;
+    });
+
+    func.walk([&](tosa::AddOp addOp) {
+      auto shape =
+          addOp.input1().getType().dyn_cast<RankedTensorType>().getShape();
+      auto comp = 1;
+      for (auto dim : shape)
+        comp *= dim;
+      totalComp += comp;
+    });
+
+    func.walk([&](tosa::MaxPool2dOp maxpoolOp) {
+      auto shape =
+          maxpoolOp.output().getType().dyn_cast<RankedTensorType>().getShape();
+      auto kernel = maxpoolOp.kernel()[0].dyn_cast<IntegerAttr>().getInt();
+      auto comp = kernel * kernel;
+      for (auto dim : shape)
+        comp *= dim;
+      totalComp += comp;
+    });
+
+    func.walk([&](tosa::AvgPool2dOp avgpoolOp) {
+      auto shape =
+          avgpoolOp.output().getType().dyn_cast<RankedTensorType>().getShape();
+      auto kernel = avgpoolOp.kernel()[0].dyn_cast<IntegerAttr>().getInt();
+      auto comp = kernel * kernel;
+      for (auto dim : shape)
+        comp *= dim;
+      totalComp += comp;
+    });
+  }
+  LLVM_DEBUG(llvm::dbgs() << "Number of total computations: " << totalComp
+                          << "\n";);
+}
+
 static bool applySharedTilingOptions(ModuleOp module, unsigned numTargets,
                                      StringRef outputPath) {
   auto builder = OpBuilder(module);
+
+  // Print the total number of computations
+  printTotalComputations(module);
 
   // Count the number of each shape of convolution.
   DenseMap<OpHelper, SmallVector<OpHelper *, 32>> countMap;
@@ -363,7 +440,7 @@ static bool applySharedTilingOptions(ModuleOp module, unsigned numTargets,
         maxCount = item.second.size();
       }
     }
-    if (maxCount == 0)
+    if (maxCount <= 0)
       break;
     else {
       if (auto convOpHelper = dyn_cast<ConvOpHelper>(opHelper)) {
