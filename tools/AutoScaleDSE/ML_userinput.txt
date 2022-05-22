@@ -17,8 +17,8 @@
 #target_source_file_location = ../../samples/polybench2/2mm.c
 #top_function = kernel_2mm
 
-target_source_file_location = ../../samples/polybench2/3mm.c
-top_function = kernel_3mm
+#target_source_file_location = ../../samples/polybench2/3mm.c
+#top_function = kernel_3mm
 
 #target_source_file_location = ../../samples/polybench2/atax.c
 #top_function = kernel_atax
@@ -35,6 +35,12 @@ top_function = kernel_3mm
 #target_source_file_location = ../../samples/polybench2/correlation.c
 #top_function = kernel_correlation
 
+#target_source_file_location = ../../samples/polybench2/cholesky.c
+#top_function = kernel_cholesky
+
+#target_source_file_location = ../../samples/polybench2/deriche.c
+#top_function = kernel_deriche
+
 ###################################################################################
 ##############################rosetta##############################################
 ###################################################################################
@@ -50,8 +56,15 @@ top_function = kernel_3mm
 ##############################MachSuit#############################################
 ###################################################################################
 
-#target_source_file_location = ../../samples/machsuite/backprop/backprop_inde.c
-#top_function = backprop
+target_source_file_location = ../../samples/machsuite/backprop/backprop_inde.c
+top_function = backprop
+
+###################################################################################
+##############################pylog################################################
+###################################################################################
+
+target_source_file_location = ../../samples/rodinia/streamcluster/compute.c
+top_function = compute
 
 ###################################################################################
 ##############################pylog################################################
@@ -64,8 +77,8 @@ top_function = kernel_3mm
 ##############################hardware-constraints#################################
 ###################################################################################
 
-part = xc7k70tfbv676-1
-#part = xc7z045-ffg900-2
+#part = xc7k70tfbv676-1
+part = xc7z045-ffg900-2
 
 # Extra file locations -> remove default keyword
 add_files default

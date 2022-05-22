@@ -13,6 +13,9 @@ import numpy as np
 import io
 import shutil
 import time
+import math
+
+from lib import DSEinputparse as INPAR
 
 import scalehls
 import mlir.ir
@@ -495,7 +498,16 @@ def combine_two_spaces(pareto_space_list, input1, input2):
         buffer_space1 = []
         # only combine pareto points
         if space1.iloc[i]['type'] == 'pareto':
-            for s1l in space1_looplables: #extract data from space 1
+
+            # get multiple of loop tiling stratergy
+            productoftiles_space1 = 1
+            for lcols in range(len(space1.iloc[i]) - 3):
+                if re.findall('l', space1.columns[lcols]):
+                    productoftiles_space1 *= int(space1.iloc[i][lcols])
+
+
+            #extract data from space 1
+            for s1l in space1_looplables: 
                 buffer_space1.append(space1.iloc[i][s1l])
             buffer_cycle = space1.iloc[i]["cycle"]
             buffer_dsp = space1.iloc[i]["dsp"]
@@ -503,15 +515,30 @@ def combine_two_spaces(pareto_space_list, input1, input2):
             for j in range(len(space2)):
                 row_buffer = []
                 if space2.iloc[j]['type'] == 'pareto':
-                    row_buffer = copy.deepcopy(buffer_space1) 
-                    for s2l in space2_looplables: #extract data from space 1
-                        row_buffer.append(space2.iloc[j][s2l])
-                    #copy combined cycle
-                    row_buffer.append(buffer_cycle + space2.iloc[j]["cycle"])
-                    row_buffer.append(buffer_dsp + space2.iloc[j]["dsp"])
-                    row_buffer.append("Null")
-                    row_deepcopy = copy.deepcopy(row_buffer)
-                    combinedbuffer.append(row_deepcopy)
+                    # get multiple of loop tiling stratergy
+                    productoftiles_space2 = 1
+                    for lcols in range(len(space2.iloc[j]) - 3): #-3 for cycle/dsp/pare
+                        if re.findall('l', space2.columns[lcols]):
+                            productoftiles_space2 *= int(space2.iloc[j][lcols])
+
+                    coprime_custom = False
+                    if math.gcd(productoftiles_space1, productoftiles_space2) in [1, 2]:
+                        coprime_custom = True
+
+                    if coprime_custom == False:
+                        row_buffer = copy.deepcopy(buffer_space1) 
+                        for s2l in space2_looplables: #extract data from space 1
+                            row_buffer.append(space2.iloc[j][s2l])
+                        #copy combined cycle
+                        row_buffer.append(buffer_cycle + space2.iloc[j]["cycle"])
+                        row_buffer.append(buffer_dsp + space2.iloc[j]["dsp"])
+                        row_buffer.append("Null")
+                        row_deepcopy = copy.deepcopy(row_buffer)
+                        combinedbuffer.append(row_deepcopy)
+                elif space2.iloc[j]['type'] == 'non-pareto':
+                    break
+        elif space1.iloc[i]['type'] == 'non-pareto':
+            break
 
     raw_combineddataspace = pd.DataFrame(combinedbuffer, columns=combined_columns)
     merge_ops = len(raw_combineddataspace)
@@ -798,6 +825,11 @@ def apply_loop_ops(dir, pattern, var_forlist, removed_function_calls, loop_tile_
             
             np_array = np.array(loop_tile_array[loopband_count])
             loc = scalehls.loop_tiling(band, np_array)
+            
+
+            # loc = len(loop_tile_array[loopband_count]) - 1
+            # print(loc)
+            # scalehls.loop_pipelining(band, loc, 1)      
 
             #keep track of number of loops
             pipeline_loc.append(loop_count + loc + 1)
@@ -812,6 +844,21 @@ def apply_loop_ops(dir, pattern, var_forlist, removed_function_calls, loop_tile_
 
         # Apply memory optimizations.
         scalehls.memory_opts(func)
+
+    # Write mlir
+    with open(input_dir + "/inter.mlir", "w") as f:
+        print(mod, file = f)
+    f.close()
+
+    # get auto array partition using command line
+    p1 = subprocess.Popen(['scalehls-opt', input_dir + '/inter.mlir', '-scalehls-func-preprocess=top-func=' + topfunction, '-scalehls-array-partition'], 
+                            stdout=subprocess.PIPE)
+    with open(input_dir + '/inter.cpp', 'wb') as fout:
+        subprocess.run(['scalehls-translate', '-emit-hlscpp'], stdin=p1.stdout, stdout=fout)
+
+    sdse_var_part = INPAR.read_sdse_arrpart(input_dir + '/inter.cpp', topfunction)
+    print("array part", topfunction)
+    print(sdse_var_part)   
     
     buf = io.StringIO()
     scalehls.emit_hlscpp(mod, buf)
@@ -903,7 +950,7 @@ def apply_loop_ops(dir, pattern, var_forlist, removed_function_calls, loop_tile_
                                     None
                                 elif re.findall(r'for', subline): #add pipeline pragma
                                     for_count += 1
-                                    if for_count in pipeline_loc:
+                                    if True and (for_count in pipeline_loc):
                                         newfile.write(subline)
                                         newfile.write("#pragma HLS pipeline\n")
                                     else:
@@ -974,99 +1021,106 @@ def graph_algorithm(tar_dir, dse_target, sortedarray, func_list, var_forlist, va
     initial_pspace = []
     for i in range(0, len(pareto_space_list)):
         # print(pareto_space_list[i][0])
+        # print(pareto_space_list[i][1])
         initial_pspace.append(pareto_space_list[i][0])
     print(initial_pspace)
 
-    # starting ROI
-    # todo: case for when starting ROI is not unique
-    print("\nStarting ROI")
-    number_of_ROI = 4
-    starting_ROI = []
-    sibling_ROI = -1
-    for i in range(len(sortedarray)):
+#####################################################################################ROI stuff
+    if False:
+        # starting ROI
+        # todo: case for when starting ROI is not unique
+        print("\nStarting ROI")
+        number_of_ROI = 4
+        starting_ROI = []
         sibling_ROI = -1
-        # cheak if ROIs are siblings
-        for j in range(len(starting_ROI)):
-            if sortedarray[i][0] == starting_ROI[j][0]:
-                sibling_ROI = j
-        # if first entry
-        if sibling_ROI == -1:
-            starting_ROI.append([sortedarray[i][0], "Loop" + str(sortedarray[i][1]), 1])
-        # if not first entry increase expansion factor by 1
-        else:
-            starting_ROI[j][2] = int(starting_ROI[j][2]) + 1
-        # number of ROIs
-        number_of_ROI -= 1
-        if number_of_ROI == 0:
-            break
-    print(starting_ROI)
+        for i in range(len(sortedarray)):
+            sibling_ROI = -1
+            # cheak if ROIs are siblings
+            for j in range(len(starting_ROI)):
+                if sortedarray[i][0] == starting_ROI[j][0]:
+                    sibling_ROI = j
+            # if first entry
+            if sibling_ROI == -1:
+                starting_ROI.append([sortedarray[i][0], "Loop" + str(sortedarray[i][1]), 1])
+            # if not first entry increase expansion factor by 1
+            else:
+                starting_ROI[j][2] = int(starting_ROI[j][2]) + 1
+            # number of ROIs
+            number_of_ROI -= 1
+            if number_of_ROI == 0:
+                break
+        print(starting_ROI)
 
-    # DFS traversal for master tree
-    mastertree = tree_list[-1]
-    DFS_list = [mastertree[node] for node in mastertree.expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
+        # DFS traversal for master tree
+        mastertree = tree_list[-1]
+        DFS_list = [mastertree[node] for node in mastertree.expand_tree(mode=treelib.Tree.DEPTH, sorting=False)]
 
-    # mark starting ROI
-    roi_count = 0
-    seed_roi = -1
-    starting_ROI_nodes = []
-    for node in DFS_list:
-        # cheak if node is seed roi
-        seed_roi = -1
-        for i in range(len(starting_ROI)):
-            if node.tag == starting_ROI[i][1]:
-                seed_roi = i
         # mark starting ROI
-        if seed_roi != -1:
-            # mark starting node with c
-            starting_ROI_nodes.append(node)
-            # node.data.group = str(roi_count) + "-c" + str(starting_ROI[seed_roi][2])
-            parent = mastertree.parent(node.identifier)
-            top_loop_count = get_UnmarkedNodeCount(mastertree, initial_pspace, parent)
-            parent.data.group = 'ROI' + str(roi_count) + '_EF' + str(starting_ROI[seed_roi][2]) + '_LC' + str(top_loop_count)   # Type(Name)_ExpansionFactor-UnmarkedNodeCount
-            # mark_subsequent_node(mastertree, node, roi_count)
-            roi_count += 1
-
-    # Expansion of ROIs
-    while_count = 0
-    while True:
+        roi_count = 0
+        seed_roi = -1
+        starting_ROI_nodes = []
         for node in DFS_list:
-            # start expansion from core node
-            if re.findall('(ROI)', node.data.group):
-                roi_ef = re.findall(r'_EF(\d+)_', node.data.group)
-                roi_ef = int(roi_ef[0]) #expansion factor              
-                progress, _ = expand_by_factor(mastertree, initial_pspace, node, roi_ef)
-        # break loop when finised
-        if progress == "Done":
-            break
-        # in case
-        if while_count > 1000:
-            print("Something is wrong, more than 1000 loops")
-        # print("\nwhile_count", i)
-        # mastertree.show(idhidden = True, data_property="group")
-        # isbreak = input("\n\nExpand\n")
-        while_count += 1
+            # cheak if node is seed roi
+            seed_roi = -1
+            for i in range(len(starting_ROI)):
+                if node.tag == starting_ROI[i][1]:
+                    seed_roi = i
+            # mark starting ROI
+            if seed_roi != -1:
+                # mark starting node with c
+                starting_ROI_nodes.append(node)
+                # node.data.group = str(roi_count) + "-c" + str(starting_ROI[seed_roi][2])
+                parent = mastertree.parent(node.identifier)
+                top_loop_count = get_UnmarkedNodeCount(mastertree, initial_pspace, parent)
+                parent.data.group = 'ROI' + str(roi_count) + '_EF' + str(starting_ROI[seed_roi][2]) + '_LC' + str(top_loop_count)   # Type(Name)_ExpansionFactor-UnmarkedNodeCount
+                # mark_subsequent_node(mastertree, node, roi_count)
+                roi_count += 1
 
-    print("\nFinal_Tree")
-    mastertree.show(idhidden = True, data_property="group")
+        # Expansion of ROIs
+        while_count = 0
+        while True:
+            for node in DFS_list:
+                # start expansion from core node
+                if re.findall('(ROI)', node.data.group):
+                    roi_ef = re.findall(r'_EF(\d+)_', node.data.group)
+                    roi_ef = int(roi_ef[0]) #expansion factor              
+                    progress, _ = expand_by_factor(mastertree, initial_pspace, node, roi_ef)
+            # break loop when finised
+            if progress == "Done":
+                break
+            # in case
+            if while_count > 1000:
+                print("Something is wrong, more than 1000 loops")
+            # print("\nwhile_count", i)
+            # mastertree.show(idhidden = True, data_property="group")
+            # isbreak = input("\n\nExpand\n")
+            while_count += 1
+
+        print("\nFinal_Tree")
+        mastertree.show(idhidden = True, data_property="group")
+
+#####################################################################################ROI stuff
 
     # Initial naive combination of individual spaces
-    # print("comb")
-    # merge_ops = 0    
-    # t0 = time.time()
-    # buffer, mo = combine_two_spaces(pareto_space_list, "Loop0", "Loop6")
-    # merge_ops += mo
-    # for i in range(2, len(pareto_space_list)):
-    #     print(pareto_space_list[i][0])
-    #     buffer, mo = combine_two_spaces(pareto_space_list, buffer, pareto_space_list[i][0])
-    #     merge_ops += mo
-    # t1 = time.time()
-    # buffer.to_csv(tar_dir + '/combspace.csv')
-    # total = t1-t0
-    # print("Time to execute naive merging", total, " merge opts:", merge_ops)
+    if False:
+        print("comb")
+        merge_ops = 0    
+        t0 = time.time()
+        buffer, mo = combine_two_spaces(pareto_space_list, "Loop0", "Loop1")
+        merge_ops += mo
+        for i in range(2, len(pareto_space_list)):
+            print(pareto_space_list[i][0])
+            buffer, mo = combine_two_spaces(pareto_space_list, buffer, pareto_space_list[i][0])
+            merge_ops += mo
+            # buffer.to_csv(tar_dir + '/buf.csv')
+        t1 = time.time()
+        buffer.to_csv(tar_dir + '/combspace.csv')
+        total = t1-t0
+        print("Time to execute naive merging", total, " merge opts:", merge_ops)
 
-    # pspace = pd.read_csv(tar_dir + '/combspace.csv', index_col=0)
+    pspace = pd.read_csv(tar_dir + '/combspace.csv', index_col=0)
 
-    # apply_p_point(tar_dir, tree_list, var_forlist, removed_function_calls, pspace, 500)
+    apply_p_point(tar_dir, tree_list, var_forlist, removed_function_calls, pspace, 360)
 
     return sdse_var_part_list
 

@@ -1,4 +1,6 @@
-#define SMALL_DATASET
+# include <math.h>
+
+#define MEDIUM_DATASET
 
 #ifdef MINI_DATASET
 #define N 40
@@ -36,7 +38,7 @@ void kernel_cholesky(int n, float A[N][N]) {
     for (k = 0; k < i; k++) {
       A[i][i] -= A[i][k] * A[i][k];
     }
-    A[i][i] = SQRT_FUN(A[i][i]);
+    A[i][i] = sqrtf(A[i][i]);
   }
 #pragma endscop
 }

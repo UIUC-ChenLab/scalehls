@@ -6,6 +6,29 @@ mlir-clang 3mm.c -function=kernel_3mm -S -memref-fullrank -raise-scf-to-affine |
 
 mlir-clang gemm.c -function=test_gemm -S -memref-fullrank -raise-scf-to-affine | scalehls-opt -debug-only=scalehls -scalehls-dse-pipeline="top-func=test_gemm target-spec=./config.json" | scalehls-translate -emit-hlscpp > gemm_dse.cpp
 
+mlir-clang 2mm.c -function=kernel_2mm -S -memref-fullrank -raise-scf-to-affine | scalehls-opt -debug-only=scalehls -scalehls-dse-pipeline="top-func=kernel_2mm target-spec=./config.json" | scalehls-translate -emit-hlscpp > 2mm_dse.cpp
+
+mlir-clang deriche.c -function=kernel_deriche -S -memref-fullrank -raise-scf-to-affine | scalehls-opt -debug-only=scalehls -scalehls-dse-pipeline="top-func=kernel_deriche target-spec=./config.json" | scalehls-translate -emit-hlscpp > deriche_dse.cpp
+
+mlir-clang update.c -function=update_weights -S -memref-fullrank -raise-scf-to-affine | scalehls-opt -debug-only=scalehls -scalehls-dse-pipeline="top-func=update_weights target-spec=./config.json" | scalehls-translate -emit-hlscpp > update_dse.cpp
+
+mlir-clang compute.c -function=compute -S -memref-fullrank -raise-scf-to-affine | scalehls-opt -debug-only=scalehls -scalehls-dse-pipeline="top-func=compute target-spec=./config.json" | scalehls-translate -emit-hlscpp > compute_dse.cpp
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 scalehls-opt in.mlir -scalehls-func-preprocess="top-func=kernel_3mm" -scalehls-array-partition | scalehls-translate -emit-hlscpp > 3mm_dse.cpp
 
 scalehls-opt 3mmopt.mlir -scalehls-func-preprocess="top-func=kernel_3mm"

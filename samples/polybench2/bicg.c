@@ -1,4 +1,4 @@
-#define MEDIUM_DATASET
+#define LARGE_DATASET
 
 #ifdef MINI_DATASET
 #define M 38
@@ -31,9 +31,8 @@ void kernel_bicg(int m, int n, float A[N][M], float s[M], float q[N],
   int i, j;
 
 #pragma scop
-  for (i = 0; i < M; i++) {
+  for (i = 0; i < M; i++)
     s[i] = 0;
-  }
   for (i = 0; i < N; i++) {
     q[i] = 0;
     for (j = 0; j < M; j++) {

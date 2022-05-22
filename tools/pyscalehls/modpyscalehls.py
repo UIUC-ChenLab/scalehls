@@ -5,7 +5,6 @@ import argparse
 import shutil
 import io
 from subprocess import PIPE, run
-import subprocess
 import scalehls
 import mlir.ir
 from mlir.dialects import func as func_dialect
@@ -76,19 +75,22 @@ def main():
             # Apply loop tiling. Tile sizes are defined from the outermost loop to the innermost.
             # Note: We use the trip count to generate this example "factors".
 
-            print("test")
             # factors = np.ones(band.depth, dtype=int)
             # list_ts = [[3, 8, 2], [1, 5, 14], [1, 4, 14]]
             # list_ts = [[1, 8, 10], [1, 2, 10], [1, 10, 10]]
-            list_ts = [[1, 5, 10], [1, 8, 14]]
+            # list_ts = [[1, 5, 10], [1, 10, 10]]
+            list_ts = [[30], [15, 10]]
             factors = np.array(list_ts[band_count])
-            print(factors)
+            print("tile", factors)
             loc = scalehls.loop_tiling(band, factors) # simplify = True
+
+            loc = len(list_ts[band_count]) - 1
+            print(loc)
 
             pipelineii = [1, 1]
 
             # Apply loop pipelining. All loops inside of the pipelined loop are fully unrolled.
-            scalehls.loop_pipelining(band, loc+1, pipelineii[band_count])  # targetII = 3
+            scalehls.loop_pipelining(band, loc, pipelineii[band_count])  # targetII = 3
 
             band_count += 1
 
@@ -128,13 +130,13 @@ def main():
         print(buf.read())
 
     with open('pyout.mlir', 'wb') as fout:
-        subprocess.run(['scalehls-opt', 'inter.mlir', '-scalehls-loop-pipelining','-scalehls-func-preprocess=top-func=kernel_3mm', '-scalehls-array-partition'], 
+        subprocess.run(['scalehls-opt', 'inter.mlir', '-scalehls-loop-pipelining','-scalehls-func-preprocess=top-func=kernel_2mm', '-scalehls-array-partition'], 
                             stdout=fout)
 
-    # p1 = subprocess.Popen(['scalehls-opt', 'inter.mlir', '-canonicalize','-scalehls-func-preprocess=top-func=kernel_3mm', '-scalehls-array-partition'], 
-    #                         stdout=subprocess.PIPE)
-    # with open('pyout.cpp', 'wb') as fout:
-    #     subprocess.run(['scalehls-translate', '-emit-hlscpp'], stdin=p1.stdout, stdout=fout)
+    p1 = subprocess.Popen(['scalehls-opt', 'inter.mlir', '-canonicalize','-scalehls-func-preprocess=top-func=kernel_2mm', '-scalehls-array-partition'], 
+                            stdout=subprocess.PIPE)
+    with open('pyout.cpp', 'wb') as fout:
+        subprocess.run(['scalehls-translate', '-emit-hlscpp'], stdin=p1.stdout, stdout=fout)
 
 
 

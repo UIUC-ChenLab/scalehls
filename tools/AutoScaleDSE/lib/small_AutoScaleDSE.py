@@ -227,8 +227,9 @@ def eval_p_point(pspace, opt_row_loc, part, topfunction, genfile = False):
 
     os.chdir(eval_dir)
 
-    results = run_hls.get_perf('template.txt', None, topfunction, part, None, 'eval', verbose=False, timelimit=1000)
-    print('Vivado Results:', "Latency", results['latency'], 'DSP_util:', results['dsp_perc'])
+    results = run_hls.get_perf('template.txt', None, topfunction, part, None, 'eval', verbose=False, timelimit=10000)
+    # print(results)
+    print('Vivado Results:', "Latency", results['latency'], 'DSP_util:', results['dsp_perc'])    
 
     os.chdir("../")
 
@@ -275,24 +276,27 @@ def apply_loop_ops_small(eval_dir, topfunction, tile_map, pipe_map):
             
             np_array = np.array(tile_map[loopband_count])
             loc = scalehls.loop_tiling(band, np_array)
+
+            loc = len(tile_map[loopband_count]) - 1
             
-            scalehls.loop_pipelining(band, loc+1, pipe_map[loopband_count])        
+            scalehls.loop_pipelining(band, loc, pipe_map[loopband_count])        
             
             loopband_count += 1
 
         # Apply memory optimizations.
         scalehls.memory_opts(func)
     
+    # buf = io.StringIO()    
+    # scalehls.emit_hlscpp(mod, buf)
+    # buf.seek(0)
+    # print(buf.read())
+
     # Write mlir
     with open(eval_dir + "/inter.mlir", "w") as f:
         print(mod, file = f)
     f.close()
 
-    # get auto array partition using command line
-    p1 = subprocess.Popen(['scalehls-opt', eval_dir + '/inter.mlir', '-scalehls-func-preprocess=top-func=' + topfunction, '-scalehls-array-partition'], 
-                            stdout=subprocess.PIPE)
-    with open(eval_dir + '/inter.cpp', 'wb') as fout:
-        subprocess.run(['scalehls-translate', '-emit-hlscpp'], stdin=p1.stdout, stdout=fout)
+
 
     # recover lost pipeline pragmas
     loopband_loc = 0
@@ -390,14 +394,13 @@ def scalehls_dse_top(dir, source_file, dsespec, part, inputtop):
         if oscillating:
             print('Vivado Point: Exit Oscillating')
             break
-
-        pspace_dsp_history.append(pspace_dsp)
+        
         opt_row_loc = opt_row_loc_buf
-
         result = eval_p_point(pspace, opt_row_loc, part, inputtop)
 
         # attempt at getting a better tiling stratergy
         if result['is_feasible'] == True:
+            pspace_dsp_history.append(pspace_dsp)
             valid_result_history.append((opt_row_loc, pspace_dsp, result))
             
             if result['dsp_perc'] >= 0.9:
@@ -413,7 +416,15 @@ def scalehls_dse_top(dir, source_file, dsespec, part, inputtop):
                 dsp_target = pspace_dsp * 0.9
             # new target is the arithmatic mean
             else:
-                dsp_target = (pspace_dsp + valid_result_history[-1][1]) / 2
+                if len(valid_result_history) > 0:
+                    dsp_target = (pspace_dsp + valid_result_history[-1][1]) / 2
+                else:
+                    dsp_target = pspace_dsp * 0.9
+
+    # write adse history
+    with open("adse_history.txt", "w") as f:
+        print(valid_result_history, file = f)
+    f.close()
 
     # get best
     min_laten = float('inf')
@@ -421,10 +432,15 @@ def scalehls_dse_top(dir, source_file, dsespec, part, inputtop):
     for i in range(len(valid_result_history)):
         lat = valid_result_history[i][2]['latency']
         if lat < min_laten:
+            min_laten = lat
             final_tile_opts = valid_result_history[i][0]
 
     eval_p_point(pspace, final_tile_opts, part, inputtop, genfile = True)
     shutil.copyfile("scalehls_dse_eval/tiled_target.cpp", '../Small_AScaleDSE_out.cpp')
     
     os.chdir("../..")
-    print("Finished Small_AScaleDSE DSE")
+    print("Finished Small_AScaleDSE DSE")    # get auto array partition using command line
+    p1 = subprocess.Popen(['scalehls-opt', eval_dir + '/inter.mlir', '-scalehls-func-preprocess=top-func=' + topfunction, '-scalehls-array-partition'], 
+                            stdout=subprocess.PIPE)
+    with open(eval_dir + '/inter.cpp', 'wb') as fout:
+        subprocess.run(['scalehls-translate', '-emit-hlscpp'], stdin=p1.stdout, stdout=fout)

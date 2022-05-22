@@ -107,7 +107,7 @@ def threaded_generate_random_training_set(parameter_file, directives_path, templ
         if (get_row(dataset, parameters).empty):
             break
 
-    new_design_point = run_hls.get_perf(template_path, directive_project_ident, top_function, part, parameters, project_ident, verbose=False, timelimit=1000)
+    new_design_point = run_hls.get_perf(template_path, directive_project_ident, top_function, part, parameters, project_ident, verbose=False, timelimit=10000)
 
     # remove the tcl file
     try:

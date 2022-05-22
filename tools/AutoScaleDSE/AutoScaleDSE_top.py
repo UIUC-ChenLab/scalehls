@@ -1,5 +1,4 @@
 #this assumes that input C file uses output from scalehls
-
 import os
 import shutil
 import pandas as pd
@@ -20,6 +19,9 @@ from lib import pyScaleHLS as PYSHLS
 from lib import DSE_main as DMain
 from lib import small_AutoScaleDSE as sASDSE
 from lib import large_AutoScaleDSE as DPAT
+
+import sys, importlib
+importlib.reload(sys.modules['lib'])
 
 def print_optknobs(opt_knobs, opt_knob_names):
     for i in range(len(opt_knobs) - 1):
@@ -181,8 +183,8 @@ def main():
         if((yn == "No") or (yn == "N") or (yn == "n")):
             None
         else:                
-            refactored_dseconfig = INPAR.preproccess(tar_dir, source_file, dse_target, inputtop)
-            sASDSE.scalehls_dse_top(tar_dir, source_file, refactored_dseconfig, inputpart, inputtop)
+            # refactored_dseconfig = INPAR.preproccess(tar_dir, source_file, dse_target, inputtop)
+            sASDSE.scalehls_dse_top(tar_dir, source_file, dse_target, inputpart, inputtop)
 
         # sdse_var_part = INPAR.read_sdse_arrpart(tar_dir + '/scalehls_dse_temp/' + 'ScaleHLS_DSE_out.cpp', inputtop)            
         func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, tar_dir + "/Small_AScaleDSE_out.cpp", "/ML_in.cpp", inputtop, sdse=True, sdse_arr=True)
@@ -205,22 +207,18 @@ def main():
             print(item)
         var_arraylist_sized, array_tree_list = INPAR.asdse_get_knobs(tar_dir + "/ML_in.cpp", inputtop, sdse_var_part_list)
         # array for only the top function
-        # print("\n Top function Arrays")
-        # print(var_arraylist_sized)
+        print("\n Top function Arrays")
+        print(var_arraylist_sized)
         var_forlist = []
     elif((val == "None") or (val == "N") or (val == "n")):
         func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list = INPAR.process_source_file(tar_dir, source_file, "/ML_in.cpp", inputtop)            
         sortedarray = sort_print_variables(func_list, var_forlist, var_arraylist_sized, var_forlist_scoped, tree_list)    
 
-###############################################################################################################    
-    isbreak = input("\n\nBreak\n")
-###############################################################################################################
-
     #create paramfile
     INPAR.create_params(tar_dir, var_forlist, var_arraylist_sized)
 
 ###############################################################################################################    
-    isbreak = input("\n\nBreak\n")
+    # isbreak = input("\n\EV_Start?\n")
 ###############################################################################################################
 
     #Create Random Training Set

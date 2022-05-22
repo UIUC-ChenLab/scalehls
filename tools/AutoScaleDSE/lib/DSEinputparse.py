@@ -371,6 +371,7 @@ def preproccess(tar_dir, source_file, dsespec, inputtop):
                             can_eval = True
                         else:
                             can_eval = False
+                            break
                     
                     if can_eval: # test if variable bound
                         forbound = str(eval(findbound))
@@ -381,12 +382,12 @@ def preproccess(tar_dir, source_file, dsespec, inputtop):
 
     max_loop_bound = -1
     for item in var_forlist :
-        if item[-1].isnumeric and max_loop_bound < int(item[-1]):
+        if item[-1].isnumeric() and max_loop_bound < int(item[-1]):
             max_loop_bound = int(item[-1]) 
 
     # unrolling loops beyond 256 leads to non-viable designs
-    if max_loop_bound > 256:
-        max_loop_bound = 256
+    if max_loop_bound > 128:
+        max_loop_bound = 128
 
     refactored_config = copy.deepcopy(dsespec) 
     refactored_config['max_init_parallel'] = int(max_loop_bound)
@@ -496,8 +497,8 @@ def process_source_file(dir, inputfile, outfile, topfun, sdse=False, sdse_arr=Fa
                     newfile.write(line)
                 else: 
                     None
-            elif(re.findall(r'using namespace std;', line)): #ignore #pragma
-                None
+            # elif(re.findall(r'using namespace std;', line)):
+            #     None
             # todo: temp measure -> implement using MLIR IR
             # change int32_t to int
             elif(re.findall('int32_t', line)):
@@ -534,6 +535,7 @@ def process_source_file(dir, inputfile, outfile, topfun, sdse=False, sdse_arr=Fa
                             can_eval = True
                         else:
                             can_eval = False
+                            break
                     
                     if can_eval: # test if variable bound
                         forbound = str(eval(findbound))

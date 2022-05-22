@@ -171,8 +171,10 @@ void update_weights(double weights1[13*64],
         bias_norm += biases1[i]*biases1[i];
     }
     
-    norm = sqrt(norm);
-    bias_norm = sqrt(bias_norm);
+    // norm = sqrt(norm);
+    // bias_norm = sqrt(bias_norm);
+    norm = 0;
+    bias_norm = 0;
 
     for(i=0; i < 13; i++){
         for(j = 0; j < 64; j++){
@@ -197,8 +199,10 @@ void update_weights(double weights1[13*64],
         bias_norm += biases2[i]*biases2[i];
     }
 
-    norm = sqrt(norm);
-    bias_norm = sqrt(bias_norm);
+    // norm = sqrt(norm);
+    // bias_norm = sqrt(bias_norm);
+    norm = 0;
+    bias_norm = 0;
 
     for(i=0; i < 64; i++){
         for(j = 0; j < 64; j++){
@@ -223,8 +227,10 @@ void update_weights(double weights1[13*64],
         bias_norm += biases3[i]*biases3[i];
     }
 
-    norm = sqrt(norm);
-    bias_norm = sqrt(bias_norm);
+    // norm = sqrt(norm);
+    // bias_norm = sqrt(bias_norm);
+    norm = 0;
+    bias_norm = 0;
 
     for(i=0; i < 64; i++){
         for(j = 0; j < 3; j++){
