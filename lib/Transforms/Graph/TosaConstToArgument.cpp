@@ -65,12 +65,19 @@ static bool applyTosaConstToArgument(ModuleOp module) {
     for (auto addOp : func.getOps<tosa::AddOp>()) {
       auto loc = addOp.getLoc();
 
-      tosa::TransposeOp transposeOp1 =
-          dyn_cast<tosa::TransposeOp>(addOp.input1().getDefiningOp());
-      tosa::TransposeOp transposeOp2 =
-          dyn_cast<tosa::TransposeOp>(addOp.input2().getDefiningOp());
-      tosa::ClampOp clampOp2 =
-          dyn_cast<tosa::ClampOp>(addOp.input2().getDefiningOp());
+      tosa::TransposeOp transposeOp1;
+      tosa::TransposeOp transposeOp2;
+      tosa::ClampOp clampOp2;
+      if (addOp.input1().getDefiningOp()) {
+        transposeOp1 =
+            dyn_cast<tosa::TransposeOp>(addOp.input1().getDefiningOp());
+      }
+      if (addOp.input2().getDefiningOp()) {
+        transposeOp2 =
+            dyn_cast<tosa::TransposeOp>(addOp.input2().getDefiningOp());
+        clampOp2 = dyn_cast<tosa::ClampOp>(addOp.input2().getDefiningOp());
+      }
+
       if (transposeOp1 && transposeOp2) {
         for (auto addUser : addOp.output().getUsers()) {
           if (auto clampOp = dyn_cast<tosa::ClampOp>(addUser)) {
