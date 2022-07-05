@@ -3,7 +3,7 @@
 #two = affine_map<(d0)[s0] -> (d0, d0 + s0)>
 #three = affine_map<(d0)[s0] -> (d0 - s0, d0, d0 + s0)>
 
-func @test_affine_for(%arg0: memref<16xindex>, %arg1: index) {
+func.func @test_affine_for(%arg0: memref<16xindex>, %arg1: index) {
   %c11 = arith.constant 11 : index
 
   // CHECK: for (int v2 = 0; v2 < min(v1, (v1 + 11)); v2 += 2) {
@@ -33,7 +33,7 @@ func @test_affine_for(%arg0: memref<16xindex>, %arg1: index) {
   return
 }
 
-func @test_affine_parallel(%arg0: memref<16xindex>) {
+func.func @test_affine_parallel(%arg0: memref<16xindex>) {
 
   // CHECK: int v8;
   // CHECK: int v9;

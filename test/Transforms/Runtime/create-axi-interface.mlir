@@ -1,8 +1,8 @@
 // RUN: scalehls-opt -scalehls-create-axi-interface %s | FileCheck %s
 
 module {
-  // CHECK: func @forward_dataflow2(%arg0: memref<1x1x1x64xi8, 3>, %arg1: !hls.stream<i1, 1>, %arg2: memref<1x64x10xi8, 3>, %arg3: memref<1x1x10xi8, 3>, %arg4: !hls.stream<i1, 1>) {
-  func @forward_dataflow2(%arg0: memref<1x1x1x64xi8>, %arg1: !hls.stream<i1, 1>, %arg2: memref<1x64x10xi8>, %arg3: memref<1x1x10xi8>, %arg4: !hls.stream<i1, 1>) {
+  // CHECK: func.func @forward_dataflow2(%arg0: memref<1x1x1x64xi8, 3>, %arg1: !hls.stream<i1, 1>, %arg2: memref<1x64x10xi8, 3>, %arg3: memref<1x1x10xi8, 3>, %arg4: !hls.stream<i1, 1>) {
+  func.func @forward_dataflow2(%arg0: memref<1x1x1x64xi8>, %arg1: !hls.stream<i1, 1>, %arg2: memref<1x64x10xi8>, %arg3: memref<1x1x10xi8>, %arg4: !hls.stream<i1, 1>) {
     %false = arith.constant false
     %c0_i8 = arith.constant 0 : i8
     "hls.stream.read"(%arg1) : (!hls.stream<i1, 1>) -> ()
@@ -21,8 +21,8 @@ module {
     return
   }
 
-  // CHECK: func @forward_dataflow3(%arg0: memref<1x32x32x64xi8, 3>, %arg1: !hls.stream<i1, 1>, %arg2: memref<1x1x1x64xi8, 3>, %arg3: !hls.stream<i1, 1>) {
-  func @forward_dataflow3(%arg0: memref<1x32x32x64xi8>, %arg1: !hls.stream<i1, 1>, %arg2: memref<1x1x1x64xi8>, %arg3: !hls.stream<i1, 1>) {
+  // CHECK: func.func @forward_dataflow3(%arg0: memref<1x32x32x64xi8, 3>, %arg1: !hls.stream<i1, 1>, %arg2: memref<1x1x1x64xi8, 3>, %arg3: !hls.stream<i1, 1>) {
+  func.func @forward_dataflow3(%arg0: memref<1x32x32x64xi8>, %arg1: !hls.stream<i1, 1>, %arg2: memref<1x1x1x64xi8>, %arg3: !hls.stream<i1, 1>) {
     %false = arith.constant false
     %c127_i32 = arith.constant 127 : i32
     %c-128_i32 = arith.constant -128 : i32
@@ -60,8 +60,8 @@ module {
     return
   }
 
-  // CHECK: func @forward(%arg0: memref<1x32x32x64xi8, 3>, %arg1: memref<1x64x10xi8, 3>, %arg2: memref<1x1x1x64xi8, 3>, %arg3: memref<1x1x10xi8, 3>) attributes {top_func} {
-  func @forward(%arg0: memref<1x32x32x64xi8>, %arg4: memref<1x64x10xi8>) attributes {top_func} {
+  // CHECK: func.func @forward(%arg0: memref<1x32x32x64xi8, 3>, %arg1: memref<1x64x10xi8, 3>, %arg2: memref<1x1x1x64xi8, 3>, %arg3: memref<1x1x10xi8, 3>) attributes {top_func} {
+  func.func @forward(%arg0: memref<1x32x32x64xi8>, %arg4: memref<1x64x10xi8>) attributes {top_func} {
     %9 = "hls.stream.channel"() : () -> !hls.stream<i1, 1>
 
     // CHECK-NOT: memref.alloc() : memref<1x1x1x64xi8>
@@ -80,8 +80,8 @@ module {
     return
   }
 
-  // CHECK: func @main(%arg0: memref<1x32x32x64xi8, 3>) attributes {runtime} {
-  func @main(%arg0: memref<1x32x32x64xi8>) attributes {runtime} {
+  // CHECK: func.func @main(%arg0: memref<1x32x32x64xi8, 3>) attributes {runtime} {
+  func.func @main(%arg0: memref<1x32x32x64xi8>) attributes {runtime} {
     %cst_2 = arith.constant dense<1> : tensor<1x64x10xi8>
     %3 = bufferization.to_memref %cst_2 : memref<1x64x10xi8>
 

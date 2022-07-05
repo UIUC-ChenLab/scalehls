@@ -7,12 +7,17 @@
 #ifndef SCALEHLS_INITALLDIALECTS_H
 #define SCALEHLS_INITALLDIALECTS_H
 
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/DLTI/DLTI.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/Math/IR/Math.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "scalehls/Dialect/HLS/HLS.h"
@@ -26,6 +31,7 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
   registry.insert<
     mlir::func::FuncDialect,
     mlir::tosa::TosaDialect,
+    mlir::tensor::TensorDialect,
     mlir::linalg::LinalgDialect,
     mlir::memref::MemRefDialect,
     mlir::bufferization::BufferizationDialect,

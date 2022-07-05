@@ -14,7 +14,7 @@ using namespace scalehls;
 
 // The difference between this pass and built-in memref-dataflow-opt is this
 // pass support to forward the StoreOps that are conditionally executed.
-static bool applyAffineStoreForward(FuncOp func) {
+static bool applyAffineStoreForward(func::FuncOp func) {
   SmallPtrSet<Operation *, 16> opsToErase;
 
   MemAccessesMap memAccessesMap;

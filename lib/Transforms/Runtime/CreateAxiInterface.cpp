@@ -4,8 +4,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
@@ -78,7 +76,7 @@ struct CreateAxiInterface
 
       for (auto &use : llvm::make_early_inc_range(op.getUses())) {
         if (auto subCall = dyn_cast<func::CallOp>(use.getOwner())) {
-          auto arg = module.lookupSymbol<FuncOp>(subCall.getCallee())
+          auto arg = module.lookupSymbol<func::FuncOp>(subCall.getCallee())
                          .getArgument(use.getOperandNumber());
 
           auto readFlag = llvm::any_of(arg.getUsers(), [](Operation *op) {

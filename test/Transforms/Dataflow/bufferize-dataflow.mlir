@@ -1,7 +1,7 @@
 // RUN: scalehls-opt -scalehls-bufferize-dataflow %s | FileCheck %s
 
 module {
-  func @forward() -> tensor<1x32x32x64xi8> attributes {top_func} {
+  func.func @forward() -> tensor<1x32x32x64xi8> attributes {top_func} {
     // CHECK: %false = arith.constant false
     // CHECK: %0:2 = hls.dataflow.node() -> memref<1x32x32x64xi8>, !hls.stream<i1, 1> {
     // CHECK:   %3 = memref.alloc() {alignment = 128 : i64} : memref<1x32x32x64xi8>

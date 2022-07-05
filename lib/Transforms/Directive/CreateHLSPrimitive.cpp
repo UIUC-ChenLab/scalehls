@@ -4,10 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "scalehls/Dialect/HLS/HLS.h"
 #include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
@@ -79,11 +76,11 @@ struct MulOpRewritePattern : public OpRewritePattern<arith::MulIOp> {
 
     auto lhs = mul.getLhs();
     if (auto broadcast = lhs.getDefiningOp<vector::BroadcastOp>())
-      lhs = broadcast.source();
+      lhs = broadcast.getSource();
 
     auto rhs = mul.getRhs();
     if (auto broadcast = rhs.getDefiningOp<vector::BroadcastOp>())
-      rhs = broadcast.source();
+      rhs = broadcast.getSource();
 
     // Replace the original op with multiplication primitive op.
     auto loc = mul.getLoc();

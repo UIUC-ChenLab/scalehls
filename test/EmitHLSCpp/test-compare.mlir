@@ -1,6 +1,6 @@
 // RUN: scalehls-translate -emit-hlscpp %s | FileCheck %s
 
-func @test_integer_compare(%arg0: i32, %arg1: i32) -> i1 {
+func.func @test_integer_compare(%arg0: i32, %arg1: i32) -> i1 {
 
   // CHECK: bool [[VAL_0:.*]] = [[ARG_0:.*]] == [[ARG_1:.*]];
   %0 = arith.cmpi "eq", %arg0, %arg1 : i32
@@ -25,7 +25,7 @@ func @test_integer_compare(%arg0: i32, %arg1: i32) -> i1 {
   return %9 : i1
 }
 
-func @test_float_compare(%arg0: f32, %arg1: f32) -> i1 {
+func.func @test_float_compare(%arg0: f32, %arg1: f32) -> i1 {
 
   // CHECK: bool [[VAL_0:.*]] = [[ARG_0:.*]] == [[ARG_1:.*]];
   %0 = arith.cmpf "oeq", %arg0, %arg1 : f32

@@ -271,7 +271,7 @@ int64_t ScaleHLSEstimator::getResMinII(int64_t begin, int64_t end,
 }
 
 /// Calculate the minimum dependency II of function.
-int64_t ScaleHLSEstimator::getDepMinII(int64_t II, FuncOp func,
+int64_t ScaleHLSEstimator::getDepMinII(int64_t II, func::FuncOp func,
                                        MemAccessesMap &map) {
   for (auto &pair : map) {
     auto loadStores = pair.second;
@@ -564,7 +564,7 @@ bool ScaleHLSEstimator::visitOp(scf::IfOp op, int64_t begin) {
 
 bool ScaleHLSEstimator::visitOp(func::CallOp op, int64_t begin) {
   auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCalleeAttr());
-  auto subFunc = dyn_cast<FuncOp>(callee);
+  auto subFunc = dyn_cast<func::FuncOp>(callee);
   assert(subFunc && "callable is not a function operation");
 
   ScaleHLSEstimator estimator(latencyMap, dspUsageMap, depAnalysis);
@@ -747,15 +747,15 @@ TimingAttr ScaleHLSEstimator::estimateBlock(Block &block, int64_t begin) {
                          blockEnd - blockBegin);
 }
 
-/// Get the innermost surrounding operation, either an AffineForOp or a FuncOp.
-/// In this method, AffineIfOp is transparent as well.
+/// Get the innermost surrounding operation, either an AffineForOp or a
+/// func::FuncOp. In this method, AffineIfOp is transparent as well.
 static Operation *getSurroundingOp(Operation *op) {
   auto currentOp = op;
   while (true) {
     auto parentOp = currentOp->getParentOp();
     if (isa<AffineIfOp, scf::IfOp>(parentOp))
       currentOp = parentOp;
-    else if (isa<AffineForOp, FuncOp>(parentOp))
+    else if (isa<AffineForOp, func::FuncOp>(parentOp))
       return parentOp;
     else
       return nullptr;
@@ -786,7 +786,7 @@ void ScaleHLSEstimator::reverseTiming(Block &block) {
             if (srdDirect.getFlatten())
               setTiming(op, srdBegin, srdBegin + latency, latency, interval);
           }
-        } else if (isa<FuncOp>(srd)) {
+        } else if (isa<func::FuncOp>(srd)) {
           auto srdLatency = getTiming(srd).getLatency() - 2;
           setTiming(op, srdLatency - end, srdLatency - begin, latency,
                     interval);
@@ -863,7 +863,7 @@ ResourceAttr ScaleHLSEstimator::calculateResource(Operation *funcOrLoop) {
   return ResourceAttr::get(funcOrLoop->getContext(), 0, dspNum, bramNum);
 }
 
-void ScaleHLSEstimator::estimateFunc(FuncOp func) {
+void ScaleHLSEstimator::estimateFunc(func::FuncOp func) {
   initEstimator(func.front());
   DT = DominanceInfo(func);
 
@@ -907,11 +907,11 @@ void ScaleHLSEstimator::estimateFunc(FuncOp func) {
   // Scheduled levels of all operations are reversed in this method, because
   // we have done the ALAP scheduling in a reverse order. Note that after
   // the reverse, the annotated scheduling level of each operation is a
-  // relative level of the nearest surrounding AffineForOp or FuncOp.
+  // relative level of the nearest surrounding AffineForOp or func::FuncOp.
   reverseTiming(func.front());
 }
 
-void ScaleHLSEstimator::estimateLoop(AffineForOp loop, FuncOp func) {
+void ScaleHLSEstimator::estimateLoop(AffineForOp loop, func::FuncOp func) {
   initEstimator(func.getBody().front());
   DT = DominanceInfo(loop);
   visitOp(loop, 0);
@@ -984,7 +984,7 @@ struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
     // Estimate performance and resource utilization. If any other functions are
     // called by the top function, it will be estimated in the procedure of
     // estimating the top function.
-    for (auto func : module.getOps<FuncOp>())
+    for (auto func : module.getOps<func::FuncOp>())
       if (hasTopFuncAttr(func))
         ScaleHLSEstimator(latencyMap, dspUsageMap, true).estimateFunc(func);
   }

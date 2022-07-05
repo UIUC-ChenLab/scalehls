@@ -1,7 +1,7 @@
 // RUN: scalehls-opt -buffer-loop-hoisting -scalehls-affine-loop-perfection %s | FileCheck %s
 
 module {
-  func @test_perfection(%arg0: f32, %arg1: f32, %arg2: memref<32x32xf32>, %arg3: memref<32x32xf32>, %arg4: memref<32x32xf32>) {
+  func.func @test_perfection(%arg0: f32, %arg1: f32, %arg2: memref<32x32xf32>, %arg3: memref<32x32xf32>, %arg4: memref<32x32xf32>) {
 
     // CHECK: %0 = memref.alloc() : memref<2xf32>
     // CHECK: %1 = memref.alloc() : memref<1xf32>

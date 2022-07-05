@@ -4,7 +4,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
@@ -32,8 +31,8 @@ struct CreateRuntimeMain : public CreateRuntimeMainBase<CreateRuntimeMain> {
     // Create the main function of runtime.
     // FIXME: Make sure there's no function called "main" already.
     builder.setInsertionPointAfter(func);
-    auto mainFunc = builder.create<FuncOp>(builder.getUnknownLoc(), "main",
-                                           func.getFunctionType());
+    auto mainFunc = builder.create<func::FuncOp>(
+        builder.getUnknownLoc(), "main", func.getFunctionType());
     setRuntimeAttr(mainFunc);
     auto entry = mainFunc.addEntryBlock();
 

@@ -72,7 +72,7 @@ static void emitTileListDebugInfo(TileList tileList) {
              });
 }
 
-LoopDesignSpace::LoopDesignSpace(FuncOp func, AffineLoopBand &band,
+LoopDesignSpace::LoopDesignSpace(func::FuncOp func, AffineLoopBand &band,
                                  ScaleHLSEstimator &estimator,
                                  unsigned maxDspNum, unsigned maxExplParallel,
                                  unsigned maxLoopParallel, bool directiveOnly)
@@ -555,7 +555,8 @@ bool FuncDesignSpace::exportParetoDesigns(unsigned outputNum,
 // Explorer Class Definition
 //===----------------------------------------------------------------------===//
 
-bool ScaleHLSExplorer::emitQoRDebugInfo(FuncOp func, std::string message) {
+bool ScaleHLSExplorer::emitQoRDebugInfo(func::FuncOp func,
+                                        std::string message) {
   estimator.estimateFunc(func);
   // auto latency = getTiming(func).getLatency();
   auto dspNum = getResource(func).getDsp();
@@ -582,7 +583,7 @@ static int64_t getInnerParallelism(Block &block) {
   return std::max(count, (int64_t)1);
 }
 
-bool ScaleHLSExplorer::evaluateFuncPipeline(FuncOp func) { return true; }
+bool ScaleHLSExplorer::evaluateFuncPipeline(func::FuncOp func) { return true; }
 
 /// DSE Stage1: Simplify loop nests by unrolling. If we take the following loops
 /// as example, where each nodes represents one sequential loop nests (LN). In
@@ -616,7 +617,7 @@ bool ScaleHLSExplorer::evaluateFuncPipeline(FuncOp func) { return true; }
 ///   LN2 LN5
 ///
 /// TODO: there is a large design space in this simplification.
-bool ScaleHLSExplorer::simplifyLoopNests(FuncOp func) {
+bool ScaleHLSExplorer::simplifyLoopNests(func::FuncOp func) {
   LLVM_DEBUG(llvm::dbgs()
                  << "----------\nStage1: Simplify loop nests structure...\n";);
 
@@ -696,7 +697,8 @@ bool ScaleHLSExplorer::simplifyLoopNests(FuncOp func) {
 /// will be applied to each leaf LNs, and the best one which meets the resource
 /// constraints will be picked as the final solution.
 /// TODO: better handle variable bound kernels.
-bool ScaleHLSExplorer::optimizeLoopBands(FuncOp func, bool directiveOnly) {
+bool ScaleHLSExplorer::optimizeLoopBands(func::FuncOp func,
+                                         bool directiveOnly) {
   LLVM_DEBUG(llvm::dbgs() << "----------\nStage2: Apply loop perfection, loop "
                              "order opt, and remove variable loop bound...\n";);
 
@@ -722,7 +724,7 @@ bool ScaleHLSExplorer::optimizeLoopBands(FuncOp func, bool directiveOnly) {
 }
 
 /// DSE Stage3: Explore the function design space through dynamic programming.
-bool ScaleHLSExplorer::exploreDesignSpace(FuncOp func, bool directiveOnly,
+bool ScaleHLSExplorer::exploreDesignSpace(func::FuncOp func, bool directiveOnly,
                                           StringRef outputRootPath,
                                           StringRef csvRootPath) {
   LLVM_DEBUG(llvm::dbgs() << "----------\nStage3: Conduct top function design "
@@ -801,7 +803,8 @@ bool ScaleHLSExplorer::exploreDesignSpace(FuncOp func, bool directiveOnly,
 //===----------------------------------------------------------------------===//
 
 /// This is a temporary approach that does not scale.
-void ScaleHLSExplorer::applyDesignSpaceExplore(FuncOp func, bool directiveOnly,
+void ScaleHLSExplorer::applyDesignSpaceExplore(func::FuncOp func,
+                                               bool directiveOnly,
                                                StringRef outputRootPath,
                                                StringRef csvRootPath) {
   emitQoRDebugInfo(func, "Start multiple level DSE.");
@@ -891,7 +894,7 @@ struct DesignSpaceExplore : public DesignSpaceExploreBase<DesignSpaceExplore> {
 
     // Optimize the top function.
     // TODO: Support to contain sub-functions.
-    for (auto func : module.getOps<FuncOp>()) {
+    for (auto func : module.getOps<func::FuncOp>()) {
       if (hasTopFuncAttr(func))
         explorer.applyDesignSpaceExplore(func, directiveOnly, outputPath,
                                          csvPath);

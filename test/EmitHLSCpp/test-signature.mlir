@@ -28,7 +28,7 @@
 // CHECK:   int32_t [[VAL_24:.*]][16][8],
 // CHECK:   int32_t [[VAL_25:.*]][16]
 // CHECK: ) {
-func @test_signature(
+func.func @test_signature(
   %arg0: f32, %arg1: f64, %arg2: index, %arg3: i1, %arg4: i11, %arg5: i32, %arg6: ui32,
   %arg7: memref<16x8xf32>, %arg8: tensor<16x8xf32>, %arg9: vector<16xf32>,
   %arg10: memref<16x8xi32>, %arg11: tensor<16x8xi32>, %arg12: vector<16xi32>

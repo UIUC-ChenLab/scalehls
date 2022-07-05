@@ -1,8 +1,8 @@
 // RUN: scalehls-opt -scalehls-tosa-simplify-graph %s | FileCheck %s
 
 module {
-  // CHECK: func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> {
-  func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> {
+  // CHECK: func.func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> {
+  func.func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> {
     %0 = "tosa.const"() {value = dense<0> : tensor<1x10xi8>} : () -> tensor<1x10xi8>
     %1 = "tosa.const"() {value = dense<1> : tensor<1x64x10xi8>} : () -> tensor<1x64x10xi8>
     %2 = "tosa.const"() {value = dense<2> : tensor<64x3x3x64xi8>} : () -> tensor<64x3x3x64xi8>

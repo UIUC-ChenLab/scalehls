@@ -1,6 +1,6 @@
 // RUN: scalehls-translate -emit-hlscpp %s | FileCheck %s
 
-func @test_scf_if(%arg0: index, %arg1: memref<16xindex>) {
+func.func @test_scf_if(%arg0: index, %arg1: memref<16xindex>) {
   %c11 = arith.constant 11 : index
   %c0 = arith.constant 0 : index
 

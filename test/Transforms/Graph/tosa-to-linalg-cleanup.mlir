@@ -5,7 +5,7 @@
 // CHECK: #map2 = affine_map<(d0) -> (0, 0, d0)>
 // CHECK: #map3 = affine_map<(d0) -> (0, d0)>
 
-func @forward_node2(%arg0: tensor<1x32x32x64xi8>) -> tensor<1x34x34x64xi8> {
+func.func @forward_node2(%arg0: tensor<1x32x32x64xi8>) -> tensor<1x34x34x64xi8> {
   // CHECK: %0 = linalg.init_tensor [1, 34, 34, 64] : tensor<1x34x34x64xi8>
   // CHECK: %1 = linalg.fill ins(%c0_i8 : i8) outs(%0 : tensor<1x34x34x64xi8>) -> tensor<1x34x34x64xi8> 
   // CHECK: %2 = linalg.generic {indexing_maps = [#map0, #map1], iterator_types = ["parallel", "parallel", "parallel", "parallel"]} ins(%arg0 : tensor<1x32x32x64xi8>) outs(%1 : tensor<1x34x34x64xi8>) {
@@ -20,7 +20,7 @@ func @forward_node2(%arg0: tensor<1x32x32x64xi8>) -> tensor<1x34x34x64xi8> {
   return %0 : tensor<1x34x34x64xi8>
 }
 
-func @forward_node6(%arg0: tensor<1x1x10xi8>) -> tensor<1x10xi8> {
+func.func @forward_node6(%arg0: tensor<1x1x10xi8>) -> tensor<1x10xi8> {
   // CHECK: %0 = linalg.init_tensor [1, 10] : tensor<1x10xi8>
   // CHECK: %1 = linalg.generic {indexing_maps = [#map2, #map3], iterator_types = ["parallel"]} ins(%arg0 : tensor<1x1x10xi8>) outs(%0 : tensor<1x10xi8>) {
   // CHECK: ^bb0(%arg1: i8, %arg2: i8):

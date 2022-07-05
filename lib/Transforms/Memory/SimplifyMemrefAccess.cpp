@@ -10,7 +10,7 @@
 using namespace mlir;
 using namespace scalehls;
 
-static bool applySimplifyMemrefAccess(FuncOp func) {
+static bool applySimplifyMemrefAccess(func::FuncOp func) {
   SmallPtrSet<Operation *, 16> opsToErase;
 
   MemAccessesMap memAccessesMap;

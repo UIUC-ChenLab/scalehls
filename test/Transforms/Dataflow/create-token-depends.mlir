@@ -1,8 +1,8 @@
 // RUN: scalehls-opt -scalehls-create-token-depends -canonicalize %s | FileCheck %s
 
 module {
-  // CHECK: func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> {
-  func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> {
+  // CHECK: func.func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> {
+  func.func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> {
 
     // CHECK: %7:2 = hls.dataflow.node() -> tensor<1x32x32x64xi8>, i1 {
     // CHECK:   %18 = "hls.dataflow.source"() : () -> i1

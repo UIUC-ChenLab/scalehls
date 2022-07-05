@@ -1,6 +1,6 @@
 // RUN: scalehls-translate -emit-hlscpp %s | FileCheck %s
 
-func @test_integer_binary(%arg0: i32, %arg1: i32) -> i32 {
+func.func @test_integer_binary(%arg0: i32, %arg1: i32) -> i32 {
 
   // CHECK: int32_t [[VAL_0:.*]] = [[ARG_0:.*]] + [[ARG_1:.*]];
   %0 = arith.addi %arg0, %arg1 : i32
@@ -37,7 +37,7 @@ func @test_integer_binary(%arg0: i32, %arg1: i32) -> i32 {
   return %14 : i32
 }
 
-func @test_float_binary_unary(%arg0: f32, %arg1: f32) -> f32 {
+func.func @test_float_binary_unary(%arg0: f32, %arg1: f32) -> f32 {
 
   // CHECK: float [[VAL_0:.*]] = [[ARG_0:.*]] + [[ARG_1:.*]];
   %0 = arith.addf %arg0, %arg1 : f32
@@ -85,7 +85,7 @@ func @test_float_binary_unary(%arg0: f32, %arg1: f32) -> f32 {
   return %19 : f32
 }
 
-func @test_special_expr(%arg0: i1, %arg1: index, %arg2: index) -> index {
+func.func @test_special_expr(%arg0: i1, %arg1: index, %arg2: index) -> index {
 
   // CHECK: int [[VAL_0:.*]] = [[ARG_0:.*]] ? [[ARG_1:.*]] : [[ARG_2:.*]];
   %0 = arith.select %arg0, %arg1, %arg2 : i1, index

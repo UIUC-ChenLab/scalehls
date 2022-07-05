@@ -4,7 +4,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -29,7 +28,8 @@ static void createBufferAndCopy(MemRefType type, Value memref,
   });
 
   // Allocate an on-chip buffer and replace all its uses.
-  assert((readFlag || writeFlag) && "found unused memref");
+  if (!readFlag && !writeFlag)
+    return;
   auto buf = builder.create<memref::AllocOp>(loc, bufType);
   memref.replaceAllUsesWith(buf);
 

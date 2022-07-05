@@ -4,8 +4,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
@@ -13,10 +11,10 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
-static void updateSubFuncs(FuncOp func, Builder builder) {
+static void updateSubFuncs(func::FuncOp func, Builder builder) {
   func.walk([&](func::CallOp op) {
     auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCalleeAttr());
-    auto subFunc = dyn_cast<FuncOp>(callee);
+    auto subFunc = dyn_cast<func::FuncOp>(callee);
 
     // Set sub-function type.
     auto subResultTypes = op.getResultTypes();
@@ -92,7 +90,8 @@ bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
   array.setType(newType);
 
   if (updateFuncSignature)
-    if (auto func = dyn_cast<FuncOp>(array.getParentBlock()->getParentOp())) {
+    if (auto func =
+            dyn_cast<func::FuncOp>(array.getParentBlock()->getParentOp())) {
       // Align function type with entry block argument types only if the array
       // is defined as an argument of the function.
       if (!array.getDefiningOp()) {
@@ -138,12 +137,12 @@ static AffineValueMap getAffineValueMap(Operation *op) {
     map = storeOp.getAffineMap();
 
   } else if (auto readOp = dyn_cast<vector::TransferReadOp>(op)) {
-    operands = readOp.indices();
+    operands = readOp.getIndices();
     map = getIdentityAffineMap(operands, readOp.getShapedType().getRank(),
                                readOp.getContext());
   } else {
     auto writeOp = cast<vector::TransferWriteOp>(op);
-    operands = writeOp.indices();
+    operands = writeOp.getIndices();
     map = getIdentityAffineMap(operands, writeOp.getShapedType().getRank(),
                                writeOp.getContext());
   }
@@ -164,10 +163,10 @@ getDimAccessMaps(Operation *op, AffineValueMap valueMap, int64_t dim) {
   AffineMap permuteMap;
   ArrayRef<int64_t> vectorShape;
   if (auto readOp = dyn_cast<vector::TransferReadOp>(op)) {
-    permuteMap = readOp.permutation_map();
+    permuteMap = readOp.getPermutationMap();
     vectorShape = readOp.getVectorType().getShape();
   } else if (auto writeOp = dyn_cast<vector::TransferWriteOp>(op)) {
-    permuteMap = writeOp.permutation_map();
+    permuteMap = writeOp.getPermutationMap();
     vectorShape = writeOp.getVectorType().getShape();
   }
 
@@ -196,7 +195,7 @@ getDimAccessMaps(Operation *op, AffineValueMap valueMap, int64_t dim) {
 
 /// Find the suitable array partition factors and kinds for all arrays in the
 /// targeted function.
-bool scalehls::applyAutoArrayPartition(FuncOp func) {
+bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
   // Check whether the input function is pipelined.
   bool funcPipeline = false;
   if (auto attr = getFuncDirective(func))
@@ -347,7 +346,7 @@ bool scalehls::applyAutoArrayPartition(FuncOp func) {
   // the "partitionsMap".
   func.walk([&](func::CallOp op) {
     auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCalleeAttr());
-    auto subFunc = dyn_cast<FuncOp>(callee);
+    auto subFunc = dyn_cast<func::FuncOp>(callee);
     assert(subFunc && "callable is not a function operation");
 
     // Apply array partition to the sub-function.
@@ -425,8 +424,8 @@ struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
 
     // Get the top function.
     // FIXME: A better solution to handle the runtime main function.
-    FuncOp topFunc;
-    for (auto func : module.getOps<FuncOp>()) {
+    func::FuncOp topFunc;
+    for (auto func : module.getOps<func::FuncOp>()) {
       if (hasRuntimeAttr(func)) {
         topFunc = func;
         break;

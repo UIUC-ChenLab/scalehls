@@ -1,8 +1,8 @@
 // RUN: scalehls-opt -scalehls-tosa-fake-quantize %s | FileCheck %s
 
 module {
-  // CHECK: func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> {
-  func @forward(%arg0: tensor<1x3x32x32xf32>) -> tensor<1x10xf32> {
+  // CHECK: func.func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> {
+  func.func @forward(%arg0: tensor<1x3x32x32xf32>) -> tensor<1x10xf32> {
 
     // CHECK: %0 = "tosa.const"() {value = dense<1> : tensor<1x10xi8>} : () -> tensor<1x10xi8>
     // CHECK: %1 = "tosa.const"() {value = dense<2> : tensor<1x64x10xi8>} : () -> tensor<1x64x10xi8>

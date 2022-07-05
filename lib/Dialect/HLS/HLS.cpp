@@ -52,13 +52,13 @@ void hls::getStreamChannelUsers(Value channel,
   for (auto &use : channel.getUses()) {
     auto user = use.getOwner();
     if (auto call = dyn_cast<func::CallOp>(user)) {
-      auto func = SymbolTable::lookupNearestSymbolFrom<FuncOp>(
+      auto func = SymbolTable::lookupNearestSymbolFrom<func::FuncOp>(
           call, call.getCalleeAttr());
       if (!func.isPrivate())
         getStreamChannelUsers(func.getArgument(use.getOperandNumber()), users);
 
     } else if (auto returnOp = dyn_cast<func::ReturnOp>(user)) {
-      auto func = returnOp->getParentOfType<FuncOp>();
+      auto func = returnOp->getParentOfType<func::FuncOp>();
       auto symbolUses = func.getSymbolUses(func->getParentOfType<ModuleOp>());
       if (!symbolUses.hasValue())
         continue;

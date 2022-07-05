@@ -1,6 +1,6 @@
 // RUN: scalehls-opt -scalehls-func-preprocess %s | scalehls-translate -emit-hlscpp | FileCheck %s
 
-func @test_constant(%arg0: i32) -> (i32, tensor<2x2xi32>, tensor<2x2xf32>, tensor<2x2xi1>, vector<2xi32>, vector<2xf32>, vector<2xi1>, i32) {
+func.func @test_constant(%arg0: i32) -> (i32, tensor<2x2xi32>, tensor<2x2xf32>, tensor<2x2xi1>, vector<2xi32>, vector<2xf32>, vector<2xi1>, i32) {
 
   // CHECK: int32_t [[VAL_0:.*]][2][2] = {11, 0, 0, -42};
   %0 = arith.constant dense<[[11, 0], [0, -42]]> : tensor<2x2xi32>

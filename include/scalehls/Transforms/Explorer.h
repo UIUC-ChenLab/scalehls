@@ -35,7 +35,7 @@ struct LoopDesignPoint {
 
 class LoopDesignSpace {
 public:
-  explicit LoopDesignSpace(FuncOp func, AffineLoopBand &band,
+  explicit LoopDesignSpace(func::FuncOp func, AffineLoopBand &band,
                            ScaleHLSEstimator &estimator, unsigned maxDspNum,
                            unsigned maxExplParallel, unsigned maxLoopParallel,
                            bool directiveOnly);
@@ -72,7 +72,7 @@ public:
   SmallVector<LoopDesignPoint, 16> allPoints;
 
   /// Associated function, loop band, and estimator.
-  FuncOp func;
+  func::FuncOp func;
   AffineLoopBand &band;
   ScaleHLSEstimator &estimator;
   unsigned maxDspNum;
@@ -124,7 +124,7 @@ struct FuncDesignPoint {
 
 class FuncDesignSpace {
 public:
-  explicit FuncDesignSpace(FuncOp func,
+  explicit FuncDesignSpace(func::FuncOp func,
                            SmallVector<LoopDesignSpace, 4> &loopDesignSpaces,
                            ScaleHLSEstimator &estimator, unsigned maxDspNum)
       : func(func), loopDesignSpaces(loopDesignSpaces), estimator(estimator),
@@ -146,7 +146,7 @@ public:
   SmallVector<FuncDesignPoint, 16> paretoPoints;
 
   /// Associated function, loop design spaces, and estimator.
-  FuncOp func;
+  func::FuncOp func;
   SmallVector<LoopDesignSpace, 4> &loopDesignSpaces;
   ScaleHLSEstimator &estimator;
   unsigned maxDspNum;
@@ -169,15 +169,15 @@ public:
         maxLoopParallel(maxLoopParallel), maxIterNum(maxIterNum),
         maxDistance(maxDistance) {}
 
-  bool emitQoRDebugInfo(FuncOp func, std::string message);
+  bool emitQoRDebugInfo(func::FuncOp func, std::string message);
 
-  bool evaluateFuncPipeline(FuncOp func);
-  bool simplifyLoopNests(FuncOp func);
-  bool optimizeLoopBands(FuncOp func, bool directiveOnly);
-  bool exploreDesignSpace(FuncOp func, bool directiveOnly,
+  bool evaluateFuncPipeline(func::FuncOp func);
+  bool simplifyLoopNests(func::FuncOp func);
+  bool optimizeLoopBands(func::FuncOp func, bool directiveOnly);
+  bool exploreDesignSpace(func::FuncOp func, bool directiveOnly,
                           StringRef outputRootPath, StringRef csvRootPath);
 
-  void applyDesignSpaceExplore(FuncOp func, bool directiveOnly,
+  void applyDesignSpaceExplore(func::FuncOp func, bool directiveOnly,
                                StringRef outputRootPath, StringRef csvRootPath);
 
   ScaleHLSEstimator &estimator;

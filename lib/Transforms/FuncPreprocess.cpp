@@ -5,10 +5,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
-#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/SCF/SCF.h"
-#include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -165,7 +161,7 @@ struct MulIRaisePattern : public OpRewritePattern<arith::MulIOp> {
 };
 } // namespace
 
-bool scalehls::applyFuncPreprocess(FuncOp func, bool isTopFunc) {
+bool scalehls::applyFuncPreprocess(func::FuncOp func, bool isTopFunc) {
   auto builder = OpBuilder(func);
   auto context = func.getContext();
 

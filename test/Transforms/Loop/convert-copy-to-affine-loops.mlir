@@ -1,16 +1,16 @@
 // RUN: scalehls-opt -scalehls-convert-copy-to-affine-loops %s | FileCheck %s
 
 module {
-  func @forward_node0(%arg0: !hls.stream<i1, 1>, %arg1: memref<1x32x32x64xi8>) {
+  func.func @forward_node0(%arg0: !hls.stream<i1, 1>, %arg1: memref<1x32x32x64xi8>) {
     %false = arith.constant false
     "hls.stream.write"(%arg0, %false) : (!hls.stream<i1, 1>, i1) -> ()
     return
   }
-  func @forward_node1(%arg0: !hls.stream<i1, 1>) {
+  func.func @forward_node1(%arg0: !hls.stream<i1, 1>) {
     "hls.stream.read"(%arg0) : (!hls.stream<i1, 1>) -> ()
     return
   }
-  func @forward(%arg0: memref<1x32x32x64xi8>) attributes {top_func} {
+  func.func @forward(%arg0: memref<1x32x32x64xi8>) attributes {top_func} {
     %0 = "hls.prim.buffer"() {depth = 2 : i32} : () -> memref<1x32x32x64xi8>
     %1 = "hls.stream.channel"() : () -> !hls.stream<i1, 1>
     call @forward_node0(%1, %0) : (!hls.stream<i1, 1>, memref<1x32x32x64xi8>) -> ()

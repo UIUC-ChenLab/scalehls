@@ -1,6 +1,6 @@
 // RUN: scalehls-translate -emit-hlscpp %s | FileCheck %s
 
-func @test_memref() {
+func.func @test_memref() {
   %c0 = arith.constant 0 : index
   %c11 = arith.constant 11 : index
   %c1 = arith.constant 1 : index

@@ -266,8 +266,8 @@ private:
   void emitBlock(Block &block);
   void emitLoopDirectives(Operation *op);
   void emitArrayDirectives(Value memref);
-  void emitFunctionDirectives(FuncOp func, ArrayRef<Value> portList);
-  void emitFunction(FuncOp func);
+  void emitFunctionDirectives(func::FuncOp func, ArrayRef<Value> portList);
+  void emitFunction(func::FuncOp func);
 };
 } // namespace
 
@@ -1027,13 +1027,13 @@ SmallVector<SmallString<8>, 4>
 ModuleEmitter::getTransferIndices(TransferOpType op) {
   // Get the head indices of the transfer read/write.
   SmallVector<SmallString<8>, 4> indices;
-  for (auto index : op.indices()) {
+  for (auto index : op.getIndices()) {
     assert(isDeclared(index) && "index has not been declared");
     indices.push_back(getName(index));
   }
   // Construct the physical indices.
-  for (unsigned i = 0, e = op.permutation_map().getNumResults(); i < e; ++i) {
-    auto expr = op.permutation_map().getResult(i);
+  for (unsigned i = 0, e = op.getPermutationMap().getNumResults(); i < e; ++i) {
+    auto expr = op.getPermutationMap().getResult(i);
     if (auto dimExpr = expr.template dyn_cast<AffineDimExpr>())
       indices[dimExpr.getPosition()] += " + iv" + std::to_string(i);
   }
@@ -1054,7 +1054,7 @@ getTransferCondition(TransferOpType op,
   // Construct the condition of transfer if required.
   SmallString<16> condition;
   for (auto i : outOfBoundDims) {
-    auto expr = op.permutation_map().getResult(i);
+    auto expr = op.getPermutationMap().getResult(i);
     if (auto dimExpr = expr.template dyn_cast<AffineDimExpr>()) {
       auto pos = dimExpr.getPosition();
       condition += indices[pos];
@@ -1068,7 +1068,7 @@ getTransferCondition(TransferOpType op,
 
 /// Vector-related statement emitters.
 void ModuleEmitter::emitTransferRead(vector::TransferReadOp op) {
-  auto rank = emitNestedLoopHeader(op.vector());
+  auto rank = emitNestedLoopHeader(op.getVector());
   auto indices = getTransferIndices(op);
   auto condition = getTransferCondition(op, indices);
 
@@ -1078,9 +1078,9 @@ void ModuleEmitter::emitTransferRead(vector::TransferReadOp op) {
   }
 
   indent();
-  emitValue(op.vector(), rank);
+  emitValue(op.getVector(), rank);
   os << " = ";
-  emitValue(op.source());
+  emitValue(op.getSource());
   for (auto index : indices)
     os << "[" << index << "]";
   os << ";";
@@ -1092,9 +1092,9 @@ void ModuleEmitter::emitTransferRead(vector::TransferReadOp op) {
     addIndent();
 
     indent();
-    emitValue(op.vector(), rank);
+    emitValue(op.getVector(), rank);
     os << " = ";
-    emitValue(op.padding());
+    emitValue(op.getPadding());
     os << ";\n";
     reduceIndent();
   }
@@ -1102,7 +1102,7 @@ void ModuleEmitter::emitTransferRead(vector::TransferReadOp op) {
 }
 
 void ModuleEmitter::emitTransferWrite(vector::TransferWriteOp op) {
-  auto rank = emitNestedLoopHeader(op.vector());
+  auto rank = emitNestedLoopHeader(op.getVector());
   auto indices = getTransferIndices(op);
   auto condition = getTransferCondition(op, indices);
 
@@ -1112,11 +1112,11 @@ void ModuleEmitter::emitTransferWrite(vector::TransferWriteOp op) {
   }
 
   indent();
-  emitValue(op.source());
+  emitValue(op.getSource());
   for (auto index : indices)
     os << "[" << index << "]";
   os << " = ";
-  emitValue(op.vector(), rank);
+  emitValue(op.getVector(), rank);
   os << ";";
   emitInfoAndNewLine(op);
 
@@ -1126,14 +1126,14 @@ void ModuleEmitter::emitTransferWrite(vector::TransferWriteOp op) {
 }
 
 void ModuleEmitter::emitBroadcast(vector::BroadcastOp op) {
-  auto rank = emitNestedLoopHeader(op.vector());
+  auto rank = emitNestedLoopHeader(op.getVector());
   indent();
-  emitValue(op.vector(), rank);
+  emitValue(op.getVector(), rank);
   os << " = ";
-  emitValue(op.source());
+  emitValue(op.getSource());
 
   // Figure out whether each dimision is broadcast or multicast.
-  if (auto type = op.source().getType().dyn_cast<ShapedType>())
+  if (auto type = op.getSource().getType().dyn_cast<ShapedType>())
     for (unsigned dim = 0, e = type.getRank(); dim < e; ++dim) {
       if (type.getDimSize(dim) == 1)
         os << "[0]";
@@ -1196,7 +1196,7 @@ void ModuleEmitter::emitMemCpy(memref::CopyOp op) {
   indent() << "memcpy(";
   emitValue(op.target());
   os << ", ";
-  emitValue(op.source());
+  emitValue(op.getSource());
   os << ", ";
 
   auto type = op.target().getType().cast<MemRefType>();
@@ -1699,7 +1699,7 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
     os << "\n";
 }
 
-void ModuleEmitter::emitFunctionDirectives(FuncOp func,
+void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
                                            ArrayRef<Value> portList) {
   // Only top function should emit interface pragmas.
   if (hasTopFuncAttr(func)) {
@@ -1772,7 +1772,7 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
   }
 }
 
-void ModuleEmitter::emitFunction(FuncOp func) {
+void ModuleEmitter::emitFunction(func::FuncOp func) {
   if (func.getBlocks().size() != 1)
     emitError(func, "has zero or more than one basic blocks.");
 
@@ -1900,7 +1900,7 @@ void pack_mul(int8_t A[2], int8_t B, int16_t C[2]) {
 
   // Emit remained functions accordingly.
   for (auto &op : *module.getBody()) {
-    if (auto func = dyn_cast<FuncOp>(op)) {
+    if (auto func = dyn_cast<func::FuncOp>(op)) {
       if (!emittedFuncs.count(func) && !hasRuntimeAttr(func))
         emitFunction(func);
     } else

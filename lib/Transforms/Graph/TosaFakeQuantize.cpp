@@ -4,8 +4,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
@@ -80,7 +78,7 @@ struct TosaFakeQuantize : public TosaFakeQuantizeBase<TosaFakeQuantize> {
 
       // As we have updated the type of all values in the function, we can
       // safely convert the function type as well.
-      if (auto func = dyn_cast<FuncOp>(op))
+      if (auto func = dyn_cast<func::FuncOp>(op))
         func.setType(FunctionType::get(
             func.getContext(), func.front().getArgumentTypes(),
             func.back().getTerminator()->getOperandTypes()));

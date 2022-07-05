@@ -13,7 +13,7 @@ using namespace hls;
 
 /// Apply function pipelining to the input function, all contained loops are
 /// automatically fully unrolled.
-static bool applyFuncPipelining(FuncOp func, int64_t targetII) {
+static bool applyFuncPipelining(func::FuncOp func, int64_t targetII) {
   if (!applyFullyLoopUnrolling(func.front()))
     return false;
   setFuncDirective(func, true, targetII, false);

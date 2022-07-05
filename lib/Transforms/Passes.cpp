@@ -118,7 +118,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addNestedPass<func::FuncOp>(tosa::createTosaToLinalgNamed());
         pm.addPass(scalehls::createTosaToLinalgCleanupPass());
         pm.addNestedPass<func::FuncOp>(tosa::createTosaToLinalg());
-        pm.addPass(tosa::createTosaToStandard());
+        pm.addPass(tosa::createTosaToArith());
         pm.addPass(mlir::createLinalgGeneralizationPass());
         pm.addPass(mlir::createCanonicalizerPass());
 

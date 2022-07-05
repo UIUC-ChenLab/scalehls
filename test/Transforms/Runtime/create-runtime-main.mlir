@@ -1,8 +1,8 @@
 // RUN: scalehls-opt -scalehls-create-runtime-main="top-func=forward" %s | FileCheck %s
 
 module {
-  // CHECK: func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> attributes {top_func} {
-  func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> {
+  // CHECK: func.func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> attributes {top_func} {
+  func.func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> {
     %cst = arith.constant dense<1> : tensor<1x64x10xi8>
     %cst_0 = arith.constant dense<[0, 3, 1, 2]> : tensor<4xi32>
     %cst_1 = arith.constant dense<2> : tensor<64x3x3x64xi8>
@@ -61,7 +61,7 @@ module {
   }
 }
 
-// CHECK: func @main(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> attributes {runtime} {
+// CHECK: func.func @main(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> attributes {runtime} {
 // CHECK:   %0 = call @forward(%arg0) : (tensor<1x3x32x32xi8>) -> tensor<1x10xi8>
 // CHECK:   return %0 : tensor<1x10xi8>
 // CHECK: }

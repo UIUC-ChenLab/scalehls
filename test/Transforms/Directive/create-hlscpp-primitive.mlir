@@ -5,7 +5,7 @@
 #map2 = affine_map<(d0, d1, d2, d3) -> (0, d1 mod 2, 0, d3 mod 2, d0, d1 floordiv 2, d2, d3 floordiv 2)>
 #map3 = affine_map<(d0) -> (d0 + 1)>
 module {
-  func @test_conv2d(%arg0: memref<1x34x34x64xi8, #map0>, %arg1: memref<3x3x64x64xi8, #map1>, %arg2: memref<1x32x32x64xi8, #map2>) attributes {top_func} {
+  func.func @test_conv2d(%arg0: memref<1x34x34x64xi8, #map0>, %arg1: memref<3x3x64x64xi8, #map1>, %arg2: memref<1x32x32x64xi8, #map2>) attributes {top_func} {
     %c0_i8 = arith.constant 0 : i8
     affine.for %arg3 = 0 to 1 {
       affine.for %arg4 = 0 to 32 step 2 {

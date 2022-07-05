@@ -48,11 +48,11 @@ void scalehls::getMemAccessesMap(Block &block, MemAccessesMap &map,
 
     else if (auto read = dyn_cast<vector::TransferReadOp>(op)) {
       if (includeVectorTransfer)
-        map[read.source()].push_back(&op);
+        map[read.getSource()].push_back(&op);
 
     } else if (auto write = dyn_cast<vector::TransferWriteOp>(op)) {
       if (includeVectorTransfer)
-        map[write.source()].push_back(&op);
+        map[write.getSource()].push_back(&op);
 
     } else if (op.getNumRegions()) {
       // Recursively collect memory access operations in each block.

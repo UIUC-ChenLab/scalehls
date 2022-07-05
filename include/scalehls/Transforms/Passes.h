@@ -8,6 +8,7 @@
 #define SCALEHLS_TRANSFORMS_PASSES_H
 
 #include "mlir/Pass/Pass.h"
+#include "scalehls/InitAllDialects.h"
 #include <memory>
 
 namespace mlir {

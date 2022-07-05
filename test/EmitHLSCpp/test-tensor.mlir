@@ -1,6 +1,6 @@
 // RUN: scalehls-translate -emit-hlscpp %s | FileCheck %s
 
-func @test_tensor_expr(%arg0: tensor<16x8xi1>, %arg1: i1, %arg2: tensor<16x8xf32>, %arg3: tensor<16x8xf32>) -> tensor<16x8xf32> {
+func.func @test_tensor_expr(%arg0: tensor<16x8xi1>, %arg1: i1, %arg2: tensor<16x8xf32>, %arg3: tensor<16x8xf32>) -> tensor<16x8xf32> {
 
   // CHECK: float [[VAL_0:.*]][16][8];
   // CHECK: for (int iv0 = 0; iv0 < 16; ++iv0) {
@@ -22,7 +22,7 @@ func @test_tensor_expr(%arg0: tensor<16x8xi1>, %arg1: i1, %arg2: tensor<16x8xf32
   return %3 : tensor<16x8xf32>
 }
 
-func @test_tensor_load_store(%arg0: memref<16x8xi32>) {
+func.func @test_tensor_load_store(%arg0: memref<16x8xi32>) {
   %0 = bufferization.to_tensor %arg0 : memref<16x8xi32>
 
   // CHECK: for (int iv0 = 0; iv0 < 16; ++iv0) {

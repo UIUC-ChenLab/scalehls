@@ -11,7 +11,7 @@
 #two = affine_map<(d0)[s0] -> (d0, d0 + s0)>
 #three = affine_map<(d0)[s0] -> (d0 - s0, d0, d0 + s0)>
 
-func @test_affine_expr(%arg0: index, %arg1: index, %arg2: index) {
+func.func @test_affine_expr(%arg0: index, %arg1: index, %arg2: index) {
   // CHECK: int [[VAL_0:.*]] = (([[ARG_0:.*]] + [[ARG_1:.*]]) + 11);
   %0 = affine.apply #add (%arg0)[%arg1]
 

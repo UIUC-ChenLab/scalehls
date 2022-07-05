@@ -3,7 +3,7 @@
 #map = affine_map<(d0) -> (d0 + 1)>
 #set = affine_set<(d0) : (d0 == 0)>
 module  {
-  func @test_syrk(%arg0: f32, %arg1: f32, %arg2: memref<16x16xf32>, %arg3: memref<16x16xf32>) {
+  func.func @test_syrk(%arg0: f32, %arg1: f32, %arg2: memref<16x16xf32>, %arg3: memref<16x16xf32>) {
 
     // CHECK: affine.for %arg4 = 0 to 16 {
     // CHECK-NEXT: affine.for %arg5 = 0 to 16 {

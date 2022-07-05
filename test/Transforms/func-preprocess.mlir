@@ -9,7 +9,7 @@ module  {
   memref.global @foo : memref<16x16xf32> = dense<1.0>
 
   // CHECK: attributes {top_func}
-  func @test_syrk(%arg0: f32, %arg1: f32, %arg3: memref<16x16xf32>) {
+  func.func @test_syrk(%arg0: f32, %arg1: f32, %arg3: memref<16x16xf32>) {
 
     // CHECK: %0 = "hls.prim.const"() {value = dense<1.000000e+00> : tensor<16x16xf32>} : () -> memref<16x16xf32>
     %arg2 = memref.get_global @foo : memref<16x16xf32>
@@ -52,9 +52,9 @@ module  {
 
 // -----
 
-// CHECK-LABEL: func @test_buffer(
+// CHECK-LABEL: func.func @test_buffer(
 // CHECK-SAME:  %arg0: f32, %arg1: memref<16xf32, 1>) -> (f32, memref<16xf32, 1>, i32, memref<2x2xi32, 1>)
-func @test_buffer(%arg0: f32, %arg1: memref<16xf32, 1>) -> (f32, memref<16xf32, 1>, i32, memref<2x2xi32, 1>) {
+func.func @test_buffer(%arg0: f32, %arg1: memref<16xf32, 1>) -> (f32, memref<16xf32, 1>, i32, memref<2x2xi32, 1>) {
   %c11_i32 = arith.constant 11 : i32
   %cst = arith.constant dense<[[11, 0], [0, -42]]> : tensor<2x2xi32>
   %cst_memref = bufferization.to_memref %cst : memref<2x2xi32, 1>

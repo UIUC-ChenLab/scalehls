@@ -70,7 +70,7 @@ private:
 class PyAffineLoopBandList {
 public:
   PyAffineLoopBandList(MlirOperation op) {
-    auto func = dyn_cast<FuncOp>(unwrap(op));
+    auto func = dyn_cast<func::FuncOp>(unwrap(op));
     if (!func)
       throw SetPyError(PyExc_ValueError, "targeted operation not a function");
     if (!llvm::hasSingleElement(func.getBody()))
@@ -95,7 +95,7 @@ private:
 class PyArrayList {
 public:
   PyArrayList(MlirOperation op) {
-    auto func = dyn_cast<FuncOp>(unwrap(op));
+    auto func = dyn_cast<func::FuncOp>(unwrap(op));
     if (!func)
       throw SetPyError(PyExc_ValueError, "targeted operation not a function");
     if (!llvm::hasSingleElement(func.getBody()))
@@ -190,7 +190,7 @@ static bool loopPipelining(PyAffineLoopBand band, int64_t pipelineLoc,
 
 static bool funcPreprocess(MlirOperation op, bool topFunc) {
   py::gil_scoped_release();
-  auto func = dyn_cast<FuncOp>(unwrap(op));
+  auto func = dyn_cast<func::FuncOp>(unwrap(op));
   if (!func)
     throw SetPyError(PyExc_ValueError, "targeted operation not a function");
   return applyFuncPreprocess(func, topFunc);
@@ -198,7 +198,7 @@ static bool funcPreprocess(MlirOperation op, bool topFunc) {
 
 static bool memoryOpts(MlirOperation op) {
   py::gil_scoped_release();
-  auto func = dyn_cast<FuncOp>(unwrap(op));
+  auto func = dyn_cast<func::FuncOp>(unwrap(op));
   if (!func)
     throw SetPyError(PyExc_ValueError, "targeted operation not a function");
   return applyMemoryOpts(func);
@@ -206,7 +206,7 @@ static bool memoryOpts(MlirOperation op) {
 
 static bool autoArrayPartition(MlirOperation op) {
   py::gil_scoped_release();
-  auto func = dyn_cast<FuncOp>(unwrap(op));
+  auto func = dyn_cast<func::FuncOp>(unwrap(op));
   if (!func)
     throw SetPyError(PyExc_ValueError, "targeted operation not a function");
   return applyAutoArrayPartition(func);

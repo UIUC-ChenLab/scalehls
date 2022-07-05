@@ -32,8 +32,8 @@ def main():
     # Parse command line arguments.
     opts = parser.parse_args()
 
-    # Call `mlir-clang` to parse HLS C/C++ into MLIR.
-    fin = do_run(['mlir-clang', '-S',
+    # Call `cgeist` to parse HLS C/C++ into MLIR.
+    fin = do_run(['cgeist', '-S',
                   '-function=' + opts.function,
                   '-memref-fullrank',
                   '-raise-scf-to-affine',

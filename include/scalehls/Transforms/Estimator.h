@@ -36,8 +36,8 @@ public:
         depAnalysis(depAnalysis) {}
 
   // Entry for estimating function and loop.
-  void estimateFunc(FuncOp func);
-  void estimateLoop(AffineForOp loop, FuncOp func);
+  void estimateFunc(func::FuncOp func);
+  void estimateLoop(AffineForOp loop, func::FuncOp func);
 
   using HLSVisitorBase::visitOp;
   bool visitUnhandledOp(Operation *op, int64_t begin) {
@@ -91,7 +91,7 @@ private:
 
   /// AffineForOp related methods.
   int64_t getResMinII(int64_t begin, int64_t end, MemAccessesMap &map);
-  int64_t getDepMinII(int64_t II, FuncOp func, MemAccessesMap &map);
+  int64_t getDepMinII(int64_t II, func::FuncOp func, MemAccessesMap &map);
   int64_t getDepMinII(int64_t II, AffineForOp forOp, MemAccessesMap &map);
 
   /// Block scheduler and estimator.
