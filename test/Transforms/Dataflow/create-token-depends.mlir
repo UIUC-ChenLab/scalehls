@@ -1,14 +1,14 @@
-// RUN: scalehls-opt -scalehls-create-token-depends %s | FileCheck %s
+// RUN: scalehls-opt -scalehls-create-token-depends -canonicalize %s | FileCheck %s
 
 module {
   // CHECK: func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> {
   func @forward(%arg0: tensor<1x3x32x32xi8>) -> tensor<1x10xi8> {
 
-    // CHECK: %0:2 = hls.dataflow.node() -> tensor<1x32x32x64xi8>, i1 {
-    // CHECK:   %14 = "hls.dataflow.source"() : () -> i1
-    // CHECK:   "hls.dataflow.output"(%13, %14) : (tensor<1x32x32x64xi8>, i1) -> ()
+    // CHECK: %7:2 = hls.dataflow.node() -> tensor<1x32x32x64xi8>, i1 {
+    // CHECK:   %18 = "hls.dataflow.source"() : () -> i1
+    // CHECK:   "hls.dataflow.output"(%17, %18) : (tensor<1x32x32x64xi8>, i1) -> ()
     // CHECK: }
-    // CHECK: %1 = "hls.dataflow.buffer"(%0#0) {depth = 2 : i32} : (tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
+    // CHECK: %8 = "hls.dataflow.buffer"(%7#0) {depth = 2 : i32} : (tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
     %0 = hls.dataflow.node() -> tensor<1x32x32x64xi8> {
       %8 = "tosa.const"() {value = dense<[0, 2, 3, 1]> : tensor<4xi32>} : () -> tensor<4xi32>
       %9 = "tosa.transpose"(%arg0, %8) : (tensor<1x3x32x32xi8>, tensor<4xi32>) -> tensor<1x32x32x3xi8>
@@ -20,10 +20,10 @@ module {
     }
     %1 = "hls.dataflow.buffer"(%0) {depth = 2 : i32} : (tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
 
-    // CHECK: %2:2 = hls.dataflow.node() -> tensor<1x32x32x64xi8>, i1 {
-    // CHECK:   "hls.dataflow.sink"(%0#1) : (i1) -> ()
-    // CHECK:   %12 = "hls.dataflow.source"() : () -> i1
-    // CHECK:   "hls.dataflow.output"(%11, %12) : (tensor<1x32x32x64xi8>, i1) -> ()
+    // CHECK: %9:2 = hls.dataflow.node() -> tensor<1x32x32x64xi8>, i1 {
+    // CHECK:   "hls.dataflow.sink"(%7#1) : (i1) -> ()
+    // CHECK:   %17 = "hls.dataflow.source"() : () -> i1
+    // CHECK:   "hls.dataflow.output"(%16, %17) : (tensor<1x32x32x64xi8>, i1) -> ()
     // CHECK: }
     %2 = hls.dataflow.node() -> tensor<1x32x32x64xi8> {
       %8 = "tosa.const"() {value = dense<5> : tensor<64xi8>} : () -> tensor<64xi8>
@@ -33,10 +33,10 @@ module {
       "hls.dataflow.output"(%11) : (tensor<1x32x32x64xi8>) -> ()
     }
 
-    // CHECK: %3:2 = hls.dataflow.node() -> tensor<1x32x32x64xi8>, i1 {
-    // CHECK: "hls.dataflow.sink"(%2#1) : (i1) -> ()
-    // CHECK: %11 = "hls.dataflow.source"() : () -> i1
-    // CHECK: "hls.dataflow.output"(%10, %11) : (tensor<1x32x32x64xi8>, i1) -> ()
+    // CHECK: %10:2 = hls.dataflow.node() -> tensor<1x32x32x64xi8>, i1 {
+    // CHECK: "hls.dataflow.sink"(%9#1) : (i1) -> ()
+    // CHECK: %16 = "hls.dataflow.source"() : () -> i1
+    // CHECK: "hls.dataflow.output"(%15, %16) : (tensor<1x32x32x64xi8>, i1) -> ()
     // CHECK: }
     %3 = hls.dataflow.node() -> tensor<1x32x32x64xi8> {
       %8 = "tosa.const"() {value = dense<5> : tensor<64xi8>} : () -> tensor<64xi8>
@@ -45,10 +45,10 @@ module {
       "hls.dataflow.output"(%10) : (tensor<1x32x32x64xi8>) -> ()
     }
 
-    // CHECK: %4:2 = hls.dataflow.node() -> tensor<1x32x32x64xi8>, i1 {
-    // CHECK:   "hls.dataflow.sink"(%3#1) : (i1) -> ()
-    // CHECK:   %10 = "hls.dataflow.source"() : () -> i1
-    // CHECK:   "hls.dataflow.output"(%9, %10) : (tensor<1x32x32x64xi8>, i1) -> ()
+    // CHECK: %11:2 = hls.dataflow.node() -> tensor<1x32x32x64xi8>, i1 {
+    // CHECK:   "hls.dataflow.sink"(%10#1) : (i1) -> ()
+    // CHECK:   %17 = "hls.dataflow.source"() : () -> i1
+    // CHECK:   "hls.dataflow.output"(%16, %17) : (tensor<1x32x32x64xi8>, i1) -> ()
     // CHECK: }
     %4 = hls.dataflow.node() -> tensor<1x32x32x64xi8> {
       %8 = "tosa.add"(%3, %1) : (tensor<1x32x32x64xi8>, tensor<1x32x32x64xi8>) -> tensor<1x32x32x64xi8>
@@ -56,20 +56,20 @@ module {
       "hls.dataflow.output"(%9) : (tensor<1x32x32x64xi8>) -> ()
     }
 
-    // CHECK: %5:2 = hls.dataflow.node() -> tensor<1x1x1x64xi8>, i1 {
-    // CHECK:   "hls.dataflow.sink"(%4#1) : (i1) -> ()
-    // CHECK:   %9 = "hls.dataflow.source"() : () -> i1
-    // CHECK:   "hls.dataflow.output"(%8, %9) : (tensor<1x1x1x64xi8>, i1) -> ()
+    // CHECK: %12:2 = hls.dataflow.node() -> tensor<1x1x1x64xi8>, i1 {
+    // CHECK:   "hls.dataflow.sink"(%11#1) : (i1) -> ()
+    // CHECK:   %16 = "hls.dataflow.source"() : () -> i1
+    // CHECK:   "hls.dataflow.output"(%15, %16) : (tensor<1x1x1x64xi8>, i1) -> ()
     // CHECK: }
     %5 = hls.dataflow.node() -> tensor<1x1x1x64xi8> {
       %8 = "tosa.avg_pool2d"(%4) {kernel = [32, 32], pad = [0, 0, 0, 0], quantization_info = {input_zp = 0 : i32, output_zp = 0 : i32}, stride = [32, 32]} : (tensor<1x32x32x64xi8>) -> tensor<1x1x1x64xi8>
       "hls.dataflow.output"(%8) : (tensor<1x1x1x64xi8>) -> ()
     }
 
-    // CHECK: %6:2 = hls.dataflow.node() -> tensor<1x1x10xi8>, i1 {
-    // CHECK:   "hls.dataflow.sink"(%5#1) : (i1) -> ()
-    // CHECK:   %13 = "hls.dataflow.source"() : () -> i1
-    // CHECK:   "hls.dataflow.output"(%12, %13) : (tensor<1x1x10xi8>, i1) -> ()
+    // CHECK: %13:2 = hls.dataflow.node() -> tensor<1x1x10xi8>, i1 {
+    // CHECK:   "hls.dataflow.sink"(%12#1) : (i1) -> ()
+    // CHECK:   %18 = "hls.dataflow.source"() : () -> i1
+    // CHECK:   "hls.dataflow.output"(%17, %18) : (tensor<1x1x10xi8>, i1) -> ()
     // CHECK: }
     %6 = hls.dataflow.node() -> tensor<1x1x10xi8> {
       %8 = "tosa.const"() {value = dense<[0, 3, 1, 2]> : tensor<4xi32>} : () -> tensor<4xi32>
@@ -80,9 +80,9 @@ module {
       "hls.dataflow.output"(%12) : (tensor<1x1x10xi8>) -> ()
     }
 
-    // CHECK: %7 = hls.dataflow.node() -> tensor<1x10xi8> {
-    // CHECK:   "hls.dataflow.sink"(%6#1) : (i1) -> ()
-    // CHECK:   "hls.dataflow.output"(%10) : (tensor<1x10xi8>) -> ()
+    // CHECK: %14 = hls.dataflow.node() -> tensor<1x10xi8> {
+    // CHECK:   "hls.dataflow.sink"(%13#1) : (i1) -> ()
+    // CHECK:   "hls.dataflow.output"(%15) : (tensor<1x10xi8>) -> ()
     // CHECK: }
     %7 = hls.dataflow.node() -> tensor<1x10xi8> {
       %8 = "tosa.reshape"(%6) {new_shape = [1, 10]} : (tensor<1x1x10xi8>) -> tensor<1x10xi8>

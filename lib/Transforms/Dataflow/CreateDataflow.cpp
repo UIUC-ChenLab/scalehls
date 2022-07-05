@@ -81,52 +81,42 @@ struct DataflowNodeCreatePattern : public OpRewritePattern<OpType> {
 } // namespace
 
 namespace {
-struct CreateDataflow : public CreateDataflowBase<CreateDataflow> {
+struct CreateFuncDataflow : public CreateFuncDataflowBase<CreateFuncDataflow> {
   void runOnOperation() override {
-    auto module = getOperation();
-    auto context = module.getContext();
-    CallGraph graph(module);
+    auto func = getOperation();
+    auto context = func.getContext();
 
-    // If any cycle appears in the call graph, return.
-    using SCCIterator = llvm::scc_iterator<const CallGraph *>;
-    for (auto scc = SCCIterator::begin(&graph); !scc.isAtEnd(); ++scc)
-      if (scc.hasCycle()) {
-        emitError(module.getLoc(), "has cycle in the call graph");
-        return signalPassFailure();
-      }
-
-    // Traverse each function in a post order and dataflow each of them.
     mlir::RewritePatternSet patterns(context);
-    for (auto node : llvm::make_early_inc_range(
-             llvm::post_order<const CallGraph *>(&graph))) {
-      if (node->isExternal())
-        continue;
-
-      if (auto func =
-              node->getCallableRegion()->getParentOfType<func::FuncOp>()) {
-        // Collect all target loop bands in the current function. FIXME: Using
-        // getTileableBands is a temporary solution.
-        AffineLoopBands targetBands;
-        getTileableBands(func, &targetBands);
-
-        // Create dataflow to the innermost loop of each loop band.
-        patterns.clear();
-        patterns.add<DataflowNodeCreatePattern<mlir::AffineForOp>>(context);
-        FrozenRewritePatternSet loopPattern(std::move(patterns));
-        for (auto &band : targetBands)
-          (void)applyOpPatternsAndFold(band.back(), loopPattern);
-
-        // Create dataflow to the function itself.
-        patterns.clear();
-        patterns.add<DataflowNodeCreatePattern<func::FuncOp>>(context);
-        FrozenRewritePatternSet funcPattern(std::move(patterns));
-        (void)applyOpPatternsAndFold(func, funcPattern);
-      }
-    }
+    patterns.add<DataflowNodeCreatePattern<func::FuncOp>>(context);
+    (void)applyOpPatternsAndFold(func, std::move(patterns));
   }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createCreateDataflowPass() {
-  return std::make_unique<CreateDataflow>();
+namespace {
+struct CreateLoopDataflow : public CreateLoopDataflowBase<CreateLoopDataflow> {
+  void runOnOperation() override {
+    auto func = getOperation();
+    auto context = func.getContext();
+
+    // Collect all target loop bands.
+    AffineLoopBands targetBands;
+    getLoopBands(func.front(), targetBands, /*allowHavingChilds=*/true);
+
+    // Create loop dataflow to each innermost loop.
+    mlir::RewritePatternSet patterns(context);
+    patterns.add<DataflowNodeCreatePattern<mlir::AffineForOp>>(context);
+    FrozenRewritePatternSet frozenPatterns(std::move(patterns));
+    for (auto &band : targetBands)
+      (void)applyOpPatternsAndFold(band.back(), frozenPatterns);
+  }
+};
+} // namespace
+
+std::unique_ptr<Pass> scalehls::createCreateFuncDataflowPass() {
+  return std::make_unique<CreateFuncDataflow>();
+}
+
+std::unique_ptr<Pass> scalehls::createCreateLoopDataflowPass() {
+  return std::make_unique<CreateLoopDataflow>();
 }

@@ -1,5 +1,5 @@
 // RUN: scalehls-opt -scalehls-create-func-dataflow %s | FileCheck -check-prefix=FUNC %s
-// RUN: scalehls-opt -scalehls-create-loop-dataflow %s | FileCheck -check-prefix=LOOP %s
+// RUN: scalehls-opt -scalehls-create-loop-dataflow -canonicalize %s | FileCheck -check-prefix=LOOP %s
 
 #map = affine_map<(d0, d1) -> (d0 + d1 * 4)>
 #set0 = affine_set<(d0, d1, d2) : (d0 == 0, d1 == 0, d2 == 0)>
@@ -18,11 +18,11 @@ module {
     %3 = memref.alloc() : memref<1x1x4x4xi8>
     %4 = memref.alloc() : memref<1x4x4x4xi8>
 
-    // FUNC: %5:6 = hls.dataflow.node() -> memref<1x4x4x4xi8>, memref<1x1x4x4xi8>, memref<1x1x1x1xi8>, memref<1x1x1x1xi8>, memref<1x4x4x4xi8>, memref<1x32x32x64xi8, 3> {
+    // FUNC: %5:5 = hls.dataflow.node() -> memref<1x4x4x4xi8>, memref<1x1x4x4xi8>, memref<1x1x1x1xi8>, memref<1x4x4x4xi8>, memref<1x32x32x64xi8, 3> {
     // FUNC:   "hls.stream.read"(%arg1) : (!hls.stream<i1, 1>) -> ()
-    // FUNC:   affine.for %arg6 = 0 to 8 {
+    // FUNC:   affine.for %arg6 = 0 to 8
     // FUNC:   }
-    // FUNC:   "hls.dataflow.output"(%2, %3, %1, %1, %4, %arg3) : (memref<1x4x4x4xi8>, memref<1x1x4x4xi8>, memref<1x1x1x1xi8>, memref<1x1x1x1xi8>, memref<1x4x4x4xi8>, memref<1x32x32x64xi8, 3>) -> ()
+    // FUNC:   "hls.dataflow.output"(%2, %1, %3, %0, %arg3) : (memref<1x4x4x4xi8>, memref<1x1x4x4xi8>, memref<1x1x1x1xi8>, memref<1x4x4x4xi8>, memref<1x32x32x64xi8, 3>) -> ()
     // FUNC: }
     affine.for %arg6 = 0 to 8 {
       affine.for %arg7 = 0 to 8 {
@@ -67,7 +67,7 @@ module {
                   }
                 }
 
-                // LOOP: %7:3 = hls.dataflow.node() -> memref<1x1x1x1xi8>, memref<1x1x1x1xi8>, memref<1x4x4x4xi8> {
+                // LOOP: %7 = hls.dataflow.node() -> memref<1x4x4x4xi8> {
                 // LOOP:     affine.for %arg12 = 0 to 4 {
                 // LOOP:       affine.for %arg13 = 0 to 4 {
                 // LOOP:         affine.for %arg14 = 0 to 4 {
@@ -76,7 +76,7 @@ module {
                 // LOOP:         } {point}
                 // LOOP:       } {point}
                 // LOOP:     } {point}
-                // LOOP:     "hls.dataflow.output"(%0, %0, %4) : (memref<1x1x1x1xi8>, memref<1x1x1x1xi8>, memref<1x4x4x4xi8>) -> ()
+                // LOOP:     "hls.dataflow.output"(%4) : (memref<1x4x4x4xi8>) -> ()
                 // LOOP:   }
                 affine.for %arg12 = 0 to 4 {
                   affine.for %arg13 = 0 to 4 {
@@ -110,7 +110,7 @@ module {
                 // LOOP:   affine.for %arg12 = 0 to 4 {
                 // LOOP:     affine.for %arg13 = 0 to 4 {
                 // LOOP:       affine.for %arg14 = 0 to 4 {
-                // LOOP:         %9 = affine.load %7#2[0, %arg12, %arg13, %arg14] : memref<1x4x4x4xi8>
+                // LOOP:         %9 = affine.load %7[0, %arg12, %arg13, %arg14] : memref<1x4x4x4xi8>
                 // LOOP:         affine.store %9, %arg3[0, %arg12 + %arg6 * 4, %arg13 + %arg7 * 4, %arg14 + %arg8 * 4] : memref<1x32x32x64xi8, 3>
                 // LOOP:       }
                 // LOOP:     }

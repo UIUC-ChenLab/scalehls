@@ -108,7 +108,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         // Graph-level optimization.
         pm.addPass(scalehls::createTosaSimplifyGraphPass());
         pm.addPass(scalehls::createTosaNodeFusionPass());
-        pm.addPass(scalehls::createCreateDataflowPass());
+        pm.addPass(scalehls::createCreateFuncDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(scalehls::createLegalizeDataflowPass());
         pm.addPass(scalehls::createCreateTokenDependsPass());
@@ -184,7 +184,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(mlir::createCanonicalizerPass());
 
         // Affine loop dataflowing.
-        pm.addPass(scalehls::createCreateDataflowPass());
+        pm.addPass(scalehls::createCreateLoopDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(scalehls::createLegalizeDataflowPass());
         pm.addPass(scalehls::createBufferizeDataflowPass());

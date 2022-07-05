@@ -31,7 +31,8 @@ createFuncPreprocessPass(std::string hlsTopFunc = "forward");
 
 /// Dataflow-related passes.
 std::unique_ptr<Pass> createFuncDuplicationPass();
-std::unique_ptr<Pass> createCreateDataflowPass();
+std::unique_ptr<Pass> createCreateFuncDataflowPass();
+std::unique_ptr<Pass> createCreateLoopDataflowPass();
 std::unique_ptr<Pass> createLegalizeDataflowPass();
 std::unique_ptr<Pass> createCreateTokenDependsPass();
 std::unique_ptr<Pass> createBufferizeDataflowPass();
