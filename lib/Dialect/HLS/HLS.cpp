@@ -6,6 +6,7 @@
 
 #include "scalehls/Dialect/HLS/HLS.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/DialectImplementation.h"
@@ -196,10 +197,8 @@ struct OutputSimplifyPattern : public OpRewritePattern<DataflowNodeOp> {
     for (auto result : node.getResults()) {
       auto value = output.getOperand(result.getResultNumber());
 
-      // Note that we always keep non-local memref outputs that are updated in
-      // the node even if they are not used.
-      if (result.use_empty() && (!value.getType().isa<MemRefType>() ||
-                                 value.getDefiningOp<memref::AllocOp>())) {
+      // Note that we always keep memref outputs even if they are not used.
+      if (result.use_empty() && !value.getType().isa<MemRefType>()) {
         hasUnusedResult = true;
         continue;
       }
@@ -309,10 +308,29 @@ LogicalResult DataflowOutputOp::verify() {
 
   llvm::SmallDenseSet<Value, 4> outputs(operand_begin(), operand_end());
   auto node = (*this)->getParentOfType<DataflowNodeOp>();
-  for (auto value : node.getOutputValues())
-    if (!outputs.count(value) && value.getType().isa<MemRefType>() &&
-        !value.getDefiningOp<memref::AllocOp>())
-      return emitOpError("updated memref is an output");
+
+  DominanceInfo DT;
+  SmallVector<Value> updatedMemrefs;
+  node.walk([&](Operation *child) {
+    // TODO: Any other ops need to be included?
+    Value memref;
+    if (auto copy = dyn_cast<memref::CopyOp>(child))
+      memref = copy.target();
+    else if (auto store = dyn_cast<mlir::AffineWriteOpInterface>(child))
+      memref = store.getMemRef();
+
+    // Only push back unique memrefs.
+    if (memref && DT.dominates(memref.getParentBlock(), node.getBody()) &&
+        llvm::find(updatedMemrefs, memref) == updatedMemrefs.end())
+      updatedMemrefs.push_back(memref);
+  });
+
+  for (auto memref : updatedMemrefs)
+    if (!outputs.count(memref)) {
+      auto diag = emitOpError("updated memref should be an output, ");
+      diag << "missed memref: " << memref << "\n";
+      return diag;
+    }
   return success();
 }
 
