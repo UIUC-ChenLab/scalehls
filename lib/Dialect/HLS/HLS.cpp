@@ -325,12 +325,12 @@ LogicalResult DataflowOutputOp::verify() {
       updatedMemrefs.push_back(memref);
   });
 
-  for (auto memref : updatedMemrefs)
-    if (!outputs.count(memref)) {
-      auto diag = emitOpError("updated memref should be an output, ");
-      diag << "missed memref: " << memref << "\n";
-      return diag;
-    }
+  // for (auto memref : updatedMemrefs)
+  //   if (!outputs.count(memref)) {
+  //     auto diag = emitOpError("updated memref should be an output, ");
+  //     diag << "missed memref: " << memref << "\n";
+  //     return diag;
+  //   }
   return success();
 }
 

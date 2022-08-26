@@ -114,8 +114,6 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createCreateTokenDependsPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
-        return;
-
         // TOSA to Linalg conversion.
         pm.addNestedPass<func::FuncOp>(tosa::createTosaToLinalgNamed());
         pm.addPass(scalehls::createTosaToLinalgCleanupPass());
