@@ -13,6 +13,39 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+/// Fuse the given operations into a new graph node. The fused node will be
+/// created before the first operation and each operation will be inserted in
+/// order. This method always succeeds.
+static GraphNodeOp fuseTosaOps(ArrayRef<Operation *> ops,
+                               PatternRewriter &rewriter) {
+  assert(!ops.empty() && "must fuse at least one op");
+
+  // Collect output values.
+  SmallVector<Value, 8> outputValues;
+  for (auto op : ops)
+    outputValues.append(op->result_begin(), op->result_end());
+
+  // Create new graph node with all outputs.
+  auto loc = rewriter.getUnknownLoc();
+  rewriter.setInsertionPoint(ops.front());
+  auto node = rewriter.create<GraphNodeOp>(loc, ValueRange(outputValues));
+
+  // Move each targeted op into the new graph node.
+  rewriter.setInsertionPointToEnd(rewriter.createBlock(&node.body()));
+  auto output = rewriter.create<GraphOutputOp>(loc, outputValues);
+  for (auto op : ops)
+    op->moveBefore(output);
+
+  // Replace external uses with the node results if the user is dominated.
+  DominanceInfo DT;
+  for (auto t : llvm::zip(outputValues, node.getResults()))
+    std::get<0>(t).replaceUsesWithIf(std::get<1>(t), [&](OpOperand &use) {
+      return !node->isProperAncestor(use.getOwner()) &&
+             DT.properlyDominates(node, use.getOwner());
+    });
+  return node;
+}
+
 namespace {
 /// This pattern will outline ops with the specified type.
 template <typename OpType>
@@ -21,9 +54,9 @@ struct OutlinePattern : public OpRewritePattern<OpType> {
 
   LogicalResult matchAndRewrite(OpType op,
                                 PatternRewriter &rewriter) const override {
-    if (op->template getParentOfType<DataflowNodeOp>())
+    if (op->template getParentOfType<GraphNodeOp>())
       return success();
-    fuseOpsIntoNewNode({op}, rewriter);
+    fuseTosaOps({op}, rewriter);
     return success();
   }
 };
@@ -38,19 +71,19 @@ struct ForwardFusePattern : public OpRewritePattern<OpType> {
 
   LogicalResult matchAndRewrite(OpType op,
                                 PatternRewriter &rewriter) const override {
-    if (op->template getParentOfType<DataflowNodeOp>())
+    if (op->template getParentOfType<GraphNodeOp>())
       return success();
 
     // We always select the dominating node as the target node to fuse.
-    DataflowNodeOp targetNode;
+    GraphNodeOp targetNode;
     for (auto user : op->getUsers()) {
-      auto node = user->template getParentOfType<DataflowNodeOp>();
+      auto node = user->template getParentOfType<GraphNodeOp>();
       if (!targetNode || (targetNode && node && DT.dominates(node, targetNode)))
         targetNode = node;
     }
 
     if (targetNode) {
-      fuseOpsIntoNewNode({op, targetNode}, rewriter);
+      fuseTosaOps({op, targetNode}, rewriter);
       return success();
     }
     return failure();
@@ -70,19 +103,19 @@ struct BackwardFusePattern : public OpRewritePattern<OpType> {
 
   LogicalResult matchAndRewrite(OpType op,
                                 PatternRewriter &rewriter) const override {
-    if (op->template getParentOfType<DataflowNodeOp>())
+    if (op->template getParentOfType<GraphNodeOp>())
       return success();
 
     // We always select the dominated node as the target node to fuse.
-    DataflowNodeOp targetNode;
+    GraphNodeOp targetNode;
     for (auto operand : op->getOperands()) {
-      auto node = operand.template getDefiningOp<DataflowNodeOp>();
+      auto node = operand.template getDefiningOp<GraphNodeOp>();
       if (!targetNode || (targetNode && node && DT.dominates(targetNode, node)))
         targetNode = node;
     }
 
     if (targetNode) {
-      fuseOpsIntoNewNode({targetNode, op}, rewriter);
+      fuseTosaOps({targetNode, op}, rewriter);
       return success();
     }
     return failure();
@@ -106,6 +139,7 @@ struct TosaNodeFusion : public TosaNodeFusionBase<TosaNodeFusion> {
     patterns.add<OutlinePattern<tosa::MaxPool2dOp>>(context);
     patterns.add<OutlinePattern<tosa::MatMulOp>>(context);
     patterns.add<OutlinePattern<tosa::AddOp>>(context);
+    patterns.add<OutlinePattern<tosa::MulOp>>(context);
     patterns.add<BackwardFusePattern<tosa::ClampOp>>(context, DT);
     patterns.add<BackwardFusePattern<tosa::TransposeOp>>(context, DT);
     patterns.add<ForwardFusePattern<tosa::ReshapeOp>>(context, DT);

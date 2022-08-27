@@ -11,6 +11,45 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 
 //===----------------------------------------------------------------------===//
+// Graph Operations
+//===----------------------------------------------------------------------===//
+
+def GraphNodeOp : HLSOp<"graph.node",
+      [SingleBlockImplicitTerminator<"GraphOutputOp">]> {
+  let summary = "Graph node operation";
+  let description = [{
+    This operation represents a node of tensor-level graph. It has a region,
+    which is not isolated from above, to represent the tensor operations
+    contained by the node. The node can return variadic number of results.
+  }];
+
+  let hasCanonicalizer = 1;
+  let hasVerifier = 1;
+  let results = (outs Variadic<AnyType>:$outputs);
+  let regions = (region SizedRegion<1>:$body);
+
+  let assemblyFormat = [{
+    `(` `)` (`->` qualified(type($outputs))^)? attr-dict-with-keyword $body
+  }];
+  let extraClassDeclaration = [{
+    GraphOutputOp getOutputOp();
+  }];
+}
+
+def GraphOutputOp : HLSOp<"graph.output",
+      [Terminator, HasParent<"GraphNodeOp">, ReturnLike]> {
+  let summary = "Output operation of a graph node";
+  let description = [{
+    The operation terminates a graph node region and outputs internal values
+    to the outside.
+  }];
+
+  let hasVerifier = 1;
+  let arguments = (ins Variadic<AnyType>:$outputs);
+  let builders = [ OpBuilder<(ins), "build($_builder, $_state, llvm::None);"> ];
+}
+
+//===----------------------------------------------------------------------===//
 // Dataflow Operations
 //===----------------------------------------------------------------------===//
 

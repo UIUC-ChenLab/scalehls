@@ -172,6 +172,101 @@ bool hls::hasRuntimeAttr(Operation *op) {
 }
 
 //===----------------------------------------------------------------------===//
+// GraphNodeOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult GraphNodeOp::verify() {
+  if (llvm::any_of((*this)->getUsers(), [&](Operation *user) {
+        return !(*this)->getBlock()->findAncestorOpInBlock(*user);
+      }))
+    return emitOpError("has unexpected dataflow consumer from parent block");
+  return success();
+}
+
+namespace {
+struct GraphOutputSimplifyPattern : public OpRewritePattern<GraphNodeOp> {
+  using OpRewritePattern<GraphNodeOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(GraphNodeOp node,
+                                PatternRewriter &rewriter) const override {
+    auto output = node.getOutputOp();
+    bool hasUnusedResult = false;
+
+    SmallVector<Value, 4> outputValues;
+    SmallVector<Value, 4> resultsToReplace;
+    for (auto result : node.getResults()) {
+      if (result.use_empty()) {
+        hasUnusedResult = true;
+        continue;
+      }
+      outputValues.push_back(output.getOperand(result.getResultNumber()));
+      resultsToReplace.push_back(result);
+    }
+
+    if (hasUnusedResult) {
+      rewriter.setInsertionPoint(output);
+      rewriter.replaceOpWithNewOp<GraphOutputOp>(output, outputValues);
+
+      rewriter.setInsertionPoint(node);
+      auto newNode =
+          rewriter.create<GraphNodeOp>(node.getLoc(), ValueRange(outputValues));
+      rewriter.inlineRegionBefore(node.body(), newNode.body(),
+                                  newNode.body().end());
+      for (auto t : llvm::zip(resultsToReplace, newNode.getResults()))
+        std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
+
+      rewriter.eraseOp(node);
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
+struct GraphHierarchySimplifyPattern : public OpRewritePattern<GraphNodeOp> {
+  using OpRewritePattern<GraphNodeOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(GraphNodeOp node,
+                                PatternRewriter &rewriter) const override {
+    // If the parent block only contains the current graph node, then the node
+    // can be fully inlined.
+    auto parentBlock = node->getBlock();
+    if (llvm::hasSingleElement(parentBlock->getOps<GraphNodeOp>())) {
+      auto &nodeOps = node.getBody()->getOperations();
+      auto &parentOps = parentBlock->getOperations();
+      parentOps.splice(node->getIterator(), nodeOps, nodeOps.begin(),
+                       std::prev(nodeOps.end()));
+      rewriter.replaceOp(node, node.getOutputOp()->getOperands());
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+void GraphNodeOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                              MLIRContext *context) {
+  results.add<GraphHierarchySimplifyPattern>(context);
+  results.add<GraphOutputSimplifyPattern>(context);
+}
+
+GraphOutputOp GraphNodeOp::getOutputOp() {
+  return cast<GraphOutputOp>(body().front().getTerminator());
+}
+
+//===----------------------------------------------------------------------===//
+// GraphOutputOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult GraphOutputOp::verify() {
+  if (getOperandTypes() !=
+      (*this)->getParentOfType<GraphNodeOp>().getResultTypes())
+    return emitOpError("output type doesn't align with node type");
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
 // DataflowNodeOp
 //===----------------------------------------------------------------------===//
 
