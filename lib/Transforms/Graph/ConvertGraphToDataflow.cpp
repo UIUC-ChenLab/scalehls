@@ -94,7 +94,7 @@ struct GraphNodeBufferizationPattern : public OpRewritePattern<GraphNodeOp> {
         auto output = op.getOutputOp().getOperand(result.getResultNumber());
         auto memref = rewriter.create<bufferization::ToMemrefOp>(
             rewriter.getUnknownLoc(), memrefType, output);
-        op.getOutputOp().outputsMutable().assign(memref);
+        op.getOutputOp()->getOpOperand(result.getResultNumber()).set(memref);
       }
     }
     return success(hasChanged);

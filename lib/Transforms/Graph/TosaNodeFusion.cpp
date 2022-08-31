@@ -177,8 +177,10 @@ struct TosaNodeFusion : public TosaNodeFusionBase<TosaNodeFusion> {
     patterns.add<OutlinePattern<tosa::AvgPool2dOp>>(context);
     patterns.add<OutlinePattern<tosa::MaxPool2dOp>>(context);
     patterns.add<OutlinePattern<tosa::MatMulOp>>(context);
-    patterns.add<OutlinePattern<tosa::AddOp>>(context);
     patterns.add<OutlinePattern<tosa::MulOp>>(context);
+    patterns.add<OutlinePattern<tosa::AddOp>>(context);
+    patterns.add<OutlinePattern<tosa::SubOp>>(context);
+    patterns.add<OutlinePattern<tosa::RsqrtOp>>(context);
     patterns.add<BackwardFusePattern<tosa::ClampOp>>(context, DT);
     patterns.add<BackwardFusePattern<tosa::TransposeOp>>(context, DT);
     patterns.add<ForwardFusePattern<tosa::ReshapeOp>>(context, DT);
