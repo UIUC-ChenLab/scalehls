@@ -276,6 +276,7 @@ void GraphNodeOp::getCanonicalizationPatterns(RewritePatternSet &results,
   results.add<SimplifyGraphNodeIOs>(context);
 }
 
+/// Get the terminator output op.
 GraphOutputOp GraphNodeOp::getOutputOp() {
   return cast<GraphOutputOp>(body().front().getTerminator());
 }
@@ -295,7 +296,33 @@ LogicalResult GraphOutputOp::verify() {
 // NodeOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult NodeOp::verify() { return success(); }
+LogicalResult NodeOp::verify() {
+  // for (auto outputArg : getOutputArguments()) {
+  //   if (!llvm::any_of(outputArg.getUses(), [](OpOperand &use) {}))
+  //     return failure();
+  // }
+  return success();
+}
+
+/// Check whether the operand is an output memref.
+bool NodeOp::isOutput(unsigned operandIdx) {
+  return operandIdx >= getODSOperandIndexAndLength(1).first;
+}
+bool NodeOp::isOutput(OpOperand &operand) {
+  return isOutput(operand.getOperandNumber());
+}
+
+/// Get the input and output arguments.
+iterator_range<Block::args_iterator> NodeOp::getInputArguments() {
+  auto range = getODSOperandIndexAndLength(0);
+  return {std::next(getBody()->args_begin(), range.first),
+          std::next(getBody()->args_begin(), range.first + range.second)};
+}
+iterator_range<Block::args_iterator> NodeOp::getOutputArguments() {
+  auto range = getODSOperandIndexAndLength(1);
+  return {std::next(getBody()->args_begin(), range.first),
+          std::next(getBody()->args_begin(), range.first + range.second)};
+}
 
 //===----------------------------------------------------------------------===//
 // ConstBufferOp

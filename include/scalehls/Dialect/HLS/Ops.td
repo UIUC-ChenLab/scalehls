@@ -33,6 +33,7 @@ def GraphNodeOp : HLSOp<"graph.node", [IsolatedFromAbove,
     `(` $inputs `)` attr-dict `:` functional-type($inputs, $outputs) $body
   }];
   let extraClassDeclaration = [{
+    /// Get the terminator output op.
     GraphOutputOp getOutputOp();
   }];
 }
@@ -91,6 +92,13 @@ def NodeOp : HLSOp<"node", [NoTerminator, IsolatedFromAbove, SingleBlock,
     `:` functional-type($inputs, $outputs) $body
   }];
   let extraClassDeclaration = [{
+    /// Check whether the operand is an output memref.
+    bool isOutput(unsigned operandIdx);
+    bool isOutput(OpOperand &operand);
+
+    /// Get the input and output arguments.
+    iterator_range<Block::args_iterator> getInputArguments();
+    iterator_range<Block::args_iterator> getOutputArguments();
   }];
 }
 
@@ -112,6 +120,10 @@ def ConstBufferOp : HLSOp<"const_buffer"> {
 
   let assemblyFormat = [{ attr-dict `:` type($memref) }];
 }
+
+//===----------------------------------------------------------------------===//
+// Stream Operations
+//===----------------------------------------------------------------------===//
 
 def DataflowNodeOp : HLSOp<"dataflow.node",
       [SingleBlockImplicitTerminator<"DataflowOutputOp">]> {
@@ -197,10 +209,6 @@ def DataflowBufferOp : HLSOp<"dataflow.buffer",
 
   let extraClassDeclaration = [{ bool isExternal(); }];
 }
-
-//===----------------------------------------------------------------------===//
-// Stream Operations
-//===----------------------------------------------------------------------===//
 
 def DeclaresStreamChannel : NativeOpTrait<"DeclaresStreamChannel">;
 

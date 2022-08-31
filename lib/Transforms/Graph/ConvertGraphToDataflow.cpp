@@ -152,9 +152,13 @@ struct ConvertGraphToDataflow
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
     // Convert dataflow node operations.
+    ConversionTarget target(*context);
+    target.addIllegalOp<NodeOp>();
+    target.addLegalOp<GraphNodeOp, GraphOutputOp>();
     patterns.clear();
     patterns.add<NodeConversionPattern>(context);
-    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+    if (failed(applyPartialConversion(func, target, std::move(patterns))))
+      return signalPassFailure();
   }
 };
 } // namespace
