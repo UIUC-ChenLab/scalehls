@@ -171,21 +171,22 @@ struct TosaNodeFusion : public TosaNodeFusionBase<TosaNodeFusion> {
     auto func = getOperation();
     auto context = func.getContext();
     auto DT = DominanceInfo(func);
-    mlir::RewritePatternSet patterns(context);
 
+    mlir::RewritePatternSet patterns(context);
     patterns.add<OutlinePattern<tosa::Conv2DOp>>(context);
     patterns.add<OutlinePattern<tosa::AvgPool2dOp>>(context);
     patterns.add<OutlinePattern<tosa::MaxPool2dOp>>(context);
     patterns.add<OutlinePattern<tosa::MatMulOp>>(context);
     patterns.add<OutlinePattern<tosa::AddOp>>(context);
     patterns.add<OutlinePattern<tosa::MulOp>>(context);
-
     patterns.add<BackwardFusePattern<tosa::ClampOp>>(context, DT);
     patterns.add<BackwardFusePattern<tosa::TransposeOp>>(context, DT);
-
     patterns.add<ForwardFusePattern<tosa::ReshapeOp>>(context, DT);
-    patterns.add<ConstFusePattern>(context);
+    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
+    patterns.clear();
+    patterns.add<OutlinePattern<tosa::TransposeOp>>(context);
+    patterns.add<ConstFusePattern>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };

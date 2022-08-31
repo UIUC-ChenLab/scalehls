@@ -15,17 +15,6 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-struct NodeConversionPattern : public OpRewritePattern<NodeOp> {
-  using OpRewritePattern<NodeOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(NodeOp op,
-                                PatternRewriter &rewriter) const override {
-    return success();
-  }
-};
-} // namespace
-
-namespace {
 struct ConstBufferConversionPattern
     : public OpRewritePattern<arith::ConstantOp> {
   using OpRewritePattern<arith::ConstantOp>::OpRewritePattern;
@@ -58,90 +47,114 @@ struct BufferConversionPattern : public OpRewritePattern<OpType> {
 };
 } // namespace
 
-/// Localize each tosa/arith constant to right before its each use. Only
-/// localize the constants whose size is below the bitsThreshold.
-static void localizeConstants(Block &block, int64_t bitsThreshold = INT64_MAX) {
-  auto builder = OpBuilder(block.getParentOp());
+namespace {
+struct GraphNodeBufferizationPattern : public OpRewritePattern<GraphNodeOp> {
+  using OpRewritePattern<GraphNodeOp>::OpRewritePattern;
 
-  // Collect all constants.
-  SmallVector<Operation *, 16> constants;
-  block.walk([&](Operation *constant) {
-    if (isa<arith::ConstantOp, PrimConstOp>(constant)) {
-      auto type = constant->getResult(0).getType();
-      if (auto shapedType = type.dyn_cast<ShapedType>()) {
-        if (shapedType.getSizeInBits() <= bitsThreshold)
-          constants.push_back(constant);
-      } else
-        constants.push_back(constant);
-    }
-  });
+  LogicalResult matchAndRewrite(GraphNodeOp op,
+                                PatternRewriter &rewriter) const override {
+    bool hasChanged = false;
 
-  // Localize constants to each of its use.
-  for (auto constant : constants) {
-    for (auto &use : llvm::make_early_inc_range(constant->getUses())) {
-      // Avoid to move constant across loop nests.
-      if (auto loop = use.getOwner()->getParentOfType<mlir::AffineForOp>())
-        if (loop != constant->getParentOp())
-          continue;
-      builder.setInsertionPoint(use.getOwner());
-      auto cloneConstant = builder.clone(*constant);
-      use.set(cloneConstant->getResult(0));
+    // Bufferize inputs of the node.
+    for (auto &input : llvm::make_early_inc_range(op->getOpOperands())) {
+      if (auto tensorType = input.get().getType().dyn_cast<TensorType>()) {
+        hasChanged = true;
+        auto memrefType =
+            MemRefType::get(tensorType.getShape(), tensorType.getElementType());
+
+        rewriter.setInsertionPoint(op);
+        auto memref = rewriter.create<bufferization::ToMemrefOp>(
+            rewriter.getUnknownLoc(), memrefType, input.get());
+        input.set(memref);
+
+        auto arg = op.getBody()->getArgument(input.getOperandNumber());
+        arg.setType(memrefType);
+
+        rewriter.setInsertionPointToStart(op.getBody());
+        auto tensor = rewriter.create<bufferization::ToTensorOp>(
+            rewriter.getUnknownLoc(), tensorType, arg);
+        arg.replaceAllUsesExcept(tensor, tensor);
+      }
     }
-    if (constant->use_empty())
-      constant->erase();
+
+    // Bufferize outputs of the node.
+    for (auto result : op->getResults()) {
+      if (auto tensorType = result.getType().dyn_cast<TensorType>()) {
+        hasChanged = true;
+        auto memrefType =
+            MemRefType::get(tensorType.getShape(), tensorType.getElementType());
+        result.setType(memrefType);
+
+        rewriter.setInsertionPointAfter(op);
+        auto tensor = rewriter.create<bufferization::ToTensorOp>(
+            rewriter.getUnknownLoc(), tensorType, result);
+        result.replaceAllUsesExcept(tensor, tensor);
+
+        rewriter.setInsertionPoint(op.getOutputOp());
+        auto output = op.getOutputOp().getOperand(result.getResultNumber());
+        auto memref = rewriter.create<bufferization::ToMemrefOp>(
+            rewriter.getUnknownLoc(), memrefType, output);
+        op.getOutputOp().outputsMutable().assign(memref);
+      }
+    }
+    return success(hasChanged);
   }
-}
+};
+} // namespace
+
+namespace {
+struct NodeConversionPattern : public OpRewritePattern<GraphNodeOp> {
+  using OpRewritePattern<GraphNodeOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(GraphNodeOp op,
+                                PatternRewriter &rewriter) const override {
+    SmallVector<Value, 8> outputMemrefs;
+    SmallVector<Location, 8> outputLocs;
+    for (auto output : op.getOutputOp().getOperands()) {
+      auto buffer = output.getDefiningOp();
+      if (!isa<BufferOp>(buffer))
+        return op.emitOpError("output memref must be defined by buffer op");
+      buffer->moveBefore(op);
+      outputMemrefs.push_back(output);
+      outputLocs.push_back(output.getLoc());
+    }
+
+    rewriter.setInsertionPoint(op);
+    auto node = rewriter.create<NodeOp>(rewriter.getUnknownLoc(),
+                                        op.getOperands(), outputMemrefs);
+    rewriter.inlineRegionBefore(op.body(), node.body(), node.body().end());
+    node.getBody()->getTerminator()->erase();
+
+    auto args =
+        node.getBody()->addArguments(ValueRange(outputMemrefs), outputLocs);
+    for (auto t : llvm::zip(outputMemrefs, args))
+      std::get<0>(t).replaceAllUsesExcept(std::get<1>(t), node);
+    rewriter.replaceOp(op, outputMemrefs);
+    return success();
+  }
+};
+} // namespace
 
 namespace {
 struct ConvertGraphToDataflow
     : public ConvertGraphToDataflowBase<ConvertGraphToDataflow> {
   void runOnOperation() override {
-    auto module = getOperation();
-    auto context = module.getContext();
-    // FIXME: Here we set a magic number as threshold, which is the size in bits
-    // of one Xilinx BRAM instance.
-    // localizeConstants(*module.getBody(), 1024 * 16);
+    auto func = getOperation();
+    auto context = func.getContext();
 
-    // // Hoist the memrefs and stream channels outputed by each node.
-    // // TODO: Maybe this should be factored out to somewhere else.
-    // module.walk([&](DataflowNodeOp node) {
-    //   auto output = node.getOutputOp();
-    //   for (auto &use : output->getOpOperands()) {
-    //     // TODO: Support other types of outputs?
-    //     if (!use.get().getType().isa<MemRefType, StreamType>()) {
-    //       output.emitOpError("dataflow output has not been bufferized");
-    //       return signalPassFailure();
-    //     }
+    // The intention of split the conversion into two parts is to allow the
+    // bufferization ops being canonicalized away.
+    mlir::RewritePatternSet patterns(context);
+    patterns.add<ConstBufferConversionPattern>(context);
+    patterns.add<BufferConversionPattern<memref::AllocOp>>(context);
+    patterns.add<BufferConversionPattern<memref::AllocaOp>>(context);
+    patterns.add<GraphNodeBufferizationPattern>(context);
+    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
-    //     if (auto defOp = use.get().getDefiningOp())
-    //       if (node->isAncestor(defOp))
-    //         defOp->moveBefore(node);
-    //     node.getResult(use.getOperandNumber()).replaceAllUsesWith(use.get());
-    //   }
-    // });
-
-    for (auto func :
-         llvm::make_early_inc_range(module.getOps<func::FuncOp>())) {
-      // Convert dataflow node and buffer operations.
-      ConversionTarget target(*context);
-      target
-          .addIllegalOp<arith::ConstantOp, memref::AllocOp, memref::AllocaOp>();
-      target.addLegalOp<ConstBufferOp, BufferOp>();
-      target.addDynamicallyLegalOp<arith::ConstantOp>(
-          [](arith::ConstantOp op) { return !op.getType().isa<TensorType>(); });
-
-      mlir::RewritePatternSet patterns(context);
-      patterns.add<NodeConversionPattern>(context);
-      patterns.add<ConstBufferConversionPattern>(context);
-      patterns.add<BufferConversionPattern<memref::AllocOp>>(context);
-      patterns.add<BufferConversionPattern<memref::AllocaOp>>(context);
-
-      // if (failed(applyPartialConversion(func, target, std::move(patterns))))
-      //   return signalPassFailure();
-
-      if (failed(applyPatternsAndFoldGreedily(func, std::move(patterns))))
-        return signalPassFailure();
-    }
+    // Convert dataflow node operations.
+    patterns.clear();
+    patterns.add<NodeConversionPattern>(context);
+    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
 } // namespace

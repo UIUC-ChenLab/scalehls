@@ -124,7 +124,7 @@ def TosaToLinalgCleanup :
 }
 
 def ConvertGraphToDataflow :
-      Pass<"scalehls-convert-graph-to-dataflow", "ModuleOp"> {
+      Pass<"scalehls-convert-graph-to-dataflow", "func::FuncOp"> {
   let summary = "Convert graph to dataflow dialect";
   let constructor = "mlir::scalehls::createConvertGraphToDataflowPass()";
 }

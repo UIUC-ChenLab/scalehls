@@ -179,7 +179,15 @@ LogicalResult GraphNodeOp::verify() {
   if (llvm::any_of((*this)->getUsers(), [&](Operation *user) {
         return !(*this)->getBlock()->findAncestorOpInBlock(*user);
       }))
-    return emitOpError("has unexpected dataflow consumer from parent block");
+    return emitOpError("has unexpected consumer from parent block");
+  if (llvm::any_of(getOperands(), [](Value value) {
+        return !value.getType().isa<TensorType>();
+      }))
+    return emitOpError("has non-tensor inputs");
+  if (llvm::any_of(getResults(), [](Value value) {
+        return !value.getType().isa<TensorType>();
+      }))
+    return emitOpError("has non-tensor outputs");
   return success();
 }
 

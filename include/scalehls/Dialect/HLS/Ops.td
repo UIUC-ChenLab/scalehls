@@ -87,7 +87,7 @@ def NodeOp : HLSOp<"node", [NoTerminator, IsolatedFromAbove, SingleBlock,
   ];
 
   let assemblyFormat = [{
-    (`(` `inputs` $inputs^ `)`)? (`,` `(` `outputs` $outputs^ `)`)? attr-dict
+    (`ins` `(` $inputs^ `)`)? (`outs` `(` $outputs^ `)`)? attr-dict
     `:` functional-type($inputs, $outputs) $body
   }];
   let extraClassDeclaration = [{
@@ -110,7 +110,7 @@ def ConstBufferOp : HLSOp<"const_buffer"> {
   let arguments = (ins ElementsAttr:$value);
   let results = (outs AnyMemRef:$memref);
 
-  let assemblyFormat = [{ $value attr-dict `:` type($memref) }];
+  let assemblyFormat = [{ attr-dict `:` type($memref) }];
 }
 
 def DataflowNodeOp : HLSOp<"dataflow.node",
