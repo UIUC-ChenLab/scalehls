@@ -10,6 +10,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Directive/FuncPipelining.cpp
   Directive/LoopPipelining.cpp
   Directive/QoREstimation.cpp
+  Graph/ConvertGraphToDataflow.cpp
   Graph/TosaFakeQuantize.cpp
   Graph/TosaToLinalgCleanup.cpp
   Graph/TosaSimplifyGraph.cpp

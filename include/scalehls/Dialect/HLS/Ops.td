@@ -14,30 +14,31 @@ include "mlir/Interfaces/ControlFlowInterfaces.td"
 // Graph Operations
 //===----------------------------------------------------------------------===//
 
-def GraphNodeOp : HLSOp<"graph.node",
-      [SingleBlockImplicitTerminator<"GraphOutputOp">]> {
-  let summary = "Graph node operation";
+def GraphNodeOp : HLSOp<"graph.node", [IsolatedFromAbove,
+      SingleBlockImplicitTerminator<"GraphOutputOp">]> {
+  let summary = "Represent a graph node";
   let description = [{
     This operation represents a node of tensor-level graph. It has a region,
     which is not isolated from above, to represent the tensor operations
-    contained by the node. The node can return variadic number of results.
+    contained by the node. The node can return variadic number of outputs.
   }];
 
   let hasCanonicalizer = 1;
   let hasVerifier = 1;
+  let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
   let regions = (region SizedRegion<1>:$body);
 
   let assemblyFormat = [{
-    `(` `)` (`->` qualified(type($outputs))^)? attr-dict-with-keyword $body
+    `(` $inputs `)` attr-dict `:` functional-type($inputs, $outputs) $body
   }];
   let extraClassDeclaration = [{
     GraphOutputOp getOutputOp();
   }];
 }
 
-def GraphOutputOp : HLSOp<"graph.output",
-      [Terminator, HasParent<"GraphNodeOp">, ReturnLike]> {
+def GraphOutputOp : HLSOp<"graph.output", [ReturnLike, Terminator,
+      HasParent<"GraphNodeOp">]> {
   let summary = "Output operation of a graph node";
   let description = [{
     The operation terminates a graph node region and outputs internal values
@@ -47,11 +48,70 @@ def GraphOutputOp : HLSOp<"graph.output",
   let hasVerifier = 1;
   let arguments = (ins Variadic<AnyType>:$outputs);
   let builders = [ OpBuilder<(ins), "build($_builder, $_state, llvm::None);"> ];
+
+  let assemblyFormat = [{ $outputs attr-dict `:` type($outputs) }];
 }
 
 //===----------------------------------------------------------------------===//
 // Dataflow Operations
 //===----------------------------------------------------------------------===//
+
+class StreamOf<list<Type> allowedTypes> : Type<And<[
+  CPred<"$_self.isa<::mlir::scalehls::hls::StreamType>()">,
+  Concat<"[](::mlir::Type elementType) { return ",
+    SubstLeaves<"$_self", "elementType", AnyTypeOf<allowedTypes>.predicate>,
+    "; }($_self.cast<::mlir::scalehls::hls::StreamType>().getElementType())">
+]>>;
+
+def AnyStream : StreamOf<[AnyType]>;
+def AnyMemrefOrStream : Type<Or<[AnyMemRef.predicate, AnyStream.predicate]>>;
+
+def NodeOp : HLSOp<"node", [NoTerminator, IsolatedFromAbove, SingleBlock,
+      AttrSizedOperandSegments]> {
+  let summary = "Represent a dataflow node";
+  let description = [{
+    This operation represents a node of dataflow. It has a region, which is
+    isolated from above, to represent the operations contained by the node. The
+    node can only take buffer or stream.channel as inputs or outputs.
+  }];
+
+  let hasVerifier = 1;
+  let arguments = (ins Variadic<AnyMemrefOrStream>:$inputs,
+                       Variadic<AnyMemrefOrStream>:$outputs,
+                       OptionalAttr<I32Attr>:$level);
+  let regions = (region SizedRegion<1>:$body);
+
+  let builders = [
+    OpBuilder<(ins "mlir::ValueRange":$inputs, "mlir::ValueRange":$outputs),
+                   "build($_builder, $_state, inputs, outputs, nullptr);">
+  ];
+
+  let assemblyFormat = [{
+    (`(` `inputs` $inputs^ `)`)? (`,` `(` `outputs` $outputs^ `)`)? attr-dict
+    `:` functional-type($inputs, $outputs) $body
+  }];
+  let extraClassDeclaration = [{
+  }];
+}
+
+def BufferOp : HLSOp<"buffer"> {
+  let summary = "Represent a dataflow buffer";
+
+  let arguments = (ins I32Attr:$depth);
+  let results = (outs AnyMemRef:$memref);
+
+  let assemblyFormat = [{ attr-dict `:` type($memref) }];
+}
+
+def ConstBufferOp : HLSOp<"const_buffer"> {
+  let summary = "Represent a cosntant dataflow buffer";
+
+  let hasVerifier = 1;
+  let arguments = (ins ElementsAttr:$value);
+  let results = (outs AnyMemRef:$memref);
+
+  let assemblyFormat = [{ $value attr-dict `:` type($memref) }];
+}
 
 def DataflowNodeOp : HLSOp<"dataflow.node",
       [SingleBlockImplicitTerminator<"DataflowOutputOp">]> {
@@ -143,13 +203,6 @@ def DataflowBufferOp : HLSOp<"dataflow.buffer",
 //===----------------------------------------------------------------------===//
 
 def DeclaresStreamChannel : NativeOpTrait<"DeclaresStreamChannel">;
-
-class StreamOf<list<Type> allowedTypes> : Type<And<[
-  CPred<"$_self.isa<::mlir::scalehls::hls::StreamType>()">,
-  Concat<"[](::mlir::Type elementType) { return ",
-    SubstLeaves<"$_self", "elementType", AnyTypeOf<allowedTypes>.predicate>,
-    "; }($_self.cast<::mlir::scalehls::hls::StreamType>().getElementType())">
-]>>;
 
 def StreamChannelOp : HLSOp<"stream.channel", [DeclaresStreamChannel]> {
   let summary = "Stream channel declaration operation";

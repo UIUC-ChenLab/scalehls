@@ -44,6 +44,7 @@ std::unique_ptr<Pass> createTosaFakeQuantizePass();
 std::unique_ptr<Pass> createTosaSimplifyGraphPass();
 std::unique_ptr<Pass> createTosaNodeFusionPass();
 std::unique_ptr<Pass> createTosaToLinalgCleanupPass();
+std::unique_ptr<Pass> createConvertGraphToDataflowPass();
 
 /// Runtime-related passes.
 std::unique_ptr<Pass> createCreateAxiInterfacePass();

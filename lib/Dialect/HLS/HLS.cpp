@@ -184,35 +184,48 @@ LogicalResult GraphNodeOp::verify() {
 }
 
 namespace {
-struct GraphOutputSimplifyPattern : public OpRewritePattern<GraphNodeOp> {
+struct SimplifyGraphNodeIOs : public OpRewritePattern<GraphNodeOp> {
   using OpRewritePattern<GraphNodeOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(GraphNodeOp node,
                                 PatternRewriter &rewriter) const override {
     auto output = node.getOutputOp();
-    bool hasUnusedResult = false;
+    bool hasUnusedPort = false;
 
-    SmallVector<Value, 4> outputValues;
-    SmallVector<Value, 4> resultsToReplace;
-    for (auto result : node.getResults()) {
+    // Identify output values that are used.
+    SmallVector<Value, 4> usedOutputs;
+    SmallVector<Value, 4> usedResults;
+    for (auto result : node.getResults())
       if (result.use_empty()) {
-        hasUnusedResult = true;
-        continue;
+        hasUnusedPort = true;
+      } else {
+        usedOutputs.push_back(output.getOperand(result.getResultNumber()));
+        usedResults.push_back(result);
       }
-      outputValues.push_back(output.getOperand(result.getResultNumber()));
-      resultsToReplace.push_back(result);
-    }
 
-    if (hasUnusedResult) {
+    // Identify input values that are used.
+    SmallVector<unsigned, 4> unusedArgNumbers;
+    SmallVector<Value, 4> usedInputs;
+    for (auto arg : node.getBody()->getArguments())
+      if (arg.use_empty()) {
+        hasUnusedPort = true;
+        unusedArgNumbers.push_back(arg.getArgNumber());
+      } else {
+        usedInputs.push_back(node.getOperand(arg.getArgNumber()));
+      }
+    node.getBody()->eraseArguments(unusedArgNumbers);
+
+    // Construct new graph node.
+    if (hasUnusedPort) {
       rewriter.setInsertionPoint(output);
-      rewriter.replaceOpWithNewOp<GraphOutputOp>(output, outputValues);
+      rewriter.replaceOpWithNewOp<GraphOutputOp>(output, usedOutputs);
 
       rewriter.setInsertionPoint(node);
-      auto newNode =
-          rewriter.create<GraphNodeOp>(node.getLoc(), ValueRange(outputValues));
+      auto newNode = rewriter.create<GraphNodeOp>(
+          node.getLoc(), ValueRange(usedOutputs), usedInputs);
       rewriter.inlineRegionBefore(node.body(), newNode.body(),
                                   newNode.body().end());
-      for (auto t : llvm::zip(resultsToReplace, newNode.getResults()))
+      for (auto t : llvm::zip(usedResults, newNode.getResults()))
         std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
 
       rewriter.eraseOp(node);
@@ -224,7 +237,7 @@ struct GraphOutputSimplifyPattern : public OpRewritePattern<GraphNodeOp> {
 } // namespace
 
 namespace {
-struct GraphHierarchySimplifyPattern : public OpRewritePattern<GraphNodeOp> {
+struct SimplifyGraphNodeHierarchy : public OpRewritePattern<GraphNodeOp> {
   using OpRewritePattern<GraphNodeOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(GraphNodeOp node,
@@ -237,6 +250,10 @@ struct GraphHierarchySimplifyPattern : public OpRewritePattern<GraphNodeOp> {
       auto &parentOps = parentBlock->getOperations();
       parentOps.splice(node->getIterator(), nodeOps, nodeOps.begin(),
                        std::prev(nodeOps.end()));
+
+      for (auto t :
+           llvm::zip(node.getBody()->getArguments(), node.getOperands()))
+        std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
       rewriter.replaceOp(node, node.getOutputOp()->getOperands());
       return success();
     }
@@ -247,8 +264,8 @@ struct GraphHierarchySimplifyPattern : public OpRewritePattern<GraphNodeOp> {
 
 void GraphNodeOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                               MLIRContext *context) {
-  results.add<GraphHierarchySimplifyPattern>(context);
-  results.add<GraphOutputSimplifyPattern>(context);
+  results.add<SimplifyGraphNodeHierarchy>(context);
+  results.add<SimplifyGraphNodeIOs>(context);
 }
 
 GraphOutputOp GraphNodeOp::getOutputOp() {
@@ -263,6 +280,28 @@ LogicalResult GraphOutputOp::verify() {
   if (getOperandTypes() !=
       (*this)->getParentOfType<GraphNodeOp>().getResultTypes())
     return emitOpError("output type doesn't align with node type");
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
+// NodeOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult NodeOp::verify() { return success(); }
+
+//===----------------------------------------------------------------------===//
+// ConstBufferOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult ConstBufferOp::verify() {
+  auto memrefType = getType();
+  auto attrType = value().getType().cast<TensorType>();
+  if (memrefType.getElementType() != attrType.getElementType())
+    return emitOpError("element type mismatch");
+  if (!memrefType.hasStaticShape() || !attrType.hasStaticShape())
+    return emitOpError("has dynamic shape");
+  if (memrefType.getShape() != attrType.getShape())
+    return emitOpError("shape mismatch");
   return success();
 }
 
