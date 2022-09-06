@@ -42,39 +42,6 @@ void HLSDialect::initialize() {
 // HLS dialect utils
 //===----------------------------------------------------------------------===//
 
-/// Get the users of a stream channel. If the channel is used by a function
-/// call, this method will recursively look into the corresponding sub-function.
-/// If the channel is used by a function return, this method will recursively
-/// look into each function that calls the parent function of the return.
-void hls::getStreamChannelUsers(Value channel,
-                                SmallVectorImpl<Operation *> &users) {
-  assert(channel.getType().isa<StreamType>() && "channel must be stream type");
-
-  for (auto &use : channel.getUses()) {
-    auto user = use.getOwner();
-    if (auto call = dyn_cast<func::CallOp>(user)) {
-      auto func = SymbolTable::lookupNearestSymbolFrom<func::FuncOp>(
-          call, call.getCalleeAttr());
-      if (!func.isPrivate())
-        getStreamChannelUsers(func.getArgument(use.getOperandNumber()), users);
-
-    } else if (auto returnOp = dyn_cast<func::ReturnOp>(user)) {
-      auto func = returnOp->getParentOfType<func::FuncOp>();
-      auto symbolUses = func.getSymbolUses(func->getParentOfType<ModuleOp>());
-      if (!symbolUses.hasValue())
-        continue;
-      for (auto &symbolUse : symbolUses.getValue()) {
-        if (auto call = dyn_cast<func::CallOp>(symbolUse.getUser()))
-          getStreamChannelUsers(call.getResult(use.getOperandNumber()), users);
-      }
-    } else if (auto output = dyn_cast<DataflowOutputOp>(user)) {
-      auto node = output->getParentOfType<DataflowNodeOp>();
-      getStreamChannelUsers(node.getResult(use.getOperandNumber()), users);
-    } else
-      users.push_back(user);
-  }
-}
-
 /// Timing attribute utils.
 TimingAttr hls::getTiming(Operation *op) {
   return op->getAttrOfType<TimingAttr>("timing");
@@ -345,8 +312,7 @@ struct SimplifyNodeHierarchy : public OpRewritePattern<NodeOp> {
         llvm::hasSingleElement(parentBlock->getOps<NodeOp>())) {
       auto &nodeOps = node.getBody()->getOperations();
       auto &parentOps = parentBlock->getOperations();
-      parentOps.splice(node->getIterator(), nodeOps, nodeOps.begin(),
-                       nodeOps.end());
+      parentOps.splice(node->getIterator(), nodeOps);
 
       for (auto t :
            llvm::zip(node.getBody()->getArguments(), node.getOperands()))
@@ -375,8 +341,10 @@ unsigned NodeOp::getNumOutputs() {
 
 /// Check whether the operand is an output memref.
 bool NodeOp::isOutput(OpOperand &operand) {
-  return operand.getOwner() == *this &&
-         operand.getOperandNumber() >= getODSOperandIndexAndLength(1).first;
+  return operand.getOwner() == *this && isOutput(operand.getOperandNumber());
+}
+bool NodeOp::isOutput(unsigned operandIdx) {
+  return operandIdx >= getODSOperandIndexAndLength(1).first;
 }
 
 /// Get the input and output arguments.
@@ -657,17 +625,17 @@ bool DataflowBufferOp::isExternal() {
 
 // Verify users of the operation are legal.
 template <typename OpType> static LogicalResult verifyChannelUsers(OpType op) {
-  unsigned numRead = 0, numWrite = 0;
-  for (auto user : op.getChannelUsers()) {
-    if (isa<StreamReadOp>(user))
-      ++numRead;
-    else if (isa<StreamWriteOp>(user))
-      ++numWrite;
-    else
-      return user->emitOpError("stream channel has unsupported user");
-  }
-  if (numWrite > 1)
-    return op->emitOpError("stream channel is written by multiple ops");
+  // unsigned numRead = 0, numWrite = 0;
+  // for (auto user : op.getChannelUsers()) {
+  //   if (isa<StreamReadOp>(user))
+  //     ++numRead;
+  //   else if (isa<StreamWriteOp>(user))
+  //     ++numWrite;
+  //   else
+  //     return user->emitOpError("stream channel has unsupported user");
+  // }
+  // if (numWrite > 1)
+  //   return op->emitOpError("stream channel is written by multiple ops");
   return success();
 }
 

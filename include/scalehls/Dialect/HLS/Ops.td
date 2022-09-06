@@ -99,6 +99,7 @@ def NodeOp : HLSOp<"node", [NoTerminator, IsolatedFromAbove, SingleBlock,
 
     /// Check whether the operand is an output memref.
     bool isOutput(OpOperand &operand);
+    bool isOutput(unsigned operandIdx);
 
     /// Get the input and output arguments.
     iterator_range<Block::args_iterator> getInputArguments();
@@ -223,7 +224,7 @@ def DataflowBufferOp : HLSOp<"dataflow.buffer",
 
 def DeclaresStreamChannel : NativeOpTrait<"DeclaresStreamChannel">;
 
-def StreamChannelOp : HLSOp<"stream.channel", [DeclaresStreamChannel]> {
+def StreamChannelOp : HLSOp<"stream.channel"> {
   let summary = "Stream channel declaration operation";
 
   let hasVerifier = 1;

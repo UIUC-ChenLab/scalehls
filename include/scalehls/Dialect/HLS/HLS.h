@@ -28,12 +28,6 @@ namespace hls {
 enum class MemoryKind { BRAM_S2P = 0, BRAM_T2P = 1, BRAM_1P = 2, DRAM = 3 };
 enum class PartitionKind { CYCLIC = 0, BLOCK = 1, NONE = 2 };
 
-/// Get the users of a stream channel. If the channel is used by a function
-/// call, this method will recursively look into the corresponding sub-function.
-/// If the channel is used by a function return, this method will recursively
-/// look into each function that calls the parent function of the return.
-void getStreamChannelUsers(Value channel, SmallVectorImpl<Operation *> &users);
-
 /// Timing attribute utils.
 TimingAttr getTiming(Operation *op);
 void setTiming(Operation *op, TimingAttr timing);
@@ -93,14 +87,6 @@ public:
         !op->getResult(0).getType().isa<scalehls::hls::StreamType>())
       return failure();
     return success();
-  }
-
-  /// Get all users of the channel.
-  SmallVector<Operation *, 2> getChannelUsers() {
-    SmallVector<Operation *, 2> users;
-    scalehls::hls::getStreamChannelUsers(this->getOperation()->getResult(0),
-                                         users);
-    return users;
   }
 };
 

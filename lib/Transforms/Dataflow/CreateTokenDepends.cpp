@@ -13,62 +13,60 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-struct TokenCreatePattern : public OpRewritePattern<func::FuncOp> {
-  using OpRewritePattern<func::FuncOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(func::FuncOp func,
-                                PatternRewriter &rewriter) const override {
-    auto loc = rewriter.getUnknownLoc();
-
-    for (auto node :
-         llvm::make_early_inc_range(func.getOps<DataflowNodeOp>())) {
-      // Collect consumers of the current node. For each consumer, we only need
-      // to create one token flow.
-      llvm::SmallDenseSet<Operation *, 4> consumers;
-      for (auto &use : llvm::make_early_inc_range(node->getUses())) {
-        // Skip non-tensor, buffer, and terminator users.
-        if (isa<DataflowBufferOp>(use.getOwner()) ||
-            !use.get().getType().isa<TensorType>() ||
-            use.getOwner() == use.getOwner()->getBlock()->getTerminator())
-          continue;
-
-        if (auto consumer = use.getOwner()->getParentOfType<DataflowNodeOp>())
-          consumers.insert(consumer);
-        else
-          return use.getOwner()->emitOpError(
-              "doesn't have parent dataflow node");
-      }
-
-      // Create token source and sink operations.
-      SmallVector<Operation *, 4> opsToFuse({node});
-      for (auto consumer : consumers) {
-        rewriter.setInsertionPointAfter(node);
-        auto token =
-            rewriter.create<DataflowSourceOp>(loc, rewriter.getI1Type());
-        opsToFuse.push_back(token);
-
-        rewriter.setInsertionPointToStart(
-            &cast<DataflowNodeOp>(consumer).body().front());
-        rewriter.create<DataflowSinkOp>(loc, token);
-      }
-
-      // Fuse the source operations and original dataflow node.
-      fuseOpsIntoNewNode(opsToFuse, rewriter);
-    }
-    return success();
-  }
-};
-} // namespace
-
-namespace {
 struct CreateTokenDepends : public CreateTokenDependsBase<CreateTokenDepends> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
+    auto b = OpBuilder(context);
 
-    mlir::RewritePatternSet patterns(context);
-    patterns.add<TokenCreatePattern>(context);
-    (void)applyOpPatternsAndFold(func, std::move(patterns));
+    // TODO: Use pattern matcher.
+    for (auto buffer : func.getOps<BufferOp>()) {
+      if (buffer.getProducers().empty() || buffer.getConsumers().empty())
+        continue;
+
+      b.setInsertionPointAfter(buffer);
+      auto token = b.create<StreamChannelOp>(
+          b.getUnknownLoc(), StreamType::get(b.getContext(), b.getI1Type(), 1));
+
+      for (auto node : buffer.getProducers()) {
+        auto outputIdx = llvm::find(node.outputs(), buffer.memref()) -
+                         node.outputs().begin();
+        SmallVector<Value, 8> outputs(node.outputs());
+        outputs.insert(std::next(outputs.begin(), outputIdx), token.channel());
+
+        b.setInsertionPoint(node);
+        auto newNode = b.create<NodeOp>(node.getLoc(), node.inputs(), outputs);
+        newNode.body().getBlocks().splice(newNode.body().end(),
+                                          node.body().getBlocks());
+        node.erase();
+        auto tokenArg = newNode.getBody()->insertArgument(
+            outputIdx + newNode.getNumInputs(), token.getType(),
+            token.getLoc());
+
+        b.setInsertionPointToEnd(newNode.getBody());
+        auto value =
+            b.create<arith::ConstantOp>(b.getUnknownLoc(), b.getBoolAttr(true));
+        b.create<StreamWriteOp>(b.getUnknownLoc(), tokenArg, value);
+      }
+
+      for (auto node : buffer.getConsumers()) {
+        auto inputIdx =
+            llvm::find(node.inputs(), buffer.memref()) - node.inputs().begin();
+        SmallVector<Value, 8> inputs(node.inputs());
+        inputs.insert(std::next(inputs.begin(), inputIdx), token.channel());
+
+        b.setInsertionPoint(node);
+        auto newNode = b.create<NodeOp>(node.getLoc(), inputs, node.outputs());
+        newNode.body().getBlocks().splice(newNode.body().end(),
+                                          node.body().getBlocks());
+        node.erase();
+        auto tokenArg = newNode.getBody()->insertArgument(
+            inputIdx, token.getType(), token.getLoc());
+
+        b.setInsertionPointToStart(newNode.getBody());
+        b.create<StreamReadOp>(b.getUnknownLoc(), Type(), tokenArg);
+      }
+    }
   }
 };
 } // namespace
