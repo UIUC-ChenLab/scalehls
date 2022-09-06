@@ -136,9 +136,40 @@ struct BypassPathRemovePattern : public OpRewritePattern<NodeOp> {
 };
 } // namespace
 
-static NodeOp fuseNodeOps(ArrayRef<NodeOp> ops, PatternRewriter &rewriter) {
-  assert(!ops.empty() && "must fuse at least one op");
-  rewriter.setInsertionPointAfter(ops.back());
+static NodeOp fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter) {
+  assert((nodes.size() > 1) && "must fuse at least two nodes");
+
+  // Collect inputs and outputs of the new node.
+  SmallVector<Value, 8> inputs;
+  SmallVector<Location, 8> inputLocs;
+  SmallVector<Value, 8> outputs;
+  SmallVector<Location, 8> outputLocs;
+  for (auto node : nodes) {
+    for (auto input : node.inputs()) {
+      inputs.push_back(input);
+      inputLocs.push_back(input.getLoc());
+    }
+    for (auto output : node.outputs()) {
+      outputs.push_back(output);
+      outputLocs.push_back(output.getLoc());
+    }
+  }
+
+  // Construct the new node after the last node.
+  rewriter.setInsertionPointAfter(nodes.back());
+  auto newNode =
+      rewriter.create<NodeOp>(rewriter.getUnknownLoc(), inputs, outputs);
+  auto block = rewriter.createBlock(&newNode.body());
+  block->addArguments(ValueRange(inputs), inputLocs);
+  block->addArguments(ValueRange(outputs), outputLocs);
+
+  for (auto node : nodes)
+    node->moveBefore(block, block->end());
+  for (auto t : llvm::zip(newNode.getOperands(), block->getArguments()))
+    std::get<0>(t).replaceUsesWithIf(std::get<1>(t), [&](OpOperand &use) {
+      return newNode->isProperAncestor(use.getOwner());
+    });
+  return newNode;
 }
 
 namespace {
@@ -148,21 +179,21 @@ struct NodeMergePattern : public OpRewritePattern<OpType> {
 
   LogicalResult matchAndRewrite(func::FuncOp target,
                                 PatternRewriter &rewriter) const override {
-    llvm::SmallDenseMap<unsigned, SmallVector<Operation *>> worklist;
-    for (auto &op : target.getOps())
-      if (auto node = dyn_cast<NodeOp>(op)) {
-        if (auto level = node.level())
-          worklist[level.getValue()].push_back(&op);
-        else
-          return op.emitOpError("node is not scheduled");
-      }
+    llvm::SmallDenseMap<unsigned, SmallVector<NodeOp, 4>> worklist;
+    for (auto node : target.getOps<NodeOp>()) {
+      if (auto level = node.level())
+        worklist[level.getValue()].push_back(node);
+      else
+        return node.emitOpError("node is not scheduled");
+    }
 
     bool hasChanged = false;
-    for (const auto &p : worklist) {
-      auto node = fuseNodeOps(p.second, rewriter);
-      node->setAttr(node.levelAttrName(), rewriter.getI32IntegerAttr(p.first));
-      hasChanged = true;
-    }
+    for (const auto &p : worklist)
+      if (p.second.size() > 1) {
+        auto node = fuseNodeOps(p.second, rewriter);
+        node.levelAttr(rewriter.getI32IntegerAttr(p.first));
+        hasChanged = true;
+      }
     return success(hasChanged);
   }
 };
@@ -174,17 +205,18 @@ struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
     auto func = getOperation();
     auto context = func.getContext();
 
+    // Remove multi-producers and bypass paths.
     mlir::RewritePatternSet patterns(context);
     patterns.add<MultiProducerRemovePattern>(context);
     patterns.add<BypassPathRemovePattern>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
-    // // Legalize function dataflow.
-    // patterns.clear();
-    // // patterns.add<NodeMergePattern<func::FuncOp>>(context);
-    // (void)applyOpPatternsAndFold(func, std::move(patterns));
-    // if (!func.getOps<DataflowNodeOp>().empty())
-    //   setFuncDirective(func, false, 1, true);
+    // Legalize function dataflow.
+    patterns.clear();
+    patterns.add<NodeMergePattern<func::FuncOp>>(context);
+    (void)applyOpPatternsAndFold(func, std::move(patterns));
+    if (!func.getOps<NodeOp>().empty())
+      setFuncDirective(func, false, 1, true);
 
     // // Collect all target loop bands.
     // AffineLoopBands targetBands;
