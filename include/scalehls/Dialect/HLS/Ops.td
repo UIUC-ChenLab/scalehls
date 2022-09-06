@@ -92,8 +92,11 @@ def NodeOp : HLSOp<"node", [NoTerminator, IsolatedFromAbove, SingleBlock,
     `:` functional-type($inputs, $outputs) $body
   }];
   let extraClassDeclaration = [{
+    /// Return the number of inputs and outputs.
+    unsigned getNumInputs();
+    unsigned getNumOutputs();
+
     /// Check whether the operand is an output memref.
-    bool isOutput(unsigned operandIdx);
     bool isOutput(OpOperand &operand);
 
     /// Get the input and output arguments.
@@ -109,6 +112,13 @@ def BufferOp : HLSOp<"buffer"> {
   let results = (outs AnyMemRef:$memref);
 
   let assemblyFormat = [{ attr-dict `:` type($memref) }];
+  let extraClassDeclaration = [{
+    /// Get consumers or producers of the dataflow buffer.
+    SmallVector<NodeOp, 4> getConsumersExcept(NodeOp exceptedOp);
+    SmallVector<NodeOp, 4> getProducersExcept(NodeOp exceptedOp);
+    SmallVector<NodeOp, 4> getConsumers();
+    SmallVector<NodeOp, 4> getProducers();
+  }];
 }
 
 def ConstBufferOp : HLSOp<"const_buffer"> {

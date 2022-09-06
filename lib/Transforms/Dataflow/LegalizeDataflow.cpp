@@ -4,6 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/IR/Dominance.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -13,173 +14,152 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-struct MultiProducerRemovePattern : public OpRewritePattern<DataflowNodeOp> {
-  using OpRewritePattern<DataflowNodeOp>::OpRewritePattern;
+struct MultiProducerRemovePattern : public OpRewritePattern<BufferOp> {
+  using OpRewritePattern<BufferOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(DataflowNodeOp node,
+  LogicalResult matchAndRewrite(BufferOp buffer,
                                 PatternRewriter &rewriter) const override {
-    auto loc = rewriter.getUnknownLoc();
+    if (buffer.getProducers().empty() ||
+        llvm::hasSingleElement(buffer.getProducers()))
+      return failure();
 
-    // The rationale here is if a memref is an output value of the current node
-    // while defined by another node in the same block, which means the memref
-    // is updated by both dataflow nodes, then we must create an explicit memref
-    // copy to avoid the multi-producer violation.
-    bool hasChanged = false;
-    for (auto outputValue : node.getOutputValues()) {
-      auto memrefType = outputValue.getType().dyn_cast<MemRefType>();
-      auto defNode = outputValue.getDefiningOp<DataflowNodeOp>();
+    Value currentBuffer = buffer;
+    for (auto user : llvm::drop_begin(buffer.getProducers())) {
+      auto node = cast<NodeOp>(user);
+      auto operandIdx = llvm::find(node.getOperands(), buffer.memref()) -
+                        node.operand_begin();
 
-      if (memrefType && defNode && defNode->getBlock() == node->getBlock()) {
-        rewriter.setInsertionPointToStart(node.getBody());
-        auto buffer = rewriter.create<memref::AllocOp>(loc, memrefType);
-        outputValue.replaceUsesWithIf(buffer, [&](OpOperand &use) {
-          return node->isProperAncestor(use.getOwner());
-        });
+      // Create a new buffer.
+      rewriter.setInsertionPoint(node);
+      auto newBuffer = cast<BufferOp>(rewriter.clone(*buffer));
+      node.setOperand(operandIdx, newBuffer);
 
-        rewriter.create<memref::CopyOp>(loc, outputValue, buffer);
-        hasChanged = true;
-      }
+      // Create a new node that takes the current buffer as input.
+      auto newInputs = SmallVector<Value>(node.inputs());
+      newInputs.push_back(currentBuffer);
+      auto newNode =
+          rewriter.create<NodeOp>(node.getLoc(), newInputs, node.outputs());
+      rewriter.inlineRegionBefore(node.body(), newNode.body(),
+                                  newNode.body().end());
+
+      // Create an explicit data copy from the current buffer to new buffer.
+      auto currentArg = newNode.getBody()->insertArgument(
+          node.getNumInputs(), buffer.getType(), buffer.getLoc());
+      auto newArg = newNode.getBody()->getArgument(operandIdx + 1);
+      rewriter.setInsertionPointToStart(newNode.getBody());
+      rewriter.create<memref::CopyOp>(rewriter.getUnknownLoc(), currentArg,
+                                      newArg);
+
+      // Finally, we can safely remove the node and update the current
+      rewriter.eraseOp(node);
+      currentBuffer = newBuffer;
     }
-    return success(hasChanged);
-  }
-};
-} // namespace
-
-/// Get the dataflow level of an operation.
-static Optional<unsigned> getDataflowLevel(Operation *op) {
-  if (op == op->getBlock()->getTerminator())
-    return (unsigned)0;
-  if (auto node = dyn_cast<DataflowNodeOp>(op))
-    return node.level();
-  if (auto buffer = dyn_cast<DataflowBufferOp>(op))
-    return buffer.level();
-  if (auto node = op->getParentOfType<DataflowNodeOp>())
-    return node.level();
-  return llvm::None;
-}
-
-/// Schedule the dataflow level of the given operation. Supports DataflowNodeOp
-/// and DataflowBufferOp.
-template <typename OpType>
-static LogicalResult scheduleDataflowOp(OpType op, PatternRewriter &rewriter) {
-  unsigned level = 0;
-  for (auto user : op->getUsers()) {
-    auto userLevel = getDataflowLevel(user);
-    if (!userLevel.hasValue())
-      return failure();
-    level = std::max(level, userLevel.getValue() + 1);
-  }
-  op->setAttr(op.levelAttrName(), rewriter.getI32IntegerAttr(level));
-  return success();
-}
-
-namespace {
-struct NodeSchedulePattern : public OpRewritePattern<DataflowNodeOp> {
-  using OpRewritePattern<DataflowNodeOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(DataflowNodeOp node,
-                                PatternRewriter &rewriter) const override {
-    if (node.level().hasValue())
-      return failure();
-    return scheduleDataflowOp(node, rewriter);
-  }
-};
-} // namespace
-
-namespace {
-struct BufferInsertPattern : public OpRewritePattern<DataflowNodeOp> {
-  using OpRewritePattern<DataflowNodeOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(DataflowNodeOp node,
-                                PatternRewriter &rewriter) const override {
-    if (!node.level().hasValue())
-      return failure();
-    auto loc = rewriter.getUnknownLoc();
-
-    bool hasChanged = false;
-    for (auto use : node.getDataflowUses()) {
-      auto userLevel = getDataflowLevel(use.second);
-      if (!userLevel.hasValue())
-        continue;
-
-      auto levelDiff = node.level().getValue() - userLevel.getValue();
-      if (levelDiff > 1) {
-        rewriter.setInsertionPointAfter(node);
-        auto buffer = rewriter.create<DataflowBufferOp>(
-            loc, use.first.getType(), use.first, levelDiff - 1);
-        use.first.replaceUsesWithIf(buffer.output(), [&](OpOperand &operand) {
-          return use.second->isAncestor(operand.getOwner());
-        });
-        hasChanged = true;
-      }
-    }
-    return success(hasChanged);
-  }
-};
-} // namespace
-
-namespace {
-struct BufferSplitPattern : public OpRewritePattern<DataflowBufferOp> {
-  using OpRewritePattern<DataflowBufferOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(DataflowBufferOp buffer,
-                                PatternRewriter &rewriter) const override {
-    // Single-element and external buffer don't need to split.
-    if (buffer.depth() == 1 || buffer.isExternal())
-      return failure();
-
-    Value currentValue = buffer.input();
-    DataflowBufferOp currentBuffer;
-    for (unsigned i = 0; i < buffer.depth(); ++i) {
-      rewriter.setInsertionPoint(buffer);
-      currentBuffer = rewriter.create<DataflowBufferOp>(
-          buffer.getLoc(), buffer.getType(), currentValue, /*depth=*/1);
-      currentValue = currentBuffer.output();
-    }
-    rewriter.replaceOp(buffer, currentValue);
     return success();
   }
 };
 } // namespace
 
 namespace {
-struct BufferSchedulePattern : public OpRewritePattern<DataflowBufferOp> {
-  using OpRewritePattern<DataflowBufferOp>::OpRewritePattern;
+struct BypassPathRemovePattern : public OpRewritePattern<NodeOp> {
+  using OpRewritePattern<NodeOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(DataflowBufferOp buffer,
+  LogicalResult matchAndRewrite(NodeOp node,
                                 PatternRewriter &rewriter) const override {
-    // Multi-elements and external buffer should not be scheduled.
-    if (buffer.level().hasValue() || buffer.depth() != 1 || buffer.isExternal())
+    if (node.level().hasValue())
       return failure();
-    return scheduleDataflowOp(buffer, rewriter);
+
+    unsigned level = 0;
+    for (auto output : node.outputs()) {
+      auto buffer = output.getDefiningOp<BufferOp>();
+      if (!buffer)
+        return node.emitOpError("has unexpected output");
+      if (!buffer.getProducersExcept(node).empty())
+        return failure();
+
+      for (auto consumer : buffer.getConsumers()) {
+        if (!consumer.level().hasValue())
+          return failure();
+        level = std::max(level, consumer.level().getValue() + 1);
+      }
+    }
+    node.levelAttr(rewriter.getI32IntegerAttr(level));
+
+    for (auto output : node.outputs()) {
+      auto buffer = output.getDefiningOp<BufferOp>();
+      SmallVector<std::pair<unsigned, NodeOp>, 4> worklist;
+      for (auto consumer : buffer.getConsumers()) {
+        auto diff = level - consumer.level().getValue();
+        worklist.push_back({diff, consumer});
+      }
+      if (worklist.empty())
+        continue;
+
+      auto currentBuffer = buffer;
+      auto currentNode = node;
+      llvm::sort(worklist, [](auto a, auto b) { return a.first > b.first; });
+      for (unsigned i = 2, e = worklist.front().first; i <= e; ++i) {
+        // Create a new buffer.
+        rewriter.setInsertionPoint(currentNode);
+        auto newBuffer = cast<BufferOp>(rewriter.clone(*buffer));
+
+        // Construct a new node for data copy.
+        rewriter.setInsertionPointAfter(currentNode);
+        auto newNode = rewriter.create<NodeOp>(
+            rewriter.getUnknownLoc(), ValueRange(currentBuffer.memref()),
+            ValueRange(newBuffer.memref()));
+        auto block = rewriter.createBlock(&newNode.body());
+        block->addArguments(
+            TypeRange({currentBuffer.getType(), newBuffer.getType()}),
+            {currentBuffer.getLoc(), newBuffer.getLoc()});
+
+        // Create an explicit copy operation.
+        rewriter.setInsertionPointToStart(block);
+        rewriter.create<memref::CopyOp>(rewriter.getUnknownLoc(),
+                                        block->getArgument(0),
+                                        block->getArgument(1));
+
+        // Replace all uses at the current level.
+        llvm::SmallDenseSet<Operation *, 4> consumers;
+        while (!worklist.empty() && (worklist.back().first == i))
+          consumers.insert(worklist.pop_back_val().second);
+        buffer.memref().replaceUsesWithIf(newBuffer, [&](OpOperand &use) {
+          return consumers.count(use.getOwner());
+        });
+
+        // Finally, we can update current buffer and current node.
+        currentBuffer = newBuffer;
+        currentNode = newNode;
+      }
+    }
+    return success();
   }
 };
 } // namespace
 
+static NodeOp fuseNodeOps(ArrayRef<NodeOp> ops, PatternRewriter &rewriter) {
+  assert(!ops.empty() && "must fuse at least one op");
+  rewriter.setInsertionPointAfter(ops.back());
+}
+
 namespace {
 template <typename OpType>
-struct DataflowMergePattern : public OpRewritePattern<OpType> {
+struct NodeMergePattern : public OpRewritePattern<OpType> {
   using OpRewritePattern<OpType>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(OpType target,
+  LogicalResult matchAndRewrite(func::FuncOp target,
                                 PatternRewriter &rewriter) const override {
-    llvm::SmallDenseMap<unsigned, SmallVector<Operation *>> dataflowOpsList;
+    llvm::SmallDenseMap<unsigned, SmallVector<Operation *>> worklist;
     for (auto &op : target.getOps())
-      if (isa<DataflowNodeOp, DataflowBufferOp>(op)) {
-        // Multi-elements and external buffer should not be merged.
-        if (auto buffer = dyn_cast<DataflowBufferOp>(op))
-          if (buffer.depth() != 1 || buffer.isExternal())
-            continue;
-
-        if (auto level = getDataflowLevel(&op))
-          dataflowOpsList[level.getValue()].push_back(&op);
+      if (auto node = dyn_cast<NodeOp>(op)) {
+        if (auto level = node.level())
+          worklist[level.getValue()].push_back(&op);
         else
-          return op.emitOpError("is not scheduled");
+          return op.emitOpError("node is not scheduled");
       }
 
     bool hasChanged = false;
-    for (const auto &p : dataflowOpsList) {
-      auto node = fuseOpsIntoNewNode(p.second, rewriter);
+    for (const auto &p : worklist) {
+      auto node = fuseNodeOps(p.second, rewriter);
       node->setAttr(node.levelAttrName(), rewriter.getI32IntegerAttr(p.first));
       hasChanged = true;
     }
@@ -196,32 +176,29 @@ struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<MultiProducerRemovePattern>(context);
-    patterns.add<NodeSchedulePattern>(context);
-    patterns.add<BufferInsertPattern>(context);
-    patterns.add<BufferSplitPattern>(context);
-    patterns.add<BufferSchedulePattern>(context);
+    patterns.add<BypassPathRemovePattern>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
-    // Legalize function dataflow.
-    patterns.clear();
-    patterns.add<DataflowMergePattern<func::FuncOp>>(context);
-    (void)applyOpPatternsAndFold(func, std::move(patterns));
-    if (!func.getOps<DataflowNodeOp>().empty())
-      setFuncDirective(func, false, 1, true);
+    // // Legalize function dataflow.
+    // patterns.clear();
+    // // patterns.add<NodeMergePattern<func::FuncOp>>(context);
+    // (void)applyOpPatternsAndFold(func, std::move(patterns));
+    // if (!func.getOps<DataflowNodeOp>().empty())
+    //   setFuncDirective(func, false, 1, true);
 
-    // Collect all target loop bands.
-    AffineLoopBands targetBands;
-    getLoopBands(func.front(), targetBands, /*allowHavingChilds=*/true);
+    // // Collect all target loop bands.
+    // AffineLoopBands targetBands;
+    // getLoopBands(func.front(), targetBands, /*allowHavingChilds=*/true);
 
-    // Legalize loop dataflow to each innermost loop.
-    patterns.clear();
-    patterns.add<DataflowMergePattern<mlir::AffineForOp>>(context);
-    FrozenRewritePatternSet frozenPatterns(std::move(patterns));
-    for (auto &band : targetBands) {
-      (void)applyOpPatternsAndFold(band.back(), frozenPatterns);
-      if (!band.back().getOps<DataflowNodeOp>().empty())
-        setLoopDirective(band.back(), false, 1, true, false);
-    }
+    // // Legalize loop dataflow to each innermost loop.
+    // patterns.clear();
+    // // patterns.add<NodeMergePattern<mlir::AffineForOp>>(context);
+    // FrozenRewritePatternSet frozenPatterns(std::move(patterns));
+    // for (auto &band : targetBands) {
+    //   (void)applyOpPatternsAndFold(band.back(), frozenPatterns);
+    //   if (!band.back().getOps<DataflowNodeOp>().empty())
+    //     setLoopDirective(band.back(), false, 1, true, false);
+    // }
   }
 };
 } // namespace

@@ -304,12 +304,18 @@ LogicalResult NodeOp::verify() {
   return success();
 }
 
-/// Check whether the operand is an output memref.
-bool NodeOp::isOutput(unsigned operandIdx) {
-  return operandIdx >= getODSOperandIndexAndLength(1).first;
+/// Return the number of inputs and outputs.
+unsigned NodeOp::getNumInputs() {
+  return getODSOperandIndexAndLength(0).second;
 }
+unsigned NodeOp::getNumOutputs() {
+  return getODSOperandIndexAndLength(1).second;
+}
+
+/// Check whether the operand is an output memref.
 bool NodeOp::isOutput(OpOperand &operand) {
-  return isOutput(operand.getOperandNumber());
+  return operand.getOwner() == *this &&
+         operand.getOperandNumber() >= getODSOperandIndexAndLength(1).first;
 }
 
 /// Get the input and output arguments.
@@ -322,6 +328,36 @@ iterator_range<Block::args_iterator> NodeOp::getOutputArguments() {
   auto range = getODSOperandIndexAndLength(1);
   return {std::next(getBody()->args_begin(), range.first),
           std::next(getBody()->args_begin(), range.first + range.second)};
+}
+
+//===----------------------------------------------------------------------===//
+// BufferOp
+//===----------------------------------------------------------------------===//
+
+static SmallVector<NodeOp, 4> getBufferUsers(Value buffer, bool isProducer,
+                                             NodeOp exceptedOp) {
+  SmallVector<NodeOp, 4> nodes;
+  for (auto &use : buffer.getUses())
+    if (auto node = dyn_cast<NodeOp>(use.getOwner()))
+      if ((node.isOutput(use) == isProducer) && (node != exceptedOp))
+        nodes.push_back(node);
+  return nodes;
+}
+
+SmallVector<NodeOp, 4> BufferOp::getConsumersExcept(NodeOp exceptedOp) {
+  return getBufferUsers(this->getOperation()->getResult(0), false, exceptedOp);
+}
+
+SmallVector<NodeOp, 4> BufferOp::getProducersExcept(NodeOp exceptedOp) {
+  return getBufferUsers(this->getOperation()->getResult(0), true, exceptedOp);
+}
+
+SmallVector<NodeOp, 4> BufferOp::getConsumers() {
+  return getConsumersExcept(NodeOp());
+}
+
+SmallVector<NodeOp, 4> BufferOp::getProducers() {
+  return getProducersExcept(NodeOp());
 }
 
 //===----------------------------------------------------------------------===//

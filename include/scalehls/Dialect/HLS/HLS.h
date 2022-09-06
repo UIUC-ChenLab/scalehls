@@ -25,8 +25,6 @@ namespace mlir {
 namespace scalehls {
 namespace hls {
 
-class DataflowNodeOp;
-
 enum class MemoryKind { BRAM_S2P = 0, BRAM_T2P = 1, BRAM_1P = 2, DRAM = 3 };
 enum class PartitionKind { CYCLIC = 0, BLOCK = 1, NONE = 2 };
 
@@ -77,12 +75,15 @@ void setTopFuncAttr(Operation *op);
 bool hasRuntimeAttr(Operation *op);
 void setRuntimeAttr(Operation *op);
 
+class NodeOp;
+
 } // namespace hls
 } // namespace scalehls
 } // namespace mlir
 
 namespace mlir {
 namespace OpTrait {
+
 template <typename ConcreteType>
 class DeclaresStreamChannel
     : public TraitBase<ConcreteType, DeclaresStreamChannel> {
@@ -102,6 +103,7 @@ public:
     return users;
   }
 };
+
 } // namespace OpTrait
 } // namespace mlir
 
