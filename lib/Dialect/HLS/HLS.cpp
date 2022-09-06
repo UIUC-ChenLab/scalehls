@@ -250,10 +250,11 @@ struct SimplifyGraphNodeHierarchy : public OpRewritePattern<GraphNodeOp> {
 
   LogicalResult matchAndRewrite(GraphNodeOp node,
                                 PatternRewriter &rewriter) const override {
-    // If the parent block only contains the current graph node, then the node
-    // can be fully inlined.
+    // If the parent block is another graph node OR only contains the current
+    // graph node, then the node can be fully inlined.
     auto parentBlock = node->getBlock();
-    if (llvm::hasSingleElement(parentBlock->getOps<GraphNodeOp>())) {
+    if (isa<GraphNodeOp>(parentBlock->getParentOp()) ||
+        llvm::hasSingleElement(parentBlock->getOps<GraphNodeOp>())) {
       auto &nodeOps = node.getBody()->getOperations();
       auto &parentOps = parentBlock->getOperations();
       parentOps.splice(node->getIterator(), nodeOps, nodeOps.begin(),
