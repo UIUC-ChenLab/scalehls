@@ -175,22 +175,6 @@ bool hls::hasRuntimeAttr(Operation *op) {
 // GraphNodeOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult GraphNodeOp::verify() {
-  if (llvm::any_of((*this)->getUsers(), [&](Operation *user) {
-        return !(*this)->getBlock()->findAncestorOpInBlock(*user);
-      }))
-    return emitOpError("has unexpected consumer from parent block");
-  if (llvm::any_of(getOperands(), [](Value value) {
-        return !value.getType().isa<TensorType>();
-      }))
-    return emitOpError("has non-tensor inputs");
-  if (llvm::any_of(getResults(), [](Value value) {
-        return !value.getType().isa<TensorType>();
-      }))
-    return emitOpError("has non-tensor outputs");
-  return success();
-}
-
 namespace {
 struct SimplifyGraphNodeIOs : public OpRewritePattern<GraphNodeOp> {
   using OpRewritePattern<GraphNodeOp>::OpRewritePattern;
@@ -282,6 +266,22 @@ GraphOutputOp GraphNodeOp::getOutputOp() {
   return cast<GraphOutputOp>(body().front().getTerminator());
 }
 
+LogicalResult GraphNodeOp::verify() {
+  if (llvm::any_of((*this)->getUsers(), [&](Operation *user) {
+        return !(*this)->getBlock()->findAncestorOpInBlock(*user);
+      }))
+    return emitOpError("has unexpected consumer from parent block");
+  if (llvm::any_of(getOperands(), [](Value value) {
+        return !value.getType().isa<TensorType>();
+      }))
+    return emitOpError("has non-tensor inputs");
+  if (llvm::any_of(getResults(), [](Value value) {
+        return !value.getType().isa<TensorType>();
+      }))
+    return emitOpError("has non-tensor outputs");
+  return success();
+}
+
 //===----------------------------------------------------------------------===//
 // GraphOutputOp
 //===----------------------------------------------------------------------===//
@@ -297,12 +297,72 @@ LogicalResult GraphOutputOp::verify() {
 // NodeOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult NodeOp::verify() {
-  // for (auto outputArg : getOutputArguments()) {
-  //   if (!llvm::any_of(outputArg.getUses(), [](OpOperand &use) {}))
-  //     return failure();
-  // }
-  return success();
+namespace {
+struct SimplifyNodeIOs : public OpRewritePattern<NodeOp> {
+  using OpRewritePattern<NodeOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(NodeOp node,
+                                PatternRewriter &rewriter) const override {
+    bool hasUnusedPort = false;
+
+    // Identify input values that are used.
+    SmallVector<unsigned, 4> unusedArgNumbers;
+    SmallVector<Value, 4> usedPorts;
+    for (auto arg : node.getBody()->getArguments())
+      if (arg.use_empty()) {
+        hasUnusedPort = true;
+        unusedArgNumbers.push_back(arg.getArgNumber());
+      } else {
+        usedPorts.push_back(node.getOperand(arg.getArgNumber()));
+      }
+    node.getBody()->eraseArguments(unusedArgNumbers);
+
+    // Construct new dataflow node.
+    if (hasUnusedPort) {
+      rewriter.setInsertionPoint(node);
+      auto newNode =
+          rewriter.create<NodeOp>(node.getLoc(), TypeRange(), usedPorts);
+      rewriter.inlineRegionBefore(node.body(), newNode.body(),
+                                  newNode.body().end());
+      rewriter.eraseOp(node);
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
+struct SimplifyNodeHierarchy : public OpRewritePattern<NodeOp> {
+  using OpRewritePattern<NodeOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(NodeOp node,
+                                PatternRewriter &rewriter) const override {
+    // If the parent block is another node OR only contains the current node,
+    // then the node can be fully inlined.
+    auto parentBlock = node->getBlock();
+    if (isa<NodeOp>(parentBlock->getParentOp()) ||
+        llvm::hasSingleElement(parentBlock->getOps<NodeOp>())) {
+      auto &nodeOps = node.getBody()->getOperations();
+      auto &parentOps = parentBlock->getOperations();
+      parentOps.splice(node->getIterator(), nodeOps, nodeOps.begin(),
+                       nodeOps.end());
+
+      for (auto t :
+           llvm::zip(node.getBody()->getArguments(), node.getOperands()))
+        std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
+      rewriter.eraseOp(node);
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+void NodeOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                         MLIRContext *context) {
+  results.add<SimplifyNodeHierarchy>(context);
+  results.add<SimplifyNodeIOs>(context);
 }
 
 /// Return the number of inputs and outputs.
@@ -329,6 +389,14 @@ iterator_range<Block::args_iterator> NodeOp::getOutputArguments() {
   auto range = getODSOperandIndexAndLength(1);
   return {std::next(getBody()->args_begin(), range.first),
           std::next(getBody()->args_begin(), range.first + range.second)};
+}
+
+LogicalResult NodeOp::verify() {
+  // for (auto outputArg : getOutputArguments()) {
+  //   if (!llvm::any_of(outputArg.getUses(), [](OpOperand &use) {}))
+  //     return failure();
+  // }
+  return success();
 }
 
 //===----------------------------------------------------------------------===//

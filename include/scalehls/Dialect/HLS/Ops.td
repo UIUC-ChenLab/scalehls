@@ -76,6 +76,7 @@ def NodeOp : HLSOp<"node", [NoTerminator, IsolatedFromAbove, SingleBlock,
     node can only take buffer or stream.channel as inputs or outputs.
   }];
 
+  let hasCanonicalizer = 1;
   let hasVerifier = 1;
   let arguments = (ins Variadic<AnyMemrefOrStream>:$inputs,
                        Variadic<AnyMemrefOrStream>:$outputs,
