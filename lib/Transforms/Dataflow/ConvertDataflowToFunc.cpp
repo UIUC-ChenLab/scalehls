@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Transforms/DialectConversion.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
@@ -48,6 +49,52 @@ private:
 } // namespace
 
 namespace {
+struct BufferConversionPattern : public OpRewritePattern<BufferOp> {
+  using OpRewritePattern<BufferOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(BufferOp buffer,
+                                PatternRewriter &rewriter) const override {
+    // if (!buffer.getProducers().empty() || !buffer.getConsumers().empty())
+    //   return failure();
+
+    rewriter.replaceOpWithNewOp<memref::AllocOp>(buffer, buffer.getType());
+    return success();
+  }
+};
+} // namespace
+
+namespace {
+struct PromoteConstBufferPattern : public OpRewritePattern<ConstBufferOp> {
+  using OpRewritePattern<ConstBufferOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ConstBufferOp buffer,
+                                PatternRewriter &rewriter) const override {
+    if (buffer.getType().getNumElements() < 1024)
+      return failure();
+
+    if (auto node = buffer->getParentOfType<NodeOp>()) {
+      buffer->moveBefore(node);
+      SmallVector<Value, 8> inputs(node.inputs());
+      inputs.push_back(buffer.memref());
+
+      auto newArg = node.getBody()->insertArgument(
+          node.getNumInputs(), buffer.getType(), buffer.getLoc());
+      buffer.memref().replaceAllUsesWith(newArg);
+
+      rewriter.setInsertionPoint(node);
+      auto newNode =
+          rewriter.create<NodeOp>(node.getLoc(), inputs, node.outputs());
+      rewriter.inlineRegionBefore(node.body(), newNode.body(),
+                                  newNode.body().end());
+      rewriter.eraseOp(node);
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
 struct ConvertDataflowToFunc
     : public ConvertDataflowToFuncBase<ConvertDataflowToFunc> {
   void runOnOperation() override {
@@ -56,13 +103,19 @@ struct ConvertDataflowToFunc
 
     for (auto func :
          llvm::make_early_inc_range(module.getOps<func::FuncOp>())) {
+      mlir::RewritePatternSet patterns(context);
+      patterns.add<PromoteConstBufferPattern>(context);
+      (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+
       ConversionTarget target(*context);
-      target.addIllegalOp<NodeOp>();
-      target.addLegalOp<func::FuncOp, func::ReturnOp, func::CallOp>();
+      target.addIllegalOp<NodeOp, BufferOp>();
+      target.addLegalOp<func::FuncOp, func::ReturnOp, func::CallOp,
+                        memref::AllocOp>();
 
       unsigned nodeIdx = 0;
-      mlir::RewritePatternSet patterns(context);
+      patterns.clear();
       patterns.add<NodeConversionPattern>(context, func.getName(), nodeIdx);
+      patterns.add<BufferConversionPattern>(context);
       if (failed(applyPartialConversion(func, target, std::move(patterns))))
         return signalPassFailure();
     }

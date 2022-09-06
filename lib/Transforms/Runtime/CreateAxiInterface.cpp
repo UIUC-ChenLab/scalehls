@@ -63,7 +63,7 @@ struct CreateAxiInterface
     // by analyzing the memroy access pattern of sub-functions.
     SmallVector<Value, 32> inputs(call.getOperands());
     for (auto &op : llvm::make_early_inc_range(func.front())) {
-      if (!isa<memref::AllocOp, PrimBufferOp, PrimConstOp>(op))
+      if (!isa<memref::AllocOp, BufferOp, ConstBufferOp>(op))
         continue;
       auto memref = op.getResult(0);
       auto type = memref.getType().cast<MemRefType>();
