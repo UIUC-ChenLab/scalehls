@@ -83,11 +83,6 @@ def CreateTokenDepends : Pass<"scalehls-create-token-depends", "func::FuncOp"> {
   let constructor = "mlir::scalehls::createCreateTokenDependsPass()";
 }
 
-def BufferizeDataflow : Pass<"scalehls-bufferize-dataflow", "func::FuncOp"> {
-  let summary = "Bufferize tensor and scalar to memref and stream";
-  let constructor = "mlir::scalehls::createBufferizeDataflowPass()";
-}
-
 def ConvertDataflowToFunc :
       Pass<"scalehls-convert-dataflow-to-func", "ModuleOp"> {
   let summary = "Convert dataflow to function dialect";

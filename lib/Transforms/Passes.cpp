@@ -124,7 +124,6 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
 
         // Tensor bufferization.
         pm.addPass(mlir::createLinalgBufferizePass());
-        pm.addPass(scalehls::createBufferizeDataflowPass());
         pm.addPass(func::createFuncBufferizePass());
         pm.addPass(bufferization::createBufferResultsToOutParamsPass());
         pm.addPass(mlir::createCanonicalizerPass());
@@ -187,7 +186,6 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createCreateLoopDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(scalehls::createLegalizeDataflowPass());
-        pm.addPass(scalehls::createBufferizeDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(scalehls::createConvertDataflowToFuncPass());
 

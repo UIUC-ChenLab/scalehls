@@ -1,5 +1,4 @@
 add_mlir_library(MLIRScaleHLSTransforms
-  Dataflow/BufferizeDataflow.cpp
   Dataflow/ConvertDataflowToFunc.cpp
   Dataflow/CreateDataflow.cpp
   Dataflow/CreateTokenDepends.cpp
