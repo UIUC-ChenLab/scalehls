@@ -15,6 +15,66 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+// static NodeOp fuseOps(ArrayRef<Operation *> ops, PatternRewriter &rewriter) {
+//   assert(!ops.empty() && "must fuse at least two nodes");
+//   llvm::SmallDenseSet<Operation *, 16> opSet(ops.begin(), ops.end());
+
+//   // Collect inputs and outputs of the new node.
+//   llvm::SmallDenseSet<Value, 8> inputs;
+//   llvm::SmallDenseSet<Value, 8> outputs;
+//   llvm::SmallDenseSet<Operation *, 8> streamReads;
+//   SmallVector<Operation *, 8> streamWrites;
+//   for (auto op : ops) {
+//     op->walk([&](Operation *op) {
+//       // Handle memory inputs and outputs.
+//       if (auto store = dyn_cast<mlir::AffineWriteOpInterface>(op))
+//         outputs.insert(store.getMemRef());
+//       else if (auto store = dyn_cast<memref::StoreOp>(op))
+//         outputs.insert(store.memref());
+//       else if (auto copy = dyn_cast<memref::CopyOp>(op)) {
+//         outputs.insert(copy.target());
+//         inputs.insert(copy.source());
+//       } else {
+//         // TODO: Is this safe in general?
+//         for (auto operand : op->getOperands())
+//           if (operand.getType().isa<MemRefType>())
+//             inputs.insert(operand);
+//       }
+
+//       // Handle normal SSA operands.
+//       for (auto operand : op->getOperands()) {
+//         if (opSet.count(operand.getDefiningOp()))
+//           continue;
+//         else if (auto read = operand.getDefiningOp<StreamReadOp>())
+//           streamReads.insert(read);
+//         else
+//           op->emitOpError("operand has illegal defining op");
+//       }
+
+//       // Handle normal SSA results.
+//       for (auto result : op->getResults()) {
+
+//       }
+//     });
+//   }
+
+//   // Construct the new node after the last node.
+//   rewriter.setInsertionPointAfter(nodes.back());
+//   auto newNode =
+//       rewriter.create<NodeOp>(rewriter.getUnknownLoc(), inputs, outputs);
+//   auto block = rewriter.createBlock(&newNode.body());
+//   block->addArguments(ValueRange(inputs), inputLocs);
+//   block->addArguments(ValueRange(outputs), outputLocs);
+
+//   for (auto node : nodes)
+//     node->moveBefore(block, block->end());
+//   for (auto t : llvm::zip(newNode.getOperands(), block->getArguments()))
+//     std::get<0>(t).replaceUsesWithIf(std::get<1>(t), [&](OpOperand &use) {
+//       return newNode->isProperAncestor(use.getOwner());
+//     });
+//   return newNode;
+// }
+
 namespace {
 /// Wrap operations in the front block into dataflow nodes based on heuristic if
 /// they have not. FuncOp and AffineForOp are supported.
@@ -33,23 +93,17 @@ struct DataflowNodeCreatePattern : public OpRewritePattern<OpType> {
     // example, how to handle AffineIfOp?
     SmallVector<Operation *, 4> opsToFuse;
     for (auto &op : llvm::make_early_inc_range(block)) {
-      if (isa<linalg::LinalgDialect>(op.getDialect())) {
-        // Linalg operations have unique consumer and producer semantics that
-        // cannot be handled by normal SSA analysis.
-        return op.emitOpError("linalg op is not supported in dataflowing");
+      if (isa<linalg::LinalgDialect, tosa::TosaDialect, tensor::TensorDialect,
+              bufferization::BufferizationDialect>(op.getDialect()) ||
+          isa<func::CallOp, NodeOp>(op)) {
+        return op.emitOpError(
+            "linalg/tosa/tensor/bufferization operations are not supported, "
+            "function call should have been inlined");
 
-      } else if (isa<tosa::ConstOp, arith::ConstantOp, memref::AllocOp,
-                     memref::AllocaOp>(op)) {
-        // Constant or alloc operations are moved to the begining and skipped.
+      } else if (isa<BufferOp, ConstBufferOp, arith::ConstantOp,
+                     memref::AllocOp, memref::AllocaOp>(op)) {
+        // Constant or memory operations are moved to the begining and skipped.
         op.moveBefore(&block, block.begin());
-
-      } else if (isa<bufferization::BufferizationDialect>(op.getDialect())) {
-        // Bufferization operation is moved right after its defining point,
-        // which is either an operation or a block argument, and skipped.
-        if (auto defOp = op.getOperand(0).getDefiningOp())
-          op.moveAfter(defOp);
-        else
-          op.moveBefore(&block, block.begin());
 
       } else if (&op == block.getTerminator()) {
         // If the block is empty, directly return.
@@ -58,10 +112,9 @@ struct DataflowNodeCreatePattern : public OpRewritePattern<OpType> {
         fuseOpsIntoNewNode(opsToFuse, rewriter);
         opsToFuse.clear();
 
-      } else if (isa<DataflowNodeOp, AffineForOp, func::CallOp>(op) ||
-                 isa<tosa::TosaDialect>(op.getDialect())) {
-        // We always fuse dataflow node, affine loop, function call, and tosa
-        // operation with all the collected operations.
+      } else if (isa<AffineForOp, scf::ForOp>(op)) {
+        // We always take loop as root operation and fuse all the collected
+        // operations so far.
         opsToFuse.push_back(&op);
         fuseOpsIntoNewNode(opsToFuse, rewriter);
         opsToFuse.clear();
