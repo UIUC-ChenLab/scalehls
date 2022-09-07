@@ -78,13 +78,14 @@ class NodeOp;
 namespace mlir {
 namespace OpTrait {
 
+using namespace scalehls::hls;
+
 template <typename ConcreteType>
-class DeclaresStreamChannel
-    : public TraitBase<ConcreteType, DeclaresStreamChannel> {
+class DataflowBufferLike : public TraitBase<ConcreteType, DataflowBufferLike> {
 public:
   static LogicalResult verifyTrait(Operation *op) {
     if (op->getNumResults() != 1 ||
-        !op->getResult(0).getType().isa<scalehls::hls::StreamType>())
+        !op->getResult(0).getType().isa<StreamType, MemRefType>())
       return failure();
     return success();
   }

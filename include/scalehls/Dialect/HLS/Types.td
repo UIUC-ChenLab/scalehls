@@ -13,10 +13,9 @@ def StreamType : HLSType<"Stream"> {
     Represents a stream of any type that can be transfered between HLS modules.
     This type is equal to the hls::stream<> type in Xilinx Vivado HLS.
   }];
-
   let mnemonic = "stream";
-  let parameters = (ins "::mlir::Type":$elementType, "int64_t":$depth );
 
+  let parameters = (ins "::mlir::Type":$elementType, "int64_t":$depth);
   let assemblyFormat = "`<` qualified($elementType) `,` $depth `>`";
 }
 

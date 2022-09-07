@@ -139,16 +139,16 @@ bool hls::hasRuntimeAttr(Operation *op) {
 }
 
 //===----------------------------------------------------------------------===//
-// GraphNodeOp
+// TaskOp
 //===----------------------------------------------------------------------===//
 
 namespace {
-struct SimplifyGraphNodeIOs : public OpRewritePattern<GraphNodeOp> {
-  using OpRewritePattern<GraphNodeOp>::OpRewritePattern;
+struct SimplifyTaskIOs : public OpRewritePattern<TaskOp> {
+  using OpRewritePattern<TaskOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(GraphNodeOp node,
+  LogicalResult matchAndRewrite(TaskOp node,
                                 PatternRewriter &rewriter) const override {
-    auto output = node.getOutputOp();
+    auto yield = node.getYieldOp();
     bool hasUnusedPort = false;
 
     // Identify output values that are used.
@@ -158,7 +158,7 @@ struct SimplifyGraphNodeIOs : public OpRewritePattern<GraphNodeOp> {
       if (result.use_empty()) {
         hasUnusedPort = true;
       } else {
-        usedOutputs.push_back(output.getOperand(result.getResultNumber()));
+        usedOutputs.push_back(yield.getOperand(result.getResultNumber()));
         usedResults.push_back(result);
       }
 
@@ -176,11 +176,11 @@ struct SimplifyGraphNodeIOs : public OpRewritePattern<GraphNodeOp> {
 
     // Construct new graph node.
     if (hasUnusedPort) {
-      rewriter.setInsertionPoint(output);
-      rewriter.replaceOpWithNewOp<GraphOutputOp>(output, usedOutputs);
+      rewriter.setInsertionPoint(yield);
+      rewriter.replaceOpWithNewOp<YieldOp>(yield, usedOutputs);
 
       rewriter.setInsertionPoint(node);
-      auto newNode = rewriter.create<GraphNodeOp>(
+      auto newNode = rewriter.create<TaskOp>(
           node.getLoc(), ValueRange(usedOutputs), usedInputs);
       rewriter.inlineRegionBefore(node.body(), newNode.body(),
                                   newNode.body().end());
@@ -196,16 +196,16 @@ struct SimplifyGraphNodeIOs : public OpRewritePattern<GraphNodeOp> {
 } // namespace
 
 namespace {
-struct SimplifyGraphNodeHierarchy : public OpRewritePattern<GraphNodeOp> {
-  using OpRewritePattern<GraphNodeOp>::OpRewritePattern;
+struct SimplifyTaskHierarchy : public OpRewritePattern<TaskOp> {
+  using OpRewritePattern<TaskOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(GraphNodeOp node,
+  LogicalResult matchAndRewrite(TaskOp node,
                                 PatternRewriter &rewriter) const override {
     // If the parent block is another graph node OR only contains the current
     // graph node, then the node can be fully inlined.
     auto parentBlock = node->getBlock();
-    if (isa<GraphNodeOp>(parentBlock->getParentOp()) ||
-        llvm::hasSingleElement(parentBlock->getOps<GraphNodeOp>())) {
+    if (isa<TaskOp>(parentBlock->getParentOp()) ||
+        llvm::hasSingleElement(parentBlock->getOps<TaskOp>())) {
       auto &nodeOps = node.getBody()->getOperations();
       auto &parentOps = parentBlock->getOperations();
       parentOps.splice(node->getIterator(), nodeOps, nodeOps.begin(),
@@ -214,7 +214,7 @@ struct SimplifyGraphNodeHierarchy : public OpRewritePattern<GraphNodeOp> {
       for (auto t :
            llvm::zip(node.getBody()->getArguments(), node.getOperands()))
         std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
-      rewriter.replaceOp(node, node.getOutputOp()->getOperands());
+      rewriter.replaceOp(node, node.getYieldOp()->getOperands());
       return success();
     }
     return failure();
@@ -222,41 +222,30 @@ struct SimplifyGraphNodeHierarchy : public OpRewritePattern<GraphNodeOp> {
 };
 } // namespace
 
-void GraphNodeOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                              MLIRContext *context) {
-  results.add<SimplifyGraphNodeHierarchy>(context);
-  results.add<SimplifyGraphNodeIOs>(context);
+void TaskOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                         MLIRContext *context) {
+  results.add<SimplifyTaskHierarchy>(context);
+  results.add<SimplifyTaskIOs>(context);
 }
 
 /// Get the terminator output op.
-GraphOutputOp GraphNodeOp::getOutputOp() {
-  return cast<GraphOutputOp>(body().front().getTerminator());
+YieldOp TaskOp::getYieldOp() {
+  return cast<YieldOp>(body().front().getTerminator());
 }
 
-LogicalResult GraphNodeOp::verify() {
-  if (llvm::any_of((*this)->getUsers(), [&](Operation *user) {
-        return !(*this)->getBlock()->findAncestorOpInBlock(*user);
-      }))
-    return emitOpError("has unexpected consumer from parent block");
-  if (llvm::any_of(getOperands(), [](Value value) {
-        return !value.getType().isa<TensorType>();
-      }))
-    return emitOpError("has non-tensor inputs");
-  if (llvm::any_of(getResults(), [](Value value) {
-        return !value.getType().isa<TensorType>();
-      }))
-    return emitOpError("has non-tensor outputs");
+LogicalResult TaskOp::verify() {
+  if (getOperandTypes() != getBody()->getArgumentTypes())
+    return emitOpError("operand type doesn't align with argument type");
   return success();
 }
 
 //===----------------------------------------------------------------------===//
-// GraphOutputOp
+// YieldOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult GraphOutputOp::verify() {
-  if (getOperandTypes() !=
-      (*this)->getParentOfType<GraphNodeOp>().getResultTypes())
-    return emitOpError("output type doesn't align with node type");
+LogicalResult YieldOp::verify() {
+  if (getOperandTypes() != (*this)->getParentOfType<TaskOp>().getResultTypes())
+    return emitOpError("yield type doesn't align with task type");
   return success();
 }
 
@@ -414,232 +403,15 @@ LogicalResult ConstBufferOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
-// DataflowNodeOp
-//===----------------------------------------------------------------------===//
-
-LogicalResult DataflowNodeOp::verify() {
-  if (llvm::any_of((*this)->getUsers(), [&](Operation *user) {
-        return !(*this)->getBlock()->findAncestorOpInBlock(*user);
-      }))
-    return emitOpError("has unexpected dataflow consumer from parent block");
-  return success();
-}
-
-namespace {
-struct OutputSimplifyPattern : public OpRewritePattern<DataflowNodeOp> {
-  using OpRewritePattern<DataflowNodeOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(DataflowNodeOp node,
-                                PatternRewriter &rewriter) const override {
-    auto output = node.getOutputOp();
-    bool hasUnusedResult = false;
-
-    SmallVector<Value, 4> outputValues;
-    SmallVector<Value, 4> resultsToReplace;
-    for (auto result : node.getResults()) {
-      auto value = output.getOperand(result.getResultNumber());
-
-      // Note that we always keep memref outputs even if they are not used.
-      if (result.use_empty() && !value.getType().isa<MemRefType>()) {
-        hasUnusedResult = true;
-        continue;
-      }
-      outputValues.push_back(value);
-      resultsToReplace.push_back(result);
-    }
-
-    if (hasUnusedResult) {
-      rewriter.setInsertionPoint(output);
-      rewriter.replaceOpWithNewOp<DataflowOutputOp>(output, outputValues);
-
-      rewriter.setInsertionPoint(node);
-      auto newNode = rewriter.create<DataflowNodeOp>(
-          node.getLoc(), ValueRange(outputValues), node.levelAttr());
-      rewriter.inlineRegionBefore(node.body(), newNode.body(),
-                                  newNode.body().end());
-      for (auto t : llvm::zip(resultsToReplace, newNode.getResults()))
-        std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
-
-      rewriter.eraseOp(node);
-      return success();
-    }
-    return failure();
-  }
-};
-} // namespace
-
-namespace {
-struct HierarchySimplifyPattern : public OpRewritePattern<DataflowNodeOp> {
-  using OpRewritePattern<DataflowNodeOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(DataflowNodeOp node,
-                                PatternRewriter &rewriter) const override {
-    // If the parent block only contains the current dataflow node, then the
-    // node can be fully inlined.
-    auto parentBlock = node->getBlock();
-    if (llvm::hasSingleElement(parentBlock->getOps<DataflowNodeOp>())) {
-      auto &nodeOps = node.getBody()->getOperations();
-      auto &parentOps = parentBlock->getOperations();
-      parentOps.splice(node->getIterator(), nodeOps, nodeOps.begin(),
-                       std::prev(nodeOps.end()));
-
-      auto output = node.getBody()->getTerminator();
-      rewriter.replaceOp(node, output->getOperands());
-      return success();
-    }
-    return failure();
-  }
-};
-} // namespace
-
-void DataflowNodeOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                                 MLIRContext *context) {
-  results.add<HierarchySimplifyPattern>(context);
-  results.add<OutputSimplifyPattern>(context);
-}
-
-DataflowOutputOp DataflowNodeOp::getOutputOp() {
-  return cast<DataflowOutputOp>(body().front().getTerminator());
-}
-
-/// Collect output values of the dataflow node. Note that here we consider not
-/// only SSA outputs, but also memrefs that are updated.
-SmallVector<mlir::Value> DataflowNodeOp::getOutputValues() {
-  DominanceInfo DT;
-  SmallVector<Value> outputValues;
-  for (auto &op : getBody()->getOperations()) {
-    outputValues.append(op.result_begin(), op.result_end());
-    op.walk([&](Operation *child) {
-      // TODO: Any other ops need to be included?
-      Value output;
-      if (auto copy = dyn_cast<memref::CopyOp>(child))
-        output = copy.target();
-      else if (auto store = dyn_cast<mlir::AffineWriteOpInterface>(child))
-        output = store.getMemRef();
-
-      // Only push back unique outputs.
-      if (output && DT.dominates(output.getParentBlock(), getBody()) &&
-          llvm::find(outputValues, output) == outputValues.end())
-        outputValues.push_back(output);
-    });
-  }
-  return outputValues;
-}
-
-/// Collect uses of the dataflow node. A use is defined by a pair of value (the
-/// edge) and operation (the user).
-SmallVector<std::pair<Value, Operation *>> DataflowNodeOp::getDataflowUses() {
-  SmallVector<std::pair<Value, Operation *>> dfUses;
-  for (auto &use : (*this)->getUses()) {
-    auto user = (*this)->getBlock()->findAncestorOpInBlock(*use.getOwner());
-    auto dfUse = std::pair<Value, Operation *>(use.get(), user);
-    if (llvm::find(dfUses, dfUse) == dfUses.end())
-      dfUses.push_back(dfUse);
-  }
-  return dfUses;
-}
-
-//===----------------------------------------------------------------------===//
-// DataflowOutputOp
-//===----------------------------------------------------------------------===//
-
-LogicalResult DataflowOutputOp::verify() {
-  if (getOperandTypes() !=
-      (*this)->getParentOfType<DataflowNodeOp>().getResultTypes())
-    return emitOpError("output type doesn't align with node type");
-
-  llvm::SmallDenseSet<Value, 4> outputs(operand_begin(), operand_end());
-  auto node = (*this)->getParentOfType<DataflowNodeOp>();
-
-  DominanceInfo DT;
-  SmallVector<Value> updatedMemrefs;
-  node.walk([&](Operation *child) {
-    // TODO: Any other ops need to be included?
-    Value memref;
-    if (auto copy = dyn_cast<memref::CopyOp>(child))
-      memref = copy.target();
-    else if (auto store = dyn_cast<mlir::AffineWriteOpInterface>(child))
-      memref = store.getMemRef();
-
-    // Only push back unique memrefs.
-    if (memref && DT.dominates(memref.getParentBlock(), node.getBody()) &&
-        llvm::find(updatedMemrefs, memref) == updatedMemrefs.end())
-      updatedMemrefs.push_back(memref);
-  });
-
-  // for (auto memref : updatedMemrefs)
-  //   if (!outputs.count(memref)) {
-  //     auto diag = emitOpError("updated memref should be an output, ");
-  //     diag << "missed memref: " << memref << "\n";
-  //     return diag;
-  //   }
-  return success();
-}
-
-//===----------------------------------------------------------------------===//
-// DataflowBufferOp
-//===----------------------------------------------------------------------===//
-
-LogicalResult DataflowBufferOp::verify() {
-  if (depth() != 1 && level())
-    return emitOpError("only buffer with depth of 1 can have level attribute");
-  return success();
-}
-
-namespace {
-struct DataflowBufferCanonicalizePattern
-    : public OpRewritePattern<DataflowBufferOp> {
-  using OpRewritePattern<DataflowBufferOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(DataflowBufferOp buffer,
-                                PatternRewriter &rewriter) const override {
-    if (auto defOp = buffer.input().getDefiningOp<DataflowBufferOp>()) {
-      buffer.inputMutable().assign(defOp.input());
-      auto newDepth = buffer.depth() + defOp.depth();
-      buffer->setAttr(buffer.depthAttrName(),
-                      rewriter.getUI32IntegerAttr(newDepth));
-      return success();
-    }
-    return failure();
-  }
-};
-} // namespace
-
-void DataflowBufferOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                                   MLIRContext *context) {
-  results.add<DataflowBufferCanonicalizePattern>(context);
-}
-
-bool DataflowBufferOp::isExternal() {
-  if (getType().isa<TensorType>())
-    return true;
-  if (auto type = getType().dyn_cast<MemRefType>())
-    if (type.getMemorySpaceAsInt() == (unsigned)MemoryKind::DRAM)
-      return true;
-  return false;
-}
-
-//===----------------------------------------------------------------------===//
 // Stream operations
 //===----------------------------------------------------------------------===//
 
 // Verify users of the operation are legal.
 template <typename OpType> static LogicalResult verifyChannelUsers(OpType op) {
-  // unsigned numRead = 0, numWrite = 0;
-  // for (auto user : op.getChannelUsers()) {
-  //   if (isa<StreamReadOp>(user))
-  //     ++numRead;
-  //   else if (isa<StreamWriteOp>(user))
-  //     ++numWrite;
-  //   else
-  //     return user->emitOpError("stream channel has unsupported user");
-  // }
-  // if (numWrite > 1)
-  //   return op->emitOpError("stream channel is written by multiple ops");
   return success();
 }
 
-LogicalResult StreamChannelOp::verify() { return verifyChannelUsers(*this); }
+LogicalResult StreamOp::verify() { return verifyChannelUsers(*this); }
 
 LogicalResult StreamReadOp::verify() {
   if (result())
@@ -705,18 +477,6 @@ struct SimplifyPrimCastOp : public OpRewritePattern<PrimCastOp> {
 void PrimCastOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                              MLIRContext *context) {
   results.add<SimplifyPrimCastOp>(context);
-}
-
-LogicalResult PrimConstOp::verify() {
-  auto memrefType = getType();
-  auto attrType = value().getType().cast<TensorType>();
-  if (memrefType.getElementType() != attrType.getElementType())
-    return emitOpError("element type mismatch");
-  if (!memrefType.hasStaticShape() || !attrType.hasStaticShape())
-    return emitOpError("has dynamic shape");
-  if (memrefType.getShape() != attrType.getShape())
-    return emitOpError("shape mismatch");
-  return success();
 }
 
 //===----------------------------------------------------------------------===//
