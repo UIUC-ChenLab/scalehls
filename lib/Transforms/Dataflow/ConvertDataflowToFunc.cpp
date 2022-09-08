@@ -54,9 +54,6 @@ struct BufferConversionPattern : public OpRewritePattern<BufferOp> {
 
   LogicalResult matchAndRewrite(BufferOp buffer,
                                 PatternRewriter &rewriter) const override {
-    // if (!buffer.getProducers().empty() || !buffer.getConsumers().empty())
-    //   return failure();
-
     rewriter.replaceOpWithNewOp<memref::AllocOp>(buffer, buffer.getType());
     return success();
   }

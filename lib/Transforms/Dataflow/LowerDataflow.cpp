@@ -14,6 +14,73 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+//===----------------------------------------------------------------------===//
+// Convert high dataflow to low dataflow
+//===----------------------------------------------------------------------===//
+
+namespace {
+struct ConstBufferConversionPattern
+    : public OpRewritePattern<memref::GetGlobalOp> {
+  using OpRewritePattern<memref::GetGlobalOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(memref::GetGlobalOp op,
+                                PatternRewriter &rewriter) const override {
+    auto global = SymbolTable::lookupNearestSymbolFrom<memref::GlobalOp>(
+        op, op.nameAttr());
+    rewriter.replaceOpWithNewOp<ConstBufferOp>(op, global.type(),
+                                               global.getConstantInitValue());
+    return success();
+  }
+};
+} // namespace
+
+namespace {
+template <typename OpType>
+struct BufferConversionPattern : public OpRewritePattern<OpType> {
+  using OpRewritePattern<OpType>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(OpType op,
+                                PatternRewriter &rewriter) const override {
+    rewriter.replaceOpWithNewOp<BufferOp>(op, op.getType(), /*depth=*/1);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
+struct NodeConversionPattern : public OpRewritePattern<TaskOp> {
+  using OpRewritePattern<TaskOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(TaskOp op,
+                                PatternRewriter &rewriter) const override {
+    SmallVector<Value, 8> outputMemrefs;
+    SmallVector<Location, 8> outputLocs;
+    for (auto output : op.getYieldOp().getOperands()) {
+      output.getDefiningOp()->moveBefore(op);
+      outputMemrefs.push_back(output);
+      outputLocs.push_back(output.getLoc());
+    }
+
+    rewriter.setInsertionPoint(op);
+    auto node = rewriter.create<NodeOp>(rewriter.getUnknownLoc(),
+                                        op.getOperands(), outputMemrefs);
+    rewriter.inlineRegionBefore(op.body(), node.body(), node.body().end());
+    rewriter.eraseOp(node.getBody()->getTerminator());
+
+    auto args =
+        node.getBody()->addArguments(ValueRange(outputMemrefs), outputLocs);
+    for (auto t : llvm::zip(outputMemrefs, args))
+      std::get<0>(t).replaceAllUsesExcept(std::get<1>(t), node);
+    rewriter.replaceOp(op, outputMemrefs);
+    return success();
+  }
+};
+} // namespace
+
+//===----------------------------------------------------------------------===//
+// Legalize low dataflow
+//===----------------------------------------------------------------------===//
+
 namespace {
 struct MultiProducerRemovePattern : public OpRewritePattern<BufferOp> {
   using OpRewritePattern<BufferOp>::OpRewritePattern;
@@ -200,71 +267,9 @@ struct NodeMergePattern : public OpRewritePattern<OpType> {
 };
 } // namespace
 
-namespace {
-struct ConstBufferConversionPattern
-    : public OpRewritePattern<arith::ConstantOp> {
-  using OpRewritePattern<arith::ConstantOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(arith::ConstantOp op,
-                                PatternRewriter &rewriter) const override {
-    if (auto type = op.getType().dyn_cast<TensorType>()) {
-      auto memrefType = MemRefType::get(type.getShape(), type.getElementType());
-      rewriter.setInsertionPoint(op);
-      auto memref = rewriter.create<ConstBufferOp>(
-          op.getLoc(), memrefType, op.getValue().cast<ElementsAttr>());
-      rewriter.replaceOpWithNewOp<bufferization::ToTensorOp>(op, memref);
-      return success();
-    }
-    return failure();
-  }
-};
-} // namespace
-
-namespace {
-template <typename OpType>
-struct BufferConversionPattern : public OpRewritePattern<OpType> {
-  using OpRewritePattern<OpType>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(OpType op,
-                                PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<BufferOp>(op, op.getType(), /*depth=*/1);
-    return success();
-  }
-};
-} // namespace
-
-namespace {
-struct NodeConversionPattern : public OpRewritePattern<TaskOp> {
-  using OpRewritePattern<TaskOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(TaskOp op,
-                                PatternRewriter &rewriter) const override {
-    SmallVector<Value, 8> outputMemrefs;
-    SmallVector<Location, 8> outputLocs;
-    for (auto output : op.getYieldOp().getOperands()) {
-      auto buffer = output.getDefiningOp();
-      if (!isa<BufferOp>(buffer))
-        return op.emitOpError("output memref must be defined by buffer op");
-      buffer->moveBefore(op);
-      outputMemrefs.push_back(output);
-      outputLocs.push_back(output.getLoc());
-    }
-
-    rewriter.setInsertionPoint(op);
-    auto node = rewriter.create<NodeOp>(rewriter.getUnknownLoc(),
-                                        op.getOperands(), outputMemrefs);
-    rewriter.inlineRegionBefore(op.body(), node.body(), node.body().end());
-    node.getBody()->getTerminator()->erase();
-
-    auto args =
-        node.getBody()->addArguments(ValueRange(outputMemrefs), outputLocs);
-    for (auto t : llvm::zip(outputMemrefs, args))
-      std::get<0>(t).replaceAllUsesExcept(std::get<1>(t), node);
-    rewriter.replaceOp(op, outputMemrefs);
-    return success();
-  }
-};
-} // namespace
+//===----------------------------------------------------------------------===//
+// Pass entry
+//===----------------------------------------------------------------------===//
 
 namespace {
 struct LowerDataflow : public LowerDataflowBase<LowerDataflow> {
@@ -272,19 +277,16 @@ struct LowerDataflow : public LowerDataflowBase<LowerDataflow> {
     auto func = getOperation();
     auto context = func.getContext();
 
-    // The intention of split the conversion into two parts is to allow the
-    // bufferization ops being canonicalized away.
+    // Convert dataflow node operations.
+    ConversionTarget target(*context);
+    target.addIllegalOp<memref::GetGlobalOp, memref::AllocOp, memref::AllocaOp,
+                        TaskOp, YieldOp>();
+    target.addLegalOp<ConstBufferOp, BufferOp, NodeOp>();
+
     mlir::RewritePatternSet patterns(context);
     patterns.add<ConstBufferConversionPattern>(context);
     patterns.add<BufferConversionPattern<memref::AllocOp>>(context);
     patterns.add<BufferConversionPattern<memref::AllocaOp>>(context);
-    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
-
-    // Convert dataflow node operations.
-    ConversionTarget target(*context);
-    target.addIllegalOp<NodeOp>();
-    target.addLegalOp<TaskOp, YieldOp>();
-    patterns.clear();
     patterns.add<NodeConversionPattern>(context);
     if (failed(applyPartialConversion(func, target, std::move(patterns))))
       return signalPassFailure();
