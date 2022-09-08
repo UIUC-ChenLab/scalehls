@@ -158,6 +158,10 @@ def ConstBufferOp : HLSOp<"dataflow.const_buffer"> {
   let assemblyFormat = "attr-dict `:` type($memref)";
 
   let hasVerifier = 1;
+  let extraClassDeclaration = [{
+    /// Get the terminator yield op.
+    Attribute getValue() { return value(); }
+  }];
 }
 
 def StreamOp : HLSOp<"dataflow.stream"> {

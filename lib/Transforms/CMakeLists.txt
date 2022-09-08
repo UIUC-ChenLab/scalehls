@@ -1,19 +1,18 @@
 add_mlir_library(MLIRScaleHLSTransforms
+  Dataflow/BufferizeDataflow.cpp
   Dataflow/ConvertDataflowToFunc.cpp
-  Dataflow/CreateDataflow.cpp
-  Dataflow/CreateTokenDepends.cpp
+  Dataflow/CreateDataflowFromAffine.cpp
+  Dataflow/CreateDataflowFromTosa.cpp
+  Dataflow/CreateTokenStream.cpp
   Dataflow/FuncDuplication.cpp
-  Dataflow/LegalizeDataflow.cpp
+  Dataflow/LowerDataflow.cpp
+
   Directive/ArrayPartition.cpp
   Directive/CreateHLSPrimitive.cpp
   Directive/FuncPipelining.cpp
   Directive/LoopPipelining.cpp
   Directive/QoREstimation.cpp
-  Graph/ConvertGraphToDataflow.cpp
-  Graph/TosaFakeQuantize.cpp
-  Graph/TosaToLinalgCleanup.cpp
-  Graph/TosaSimplifyGraph.cpp
-  Graph/TosaNodeFusion.cpp
+
   Loop/AffineLoopOrderOpt.cpp
   Loop/AffineLoopPerfection.cpp
   Loop/AffineLoopTile.cpp
@@ -22,14 +21,21 @@ add_mlir_library(MLIRScaleHLSTransforms
   Loop/MaterializeReduction.cpp
   Loop/RemoveVariableBound.cpp
   Loop/SimplifyAffineIf.cpp
+
   Memory/AffineStoreForward.cpp
   Memory/CreateMemrefSubview.cpp
   Memory/PromoteBuffer.cpp
   Memory/RaiseImplicitCopy.cpp
   Memory/ReduceInitialInterval.cpp
   Memory/SimplifyMemrefAccess.cpp
+
   Runtime/CreateAxiInterface.cpp
   Runtime/CreateRuntimeMain.cpp
+
+  Tensor/TosaFakeQuantize.cpp
+  Tensor/TosaSimplifyGraph.cpp
+  Tensor/TosaToLinalgCleanup.cpp
+
   DesignSpaceExplore.cpp
   FuncPreprocess.cpp
   Passes.cpp

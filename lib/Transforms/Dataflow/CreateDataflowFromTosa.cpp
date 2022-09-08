@@ -16,8 +16,8 @@ using namespace hls;
 /// Fuse the given operations into a new graph node. The fused node will be
 /// created before the first operation and each operation will be inserted in
 /// order. This method always succeeds even if the resulting IR is invalid.
-static GraphNodeOp fuseTosaOps(ArrayRef<Operation *> ops,
-                               PatternRewriter &rewriter) {
+static TaskOp fuseTosaOps(ArrayRef<Operation *> ops,
+                          PatternRewriter &rewriter) {
   assert(!ops.empty() && "must fuse at least one op");
   SmallPtrSet<Operation *, 4> opsSet(ops.begin(), ops.end());
 
@@ -40,7 +40,7 @@ static GraphNodeOp fuseTosaOps(ArrayRef<Operation *> ops,
   auto loc = rewriter.getUnknownLoc();
   rewriter.setInsertionPoint(ops.front());
   auto node =
-      rewriter.create<GraphNodeOp>(loc, ValueRange(outputValues), inputValues);
+      rewriter.create<TaskOp>(loc, ValueRange(outputValues), inputValues);
   auto nodeBlock = rewriter.createBlock(&node.body());
 
   // Replace internal input uses with node arguments.
@@ -59,7 +59,7 @@ static GraphNodeOp fuseTosaOps(ArrayRef<Operation *> ops,
 
   // Move each targeted op into the new graph node.
   rewriter.setInsertionPointToEnd(nodeBlock);
-  auto output = rewriter.create<GraphOutputOp>(loc, outputValues);
+  auto output = rewriter.create<YieldOp>(loc, outputValues);
   for (auto op : ops)
     op->moveBefore(output);
   return node;
@@ -73,7 +73,7 @@ struct OutlinePattern : public OpRewritePattern<OpType> {
 
   LogicalResult matchAndRewrite(OpType op,
                                 PatternRewriter &rewriter) const override {
-    if (op->template getParentOfType<GraphNodeOp>())
+    if (op->template getParentOfType<TaskOp>())
       return failure();
     fuseTosaOps({op}, rewriter);
     return success();
@@ -91,13 +91,13 @@ struct ForwardFusePattern : public OpRewritePattern<OpType> {
 
   LogicalResult matchAndRewrite(OpType op,
                                 PatternRewriter &rewriter) const override {
-    if (op->template getParentOfType<GraphNodeOp>())
+    if (op->template getParentOfType<TaskOp>())
       return failure();
 
     // We always select the dominating node as the target node to fuse.
-    GraphNodeOp targetNode;
+    TaskOp targetNode;
     for (auto user : op->getUsers())
-      if (auto node = dyn_cast<GraphNodeOp>(user))
+      if (auto node = dyn_cast<TaskOp>(user))
         if (!targetNode || (targetNode && DT.dominates(node, targetNode)))
           targetNode = node;
 
@@ -121,13 +121,13 @@ struct BackwardFusePattern : public OpRewritePattern<OpType> {
 
   LogicalResult matchAndRewrite(OpType op,
                                 PatternRewriter &rewriter) const override {
-    if (op->template getParentOfType<GraphNodeOp>())
+    if (op->template getParentOfType<TaskOp>())
       return failure();
 
     // We always select the dominated node as the target node to fuse.
-    GraphNodeOp targetNode;
+    TaskOp targetNode;
     for (auto operand : op->getOperands())
-      if (auto node = operand.template getDefiningOp<GraphNodeOp>())
+      if (auto node = operand.template getDefiningOp<TaskOp>())
         if (!targetNode || (targetNode && DT.dominates(targetNode, node)))
           targetNode = node;
 
@@ -148,12 +148,12 @@ struct ConstFusePattern : public OpRewritePattern<tosa::ConstOp> {
 
   LogicalResult matchAndRewrite(tosa::ConstOp op,
                                 PatternRewriter &rewriter) const override {
-    if (op->getParentOfType<GraphNodeOp>())
+    if (op->getParentOfType<TaskOp>())
       return failure();
 
     bool hasChanged = false;
     for (auto &use : llvm::make_early_inc_range(op->getUses()))
-      if (auto node = dyn_cast<GraphNodeOp>(use.getOwner())) {
+      if (auto node = dyn_cast<TaskOp>(use.getOwner())) {
         rewriter.setInsertionPoint(node);
         auto newOp = cast<tosa::ConstOp>(rewriter.clone(*op));
         use.set(newOp.getResult());
@@ -166,7 +166,8 @@ struct ConstFusePattern : public OpRewritePattern<tosa::ConstOp> {
 } // namespace
 
 namespace {
-struct TosaNodeFusion : public TosaNodeFusionBase<TosaNodeFusion> {
+struct CreateDataflowFromTosa
+    : public CreateDataflowFromTosaBase<CreateDataflowFromTosa> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -194,6 +195,6 @@ struct TosaNodeFusion : public TosaNodeFusionBase<TosaNodeFusion> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createTosaNodeFusionPass() {
-  return std::make_unique<TosaNodeFusion>();
+std::unique_ptr<Pass> scalehls::createCreateDataflowFromTosaPass() {
+  return std::make_unique<CreateDataflowFromTosa>();
 }

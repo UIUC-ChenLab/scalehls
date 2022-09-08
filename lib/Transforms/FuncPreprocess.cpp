@@ -61,7 +61,7 @@ struct GetGlobalConvertPattern : public OpRewritePattern<memref::GetGlobalOp> {
     auto global = SymbolTable::lookupNearestSymbolFrom<memref::GlobalOp>(
         getGlobal, getGlobal.nameAttr());
     rewriter.setInsertionPoint(getGlobal);
-    rewriter.replaceOpWithNewOp<PrimConstOp>(
+    rewriter.replaceOpWithNewOp<ConstBufferOp>(
         getGlobal, global.type(),
         global.initial_valueAttr().cast<ElementsAttr>());
     return success();
@@ -185,15 +185,15 @@ bool scalehls::applyFuncPreprocess(func::FuncOp func, bool isTopFunc) {
   // function parameters. Therefore, we insert BufferOp when an arguments or
   // result of ConstantOp are directly connected to ReturnOp.
   // TODO: We should introduce pointer types here.
-  auto returnOp = func.front().getTerminator();
-  for (auto &use : llvm::make_early_inc_range(returnOp->getOpOperands()))
-    if (use.get().dyn_cast<BlockArgument>() ||
-        isa<arith::ConstantOp>(use.get().getDefiningOp())) {
-      builder.setInsertionPoint(returnOp);
-      auto value = builder.create<DataflowBufferOp>(
-          returnOp->getLoc(), use.get().getType(), use.get(), /*depth=*/1);
-      use.set(value);
-    }
+  // auto returnOp = func.front().getTerminator();
+  // for (auto &use : llvm::make_early_inc_range(returnOp->getOpOperands()))
+  //   if (use.get().dyn_cast<BlockArgument>() ||
+  //       isa<arith::ConstantOp>(use.get().getDefiningOp())) {
+  //     builder.setInsertionPoint(returnOp);
+  //     auto value = builder.create<DataflowBufferOp>(
+  //         returnOp->getLoc(), use.get().getType(), use.get(), /*depth=*/1);
+  //     use.set(value);
+  //   }
 
   mlir::RewritePatternSet patterns(context);
   patterns.add<MemrefLoadRaisePattern>(context);

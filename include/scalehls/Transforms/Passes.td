@@ -12,7 +12,7 @@ include "mlir/Pass/PassBase.td"
 def DesignSpaceExplore : Pass<"scalehls-dse", "ModuleOp"> {
   let summary = "Optimize HLS design at multiple abstraction level";
   let description = [{
-    This dse pass will automatically conduct the design space exploration (DSE)
+    This pass will automatically conduct the design space exploration (DSE)
     across multiple abstraction levels. By calling methods provided by
     qor-estimation, this pass is able to rapidly obtain the QoR estimation of
     the current design point, and feed it back to the DSE engine for an
@@ -48,39 +48,10 @@ def FuncPreprocess : Pass<"scalehls-func-preprocess", "func::FuncOp"> {
 // Dataflow-related Passes
 //===----------------------------------------------------------------------===//
 
-def FuncDuplication : Pass<"scalehls-func-duplication", "mlir::ModuleOp"> {
-  let summary = "Duplicate function for each function call";
-  let constructor = "mlir::scalehls::createFuncDuplicationPass()";
-}
-
-def CreateFuncDataflow : Pass<"scalehls-create-func-dataflow", "func::FuncOp"> {
-  let summary = "Create dataflow hierarchy to functions";
-  let constructor = "mlir::scalehls::createCreateFuncDataflowPass()";
-}
-
-def CreateLoopDataflow : Pass<"scalehls-create-loop-dataflow", "func::FuncOp"> {
-  let summary = "Create dataflow hierarchy to affine loops";
-  let constructor = "mlir::scalehls::createCreateLoopDataflowPass()";
-}
-
-def LegalizeDataflow : Pass<"scalehls-legalize-dataflow", "func::FuncOp"> {
-  let summary = "Legalize dataflow to a one-way feed-forward path";
-  let description = [{
-    This legalize-dataflow pass will legalize the dataflow scheduling to meet
-    the requirements of the dataflow pragma: 1) single-producer single-consumer;
-    2) no bypass paths. Then, it will fuse operations/loops scheduled at the
-    same dataflow level into one dataflow node and apply the dataflow directive.
-  }];
-  let constructor = "mlir::scalehls::createLegalizeDataflowPass()";
-}
-
-def CreateTokenDepends : Pass<"scalehls-create-token-depends", "func::FuncOp"> {
-  let summary = "Create token dependencies based on the dataflow";
-  let description = [{
-    This create-token-depends pass will create a token flow to represent the
-    dependency graph of the original dataflow.
-  }];
-  let constructor = "mlir::scalehls::createCreateTokenDependsPass()";
+def BufferizeDataflow :
+      Pass<"scalehls-bufferize-dataflow", "func::FuncOp"> {
+  let summary = "Bufferize dataflow operations";
+  let constructor = "mlir::scalehls::createBufferizeDataflowPass()";
 }
 
 def ConvertDataflowToFunc :
@@ -89,8 +60,39 @@ def ConvertDataflowToFunc :
   let constructor = "mlir::scalehls::createConvertDataflowToFuncPass()";
 }
 
+def CreateDataflowFromAffine :
+      Pass<"scalehls-create-dataflow-from-affine", "func::FuncOp"> {
+  let summary = "Create dataflow hierarchy to functions";
+  let constructor = "mlir::scalehls::createCreateDataflowFromAffinePass()";
+}
+
+def CreateDataflowFromTosa :
+      Pass<"scalehls-create-dataflow-from-tosa", "func::FuncOp"> {
+  let summary = "Create dataflow hierarchy to affine loops";
+  let constructor = "mlir::scalehls::createCreateDataflowFromTosaPass()";
+}
+
+def CreateTokenStream : Pass<"scalehls-create-token-stream", "func::FuncOp"> {
+  let summary = "Create token stream channels based on the dataflow";
+  let constructor = "mlir::scalehls::createCreateTokenStreamPass()";
+}
+
+def FuncDuplication : Pass<"scalehls-func-duplication", "mlir::ModuleOp"> {
+  let summary = "Duplicate function for each function call";
+  let constructor = "mlir::scalehls::createFuncDuplicationPass()";
+}
+
+def LowerDataflow : Pass<"scalehls-lower-dataflow", "func::FuncOp"> {
+  let summary = "Lower dataflow from high level to low level";
+  let description = [{
+    This pass will lower task to node while legalize the dataflow to meet the
+    single-producer and single-consumer requirements of the dataflow schedule.
+  }];
+  let constructor = "mlir::scalehls::createLowerDataflowPass()";
+}
+
 //===----------------------------------------------------------------------===//
-// Graph-related Passes
+// Tensor-related Passes
 //===----------------------------------------------------------------------===//
 
 def TosaFakeQuantize : Pass<"scalehls-tosa-fake-quantize", "ModuleOp"> {
@@ -107,21 +109,10 @@ def TosaSimplifyGraph : Pass<"scalehls-tosa-simplify-graph", "func::FuncOp"> {
   let constructor = "mlir::scalehls::createTosaSimplifyGraphPass()";
 }
 
-def TosaNodeFusion : Pass<"scalehls-tosa-node-fusion", "func::FuncOp"> {
-  let summary = "Node fusion on TOSA operations";
-  let constructor = "mlir::scalehls::createTosaNodeFusionPass()";
-}
-
 def TosaToLinalgCleanup :
       Pass<"scalehls-tosa-to-linalg-cleanup", "func::FuncOp"> {
   let summary = "Lower tosa::ReshapeOp and tensor::PadOp";
   let constructor = "mlir::scalehls::createTosaToLinalgCleanupPass()";
-}
-
-def ConvertGraphToDataflow :
-      Pass<"scalehls-convert-graph-to-dataflow", "func::FuncOp"> {
-  let summary = "Convert graph to dataflow dialect";
-  let constructor = "mlir::scalehls::createConvertGraphToDataflowPass()";
 }
 
 //===----------------------------------------------------------------------===//

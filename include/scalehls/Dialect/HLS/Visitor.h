@@ -139,14 +139,13 @@ public:
   HANDLE(bufferization::ToTensorOp);
 
   // HLS dialect operations.
-  HANDLE(DataflowBufferOp);
-  HANDLE(StreamChannelOp);
+  HANDLE(BufferOp);
+  HANDLE(ConstBufferOp);
+  HANDLE(StreamOp);
   HANDLE(StreamReadOp);
   HANDLE(StreamWriteOp);
   HANDLE(PrimMulOp);
   HANDLE(PrimCastOp);
-  HANDLE(PrimBufferOp);
-  HANDLE(PrimConstOp);
 
   // Control flow operations.
   HANDLE(func::CallOp);

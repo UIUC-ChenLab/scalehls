@@ -109,14 +109,14 @@ struct DataflowNodeCreatePattern : public OpRewritePattern<OpType> {
         // If the block is empty, directly return.
         if (opsToFuse.empty())
           return failure();
-        fuseOpsIntoNewNode(opsToFuse, rewriter);
+        // fuseOpsIntoNewNode(opsToFuse, rewriter);
         opsToFuse.clear();
 
       } else if (isa<AffineForOp, scf::ForOp>(op)) {
         // We always take loop as root operation and fuse all the collected
         // operations so far.
         opsToFuse.push_back(&op);
-        fuseOpsIntoNewNode(opsToFuse, rewriter);
+        // fuseOpsIntoNewNode(opsToFuse, rewriter);
         opsToFuse.clear();
 
       } else {
@@ -130,7 +130,8 @@ struct DataflowNodeCreatePattern : public OpRewritePattern<OpType> {
 } // namespace
 
 namespace {
-struct CreateFuncDataflow : public CreateFuncDataflowBase<CreateFuncDataflow> {
+struct CreateDataflowFromAffine
+    : public CreateDataflowFromAffineBase<CreateDataflowFromAffine> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -138,22 +139,13 @@ struct CreateFuncDataflow : public CreateFuncDataflowBase<CreateFuncDataflow> {
     mlir::RewritePatternSet patterns(context);
     patterns.add<DataflowNodeCreatePattern<func::FuncOp>>(context);
     (void)applyOpPatternsAndFold(func, std::move(patterns));
-  }
-};
-} // namespace
-
-namespace {
-struct CreateLoopDataflow : public CreateLoopDataflowBase<CreateLoopDataflow> {
-  void runOnOperation() override {
-    auto func = getOperation();
-    auto context = func.getContext();
 
     // Collect all target loop bands.
     AffineLoopBands targetBands;
     getLoopBands(func.front(), targetBands, /*allowHavingChilds=*/true);
 
     // Create loop dataflow to each innermost loop.
-    mlir::RewritePatternSet patterns(context);
+    patterns.clear();
     patterns.add<DataflowNodeCreatePattern<mlir::AffineForOp>>(context);
     FrozenRewritePatternSet frozenPatterns(std::move(patterns));
     for (auto &band : targetBands)
@@ -162,10 +154,6 @@ struct CreateLoopDataflow : public CreateLoopDataflowBase<CreateLoopDataflow> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createCreateFuncDataflowPass() {
-  return std::make_unique<CreateFuncDataflow>();
-}
-
-std::unique_ptr<Pass> scalehls::createCreateLoopDataflowPass() {
-  return std::make_unique<CreateLoopDataflow>();
+std::unique_ptr<Pass> scalehls::createCreateDataflowFromAffinePass() {
+  return std::make_unique<CreateDataflowFromAffine>();
 }

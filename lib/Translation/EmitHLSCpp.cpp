@@ -227,12 +227,12 @@ public:
   void emitMemrefToTensor(bufferization::ToTensorOp op);
 
   /// HLS dialect operation emitters.
-  void emitStreamChannel(StreamChannelOp op);
+  void emitStreamChannel(StreamOp op);
   void emitStreamRead(StreamReadOp op);
   void emitStreamWrite(StreamWriteOp op);
   void emitPrimMul(PrimMulOp op);
   template <typename AssignOpType> void emitAssign(AssignOpType op);
-  void emitPrimConst(PrimConstOp op);
+  void emitPrimConst(ConstBufferOp op);
 
   /// Control flow operation emitters.
   void emitCall(func::CallOp op);
@@ -431,24 +431,17 @@ public:
   }
 
   /// HLS dialect operations.
-  bool visitOp(DataflowBufferOp op) {
-    if (op.depth() == 1)
-      return emitter.emitAssign(op), true;
-    return op.emitOpError("only support depth of 1"), false;
-  }
-  bool visitOp(StreamChannelOp op) {
-    return emitter.emitStreamChannel(op), true;
-  }
-  bool visitOp(StreamReadOp op) { return emitter.emitStreamRead(op), true; }
-  bool visitOp(StreamWriteOp op) { return emitter.emitStreamWrite(op), true; }
-  bool visitOp(PrimMulOp op) { return emitter.emitPrimMul(op), true; }
-  bool visitOp(PrimCastOp op) { return emitter.emitAssign(op), true; }
-  bool visitOp(PrimBufferOp op) {
+  bool visitOp(BufferOp op) {
     if (op.depth() == 1)
       return emitter.emitAlloc(op), true;
     return op.emitOpError("only support depth of 1"), false;
   }
-  bool visitOp(PrimConstOp op) { return emitter.emitPrimConst(op), true; }
+  bool visitOp(ConstBufferOp op) { return emitter.emitPrimConst(op), true; }
+  bool visitOp(StreamOp op) { return emitter.emitStreamChannel(op), true; }
+  bool visitOp(StreamReadOp op) { return emitter.emitStreamRead(op), true; }
+  bool visitOp(StreamWriteOp op) { return emitter.emitStreamWrite(op), true; }
+  bool visitOp(PrimMulOp op) { return emitter.emitPrimMul(op), true; }
+  bool visitOp(PrimCastOp op) { return emitter.emitAssign(op), true; }
 
   /// Control flow operations.
   bool visitOp(func::CallOp op) { return emitter.emitCall(op), true; }
@@ -1277,7 +1270,7 @@ void ModuleEmitter::emitMemrefToTensor(bufferization::ToTensorOp op) {
 }
 
 /// HLS dialect operation emitters.
-void ModuleEmitter::emitStreamChannel(StreamChannelOp op) {
+void ModuleEmitter::emitStreamChannel(StreamOp op) {
   indent();
   emitValue(op.channel());
   os << ";";
@@ -1356,7 +1349,7 @@ void ModuleEmitter::emitAssign(AssignOpType op) {
   emitNestedLoopFooter(rank);
 }
 
-void ModuleEmitter::emitPrimConst(PrimConstOp op) {
+void ModuleEmitter::emitPrimConst(ConstBufferOp op) {
   emitConstant(op);
   emitArrayDirectives(op.getResult());
 }

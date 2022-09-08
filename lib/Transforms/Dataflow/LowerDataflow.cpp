@@ -48,10 +48,10 @@ struct BufferConversionPattern : public OpRewritePattern<OpType> {
 } // namespace
 
 namespace {
-struct GraphNodeBufferizationPattern : public OpRewritePattern<GraphNodeOp> {
-  using OpRewritePattern<GraphNodeOp>::OpRewritePattern;
+struct GraphNodeBufferizationPattern : public OpRewritePattern<TaskOp> {
+  using OpRewritePattern<TaskOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(GraphNodeOp op,
+  LogicalResult matchAndRewrite(TaskOp op,
                                 PatternRewriter &rewriter) const override {
     bool hasChanged = false;
 
@@ -90,11 +90,11 @@ struct GraphNodeBufferizationPattern : public OpRewritePattern<GraphNodeOp> {
             rewriter.getUnknownLoc(), tensorType, result);
         result.replaceAllUsesExcept(tensor, tensor);
 
-        rewriter.setInsertionPoint(op.getOutputOp());
-        auto output = op.getOutputOp().getOperand(result.getResultNumber());
+        rewriter.setInsertionPoint(op.getYieldOp());
+        auto output = op.getYieldOp().getOperand(result.getResultNumber());
         auto memref = rewriter.create<bufferization::ToMemrefOp>(
             rewriter.getUnknownLoc(), memrefType, output);
-        op.getOutputOp()->getOpOperand(result.getResultNumber()).set(memref);
+        op.getYieldOp()->getOpOperand(result.getResultNumber()).set(memref);
       }
     }
     return success(hasChanged);
@@ -103,14 +103,14 @@ struct GraphNodeBufferizationPattern : public OpRewritePattern<GraphNodeOp> {
 } // namespace
 
 namespace {
-struct NodeConversionPattern : public OpRewritePattern<GraphNodeOp> {
-  using OpRewritePattern<GraphNodeOp>::OpRewritePattern;
+struct NodeConversionPattern : public OpRewritePattern<TaskOp> {
+  using OpRewritePattern<TaskOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(GraphNodeOp op,
+  LogicalResult matchAndRewrite(TaskOp op,
                                 PatternRewriter &rewriter) const override {
     SmallVector<Value, 8> outputMemrefs;
     SmallVector<Location, 8> outputLocs;
-    for (auto output : op.getOutputOp().getOperands()) {
+    for (auto output : op.getYieldOp().getOperands()) {
       auto buffer = output.getDefiningOp();
       if (!isa<BufferOp>(buffer))
         return op.emitOpError("output memref must be defined by buffer op");
@@ -136,8 +136,7 @@ struct NodeConversionPattern : public OpRewritePattern<GraphNodeOp> {
 } // namespace
 
 namespace {
-struct ConvertGraphToDataflow
-    : public ConvertGraphToDataflowBase<ConvertGraphToDataflow> {
+struct LowerDataflow : public LowerDataflowBase<LowerDataflow> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -154,7 +153,7 @@ struct ConvertGraphToDataflow
     // Convert dataflow node operations.
     ConversionTarget target(*context);
     target.addIllegalOp<NodeOp>();
-    target.addLegalOp<GraphNodeOp, GraphOutputOp>();
+    target.addLegalOp<TaskOp, YieldOp>();
     patterns.clear();
     patterns.add<NodeConversionPattern>(context);
     if (failed(applyPartialConversion(func, target, std::move(patterns))))
@@ -163,6 +162,6 @@ struct ConvertGraphToDataflow
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createConvertGraphToDataflowPass() {
-  return std::make_unique<ConvertGraphToDataflow>();
+std::unique_ptr<Pass> scalehls::createLowerDataflowPass() {
+  return std::make_unique<LowerDataflow>();
 }

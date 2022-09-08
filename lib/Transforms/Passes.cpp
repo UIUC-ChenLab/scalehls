@@ -106,13 +106,13 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
           pm.addPass(scalehls::createTosaFakeQuantizePass());
 
         // Graph-level optimization.
-        pm.addPass(scalehls::createTosaSimplifyGraphPass());
-        pm.addPass(scalehls::createTosaNodeFusionPass());
-        pm.addPass(scalehls::createCreateFuncDataflowPass());
-        pm.addPass(mlir::createCanonicalizerPass());
-        pm.addPass(scalehls::createLegalizeDataflowPass());
-        pm.addPass(scalehls::createCreateTokenDependsPass());
-        pm.addPass(mlir::createCanonicalizerPass());
+        // pm.addPass(scalehls::createTosaSimplifyGraphPass());
+        // pm.addPass(scalehls::createTosaNodeFusionPass());
+        // pm.addPass(scalehls::createCreateFuncDataflowPass());
+        // pm.addPass(mlir::createCanonicalizerPass());
+        // pm.addPass(scalehls::createLegalizeDataflowPass());
+        // pm.addPass(scalehls::createCreateTokenDependsPass());
+        // pm.addPass(mlir::createCanonicalizerPass());
 
         // TOSA to Linalg conversion.
         pm.addNestedPass<func::FuncOp>(tosa::createTosaToLinalgNamed());
@@ -183,11 +183,11 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(mlir::createCanonicalizerPass());
 
         // Affine loop dataflowing.
-        pm.addPass(scalehls::createCreateLoopDataflowPass());
-        pm.addPass(mlir::createCanonicalizerPass());
-        pm.addPass(scalehls::createLegalizeDataflowPass());
-        pm.addPass(mlir::createCanonicalizerPass());
-        pm.addPass(scalehls::createConvertDataflowToFuncPass());
+        // pm.addPass(scalehls::createCreateLoopDataflowPass());
+        // pm.addPass(mlir::createCanonicalizerPass());
+        // pm.addPass(scalehls::createLegalizeDataflowPass());
+        // pm.addPass(mlir::createCanonicalizerPass());
+        // pm.addPass(scalehls::createConvertDataflowToFuncPass());
 
         // Affine loop unrolling.
         if (opts.loopUnrollFactor) {

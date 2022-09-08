@@ -200,7 +200,7 @@ struct NodeMergePattern : public OpRewritePattern<OpType> {
 } // namespace
 
 namespace {
-struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
+struct BufferizeDataflow : public BufferizeDataflowBase<BufferizeDataflow> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -235,6 +235,6 @@ struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createLegalizeDataflowPass() {
-  return std::make_unique<LegalizeDataflow>();
+std::unique_ptr<Pass> scalehls::createBufferizeDataflowPass() {
+  return std::make_unique<BufferizeDataflow>();
 }

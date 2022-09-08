@@ -250,6 +250,34 @@ LogicalResult YieldOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
+// ToStreamOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult ToStreamOp::verify() {
+  if (value().getType() !=
+      stream().getType().cast<StreamType>().getElementType())
+    return emitOpError("value and stream type doesn't match");
+  return success();
+}
+
+void ToStreamOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                             MLIRContext *context) {}
+
+//===----------------------------------------------------------------------===//
+// ToValueOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult ToValueOp::verify() {
+  if (value().getType() !=
+      stream().getType().cast<StreamType>().getElementType())
+    return emitOpError("value and stream type doesn't match");
+  return success();
+}
+
+void ToValueOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                            MLIRContext *context) {}
+
+//===----------------------------------------------------------------------===//
 // NodeOp
 //===----------------------------------------------------------------------===//
 

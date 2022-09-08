@@ -31,19 +31,18 @@ std::unique_ptr<Pass>
 createFuncPreprocessPass(std::string hlsTopFunc = "forward");
 
 /// Dataflow-related passes.
-std::unique_ptr<Pass> createFuncDuplicationPass();
-std::unique_ptr<Pass> createCreateFuncDataflowPass();
-std::unique_ptr<Pass> createCreateLoopDataflowPass();
-std::unique_ptr<Pass> createLegalizeDataflowPass();
-std::unique_ptr<Pass> createCreateTokenDependsPass();
+std::unique_ptr<Pass> createBufferizeDataflowPass();
 std::unique_ptr<Pass> createConvertDataflowToFuncPass();
+std::unique_ptr<Pass> createCreateDataflowFromTosaPass();
+std::unique_ptr<Pass> createCreateDataflowFromAffinePass();
+std::unique_ptr<Pass> createFuncDuplicationPass();
+std::unique_ptr<Pass> createCreateTokenStreamPass();
+std::unique_ptr<Pass> createLowerDataflowPass();
 
-/// Graph-related passes.
+/// Tensor-related passes.
 std::unique_ptr<Pass> createTosaFakeQuantizePass();
 std::unique_ptr<Pass> createTosaSimplifyGraphPass();
-std::unique_ptr<Pass> createTosaNodeFusionPass();
 std::unique_ptr<Pass> createTosaToLinalgCleanupPass();
-std::unique_ptr<Pass> createConvertGraphToDataflowPass();
 
 /// Runtime-related passes.
 std::unique_ptr<Pass> createCreateAxiInterfacePass();

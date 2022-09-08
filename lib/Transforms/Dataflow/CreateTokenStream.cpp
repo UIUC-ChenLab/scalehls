@@ -13,7 +13,7 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-struct CreateTokenDepends : public CreateTokenDependsBase<CreateTokenDepends> {
+struct CreateTokenStream : public CreateTokenStreamBase<CreateTokenStream> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -25,8 +25,10 @@ struct CreateTokenDepends : public CreateTokenDependsBase<CreateTokenDepends> {
         continue;
 
       b.setInsertionPointAfter(buffer);
-      auto token = b.create<StreamChannelOp>(
-          b.getUnknownLoc(), StreamType::get(b.getContext(), b.getI1Type(), 1));
+      auto token = b.create<StreamOp>(
+          b.getUnknownLoc(),
+          StreamType::get(b.getContext(), b.getI1Type(), /*depth=*/1),
+          /*depth=*/1);
 
       for (auto node : buffer.getProducers()) {
         auto outputIdx = llvm::find(node.outputs(), buffer.memref()) -
@@ -71,6 +73,6 @@ struct CreateTokenDepends : public CreateTokenDependsBase<CreateTokenDepends> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createCreateTokenDependsPass() {
-  return std::make_unique<CreateTokenDepends>();
+std::unique_ptr<Pass> scalehls::createCreateTokenStreamPass() {
+  return std::make_unique<CreateTokenStream>();
 }
