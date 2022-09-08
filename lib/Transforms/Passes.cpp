@@ -7,6 +7,7 @@
 #include "scalehls/Transforms/Passes.h"
 #include "mlir/Conversion/Passes.h"
 #include "mlir/Dialect/Affine/Passes.h"
+#include "mlir/Dialect/Arithmetic/Transforms/Passes.h"
 #include "mlir/Dialect/Bufferization/Transforms/Passes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Func/Transforms/Passes.h"
@@ -105,14 +106,10 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         if (opts.fakeQuantize)
           pm.addPass(scalehls::createTosaFakeQuantizePass());
 
-        // Graph-level optimization.
-        // pm.addPass(scalehls::createTosaSimplifyGraphPass());
-        // pm.addPass(scalehls::createTosaNodeFusionPass());
-        // pm.addPass(scalehls::createCreateFuncDataflowPass());
-        // pm.addPass(mlir::createCanonicalizerPass());
-        // pm.addPass(scalehls::createLegalizeDataflowPass());
-        // pm.addPass(scalehls::createCreateTokenDependsPass());
-        // pm.addPass(mlir::createCanonicalizerPass());
+        // TOSA-level optimization.
+        pm.addPass(scalehls::createTosaSimplifyGraphPass());
+        pm.addPass(scalehls::createCreateDataflowFromTosaPass());
+        pm.addPass(mlir::createCanonicalizerPass());
 
         // TOSA to Linalg conversion.
         pm.addNestedPass<func::FuncOp>(tosa::createTosaToLinalgNamed());
@@ -123,10 +120,18 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(mlir::createCanonicalizerPass());
 
         // Tensor bufferization.
+        pm.addPass(arith::createArithmeticBufferizePass());
         pm.addPass(mlir::createLinalgBufferizePass());
         pm.addPass(func::createFuncBufferizePass());
         pm.addPass(bufferization::createBufferResultsToOutParamsPass());
+        pm.addPass(scalehls::createBufferizeDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
+
+        return;
+
+        // pm.addPass(scalehls::createLegalizeDataflowPass());
+        // pm.addPass(scalehls::createCreateTokenDependsPass());
+        // pm.addPass(mlir::createCanonicalizerPass());
 
         // Dataflow and Linalg lowering.
         pm.addPass(scalehls::createConvertDataflowToFuncPass());
