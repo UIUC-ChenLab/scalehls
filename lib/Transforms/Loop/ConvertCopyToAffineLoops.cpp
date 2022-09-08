@@ -135,10 +135,10 @@ struct ConvertCopyToAffineLoops
     patterns.add<AllocOpRewritePattern>(context, DT);
     (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
 
-    // Lower copy and assign operation.
-    patterns.clear();
-    patterns.add<CopyOpLoweringPattern>(context, internCopyOnly);
-    (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
+    // // Lower copy and assign operation.
+    // patterns.clear();
+    // patterns.add<CopyOpLoweringPattern>(context, internCopyOnly);
+    // (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
   }
 };
 } // namespace

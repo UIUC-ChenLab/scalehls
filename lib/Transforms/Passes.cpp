@@ -106,7 +106,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         if (opts.fakeQuantize)
           pm.addPass(scalehls::createTosaFakeQuantizePass());
 
-        // TOSA-level optimization.
+        // TOSA optimization.
         pm.addPass(scalehls::createTosaSimplifyGraphPass());
         pm.addPass(scalehls::createCreateDataflowFromTosaPass());
         pm.addPass(mlir::createCanonicalizerPass());
@@ -119,7 +119,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(mlir::createLinalgGeneralizationPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
-        // Tensor bufferization.
+        // Bufferization.
         pm.addPass(arith::createArithmeticBufferizePass());
         pm.addPass(mlir::createLinalgBufferizePass());
         pm.addPass(func::createFuncBufferizePass());
@@ -127,24 +127,18 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createBufferizeDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
-        return;
-
-        // pm.addPass(scalehls::createLegalizeDataflowPass());
-        // pm.addPass(scalehls::createCreateTokenDependsPass());
-        // pm.addPass(mlir::createCanonicalizerPass());
-
-        // Dataflow and Linalg lowering.
-        pm.addPass(scalehls::createConvertDataflowToFuncPass());
+        // Linalg to Affine conversion.
         pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
         pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
-        pm.addPass(memref::createFoldSubViewOpsPass());
-        pm.addPass(mlir::createAffineLoopNormalizePass());
-        pm.addPass(mlir::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
+        return;
+
         // Affine loop fusion.
-        pm.addPass(mlir::createLoopFusionPass(opts.fusionComputeTolerance));
+        pm.addPass(
+            scalehls::createAffineLoopFusionPass(opts.fusionComputeTolerance));
         pm.addPass(mlir::createCanonicalizerPass());
+
         pm.addPass(scalehls::createAffineStoreForwardPass());
         pm.addPass(scalehls::createRaiseImplicitCopyPass());
         pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());

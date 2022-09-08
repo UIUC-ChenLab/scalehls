@@ -30,8 +30,8 @@ def DataflowBufferLike : NativeOpTrait<"DataflowBufferLike">;
 // High Dataflow Operations
 //===----------------------------------------------------------------------===//
 
-def TaskOp : HLSOp<"dataflow.task", [IsolatedFromAbove,
-      SingleBlockImplicitTerminator<"YieldOp">]> {
+def TaskOp : HLSOp<"dataflow.task", [IsolatedFromAbove, AffineScope,
+      AutomaticAllocationScope, SingleBlockImplicitTerminator<"YieldOp">]> {
   let summary = "Represent a high-level task";
   let description = [{
     This operation represents a task that has an isolated region to contain the
@@ -92,8 +92,9 @@ def ToValueOp : HLSOp<"dataflow.to_value"> {
 // Low Dataflow Operations
 //===----------------------------------------------------------------------===//
 
-def NodeOp : HLSOp<"dataflow.node", [NoTerminator, IsolatedFromAbove,
-      SingleBlock, AttrSizedOperandSegments]> {
+def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
+      AutomaticAllocationScope, NoTerminator, SingleBlock,
+      AttrSizedOperandSegments]> {
   let summary = "Represent a dataflow node";
   let description = [{
     This operation represents a node of dataflow that has an isolated region to

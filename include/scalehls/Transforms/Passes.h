@@ -21,6 +21,10 @@ class FuncOp;
 namespace mlir {
 namespace scalehls {
 
+/// Fusion mode to attempt. The default mode `Greedy` does both
+/// producer-consumer and sibling fusion.
+enum AffineFusionMode { Greedy, ProducerConsumer, Sibling };
+
 void registerScaleHLSDSEPipeline();
 void registerScaleHLSPyTorchPipelineV2();
 void registerTransformsPasses();
@@ -50,6 +54,10 @@ std::unique_ptr<Pass>
 createCreateRuntimeMainPass(std::string hlsTopFunc = "forward");
 
 /// Loop-related passes.
+std::unique_ptr<Pass> createAffineLoopFusionPass(
+    double computeToleranceThreshold = 0.3, unsigned fastMemorySpace = 0,
+    uint64_t localBufSizeThreshold = 0, bool maximalFusion = false,
+    enum AffineFusionMode fusionMode = AffineFusionMode::Greedy);
 std::unique_ptr<Pass>
 createConvertCopyToAffineLoopsPass(bool convertInternCopyOnly = true);
 std::unique_ptr<Pass> createMaterializeReductionPass();
