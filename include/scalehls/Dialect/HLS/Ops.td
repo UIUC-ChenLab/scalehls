@@ -74,7 +74,7 @@ def ToStreamOp : HLSOp<"dataflow.to_stream"> {
   let assemblyFormat = "$value attr-dict `:` functional-type($value, $stream)";
 
   let hasVerifier = 1;
-  let hasCanonicalizer = 1;
+  let hasFolder = 1;
 }
 
 def ToValueOp : HLSOp<"dataflow.to_value"> {
@@ -85,7 +85,7 @@ def ToValueOp : HLSOp<"dataflow.to_value"> {
   let assemblyFormat = "$stream attr-dict `:` functional-type($stream, $value)";
 
   let hasVerifier = 1;
-  let hasCanonicalizer = 1;
+  let hasFolder = 1;
 }
 
 //===----------------------------------------------------------------------===//

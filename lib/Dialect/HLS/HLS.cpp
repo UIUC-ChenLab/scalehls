@@ -260,8 +260,12 @@ LogicalResult ToStreamOp::verify() {
   return success();
 }
 
-void ToStreamOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                             MLIRContext *context) {}
+OpFoldResult ToStreamOp::fold(ArrayRef<Attribute>) {
+  if (auto toValue = value().getDefiningOp<ToValueOp>())
+    if (toValue.stream().getType() == getType())
+      return toValue.stream();
+  return {};
+}
 
 //===----------------------------------------------------------------------===//
 // ToValueOp
@@ -274,8 +278,12 @@ LogicalResult ToValueOp::verify() {
   return success();
 }
 
-void ToValueOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                            MLIRContext *context) {}
+OpFoldResult ToValueOp::fold(ArrayRef<Attribute>) {
+  if (auto toStream = stream().getDefiningOp<ToStreamOp>())
+    if (toStream.value().getType() == getType())
+      return toStream.value();
+  return {};
+}
 
 //===----------------------------------------------------------------------===//
 // NodeOp
