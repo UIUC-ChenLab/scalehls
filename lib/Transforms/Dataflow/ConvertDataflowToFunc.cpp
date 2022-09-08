@@ -14,6 +14,51 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
+struct TaskConversionPattern : public OpRewritePattern<TaskOp> {
+  TaskConversionPattern(MLIRContext *context, StringRef prefix,
+                        unsigned &taskIdx)
+      : OpRewritePattern<TaskOp>(context), prefix(prefix), taskIdx(taskIdx) {}
+
+  LogicalResult matchAndRewrite(TaskOp task,
+                                PatternRewriter &rewriter) const override {
+    // Create a new sub-function.
+    rewriter.setInsertionPoint(task->getParentOfType<func::FuncOp>());
+    auto subFunc = rewriter.create<func::FuncOp>(
+        task.getLoc(), prefix.str() + "_task" + std::to_string(taskIdx++),
+        rewriter.getFunctionType(task.getOperandTypes(),
+                                 task.getResultTypes()));
+
+    // Inline the contents of the dataflow task.
+    rewriter.inlineRegionBefore(task.getBodyRegion(), subFunc.getBody(),
+                                subFunc.end());
+
+    // Replace original with a function call.
+    rewriter.setInsertionPoint(task);
+    rewriter.replaceOpWithNewOp<func::CallOp>(task, subFunc,
+                                              task.getOperands());
+    setFuncDirective(subFunc, false, 1, true);
+    return success();
+  }
+
+private:
+  StringRef prefix;
+  unsigned &taskIdx;
+};
+} // namespace
+
+namespace {
+struct YieldConversionPattern : public OpRewritePattern<YieldOp> {
+  using OpRewritePattern<YieldOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(YieldOp yield,
+                                PatternRewriter &rewriter) const override {
+    rewriter.replaceOpWithNewOp<func::ReturnOp>(yield, yield.getOperands());
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 struct NodeConversionPattern : public OpRewritePattern<NodeOp> {
   NodeConversionPattern(MLIRContext *context, StringRef prefix,
                         unsigned &nodeIdx)
@@ -35,9 +80,8 @@ struct NodeConversionPattern : public OpRewritePattern<NodeOp> {
 
     // Replace original with a function call.
     rewriter.setInsertionPoint(node);
-    rewriter.create<func::CallOp>(node.getLoc(), subFunc, node.getOperands());
-    rewriter.eraseOp(node);
-
+    rewriter.replaceOpWithNewOp<func::CallOp>(node, subFunc,
+                                              node.getOperands());
     setFuncDirective(subFunc, false, 1, true);
     return success();
   }
@@ -105,12 +149,14 @@ struct ConvertDataflowToFunc
       (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
       ConversionTarget target(*context);
-      target.addIllegalOp<NodeOp, BufferOp>();
+      target.addIllegalOp<TaskOp, YieldOp, NodeOp, BufferOp>();
       target.addLegalOp<func::FuncOp, func::ReturnOp, func::CallOp,
                         memref::AllocOp>();
 
       unsigned nodeIdx = 0;
       patterns.clear();
+      patterns.add<TaskConversionPattern>(context, func.getName(), nodeIdx);
+      patterns.add<YieldConversionPattern>(context);
       patterns.add<NodeConversionPattern>(context, func.getName(), nodeIdx);
       patterns.add<BufferConversionPattern>(context);
       if (failed(applyPartialConversion(func, target, std::move(patterns))))
