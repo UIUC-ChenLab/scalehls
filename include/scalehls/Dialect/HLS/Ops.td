@@ -55,7 +55,7 @@ def TaskOp : HLSOp<"dataflow.task", [IsolatedFromAbove, AffineScope,
   }];
 }
 
-def YieldOp : HLSOp<"dataflow.yield", [ReturnLike, Terminator,
+def YieldOp : HLSOp<"dataflow.yield", [NoSideEffect, ReturnLike, Terminator,
       HasParent<"TaskOp">]> {
   let summary = "Terminate and yield results of a task";
 
@@ -66,7 +66,7 @@ def YieldOp : HLSOp<"dataflow.yield", [ReturnLike, Terminator,
   let hasVerifier = 1;
 }
 
-def ToStreamOp : HLSOp<"dataflow.to_stream"> {
+def ToStreamOp : HLSOp<"dataflow.to_stream", [NoSideEffect]> {
   let summary = "Convert a scalar value to a stream channel";
 
   let arguments = (ins AnyType:$value);
@@ -77,7 +77,7 @@ def ToStreamOp : HLSOp<"dataflow.to_stream"> {
   let hasFolder = 1;
 }
 
-def ToValueOp : HLSOp<"dataflow.to_value"> {
+def ToValueOp : HLSOp<"dataflow.to_value", [NoSideEffect]> {
   let summary = "Convert a stream to a scalar value";
 
   let arguments = (ins AnyStream:$stream);
