@@ -25,8 +25,9 @@ class StreamOf<list<Type> allowedTypes> : Type<And<[
 >;
 
 def AnyStream : StreamOf<[AnyType]>;
-def AnyMemrefOrStream : Type<Or<[AnyMemRef.predicate, AnyStream.predicate]>,
-  "memref or stream values">;
+def AnyMemrefOrStreamOrIndex :
+    Type<Or<[AnyMemRef.predicate, AnyStream.predicate, Index.predicate]>,
+  "memref or stream or index values">;
 
 def DataflowBufferLike : NativeOpTrait<"DataflowBufferLike">;
 
@@ -103,11 +104,11 @@ def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
   let description = [{
     This operation represents a node of dataflow that has an isolated region to
     represent the operations contained by the node. The node can only take
-    buffer or stream as inputs or outputs.
+    buffer or stream or index as inputs or outputs.
   }];
 
-  let arguments = (ins Variadic<AnyMemrefOrStream>:$inputs,
-                       Variadic<AnyMemrefOrStream>:$outputs,
+  let arguments = (ins Variadic<AnyMemrefOrStreamOrIndex>:$inputs,
+                       Variadic<AnyMemrefOrStreamOrIndex>:$outputs,
                        OptionalAttr<I32Attr>:$level);
   let regions = (region SizedRegion<1>:$body);
 

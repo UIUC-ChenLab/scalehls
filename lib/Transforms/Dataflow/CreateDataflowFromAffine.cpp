@@ -94,6 +94,20 @@ struct DataflowNodeCreatePattern : public OpRewritePattern<OpType> {
       return target.emitOpError("target region has multiple blocks");
     auto &block = target.getRegion().front();
 
+    // Collect all constants in the block.
+    SmallVector<Operation *, 16> constants;
+    block.walk([&](arith::ConstantOp op) { constants.push_back(op); });
+
+    // Localize constants to each of its use.
+    for (auto constant : constants) {
+      for (auto &use : llvm::make_early_inc_range(constant->getUses())) {
+        rewriter.setInsertionPoint(use.getOwner());
+        auto cloneConstant = cast<arith::ConstantOp>(rewriter.clone(*constant));
+        use.set(cloneConstant.getResult());
+      }
+      constant->erase();
+    }
+
     // Fuse operations into dataflow nodes. TODO: We need more case study to
     // figure out any other operations need to be separately handled. For
     // example, how to handle AffineIfOp?

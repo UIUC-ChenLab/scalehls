@@ -24,7 +24,7 @@ struct TaskStreamingPattern : public OpRewritePattern<TaskOp> {
     // Bufferize inputs of the node.
     for (auto &input : llvm::make_early_inc_range(op->getOpOperands())) {
       auto type = input.get().getType();
-      if (type.isa<MemRefType, StreamType>())
+      if (type.isa<MemRefType, StreamType, IndexType>())
         continue;
 
       hasChanged = true;
@@ -47,7 +47,7 @@ struct TaskStreamingPattern : public OpRewritePattern<TaskOp> {
     // Bufferize outputs of the node.
     for (auto result : op->getResults()) {
       auto type = result.getType();
-      if (type.isa<MemRefType, StreamType>())
+      if (type.isa<MemRefType, StreamType, IndexType>())
         continue;
 
       hasChanged = true;
@@ -70,6 +70,34 @@ struct TaskStreamingPattern : public OpRewritePattern<TaskOp> {
 } // namespace
 
 namespace {
+struct ToStreamConversionPattern : public OpRewritePattern<ToStreamOp> {
+  using OpRewritePattern<ToStreamOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ToStreamOp op,
+                                PatternRewriter &rewriter) const override {
+    rewriter.setInsertionPointAfter(op);
+    rewriter.create<StreamWriteOp>(op.getLoc(), op.stream(), op.value());
+    rewriter.setInsertionPoint(op);
+    rewriter.replaceOpWithNewOp<StreamOp>(
+        op, op.getType(), op.getType().cast<StreamType>().getDepth());
+    return success();
+  }
+};
+} // namespace
+
+namespace {
+struct ToValueConversionPattern : public OpRewritePattern<ToValueOp> {
+  using OpRewritePattern<ToValueOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ToValueOp op,
+                                PatternRewriter &rewriter) const override {
+    rewriter.replaceOpWithNewOp<StreamReadOp>(op, op.getType(), op.stream());
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 struct StreamDataflow : public StreamDataflowBase<StreamDataflow> {
   void runOnOperation() override {
     auto func = getOperation();
@@ -77,6 +105,8 @@ struct StreamDataflow : public StreamDataflowBase<StreamDataflow> {
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<TaskStreamingPattern>(context);
+    patterns.add<ToStreamConversionPattern>(context);
+    patterns.add<ToValueConversionPattern>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
