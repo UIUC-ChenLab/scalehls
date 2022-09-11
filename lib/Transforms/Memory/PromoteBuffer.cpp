@@ -65,8 +65,7 @@ struct PromoteBufferPattern : public OpRewritePattern<memref::SubViewOp> {
 
   LogicalResult matchAndRewrite(memref::SubViewOp subview,
                                 PatternRewriter &rewriter) const override {
-    if (subview.source().getType().cast<MemRefType>().getMemorySpaceAsInt() !=
-        (unsigned)MemoryKind::DRAM)
+    if (!isInputOutput(subview.source()))
       return failure();
 
     rewriter.setInsertionPointAfter(subview);
@@ -84,14 +83,13 @@ struct PromoteBuffer : public scalehls::PromoteBufferBase<PromoteBuffer> {
 
     // We assume after create-axi-interface, we should not allocate any on-chip
     // buffer in the top function. TODO: Make this an option.
-    if (hasTopFuncAttr(func) || hasRuntimeAttr(func))
-      return;
+    // if (hasTopFuncAttr(func) || hasRuntimeAttr(func))
+    //   return;
 
     // Promote function arguments that are not only used by subviews.
     for (auto arg : func.getArguments()) {
       auto type = arg.getType().dyn_cast<MemRefType>();
-      if (!type || type.getMemorySpaceAsInt() != (unsigned)MemoryKind::DRAM ||
-          llvm::all_of(arg.getUsers(), [&](Operation *op) {
+      if (!type || llvm::all_of(arg.getUsers(), [&](Operation *op) {
             return isa<memref::SubViewOp>(op);
           }))
         continue;

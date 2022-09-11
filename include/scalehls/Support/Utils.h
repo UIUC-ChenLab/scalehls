@@ -86,6 +86,8 @@ func::FuncOp getTopFunc(ModuleOp module, std::string topFuncName = "");
 
 func::FuncOp getRuntimeFunc(ModuleOp module, std::string runtimeFuncName = "");
 
+bool isInputOutput(Value value);
+
 //===----------------------------------------------------------------------===//
 // PtrLikeMemRefAccess Struct Declaration
 //===----------------------------------------------------------------------===//

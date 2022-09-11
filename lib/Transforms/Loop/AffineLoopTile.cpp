@@ -104,7 +104,8 @@ struct AffineLoopTile : public AffineLoopTileBase<AffineLoopTile> {
   void runOnOperation() override {
     // Bands of loops to tile.
     std::vector<SmallVector<AffineForOp, 6>> bands;
-    getTileableBands(getOperation(), &bands);
+    getLoopBands(getOperation().front(), bands);
+    // getTileableBands(getOperation(), &bands);
 
     // Tile each band.
     for (auto &band : bands) {

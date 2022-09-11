@@ -58,8 +58,7 @@ void CreateMemrefSubview::runOnOperation() {
 
       // No need to create subview for on-chip buffers. TODO: Should we make
       // this an option?
-      if (memref.getType().cast<MemRefType>().getMemorySpaceAsInt() !=
-          (unsigned)MemoryKind::DRAM)
+      if (!isInputOutput(memref))
         return WalkResult::advance();
 
       // Construct the dimensions set whose corresponding operand is point loop

@@ -15,14 +15,18 @@ include "mlir/Interfaces/ControlFlowInterfaces.td"
 //===----------------------------------------------------------------------===//
 
 class StreamOf<list<Type> allowedTypes> : Type<And<[
-  CPred<"$_self.isa<::mlir::scalehls::hls::StreamType>()">,
-  Concat<"[](::mlir::Type elementType) { return ",
-    SubstLeaves<"$_self", "elementType", AnyTypeOf<allowedTypes>.predicate>,
-    "; }($_self.cast<::mlir::scalehls::hls::StreamType>().getElementType())">
-]>>;
+    CPred<"$_self.isa<::mlir::scalehls::hls::StreamType>()">,
+    Concat<"[](::mlir::Type elementType) { return ",
+      SubstLeaves<"$_self", "elementType", AnyTypeOf<allowedTypes>.predicate>,
+      "; }($_self.cast<::mlir::scalehls::hls::StreamType>().getElementType())">
+  ]>,
+  "stream of " # AnyTypeOf<allowedTypes>.summary # " values",
+  "::mlir::scalehls::hls::StreamType"
+>;
 
 def AnyStream : StreamOf<[AnyType]>;
-def AnyMemrefOrStream : Type<Or<[AnyMemRef.predicate, AnyStream.predicate]>>;
+def AnyMemrefOrStream : Type<Or<[AnyMemRef.predicate, AnyStream.predicate]>,
+  "memref or stream values">;
 
 def DataflowBufferLike : NativeOpTrait<"DataflowBufferLike">;
 

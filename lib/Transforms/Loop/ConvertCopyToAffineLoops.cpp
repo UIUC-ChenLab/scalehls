@@ -7,6 +7,7 @@
 #include "mlir/IR/Dominance.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
+#include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -77,15 +78,12 @@ struct CopyOpLoweringPattern : public OpRewritePattern<memref::CopyOp> {
 
   LogicalResult matchAndRewrite(memref::CopyOp copy,
                                 PatternRewriter &rewriter) const override {
-    // Check whether the copy op communicates with an AXI interface.
-    auto isAxiInterf =
-        copy.source().getType().cast<MemRefType>().getMemorySpaceAsInt() ==
-            (unsigned)MemoryKind::DRAM ||
-        copy.target().getType().cast<MemRefType>().getMemorySpaceAsInt() ==
-            (unsigned)MemoryKind::DRAM;
+    // Check whether the copy op communicates with inputs or outputs.
+    auto isExternalCopy =
+        isInputOutput(copy.source()) || isInputOutput(copy.target());
 
-    // Return failure if we don't need to lower copy op with AXI interfaces.
-    if (internCopyOnly && isAxiInterf)
+    // Return failure if we don't need to lower external copies.
+    if (internCopyOnly && isExternalCopy)
       return failure();
 
     rewriter.setInsertionPoint(copy);
@@ -96,9 +94,9 @@ struct CopyOpLoweringPattern : public OpRewritePattern<memref::CopyOp> {
     SmallVector<Value, 4> ivs;
     for (auto dimSize : memrefType.getShape()) {
       auto loop = rewriter.create<mlir::AffineForOp>(loc, 0, dimSize);
-      // If the copy op is not with  an AXI interface, we consider the loop as
-      // point loop that needs to be optimized later.
-      if (!isAxiInterf)
+      // If the copy op is not external, we consider the loop as  point loop
+      // that needs to be optimized later.
+      if (!isExternalCopy)
         setPointAttr(loop);
       rewriter.setInsertionPointToStart(loop.getBody());
       ivs.push_back(loop.getInductionVar());
@@ -135,10 +133,10 @@ struct ConvertCopyToAffineLoops
     patterns.add<AllocOpRewritePattern>(context, DT);
     (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
 
-    // // Lower copy and assign operation.
-    // patterns.clear();
-    // patterns.add<CopyOpLoweringPattern>(context, internCopyOnly);
-    // (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
+    // Lower copy and assign operation.
+    patterns.clear();
+    patterns.add<CopyOpLoweringPattern>(context, internCopyOnly);
+    (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
   }
 };
 } // namespace

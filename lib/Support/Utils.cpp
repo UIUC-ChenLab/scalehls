@@ -409,6 +409,14 @@ func::FuncOp scalehls::getRuntimeFunc(ModuleOp module,
   return runtimeFunc;
 }
 
+bool scalehls::isInputOutput(Value value) {
+  return value.isa<BlockArgument>() ||
+         llvm::any_of(value.getUsers(), [](Operation *op) {
+           return op->hasTrait<OpTrait::IsTerminator>() &&
+                  op->hasTrait<OpTrait::ReturnLike>();
+         });
+}
+
 //===----------------------------------------------------------------------===//
 // PtrLikeMemRefAccess Struct Definition
 //===----------------------------------------------------------------------===//

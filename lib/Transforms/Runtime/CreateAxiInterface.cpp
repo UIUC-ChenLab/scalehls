@@ -32,6 +32,10 @@ void updateFuncType(func::FuncOp func, OpBuilder &builder) {
       std::get<0>(t).setType(std::get<1>(t));
     updateFuncType(subFunc, builder);
   }
+  for (auto task : func.getOps<TaskOp>())
+    for (auto t :
+         llvm::zip(task.getBody()->getArguments(), task.getOperandTypes()))
+      std::get<0>(t).setType(std::get<1>(t));
 }
 
 namespace {
@@ -75,9 +79,8 @@ struct CreateAxiInterface
       bool writeChannel = true, readChannel = true;
 
       for (auto &use : llvm::make_early_inc_range(op.getUses())) {
-        if (auto subCall = dyn_cast<func::CallOp>(use.getOwner())) {
-          auto arg = module.lookupSymbol<func::FuncOp>(subCall.getCallee())
-                         .getArgument(use.getOperandNumber());
+        if (auto task = dyn_cast<TaskOp>(use.getOwner())) {
+          auto arg = task.getBody()->getArgument(use.getOperandNumber());
 
           auto readFlag = llvm::any_of(arg.getUsers(), [](Operation *op) {
             return isa<mlir::AffineReadOpInterface, func::CallOp>(op);
