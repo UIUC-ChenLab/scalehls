@@ -6,6 +6,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Dataflow/CreateTokenStream.cpp
   Dataflow/FuncDuplication.cpp
   Dataflow/LowerDataflow.cpp
+  Dataflow/StreamDataflow.cpp
 
   Directive/ArrayPartition.cpp
   Directive/CreateHLSPrimitive.cpp

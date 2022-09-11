@@ -42,6 +42,7 @@ std::unique_ptr<Pass> createCreateDataflowFromAffinePass();
 std::unique_ptr<Pass> createFuncDuplicationPass();
 std::unique_ptr<Pass> createCreateTokenStreamPass();
 std::unique_ptr<Pass> createLowerDataflowPass();
+std::unique_ptr<Pass> createStreamDataflowPass();
 
 /// Tensor-related passes.
 std::unique_ptr<Pass> createTosaFakeQuantizePass();

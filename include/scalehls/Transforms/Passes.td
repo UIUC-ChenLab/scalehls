@@ -91,6 +91,12 @@ def LowerDataflow : Pass<"scalehls-lower-dataflow", "func::FuncOp"> {
   let constructor = "mlir::scalehls::createLowerDataflowPass()";
 }
 
+def StreamDataflow :
+      Pass<"scalehls-stream-dataflow", "func::FuncOp"> {
+  let summary = "Stream dataflow operations";
+  let constructor = "mlir::scalehls::createStreamDataflowPass()";
+}
+
 //===----------------------------------------------------------------------===//
 // Tensor-related Passes
 //===----------------------------------------------------------------------===//
