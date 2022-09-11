@@ -4,76 +4,82 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Analysis/CallGraph.h"
+#include "mlir/Analysis/Liveness.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
-#include "llvm/ADT/PostOrderIterator.h"
-#include "llvm/ADT/SCCIterator.h"
 
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
-// static NodeOp fuseOps(ArrayRef<Operation *> ops, PatternRewriter &rewriter) {
-//   assert(!ops.empty() && "must fuse at least two nodes");
-//   llvm::SmallDenseSet<Operation *, 16> opSet(ops.begin(), ops.end());
+/// Fuse the given operations into a new task. The new task will be created
+/// before the first operation and each operation will be inserted in order.
+/// This method always succeeds even if the resulting IR is invalid.
+static TaskOp fuseOps(ArrayRef<Operation *> ops, PatternRewriter &rewriter) {
+  assert(!ops.empty() && "must fuse at least one op");
+  SmallPtrSet<Operation *, 4> opsSet(ops.begin(), ops.end());
 
-//   // Collect inputs and outputs of the new node.
-//   llvm::SmallDenseSet<Value, 8> inputs;
-//   llvm::SmallDenseSet<Value, 8> outputs;
-//   llvm::SmallDenseSet<Operation *, 8> streamReads;
-//   SmallVector<Operation *, 8> streamWrites;
-//   for (auto op : ops) {
-//     op->walk([&](Operation *op) {
-//       // Handle memory inputs and outputs.
-//       if (auto store = dyn_cast<mlir::AffineWriteOpInterface>(op))
-//         outputs.insert(store.getMemRef());
-//       else if (auto store = dyn_cast<memref::StoreOp>(op))
-//         outputs.insert(store.memref());
-//       else if (auto copy = dyn_cast<memref::CopyOp>(op)) {
-//         outputs.insert(copy.target());
-//         inputs.insert(copy.source());
-//       } else {
-//         // TODO: Is this safe in general?
-//         for (auto operand : op->getOperands())
-//           if (operand.getType().isa<MemRefType>())
-//             inputs.insert(operand);
-//       }
+  llvm::SetVector<Value> inputValues;
+  llvm::SetVector<Value> outputValues;
+  for (auto op : ops) {
+    // Collect input values.
+    for (auto operand : op->getOperands())
+      if (!opsSet.count(operand.getDefiningOp()))
+        inputValues.insert(operand);
 
-//       // Handle normal SSA operands.
-//       for (auto operand : op->getOperands()) {
-//         if (opSet.count(operand.getDefiningOp()))
-//           continue;
-//         else if (auto read = operand.getDefiningOp<StreamReadOp>())
-//           streamReads.insert(read);
-//         else
-//           op->emitOpError("operand has illegal defining op");
-//       }
+    // Collect input values of sub-regions through liveness analysis.
+    if (op->getNumRegions() != 0) {
+      auto liveness = Liveness(op);
+      op->walk([&](Block *block) {
+        for (auto livein : liveness.getLiveIn(block))
+          if (auto arg = livein.dyn_cast<BlockArgument>()) {
+            if (!op->isAncestor(arg.getParentBlock()->getParentOp()))
+              inputValues.insert(livein);
+          } else if (!opsSet.count(livein.getDefiningOp()) &&
+                     !op->isAncestor(livein.getDefiningOp()))
+            inputValues.insert(livein);
+      });
+    }
 
-//       // Handle normal SSA results.
-//       for (auto result : op->getResults()) {
+    // Collect output values. This is not sufficient and may lead to empty-used
+    // outputs, which will be removed furing cononicalization.
+    for (auto result : op->getResults())
+      if (llvm::any_of(result.getUsers(),
+                       [&](Operation *user) { return !opsSet.count(user); }))
+        outputValues.insert(result);
+  }
 
-//       }
-//     });
-//   }
+  // Create new graph task with all inputs and outputs.
+  auto loc = rewriter.getUnknownLoc();
+  rewriter.setInsertionPoint(ops.front());
+  auto task = rewriter.create<TaskOp>(
+      loc, ValueRange(outputValues.getArrayRef()), inputValues.getArrayRef());
+  auto taskBlock = rewriter.createBlock(&task.body());
 
-//   // Construct the new node after the last node.
-//   rewriter.setInsertionPointAfter(nodes.back());
-//   auto newNode =
-//       rewriter.create<NodeOp>(rewriter.getUnknownLoc(), inputs, outputs);
-//   auto block = rewriter.createBlock(&newNode.body());
-//   block->addArguments(ValueRange(inputs), inputLocs);
-//   block->addArguments(ValueRange(outputs), outputLocs);
+  // Move each targeted op into the new graph task.
+  rewriter.setInsertionPointToEnd(taskBlock);
+  auto yield = rewriter.create<YieldOp>(loc, outputValues.getArrayRef());
+  for (auto op : ops)
+    op->moveBefore(yield);
 
-//   for (auto node : nodes)
-//     node->moveBefore(block, block->end());
-//   for (auto t : llvm::zip(newNode.getOperands(), block->getArguments()))
-//     std::get<0>(t).replaceUsesWithIf(std::get<1>(t), [&](OpOperand &use) {
-//       return newNode->isProperAncestor(use.getOwner());
-//     });
-//   return newNode;
-// }
+  // Replace internal input uses with task arguments.
+  for (auto input : inputValues) {
+    auto arg = taskBlock->addArgument(input.getType(), input.getLoc());
+    input.replaceUsesWithIf(arg, [&](OpOperand &use) {
+      return task->isProperAncestor(use.getOwner());
+    });
+  }
+
+  // Replace external output uses with the task results.
+  unsigned idx = 0;
+  for (auto output : outputValues) {
+    output.replaceUsesWithIf(task.getResult(idx++), [&](OpOperand &use) {
+      return !task->isProperAncestor(use.getOwner());
+    });
+  }
+  return task;
+}
 
 namespace {
 /// Wrap operations in the front block into dataflow nodes based on heuristic if
@@ -93,30 +99,27 @@ struct DataflowNodeCreatePattern : public OpRewritePattern<OpType> {
     // example, how to handle AffineIfOp?
     SmallVector<Operation *, 4> opsToFuse;
     for (auto &op : llvm::make_early_inc_range(block)) {
-      if (isa<linalg::LinalgDialect, tosa::TosaDialect, tensor::TensorDialect,
+      if (isa<tosa::TosaDialect, tensor::TensorDialect, linalg::LinalgDialect,
               bufferization::BufferizationDialect>(op.getDialect()) ||
-          isa<func::CallOp, NodeOp>(op)) {
-        return op.emitOpError(
-            "linalg/tosa/tensor/bufferization operations are not supported, "
-            "function call should have been inlined");
+          isa<func::CallOp, TaskOp, NodeOp>(op)) {
+        return failure();
 
       } else if (isa<BufferOp, ConstBufferOp, arith::ConstantOp,
                      memref::AllocOp, memref::AllocaOp>(op)) {
         // Constant or memory operations are moved to the begining and skipped.
         op.moveBefore(&block, block.begin());
 
-      } else if (&op == block.getTerminator()) {
-        // If the block is empty, directly return.
-        if (opsToFuse.empty())
-          return failure();
-        // fuseOpsIntoNewNode(opsToFuse, rewriter);
-        opsToFuse.clear();
-
       } else if (isa<AffineForOp, scf::ForOp>(op)) {
         // We always take loop as root operation and fuse all the collected
         // operations so far.
         opsToFuse.push_back(&op);
-        // fuseOpsIntoNewNode(opsToFuse, rewriter);
+        fuseOps(opsToFuse, rewriter);
+        opsToFuse.clear();
+
+      } else if (&op == block.getTerminator()) {
+        if (opsToFuse.empty())
+          continue;
+        fuseOps(opsToFuse, rewriter);
         opsToFuse.clear();
 
       } else {
@@ -148,7 +151,7 @@ struct CreateDataflowFromAffine
     patterns.clear();
     patterns.add<DataflowNodeCreatePattern<mlir::AffineForOp>>(context);
     FrozenRewritePatternSet frozenPatterns(std::move(patterns));
-    for (auto &band : targetBands)
+    for (auto &band : llvm::reverse(targetBands))
       (void)applyOpPatternsAndFold(band.back(), frozenPatterns);
   }
 };
