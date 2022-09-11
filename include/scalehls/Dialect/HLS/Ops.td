@@ -25,9 +25,8 @@ class StreamOf<list<Type> allowedTypes> : Type<And<[
 >;
 
 def AnyStream : StreamOf<[AnyType]>;
-def AnyMemrefOrStreamOrIndex :
-    Type<Or<[AnyMemRef.predicate, AnyStream.predicate, Index.predicate]>,
-  "memref or stream or index values">;
+def AnyMemrefOrStream : Type<Or<[AnyMemRef.predicate, AnyStream.predicate]>,
+    "memref or stream values">;
 
 def DataflowBufferLike : NativeOpTrait<"DataflowBufferLike">;
 
@@ -104,22 +103,28 @@ def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
   let description = [{
     This operation represents a node of dataflow that has an isolated region to
     represent the operations contained by the node. The node can only take
-    buffer or stream or index as inputs or outputs.
+    buffers or streams as inputs and outputs. Additionally, scalar values can be
+    passed into a node as parameters, which will not be considered in the
+    dataflow.
   }];
 
-  let arguments = (ins Variadic<AnyMemrefOrStreamOrIndex>:$inputs,
-                       Variadic<AnyMemrefOrStreamOrIndex>:$outputs,
+  let arguments = (ins Variadic<AnyMemrefOrStream>:$inputs,
+                       Variadic<AnyMemrefOrStream>:$outputs,
+                       Variadic<AnyType>:$params,
                        OptionalAttr<I32Attr>:$level);
   let regions = (region SizedRegion<1>:$body);
 
   let assemblyFormat = [{
-    (`ins` `(` $inputs^ `)`)? (`outs` `(` $outputs^ `)`)? attr-dict
-    `:` functional-type($inputs, $outputs) $body
+    `(` $inputs `)` `->` `(` $outputs `)` ( `[` $params^ `]` )? attr-dict `:`
+    functional-type($inputs, $outputs) (`[` type($params)^ `]` )? $body
   }];
 
   let builders = [
+    OpBuilder<(ins "mlir::ValueRange":$inputs, "mlir::ValueRange":$outputs,
+                   "mlir::ValueRange":$params),
+        "build($_builder, $_state, inputs, outputs, params, nullptr);">,
     OpBuilder<(ins "mlir::ValueRange":$inputs, "mlir::ValueRange":$outputs),
-                   "build($_builder, $_state, inputs, outputs, nullptr);">
+        "build($_builder, $_state, inputs, outputs, ValueRange());">
   ];
 
   let hasVerifier = 1;

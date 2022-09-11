@@ -162,7 +162,7 @@ struct MulIRaisePattern : public OpRewritePattern<arith::MulIOp> {
 } // namespace
 
 bool scalehls::applyFuncPreprocess(func::FuncOp func, bool isTopFunc) {
-  auto builder = OpBuilder(func);
+  // auto builder = OpBuilder(func);
   auto context = func.getContext();
 
   // We constrain functions to only contain one block.
