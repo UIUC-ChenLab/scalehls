@@ -140,10 +140,6 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createRaiseImplicitCopyPass());
         pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
 
-        // // Create runtime components.
-        // pm.addPass(scalehls::createCreateRuntimeMainPass(opts.hlsTopFunc));
-        // pm.addPass(scalehls::createCreateAxiInterfacePass());
-
         // // Vectorization.
         // if (opts.vectorSize) {
         //   pm.addPass(mlir::createSuperVectorizePass({opts.vectorSize}));
@@ -178,14 +174,19 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(mlir::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
+        // Affine loop dataflowing.
+        pm.addPass(scalehls::createCreateDataflowFromAffinePass());
+        pm.addPass(mlir::createCanonicalizerPass());
+
         return;
 
-        // Affine loop dataflowing.
-        // pm.addPass(scalehls::createCreateLoopDataflowPass());
-        // pm.addPass(mlir::createCanonicalizerPass());
         // pm.addPass(scalehls::createLegalizeDataflowPass());
         // pm.addPass(mlir::createCanonicalizerPass());
         // pm.addPass(scalehls::createConvertDataflowToFuncPass());
+
+        // // Create runtime components.
+        // pm.addPass(scalehls::createCreateRuntimeMainPass(opts.hlsTopFunc));
+        // pm.addPass(scalehls::createCreateAxiInterfacePass());
 
         // Affine loop unrolling.
         if (opts.loopUnrollFactor) {

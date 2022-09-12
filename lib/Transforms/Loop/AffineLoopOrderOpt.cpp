@@ -196,8 +196,8 @@ struct AffineLoopOrderOpt : public AffineLoopOrderOptBase<AffineLoopOrderOpt> {
       // apply to these two partial bands separately. Otherwise, apply to the
       // whole loop band.
       if (getTileAndPointLoopBand(band, tileBand, pointBand)) {
-        if (!tileBand.empty())
-          applyAffineLoopOrderOpt(tileBand);
+        // if (!tileBand.empty())
+        //   applyAffineLoopOrderOpt(tileBand);
         if (!pointBand.empty())
           applyAffineLoopOrderOpt(pointBand);
       } else

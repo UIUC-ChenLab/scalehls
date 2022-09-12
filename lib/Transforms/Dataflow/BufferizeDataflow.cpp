@@ -14,6 +14,39 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
+struct ScheduleBufferizationPattern : public OpRewritePattern<ScheduleOp> {
+  using OpRewritePattern<ScheduleOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ScheduleOp op,
+                                PatternRewriter &rewriter) const override {
+    bool hasChanged = false;
+
+    // Bufferize outputs of the node.
+    for (auto result : op->getResults()) {
+      if (auto tensorType = result.getType().dyn_cast<TensorType>()) {
+        hasChanged = true;
+        auto memrefType =
+            MemRefType::get(tensorType.getShape(), tensorType.getElementType());
+        result.setType(memrefType);
+
+        rewriter.setInsertionPointAfter(op);
+        auto tensor = rewriter.create<bufferization::ToTensorOp>(
+            rewriter.getUnknownLoc(), tensorType, result);
+        result.replaceAllUsesExcept(tensor, tensor);
+
+        rewriter.setInsertionPoint(op.getReturnOp());
+        auto output = op.getReturnOp().getOperand(result.getResultNumber());
+        auto memref = rewriter.create<bufferization::ToMemrefOp>(
+            rewriter.getUnknownLoc(), memrefType, output);
+        op.getReturnOp()->getOpOperand(result.getResultNumber()).set(memref);
+      }
+    }
+    return success(hasChanged);
+  }
+};
+} // namespace
+
+namespace {
 struct TaskBufferizationPattern : public OpRewritePattern<TaskOp> {
   using OpRewritePattern<TaskOp>::OpRewritePattern;
 
@@ -76,6 +109,7 @@ struct BufferizeDataflow : public BufferizeDataflowBase<BufferizeDataflow> {
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<TaskBufferizationPattern>(context);
+    patterns.add<ScheduleBufferizationPattern>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
