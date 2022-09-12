@@ -33,30 +33,11 @@ static void createBufferAndCopy(MemRefType type, Value memref,
   auto buf = builder.create<memref::AllocOp>(loc, bufType);
   memref.replaceAllUsesWith(buf);
 
-  if (readFlag && !writeFlag) {
-    // If the on-chip buffer is read-only, we copy the data from DDR to buffer
-    // right after the buffer allocation.
+  if (readFlag)
     builder.create<memref::CopyOp>(loc, memref, buf);
-
-  } else if (!readFlag && writeFlag) {
-    // If the on-chip buffer is write-only, we copy the data from buffer to DDR
-    // at the end of the current region.
+  if (writeFlag) {
     builder.setInsertionPoint(memref.getParentRegion()->back().getTerminator());
     builder.create<memref::CopyOp>(loc, buf, memref);
-
-  } else {
-    // Otherwise, if the on-chip buffer has both read and write, to enable the
-    // pipeline between load-compute-store, we must create another "result"
-    // buffer and carry out the computation over the "result" buffer.
-    // TODO: Should not be done here?
-    auto resultBuf = builder.create<memref::AllocOp>(loc, bufType);
-    buf.memref().replaceAllUsesWith(resultBuf);
-
-    builder.create<memref::CopyOp>(loc, memref, buf);
-    builder.create<memref::CopyOp>(loc, buf, resultBuf);
-
-    builder.setInsertionPoint(memref.getParentRegion()->back().getTerminator());
-    builder.create<memref::CopyOp>(loc, resultBuf, memref);
   }
 }
 

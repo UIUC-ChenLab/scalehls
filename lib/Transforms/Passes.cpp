@@ -180,10 +180,11 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
 
         // Lower dataflow.
         pm.addPass(scalehls::createStreamDataflowPass());
-        pm.addPass(scalehls::createLowerDataflowPass());
-        pm.addPass(mlir::createCanonicalizerPass());
 
         return;
+
+        pm.addPass(scalehls::createLowerDataflowPass());
+        pm.addPass(mlir::createCanonicalizerPass());
 
         // pm.addPass(scalehls::createConvertDataflowToFuncPass());
 

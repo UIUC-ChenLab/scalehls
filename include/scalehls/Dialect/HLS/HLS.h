@@ -27,6 +27,7 @@ namespace hls {
 
 enum class MemoryKind { BRAM_S2P = 0, BRAM_T2P = 1, BRAM_1P = 2, DRAM = 3 };
 enum class PartitionKind { CYCLIC = 0, BLOCK = 1, NONE = 2 };
+enum class OperandKind { INPUT = 0, OUTPUT = 1, PARAM = 2 };
 
 /// Timing attribute utils.
 TimingAttr getTiming(Operation *op);

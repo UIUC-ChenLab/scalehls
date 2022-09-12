@@ -411,39 +411,51 @@ ScheduleOp NodeOp::getScheduleOp() {
   return (*this)->getParentOfType<ScheduleOp>();
 }
 
-/// Return the number of inputs and outputs.
+/// Return the number of inputs, outputs, and params.
 unsigned NodeOp::getNumInputs() {
   return getODSOperandIndexAndLength(0).second;
 }
 unsigned NodeOp::getNumOutputs() {
   return getODSOperandIndexAndLength(1).second;
 }
-
-/// Check whether the operand is an output memref.
-bool NodeOp::isOutput(OpOperand &operand) {
-  return operand.getOwner() == *this && isOutput(operand.getOperandNumber());
-}
-bool NodeOp::isOutput(unsigned operandIdx) {
-  return operandIdx >= getODSOperandIndexAndLength(1).first;
+unsigned NodeOp::getNumParams() {
+  return getODSOperandIndexAndLength(2).second;
 }
 
-/// Get the input and output arguments.
-iterator_range<Block::args_iterator> NodeOp::getInputArguments() {
+/// Get the type of operand: input, output, or param.
+OperandKind NodeOp::getOperandKind(OpOperand &operand) {
+  assert(operand.getOwner() == *this && "invalid operand");
+  return getOperandKind(operand.getOperandNumber());
+}
+OperandKind NodeOp::getOperandKind(unsigned operandIdx) {
+  if (operandIdx >= getODSOperandIndexAndLength(2).first)
+    return OperandKind::PARAM;
+  else if (operandIdx >= getODSOperandIndexAndLength(1).first)
+    return OperandKind::OUTPUT;
+  else
+    return OperandKind::INPUT;
+}
+
+/// Get the input, output, and param arguments.
+iterator_range<Block::args_iterator> NodeOp::getInputArgs() {
   auto range = getODSOperandIndexAndLength(0);
   return {std::next(getBody()->args_begin(), range.first),
           std::next(getBody()->args_begin(), range.first + range.second)};
 }
-iterator_range<Block::args_iterator> NodeOp::getOutputArguments() {
+iterator_range<Block::args_iterator> NodeOp::getOutputArgs() {
   auto range = getODSOperandIndexAndLength(1);
+  return {std::next(getBody()->args_begin(), range.first),
+          std::next(getBody()->args_begin(), range.first + range.second)};
+}
+iterator_range<Block::args_iterator> NodeOp::getParamArgs() {
+  auto range = getODSOperandIndexAndLength(2);
   return {std::next(getBody()->args_begin(), range.first),
           std::next(getBody()->args_begin(), range.first + range.second)};
 }
 
 LogicalResult NodeOp::verify() {
-  // for (auto outputArg : getOutputArguments()) {
-  //   if (!llvm::any_of(outputArg.getUses(), [](OpOperand &use) {}))
-  //     return failure();
-  // }
+  if (getOperandTypes() != getBody()->getArgumentTypes())
+    return emitOpError("operand type doesn't align with argument type");
   return success();
 }
 
@@ -456,7 +468,9 @@ static SmallVector<NodeOp, 4> getBufferUsers(Value buffer, bool isProducer,
   SmallVector<NodeOp, 4> nodes;
   for (auto &use : buffer.getUses())
     if (auto node = dyn_cast<NodeOp>(use.getOwner()))
-      if ((node.isOutput(use) == isProducer) && (node != exceptedOp))
+      if ((node != exceptedOp) &&
+          ((isProducer && (node.getOperandKind(use) == OperandKind::OUTPUT)) ||
+           (!isProducer && (node.getOperandKind(use) == OperandKind::INPUT))))
         nodes.push_back(node);
   return nodes;
 }

@@ -172,17 +172,19 @@ def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
     /// Get the parent schedule op.
     ScheduleOp getScheduleOp();
 
-    /// Return the number of inputs and outputs.
+    /// Get the number of inputs, outputs, and params.
     unsigned getNumInputs();
     unsigned getNumOutputs();
+    unsigned getNumParams();
 
-    /// Check whether the operand is an output memref.
-    bool isOutput(OpOperand &operand);
-    bool isOutput(unsigned operandIdx);
+    /// Get the type of operand: input, output, or param.
+    OperandKind getOperandKind(OpOperand &operand);
+    OperandKind getOperandKind(unsigned operandIdx);
 
-    /// Get the input and output arguments.
-    iterator_range<Block::args_iterator> getInputArguments();
-    iterator_range<Block::args_iterator> getOutputArguments();
+    /// Get the input, output, and param arguments.
+    iterator_range<Block::args_iterator> getInputArgs();
+    iterator_range<Block::args_iterator> getOutputArgs();
+    iterator_range<Block::args_iterator> getParamArgs();
   }];
 }
 

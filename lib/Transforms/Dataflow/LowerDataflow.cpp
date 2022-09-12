@@ -62,20 +62,22 @@ struct NodeConversionPattern : public OpRewritePattern<TaskOp> {
       outputLocs.push_back(output.getLoc());
     }
 
-    SmallVector<Value, 8> args;
-    SmallVector<Location, 8> argLocs;
     SmallVector<Value, 8> inputs;
+    SmallVector<BlockArgument, 8> inputArgs;
+    SmallVector<Location, 8> inputLocs;
     SmallVector<Value, 8> params;
+    SmallVector<BlockArgument, 8> paramArgs;
+    SmallVector<Location, 8> paramLocs;
     for (auto arg : task.getBody()->getArguments()) {
       auto operand = task.getOperand(arg.getArgNumber());
       if (operand.getType().isa<MemRefType, StreamType>()) {
         inputs.push_back(operand);
-        args.push_back(arg);
-        argLocs.push_back(operand.getLoc());
+        inputArgs.push_back(arg);
+        inputLocs.push_back(operand.getLoc());
       } else {
         params.push_back(operand);
-        args.push_back(arg);
-        argLocs.push_back(operand.getLoc());
+        paramArgs.push_back(arg);
+        paramLocs.push_back(operand.getLoc());
       }
     }
 
@@ -89,14 +91,18 @@ struct NodeConversionPattern : public OpRewritePattern<TaskOp> {
     nodeOps.splice(nodeOps.begin(), taskOps, taskOps.begin(),
                    std::prev(taskOps.end()));
 
-    auto newArgs = nodeBlock->addArguments(ValueRange(args), argLocs);
-    for (auto t : llvm::zip(args, newArgs))
+    auto newInputArgs = nodeBlock->addArguments(ValueRange(inputs), inputLocs);
+    for (auto t : llvm::zip(inputArgs, newInputArgs))
       std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
 
     auto newOutputArgs =
         node.getBody()->addArguments(ValueRange(outputs), outputLocs);
     for (auto t : llvm::zip(outputs, newOutputArgs))
       std::get<0>(t).replaceAllUsesExcept(std::get<1>(t), node);
+
+    auto newParamArgs = nodeBlock->addArguments(ValueRange(params), paramLocs);
+    for (auto t : llvm::zip(paramArgs, newParamArgs))
+      std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
 
     rewriter.replaceOp(task, outputs);
     return success();
@@ -288,11 +294,14 @@ struct BypassPathRemovePattern : public OpRewritePattern<NodeOp> {
 static NodeOp fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter) {
   assert((nodes.size() > 1) && "must fuse at least two nodes");
 
-  // Collect inputs and outputs of the new node.
+  // Collect inputs, outputs, and params of the new node.
   SmallVector<Value, 8> inputs;
   SmallVector<Location, 8> inputLocs;
   SmallVector<Value, 8> outputs;
   SmallVector<Location, 8> outputLocs;
+  SmallVector<Value, 8> params;
+  SmallVector<Location, 8> paramLocs;
+
   for (auto node : nodes) {
     for (auto input : node.inputs()) {
       inputs.push_back(input);
@@ -302,18 +311,31 @@ static NodeOp fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter) {
       outputs.push_back(output);
       outputLocs.push_back(output.getLoc());
     }
+    for (auto param : node.params()) {
+      params.push_back(param);
+      paramLocs.push_back(param.getLoc());
+    }
   }
 
   // Construct the new node after the last node.
   rewriter.setInsertionPointAfter(nodes.back());
-  auto newNode =
-      rewriter.create<NodeOp>(rewriter.getUnknownLoc(), inputs, outputs);
+  auto newNode = rewriter.create<NodeOp>(rewriter.getUnknownLoc(), inputs,
+                                         outputs, params);
   auto block = rewriter.createBlock(&newNode.body());
   block->addArguments(ValueRange(inputs), inputLocs);
   block->addArguments(ValueRange(outputs), outputLocs);
+  block->addArguments(ValueRange(params), paramLocs);
 
-  for (auto node : nodes)
-    node->moveBefore(block, block->end());
+  // Inline all nodes into the new node.
+  for (auto node : nodes) {
+    auto &nodeOps = node.getBody()->getOperations();
+    auto &newNodeOps = newNode.getBody()->getOperations();
+    newNodeOps.splice(newNode.end(), nodeOps);
+    for (auto t : llvm::zip(node.getBody()->getArguments(), node.getOperands()))
+      std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
+    rewriter.eraseOp(node);
+  }
+
   for (auto t : llvm::zip(newNode.getOperands(), block->getArguments()))
     std::get<0>(t).replaceUsesWithIf(std::get<1>(t), [&](OpOperand &use) {
       return newNode->isProperAncestor(use.getOwner());
@@ -322,11 +344,10 @@ static NodeOp fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter) {
 }
 
 namespace {
-template <typename OpType>
-struct NodeMergePattern : public OpRewritePattern<OpType> {
-  using OpRewritePattern<OpType>::OpRewritePattern;
+struct NodeMergePattern : public OpRewritePattern<ScheduleOp> {
+  using OpRewritePattern<ScheduleOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(func::FuncOp target,
+  LogicalResult matchAndRewrite(ScheduleOp target,
                                 PatternRewriter &rewriter) const override {
     llvm::SmallDenseMap<unsigned, SmallVector<NodeOp, 4>> worklist;
     for (auto node : target.getOps<NodeOp>()) {
@@ -375,30 +396,17 @@ struct LowerDataflow : public LowerDataflowBase<LowerDataflow> {
     // Remove multi-producers and bypass paths.
     patterns.clear();
     patterns.add<ScheduleOutputRemovePattern>(context);
-    // patterns.add<MultiProducerRemovePattern>(context);
-    // patterns.add<BypassPathRemovePattern>(context);
+    patterns.add<MultiProducerRemovePattern>(context);
+    patterns.add<BypassPathRemovePattern>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
-    // // Legalize function dataflow.
-    // patterns.clear();
-    // patterns.add<NodeMergePattern<func::FuncOp>>(context);
-    // (void)applyOpPatternsAndFold(func, std::move(patterns));
-    // if (!func.getOps<NodeOp>().empty())
-    //   setFuncDirective(func, false, 1, true);
-
-    // // Collect all target loop bands.
-    // AffineLoopBands targetBands;
-    // getLoopBands(func.front(), targetBands, /*allowHavingChilds=*/true);
-
-    // // Legalize loop dataflow to each innermost loop.
-    // patterns.clear();
-    // // patterns.add<NodeMergePattern<mlir::AffineForOp>>(context);
-    // FrozenRewritePatternSet frozenPatterns(std::move(patterns));
-    // for (auto &band : targetBands) {
-    //   (void)applyOpPatternsAndFold(band.back(), frozenPatterns);
-    //   if (!band.back().getOps<DataflowNodeOp>().empty())
-    //     setLoopDirective(band.back(), false, 1, true, false);
-    // }
+    // Merge nodes at the same dataflow level.
+    patterns.clear();
+    patterns.add<NodeMergePattern>(context);
+    auto frozenPatterns = FrozenRewritePatternSet(std::move(patterns));
+    func.walk([&](ScheduleOp schedule) {
+      (void)applyOpPatternsAndFold(schedule, frozenPatterns);
+    });
   }
 };
 } // namespace
