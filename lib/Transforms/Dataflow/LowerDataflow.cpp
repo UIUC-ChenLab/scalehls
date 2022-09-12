@@ -123,6 +123,7 @@ struct ScheduleOutputRemovePattern : public OpRewritePattern<ScheduleOp> {
     SmallVector<OpResult, 4> hoistedResults;
     for (auto result : schedule.getResults()) {
       auto output = returnOp.getOperand(result.getResultNumber());
+      // TODO: How to handle this??
       if (auto buffer = output.getDefiningOp<BufferOp>())
         if (schedule->isAncestor(buffer)) {
           buffer->moveBefore(schedule);

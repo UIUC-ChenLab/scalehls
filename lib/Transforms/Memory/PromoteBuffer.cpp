@@ -48,6 +48,7 @@ static void createBufferAndCopy(MemRefType type, Value memref,
     // Otherwise, if the on-chip buffer has both read and write, to enable the
     // pipeline between load-compute-store, we must create another "result"
     // buffer and carry out the computation over the "result" buffer.
+    // TODO: Should not be done here?
     auto resultBuf = builder.create<memref::AllocOp>(loc, bufType);
     buf.memref().replaceAllUsesWith(resultBuf);
 

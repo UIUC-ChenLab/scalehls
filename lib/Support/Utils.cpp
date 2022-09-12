@@ -107,6 +107,19 @@ TaskOp scalehls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
       return !task->isProperAncestor(use.getOwner());
     });
   }
+
+  // Inline all sub-tasks.
+  for (auto subTask : llvm::make_early_inc_range(task.getOps<TaskOp>())) {
+    auto &subTaskOps = subTask.getBody()->getOperations();
+    auto &taskOps = task.getBody()->getOperations();
+    taskOps.splice(subTask->getIterator(), subTaskOps, subTaskOps.begin(),
+                   std::prev(subTaskOps.end()));
+
+    for (auto t :
+         llvm::zip(subTask.getBody()->getArguments(), subTask.getOperands()))
+      std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
+    rewriter.replaceOp(subTask, subTask.getYieldOp()->getOperands());
+  }
   return task;
 }
 

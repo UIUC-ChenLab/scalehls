@@ -170,7 +170,7 @@ void ScheduleOp::getCanonicalizationPatterns(RewritePatternSet &results,
   results.add<SimplifyScheduleHierarchy>(context);
 }
 
-/// Get the terminator output op.
+/// Get the terminator return op.
 ReturnOp ScheduleOp::getReturnOp() {
   return cast<ReturnOp>(body().front().getTerminator());
 }
@@ -194,15 +194,15 @@ namespace {
 struct SimplifyTaskIOs : public OpRewritePattern<TaskOp> {
   using OpRewritePattern<TaskOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(TaskOp node,
+  LogicalResult matchAndRewrite(TaskOp task,
                                 PatternRewriter &rewriter) const override {
-    auto yield = node.getYieldOp();
+    auto yield = task.getYieldOp();
     bool hasUnusedPort = false;
 
     // Identify output values that are used.
     SmallVector<Value, 4> usedOutputs;
     SmallVector<Value, 4> usedResults;
-    for (auto result : node.getResults())
+    for (auto result : task.getResults())
       if (result.use_empty()) {
         hasUnusedPort = true;
       } else {
@@ -213,29 +213,29 @@ struct SimplifyTaskIOs : public OpRewritePattern<TaskOp> {
     // Identify input values that are used.
     SmallVector<unsigned, 4> unusedArgNumbers;
     SmallVector<Value, 4> usedInputs;
-    for (auto arg : node.getBody()->getArguments())
+    for (auto arg : task.getBody()->getArguments())
       if (arg.use_empty()) {
         hasUnusedPort = true;
         unusedArgNumbers.push_back(arg.getArgNumber());
       } else {
-        usedInputs.push_back(node.getOperand(arg.getArgNumber()));
+        usedInputs.push_back(task.getOperand(arg.getArgNumber()));
       }
-    node.getBody()->eraseArguments(unusedArgNumbers);
+    task.getBody()->eraseArguments(unusedArgNumbers);
 
-    // Construct new graph node.
+    // Construct new graph task.
     if (hasUnusedPort) {
       rewriter.setInsertionPoint(yield);
       rewriter.replaceOpWithNewOp<YieldOp>(yield, usedOutputs);
 
-      rewriter.setInsertionPoint(node);
-      auto newNode = rewriter.create<TaskOp>(
-          node.getLoc(), ValueRange(usedOutputs), usedInputs);
-      rewriter.inlineRegionBefore(node.body(), newNode.body(),
-                                  newNode.body().end());
-      for (auto t : llvm::zip(usedResults, newNode.getResults()))
+      rewriter.setInsertionPoint(task);
+      auto newTask = rewriter.create<TaskOp>(
+          task.getLoc(), ValueRange(usedOutputs), usedInputs);
+      rewriter.inlineRegionBefore(task.body(), newTask.body(),
+                                  newTask.body().end());
+      for (auto t : llvm::zip(usedResults, newTask.getResults()))
         std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
 
-      rewriter.eraseOp(node);
+      rewriter.eraseOp(task);
       return success();
     }
     return failure();
@@ -247,22 +247,20 @@ namespace {
 struct SimplifyTaskHierarchy : public OpRewritePattern<TaskOp> {
   using OpRewritePattern<TaskOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(TaskOp node,
+  LogicalResult matchAndRewrite(TaskOp task,
                                 PatternRewriter &rewriter) const override {
-    // If the parent block is another task OR only contains the current task,
-    // then the node can be fully inlined.
-    auto parentBlock = node->getBlock();
-    if (isa<TaskOp>(parentBlock->getParentOp()) ||
-        llvm::hasSingleElement(parentBlock->getOps<TaskOp>())) {
-      auto &nodeOps = node.getBody()->getOperations();
-      auto &parentOps = parentBlock->getOperations();
-      parentOps.splice(node->getIterator(), nodeOps, nodeOps.begin(),
-                       std::prev(nodeOps.end()));
+    // If the parent schedule only contains the current task, then the task can
+    // be fully inlined.
+    if (llvm::hasSingleElement(task.getScheduleOp().getOps<TaskOp>())) {
+      auto &taskOps = task.getBody()->getOperations();
+      auto &scheduleOps = task.getScheduleOp().getBody()->getOperations();
+      scheduleOps.splice(task->getIterator(), taskOps, taskOps.begin(),
+                         std::prev(taskOps.end()));
 
       for (auto t :
-           llvm::zip(node.getBody()->getArguments(), node.getOperands()))
+           llvm::zip(task.getBody()->getArguments(), task.getOperands()))
         std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
-      rewriter.replaceOp(node, node.getYieldOp()->getOperands());
+      rewriter.replaceOp(task, task.getYieldOp()->getOperands());
       return success();
     }
     return failure();
@@ -274,6 +272,11 @@ void TaskOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                          MLIRContext *context) {
   results.add<SimplifyTaskHierarchy>(context);
   results.add<SimplifyTaskIOs>(context);
+}
+
+/// Get the parent schedule op.
+ScheduleOp TaskOp::getScheduleOp() {
+  return (*this)->getParentOfType<ScheduleOp>();
 }
 
 /// Get the terminator output op.
@@ -360,6 +363,7 @@ struct SimplifyNodeIOs : public OpRewritePattern<NodeOp> {
     // Construct new dataflow node.
     if (hasUnusedPort) {
       rewriter.setInsertionPoint(node);
+      // TODO: This will lead to illegal node!
       auto newNode =
           rewriter.create<NodeOp>(node.getLoc(), TypeRange(), usedPorts);
       rewriter.inlineRegionBefore(node.body(), newNode.body(),
@@ -378,14 +382,12 @@ struct SimplifyNodeHierarchy : public OpRewritePattern<NodeOp> {
 
   LogicalResult matchAndRewrite(NodeOp node,
                                 PatternRewriter &rewriter) const override {
-    // If the parent block is another node OR only contains the current node,
-    // then the node can be fully inlined.
-    auto parentBlock = node->getBlock();
-    if (isa<NodeOp>(parentBlock->getParentOp()) ||
-        llvm::hasSingleElement(parentBlock->getOps<NodeOp>())) {
+    // If the parent schedule only contains the current node, then the node can
+    // be fully inlined.
+    if (llvm::hasSingleElement(node.getScheduleOp().getOps<NodeOp>())) {
       auto &nodeOps = node.getBody()->getOperations();
-      auto &parentOps = parentBlock->getOperations();
-      parentOps.splice(node->getIterator(), nodeOps);
+      auto &scheduleOps = node.getScheduleOp().getBody()->getOperations();
+      scheduleOps.splice(node->getIterator(), nodeOps);
 
       for (auto t :
            llvm::zip(node.getBody()->getArguments(), node.getOperands()))
@@ -402,6 +404,11 @@ void NodeOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                          MLIRContext *context) {
   results.add<SimplifyNodeHierarchy>(context);
   results.add<SimplifyNodeIOs>(context);
+}
+
+/// Get the parent schedule op.
+ScheduleOp NodeOp::getScheduleOp() {
+  return (*this)->getParentOfType<ScheduleOp>();
 }
 
 /// Return the number of inputs and outputs.

@@ -69,7 +69,8 @@ def ReturnOp : HLSOp<"dataflow.return", [NoSideEffect, ReturnLike, Terminator,
 //===----------------------------------------------------------------------===//
 
 def TaskOp : HLSOp<"dataflow.task", [IsolatedFromAbove, AffineScope,
-      AutomaticAllocationScope, SingleBlockImplicitTerminator<"YieldOp">]> {
+      AutomaticAllocationScope, SingleBlockImplicitTerminator<"YieldOp">,
+      HasParent<"ScheduleOp">]> {
   let summary = "Represent a high-level task";
   let description = [{
     This operation represents a task that has an isolated region to contain the
@@ -88,6 +89,9 @@ def TaskOp : HLSOp<"dataflow.task", [IsolatedFromAbove, AffineScope,
   let hasCanonicalizer = 1;
 
   let extraClassDeclaration = [{
+    /// Get the parent schedule op.
+    ScheduleOp getScheduleOp();
+
     /// Get the terminator yield op.
     YieldOp getYieldOp();
   }];
@@ -132,7 +136,7 @@ def ToValueOp : HLSOp<"dataflow.to_value", [NoSideEffect]> {
 
 def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
       AutomaticAllocationScope, NoTerminator, SingleBlock,
-      AttrSizedOperandSegments]> {
+      AttrSizedOperandSegments, HasParent<"ScheduleOp">]> {
   let summary = "Represent a dataflow node";
   let description = [{
     This operation represents a node of dataflow that has an isolated region to
@@ -150,7 +154,7 @@ def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
 
   let assemblyFormat = [{
     `(` $inputs `)` `->` `(` $outputs `)` ( `[` $params^ `]` )? attr-dict `:`
-    functional-type($inputs, $outputs) ( `[` type($params)^ `]` )? $body
+    functional-type($inputs, $outputs) ( ` ` `[` type($params)^ `]` )? $body
   }];
 
   let builders = [
@@ -165,6 +169,9 @@ def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
   let hasCanonicalizer = 1;
 
   let extraClassDeclaration = [{
+    /// Get the parent schedule op.
+    ScheduleOp getScheduleOp();
+
     /// Return the number of inputs and outputs.
     unsigned getNumInputs();
     unsigned getNumOutputs();
