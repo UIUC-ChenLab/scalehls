@@ -15,6 +15,21 @@
 namespace mlir {
 namespace scalehls {
 
+using namespace hls;
+
+//===----------------------------------------------------------------------===//
+// Dataflow utils
+//===----------------------------------------------------------------------===//
+
+ScheduleOp wrapWithSchedule(Block *block);
+
+/// Fuse the given operations into a new task. The new task will be created
+/// before the first operation and each operation will be inserted in order.
+/// This method always succeeds even if the resulting IR is invalid.
+TaskOp fuseOpsIntoTask(ArrayRef<Operation *> ops, PatternRewriter &rewriter);
+
+bool isInputOutput(Value value);
+
 //===----------------------------------------------------------------------===//
 // Memory and loop analysis utils
 //===----------------------------------------------------------------------===//
@@ -85,8 +100,6 @@ bool checkDependence(Operation *A, Operation *B);
 func::FuncOp getTopFunc(ModuleOp module, std::string topFuncName = "");
 
 func::FuncOp getRuntimeFunc(ModuleOp module, std::string runtimeFuncName = "");
-
-bool isInputOutput(Value value);
 
 //===----------------------------------------------------------------------===//
 // PtrLikeMemRefAccess Struct Declaration

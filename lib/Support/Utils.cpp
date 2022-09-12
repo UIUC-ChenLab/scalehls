@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Support/Utils.h"
+#include "mlir/Analysis/Liveness.h"
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/Utils.h"
@@ -16,6 +17,106 @@
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
+
+//===----------------------------------------------------------------------===//
+// Dataflow utils
+//===----------------------------------------------------------------------===//
+
+ScheduleOp scalehls::wrapWithSchedule(Block *block) {
+  OpBuilder builder(block, block->begin());
+  ValueRange returnValues(block->getTerminator()->getOperands());
+  auto loc = builder.getUnknownLoc();
+  auto schedule = builder.create<ScheduleOp>(loc, returnValues);
+
+  auto &scheduleBlock = schedule.body().emplaceBlock();
+  builder.setInsertionPointToEnd(&scheduleBlock);
+  builder.create<ReturnOp>(loc, returnValues);
+
+  auto &scheduleOps = scheduleBlock.getOperations();
+  auto &parentOps = block->getOperations();
+  scheduleOps.splice(scheduleBlock.begin(), parentOps,
+                     std::next(parentOps.begin()), std::prev(parentOps.end()));
+
+  block->getTerminator()->setOperands(schedule.getResults());
+  return schedule;
+}
+
+/// Fuse the given operations into a new task. The new task will be created
+/// before the first operation and each operation will be inserted in order.
+/// This method always succeeds even if the resulting IR is invalid.
+TaskOp scalehls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
+                                 PatternRewriter &rewriter) {
+  assert(!ops.empty() && "must fuse at least one op");
+  llvm::SmallPtrSet<Operation *, 4> opsSet(ops.begin(), ops.end());
+
+  llvm::SetVector<Value> inputValues;
+  llvm::SetVector<Value> outputValues;
+  for (auto op : ops) {
+    // Collect input values.
+    for (auto operand : op->getOperands())
+      if (!opsSet.count(operand.getDefiningOp()))
+        inputValues.insert(operand);
+
+    // Collect input values of sub-regions through liveness analysis.
+    if (op->getNumRegions() != 0) {
+      auto liveness = Liveness(op);
+      op->walk([&](Block *block) {
+        for (auto livein : liveness.getLiveIn(block))
+          if (auto arg = livein.dyn_cast<BlockArgument>()) {
+            if (!op->isAncestor(arg.getParentBlock()->getParentOp()))
+              inputValues.insert(livein);
+          } else if (!opsSet.count(livein.getDefiningOp()) &&
+                     !op->isAncestor(livein.getDefiningOp()))
+            inputValues.insert(livein);
+      });
+    }
+
+    // Collect output values. This is not sufficient and may lead to empty-used
+    // outputs, which will be removed furing cononicalization.
+    for (auto result : op->getResults())
+      if (llvm::any_of(result.getUsers(),
+                       [&](Operation *user) { return !opsSet.count(user); }))
+        outputValues.insert(result);
+  }
+
+  // Create new graph task with all inputs and outputs.
+  auto loc = rewriter.getUnknownLoc();
+  rewriter.setInsertionPoint(ops.front());
+  auto task = rewriter.create<TaskOp>(
+      loc, ValueRange(outputValues.getArrayRef()), inputValues.getArrayRef());
+  auto taskBlock = rewriter.createBlock(&task.body());
+
+  // Move each targeted op into the new graph task.
+  rewriter.setInsertionPointToEnd(taskBlock);
+  auto yield = rewriter.create<YieldOp>(loc, outputValues.getArrayRef());
+  for (auto op : ops)
+    op->moveBefore(yield);
+
+  // Replace internal input uses with task arguments.
+  for (auto input : inputValues) {
+    auto arg = taskBlock->addArgument(input.getType(), input.getLoc());
+    input.replaceUsesWithIf(arg, [&](OpOperand &use) {
+      return task->isProperAncestor(use.getOwner());
+    });
+  }
+
+  // Replace external output uses with the task results.
+  unsigned idx = 0;
+  for (auto output : outputValues) {
+    output.replaceUsesWithIf(task.getResult(idx++), [&](OpOperand &use) {
+      return !task->isProperAncestor(use.getOwner());
+    });
+  }
+  return task;
+}
+
+bool scalehls::isInputOutput(Value value) {
+  return value.isa<BlockArgument>() ||
+         llvm::any_of(value.getUsers(), [](Operation *op) {
+           return op->hasTrait<OpTrait::IsTerminator>() &&
+                  op->hasTrait<OpTrait::ReturnLike>();
+         });
+}
 
 //===----------------------------------------------------------------------===//
 // Memory and loop analysis utils
@@ -407,14 +508,6 @@ func::FuncOp scalehls::getRuntimeFunc(ModuleOp module,
         return func::FuncOp();
     }
   return runtimeFunc;
-}
-
-bool scalehls::isInputOutput(Value value) {
-  return value.isa<BlockArgument>() ||
-         llvm::any_of(value.getUsers(), [](Operation *op) {
-           return op->hasTrait<OpTrait::IsTerminator>() &&
-                  op->hasTrait<OpTrait::ReturnLike>();
-         });
 }
 
 //===----------------------------------------------------------------------===//
