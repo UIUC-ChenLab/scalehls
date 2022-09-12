@@ -23,9 +23,14 @@ struct TaskStreamingPattern : public OpRewritePattern<TaskOp> {
 
     // Bufferize inputs of the node.
     for (auto &input : llvm::make_early_inc_range(op->getOpOperands())) {
-      // Memref or stream typed inputs are ignored.
       auto type = input.get().getType();
-      if (type.isa<MemRefType, StreamType>())
+      if (type.isa<ShapedType, StreamType>())
+        continue;
+
+      // If the input is defined outside of the schedule, the input doesn't need
+      // to be streamed.
+      auto schedule = op->getParentOfType<ScheduleOp>();
+      if (!schedule.body().isProperAncestor(input.get().getParentRegion()))
         continue;
 
       hasChanged = true;
@@ -48,7 +53,7 @@ struct TaskStreamingPattern : public OpRewritePattern<TaskOp> {
     // Bufferize outputs of the node.
     for (auto result : op->getResults()) {
       auto type = result.getType();
-      if (type.isa<MemRefType, StreamType>())
+      if (type.isa<ShapedType, StreamType>())
         continue;
 
       hasChanged = true;

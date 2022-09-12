@@ -44,7 +44,7 @@ def ScheduleOp : HLSOp<"dataflow.schedule", [AffineScope,
 
   let results = (outs Variadic<AnyType>:$results);
   let regions = (region SizedRegion<1>:$body);
-  let assemblyFormat = "attr-dict (`:` type($results)^ )? $body";
+  let assemblyFormat = "attr-dict-with-keyword (`:` type($results)^ )? $body";
 
   let hasCanonicalizer = 1;
   let extraClassDeclaration = [{
