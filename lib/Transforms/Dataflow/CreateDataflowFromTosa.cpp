@@ -165,6 +165,25 @@ struct ConstFusePattern : public OpRewritePattern<tosa::ConstOp> {
 };
 } // namespace
 
+ScheduleOp wrapWithScheduleOp(Block *block) {
+  OpBuilder builder(block, block->begin());
+  ValueRange returnValues(block->getTerminator()->getOperands());
+  auto loc = builder.getUnknownLoc();
+  auto schedule = builder.create<ScheduleOp>(loc, returnValues);
+
+  auto &scheduleBlock = schedule.body().emplaceBlock();
+  builder.setInsertionPointToEnd(&scheduleBlock);
+  builder.create<ReturnOp>(loc, returnValues);
+
+  auto &scheduleOps = scheduleBlock.getOperations();
+  auto &parentOps = block->getOperations();
+  scheduleOps.splice(scheduleBlock.begin(), parentOps,
+                     std::next(parentOps.begin()), std::prev(parentOps.end()));
+
+  block->getTerminator()->setOperands(schedule.getResults());
+  return schedule;
+}
+
 namespace {
 struct CreateDataflowFromTosa
     : public CreateDataflowFromTosaBase<CreateDataflowFromTosa> {
@@ -191,6 +210,8 @@ struct CreateDataflowFromTosa
     patterns.add<OutlinePattern<tosa::TransposeOp>>(context);
     patterns.add<ConstFusePattern>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+
+    wrapWithScheduleOp(&func.front());
   }
 };
 } // namespace

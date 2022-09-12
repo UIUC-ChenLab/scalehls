@@ -139,6 +139,54 @@ bool hls::hasRuntimeAttr(Operation *op) {
 }
 
 //===----------------------------------------------------------------------===//
+// ScheduleOp
+//===----------------------------------------------------------------------===//
+
+namespace {
+struct SimplifyScheduleHierarchy : public OpRewritePattern<ScheduleOp> {
+  using OpRewritePattern<ScheduleOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ScheduleOp schedule,
+                                PatternRewriter &rewriter) const override {
+    // If the schedule doesn't contain any task or node, the schedule can be
+    // fully inlined.
+    if (schedule.getOps<TaskOp>().empty() &&
+        schedule.getOps<NodeOp>().empty()) {
+      auto &scheduleOps = schedule.getBody()->getOperations();
+      auto &parentOps = schedule->getBlock()->getOperations();
+      parentOps.splice(schedule->getIterator(), scheduleOps,
+                       scheduleOps.begin(), std::prev(scheduleOps.end()));
+
+      rewriter.replaceOp(schedule, schedule.getReturnOp()->getOperands());
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+void ScheduleOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                             MLIRContext *context) {
+  results.add<SimplifyScheduleHierarchy>(context);
+}
+
+/// Get the terminator output op.
+ReturnOp ScheduleOp::getReturnOp() {
+  return cast<ReturnOp>(body().front().getTerminator());
+}
+
+//===----------------------------------------------------------------------===//
+// ReturnOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult ReturnOp::verify() {
+  if (getOperandTypes() !=
+      (*this)->getParentOfType<ScheduleOp>().getResultTypes())
+    return emitOpError("return type doesn't align with schedule type");
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
 // TaskOp
 //===----------------------------------------------------------------------===//
 
@@ -201,8 +249,8 @@ struct SimplifyTaskHierarchy : public OpRewritePattern<TaskOp> {
 
   LogicalResult matchAndRewrite(TaskOp node,
                                 PatternRewriter &rewriter) const override {
-    // If the parent block is another graph node OR only contains the current
-    // graph node, then the node can be fully inlined.
+    // If the parent block is another task OR only contains the current task,
+    // then the node can be fully inlined.
     auto parentBlock = node->getBlock();
     if (isa<TaskOp>(parentBlock->getParentOp()) ||
         llvm::hasSingleElement(parentBlock->getOps<TaskOp>())) {

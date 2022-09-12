@@ -85,7 +85,7 @@ namespace {
 /// Wrap operations in the front block into dataflow nodes based on heuristic if
 /// they have not. FuncOp and AffineForOp are supported.
 template <typename OpType>
-struct DataflowNodeCreatePattern : public OpRewritePattern<OpType> {
+struct TaskCreatePattern : public OpRewritePattern<OpType> {
   using OpRewritePattern<OpType>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(OpType target,
@@ -154,7 +154,7 @@ struct CreateDataflowFromAffine
     auto context = func.getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<DataflowNodeCreatePattern<func::FuncOp>>(context);
+    patterns.add<TaskCreatePattern<func::FuncOp>>(context);
     (void)applyOpPatternsAndFold(func, std::move(patterns));
 
     // Collect all target loop bands.
@@ -163,7 +163,7 @@ struct CreateDataflowFromAffine
 
     // Create loop dataflow to each innermost loop.
     patterns.clear();
-    patterns.add<DataflowNodeCreatePattern<mlir::AffineForOp>>(context);
+    patterns.add<TaskCreatePattern<mlir::AffineForOp>>(context);
     FrozenRewritePatternSet frozenPatterns(std::move(patterns));
     for (auto &band : llvm::reverse(targetBands))
       (void)applyOpPatternsAndFold(band.back(), frozenPatterns);

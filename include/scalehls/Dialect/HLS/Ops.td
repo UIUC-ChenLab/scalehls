@@ -31,6 +31,40 @@ def AnyMemrefOrStream : Type<Or<[AnyMemRef.predicate, AnyStream.predicate]>,
 def DataflowBufferLike : NativeOpTrait<"DataflowBufferLike">;
 
 //===----------------------------------------------------------------------===//
+// Dataflow Schedule Operation
+//===----------------------------------------------------------------------===//
+
+def ScheduleOp : HLSOp<"dataflow.schedule", [AffineScope,
+      AutomaticAllocationScope, SingleBlockImplicitTerminator<"ReturnOp">]> {
+  let summary = "Represent a schedule of dataflow";
+  let description = [{
+    This operation represents a dataflow schedule that has a region to contain
+    the dataflow tasks or nodes to be scheduled.
+  }];
+
+  let results = (outs Variadic<AnyType>:$results);
+  let regions = (region SizedRegion<1>:$body);
+  let assemblyFormat = "attr-dict `:` type($results) $body";
+
+  let hasCanonicalizer = 1;
+  let extraClassDeclaration = [{
+    /// Get the terminator return op.
+    ReturnOp getReturnOp();
+  }];
+}
+
+def ReturnOp : HLSOp<"dataflow.return", [NoSideEffect, ReturnLike, Terminator,
+      HasParent<"ScheduleOp">]> {
+  let summary = "Terminate and return results of a schedule";
+
+  let arguments = (ins Variadic<AnyType>:$results);
+  let assemblyFormat = "$results attr-dict `:` type($results)";
+
+  let builders = [ OpBuilder<(ins), "build($_builder, $_state, llvm::None);"> ];
+  let hasVerifier = 1;
+}
+
+//===----------------------------------------------------------------------===//
 // High Dataflow Operations
 //===----------------------------------------------------------------------===//
 

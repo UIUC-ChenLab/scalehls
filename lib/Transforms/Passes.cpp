@@ -170,7 +170,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(mlir::createCSEPass());
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(scalehls::createPromoteBufferPass());
-        pm.addPass(bufferization::createBufferLoopHoistingPass());
+        // pm.addPass(bufferization::createBufferLoopHoistingPass());
         pm.addPass(scalehls::createConvertCopyToAffineLoopsPass(
             /*convertInternCopyOnly=*/false));
         pm.addPass(memref::createFoldSubViewOpsPass());
