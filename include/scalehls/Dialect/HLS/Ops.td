@@ -150,7 +150,7 @@ def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
 
   let assemblyFormat = [{
     `(` $inputs `)` `->` `(` $outputs `)` ( `[` $params^ `]` )? attr-dict `:`
-    functional-type($inputs, $outputs) (`[` type($params)^ `]` )? $body
+    functional-type($inputs, $outputs) ( `[` type($params)^ `]` )? $body
   }];
 
   let builders = [

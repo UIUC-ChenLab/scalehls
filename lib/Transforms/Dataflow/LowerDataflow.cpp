@@ -51,28 +51,108 @@ namespace {
 struct NodeConversionPattern : public OpRewritePattern<TaskOp> {
   using OpRewritePattern<TaskOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(TaskOp op,
+  LogicalResult matchAndRewrite(TaskOp task,
                                 PatternRewriter &rewriter) const override {
-    SmallVector<Value, 8> outputMemrefs;
+    SmallVector<Value, 8> outputs;
     SmallVector<Location, 8> outputLocs;
-    for (auto output : op.getYieldOp().getOperands()) {
-      output.getDefiningOp()->moveBefore(op);
-      outputMemrefs.push_back(output);
+    for (auto output : task.getYieldOp().getOperands()) {
+      // TODO: How to handle this??
+      output.getDefiningOp()->moveBefore(task);
+      outputs.push_back(output);
       outputLocs.push_back(output.getLoc());
     }
 
-    rewriter.setInsertionPoint(op);
-    auto node = rewriter.create<NodeOp>(rewriter.getUnknownLoc(),
-                                        op.getOperands(), outputMemrefs);
-    rewriter.inlineRegionBefore(op.body(), node.body(), node.body().end());
-    rewriter.eraseOp(node.getBody()->getTerminator());
+    SmallVector<Value, 8> args;
+    SmallVector<Location, 8> argLocs;
+    SmallVector<Value, 8> inputs;
+    SmallVector<Value, 8> params;
+    for (auto arg : task.getBody()->getArguments()) {
+      auto operand = task.getOperand(arg.getArgNumber());
+      if (operand.getType().isa<MemRefType, StreamType>()) {
+        inputs.push_back(operand);
+        args.push_back(arg);
+        argLocs.push_back(operand.getLoc());
+      } else {
+        params.push_back(operand);
+        args.push_back(arg);
+        argLocs.push_back(operand.getLoc());
+      }
+    }
 
-    auto args =
-        node.getBody()->addArguments(ValueRange(outputMemrefs), outputLocs);
-    for (auto t : llvm::zip(outputMemrefs, args))
+    rewriter.setInsertionPoint(task);
+    auto node = rewriter.create<NodeOp>(rewriter.getUnknownLoc(), inputs,
+                                        outputs, params);
+    auto nodeBlock = rewriter.createBlock(&node.body());
+
+    auto &nodeOps = nodeBlock->getOperations();
+    auto &taskOps = task.getBody()->getOperations();
+    nodeOps.splice(nodeOps.begin(), taskOps, taskOps.begin(),
+                   std::prev(taskOps.end()));
+
+    auto newArgs = nodeBlock->addArguments(ValueRange(args), argLocs);
+    for (auto t : llvm::zip(args, newArgs))
+      std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
+
+    auto newOutputArgs =
+        node.getBody()->addArguments(ValueRange(outputs), outputLocs);
+    for (auto t : llvm::zip(outputs, newOutputArgs))
       std::get<0>(t).replaceAllUsesExcept(std::get<1>(t), node);
-    rewriter.replaceOp(op, outputMemrefs);
+
+    rewriter.replaceOp(task, outputs);
     return success();
+  }
+};
+} // namespace
+
+//===----------------------------------------------------------------------===//
+// Schedule operation lowering
+//===----------------------------------------------------------------------===//
+
+namespace {
+struct ScheduleOutputRemovePattern : public OpRewritePattern<ScheduleOp> {
+  using OpRewritePattern<ScheduleOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ScheduleOp schedule,
+                                PatternRewriter &rewriter) const override {
+    bool hasChanged = false;
+    auto returnOp = schedule.getReturnOp();
+
+    SmallVector<Value, 4> remainedOutputs;
+    SmallVector<OpResult, 4> remainedResults;
+    SmallVector<Value, 4> hoistedOutputs;
+    SmallVector<OpResult, 4> hoistedResults;
+    for (auto result : schedule.getResults()) {
+      auto output = returnOp.getOperand(result.getResultNumber());
+      if (auto buffer = output.getDefiningOp<BufferOp>())
+        if (schedule->isAncestor(buffer)) {
+          buffer->moveBefore(schedule);
+          hasChanged = true;
+          hoistedOutputs.push_back(output);
+          hoistedResults.push_back(result);
+          continue;
+        }
+      remainedOutputs.push_back(output);
+      remainedResults.push_back(result);
+    }
+
+    if (hasChanged) {
+      rewriter.setInsertionPoint(returnOp);
+      rewriter.replaceOpWithNewOp<ReturnOp>(returnOp, remainedOutputs);
+
+      rewriter.setInsertionPoint(schedule);
+      auto newSchedule = rewriter.create<ScheduleOp>(
+          schedule.getLoc(), ValueRange(remainedOutputs));
+      rewriter.inlineRegionBefore(schedule.body(), newSchedule.body(),
+                                  newSchedule.body().end());
+
+      for (auto t : llvm::zip(remainedResults, newSchedule.getResults()))
+        std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
+      for (auto t : llvm::zip(hoistedResults, hoistedOutputs))
+        std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
+
+      rewriter.eraseOp(schedule);
+    }
+    return success(hasChanged);
   }
 };
 } // namespace
@@ -291,11 +371,12 @@ struct LowerDataflow : public LowerDataflowBase<LowerDataflow> {
     if (failed(applyPartialConversion(func, target, std::move(patterns))))
       return signalPassFailure();
 
-    // // Remove multi-producers and bypass paths.
-    // mlir::RewritePatternSet patterns(context);
+    // Remove multi-producers and bypass paths.
+    patterns.clear();
+    patterns.add<ScheduleOutputRemovePattern>(context);
     // patterns.add<MultiProducerRemovePattern>(context);
     // patterns.add<BypassPathRemovePattern>(context);
-    // (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
     // // Legalize function dataflow.
     // patterns.clear();
