@@ -159,7 +159,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(mlir::createAffineLoopNormalizePass());
         pm.addPass(mlir::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
-        pm.addPass(scalehls::createAffineLoopOrderOptPass());
+        // pm.addPass(scalehls::createAffineLoopOrderOptPass());
 
         // Local buffer allocation.
         pm.addPass(scalehls::createCreateMemrefSubviewPass());
@@ -180,11 +180,10 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
 
         // Lower dataflow.
         pm.addPass(scalehls::createStreamDataflowPass());
-
-        return;
-
         pm.addPass(scalehls::createLowerDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
+
+        return;
 
         // pm.addPass(scalehls::createConvertDataflowToFuncPass());
 

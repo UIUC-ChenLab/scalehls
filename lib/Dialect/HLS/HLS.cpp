@@ -351,13 +351,21 @@ struct SimplifyNodeIOs : public OpRewritePattern<NodeOp> {
 
     // Identify input values that are used.
     SmallVector<unsigned, 4> unusedArgNumbers;
-    SmallVector<Value, 4> usedPorts;
+    SmallVector<Value, 4> usedInputs;
+    SmallVector<Value, 4> usedOutputs;
+    SmallVector<Value, 4> usedParams;
     for (auto arg : node.getBody()->getArguments())
       if (arg.use_empty()) {
         hasUnusedPort = true;
         unusedArgNumbers.push_back(arg.getArgNumber());
       } else {
-        usedPorts.push_back(node.getOperand(arg.getArgNumber()));
+        auto idx = arg.getArgNumber();
+        if (node.getOperandKind(idx) == OperandKind::INPUT)
+          usedInputs.push_back(node.getOperand(idx));
+        else if (node.getOperandKind(idx) == OperandKind::OUTPUT)
+          usedOutputs.push_back(node.getOperand(idx));
+        else
+          usedParams.push_back(node.getOperand(idx));
       }
     node.getBody()->eraseArguments(unusedArgNumbers);
 
@@ -365,8 +373,8 @@ struct SimplifyNodeIOs : public OpRewritePattern<NodeOp> {
     if (hasUnusedPort) {
       rewriter.setInsertionPoint(node);
       // TODO: This will lead to illegal node!
-      auto newNode =
-          rewriter.create<NodeOp>(node.getLoc(), TypeRange(), usedPorts);
+      auto newNode = rewriter.create<NodeOp>(
+          node.getLoc(), usedInputs, usedOutputs, usedParams, node.levelAttr());
       rewriter.inlineRegionBefore(node.body(), newNode.body(),
                                   newNode.body().end());
       rewriter.eraseOp(node);
@@ -457,6 +465,12 @@ iterator_range<Block::args_iterator> NodeOp::getParamArgs() {
 LogicalResult NodeOp::verify() {
   if (getOperandTypes() != getBody()->getArgumentTypes())
     return emitOpError("operand type doesn't align with argument type");
+  for (auto inputArg : getInputArgs())
+    if (llvm::any_of(inputArg.getUses(), isWritten))
+      return emitOpError("input operand is written");
+  for (auto outputArg : getOutputArgs())
+    if (!llvm::any_of(outputArg.getUses(), isWritten))
+      return emitOpError("output operand is not written");
   return success();
 }
 
@@ -499,12 +513,11 @@ LogicalResult ConstBufferOp::verify() {
 // Stream operations
 //===----------------------------------------------------------------------===//
 
-// Verify users of the operation are legal.
-template <typename OpType> static LogicalResult verifyChannelUsers(OpType op) {
+LogicalResult StreamOp::verify() {
+  if (depth() != channel().getType().cast<StreamType>().getDepth())
+    return emitOpError("stream channel depth is not aligned");
   return success();
 }
-
-LogicalResult StreamOp::verify() { return verifyChannelUsers(*this); }
 
 LogicalResult StreamReadOp::verify() {
   if (result())

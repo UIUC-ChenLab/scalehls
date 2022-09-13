@@ -41,6 +41,8 @@ SmallVector<NodeOp, 4> getProducersInSchedule(Value buffer,
 
 bool isInputOutput(Value value);
 
+bool isWritten(OpOperand &use);
+
 //===----------------------------------------------------------------------===//
 // Memory and loop analysis utils
 //===----------------------------------------------------------------------===//

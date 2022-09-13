@@ -42,7 +42,7 @@ struct BufferConversionPattern : public OpRewritePattern<OpType> {
 
   LogicalResult matchAndRewrite(OpType op,
                                 PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<BufferOp>(op, op.getType(), /*depth=*/1);
+    rewriter.replaceOpWithNewOp<BufferOp>(op, op.getType());
     return success();
   }
 };
@@ -75,14 +75,7 @@ struct NodeConversionPattern : public OpRewritePattern<TaskOp> {
       auto operand = task.getOperand(arg.getArgNumber());
 
       if (operand.getType().isa<MemRefType, StreamType>()) {
-        // Cases when the operand actually should be an output of the node.
-        auto isOutput = llvm::any_of(arg.getUses(), [&](OpOperand &use) {
-          if (auto node = dyn_cast<NodeOp>(use.getOwner()))
-            return node.getOperandKind(use) == OperandKind::OUTPUT;
-          return isa<mlir::AffineWriteOpInterface, memref::StoreOp,
-                     StreamWriteOp>(use.getOwner());
-        });
-        if (isOutput) {
+        if (llvm::any_of(arg.getUses(), isWritten)) {
           outputs.push_back(operand);
           outputArgs.push_back(arg);
           outputLocs.push_back(operand.getLoc());

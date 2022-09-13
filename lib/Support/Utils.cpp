@@ -163,6 +163,16 @@ bool scalehls::isInputOutput(Value value) {
          });
 }
 
+bool scalehls::isWritten(OpOperand &use) {
+  // TODO: Any other cases?
+  if (auto node = dyn_cast<NodeOp>(use.getOwner()))
+    return node.getOperandKind(use) == OperandKind::OUTPUT;
+  else if (auto copy = dyn_cast<memref::CopyOp>(use.getOwner()))
+    return copy.target() == use.get();
+  return isa<mlir::AffineWriteOpInterface, memref::StoreOp, StreamWriteOp>(
+      use.getOwner());
+}
+
 //===----------------------------------------------------------------------===//
 // Memory and loop analysis utils
 //===----------------------------------------------------------------------===//
