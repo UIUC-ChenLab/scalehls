@@ -11,6 +11,7 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/Dominance.h"
+#include "scalehls/Support/Utils.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 using namespace mlir;
@@ -463,32 +464,17 @@ LogicalResult NodeOp::verify() {
 // BufferOp
 //===----------------------------------------------------------------------===//
 
-static SmallVector<NodeOp, 4> getBufferUsers(Value buffer, bool isProducer,
-                                             NodeOp exceptedOp) {
-  SmallVector<NodeOp, 4> nodes;
-  for (auto &use : buffer.getUses())
-    if (auto node = dyn_cast<NodeOp>(use.getOwner()))
-      if ((node != exceptedOp) &&
-          ((isProducer && (node.getOperandKind(use) == OperandKind::OUTPUT)) ||
-           (!isProducer && (node.getOperandKind(use) == OperandKind::INPUT))))
-        nodes.push_back(node);
-  return nodes;
-}
-
 SmallVector<NodeOp, 4> BufferOp::getConsumersExcept(NodeOp exceptedOp) {
-  return getBufferUsers(this->getOperation()->getResult(0), false, exceptedOp);
+  return scalehls::getConsumersExcept(memref(), exceptedOp);
 }
-
 SmallVector<NodeOp, 4> BufferOp::getProducersExcept(NodeOp exceptedOp) {
-  return getBufferUsers(this->getOperation()->getResult(0), true, exceptedOp);
+  return scalehls::getProducersExcept(memref(), exceptedOp);
 }
-
 SmallVector<NodeOp, 4> BufferOp::getConsumers() {
-  return getConsumersExcept(NodeOp());
+  return scalehls::getConsumers(memref());
 }
-
 SmallVector<NodeOp, 4> BufferOp::getProducers() {
-  return getProducersExcept(NodeOp());
+  return scalehls::getProducers(memref());
 }
 
 //===----------------------------------------------------------------------===//

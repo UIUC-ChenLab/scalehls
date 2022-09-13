@@ -123,6 +123,33 @@ TaskOp scalehls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
   return task;
 }
 
+static SmallVector<NodeOp, 4> getBufferUsers(Value buffer, bool getProducer,
+                                             NodeOp exceptedOp) {
+  SmallVector<NodeOp, 4> nodes;
+  for (auto &use : buffer.getUses())
+    if (auto node = dyn_cast<NodeOp>(use.getOwner()))
+      if ((node != exceptedOp) &&
+          ((getProducer && (node.getOperandKind(use) == OperandKind::OUTPUT)) ||
+           (!getProducer && (node.getOperandKind(use) == OperandKind::INPUT))))
+        nodes.push_back(node);
+  return nodes;
+}
+
+SmallVector<NodeOp, 4> scalehls::getConsumersExcept(Value buffer,
+                                                    NodeOp exceptedOp) {
+  return getBufferUsers(buffer, false, exceptedOp);
+}
+SmallVector<NodeOp, 4> scalehls::getProducersExcept(Value buffer,
+                                                    NodeOp exceptedOp) {
+  return getBufferUsers(buffer, true, exceptedOp);
+}
+SmallVector<NodeOp, 4> scalehls::getConsumers(Value buffer) {
+  return getConsumersExcept(buffer, NodeOp());
+}
+SmallVector<NodeOp, 4> scalehls::getProducers(Value buffer) {
+  return getProducersExcept(buffer, NodeOp());
+}
+
 bool scalehls::isInputOutput(Value value) {
   return value.isa<BlockArgument>() ||
          llvm::any_of(value.getUsers(), [](Operation *op) {

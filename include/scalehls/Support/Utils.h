@@ -28,6 +28,11 @@ ScheduleOp wrapWithSchedule(Block *block);
 /// This method always succeeds even if the resulting IR is invalid.
 TaskOp fuseOpsIntoTask(ArrayRef<Operation *> ops, PatternRewriter &rewriter);
 
+SmallVector<NodeOp, 4> getConsumersExcept(Value buffer, NodeOp exceptedOp);
+SmallVector<NodeOp, 4> getProducersExcept(Value buffer, NodeOp exceptedOp);
+SmallVector<NodeOp, 4> getConsumers(Value buffer);
+SmallVector<NodeOp, 4> getProducers(Value buffer);
+
 bool isInputOutput(Value value);
 
 //===----------------------------------------------------------------------===//

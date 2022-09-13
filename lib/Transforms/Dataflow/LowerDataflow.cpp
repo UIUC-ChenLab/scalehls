@@ -54,11 +54,13 @@ struct NodeConversionPattern : public OpRewritePattern<TaskOp> {
   LogicalResult matchAndRewrite(TaskOp task,
                                 PatternRewriter &rewriter) const override {
     SmallVector<Value, 8> outputs;
+    SmallVector<Value, 8> outputArgs;
     SmallVector<Location, 8> outputLocs;
     for (auto output : task.getYieldOp().getOperands()) {
       // TODO: How to handle this??
       output.getDefiningOp()->moveBefore(task);
       outputs.push_back(output);
+      outputArgs.push_back(output);
       outputLocs.push_back(output.getLoc());
     }
 
@@ -70,10 +72,24 @@ struct NodeConversionPattern : public OpRewritePattern<TaskOp> {
     SmallVector<Location, 8> paramLocs;
     for (auto arg : task.getBody()->getArguments()) {
       auto operand = task.getOperand(arg.getArgNumber());
+
       if (operand.getType().isa<MemRefType, StreamType>()) {
-        inputs.push_back(operand);
-        inputArgs.push_back(arg);
-        inputLocs.push_back(operand.getLoc());
+        // Cases when the operand actually should be an output of the node.
+        auto isOutput = llvm::any_of(arg.getUses(), [&](OpOperand &use) {
+          if (auto node = dyn_cast<NodeOp>(use.getOwner()))
+            return node.getOperandKind(use) == OperandKind::OUTPUT;
+          return isa<mlir::AffineWriteOpInterface, memref::StoreOp,
+                     StreamWriteOp>(use.getOwner());
+        });
+        if (isOutput) {
+          outputs.push_back(operand);
+          outputArgs.push_back(arg);
+          outputLocs.push_back(operand.getLoc());
+        } else {
+          inputs.push_back(operand);
+          inputArgs.push_back(arg);
+          inputLocs.push_back(operand.getLoc());
+        }
       } else {
         params.push_back(operand);
         paramArgs.push_back(arg);
@@ -97,14 +113,16 @@ struct NodeConversionPattern : public OpRewritePattern<TaskOp> {
 
     auto newOutputArgs =
         node.getBody()->addArguments(ValueRange(outputs), outputLocs);
-    for (auto t : llvm::zip(outputs, newOutputArgs))
+    for (auto t : llvm::zip(outputArgs, newOutputArgs))
       std::get<0>(t).replaceAllUsesExcept(std::get<1>(t), node);
 
     auto newParamArgs = nodeBlock->addArguments(ValueRange(params), paramLocs);
     for (auto t : llvm::zip(paramArgs, newParamArgs))
       std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
 
-    rewriter.replaceOp(task, outputs);
+    rewriter.replaceOp(
+        task, ValueRange({outputs.begin(),
+                          std::next(outputs.begin(), task.getNumResults())}));
     return success();
   }
 };
@@ -192,8 +210,8 @@ struct MultiProducerRemovePattern : public OpRewritePattern<BufferOp> {
       // Create a new node that takes the current buffer as input.
       auto newInputs = SmallVector<Value>(node.inputs());
       newInputs.push_back(currentBuffer);
-      auto newNode =
-          rewriter.create<NodeOp>(node.getLoc(), newInputs, node.outputs());
+      auto newNode = rewriter.create<NodeOp>(node.getLoc(), newInputs,
+                                             node.outputs(), node.params());
       rewriter.inlineRegionBefore(node.body(), newNode.body(),
                                   newNode.body().end());
 
@@ -225,13 +243,10 @@ struct BypassPathRemovePattern : public OpRewritePattern<NodeOp> {
 
     unsigned level = 0;
     for (auto output : node.outputs()) {
-      auto buffer = output.getDefiningOp<BufferOp>();
-      if (!buffer)
-        return node.emitOpError("has unexpected output");
-      if (!buffer.getProducersExcept(node).empty())
+      if (!getProducersExcept(output, node).empty())
         return failure();
 
-      for (auto consumer : buffer.getConsumers()) {
+      for (auto consumer : getConsumers(output)) {
         if (!consumer.level().hasValue())
           return failure();
         level = std::max(level, consumer.level().getValue() + 1);
@@ -240,28 +255,29 @@ struct BypassPathRemovePattern : public OpRewritePattern<NodeOp> {
     node.levelAttr(rewriter.getI32IntegerAttr(level));
 
     for (auto output : node.outputs()) {
-      auto buffer = output.getDefiningOp<BufferOp>();
       SmallVector<std::pair<unsigned, NodeOp>, 4> worklist;
-      for (auto consumer : buffer.getConsumers()) {
+      for (auto consumer : getConsumers(output)) {
         auto diff = level - consumer.level().getValue();
         worklist.push_back({diff, consumer});
       }
       if (worklist.empty())
         continue;
 
-      auto currentBuffer = buffer;
+      auto currentBuffer = output;
       auto currentNode = node;
       llvm::sort(worklist, [](auto a, auto b) { return a.first > b.first; });
       for (unsigned i = 2, e = worklist.front().first; i <= e; ++i) {
         // Create a new buffer.
         rewriter.setInsertionPoint(currentNode);
-        auto newBuffer = cast<BufferOp>(rewriter.clone(*buffer));
+        auto newBuffer = rewriter.create<BufferOp>(
+            rewriter.getUnknownLoc(), output.getType(), /*depth=*/1);
 
         // Construct a new node for data copy.
         rewriter.setInsertionPointAfter(currentNode);
         auto newNode = rewriter.create<NodeOp>(
-            rewriter.getUnknownLoc(), ValueRange(currentBuffer.memref()),
-            ValueRange(newBuffer.memref()));
+            rewriter.getUnknownLoc(), ValueRange(currentBuffer),
+            ValueRange(newBuffer.memref()), ValueRange(),
+            /*level=*/rewriter.getI32IntegerAttr(level + 1 - i));
         auto block = rewriter.createBlock(&newNode.body());
         block->addArguments(
             TypeRange({currentBuffer.getType(), newBuffer.getType()}),
@@ -277,7 +293,7 @@ struct BypassPathRemovePattern : public OpRewritePattern<NodeOp> {
         llvm::SmallDenseSet<Operation *, 4> consumers;
         while (!worklist.empty() && (worklist.back().first == i))
           consumers.insert(worklist.pop_back_val().second);
-        buffer.memref().replaceUsesWithIf(newBuffer, [&](OpOperand &use) {
+        output.replaceUsesWithIf(newBuffer, [&](OpOperand &use) {
           return consumers.count(use.getOwner());
         });
 
@@ -396,17 +412,17 @@ struct LowerDataflow : public LowerDataflowBase<LowerDataflow> {
     // Remove multi-producers and bypass paths.
     patterns.clear();
     patterns.add<ScheduleOutputRemovePattern>(context);
-    patterns.add<MultiProducerRemovePattern>(context);
-    patterns.add<BypassPathRemovePattern>(context);
+    // patterns.add<MultiProducerRemovePattern>(context);
+    // patterns.add<BypassPathRemovePattern>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
-    // Merge nodes at the same dataflow level.
-    patterns.clear();
-    patterns.add<NodeMergePattern>(context);
-    auto frozenPatterns = FrozenRewritePatternSet(std::move(patterns));
-    func.walk([&](ScheduleOp schedule) {
-      (void)applyOpPatternsAndFold(schedule, frozenPatterns);
-    });
+    // // Merge nodes at the same dataflow level.
+    // patterns.clear();
+    // patterns.add<NodeMergePattern>(context);
+    // auto frozenPatterns = FrozenRewritePatternSet(std::move(patterns));
+    // func.walk([&](ScheduleOp schedule) {
+    //   (void)applyOpPatternsAndFold(schedule, frozenPatterns);
+    // });
   }
 };
 } // namespace
