@@ -195,12 +195,19 @@ def BufferOp : HLSOp<"dataflow.buffer"> {
   let results = (outs AnyMemRef:$memref);
   let assemblyFormat = "attr-dict `:` type($memref)";
 
+  let builders = [
+    OpBuilder<(ins "mlir::Type":$memref),
+        "build($_builder, $_state, memref, 1);">
+  ];
+
   let extraClassDeclaration = [{
     /// Get consumers or producers of the dataflow buffer.
-    SmallVector<NodeOp, 4> getConsumersExcept(NodeOp exceptedOp);
-    SmallVector<NodeOp, 4> getProducersExcept(NodeOp exceptedOp);
-    SmallVector<NodeOp, 4> getConsumers();
-    SmallVector<NodeOp, 4> getProducers();
+    SmallVector<NodeOp, 4> getConsumersInScheduleExcept(ScheduleOp schedule,
+                                                        NodeOp exceptedOp);
+    SmallVector<NodeOp, 4> getProducersInScheduleExcept(ScheduleOp schedule,
+                                                        NodeOp exceptedOp);
+    SmallVector<NodeOp, 4> getConsumersInSchedule(ScheduleOp schedule);
+    SmallVector<NodeOp, 4> getProducersInSchedule(ScheduleOp schedule);
   }];
 }
 

@@ -123,31 +123,36 @@ TaskOp scalehls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
   return task;
 }
 
-static SmallVector<NodeOp, 4> getBufferUsers(Value buffer, bool getProducer,
+static SmallVector<NodeOp, 4> getBufferUsers(Value buffer, ScheduleOp schedule,
+                                             bool getProducer,
                                              NodeOp exceptedOp) {
   SmallVector<NodeOp, 4> nodes;
   for (auto &use : buffer.getUses())
     if (auto node = dyn_cast<NodeOp>(use.getOwner()))
-      if ((node != exceptedOp) &&
+      if ((node != exceptedOp) && (node.getScheduleOp() == schedule) &&
           ((getProducer && (node.getOperandKind(use) == OperandKind::OUTPUT)) ||
            (!getProducer && (node.getOperandKind(use) == OperandKind::INPUT))))
         nodes.push_back(node);
   return nodes;
 }
 
-SmallVector<NodeOp, 4> scalehls::getConsumersExcept(Value buffer,
-                                                    NodeOp exceptedOp) {
-  return getBufferUsers(buffer, false, exceptedOp);
+SmallVector<NodeOp, 4>
+scalehls::getConsumersInScheduleExcept(Value buffer, ScheduleOp schedule,
+                                       NodeOp exceptedOp) {
+  return getBufferUsers(buffer, schedule, false, exceptedOp);
 }
-SmallVector<NodeOp, 4> scalehls::getProducersExcept(Value buffer,
-                                                    NodeOp exceptedOp) {
-  return getBufferUsers(buffer, true, exceptedOp);
+SmallVector<NodeOp, 4>
+scalehls::getProducersInScheduleExcept(Value buffer, ScheduleOp schedule,
+                                       NodeOp exceptedOp) {
+  return getBufferUsers(buffer, schedule, true, exceptedOp);
 }
-SmallVector<NodeOp, 4> scalehls::getConsumers(Value buffer) {
-  return getConsumersExcept(buffer, NodeOp());
+SmallVector<NodeOp, 4> scalehls::getConsumersInSchedule(Value buffer,
+                                                        ScheduleOp schedule) {
+  return getConsumersInScheduleExcept(buffer, schedule, NodeOp());
 }
-SmallVector<NodeOp, 4> scalehls::getProducers(Value buffer) {
-  return getProducersExcept(buffer, NodeOp());
+SmallVector<NodeOp, 4> scalehls::getProducersInSchedule(Value buffer,
+                                                        ScheduleOp schedule) {
+  return getProducersInScheduleExcept(buffer, schedule, NodeOp());
 }
 
 bool scalehls::isInputOutput(Value value) {

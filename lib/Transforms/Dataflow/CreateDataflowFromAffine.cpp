@@ -18,16 +18,16 @@ namespace {
 struct TaskCreatePattern : public OpRewritePattern<ScheduleOp> {
   using OpRewritePattern<ScheduleOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(ScheduleOp target,
+  LogicalResult matchAndRewrite(ScheduleOp schedule,
                                 PatternRewriter &rewriter) const override {
-    if (llvm::any_of(target.getOps(), [](Operation &op) {
+    if (llvm::any_of(schedule.getOps(), [](Operation &op) {
           return isa<bufferization::BufferizationDialect, tosa::TosaDialect,
                      tensor::TensorDialect, linalg::LinalgDialect>(
                      op.getDialect()) ||
                  isa<func::CallOp, TaskOp, NodeOp>(op);
         }))
       return failure();
-    auto &block = target.getRegion().front();
+    auto &block = schedule.getRegion().front();
 
     // Fuse operations into dataflow nodes. TODO: We need more case study to
     // figure out any other operations need to be separately handled. For

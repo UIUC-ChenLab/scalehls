@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Analysis/Liveness.h"
+#include "mlir/IR/Dominance.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
@@ -187,46 +188,68 @@ struct ScheduleOutputRemovePattern : public OpRewritePattern<ScheduleOp> {
 //===----------------------------------------------------------------------===//
 
 namespace {
-struct MultiProducerRemovePattern : public OpRewritePattern<BufferOp> {
-  using OpRewritePattern<BufferOp>::OpRewritePattern;
+struct MultiProducerRemovePattern : public OpRewritePattern<NodeOp> {
+  using OpRewritePattern<NodeOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(BufferOp buffer,
+  LogicalResult matchAndRewrite(NodeOp node,
                                 PatternRewriter &rewriter) const override {
-    if (buffer.getProducers().empty() ||
-        llvm::hasSingleElement(buffer.getProducers()))
+    auto schedule = node.getScheduleOp();
+    DominanceInfo DT(schedule);
+
+    // Get all argument buffers that need to be transformed.
+    SmallVector<BlockArgument, 4> targetArgs;
+    for (auto arg : node.getOutputArgs()) {
+      auto buffer = node.getOperand(arg.getArgNumber());
+      auto producers = getProducersInSchedule(buffer, schedule);
+      llvm::sort(producers, [&](NodeOp a, NodeOp b) {
+        return DT.properlyDominates(a, b);
+      });
+      if (node != producers.front())
+        targetArgs.push_back(arg);
+    }
+
+    if (targetArgs.empty())
       return failure();
 
-    Value currentBuffer = buffer;
-    for (auto user : llvm::drop_begin(buffer.getProducers())) {
-      auto node = cast<NodeOp>(user);
-      auto operandIdx = llvm::find(node.getOperands(), buffer.memref()) -
-                        node.operand_begin();
+    auto loc = rewriter.getUnknownLoc();
+    auto newInputs = SmallVector<Value>(node.inputs());
+    rewriter.setInsertionPoint(node);
 
-      // Create a new buffer.
-      rewriter.setInsertionPoint(node);
-      auto newBuffer = cast<BufferOp>(rewriter.clone(*buffer));
-      node.setOperand(operandIdx, newBuffer);
+    // Create new buffers and write to them instead of the original buffers. The
+    // original buffer will be passed into the new node as inputs.
+    for (auto arg : targetArgs) {
+      auto buffer = node.getOperand(arg.getArgNumber());
+      newInputs.push_back(buffer);
+      auto newBuffer = rewriter.create<BufferOp>(loc, arg.getType());
+      node.setOperand(arg.getArgNumber(), newBuffer);
 
-      // Create a new node that takes the current buffer as input.
-      auto newInputs = SmallVector<Value>(node.inputs());
-      newInputs.push_back(currentBuffer);
-      auto newNode = rewriter.create<NodeOp>(node.getLoc(), newInputs,
-                                             node.outputs(), node.params());
-      rewriter.inlineRegionBefore(node.body(), newNode.body(),
-                                  newNode.body().end());
-
-      // Create an explicit data copy from the current buffer to new buffer.
-      auto currentArg = newNode.getBody()->insertArgument(
-          node.getNumInputs(), buffer.getType(), buffer.getLoc());
-      auto newArg = newNode.getBody()->getArgument(operandIdx + 1);
-      rewriter.setInsertionPointToStart(newNode.getBody());
-      rewriter.create<memref::CopyOp>(rewriter.getUnknownLoc(), currentArg,
-                                      newArg);
-
-      // Finally, we can safely remove the node and update the current
-      rewriter.eraseOp(node);
-      currentBuffer = newBuffer;
+      buffer.replaceUsesWithIf(newBuffer, [&](OpOperand &use) {
+        if (auto user = dyn_cast<NodeOp>(use.getOwner()))
+          return user.getScheduleOp() == schedule &&
+                 DT.properlyDominates(node, user);
+        return false;
+      });
     }
+
+    // Create a new node and erase the original one.
+    auto newNode =
+        rewriter.create<NodeOp>(node.getLoc(), newInputs, node.outputs(),
+                                node.params(), node.levelAttr());
+    rewriter.inlineRegionBefore(node.body(), newNode.body(),
+                                newNode.body().end());
+
+    // Insert new arguments and create explicit data copy from the original
+    // buffer to new buffer.
+    rewriter.setInsertionPointToStart(newNode.getBody());
+    for (auto e : llvm::enumerate(targetArgs)) {
+      auto newBufferArg = e.value();
+      auto bufferArg = newNode.getBody()->insertArgument(
+          node.getNumInputs() + e.index(), newBufferArg.getType(),
+          newBufferArg.getLoc());
+      rewriter.create<memref::CopyOp>(loc, bufferArg, newBufferArg);
+    }
+
+    rewriter.eraseOp(node);
     return success();
   }
 };
@@ -240,13 +263,14 @@ struct BypassPathRemovePattern : public OpRewritePattern<NodeOp> {
                                 PatternRewriter &rewriter) const override {
     if (node.level().hasValue())
       return failure();
+    auto schedule = node.getScheduleOp();
 
     unsigned level = 0;
     for (auto output : node.outputs()) {
-      if (!getProducersExcept(output, node).empty())
+      if (!getProducersInScheduleExcept(output, schedule, node).empty())
         return failure();
 
-      for (auto consumer : getConsumers(output)) {
+      for (auto consumer : getConsumersInSchedule(output, schedule)) {
         if (!consumer.level().hasValue())
           return failure();
         level = std::max(level, consumer.level().getValue() + 1);
@@ -256,49 +280,46 @@ struct BypassPathRemovePattern : public OpRewritePattern<NodeOp> {
 
     for (auto output : node.outputs()) {
       SmallVector<std::pair<unsigned, NodeOp>, 4> worklist;
-      for (auto consumer : getConsumers(output)) {
+      for (auto consumer : getConsumersInSchedule(output, schedule)) {
         auto diff = level - consumer.level().getValue();
         worklist.push_back({diff, consumer});
       }
       if (worklist.empty())
         continue;
 
-      auto currentBuffer = output;
+      auto currentBuf = output;
       auto currentNode = node;
       llvm::sort(worklist, [](auto a, auto b) { return a.first > b.first; });
       for (unsigned i = 2, e = worklist.front().first; i <= e; ++i) {
         // Create a new buffer.
+        auto loc = rewriter.getUnknownLoc();
         rewriter.setInsertionPoint(currentNode);
-        auto newBuffer = rewriter.create<BufferOp>(
-            rewriter.getUnknownLoc(), output.getType(), /*depth=*/1);
+        auto newBuf = rewriter.create<BufferOp>(loc, output.getType()).memref();
 
         // Construct a new node for data copy.
         rewriter.setInsertionPointAfter(currentNode);
         auto newNode = rewriter.create<NodeOp>(
-            rewriter.getUnknownLoc(), ValueRange(currentBuffer),
-            ValueRange(newBuffer.memref()), ValueRange(),
+            loc, ValueRange(currentBuf), ValueRange(newBuf), ValueRange(),
             /*level=*/rewriter.getI32IntegerAttr(level + 1 - i));
         auto block = rewriter.createBlock(&newNode.body());
-        block->addArguments(
-            TypeRange({currentBuffer.getType(), newBuffer.getType()}),
-            {currentBuffer.getLoc(), newBuffer.getLoc()});
+        block->addArguments(TypeRange({currentBuf.getType(), newBuf.getType()}),
+                            {currentBuf.getLoc(), newBuf.getLoc()});
 
         // Create an explicit copy operation.
         rewriter.setInsertionPointToStart(block);
-        rewriter.create<memref::CopyOp>(rewriter.getUnknownLoc(),
-                                        block->getArgument(0),
+        rewriter.create<memref::CopyOp>(loc, block->getArgument(0),
                                         block->getArgument(1));
 
         // Replace all uses at the current level.
         llvm::SmallDenseSet<Operation *, 4> consumers;
         while (!worklist.empty() && (worklist.back().first == i))
           consumers.insert(worklist.pop_back_val().second);
-        output.replaceUsesWithIf(newBuffer, [&](OpOperand &use) {
+        output.replaceUsesWithIf(newBuf, [&](OpOperand &use) {
           return consumers.count(use.getOwner());
         });
 
         // Finally, we can update current buffer and current node.
-        currentBuffer = newBuffer;
+        currentBuf = newBuf;
         currentNode = newNode;
       }
     }
@@ -363,14 +384,14 @@ namespace {
 struct NodeMergePattern : public OpRewritePattern<ScheduleOp> {
   using OpRewritePattern<ScheduleOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(ScheduleOp target,
+  LogicalResult matchAndRewrite(ScheduleOp schedule,
                                 PatternRewriter &rewriter) const override {
     llvm::SmallDenseMap<unsigned, SmallVector<NodeOp, 4>> worklist;
-    for (auto node : target.getOps<NodeOp>()) {
+    for (auto node : schedule.getOps<NodeOp>()) {
       if (auto level = node.level())
         worklist[level.getValue()].push_back(node);
       else
-        return node.emitOpError("node is not scheduled");
+        return failure();
     }
 
     bool hasChanged = false;
@@ -409,20 +430,19 @@ struct LowerDataflow : public LowerDataflowBase<LowerDataflow> {
     if (failed(applyPartialConversion(func, target, std::move(patterns))))
       return signalPassFailure();
 
-    // Remove multi-producers and bypass paths.
+    // Legalize dataflow schedule.
     patterns.clear();
-    patterns.add<ScheduleOutputRemovePattern>(context);
-    // patterns.add<MultiProducerRemovePattern>(context);
-    // patterns.add<BypassPathRemovePattern>(context);
+    patterns.add<MultiProducerRemovePattern>(context);
+    patterns.add<BypassPathRemovePattern>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
-    // // Merge nodes at the same dataflow level.
-    // patterns.clear();
-    // patterns.add<NodeMergePattern>(context);
-    // auto frozenPatterns = FrozenRewritePatternSet(std::move(patterns));
-    // func.walk([&](ScheduleOp schedule) {
-    //   (void)applyOpPatternsAndFold(schedule, frozenPatterns);
-    // });
+    patterns.clear();
+    patterns.add<ScheduleOutputRemovePattern>(context);
+    patterns.add<NodeMergePattern>(context);
+    auto frozenPatterns = FrozenRewritePatternSet(std::move(patterns));
+    func.walk([&](ScheduleOp schedule) {
+      (void)applyOpPatternsAndFold(schedule, frozenPatterns);
+    });
   }
 };
 } // namespace

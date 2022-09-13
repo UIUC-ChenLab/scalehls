@@ -464,17 +464,19 @@ LogicalResult NodeOp::verify() {
 // BufferOp
 //===----------------------------------------------------------------------===//
 
-SmallVector<NodeOp, 4> BufferOp::getConsumersExcept(NodeOp exceptedOp) {
-  return scalehls::getConsumersExcept(memref(), exceptedOp);
+SmallVector<NodeOp, 4>
+BufferOp::getConsumersInScheduleExcept(ScheduleOp schedule, NodeOp exceptedOp) {
+  return scalehls::getConsumersInScheduleExcept(memref(), schedule, exceptedOp);
 }
-SmallVector<NodeOp, 4> BufferOp::getProducersExcept(NodeOp exceptedOp) {
-  return scalehls::getProducersExcept(memref(), exceptedOp);
+SmallVector<NodeOp, 4>
+BufferOp::getProducersInScheduleExcept(ScheduleOp schedule, NodeOp exceptedOp) {
+  return scalehls::getProducersInScheduleExcept(memref(), schedule, exceptedOp);
 }
-SmallVector<NodeOp, 4> BufferOp::getConsumers() {
-  return scalehls::getConsumers(memref());
+SmallVector<NodeOp, 4> BufferOp::getConsumersInSchedule(ScheduleOp schedule) {
+  return scalehls::getConsumersInSchedule(memref(), schedule);
 }
-SmallVector<NodeOp, 4> BufferOp::getProducers() {
-  return scalehls::getProducers(memref());
+SmallVector<NodeOp, 4> BufferOp::getProducersInSchedule(ScheduleOp schedule) {
+  return scalehls::getProducersInSchedule(memref(), schedule);
 }
 
 //===----------------------------------------------------------------------===//
