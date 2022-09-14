@@ -167,6 +167,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(scalehls::createPromoteBufferPass());
         // pm.addPass(bufferization::createBufferLoopHoistingPass());
+
         pm.addPass(scalehls::createConvertCopyToAffineLoopsPass(
             /*convertInternCopyOnly=*/false));
         pm.addPass(memref::createFoldSubViewOpsPass());
@@ -183,14 +184,6 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createLowerDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
-        return;
-
-        // pm.addPass(scalehls::createConvertDataflowToFuncPass());
-
-        // // Create runtime components.
-        // pm.addPass(scalehls::createCreateRuntimeMainPass(opts.hlsTopFunc));
-        // pm.addPass(scalehls::createCreateAxiInterfacePass());
-
         // Affine loop unrolling.
         if (opts.loopUnrollFactor) {
           pm.addPass(scalehls::createAffineLoopUnrollJamPass(
@@ -206,6 +199,17 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createSimplifyMemrefAccessPass());
         pm.addPass(scalehls::createReduceInitialIntervalPass());
         pm.addPass(mlir::createCanonicalizerPass());
+
+        // Convert dataflow to func.
+        pm.addPass(scalehls::createConvertDataflowToFuncPass());
+        pm.addPass(scalehls::createRaiseImplicitCopyPass());
+        pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
+
+        return;
+
+        // // Create runtime components.
+        // pm.addPass(scalehls::createCreateRuntimeMainPass(opts.hlsTopFunc));
+        // pm.addPass(scalehls::createCreateAxiInterfacePass());
 
         // Directive-level optimization.
         pm.addPass(scalehls::createLoopPipeliningPass());

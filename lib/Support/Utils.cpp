@@ -156,8 +156,11 @@ SmallVector<NodeOp, 4> scalehls::getProducersInSchedule(Value buffer,
 }
 
 bool scalehls::isInputOutput(Value value) {
-  return value.isa<BlockArgument>() ||
-         llvm::any_of(value.getUsers(), [](Operation *op) {
+  auto memref = value;
+  if (auto viewLike = value.getDefiningOp<ViewLikeOpInterface>())
+    memref = viewLike.getViewSource();
+  return memref.isa<BlockArgument>() ||
+         llvm::any_of(memref.getUsers(), [](Operation *op) {
            return op->hasTrait<OpTrait::IsTerminator>() &&
                   op->hasTrait<OpTrait::ReturnLike>();
          });

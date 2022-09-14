@@ -430,12 +430,12 @@ struct LowerDataflow : public LowerDataflowBase<LowerDataflow> {
     patterns.add<ScheduleOutputRemovePattern>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
-    // patterns.clear();
-    // patterns.add<ScheduleLegalizePattern>(context);
-    // auto frozenPatterns = FrozenRewritePatternSet(std::move(patterns));
-    // func.walk([&](ScheduleOp schedule) {
-    //   (void)applyOpPatternsAndFold(schedule, frozenPatterns);
-    // });
+    patterns.clear();
+    patterns.add<ScheduleLegalizePattern>(context);
+    auto frozenPatterns = FrozenRewritePatternSet(std::move(patterns));
+    func.walk([&](ScheduleOp schedule) {
+      (void)applyOpPatternsAndFold(schedule, frozenPatterns);
+    });
   }
 };
 } // namespace

@@ -14,6 +14,31 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
+struct ScheduleConversionPattern : public OpRewritePattern<ScheduleOp> {
+  using OpRewritePattern<ScheduleOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ScheduleOp schedule,
+                                PatternRewriter &rewriter) const override {
+    auto &scheduleOps = schedule.getBody()->getOperations();
+    auto &parentOps = schedule->getBlock()->getOperations();
+    parentOps.splice(schedule->getIterator(), scheduleOps, scheduleOps.begin(),
+                     std::prev(scheduleOps.end()));
+
+    if (schedule.isLegal()) {
+      if (auto func = dyn_cast<func::FuncOp>(schedule->getParentOp()))
+        setFuncDirective(func, /*pipeline=*/false, /*targetInterval=*/1,
+                         /*dataflow=*/true);
+      else if (auto loop = dyn_cast<mlir::AffineForOp>(schedule->getParentOp()))
+        setLoopDirective(loop, /*pipeline=*/false, /*targetII=*/1,
+                         /*dataflow=*/true, /*flattern=*/false);
+    }
+    rewriter.replaceOp(schedule, schedule.getReturnOp()->getOperands());
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 struct TaskConversionPattern : public OpRewritePattern<TaskOp> {
   TaskConversionPattern(MLIRContext *context, StringRef prefix,
                         unsigned &taskIdx)
@@ -104,36 +129,36 @@ struct BufferConversionPattern : public OpRewritePattern<BufferOp> {
 };
 } // namespace
 
-namespace {
-struct PromoteConstBufferPattern : public OpRewritePattern<ConstBufferOp> {
-  using OpRewritePattern<ConstBufferOp>::OpRewritePattern;
+// namespace {
+// struct DemoteConstBufferPattern : public OpRewritePattern<ConstBufferOp> {
+//   using OpRewritePattern<ConstBufferOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(ConstBufferOp buffer,
-                                PatternRewriter &rewriter) const override {
-    if (buffer.getType().getNumElements() < 1024)
-      return failure();
+//   LogicalResult matchAndRewrite(ConstBufferOp buffer,
+//                                 PatternRewriter &rewriter) const override {
+//     if (buffer.getType().getNumElements() < 1024)
+//       return failure();
 
-    if (auto node = buffer->getParentOfType<NodeOp>()) {
-      buffer->moveBefore(node);
-      SmallVector<Value, 8> inputs(node.inputs());
-      inputs.push_back(buffer.memref());
+//     if (auto node = buffer->getParentOfType<NodeOp>()) {
+//       buffer->moveBefore(node);
+//       SmallVector<Value, 8> inputs(node.inputs());
+//       inputs.push_back(buffer.memref());
 
-      auto newArg = node.getBody()->insertArgument(
-          node.getNumInputs(), buffer.getType(), buffer.getLoc());
-      buffer.memref().replaceAllUsesWith(newArg);
+//       auto newArg = node.getBody()->insertArgument(
+//           node.getNumInputs(), buffer.getType(), buffer.getLoc());
+//       buffer.memref().replaceAllUsesWith(newArg);
 
-      rewriter.setInsertionPoint(node);
-      auto newNode =
-          rewriter.create<NodeOp>(node.getLoc(), inputs, node.outputs());
-      rewriter.inlineRegionBefore(node.body(), newNode.body(),
-                                  newNode.body().end());
-      rewriter.eraseOp(node);
-      return success();
-    }
-    return failure();
-  }
-};
-} // namespace
+//       rewriter.setInsertionPoint(node);
+//       auto newNode =
+//           rewriter.create<NodeOp>(node.getLoc(), inputs, node.outputs());
+//       rewriter.inlineRegionBefore(node.body(), newNode.body(),
+//                                   newNode.body().end());
+//       rewriter.eraseOp(node);
+//       return success();
+//     }
+//     return failure();
+//   }
+// };
+// } // namespace
 
 namespace {
 struct ConvertDataflowToFunc
@@ -144,17 +169,18 @@ struct ConvertDataflowToFunc
 
     for (auto func :
          llvm::make_early_inc_range(module.getOps<func::FuncOp>())) {
-      mlir::RewritePatternSet patterns(context);
-      patterns.add<PromoteConstBufferPattern>(context);
-      (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+      // mlir::RewritePatternSet patterns(context);
+      // patterns.add<DemoteConstBufferPattern>(context);
+      // (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
       ConversionTarget target(*context);
-      target.addIllegalOp<TaskOp, YieldOp, NodeOp, BufferOp>();
+      target.addIllegalOp<ScheduleOp, TaskOp, YieldOp, NodeOp, BufferOp>();
       target.addLegalOp<func::FuncOp, func::ReturnOp, func::CallOp,
                         memref::AllocOp>();
 
       unsigned nodeIdx = 0;
-      patterns.clear();
+      mlir::RewritePatternSet patterns(context);
+      patterns.add<ScheduleConversionPattern>(context);
       patterns.add<TaskConversionPattern>(context, func.getName(), nodeIdx);
       patterns.add<YieldConversionPattern>(context);
       patterns.add<NodeConversionPattern>(context, func.getName(), nodeIdx);
