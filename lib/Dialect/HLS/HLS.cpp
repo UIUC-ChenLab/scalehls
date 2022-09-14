@@ -176,6 +176,36 @@ ReturnOp ScheduleOp::getReturnOp() {
   return cast<ReturnOp>(body().front().getTerminator());
 }
 
+LogicalResult ScheduleOp::verify() {
+  if (isLegal()) {
+    if (!getOps<TaskOp>().empty())
+      return mlir::emitError(getLoc(), "contains task ops");
+
+    for (auto node : getOps<NodeOp>()) {
+      if (!node.level().hasValue()) {
+        auto diag = mlir::emitError(getLoc(), "contains node not scheduled: ");
+        diag.attachNote(node.getLoc())
+            .append("see current node: ")
+            .appendOp(*node, OpPrintingFlags().printGenericOpForm());
+        return diag;
+      }
+      for (auto output : node.outputs())
+        if (getConsumersInSchedule(output, *this).size() > 1 ||
+            getProducersInSchedule(output, *this).size() > 1) {
+          auto diag = mlir::emitError(
+              getLoc(), "violates single-consumer or single-producer\n");
+          diag << "see current buffer: " << output << "\n";
+          for (auto user : output.getUsers())
+            diag.attachNote(user->getLoc())
+                .append("see current buffer user: ")
+                .appendOp(*user, OpPrintingFlags().printGenericOpForm());
+          return diag;
+        }
+    }
+  }
+  return success();
+}
+
 //===----------------------------------------------------------------------===//
 // ReturnOp
 //===----------------------------------------------------------------------===//
@@ -465,6 +495,12 @@ iterator_range<Block::args_iterator> NodeOp::getParamArgs() {
 LogicalResult NodeOp::verify() {
   if (getOperandTypes() != getBody()->getArgumentTypes())
     return emitOpError("operand type doesn't align with argument type");
+
+  if (llvm::any_of(params(), [](Value param) {
+        return param.getType().isa<ShapedType, StreamType>();
+      }))
+    return emitOpError("node params should not be shaped or stream typed");
+
   for (auto inputArg : getInputArgs())
     if (llvm::any_of(inputArg.getUses(), isWritten))
       return emitOpError("input operand is written");

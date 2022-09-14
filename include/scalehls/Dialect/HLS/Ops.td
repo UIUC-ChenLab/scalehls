@@ -42,11 +42,20 @@ def ScheduleOp : HLSOp<"dataflow.schedule", [AffineScope,
     the dataflow tasks or nodes to be scheduled.
   }];
 
+  let arguments = (ins UnitAttr:$isLegal);
   let results = (outs Variadic<AnyType>:$results);
   let regions = (region SizedRegion<1>:$body);
-  let assemblyFormat = "attr-dict-with-keyword (`:` type($results)^ )? $body";
+  let assemblyFormat = [{
+    attr-dict-with-keyword ( `legal` $isLegal^ )? ( `:` type($results)^ )? $body
+  }];
 
+  let builders = [
+    OpBuilder<(ins "mlir::TypeRange":$results),
+        "build($_builder, $_state, results, false);">
+  ];
+  let hasVerifier = 1;
   let hasCanonicalizer = 1;
+
   let extraClassDeclaration = [{
     /// Get the terminator return op.
     ReturnOp getReturnOp();
@@ -154,7 +163,7 @@ def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
 
   let assemblyFormat = [{
     `(` $inputs `)` `->` `(` $outputs `)` ( `[` $params^ `]` )? attr-dict `:`
-    functional-type($inputs, $outputs) ( ` ` `[` type($params)^ `]` )? $body
+    functional-type($inputs, $outputs) ( `[` type($params)^ `]` )? $body
   }];
 
   let builders = [
@@ -164,7 +173,6 @@ def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
     OpBuilder<(ins "mlir::ValueRange":$inputs, "mlir::ValueRange":$outputs),
         "build($_builder, $_state, inputs, outputs, ValueRange());">
   ];
-
   let hasVerifier = 1;
   let hasCanonicalizer = 1;
 

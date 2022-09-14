@@ -275,7 +275,8 @@ struct BypassPathRemovePattern : public OpRewritePattern<NodeOp> {
       SmallVector<std::pair<unsigned, NodeOp>, 4> worklist;
       for (auto consumer : getConsumersInSchedule(output, schedule)) {
         auto diff = level - consumer.level().getValue();
-        worklist.push_back({diff, consumer});
+        if (diff > 1)
+          worklist.push_back({diff, consumer});
       }
       if (worklist.empty())
         continue;
@@ -325,36 +326,34 @@ static NodeOp fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter) {
   assert((nodes.size() > 1) && "must fuse at least two nodes");
 
   // Collect inputs, outputs, and params of the new node.
-  SmallVector<Value, 8> inputs;
-  SmallVector<Location, 8> inputLocs;
-  SmallVector<Value, 8> outputs;
-  SmallVector<Location, 8> outputLocs;
-  SmallVector<Value, 8> params;
-  SmallVector<Location, 8> paramLocs;
+  llvm::SetVector<Value> inputs;
+  llvm::SmallVector<Location, 8> inputLocs;
+  llvm::SetVector<Value> outputs;
+  llvm::SmallVector<Location, 8> outputLocs;
+  llvm::SetVector<Value> params;
+  llvm::SmallVector<Location, 8> paramLocs;
 
   for (auto node : nodes) {
-    for (auto input : node.inputs()) {
-      inputs.push_back(input);
-      inputLocs.push_back(input.getLoc());
-    }
-    for (auto output : node.outputs()) {
-      outputs.push_back(output);
-      outputLocs.push_back(output.getLoc());
-    }
-    for (auto param : node.params()) {
-      params.push_back(param);
-      paramLocs.push_back(param.getLoc());
-    }
+    for (auto input : node.inputs())
+      if (inputs.insert(input))
+        inputLocs.push_back(input.getLoc());
+    for (auto output : node.outputs())
+      if (outputs.insert(output))
+        outputLocs.push_back(output.getLoc());
+    for (auto param : node.params())
+      if (params.insert(param))
+        paramLocs.push_back(param.getLoc());
   }
 
   // Construct the new node after the last node.
   rewriter.setInsertionPointAfter(nodes.back());
-  auto newNode = rewriter.create<NodeOp>(rewriter.getUnknownLoc(), inputs,
-                                         outputs, params);
+  auto newNode =
+      rewriter.create<NodeOp>(rewriter.getUnknownLoc(), inputs.getArrayRef(),
+                              outputs.getArrayRef(), params.getArrayRef());
   auto block = rewriter.createBlock(&newNode.body());
-  block->addArguments(ValueRange(inputs), inputLocs);
-  block->addArguments(ValueRange(outputs), outputLocs);
-  block->addArguments(ValueRange(params), paramLocs);
+  block->addArguments(ValueRange(inputs.getArrayRef()), inputLocs);
+  block->addArguments(ValueRange(outputs.getArrayRef()), outputLocs);
+  block->addArguments(ValueRange(params.getArrayRef()), paramLocs);
 
   // Inline all nodes into the new node.
   for (auto node : nodes) {
@@ -374,7 +373,7 @@ static NodeOp fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter) {
 }
 
 namespace {
-struct NodeMergePattern : public OpRewritePattern<ScheduleOp> {
+struct ScheduleLegalizePattern : public OpRewritePattern<ScheduleOp> {
   using OpRewritePattern<ScheduleOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(ScheduleOp schedule,
@@ -394,6 +393,7 @@ struct NodeMergePattern : public OpRewritePattern<ScheduleOp> {
         node.levelAttr(rewriter.getI32IntegerAttr(p.first));
         hasChanged = true;
       }
+    schedule.isLegalAttr(rewriter.getUnitAttr());
     return success(hasChanged);
   }
 };
@@ -427,15 +427,15 @@ struct LowerDataflow : public LowerDataflowBase<LowerDataflow> {
     patterns.clear();
     patterns.add<MultiProducerRemovePattern>(context);
     patterns.add<BypassPathRemovePattern>(context);
+    patterns.add<ScheduleOutputRemovePattern>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
-    patterns.clear();
-    patterns.add<ScheduleOutputRemovePattern>(context);
-    patterns.add<NodeMergePattern>(context);
-    auto frozenPatterns = FrozenRewritePatternSet(std::move(patterns));
-    func.walk([&](ScheduleOp schedule) {
-      (void)applyOpPatternsAndFold(schedule, frozenPatterns);
-    });
+    // patterns.clear();
+    // patterns.add<ScheduleLegalizePattern>(context);
+    // auto frozenPatterns = FrozenRewritePatternSet(std::move(patterns));
+    // func.walk([&](ScheduleOp schedule) {
+    //   (void)applyOpPatternsAndFold(schedule, frozenPatterns);
+    // });
   }
 };
 } // namespace
