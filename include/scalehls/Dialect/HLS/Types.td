@@ -15,8 +15,20 @@ def StreamType : HLSType<"Stream"> {
   }];
   let mnemonic = "stream";
 
-  let parameters = (ins "::mlir::Type":$elementType, "int64_t":$depth);
+  let parameters = (ins "mlir::Type":$elementType, "unsigned":$depth);
   let assemblyFormat = "`<` qualified($elementType) `,` $depth `>`";
+}
+
+def AxiType : HLSType<"Axi"> {
+  let summary = "An HLS AXI interface type";
+  let description = [{
+    Represents an AXI interface of any memory reference type.
+  }];
+  let mnemonic = "axi";
+
+  let parameters = (ins "mlir::MemRefType":$elementType,
+                        "mlir::scalehls::hls::AxiKindAttr":$kind);
+  let assemblyFormat = "`<` qualified($elementType) `,` $kind `>`";
 }
 
 #endif // SCALEHLS_DIALECT_HLS_TYPES_TD

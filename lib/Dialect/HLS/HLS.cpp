@@ -140,7 +140,7 @@ bool hls::hasRuntimeAttr(Operation *op) {
 }
 
 //===----------------------------------------------------------------------===//
-// ScheduleOp
+// ScheduleOp and ReturnOp
 //===----------------------------------------------------------------------===//
 
 namespace {
@@ -206,10 +206,6 @@ LogicalResult ScheduleOp::verify() {
   return success();
 }
 
-//===----------------------------------------------------------------------===//
-// ReturnOp
-//===----------------------------------------------------------------------===//
-
 LogicalResult ReturnOp::verify() {
   if (getOperandTypes() !=
       (*this)->getParentOfType<ScheduleOp>().getResultTypes())
@@ -218,7 +214,7 @@ LogicalResult ReturnOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
-// TaskOp
+// TaskOp and YieldOp
 //===----------------------------------------------------------------------===//
 
 namespace {
@@ -321,10 +317,6 @@ LogicalResult TaskOp::verify() {
   return success();
 }
 
-//===----------------------------------------------------------------------===//
-// YieldOp
-//===----------------------------------------------------------------------===//
-
 LogicalResult YieldOp::verify() {
   if (getOperandTypes() != (*this)->getParentOfType<TaskOp>().getResultTypes())
     return emitOpError("yield type doesn't align with task type");
@@ -332,7 +324,7 @@ LogicalResult YieldOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
-// ToStreamOp
+// ToStreamOp and ToValueOp
 //===----------------------------------------------------------------------===//
 
 LogicalResult ToStreamOp::verify() {
@@ -348,10 +340,6 @@ OpFoldResult ToStreamOp::fold(ArrayRef<Attribute>) {
       return toValue.stream();
   return {};
 }
-
-//===----------------------------------------------------------------------===//
-// ToValueOp
-//===----------------------------------------------------------------------===//
 
 LogicalResult ToValueOp::verify() {
   if (value().getType() !=
@@ -511,26 +499,7 @@ LogicalResult NodeOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
-// BufferOp
-//===----------------------------------------------------------------------===//
-
-SmallVector<NodeOp, 4>
-BufferOp::getConsumersInScheduleExcept(ScheduleOp schedule, NodeOp exceptedOp) {
-  return scalehls::getConsumersInScheduleExcept(memref(), schedule, exceptedOp);
-}
-SmallVector<NodeOp, 4>
-BufferOp::getProducersInScheduleExcept(ScheduleOp schedule, NodeOp exceptedOp) {
-  return scalehls::getProducersInScheduleExcept(memref(), schedule, exceptedOp);
-}
-SmallVector<NodeOp, 4> BufferOp::getConsumersInSchedule(ScheduleOp schedule) {
-  return scalehls::getConsumersInSchedule(memref(), schedule);
-}
-SmallVector<NodeOp, 4> BufferOp::getProducersInSchedule(ScheduleOp schedule) {
-  return scalehls::getProducersInSchedule(memref(), schedule);
-}
-
-//===----------------------------------------------------------------------===//
-// ConstBufferOp
+// BufferOp and ConstBufferOp
 //===----------------------------------------------------------------------===//
 
 LogicalResult ConstBufferOp::verify() {
@@ -546,7 +515,7 @@ LogicalResult ConstBufferOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
-// Stream operations
+// StreamOp, StreamReadOp, and StreamWriteOp
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamOp::verify() {
@@ -567,6 +536,33 @@ LogicalResult StreamWriteOp::verify() {
   if (channel().getType().cast<StreamType>().getElementType() !=
       value().getType())
     return emitOpError("value type doesn't align with channel type");
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
+// AxiBundleOp, AxiPortOp, and AxiPackOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult AxiPortOp::verifySymbolUses(SymbolTableCollection &symbolTable) {
+  if (auto bundleOp = symbolTable.lookupNearestSymbolFrom<AxiBundleOp>(
+          *this, bundleAttr())) {
+    auto axiType = axi().getType().cast<AxiType>();
+    if (axiType.getKind() == bundleOp.kindAttr())
+      return success();
+    return emitOpError("axi kind is not aligned with bundle");
+  }
+  return emitOpError("failed to find bundle op");
+}
+
+LogicalResult AxiPortOp::verify() {
+  if (axi().getType().cast<AxiType>().getElementType() != value().getType())
+    return emitOpError("axi type doesn't align with value type");
+  return success();
+}
+
+LogicalResult AxiPackOp::verify() {
+  if (axi().getType().cast<StreamType>().getElementType() != value().getType())
+    return emitOpError("axi type doesn't align with value type");
   return success();
 }
 

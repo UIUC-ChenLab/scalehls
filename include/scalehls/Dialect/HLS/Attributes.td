@@ -7,6 +7,13 @@
 #ifndef SCALEHLS_DIALECT_HLS_ATTRIBUTES_TD
 #define SCALEHLS_DIALECT_HLS_ATTRIBUTES_TD
 
+def MM: I32EnumAttrCase<"MM", 0>;
+def LITE: I32EnumAttrCase<"LITE", 1>;
+def STREAM: I32EnumAttrCase<"STREAM", 2>;
+def AxiKind: I32EnumAttr<"AxiKind", "Kind of AXI Port", [MM, LITE, STREAM]> {
+  let cppNamespace = "mlir::scalehls::hls";
+}
+
 def Resource : HLSAttr<"Resource"> {
   let summary = "Resource utilization information";
   let description = [{

@@ -9,21 +9,33 @@
 
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
+include "mlir/IR/SymbolInterfaces.td"
 
 //===----------------------------------------------------------------------===//
 // Traits and Type Constraints
 //===----------------------------------------------------------------------===//
 
 class StreamOf<list<Type> allowedTypes> : Type<And<[
-    CPred<"$_self.isa<::mlir::scalehls::hls::StreamType>()">,
-    Concat<"[](::mlir::Type elementType) { return ",
+    CPred<"$_self.isa<mlir::scalehls::hls::StreamType>()">,
+    Concat<"[](mlir::Type elementType) { return ",
       SubstLeaves<"$_self", "elementType", AnyTypeOf<allowedTypes>.predicate>,
-      "; }($_self.cast<::mlir::scalehls::hls::StreamType>().getElementType())">
+      "; }($_self.cast<mlir::scalehls::hls::StreamType>().getElementType())">
   ]>,
   "stream of " # AnyTypeOf<allowedTypes>.summary # " values",
-  "::mlir::scalehls::hls::StreamType"
+  "mlir::scalehls::hls::StreamType"
 >;
 
+class AxiOf<list<Type> allowedTypes> : Type<And<[
+    CPred<"$_self.isa<mlir::scalehls::hls::AxiType>()">,
+    Concat<"[](mlir::Type elementType) { return ",
+      SubstLeaves<"$_self", "elementType", AnyTypeOf<allowedTypes>.predicate>,
+      "; }($_self.cast<mlir::scalehls::hls::AxiType>().getElementType())">
+  ]>,
+  "axi of " # AnyTypeOf<allowedTypes>.summary # " values",
+  "mlir::scalehls::hls::AxiType"
+>;
+
+def AnyAxi : AxiOf<[AnyType]>;
 def AnyStream : StreamOf<[AnyType]>;
 def AnyMemrefOrStream : Type<Or<[AnyMemRef.predicate, AnyStream.predicate]>,
     "memref or stream values">;
@@ -207,16 +219,6 @@ def BufferOp : HLSOp<"dataflow.buffer"> {
     OpBuilder<(ins "mlir::Type":$memref),
         "build($_builder, $_state, memref, 1);">
   ];
-
-  let extraClassDeclaration = [{
-    /// Get consumers or producers of the dataflow buffer.
-    SmallVector<NodeOp, 4> getConsumersInScheduleExcept(ScheduleOp schedule,
-                                                        NodeOp exceptedOp);
-    SmallVector<NodeOp, 4> getProducersInScheduleExcept(ScheduleOp schedule,
-                                                        NodeOp exceptedOp);
-    SmallVector<NodeOp, 4> getConsumersInSchedule(ScheduleOp schedule);
-    SmallVector<NodeOp, 4> getProducersInSchedule(ScheduleOp schedule);
-  }];
 }
 
 def ConstBufferOp : HLSOp<"dataflow.const_buffer"> {
@@ -241,6 +243,10 @@ def StreamOp : HLSOp<"dataflow.stream"> {
   let assemblyFormat = "attr-dict `:` type($channel)";
 
   let hasVerifier = 1;
+  let builders = [
+    OpBuilder<(ins "mlir::Type":$channel),
+        "build($_builder, $_state, channel, 1);">
+  ];
 }
 
 def StreamReadOp : HLSOp<"dataflow.stream_read"> {
@@ -270,6 +276,40 @@ def StreamWriteOp : HLSOp<"dataflow.stream_write"> {
   let assemblyFormat = [{
     $channel `,` $value attr-dict `:` type($channel) `,` type($value)
   }];
+
+  let hasVerifier = 1;
+}
+
+//===----------------------------------------------------------------------===//
+// AXI-related Operations
+//===----------------------------------------------------------------------===//
+
+def AxiBundleOp : HLSOp<"axi.bundle", [Symbol, NoSideEffect]> {
+  let summary = "Represent an bundle of axi ports";
+
+  let arguments = (ins SymbolNameAttr:$sym_name, AxiKind:$kind);
+  let assemblyFormat = "$kind `,` $sym_name attr-dict";
+}
+
+def AxiPortOp : HLSOp<"axi.port", [NoSideEffect,
+      DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+  let summary = "Represent an axi port";
+
+  let arguments = (ins AnyAxi:$axi, FlatSymbolRefAttr:$bundle);
+  let results = (outs AnyType:$value);
+  let assemblyFormat = [{
+    $bundle $axi attr-dict `:` functional-type($axi, $value)
+  }];
+
+  let hasVerifier = 1;
+}
+
+def AxiPackOp : HLSOp<"axi.pack", [NoSideEffect]> {
+  let summary = "Pack a memref or scalar into an axi type";
+
+  let arguments = (ins AnyType:$value);
+  let results = (outs AnyAxi:$axi);
+  let assemblyFormat = "$value attr-dict `:` functional-type($value, $axi)";
 
   let hasVerifier = 1;
 }
