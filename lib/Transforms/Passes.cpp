@@ -207,11 +207,8 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
 
         return;
 
-        // // Create runtime components.
-        // pm.addPass(scalehls::createCreateRuntimeMainPass(opts.hlsTopFunc));
-        // pm.addPass(scalehls::createCreateAxiInterfacePass());
-
         // Directive-level optimization.
+        pm.addPass(scalehls::createCreateAxiInterfacePass(opts.hlsTopFunc));
         pm.addPass(scalehls::createLoopPipeliningPass());
         pm.addPass(scalehls::createArrayPartitionPass());
         pm.addPass(scalehls::createCreateHLSPrimitivePass());

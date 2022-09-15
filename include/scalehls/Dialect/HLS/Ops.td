@@ -284,21 +284,22 @@ def StreamWriteOp : HLSOp<"dataflow.stream_write"> {
 // AXI-related Operations
 //===----------------------------------------------------------------------===//
 
-def AxiBundleOp : HLSOp<"axi.bundle", [Symbol, NoSideEffect]> {
+def AxiBundleOp : HLSOp<"axi.bundle", [NoSideEffect]> {
   let summary = "Represent an bundle of axi ports";
 
-  let arguments = (ins SymbolNameAttr:$sym_name, AxiKind:$kind);
-  let assemblyFormat = "$kind `,` $sym_name attr-dict";
+  let arguments = (ins StrAttr:$name);
+  let results = (outs BundleType:$bundle);
+  let assemblyFormat = "$name attr-dict `:` type($bundle)";
 }
 
-def AxiPortOp : HLSOp<"axi.port", [NoSideEffect,
-      DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+def AxiPortOp : HLSOp<"axi.port", [NoSideEffect]> {
   let summary = "Represent an axi port";
 
-  let arguments = (ins AnyAxi:$axi, FlatSymbolRefAttr:$bundle);
+  let arguments = (ins BundleType:$bundle, AnyAxi:$axi);
   let results = (outs AnyType:$value);
   let assemblyFormat = [{
-    $bundle $axi attr-dict `:` functional-type($axi, $value)
+    $bundle `,` $axi attr-dict `:` type($bundle) `,`
+    functional-type($axi, $value)
   }];
 
   let hasVerifier = 1;

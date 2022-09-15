@@ -543,25 +543,17 @@ LogicalResult StreamWriteOp::verify() {
 // AxiBundleOp, AxiPortOp, and AxiPackOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult AxiPortOp::verifySymbolUses(SymbolTableCollection &symbolTable) {
-  if (auto bundleOp = symbolTable.lookupNearestSymbolFrom<AxiBundleOp>(
-          *this, bundleAttr())) {
-    auto axiType = axi().getType().cast<AxiType>();
-    if (axiType.getKind() == bundleOp.kindAttr())
-      return success();
-    return emitOpError("axi kind is not aligned with bundle");
-  }
-  return emitOpError("failed to find bundle op");
-}
-
 LogicalResult AxiPortOp::verify() {
   if (axi().getType().cast<AxiType>().getElementType() != value().getType())
     return emitOpError("axi type doesn't align with value type");
+  if (axi().getType().cast<AxiType>().getKind() !=
+      bundle().getType().cast<BundleType>().getKind())
+    return emitOpError("axi kind doesn't align with bundle kind");
   return success();
 }
 
 LogicalResult AxiPackOp::verify() {
-  if (axi().getType().cast<StreamType>().getElementType() != value().getType())
+  if (axi().getType().cast<AxiType>().getElementType() != value().getType())
     return emitOpError("axi type doesn't align with value type");
   return success();
 }
@@ -757,11 +749,11 @@ void FuncDirectiveAttr::print(AsmPrinter &p) const {
 #include "scalehls/Dialect/HLS/HLSDialect.cpp.inc"
 #include "scalehls/Dialect/HLS/HLSEnums.cpp.inc"
 
-#define GET_TYPEDEF_CLASSES
-#include "scalehls/Dialect/HLS/HLSTypes.cpp.inc"
-
 #define GET_ATTRDEF_CLASSES
 #include "scalehls/Dialect/HLS/HLSAttributes.cpp.inc"
+
+#define GET_TYPEDEF_CLASSES
+#include "scalehls/Dialect/HLS/HLSTypes.cpp.inc"
 
 #define GET_OP_CLASSES
 #include "scalehls/Dialect/HLS/HLS.cpp.inc"

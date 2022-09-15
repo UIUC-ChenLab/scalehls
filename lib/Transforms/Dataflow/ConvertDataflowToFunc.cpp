@@ -129,36 +129,36 @@ struct BufferConversionPattern : public OpRewritePattern<BufferOp> {
 };
 } // namespace
 
-// namespace {
-// struct DemoteConstBufferPattern : public OpRewritePattern<ConstBufferOp> {
-//   using OpRewritePattern<ConstBufferOp>::OpRewritePattern;
+namespace {
+struct DemoteConstBufferPattern : public OpRewritePattern<ConstBufferOp> {
+  using OpRewritePattern<ConstBufferOp>::OpRewritePattern;
 
-//   LogicalResult matchAndRewrite(ConstBufferOp buffer,
-//                                 PatternRewriter &rewriter) const override {
-//     if (buffer.getType().getNumElements() < 1024)
-//       return failure();
+  LogicalResult matchAndRewrite(ConstBufferOp buffer,
+                                PatternRewriter &rewriter) const override {
+    if (buffer.getType().getNumElements() < 1024)
+      return failure();
 
-//     if (auto node = buffer->getParentOfType<NodeOp>()) {
-//       buffer->moveBefore(node);
-//       SmallVector<Value, 8> inputs(node.inputs());
-//       inputs.push_back(buffer.memref());
+    if (auto node = buffer->getParentOfType<NodeOp>()) {
+      buffer->moveBefore(node);
+      SmallVector<Value, 8> inputs(node.inputs());
+      inputs.push_back(buffer.memref());
 
-//       auto newArg = node.getBody()->insertArgument(
-//           node.getNumInputs(), buffer.getType(), buffer.getLoc());
-//       buffer.memref().replaceAllUsesWith(newArg);
+      auto newArg = node.getBody()->insertArgument(
+          node.getNumInputs(), buffer.getType(), buffer.getLoc());
+      buffer.memref().replaceAllUsesWith(newArg);
 
-//       rewriter.setInsertionPoint(node);
-//       auto newNode =
-//           rewriter.create<NodeOp>(node.getLoc(), inputs, node.outputs());
-//       rewriter.inlineRegionBefore(node.body(), newNode.body(),
-//                                   newNode.body().end());
-//       rewriter.eraseOp(node);
-//       return success();
-//     }
-//     return failure();
-//   }
-// };
-// } // namespace
+      rewriter.setInsertionPoint(node);
+      auto newNode =
+          rewriter.create<NodeOp>(node.getLoc(), inputs, node.outputs());
+      rewriter.inlineRegionBefore(node.body(), newNode.body(),
+                                  newNode.body().end());
+      rewriter.eraseOp(node);
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
 
 namespace {
 struct ConvertDataflowToFunc
@@ -174,9 +174,8 @@ struct ConvertDataflowToFunc
       // (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
       ConversionTarget target(*context);
-      target.addIllegalOp<ScheduleOp, TaskOp, YieldOp, NodeOp, BufferOp>();
-      target.addLegalOp<func::FuncOp, func::ReturnOp, func::CallOp,
-                        memref::AllocOp>();
+      target.addIllegalOp<ScheduleOp, TaskOp, YieldOp, NodeOp>();
+      target.addLegalOp<func::FuncOp, func::ReturnOp, func::CallOp>();
 
       unsigned nodeIdx = 0;
       mlir::RewritePatternSet patterns(context);
@@ -184,7 +183,7 @@ struct ConvertDataflowToFunc
       patterns.add<TaskConversionPattern>(context, func.getName(), nodeIdx);
       patterns.add<YieldConversionPattern>(context);
       patterns.add<NodeConversionPattern>(context, func.getName(), nodeIdx);
-      patterns.add<BufferConversionPattern>(context);
+      // patterns.add<BufferConversionPattern>(context);
       if (failed(applyPartialConversion(func, target, std::move(patterns))))
         return signalPassFailure();
     }

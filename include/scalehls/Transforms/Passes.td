@@ -122,31 +122,6 @@ def TosaToLinalgCleanup :
 }
 
 //===----------------------------------------------------------------------===//
-// Runtime-related Passes
-//===----------------------------------------------------------------------===//
-
-def CreateAxiInterface : Pass<"scalehls-create-axi-interface", "ModuleOp"> {
-  let summary = "Create AXI interfaces for the top function";
-  let constructor = "mlir::scalehls::createCreateAxiInterfacePass()";
-}
-
-def CreateRuntimeMain : Pass<"scalehls-create-runtime-main", "ModuleOp"> {
-  let summary = "Create the main function of runtime";
-  let description = [{
-    This create-runtime-main pass will create a new "main" function calling the
-    original top function. All constant tensors are instantiated in the new
-    "main" function and passed into the original top function as arguments after
-    the transform.
-  }];
-  let constructor = "mlir::scalehls::createCreateRuntimeMainPass()";
-
-  let options = [
-    Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
-           "The top function for HLS synthesis">
-  ];
-}
-
-//===----------------------------------------------------------------------===//
 // Loop-related Passes
 //===----------------------------------------------------------------------===//
 
@@ -184,7 +159,7 @@ def AffineLoopFusion : Pass<"scalehls-affine-loop-fusion", "func::FuncOp"> {
     Option<"affineFusionMode", "mode", "enum AffineFusionMode",
            "AffineFusionMode::Greedy", "fusion mode to attempt",
            "llvm::cl::values(clEnumValN(AffineFusionMode::Greedy,"
-           " \"greedy\", \"Perform greedy (both producer-consumer and sibling) fusion\"), "
+           " \"greedy\", \"Perform greedy fusion\"), "
            "clEnumValN( AffineFusionMode::ProducerConsumer, "
            "\"producer\", \"Perform only producer-consumer fusion\"), "
            "clEnumValN( AffineFusionMode::Sibling, "
@@ -358,6 +333,22 @@ def ReduceInitialInterval :
 //===----------------------------------------------------------------------===//
 // Directive-related Passes
 //===----------------------------------------------------------------------===//
+
+def CreateAxiInterface : Pass<"scalehls-create-axi-interface", "ModuleOp"> {
+  let summary = "Create AXI interfaces for the top function";
+  let description = [{
+    This create-runtime-main pass will create a new "main" function calling the
+    original top function. All constant tensors are instantiated in the new
+    "main" function and passed into the original top function as arguments after
+    the transform.
+  }];
+  let constructor = "mlir::scalehls::createCreateAxiInterfacePass()";
+
+  let options = [
+    Option<"topFunc", "top-func", "std::string", /*default=*/"\"main\"",
+           "The top function for HLS synthesis">
+  ];
+}
 
 def FuncPipelining : Pass<"scalehls-func-pipelining", "func::FuncOp"> {
   let summary = "Apply function pipelining";

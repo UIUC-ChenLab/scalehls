@@ -9,6 +9,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Dataflow/StreamDataflow.cpp
 
   Directive/ArrayPartition.cpp
+  Directive/CreateAxiInterface.cpp
   Directive/CreateHLSPrimitive.cpp
   Directive/FuncPipelining.cpp
   Directive/LoopPipelining.cpp
@@ -30,9 +31,6 @@ add_mlir_library(MLIRScaleHLSTransforms
   Memory/RaiseImplicitCopy.cpp
   Memory/ReduceInitialInterval.cpp
   Memory/SimplifyMemrefAccess.cpp
-
-  Runtime/CreateAxiInterface.cpp
-  Runtime/CreateRuntimeMain.cpp
 
   Tensor/TosaFakeQuantize.cpp
   Tensor/TosaSimplifyGraph.cpp

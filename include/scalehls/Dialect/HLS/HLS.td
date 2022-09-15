@@ -29,8 +29,8 @@ class HLSAttr<string name> : AttrDef<HLSDialect, name>;
 class HLSOp<string mnemonic, list<Trait> traits = []> :
     Op<HLSDialect, mnemonic, traits>;
 
-include "scalehls/Dialect/HLS/Types.td"
 include "scalehls/Dialect/HLS/Attributes.td"
+include "scalehls/Dialect/HLS/Types.td"
 include "scalehls/Dialect/HLS/Ops.td"
 
 #endif // SCALEHLS_DIALECT_HLS_HLS_TD

@@ -49,11 +49,6 @@ std::unique_ptr<Pass> createTosaFakeQuantizePass();
 std::unique_ptr<Pass> createTosaSimplifyGraphPass();
 std::unique_ptr<Pass> createTosaToLinalgCleanupPass();
 
-/// Runtime-related passes.
-std::unique_ptr<Pass> createCreateAxiInterfacePass();
-std::unique_ptr<Pass>
-createCreateRuntimeMainPass(std::string hlsTopFunc = "forward");
-
 /// Loop-related passes.
 std::unique_ptr<Pass> createAffineLoopFusionPass(
     double computeToleranceThreshold = 0.3, unsigned fastMemorySpace = 0,
@@ -80,6 +75,8 @@ std::unique_ptr<Pass> createRaiseImplicitCopyPass();
 std::unique_ptr<Pass> createReduceInitialIntervalPass();
 
 /// Directive-related passes.
+std::unique_ptr<Pass>
+createCreateAxiInterfacePass(std::string hlsTopFunc = "forward");
 std::unique_ptr<Pass> createFuncPipeliningPass();
 std::unique_ptr<Pass> createLoopPipeliningPass();
 std::unique_ptr<Pass> createArrayPartitionPass();

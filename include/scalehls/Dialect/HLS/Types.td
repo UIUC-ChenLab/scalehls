@@ -21,14 +21,19 @@ def StreamType : HLSType<"Stream"> {
 
 def AxiType : HLSType<"Axi"> {
   let summary = "An HLS AXI interface type";
-  let description = [{
-    Represents an AXI interface of any memory reference type.
-  }];
   let mnemonic = "axi";
 
-  let parameters = (ins "mlir::MemRefType":$elementType,
+  let parameters = (ins "mlir::Type":$elementType,
                         "mlir::scalehls::hls::AxiKindAttr":$kind);
   let assemblyFormat = "`<` qualified($elementType) `,` $kind `>`";
+}
+
+def BundleType : HLSType<"Bundle"> {
+  let summary = "An HLS AXI bundle type";
+  let mnemonic = "bundle";
+
+  let parameters = (ins "mlir::scalehls::hls::AxiKindAttr":$kind);
+  let assemblyFormat = "`<` $kind `>`";
 }
 
 #endif // SCALEHLS_DIALECT_HLS_TYPES_TD
