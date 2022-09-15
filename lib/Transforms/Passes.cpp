@@ -205,8 +205,6 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createRaiseImplicitCopyPass());
         pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
 
-        return;
-
         // Directive-level optimization.
         pm.addPass(scalehls::createCreateAxiInterfacePass(opts.hlsTopFunc));
         pm.addPass(scalehls::createLoopPipeliningPass());

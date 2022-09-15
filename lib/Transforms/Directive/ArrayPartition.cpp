@@ -402,8 +402,9 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
       factors.push_back(info.second);
     }
 
-    applyArrayPartition(memref, factors, kinds,
-                        /*updateFuncSignature=*/false);
+    if (llvm::any_of(factors, [](unsigned factor) { return factor != 1; }))
+      applyArrayPartition(memref, factors, kinds,
+                          /*updateFuncSignature=*/false);
   }
 
   // Align function type with entry block argument types.
