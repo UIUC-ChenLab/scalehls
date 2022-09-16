@@ -84,7 +84,7 @@ LoopDesignSpace::LoopDesignSpace(func::FuncOp func, AffineLoopBand &band,
     if (!optionalTripCount)
       loop.emitError("has variable loop bound");
 
-    unsigned tripCount = optionalTripCount.getValue();
+    unsigned tripCount = optionalTripCount.value();
     tripCountList.push_back(tripCount);
 
     SmallVector<unsigned, 8> validSizes;
@@ -375,7 +375,7 @@ void LoopDesignSpace::exploreLoopDesignSpace(unsigned maxIterNum,
       }
 
       foundValidNeighbor = true;
-      auto config = closestNeighbor.getValue();
+      auto config = closestNeighbor.value();
       auto tileList = getTileList(config);
 
       evaluateTileConfig(config);
@@ -574,7 +574,7 @@ static int64_t getInnerParallelism(Block &block) {
   for (auto loop : block.getOps<AffineForOp>()) {
     auto innerCount = getInnerParallelism(loop.getLoopBody().front());
     if (auto trip = getAverageTripCount(loop))
-      count += trip.getValue() * innerCount;
+      count += trip.value() * innerCount;
     else
       count += innerCount;
   }
@@ -853,26 +853,26 @@ struct DesignSpaceExplore : public DesignSpaceExploreBase<DesignSpaceExplore> {
     }
 
     // Collect DSE configurations.
-    unsigned outputNum = configObj->getInteger("output_num").getValueOr(30);
+    unsigned outputNum = configObj->getInteger("output_num").value_or(30);
 
     unsigned maxInitParallel =
-        configObj->getInteger("max_init_parallel").getValueOr(32);
+        configObj->getInteger("max_init_parallel").value_or(32);
     unsigned maxExplParallel =
-        configObj->getInteger("max_expl_parallel").getValueOr(1024);
+        configObj->getInteger("max_expl_parallel").value_or(1024);
     unsigned maxLoopParallel =
-        configObj->getInteger("max_loop_parallel").getValueOr(128);
+        configObj->getInteger("max_loop_parallel").value_or(128);
 
     assert(maxInitParallel <= maxExplParallel &&
            maxLoopParallel <= maxExplParallel &&
            "invalid configuration of DSE");
 
-    unsigned maxIterNum = configObj->getInteger("max_iter_num").getValueOr(30);
-    float maxDistance = configObj->getNumber("max_distance").getValueOr(3.0);
+    unsigned maxIterNum = configObj->getInteger("max_iter_num").value_or(30);
+    float maxDistance = configObj->getNumber("max_distance").value_or(3.0);
 
     bool directiveOnly =
-        configObj->getBoolean("directive_only").getValueOr(false);
+        configObj->getBoolean("directive_only").value_or(false);
     bool resourceConstr =
-        configObj->getBoolean("resource_constr").getValueOr(true);
+        configObj->getBoolean("resource_constr").value_or(true);
 
     // Collect profiling latency and DSP usage data, where default values are
     // based on Xilinx PYNQ-Z1 board.
@@ -881,8 +881,7 @@ struct DesignSpaceExplore : public DesignSpaceExploreBase<DesignSpaceExplore> {
     llvm::StringMap<int64_t> dspUsageMap;
     getDspUsageMap(configObj, dspUsageMap);
 
-    unsigned maxDspNum =
-        ceil(configObj->getInteger("dsp").getValueOr(220) * 1.1);
+    unsigned maxDspNum = ceil(configObj->getInteger("dsp").value_or(220) * 1.1);
     if (!resourceConstr)
       maxDspNum = UINT_MAX;
 

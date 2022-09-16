@@ -179,7 +179,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
 
         return;
 
-        pm.addPass(memref::createFoldSubViewOpsPass());
+        pm.addPass(memref::createFoldMemRefAliasOpsPass());
         pm.addPass(mlir::createAffineLoopNormalizePass());
         pm.addPass(mlir::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());

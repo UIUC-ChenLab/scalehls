@@ -32,8 +32,8 @@ struct RaiseAffineToCopy : public RaiseAffineToCopyBase<RaiseAffineToCopy> {
       // memory access.
       auto load = dyn_cast<AffineLoadOp>(*bodyOps.begin());
       auto store = dyn_cast<AffineStoreOp>(*std::next(bodyOps.begin()));
-      if (!load || !store || load.result() != store.value() ||
-          load.memref().getType() != store.memref().getType() ||
+      if (!load || !store || load.getResult() != store.getValue() ||
+          load.getMemref().getType() != store.getMemref().getType() ||
           store.getMapOperands() != load.getMapOperands() ||
           store.getAffineMap() != load.getAffineMap())
         continue;
@@ -42,9 +42,9 @@ struct RaiseAffineToCopy : public RaiseAffineToCopyBase<RaiseAffineToCopy> {
       llvm::SmallDenseMap<Value, unsigned, 4> shapeMap;
       if (llvm::any_of(band, [&](mlir::AffineForOp loop) {
             auto maybeTripCount = getConstantTripCount(loop);
-            if (!maybeTripCount.hasValue())
+            if (!maybeTripCount.has_value())
               return true;
-            shapeMap[loop.getInductionVar()] = maybeTripCount.getValue();
+            shapeMap[loop.getInductionVar()] = maybeTripCount.value();
             return false;
           }))
         continue;
@@ -68,8 +68,8 @@ struct RaiseAffineToCopy : public RaiseAffineToCopyBase<RaiseAffineToCopy> {
 
       // Replace the loop nest with a copy op.
       builder.setInsertionPoint(band.front());
-      builder.create<memref::CopyOp>(band.front().getLoc(), load.memref(),
-                                     store.memref());
+      builder.create<memref::CopyOp>(band.front().getLoc(), load.getMemref(),
+                                     store.getMemref());
       band.front().erase();
     }
   }

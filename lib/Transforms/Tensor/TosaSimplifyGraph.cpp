@@ -17,18 +17,18 @@ struct ClampOpRewritePattern : public OpRewritePattern<tosa::ClampOp> {
 
   LogicalResult matchAndRewrite(tosa::ClampOp clamp,
                                 PatternRewriter &rewriter) const override {
-    auto transpose = clamp.input().getDefiningOp<tosa::TransposeOp>();
+    auto transpose = clamp.getInput().getDefiningOp<tosa::TransposeOp>();
     if (!transpose)
       return failure();
 
-    clamp.inputMutable().assign(transpose.input1());
-    clamp.output().setType(transpose.input1().getType());
+    clamp.getInputMutable().assign(transpose.getInput1());
+    clamp.getOutput().setType(transpose.getInput1().getType());
 
     rewriter.setInsertionPointAfter(clamp);
     auto cloneTranspose = cast<tosa::TransposeOp>(rewriter.clone(*transpose));
 
-    clamp.output().replaceAllUsesWith(cloneTranspose.output());
-    cloneTranspose.input1Mutable().assign(clamp.output());
+    clamp.getOutput().replaceAllUsesWith(cloneTranspose.getOutput());
+    cloneTranspose.getInput1Mutable().assign(clamp.getOutput());
     return success();
   }
 };
@@ -51,12 +51,13 @@ struct TransposeOpRewritePattern : public OpRewritePattern<tosa::TransposeOp> {
 
   LogicalResult matchAndRewrite(tosa::TransposeOp transpose,
                                 PatternRewriter &rewriter) const override {
-    auto inputTranspose = transpose.input1().getDefiningOp<tosa::TransposeOp>();
+    auto inputTranspose =
+        transpose.getInput1().getDefiningOp<tosa::TransposeOp>();
     if (!inputTranspose)
       return failure();
 
-    auto permValues = getPermValues(transpose.perms());
-    auto inputPermValues = getPermValues(inputTranspose.perms());
+    auto permValues = getPermValues(transpose.getPerms());
+    auto inputPermValues = getPermValues(inputTranspose.getPerms());
     assert(permValues.size() == inputPermValues.size() &&
            "unexpected permutation values");
 
@@ -64,7 +65,7 @@ struct TransposeOpRewritePattern : public OpRewritePattern<tosa::TransposeOp> {
       if (inputPermValues[permValues[i]] != i)
         return failure();
 
-    rewriter.replaceOp(transpose, inputTranspose.input1());
+    rewriter.replaceOp(transpose, inputTranspose.getInput1());
     return success();
   }
 };
@@ -77,25 +78,25 @@ struct AddOpRewritePattern : public OpRewritePattern<tosa::AddOp> {
 
   LogicalResult matchAndRewrite(tosa::AddOp add,
                                 PatternRewriter &rewriter) const override {
-    auto input1Transpose = add.input1().getDefiningOp<tosa::TransposeOp>();
-    auto input2Transpose = add.input2().getDefiningOp<tosa::TransposeOp>();
+    auto input1Transpose = add.getInput1().getDefiningOp<tosa::TransposeOp>();
+    auto input2Transpose = add.getInput2().getDefiningOp<tosa::TransposeOp>();
     if (!input1Transpose || !input2Transpose)
       return failure();
 
-    if (getPermValues(input1Transpose.perms()) !=
-        getPermValues(input2Transpose.perms()))
+    if (getPermValues(input1Transpose.getPerms()) !=
+        getPermValues(input2Transpose.getPerms()))
       return failure();
 
-    add.input1Mutable().assign(input1Transpose.input1());
-    add.input2Mutable().assign(input2Transpose.input1());
-    add.output().setType(input1Transpose.input1().getType());
+    add.getInput1Mutable().assign(input1Transpose.getInput1());
+    add.getInput2Mutable().assign(input2Transpose.getInput1());
+    add.getOutput().setType(input1Transpose.getInput1().getType());
 
     rewriter.setInsertionPointAfter(add);
     auto cloneTranspose =
         cast<tosa::TransposeOp>(rewriter.clone(*input1Transpose));
 
-    add.output().replaceAllUsesWith(cloneTranspose.output());
-    cloneTranspose.input1Mutable().assign(add.output());
+    add.getOutput().replaceAllUsesWith(cloneTranspose.getOutput());
+    cloneTranspose.getInput1Mutable().assign(add.getOutput());
     return success();
   }
 };

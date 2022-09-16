@@ -19,12 +19,12 @@ struct ScheduleConversionPattern : public OpRewritePattern<ScheduleOp> {
 
   LogicalResult matchAndRewrite(ScheduleOp schedule,
                                 PatternRewriter &rewriter) const override {
-    auto &scheduleOps = schedule.getBody()->getOperations();
+    auto &scheduleOps = schedule.getBody().front().getOperations();
     auto &parentOps = schedule->getBlock()->getOperations();
     parentOps.splice(schedule->getIterator(), scheduleOps, scheduleOps.begin(),
                      std::prev(scheduleOps.end()));
 
-    if (schedule.isLegal()) {
+    if (schedule.getIsLegal()) {
       if (auto func = dyn_cast<func::FuncOp>(schedule->getParentOp()))
         setFuncDirective(func, /*pipeline=*/false, /*targetInterval=*/1,
                          /*dataflow=*/true);
@@ -137,18 +137,18 @@ struct DemoteConstBufferPattern : public OpRewritePattern<ConstBufferOp> {
                                 PatternRewriter &rewriter) const override {
     if (auto node = buffer->getParentOfType<NodeOp>()) {
       buffer->moveBefore(node);
-      SmallVector<Value, 8> inputs(node.inputs());
-      inputs.push_back(buffer.memref());
+      SmallVector<Value, 8> inputs(node.getInputs());
+      inputs.push_back(buffer.getMemref());
 
-      auto newArg = node.getBody()->insertArgument(
+      auto newArg = node.getBody().front().insertArgument(
           node.getNumInputs(), buffer.getType(), buffer.getLoc());
-      buffer.memref().replaceAllUsesWith(newArg);
+      buffer.getMemref().replaceAllUsesWith(newArg);
 
       rewriter.setInsertionPoint(node);
       auto newNode =
-          rewriter.create<NodeOp>(node.getLoc(), inputs, node.outputs());
-      rewriter.inlineRegionBefore(node.body(), newNode.body(),
-                                  newNode.body().end());
+          rewriter.create<NodeOp>(node.getLoc(), inputs, node.getOutputs());
+      rewriter.inlineRegionBefore(node.getBody(), newNode.getBody(),
+                                  newNode.getBody().end());
       rewriter.eraseOp(node);
       return success();
     }

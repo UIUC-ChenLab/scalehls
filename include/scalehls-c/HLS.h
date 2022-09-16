@@ -7,7 +7,7 @@
 #ifndef SCALEHLS_C_DIALECT_HLS_H
 #define SCALEHLS_C_DIALECT_HLS_H
 
-#include "mlir-c/Registration.h"
+#include "mlir-c/RegisterEverything.h"
 
 #ifdef __cplusplus
 extern "C" {

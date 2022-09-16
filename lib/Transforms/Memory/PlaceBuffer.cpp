@@ -50,8 +50,8 @@ struct PlaceBufferPattern : public OpRewritePattern<ScheduleOp> {
                                 PatternRewriter &rewriter) const override {
     for (auto task : llvm::make_early_inc_range(schedule.getOps<TaskOp>())) {
       // Update the task argument type.
-      for (auto t :
-           llvm::zip(task.getBody()->getArguments(), task.getOperandTypes()))
+      for (auto t : llvm::zip(task.getBody().front().getArguments(),
+                              task.getOperandTypes()))
         std::get<0>(t).setType(std::get<1>(t));
 
       SmallVector<Value, 4> buffers;
@@ -69,17 +69,18 @@ struct PlaceBufferPattern : public OpRewritePattern<ScheduleOp> {
       }
 
       if (!buffers.empty()) {
-        auto args = task.getBody()->addArguments(ValueRange(buffers), locs);
+        auto args =
+            task.getBody().front().addArguments(ValueRange(buffers), locs);
         for (auto t : llvm::zip(buffers, args))
           std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
 
-        SmallVector<Value, 16> newInputs(task.inputs());
+        SmallVector<Value, 16> newInputs(task.getInputs());
         newInputs.append(buffers.begin(), buffers.end());
         rewriter.setInsertionPoint(task);
         auto newTask = rewriter.create<TaskOp>(
             task.getLoc(), task.getYieldOp().getOperandTypes(), newInputs);
-        rewriter.inlineRegionBefore(task.body(), newTask.body(),
-                                    newTask.body().end());
+        rewriter.inlineRegionBefore(task.getBody(), newTask.getBody(),
+                                    newTask.getBody().end());
 
         rewriter.replaceOp(task, newTask.getResults());
       }

@@ -49,7 +49,7 @@ bool scalehls::applyRemoveVariableBound(AffineLoopBand &band) {
                        std::prev(loopBlock.end(), 1));
 
         // Set constant variable bound.
-        auto maximum = bound.getValue().second;
+        auto maximum = bound.value().second;
         loop.setConstantUpperBound(maximum);
       } else
         return false;
@@ -83,7 +83,7 @@ bool scalehls::applyRemoveVariableBound(AffineLoopBand &band) {
                        std::prev(loopBlock.end(), 1));
 
         // Set constant variable bound.
-        auto minimum = bound.getValue().first;
+        auto minimum = bound.value().first;
         loop.setConstantLowerBound(minimum);
       } else
         return false;

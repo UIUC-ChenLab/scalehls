@@ -33,42 +33,45 @@ struct CreateTokenStream : public CreateTokenStreamBase<CreateTokenStream> {
           loc, StreamType::get(b.getContext(), b.getI1Type(), 1));
 
       for (auto node : producers) {
-        auto outputIdx = llvm::find(node.outputs(), buffer.memref()) -
-                         node.outputs().begin();
-        SmallVector<Value, 8> outputs(node.outputs());
-        outputs.insert(std::next(outputs.begin(), outputIdx), token.channel());
+        auto outputIdx = llvm::find(node.getOutputs(), buffer.getMemref()) -
+                         node.getOutputs().begin();
+        SmallVector<Value, 8> outputs(node.getOutputs());
+        outputs.insert(std::next(outputs.begin(), outputIdx),
+                       token.getChannel());
 
         b.setInsertionPoint(node);
-        auto newNode = b.create<NodeOp>(node.getLoc(), node.inputs(), outputs,
-                                        node.params(), node.levelAttr());
-        newNode.body().getBlocks().splice(newNode.body().end(),
-                                          node.body().getBlocks());
+        auto newNode =
+            b.create<NodeOp>(node.getLoc(), node.getInputs(), outputs,
+                             node.getParams(), node.getLevelAttr());
+        newNode.getBody().getBlocks().splice(newNode.getBody().end(),
+                                             node.getBody().getBlocks());
         node.erase();
-        auto tokenArg = newNode.getBody()->insertArgument(
+        auto tokenArg = newNode.getBody().front().insertArgument(
             outputIdx + newNode.getNumInputs(), token.getType(),
             token.getLoc());
 
-        b.setInsertionPointToEnd(newNode.getBody());
+        b.setInsertionPointToEnd(&newNode.getBody().front());
         auto value = b.create<arith::ConstantOp>(loc, b.getBoolAttr(true));
         b.create<StreamWriteOp>(loc, tokenArg, value);
       }
 
       for (auto node : consumers) {
-        auto inputIdx =
-            llvm::find(node.inputs(), buffer.memref()) - node.inputs().begin();
-        SmallVector<Value, 8> inputs(node.inputs());
-        inputs.insert(std::next(inputs.begin(), inputIdx), token.channel());
+        auto inputIdx = llvm::find(node.getInputs(), buffer.getMemref()) -
+                        node.getInputs().begin();
+        SmallVector<Value, 8> inputs(node.getInputs());
+        inputs.insert(std::next(inputs.begin(), inputIdx), token.getChannel());
 
         b.setInsertionPoint(node);
-        auto newNode = b.create<NodeOp>(node.getLoc(), inputs, node.outputs(),
-                                        node.params(), node.levelAttr());
-        newNode.body().getBlocks().splice(newNode.body().end(),
-                                          node.body().getBlocks());
+        auto newNode =
+            b.create<NodeOp>(node.getLoc(), inputs, node.getOutputs(),
+                             node.getParams(), node.getLevelAttr());
+        newNode.getBody().getBlocks().splice(newNode.getBody().end(),
+                                             node.getBody().getBlocks());
         node.erase();
-        auto tokenArg = newNode.getBody()->insertArgument(
+        auto tokenArg = newNode.getBody().front().insertArgument(
             inputIdx, token.getType(), token.getLoc());
 
-        b.setInsertionPointToStart(newNode.getBody());
+        b.setInsertionPointToStart(&newNode.getBody().front());
         b.create<StreamReadOp>(loc, Type(), tokenArg);
       }
     }

@@ -29,7 +29,7 @@ struct TaskStreamingPattern : public OpRewritePattern<TaskOp> {
       // If the input is defined outside of the schedule, the input doesn't need
       // to be streamed.
       auto schedule = op->getParentOfType<ScheduleOp>();
-      if (!schedule.body().isProperAncestor(input.get().getParentRegion()))
+      if (!schedule.getBody().isProperAncestor(input.get().getParentRegion()))
         continue;
 
       hasChanged = true;
@@ -41,10 +41,10 @@ struct TaskStreamingPattern : public OpRewritePattern<TaskOp> {
       auto stream = rewriter.create<ToStreamOp>(loc, streamType, input.get());
       input.set(stream);
 
-      auto arg = op.getBody()->getArgument(input.getOperandNumber());
+      auto arg = op.getBody().front().getArgument(input.getOperandNumber());
       arg.setType(streamType);
 
-      rewriter.setInsertionPointToStart(op.getBody());
+      rewriter.setInsertionPointToStart(&op.getBody().front());
       auto value = rewriter.create<ToValueOp>(loc, type, arg);
       arg.replaceAllUsesExcept(value, value);
     }
@@ -81,7 +81,7 @@ struct ToStreamConversionPattern : public OpRewritePattern<ToStreamOp> {
   LogicalResult matchAndRewrite(ToStreamOp op,
                                 PatternRewriter &rewriter) const override {
     rewriter.setInsertionPointAfter(op);
-    rewriter.create<StreamWriteOp>(op.getLoc(), op.stream(), op.value());
+    rewriter.create<StreamWriteOp>(op.getLoc(), op.getStream(), op.getValue());
     rewriter.setInsertionPoint(op);
     rewriter.replaceOpWithNewOp<StreamOp>(
         op, op.getType(), op.getType().cast<StreamType>().getDepth());
@@ -96,7 +96,7 @@ struct ToValueConversionPattern : public OpRewritePattern<ToValueOp> {
 
   LogicalResult matchAndRewrite(ToValueOp op,
                                 PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<StreamReadOp>(op, op.getType(), op.stream());
+    rewriter.replaceOpWithNewOp<StreamReadOp>(op, op.getType(), op.getStream());
     return success();
   }
 };

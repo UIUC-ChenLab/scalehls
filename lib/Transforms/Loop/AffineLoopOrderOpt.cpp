@@ -80,8 +80,8 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band,
             assert(loop == depComp.op && "unexpected dependency");
 
             // Only positive distance will be recorded.
-            if (depComp.ub.getValue() > 0) {
-              unsigned distance = std::max(depComp.lb.getValue(), (int64_t)1);
+            if (depComp.ub.value() > 0) {
+              unsigned distance = std::max(depComp.lb.value(), (int64_t)1);
               minDistance = std::min(minDistance, distance);
             }
           }

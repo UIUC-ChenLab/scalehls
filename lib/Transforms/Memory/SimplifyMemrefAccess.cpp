@@ -84,7 +84,7 @@ static bool applySimplifyMemrefAccess(func::FuncOp func) {
           continue;
 
         // The second store operation must always be executed.
-        if (sameLevelOps.getValue().second != postDomStoreOp)
+        if (sameLevelOps.value().second != postDomStoreOp)
           continue;
 
         // Traverse all load operations between the current two load operations

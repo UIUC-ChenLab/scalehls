@@ -51,9 +51,10 @@ public:
             func::CallOp, func::ReturnOp,
 
             // Unary expressions.
-            math::AbsOp, math::CeilOp, math::CosOp, math::SinOp, math::TanhOp,
-            math::SqrtOp, math::RsqrtOp, math::ExpOp, math::Exp2Op, math::LogOp,
-            math::Log2Op, math::Log10Op, arith::NegFOp,
+            math::AbsIOp, math::AbsFOp, math::CeilOp, math::CosOp, math::SinOp,
+            math::TanhOp, math::SqrtOp, math::RsqrtOp, math::ExpOp,
+            math::Exp2Op, math::LogOp, math::Log2Op, math::Log10Op,
+            arith::NegFOp,
 
             // Float binary expressions.
             arith::CmpFOp, arith::AddFOp, arith::SubFOp, arith::MulFOp,
@@ -152,7 +153,8 @@ public:
   HANDLE(func::ReturnOp);
 
   // Unary expressions.
-  HANDLE(math::AbsOp);
+  HANDLE(math::AbsIOp);
+  HANDLE(math::AbsFOp);
   HANDLE(math::CeilOp);
   HANDLE(math::CosOp);
   HANDLE(math::SinOp);

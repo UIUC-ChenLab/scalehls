@@ -54,7 +54,7 @@ static bool applyAffineStoreForward(func::FuncOp func) {
         }
 
         // The second operation (load) must always be executed.
-        if (sameLevelOps.getValue().second != loadOp) {
+        if (sameLevelOps.value().second != loadOp) {
           lastIsChainLoadOp = false;
           continue;
         }
@@ -88,7 +88,7 @@ static bool applyAffineStoreForward(func::FuncOp func) {
         // Now we know the forwarding is possible. Perform the actual store to
         // load forwarding.
         auto storeSurroundingOp =
-            checkSameLevel(domStoreOp, loadOp).getValue().first;
+            checkSameLevel(domStoreOp, loadOp).value().first;
         Value storeVal =
             cast<AffineWriteOpInterface>(domStoreOp).getValueToStore();
         auto builder = OpBuilder(func);

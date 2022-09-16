@@ -447,15 +447,15 @@ public:
       ++pos;
     }
 
-    if (firstSrcDepPos.hasValue()) {
-      if (lastDstDepPos.hasValue()) {
-        if (firstSrcDepPos.getValue() <= lastDstDepPos.getValue()) {
+    if (firstSrcDepPos.value()) {
+      if (lastDstDepPos.value()) {
+        if (firstSrcDepPos.value() <= lastDstDepPos.value()) {
           // No valid insertion point exists which preserves dependences.
           return nullptr;
         }
       }
       // Return the insertion point at 'firstSrcDepPos'.
-      return depInsts[firstSrcDepPos.getValue()];
+      return depInsts[firstSrcDepPos.value()];
     }
     // No dependence targets in range (or only dst deps in range), return
     // 'dstNodInst' insertion point.
@@ -639,13 +639,13 @@ static bool canRemoveSrcNodeAfterFusion(
   // that all the dependences are preserved.
   if (hasOutDepsAfterFusion || !escapingMemRefs.empty()) {
     Optional<bool> isMaximal = fusionSlice.isMaximal();
-    if (!isMaximal.hasValue()) {
+    if (!isMaximal.value()) {
       LLVM_DEBUG(llvm::dbgs() << "Src loop can't be removed: can't determine "
                                  "if fusion is maximal\n");
       return false;
     }
 
-    if (!isMaximal.getValue()) {
+    if (!isMaximal.value()) {
       LLVM_DEBUG(llvm::dbgs()
                  << "Src loop can't be removed: fusion is not maximal\n");
       return false;
@@ -742,7 +742,7 @@ bool MemRefDependenceGraph::init(TaskOp f) {
   DenseMap<Value, SetVector<unsigned>> memrefAccesses;
 
   DenseMap<Operation *, unsigned> forToNodeMap;
-  for (auto &op : *f.getBody()) {
+  for (auto &op : f.getBody().front()) {
     if (auto forOp = dyn_cast<AffineForOp>(op)) {
       // Create graph node 'id' to represent top-level 'forOp' and record
       // all loads and store accesses it contains.
@@ -897,7 +897,7 @@ static Value createPrivateMemRef(AffineForOp forOp, Operation *srcStoreOpInst,
   // Create builder to insert alloc op just before 'forOp'.
   OpBuilder b(forInst);
   // Builder to create constants at the top level.
-  OpBuilder top(forInst->getParentOfType<TaskOp>().body());
+  OpBuilder top(forInst->getParentOfType<TaskOp>().getBody());
   // Create new memref type based on slice bounds.
   auto oldMemRef = cast<AffineWriteOpInterface>(srcStoreOpInst).getMemRef();
   auto oldMemRefType = oldMemRef.getType().cast<MemRefType>();
@@ -916,15 +916,14 @@ static Value createPrivateMemRef(AffineForOp forOp, Operation *srcStoreOpInst,
   // by 'srcStoreOpInst' at depth 'dstLoopDepth'.
   Optional<int64_t> numElements =
       region.getConstantBoundingSizeAndShape(&newShape, &lbs, &lbDivisors);
-  assert(numElements.hasValue() &&
-         "non-constant number of elts in local buffer");
+  assert(numElements.value() && "non-constant number of elts in local buffer");
 
   const FlatAffineValueConstraints *cst = region.getConstraints();
   // 'outerIVs' holds the values that this memory region is symbolic/parametric
   // on; this would correspond to loop IVs surrounding the level at which the
   // slice is being materialized.
   SmallVector<Value, 8> outerIVs;
-  cst->getValues(rank, cst->getNumIds(), &outerIVs);
+  cst->getValues(rank, cst->getNumVars(), &outerIVs);
 
   // Build 'rank' AffineExprs from MemRefRegion 'lbs'
   SmallVector<AffineExpr, 4> offsets;
@@ -945,10 +944,10 @@ static Value createPrivateMemRef(AffineForOp forOp, Operation *srcStoreOpInst,
   // Create 'newMemRefType' using 'newShape' from MemRefRegion accessed
   // by 'srcStoreOpInst'.
   uint64_t bufSize =
-      getMemRefEltSizeInBytes(oldMemRefType) * numElements.getValue();
+      getMemRefEltSizeInBytes(oldMemRefType) * numElements.value();
   unsigned newMemSpace;
-  if (bufSize <= localBufSizeThreshold && fastMemorySpace.hasValue()) {
-    newMemSpace = fastMemorySpace.getValue();
+  if (bufSize <= localBufSizeThreshold && fastMemorySpace.has_value()) {
+    newMemSpace = fastMemorySpace.value();
   } else {
     newMemSpace = oldMemRefType.getMemorySpaceAsInt();
   }
@@ -1144,9 +1143,9 @@ static bool isFusionProfitable(Operation *srcOpInst, Operation *srcStoreOpInst,
 
   Optional<int64_t> maybeSrcWriteRegionSizeBytes =
       srcWriteRegion.getRegionSize();
-  if (!maybeSrcWriteRegionSizeBytes.hasValue())
+  if (!maybeSrcWriteRegionSizeBytes.value())
     return false;
-  int64_t srcWriteRegionSizeBytes = maybeSrcWriteRegionSizeBytes.getValue();
+  int64_t srcWriteRegionSizeBytes = maybeSrcWriteRegionSizeBytes.value();
 
   // Compute op instance count for the src loop nest.
   uint64_t dstLoopNestCost = getComputeCost(dstForOp, dstLoopNestStats);
@@ -1186,15 +1185,14 @@ static bool isFusionProfitable(Operation *srcOpInst, Operation *srcStoreOpInst,
 
     Optional<int64_t> maybeSliceWriteRegionSizeBytes =
         sliceWriteRegion.getRegionSize();
-    if (!maybeSliceWriteRegionSizeBytes.hasValue() ||
-        maybeSliceWriteRegionSizeBytes.getValue() == 0) {
+    if (!maybeSliceWriteRegionSizeBytes.value() ||
+        maybeSliceWriteRegionSizeBytes.value() == 0) {
       LLVM_DEBUG(llvm::dbgs()
                  << "Failed to get slice write region size at loopDepth: " << i
                  << "\n");
       continue;
     }
-    int64_t sliceWriteRegionSizeBytes =
-        maybeSliceWriteRegionSizeBytes.getValue();
+    int64_t sliceWriteRegionSizeBytes = maybeSliceWriteRegionSizeBytes.value();
 
     // If we are fusing for reuse, check that write regions remain the same.
     // TODO: Write region check should check sizes and offsets in
@@ -1236,7 +1234,7 @@ static bool isFusionProfitable(Operation *srcOpInst, Operation *srcStoreOpInst,
 
   // A simple cost model: fuse if it reduces the memory footprint.
 
-  if (!bestDstLoopDepth.hasValue()) {
+  if (!bestDstLoopDepth.value()) {
     LLVM_DEBUG(
         llvm::dbgs()
         << "All fusion choices involve more than the threshold amount of "
@@ -1244,13 +1242,13 @@ static bool isFusionProfitable(Operation *srcOpInst, Operation *srcStoreOpInst,
     return false;
   }
 
-  if (!bestDstLoopDepth.hasValue()) {
+  if (!bestDstLoopDepth.value()) {
     LLVM_DEBUG(llvm::dbgs() << "no fusion depth could be evaluated.\n");
     return false;
   }
 
   // Set dstLoopDepth based on best values from search.
-  *dstLoopDepth = bestDstLoopDepth.getValue();
+  *dstLoopDepth = bestDstLoopDepth.value();
 
   LLVM_DEBUG(
       llvm::dbgs() << " LoopFusion fusion stats:"
@@ -1265,17 +1263,17 @@ static bool isFusionProfitable(Operation *srcOpInst, Operation *srcStoreOpInst,
 
   Optional<double> storageReduction = None;
 
-  if (!dstMemSize.hasValue() || !srcMemSize.hasValue()) {
+  if (!dstMemSize.has_value() || !srcMemSize.has_value()) {
     LLVM_DEBUG(llvm::dbgs()
                << "  fusion memory benefit cannot be evaluated; NOT fusing.\n");
     return false;
   }
 
-  auto srcMemSizeVal = srcMemSize.getValue();
-  auto dstMemSizeVal = dstMemSize.getValue();
+  auto srcMemSizeVal = srcMemSize.value();
+  auto dstMemSizeVal = dstMemSize.value();
 
-  assert(sliceMemEstimate.hasValue() && "expected value");
-  auto fusedMem = dstMemSizeVal + sliceMemEstimate.getValue();
+  assert(sliceMemEstimate.has_value() && "expected value");
+  auto fusedMem = dstMemSizeVal + sliceMemEstimate.value();
 
   LLVM_DEBUG(llvm::dbgs() << "   src mem: " << srcMemSizeVal << "\n"
                           << "   dst mem: " << dstMemSizeVal << "\n"
@@ -1300,9 +1298,8 @@ static bool isFusionProfitable(Operation *srcOpInst, Operation *srcStoreOpInst,
     msg << " fusion is most profitable at depth " << *dstLoopDepth << " with "
         << std::setprecision(2) << additionalComputeFraction
         << "% redundant computation and a ";
-    msg << (storageReduction.hasValue()
-                ? std::to_string(storageReduction.getValue())
-                : "<unknown>");
+    msg << (storageReduction.value() ? std::to_string(storageReduction.value())
+                                     : "<unknown>");
     msg << "% storage reduction.\n";
     llvm::dbgs() << msg.str();
   });
@@ -1856,8 +1853,9 @@ public:
 
     // Search for siblings which load the same memref function argument.
     auto fn = dstNode->op->getParentOfType<TaskOp>();
-    for (unsigned i = 0, e = fn.getBody()->getNumArguments(); i != e; ++i) {
-      for (auto *user : fn.getBody()->getArgument(i).getUsers()) {
+    for (unsigned i = 0, e = fn.getBody().front().getNumArguments(); i != e;
+         ++i) {
+      for (auto *user : fn.getBody().front().getArgument(i).getUsers()) {
         if (auto loadOp = dyn_cast<AffineReadOpInterface>(user)) {
           // Gather loops surrounding 'use'.
           SmallVector<AffineForOp, 4> loops;

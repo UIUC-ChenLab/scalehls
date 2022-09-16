@@ -379,8 +379,8 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
                 auto dep = *i;
                 auto loop = cast<AffineForOp>(dep.op);
 
-                auto ub = dep.ub.getValue();
-                auto lb = dep.lb.getValue();
+                auto ub = dep.ub.value();
+                auto lb = dep.lb.value();
 
                 // If ub is more than zero, calculate the minimum positive
                 // disatance. Otherwise, set distance to negative and break.
@@ -392,7 +392,7 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
                   break;
                 }
                 accumTrips.push_back(accumTrips.back() *
-                                     getAverageTripCount(loop).getValue());
+                                     getAverageTripCount(loop).value());
               }
             }
 
@@ -428,7 +428,7 @@ bool ScaleHLSEstimator::visitOp(AffineForOp op, int64_t begin) {
   auto optionalTripCount = getAverageTripCount(op);
   if (!optionalTripCount)
     return false;
-  auto tripCount = optionalTripCount.getValue();
+  auto tripCount = optionalTripCount.value();
 
   // Estimate the contained loop block.
   auto &loopBlock = *op.getBody();
@@ -925,24 +925,24 @@ void ScaleHLSEstimator::estimateLoop(AffineForOp loop, func::FuncOp func) {
 void scalehls::getLatencyMap(llvm::json::Object *config,
                              llvm::StringMap<int64_t> &latencyMap) {
   auto frequency =
-      config->getObject(config->getString("frequency").getValueOr("100MHz"));
+      config->getObject(config->getString("frequency").value_or("100MHz"));
 
-  latencyMap["fadd"] = frequency->getInteger("fadd").getValueOr(4);
-  latencyMap["fmul"] = frequency->getInteger("fmul").getValueOr(3);
-  latencyMap["fdiv"] = frequency->getInteger("fdiv").getValueOr(15);
-  latencyMap["fcmp"] = frequency->getInteger("fcmp").getValueOr(1);
-  latencyMap["fexp"] = frequency->getInteger("fexp").getValueOr(8);
+  latencyMap["fadd"] = frequency->getInteger("fadd").value_or(4);
+  latencyMap["fmul"] = frequency->getInteger("fmul").value_or(3);
+  latencyMap["fdiv"] = frequency->getInteger("fdiv").value_or(15);
+  latencyMap["fcmp"] = frequency->getInteger("fcmp").value_or(1);
+  latencyMap["fexp"] = frequency->getInteger("fexp").value_or(8);
 }
 
 void scalehls::getDspUsageMap(llvm::json::Object *config,
                               llvm::StringMap<int64_t> &dspUsageMap) {
   auto dspUsage = config->getObject("dsp_usage");
 
-  dspUsageMap["fadd"] = dspUsage->getInteger("fadd").getValueOr(2);
-  dspUsageMap["fmul"] = dspUsage->getInteger("fmul").getValueOr(3);
-  dspUsageMap["fdiv"] = dspUsage->getInteger("fdiv").getValueOr(0);
-  dspUsageMap["fcmp"] = dspUsage->getInteger("fcmp").getValueOr(0);
-  dspUsageMap["fexp"] = dspUsage->getInteger("fexp").getValueOr(7);
+  dspUsageMap["fadd"] = dspUsage->getInteger("fadd").value_or(2);
+  dspUsageMap["fmul"] = dspUsage->getInteger("fmul").value_or(3);
+  dspUsageMap["fdiv"] = dspUsage->getInteger("fdiv").value_or(0);
+  dspUsageMap["fcmp"] = dspUsage->getInteger("fcmp").value_or(0);
+  dspUsageMap["fexp"] = dspUsage->getInteger("fexp").value_or(7);
 }
 
 namespace {

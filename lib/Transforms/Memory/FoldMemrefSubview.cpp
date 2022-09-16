@@ -104,7 +104,7 @@ resolveSourceIndices(Location loc, PatternRewriter &rewriter,
 /// Helpers to access the memref operand for each op.
 template <typename LoadOrStoreOpTy>
 static Value getMemRefOperand(LoadOrStoreOpTy op) {
-  return op.memref();
+  return op.getMemref();
 }
 
 static Value getMemRefOperand(vector::TransferReadOp op) {
@@ -197,7 +197,7 @@ template <typename StoreOpTy>
 void StoreOpOfSubViewFolder<StoreOpTy>::replaceOp(
     StoreOpTy storeOp, memref::SubViewOp subViewOp,
     ArrayRef<Value> sourceIndices, PatternRewriter &rewriter) const {
-  rewriter.replaceOpWithNewOp<StoreOpTy>(storeOp, storeOp.value(),
+  rewriter.replaceOpWithNewOp<StoreOpTy>(storeOp, storeOp.getValue(),
                                          subViewOp.source(), sourceIndices);
 }
 

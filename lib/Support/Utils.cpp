@@ -10,7 +10,7 @@
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/Utils.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/SCF/SCF.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 
@@ -28,7 +28,7 @@ ScheduleOp scalehls::wrapWithSchedule(Block *block) {
   auto loc = builder.getUnknownLoc();
   auto schedule = builder.create<ScheduleOp>(loc, returnValues);
 
-  auto &scheduleBlock = schedule.body().emplaceBlock();
+  auto &scheduleBlock = schedule.getBody().emplaceBlock();
   builder.setInsertionPointToEnd(&scheduleBlock);
   builder.create<ReturnOp>(loc, returnValues);
 
@@ -84,7 +84,7 @@ TaskOp scalehls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
   rewriter.setInsertionPoint(ops.front());
   auto task = rewriter.create<TaskOp>(
       loc, ValueRange(outputValues.getArrayRef()), inputValues.getArrayRef());
-  auto taskBlock = rewriter.createBlock(&task.body());
+  auto taskBlock = rewriter.createBlock(&task.getBody());
 
   // Move each targeted op into the new graph task.
   rewriter.setInsertionPointToEnd(taskBlock);
@@ -110,13 +110,13 @@ TaskOp scalehls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
 
   // Inline all sub-tasks.
   for (auto subTask : llvm::make_early_inc_range(task.getOps<TaskOp>())) {
-    auto &subTaskOps = subTask.getBody()->getOperations();
-    auto &taskOps = task.getBody()->getOperations();
+    auto &subTaskOps = subTask.getBody().front().getOperations();
+    auto &taskOps = task.getBody().front().getOperations();
     taskOps.splice(subTask->getIterator(), subTaskOps, subTaskOps.begin(),
                    std::prev(subTaskOps.end()));
 
-    for (auto t :
-         llvm::zip(subTask.getBody()->getArguments(), subTask.getOperands()))
+    for (auto t : llvm::zip(subTask.getBody().front().getArguments(),
+                            subTask.getOperands()))
       std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
     rewriter.replaceOp(subTask, subTask.getYieldOp()->getOperands());
   }
@@ -508,9 +508,9 @@ Optional<unsigned> scalehls::getAverageTripCount(AffineForOp forOp) {
 
     if (lowerBound && upperBound) {
       auto lowerTripCount =
-          upperBound.getValue().second - lowerBound.getValue().first;
+          upperBound.value().second - lowerBound.value().first;
       auto upperTripCount =
-          upperBound.getValue().first - lowerBound.getValue().second;
+          upperBound.value().first - lowerBound.value().second;
       return (lowerTripCount + upperTripCount + 1) / 2;
     } else
       return Optional<unsigned>();

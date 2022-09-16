@@ -22,7 +22,7 @@ struct ReshapeOpRewritePattern : public OpRewritePattern<tosa::ReshapeOp> {
   LogicalResult matchAndRewrite(tosa::ReshapeOp reshape,
                                 PatternRewriter &rewriter) const override {
     rewriter.setInsertionPoint(reshape);
-    auto inputType = reshape.input1().getType().cast<TensorType>();
+    auto inputType = reshape.getInput1().getType().cast<TensorType>();
     auto outputType = reshape.getType();
 
     // A helper to get the memory access map.
@@ -48,7 +48,7 @@ struct ReshapeOpRewritePattern : public OpRewritePattern<tosa::ReshapeOp> {
     auto init = rewriter.create<linalg::InitTensorOp>(
         reshape.getLoc(), outputType.getShape(), outputType.getElementType());
     auto generic = rewriter.replaceOpWithNewOp<linalg::GenericOp>(
-        reshape, TypeRange(outputType), ValueRange(reshape.input1()),
+        reshape, TypeRange(outputType), ValueRange(reshape.getInput1()),
         ValueRange(init.result()),
         SmallVector<AffineMap>(
             {getIndexMap(inputType), getIndexMap(outputType)}),

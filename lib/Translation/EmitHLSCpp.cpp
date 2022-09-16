@@ -432,7 +432,7 @@ public:
 
   /// HLS dialect operations.
   bool visitOp(BufferOp op) {
-    if (op.depth() == 1)
+    if (op.getDepth() == 1)
       return emitter.emitAlloc(op), true;
     return op.emitOpError("only support depth of 1"), false;
   }
@@ -459,7 +459,8 @@ public:
   using HLSVisitorBase::visitOp;
 
   /// Unary expressions.
-  bool visitOp(math::AbsOp op) { return emitter.emitUnary(op, "abs"), true; }
+  bool visitOp(math::AbsIOp op) { return emitter.emitUnary(op, "abs"), true; }
+  bool visitOp(math::AbsFOp op) { return emitter.emitUnary(op, "abs"), true; }
   bool visitOp(math::CeilOp op) { return emitter.emitUnary(op, "ceil"), true; }
   bool visitOp(math::CosOp op) { return emitter.emitUnary(op, "cos"), true; }
   bool visitOp(math::SinOp op) { return emitter.emitUnary(op, "sin"), true; }
@@ -1272,18 +1273,18 @@ void ModuleEmitter::emitMemrefToTensor(bufferization::ToTensorOp op) {
 /// HLS dialect operation emitters.
 void ModuleEmitter::emitStreamChannel(StreamOp op) {
   indent();
-  emitValue(op.channel());
+  emitValue(op.getChannel());
   os << ";";
   emitInfoAndNewLine(op);
 }
 
 void ModuleEmitter::emitStreamRead(StreamReadOp op) {
   indent();
-  if (op.result()) {
-    emitValue(op.result());
+  if (op.getResult()) {
+    emitValue(op.getResult());
     os << " = ";
   }
-  emitValue(op.channel());
+  emitValue(op.getChannel());
   os << ".read(";
   os << ");";
   emitInfoAndNewLine(op);
@@ -1291,9 +1292,9 @@ void ModuleEmitter::emitStreamRead(StreamReadOp op) {
 
 void ModuleEmitter::emitStreamWrite(StreamWriteOp op) {
   indent();
-  emitValue(op.channel());
+  emitValue(op.getChannel());
   os << ".write(";
-  emitValue(op.value());
+  emitValue(op.getValue());
   os << ");";
   emitInfoAndNewLine(op);
 }
@@ -1301,36 +1302,36 @@ void ModuleEmitter::emitStreamWrite(StreamWriteOp op) {
 void ModuleEmitter::emitPrimMul(PrimMulOp op) {
   if (op.isPackMul()) {
     // Declare the result C array.
-    if (!isDeclared(op.C())) {
+    if (!isDeclared(op.getC())) {
       indent();
-      emitArrayDecl(op.C());
+      emitArrayDecl(op.getC());
       os << ";\n";
 
       indent() << "#pragma HLS array_partition variable=";
-      emitValue(op.C());
+      emitValue(op.getC());
       os << " complete dim=0\n";
     }
 
-    auto AIsVector = op.A().getType().isa<VectorType>();
+    auto AIsVector = op.getA().getType().isa<VectorType>();
     indent() << "pack_mul(";
-    emitValue(AIsVector ? op.A() : op.B());
+    emitValue(AIsVector ? op.getA() : op.getB());
     os << ", ";
-    emitValue(AIsVector ? op.B() : op.A());
+    emitValue(AIsVector ? op.getB() : op.getA());
     os << ", ";
-    emitValue(op.C());
+    emitValue(op.getC());
     os << ");";
     emitInfoAndNewLine(op);
 
   } else {
     // To ensure DSP is utilized, the two operands are casted to 16-bits integer
     // before the multiplication.
-    auto rank = emitNestedLoopHeader(op.C());
+    auto rank = emitNestedLoopHeader(op.getC());
     indent();
-    emitValue(op.C(), rank);
+    emitValue(op.getC(), rank);
     os << " = (int16_t)";
-    emitValue(op.A(), rank);
+    emitValue(op.getA(), rank);
     os << " * (int16_t)";
-    emitValue(op.B(), rank);
+    emitValue(op.getB(), rank);
     os << ";";
     emitInfoAndNewLine(op);
     emitNestedLoopFooter(rank);

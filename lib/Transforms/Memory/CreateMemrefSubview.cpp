@@ -161,9 +161,9 @@ void CreateMemrefSubview::runOnOperation() {
         // Take the upper bound as the size of the current dimension.
         auto bounds = getBoundOfAffineMap(sizeMap.getAffineMap(),
                                           ValueRange(sizeMap.getOperands()));
-        if (!bounds.hasValue() || bounds.getValue().first != 0)
+        if (!bounds.has_value() || bounds.value().first != 0)
           return WalkResult::advance();
-        bufSizes.push_back(b.getI64IntegerAttr(bounds.getValue().second + 1));
+        bufSizes.push_back(b.getI64IntegerAttr(bounds.value().second + 1));
 
         // Now we can construct the affine apply for the offset of the current
         // memory dimension.

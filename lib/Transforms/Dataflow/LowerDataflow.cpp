@@ -41,7 +41,7 @@ struct NodeConversionPattern : public OpRewritePattern<TaskOp> {
     SmallVector<Value, 8> params;
     SmallVector<BlockArgument, 8> paramArgs;
     SmallVector<Location, 8> paramLocs;
-    for (auto arg : task.getBody()->getArguments()) {
+    for (auto arg : task.getBody().front().getArguments()) {
       auto operand = task.getOperand(arg.getArgNumber());
 
       if (operand.getType().isa<MemRefType, StreamType>()) {
@@ -64,10 +64,10 @@ struct NodeConversionPattern : public OpRewritePattern<TaskOp> {
     rewriter.setInsertionPoint(task);
     auto node = rewriter.create<NodeOp>(rewriter.getUnknownLoc(), inputs,
                                         outputs, params);
-    auto nodeBlock = rewriter.createBlock(&node.body());
+    auto nodeBlock = rewriter.createBlock(&node.getBody());
 
     auto &nodeOps = nodeBlock->getOperations();
-    auto &taskOps = task.getBody()->getOperations();
+    auto &taskOps = task.getBody().front().getOperations();
     nodeOps.splice(nodeOps.begin(), taskOps, taskOps.begin(),
                    std::prev(taskOps.end()));
 
@@ -76,7 +76,7 @@ struct NodeConversionPattern : public OpRewritePattern<TaskOp> {
       std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
 
     auto newOutputArgs =
-        node.getBody()->addArguments(ValueRange(outputs), outputLocs);
+        node.getBody().front().addArguments(ValueRange(outputs), outputLocs);
     for (auto t : llvm::zip(outputArgs, newOutputArgs))
       std::get<0>(t).replaceAllUsesExcept(std::get<1>(t), node);
 
@@ -131,8 +131,8 @@ struct ScheduleOutputRemovePattern : public OpRewritePattern<ScheduleOp> {
       rewriter.setInsertionPoint(schedule);
       auto newSchedule = rewriter.create<ScheduleOp>(
           schedule.getLoc(), ValueRange(remainedOutputs));
-      rewriter.inlineRegionBefore(schedule.body(), newSchedule.body(),
-                                  newSchedule.body().end());
+      rewriter.inlineRegionBefore(schedule.getBody(), newSchedule.getBody(),
+                                  newSchedule.getBody().end());
 
       for (auto t : llvm::zip(remainedResults, newSchedule.getResults()))
         std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
@@ -175,7 +175,7 @@ struct MultiProducerRemovePattern : public OpRewritePattern<NodeOp> {
       return failure();
 
     auto loc = rewriter.getUnknownLoc();
-    auto newInputs = SmallVector<Value>(node.inputs());
+    auto newInputs = SmallVector<Value>(node.getInputs());
     rewriter.setInsertionPoint(node);
 
     // Create new buffers and write to them instead of the original buffers. The
@@ -196,17 +196,17 @@ struct MultiProducerRemovePattern : public OpRewritePattern<NodeOp> {
 
     // Create a new node and erase the original one.
     auto newNode =
-        rewriter.create<NodeOp>(node.getLoc(), newInputs, node.outputs(),
-                                node.params(), node.levelAttr());
-    rewriter.inlineRegionBefore(node.body(), newNode.body(),
-                                newNode.body().end());
+        rewriter.create<NodeOp>(node.getLoc(), newInputs, node.getOutputs(),
+                                node.getParams(), node.getLevelAttr());
+    rewriter.inlineRegionBefore(node.getBody(), newNode.getBody(),
+                                newNode.getBody().end());
 
     // Insert new arguments and create explicit data copy from the original
     // buffer to new buffer.
-    rewriter.setInsertionPointToStart(newNode.getBody());
+    rewriter.setInsertionPointToStart(&newNode.getBody().front());
     for (auto e : llvm::enumerate(targetArgs)) {
       auto newBufferArg = e.value();
-      auto bufferArg = newNode.getBody()->insertArgument(
+      auto bufferArg = newNode.getBody().front().insertArgument(
           node.getNumInputs() + e.index(), newBufferArg.getType(),
           newBufferArg.getLoc());
       rewriter.create<memref::CopyOp>(loc, bufferArg, newBufferArg);
@@ -224,27 +224,27 @@ struct BypassPathRemovePattern : public OpRewritePattern<NodeOp> {
 
   LogicalResult matchAndRewrite(NodeOp node,
                                 PatternRewriter &rewriter) const override {
-    if (node.level().hasValue())
+    if (node.getLevel().value())
       return failure();
     auto schedule = node.getScheduleOp();
 
     unsigned level = 0;
-    for (auto output : node.outputs()) {
+    for (auto output : node.getOutputs()) {
       if (!getProducersInScheduleExcept(output, schedule, node).empty())
         return failure();
 
       for (auto consumer : getConsumersInSchedule(output, schedule)) {
-        if (!consumer.level().hasValue())
+        if (!consumer.getLevel().value())
           return failure();
-        level = std::max(level, consumer.level().getValue() + 1);
+        level = std::max(level, consumer.getLevel().value() + 1);
       }
     }
-    node.levelAttr(rewriter.getI32IntegerAttr(level));
+    node.setLevelAttr(rewriter.getI32IntegerAttr(level));
 
-    for (auto output : node.outputs()) {
+    for (auto output : node.getOutputs()) {
       SmallVector<std::pair<unsigned, NodeOp>, 4> worklist;
       for (auto consumer : getConsumersInSchedule(output, schedule)) {
-        auto diff = level - consumer.level().getValue();
+        auto diff = level - consumer.getLevel().value();
         if (diff > 1)
           worklist.push_back({diff, consumer});
       }
@@ -258,14 +258,15 @@ struct BypassPathRemovePattern : public OpRewritePattern<NodeOp> {
         // Create a new buffer.
         auto loc = rewriter.getUnknownLoc();
         rewriter.setInsertionPoint(currentNode);
-        auto newBuf = rewriter.create<BufferOp>(loc, output.getType()).memref();
+        auto newBuf =
+            rewriter.create<BufferOp>(loc, output.getType()).getMemref();
 
         // Construct a new node for data copy.
         rewriter.setInsertionPointAfter(currentNode);
         auto newNode = rewriter.create<NodeOp>(
             loc, ValueRange(currentBuf), ValueRange(newBuf), ValueRange(),
             /*level=*/rewriter.getI32IntegerAttr(level + 1 - i));
-        auto block = rewriter.createBlock(&newNode.body());
+        auto block = rewriter.createBlock(&newNode.getBody());
         block->addArguments(TypeRange({currentBuf.getType(), newBuf.getType()}),
                             {currentBuf.getLoc(), newBuf.getLoc()});
 
@@ -304,13 +305,13 @@ static NodeOp fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter) {
   llvm::SmallVector<Location, 8> paramLocs;
 
   for (auto node : nodes) {
-    for (auto input : node.inputs())
+    for (auto input : node.getInputs())
       if (inputs.insert(input))
         inputLocs.push_back(input.getLoc());
-    for (auto output : node.outputs())
+    for (auto output : node.getOutputs())
       if (outputs.insert(output))
         outputLocs.push_back(output.getLoc());
-    for (auto param : node.params())
+    for (auto param : node.getParams())
       if (params.insert(param))
         paramLocs.push_back(param.getLoc());
   }
@@ -320,17 +321,18 @@ static NodeOp fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter) {
   auto newNode =
       rewriter.create<NodeOp>(rewriter.getUnknownLoc(), inputs.getArrayRef(),
                               outputs.getArrayRef(), params.getArrayRef());
-  auto block = rewriter.createBlock(&newNode.body());
+  auto block = rewriter.createBlock(&newNode.getBody());
   block->addArguments(ValueRange(inputs.getArrayRef()), inputLocs);
   block->addArguments(ValueRange(outputs.getArrayRef()), outputLocs);
   block->addArguments(ValueRange(params.getArrayRef()), paramLocs);
 
   // Inline all nodes into the new node.
   for (auto node : nodes) {
-    auto &nodeOps = node.getBody()->getOperations();
-    auto &newNodeOps = newNode.getBody()->getOperations();
+    auto &nodeOps = node.getBody().front().getOperations();
+    auto &newNodeOps = newNode.getBody().front().getOperations();
     newNodeOps.splice(newNode.end(), nodeOps);
-    for (auto t : llvm::zip(node.getBody()->getArguments(), node.getOperands()))
+    for (auto t :
+         llvm::zip(node.getBody().front().getArguments(), node.getOperands()))
       std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
     rewriter.eraseOp(node);
   }
@@ -350,8 +352,8 @@ struct ScheduleLegalizePattern : public OpRewritePattern<ScheduleOp> {
                                 PatternRewriter &rewriter) const override {
     llvm::SmallDenseMap<unsigned, SmallVector<NodeOp, 4>> worklist;
     for (auto node : schedule.getOps<NodeOp>()) {
-      if (auto level = node.level())
-        worklist[level.getValue()].push_back(node);
+      if (auto level = node.getLevel())
+        worklist[level.value()].push_back(node);
       else
         return failure();
     }
@@ -360,10 +362,10 @@ struct ScheduleLegalizePattern : public OpRewritePattern<ScheduleOp> {
     for (const auto &p : worklist)
       if (p.second.size() > 1) {
         auto node = fuseNodeOps(p.second, rewriter);
-        node.levelAttr(rewriter.getI32IntegerAttr(p.first));
+        node.setLevelAttr(rewriter.getI32IntegerAttr(p.first));
         hasChanged = true;
       }
-    schedule.isLegalAttr(rewriter.getUnitAttr());
+    schedule.setIsLegalAttr(rewriter.getUnitAttr());
     return success(hasChanged);
   }
 };

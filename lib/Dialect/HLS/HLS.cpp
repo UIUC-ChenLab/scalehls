@@ -153,7 +153,7 @@ struct SimplifyScheduleHierarchy : public OpRewritePattern<ScheduleOp> {
     // fully inlined.
     if (schedule.getOps<TaskOp>().empty() &&
         schedule.getOps<NodeOp>().empty()) {
-      auto &scheduleOps = schedule.getBody()->getOperations();
+      auto &scheduleOps = schedule.getBody().front().getOperations();
       auto &parentOps = schedule->getBlock()->getOperations();
       parentOps.splice(schedule->getIterator(), scheduleOps,
                        scheduleOps.begin(), std::prev(scheduleOps.end()));
@@ -173,23 +173,23 @@ void ScheduleOp::getCanonicalizationPatterns(RewritePatternSet &results,
 
 /// Get the terminator return op.
 ReturnOp ScheduleOp::getReturnOp() {
-  return cast<ReturnOp>(body().front().getTerminator());
+  return cast<ReturnOp>(getBody().front().getTerminator());
 }
 
 LogicalResult ScheduleOp::verify() {
-  if (isLegal()) {
+  if (getIsLegal()) {
     if (!getOps<TaskOp>().empty())
       return mlir::emitError(getLoc(), "contains task ops");
 
     for (auto node : getOps<NodeOp>()) {
-      if (!node.level().hasValue()) {
+      if (!node.getLevel().value()) {
         auto diag = mlir::emitError(getLoc(), "contains node not scheduled: ");
         diag.attachNote(node.getLoc())
             .append("see current node: ")
             .appendOp(*node, OpPrintingFlags().printGenericOpForm());
         return diag;
       }
-      for (auto output : node.outputs())
+      for (auto output : node.getOutputs())
         if (getConsumersInSchedule(output, *this).size() > 1 ||
             getProducersInSchedule(output, *this).size() > 1) {
           auto diag = mlir::emitError(
@@ -238,16 +238,17 @@ struct SimplifyTaskIOs : public OpRewritePattern<TaskOp> {
       }
 
     // Identify input values that are used.
-    SmallVector<unsigned, 4> unusedArgNumbers;
+    llvm::SmallDenseSet<BlockArgument, 4> unusedArgs;
     SmallVector<Value, 4> usedInputs;
-    for (auto arg : task.getBody()->getArguments())
+    for (auto arg : task.getBody().front().getArguments())
       if (arg.use_empty()) {
         hasUnusedPort = true;
-        unusedArgNumbers.push_back(arg.getArgNumber());
+        unusedArgs.insert(arg);
       } else {
         usedInputs.push_back(task.getOperand(arg.getArgNumber()));
       }
-    task.getBody()->eraseArguments(unusedArgNumbers);
+    task.getBody().front().eraseArguments(
+        [&](BlockArgument arg) { return unusedArgs.count(arg); });
 
     // Construct new graph task.
     if (hasUnusedPort) {
@@ -257,8 +258,8 @@ struct SimplifyTaskIOs : public OpRewritePattern<TaskOp> {
       rewriter.setInsertionPoint(task);
       auto newTask = rewriter.create<TaskOp>(
           task.getLoc(), ValueRange(usedOutputs), usedInputs);
-      rewriter.inlineRegionBefore(task.body(), newTask.body(),
-                                  newTask.body().end());
+      rewriter.inlineRegionBefore(task.getBody(), newTask.getBody(),
+                                  newTask.getBody().end());
       for (auto t : llvm::zip(usedResults, newTask.getResults()))
         std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
 
@@ -279,13 +280,14 @@ struct SimplifyTaskHierarchy : public OpRewritePattern<TaskOp> {
     // If the parent schedule only contains the current task, then the task can
     // be fully inlined.
     if (llvm::hasSingleElement(task.getScheduleOp().getOps<TaskOp>())) {
-      auto &taskOps = task.getBody()->getOperations();
-      auto &scheduleOps = task.getScheduleOp().getBody()->getOperations();
+      auto &taskOps = task.getBody().front().getOperations();
+      auto &scheduleOps =
+          task.getScheduleOp().getBody().front().getOperations();
       scheduleOps.splice(task->getIterator(), taskOps, taskOps.begin(),
                          std::prev(taskOps.end()));
 
       for (auto t :
-           llvm::zip(task.getBody()->getArguments(), task.getOperands()))
+           llvm::zip(task.getBody().front().getArguments(), task.getOperands()))
         std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
       rewriter.replaceOp(task, task.getYieldOp()->getOperands());
       return success();
@@ -308,11 +310,11 @@ ScheduleOp TaskOp::getScheduleOp() {
 
 /// Get the terminator output op.
 YieldOp TaskOp::getYieldOp() {
-  return cast<YieldOp>(body().front().getTerminator());
+  return cast<YieldOp>(getBody().front().getTerminator());
 }
 
 LogicalResult TaskOp::verify() {
-  if (getOperandTypes() != getBody()->getArgumentTypes())
+  if (getOperandTypes() != getBody().front().getArgumentTypes())
     return emitOpError("operand type doesn't align with argument type");
   return success();
 }
@@ -328,30 +330,30 @@ LogicalResult YieldOp::verify() {
 //===----------------------------------------------------------------------===//
 
 LogicalResult ToStreamOp::verify() {
-  if (value().getType() !=
-      stream().getType().cast<StreamType>().getElementType())
+  if (getValue().getType() !=
+      getStream().getType().cast<StreamType>().getElementType())
     return emitOpError("value and stream type doesn't match");
   return success();
 }
 
 OpFoldResult ToStreamOp::fold(ArrayRef<Attribute>) {
-  if (auto toValue = value().getDefiningOp<ToValueOp>())
-    if (toValue.stream().getType() == getType())
-      return toValue.stream();
+  if (auto toValue = getValue().getDefiningOp<ToValueOp>())
+    if (toValue.getStream().getType() == getType())
+      return toValue.getStream();
   return {};
 }
 
 LogicalResult ToValueOp::verify() {
-  if (value().getType() !=
-      stream().getType().cast<StreamType>().getElementType())
+  if (getValue().getType() !=
+      getStream().getType().cast<StreamType>().getElementType())
     return emitOpError("value and stream type doesn't match");
   return success();
 }
 
 OpFoldResult ToValueOp::fold(ArrayRef<Attribute>) {
-  if (auto toStream = stream().getDefiningOp<ToStreamOp>())
-    if (toStream.value().getType() == getType())
-      return toStream.value();
+  if (auto toStream = getStream().getDefiningOp<ToStreamOp>())
+    if (toStream.getValue().getType() == getType())
+      return toStream.getValue();
   return {};
 }
 
@@ -368,14 +370,14 @@ struct SimplifyNodeIOs : public OpRewritePattern<NodeOp> {
     bool hasUnusedPort = false;
 
     // Identify input values that are used.
-    SmallVector<unsigned, 4> unusedArgNumbers;
+    llvm::SmallDenseSet<BlockArgument, 4> unusedArgs;
     SmallVector<Value, 4> usedInputs;
     SmallVector<Value, 4> usedOutputs;
     SmallVector<Value, 4> usedParams;
-    for (auto arg : node.getBody()->getArguments())
+    for (auto arg : node.getBody().front().getArguments())
       if (arg.use_empty()) {
         hasUnusedPort = true;
-        unusedArgNumbers.push_back(arg.getArgNumber());
+        unusedArgs.insert(arg);
       } else {
         auto idx = arg.getArgNumber();
         if (node.getOperandKind(idx) == OperandKind::INPUT)
@@ -385,16 +387,18 @@ struct SimplifyNodeIOs : public OpRewritePattern<NodeOp> {
         else
           usedParams.push_back(node.getOperand(idx));
       }
-    node.getBody()->eraseArguments(unusedArgNumbers);
+    node.getBody().front().eraseArguments(
+        [&](BlockArgument arg) { return unusedArgs.count(arg); });
 
     // Construct new dataflow node.
     if (hasUnusedPort) {
       rewriter.setInsertionPoint(node);
       // TODO: This will lead to illegal node!
-      auto newNode = rewriter.create<NodeOp>(
-          node.getLoc(), usedInputs, usedOutputs, usedParams, node.levelAttr());
-      rewriter.inlineRegionBefore(node.body(), newNode.body(),
-                                  newNode.body().end());
+      auto newNode =
+          rewriter.create<NodeOp>(node.getLoc(), usedInputs, usedOutputs,
+                                  usedParams, node.getLevelAttr());
+      rewriter.inlineRegionBefore(node.getBody(), newNode.getBody(),
+                                  newNode.getBody().end());
       rewriter.eraseOp(node);
       return success();
     }
@@ -412,12 +416,13 @@ struct SimplifyNodeHierarchy : public OpRewritePattern<NodeOp> {
     // If the parent schedule only contains the current node, then the node can
     // be fully inlined.
     if (llvm::hasSingleElement(node.getScheduleOp().getOps<NodeOp>())) {
-      auto &nodeOps = node.getBody()->getOperations();
-      auto &scheduleOps = node.getScheduleOp().getBody()->getOperations();
+      auto &nodeOps = node.getBody().front().getOperations();
+      auto &scheduleOps =
+          node.getScheduleOp().getBody().front().getOperations();
       scheduleOps.splice(node->getIterator(), nodeOps);
 
       for (auto t :
-           llvm::zip(node.getBody()->getArguments(), node.getOperands()))
+           llvm::zip(node.getBody().front().getArguments(), node.getOperands()))
         std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
       rewriter.eraseOp(node);
       return success();
@@ -466,25 +471,28 @@ OperandKind NodeOp::getOperandKind(unsigned operandIdx) {
 /// Get the input, output, and param arguments.
 iterator_range<Block::args_iterator> NodeOp::getInputArgs() {
   auto range = getODSOperandIndexAndLength(0);
-  return {std::next(getBody()->args_begin(), range.first),
-          std::next(getBody()->args_begin(), range.first + range.second)};
+  return {
+      std::next(getBody().front().args_begin(), range.first),
+      std::next(getBody().front().args_begin(), range.first + range.second)};
 }
 iterator_range<Block::args_iterator> NodeOp::getOutputArgs() {
   auto range = getODSOperandIndexAndLength(1);
-  return {std::next(getBody()->args_begin(), range.first),
-          std::next(getBody()->args_begin(), range.first + range.second)};
+  return {
+      std::next(getBody().front().args_begin(), range.first),
+      std::next(getBody().front().args_begin(), range.first + range.second)};
 }
 iterator_range<Block::args_iterator> NodeOp::getParamArgs() {
   auto range = getODSOperandIndexAndLength(2);
-  return {std::next(getBody()->args_begin(), range.first),
-          std::next(getBody()->args_begin(), range.first + range.second)};
+  return {
+      std::next(getBody().front().args_begin(), range.first),
+      std::next(getBody().front().args_begin(), range.first + range.second)};
 }
 
 LogicalResult NodeOp::verify() {
-  if (getOperandTypes() != getBody()->getArgumentTypes())
+  if (getOperandTypes() != getBody().front().getArgumentTypes())
     return emitOpError("operand type doesn't align with argument type");
 
-  if (llvm::any_of(params(), [](Value param) {
+  if (llvm::any_of(getParams(), [](Value param) {
         return param.getType().isa<ShapedType, StreamType>();
       }))
     return emitOpError("node params should not be shaped or stream typed");
@@ -504,7 +512,7 @@ LogicalResult NodeOp::verify() {
 
 LogicalResult ConstBufferOp::verify() {
   auto memrefType = getType();
-  auto attrType = value().getType().cast<TensorType>();
+  auto attrType = getValue().getType().cast<TensorType>();
   if (memrefType.getElementType() != attrType.getElementType())
     return emitOpError("element type mismatch");
   if (!memrefType.hasStaticShape() || !attrType.hasStaticShape())
@@ -519,22 +527,22 @@ LogicalResult ConstBufferOp::verify() {
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamOp::verify() {
-  if (depth() != channel().getType().cast<StreamType>().getDepth())
+  if (getDepth() != getChannel().getType().cast<StreamType>().getDepth())
     return emitOpError("stream channel depth is not aligned");
   return success();
 }
 
 LogicalResult StreamReadOp::verify() {
-  if (result())
-    if (channel().getType().cast<StreamType>().getElementType() !=
-        result().getType())
+  if (getResult())
+    if (getChannel().getType().cast<StreamType>().getElementType() !=
+        getResult().getType())
       return emitOpError("result type doesn't align with channel type");
   return success();
 }
 
 LogicalResult StreamWriteOp::verify() {
-  if (channel().getType().cast<StreamType>().getElementType() !=
-      value().getType())
+  if (getChannel().getType().cast<StreamType>().getElementType() !=
+      getValue().getType())
     return emitOpError("value type doesn't align with channel type");
   return success();
 }
@@ -544,16 +552,18 @@ LogicalResult StreamWriteOp::verify() {
 //===----------------------------------------------------------------------===//
 
 LogicalResult AxiPortOp::verify() {
-  if (axi().getType().cast<AxiType>().getElementType() != value().getType())
+  if (getAxi().getType().cast<AxiType>().getElementType() !=
+      getValue().getType())
     return emitOpError("axi type doesn't align with value type");
-  if (axi().getType().cast<AxiType>().getKind() !=
-      bundle().getType().cast<BundleType>().getKind())
+  if (getAxi().getType().cast<AxiType>().getKind() !=
+      getBundle().getType().cast<BundleType>().getKind())
     return emitOpError("axi kind doesn't align with bundle kind");
   return success();
 }
 
 LogicalResult AxiPackOp::verify() {
-  if (axi().getType().cast<AxiType>().getElementType() != value().getType())
+  if (getAxi().getType().cast<AxiType>().getElementType() !=
+      getValue().getType())
     return emitOpError("axi type doesn't align with value type");
   return success();
 }
@@ -563,9 +573,9 @@ LogicalResult AxiPackOp::verify() {
 //===----------------------------------------------------------------------===//
 
 LogicalResult PrimMulOp::verify() {
-  auto AIsVector = A().getType().isa<VectorType>();
-  auto BIsVector = B().getType().isa<VectorType>();
-  auto CIsVector = C().getType().isa<VectorType>();
+  auto AIsVector = getA().getType().isa<VectorType>();
+  auto BIsVector = getB().getType().isa<VectorType>();
+  auto CIsVector = getC().getType().isa<VectorType>();
 
   if ((AIsVector || BIsVector) && CIsVector)
     return success();
@@ -575,8 +585,8 @@ LogicalResult PrimMulOp::verify() {
 }
 
 bool PrimMulOp::isPackMul() {
-  auto AIsVector = A().getType().isa<VectorType>();
-  auto BIsVector = B().getType().isa<VectorType>();
+  auto AIsVector = getA().getType().isa<VectorType>();
+  auto BIsVector = getB().getType().isa<VectorType>();
   return (AIsVector && !BIsVector) || (!AIsVector && BIsVector);
 }
 
@@ -586,17 +596,17 @@ struct SimplifyPrimCastOp : public OpRewritePattern<PrimCastOp> {
 
   LogicalResult matchAndRewrite(PrimCastOp cast,
                                 PatternRewriter &rewriter) const override {
-    if (cast.input().getType() == cast.output().getType()) {
-      rewriter.replaceOp(cast, cast.input());
+    if (cast.getInput().getType() == cast.getOutput().getType()) {
+      rewriter.replaceOp(cast, cast.getInput());
       return success();
     }
 
     // If the input of the cast is defined by another cast, then the two casts
     // can be merged into one.
-    if (cast.input().hasOneUse())
-      if (auto defCast = cast.input().getDefiningOp<PrimCastOp>()) {
+    if (cast.getInput().hasOneUse())
+      if (auto defCast = cast.getInput().getDefiningOp<PrimCastOp>()) {
         rewriter.replaceOpWithNewOp<PrimCastOp>(cast, cast.getType(),
-                                                defCast.input());
+                                                defCast.getInput());
         return success();
       }
     return failure();

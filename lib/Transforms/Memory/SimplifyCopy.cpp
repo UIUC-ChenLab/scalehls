@@ -34,8 +34,8 @@ struct SimplifyBufferPattern : public OpRewritePattern<OpType> {
       return failure();
 
     // If the current buf dominates another buf, return failure.
-    auto anotherVal =
-        buf.memref() == copy.getSource() ? copy.getTarget() : copy.getSource();
+    auto anotherVal = buf.getMemref() == copy.getSource() ? copy.getTarget()
+                                                          : copy.getSource();
     if (auto anotherBuf = anotherVal.getDefiningOp())
       if (!isa<OpType>(anotherBuf) ||
           DT.dominates(buf.getOperation(), anotherBuf))

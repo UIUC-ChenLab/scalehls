@@ -73,7 +73,7 @@ struct FuncDuplication : public FuncDuplicationBase<FuncDuplication> {
          llvm::make_early_inc_range(module.getOps<func::FuncOp>())) {
       unsigned idx = 0;
       if (auto symbolUses = func.getSymbolUses(module)) {
-        for (auto use : llvm::make_early_inc_range(symbolUses.getValue())) {
+        for (auto use : llvm::make_early_inc_range(symbolUses.value())) {
           auto call = cast<func::CallOp>(use.getUser());
           builder.setInsertionPoint(func);
           auto cloneFunc = cast<func::FuncOp>(builder.clone(*func));
@@ -82,7 +82,7 @@ struct FuncDuplication : public FuncDuplicationBase<FuncDuplication> {
           call->setAttr(call.getCalleeAttrName(),
                         FlatSymbolRefAttr::get(func.getContext(), newName));
         }
-        if (!symbolUses.getValue().empty())
+        if (!symbolUses.value().empty())
           func.erase();
       }
     }

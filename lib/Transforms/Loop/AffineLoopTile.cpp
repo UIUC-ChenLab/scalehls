@@ -66,7 +66,7 @@ bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList,
     for (auto loop : tiledBand) {
       (void)normalizeAffineFor(loop);
       auto tripCount = getConstantTripCount(loop);
-      if (!tripCount || tripCount.getValue() != 1)
+      if (!tripCount || tripCount.value() != 1)
         band.push_back(loop);
     }
   } else
@@ -87,7 +87,7 @@ static void adjustToDivisorsOfTripCounts(ArrayRef<AffineForOp> band,
 
     // Adjust the tile size to largest factor of the trip count less than
     // tSize.
-    uint64_t constTripCount = mayConst.getValue();
+    uint64_t constTripCount = mayConst.value();
     if (constTripCount > 1 && tSizeAdjusted > constTripCount / 2)
       tSizeAdjusted = constTripCount / 2;
     while (constTripCount % tSizeAdjusted != 0)

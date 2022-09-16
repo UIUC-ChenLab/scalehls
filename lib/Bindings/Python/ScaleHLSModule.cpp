@@ -52,7 +52,7 @@ public:
   size_t depth() const { return band.size(); }
   int64_t getTripCount(size_t loc) {
     auto optTripCount = getConstantTripCount(band[loc]);
-    return optTripCount.hasValue() ? optTripCount.getValue() : -1;
+    return optTripCount.value() ? optTripCount.value() : -1;
   }
 
   PyAffineLoopBand &dunderIter() { return *this; }

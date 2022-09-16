@@ -28,7 +28,6 @@ namespace {
 struct TosaFakeQuantize : public TosaFakeQuantizeBase<TosaFakeQuantize> {
   void runOnOperation() override {
     auto module = getOperation();
-    auto builder = OpBuilder(module);
 
     // Convert the type of block arguments.
     module.walk([&](Block *block) {
@@ -48,31 +47,31 @@ struct TosaFakeQuantize : public TosaFakeQuantizeBase<TosaFakeQuantize> {
           if (auto constant = dyn_cast<tosa::ConstOp>(op)) {
             // Because we are not trying to really quantize the model, here we
             // just assign a fake value to the constant operation.
-            SmallVector<int8_t, 64> list(constant.value().size(), fakeIdx++);
+            SmallVector<int8_t, 64> list(constant.getValue().size(), fakeIdx++);
             // for (auto value : constant.valueAttr().getValues<float>())
             //   list.push_back(value);
 
             auto quantValue = DenseIntElementsAttr::get(quantType, list);
-            constant->setAttr(constant.valueAttrName(), quantValue);
+            constant->setAttr(constant.getValueAttrName(), quantValue);
           }
 
           if (auto conv2d = dyn_cast<tosa::Conv2DOp>(op)) {
-            auto quantInfoAttr = tosa::ConvOpQuantizationAttr::get(
-                builder.getI32IntegerAttr(0), builder.getI32IntegerAttr(0),
-                conv2d.getContext());
-            conv2d->setAttr(conv2d.quantization_infoAttrName(), quantInfoAttr);
+            auto quantInfoAttr =
+                tosa::ConvOpQuantizationAttr::get(conv2d.getContext(), 0, 0);
+            conv2d->setAttr(conv2d.getQuantizationInfoAttrName(),
+                            quantInfoAttr);
 
           } else if (auto matMul = dyn_cast<tosa::MatMulOp>(op)) {
-            auto quantInfoAttr = tosa::MatMulOpQuantizationAttr::get(
-                builder.getI32IntegerAttr(0), builder.getI32IntegerAttr(0),
-                matMul.getContext());
-            matMul->setAttr(matMul.quantization_infoAttrName(), quantInfoAttr);
+            auto quantInfoAttr =
+                tosa::MatMulOpQuantizationAttr::get(matMul.getContext(), 0, 0);
+            matMul->setAttr(matMul.getQuantizationInfoAttrName(),
+                            quantInfoAttr);
 
           } else if (auto pool2d = dyn_cast<tosa::AvgPool2dOp>(op)) {
-            auto quantInfoAttr = tosa::UnaryOpQuantizationAttr::get(
-                builder.getI32IntegerAttr(0), builder.getI32IntegerAttr(0),
-                pool2d.getContext());
-            pool2d->setAttr(pool2d.quantization_infoAttrName(), quantInfoAttr);
+            auto quantInfoAttr =
+                tosa::UnaryOpQuantizationAttr::get(pool2d.getContext(), 0, 0);
+            pool2d->setAttr(pool2d.getQuantizationInfoAttrName(),
+                            quantInfoAttr);
           }
         }
 

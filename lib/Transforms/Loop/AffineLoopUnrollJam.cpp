@@ -60,7 +60,7 @@ struct AffineLoopUnrollJam
       // Calculate the tiling size of each loop level.
       for (auto it = band.rbegin(), e = band.rend(); it != e; ++it) {
         if (auto optionalTripCount = getConstantTripCount(*it)) {
-          auto tripCount = optionalTripCount.getValue();
+          auto tripCount = optionalTripCount.value();
           auto size = tripCount;
 
           if (remainTileSize >= tripCount)
