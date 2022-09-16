@@ -102,7 +102,7 @@ struct TaskBufferizationPattern : public OpRewritePattern<TaskOp> {
 } // namespace
 
 namespace {
-struct GetGlobalDemotePattern : public OpRewritePattern<TaskOp> {
+struct DemoteGetGlobalPattern : public OpRewritePattern<TaskOp> {
   using OpRewritePattern<TaskOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(TaskOp task,
@@ -112,13 +112,12 @@ struct GetGlobalDemotePattern : public OpRewritePattern<TaskOp> {
     SmallVector<Value, 4> memrefs;
     SmallVector<Location, 4> locs;
     for (auto getGlobal :
-         llvm::make_early_inc_range(task.getOps<memref::GetGlobalOp>()))
-      if (getGlobal.getType().getNumElements() > 1024) {
-        getGlobal->moveBefore(task);
-        memrefs.push_back(getGlobal);
-        locs.push_back(getGlobal.getLoc());
-        hasChanged = true;
-      }
+         llvm::make_early_inc_range(task.getOps<memref::GetGlobalOp>())) {
+      getGlobal->moveBefore(task);
+      memrefs.push_back(getGlobal);
+      locs.push_back(getGlobal.getLoc());
+      hasChanged = true;
+    }
 
     if (hasChanged) {
       auto args = task.getBody()->addArguments(ValueRange(memrefs), locs);
@@ -153,7 +152,7 @@ struct BufferizeDataflow : public BufferizeDataflowBase<BufferizeDataflow> {
 
     // TODO: Temporary approach. This should be factored out.
     patterns.clear();
-    patterns.add<GetGlobalDemotePattern>(context);
+    patterns.add<DemoteGetGlobalPattern>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };

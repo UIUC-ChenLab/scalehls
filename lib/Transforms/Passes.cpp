@@ -201,6 +201,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(mlir::createCanonicalizerPass());
 
         // Convert dataflow to func.
+        pm.addPass(scalehls::createCreateTokenStreamPass());
         pm.addPass(scalehls::createConvertDataflowToFuncPass());
         pm.addPass(scalehls::createRaiseImplicitCopyPass());
         pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());

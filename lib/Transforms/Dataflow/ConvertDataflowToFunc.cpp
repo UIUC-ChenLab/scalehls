@@ -135,9 +135,6 @@ struct DemoteConstBufferPattern : public OpRewritePattern<ConstBufferOp> {
 
   LogicalResult matchAndRewrite(ConstBufferOp buffer,
                                 PatternRewriter &rewriter) const override {
-    if (buffer.getType().getNumElements() < 1024)
-      return failure();
-
     if (auto node = buffer->getParentOfType<NodeOp>()) {
       buffer->moveBefore(node);
       SmallVector<Value, 8> inputs(node.inputs());
