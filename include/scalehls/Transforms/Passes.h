@@ -67,6 +67,7 @@ std::unique_ptr<Pass> createSimplifyAffineIfPass();
 /// Memory-related passes.
 std::unique_ptr<Pass> createAffineStoreForwardPass();
 std::unique_ptr<Pass> createCreateMemrefSubviewPass();
+std::unique_ptr<Pass> createFoldMemrefSubviewPass();
 std::unique_ptr<Pass> createLowerCopyToAffinePass(bool internalCopyOnly = true);
 std::unique_ptr<Pass> createPlaceBufferPass();
 std::unique_ptr<Pass> createPromoteBufferPass();

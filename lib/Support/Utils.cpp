@@ -155,15 +155,10 @@ SmallVector<NodeOp, 4> scalehls::getProducersInSchedule(Value buffer,
   return getProducersInScheduleExcept(buffer, schedule, NodeOp());
 }
 
-bool scalehls::isInputOutput(Value value) {
-  auto memref = value;
-  if (auto viewLike = value.getDefiningOp<ViewLikeOpInterface>())
-    memref = viewLike.getViewSource();
-  return memref.isa<BlockArgument>() ||
-         llvm::any_of(memref.getUsers(), [](Operation *op) {
-           return op->hasTrait<OpTrait::IsTerminator>() &&
-                  op->hasTrait<OpTrait::ReturnLike>();
-         });
+bool scalehls::isExternalBuffer(Value value) {
+  if (auto type = value.getType().dyn_cast<MemRefType>())
+    return type.getMemorySpaceAsInt() == (unsigned)MemoryKind::DRAM;
+  return false;
 }
 
 bool scalehls::isWritten(OpOperand &use) {

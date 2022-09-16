@@ -39,7 +39,7 @@ SmallVector<NodeOp, 4> getConsumersInSchedule(Value buffer,
 SmallVector<NodeOp, 4> getProducersInSchedule(Value buffer,
                                               ScheduleOp schedule);
 
-bool isInputOutput(Value value);
+bool isExternalBuffer(Value value);
 
 bool isWritten(OpOperand &use);
 

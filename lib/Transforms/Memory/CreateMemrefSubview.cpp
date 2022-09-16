@@ -56,10 +56,10 @@ void CreateMemrefSubview::runOnOperation() {
       } else
         return WalkResult::advance();
 
-      // No need to create subview for on-chip buffers. TODO: Should we make
-      // this an option?
-      if (!isInputOutput(memref))
-        return WalkResult::advance();
+      // // No need to create subview for on-chip buffers. TODO: Should we make
+      // // this an option?
+      // if (!isInputOutput(memref))
+      //   return WalkResult::advance();
 
       // Construct the dimensions set whose corresponding operand is point loop
       // induction variable.

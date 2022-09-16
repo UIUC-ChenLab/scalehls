@@ -123,6 +123,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(arith::createArithmeticBufferizePass());
         pm.addPass(mlir::createLinalgBufferizePass());
         pm.addPass(func::createFuncBufferizePass());
+        pm.addPass(bufferization::createBufferResultsToOutParamsPass());
         pm.addPass(scalehls::createBufferizeDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
@@ -172,18 +173,16 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createCreateMemrefSubviewPass());
         pm.addPass(mlir::createCSEPass());
         pm.addPass(mlir::createCanonicalizerPass());
+        pm.addPass(scalehls::createPromoteBufferPass());
+        pm.addPass(scalehls::createLowerCopyToAffinePass(
+            /*InternalCopyOnly=*/false));
 
         return;
 
-        // pm.addPass(scalehls::createPromoteBufferPass());
-        // // pm.addPass(bufferization::createBufferLoopHoistingPass());
-
-        // pm.addPass(scalehls::createConvertCopyToAffineLoopsPass(
-        //     /*convertInternCopyOnly=*/false));
-        // pm.addPass(memref::createFoldSubViewOpsPass());
-        // pm.addPass(mlir::createAffineLoopNormalizePass());
-        // pm.addPass(mlir::createSimplifyAffineStructuresPass());
-        // pm.addPass(mlir::createCanonicalizerPass());
+        pm.addPass(memref::createFoldSubViewOpsPass());
+        pm.addPass(mlir::createAffineLoopNormalizePass());
+        pm.addPass(mlir::createSimplifyAffineStructuresPass());
+        pm.addPass(mlir::createCanonicalizerPass());
 
         // // Affine loop dataflowing.
         // pm.addPass(scalehls::createCreateDataflowFromAffinePass());
@@ -215,8 +214,6 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         // pm.addPass(scalehls::createConvertDataflowToFuncPass());
         // pm.addPass(scalehls::createRaiseImplicitCopyPass());
         // pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
-
-        // pm.addPass(bufferization::createBufferResultsToOutParamsPass());
 
         // // Directive-level optimization.
         // pm.addPass(scalehls::createCreateAxiInterfacePass(opts.hlsTopFunc));

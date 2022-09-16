@@ -27,7 +27,21 @@ namespace hls {
 
 #include "scalehls/Dialect/HLS/HLSInterfaces.h.inc"
 
-enum class MemoryKind { BRAM_S2P = 0, BRAM_T2P = 1, BRAM_1P = 2, DRAM = 3 };
+enum class MemoryKind {
+  LUTRAM_1P = 0,
+  LUTRAM_2P = 1,
+  LUTRAM_S2P = 2,
+  LUTRAM_T2P = 3,
+  BRAM_1P = 4,
+  BRAM_2P = 5,
+  BRAM_S2P = 6,
+  BRAM_T2P = 7,
+  URAM_1P = 8,
+  URAM_2P = 9,
+  URAM_S2P = 10,
+  URAM_T2P = 11,
+  DRAM = 12
+};
 enum class PartitionKind { CYCLIC = 0, BLOCK = 1, NONE = 2 };
 enum class OperandKind { INPUT = 0, OUTPUT = 1, PARAM = 2 };
 

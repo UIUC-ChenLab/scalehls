@@ -27,40 +27,68 @@ struct BufferConversionPattern : public OpRewritePattern<OpType> {
 };
 } // namespace
 
+MemRefType getNewType(MemRefType type) {
+  // TODO: For now, we just use a heuristic to determine the buffer
+  // placement location.
+  auto kind = MemoryKind::DRAM;
+  if (type.getNumElements() < 1024)
+    kind = MemoryKind::BRAM_S2P;
+
+  // We use MemorySpaceInt of MemRefType to represent the space of
+  // buffers. Here, we set the new memref type.
+  auto newType =
+      MemRefType::get(type.getShape(), type.getElementType(),
+                      type.getLayout().getAffineMap(), (unsigned)kind);
+  return newType;
+}
+
 namespace {
-struct PlaceBufferPattern : public OpRewritePattern<TaskOp> {
-  using OpRewritePattern<TaskOp>::OpRewritePattern;
+struct PlaceBufferPattern : public OpRewritePattern<ScheduleOp> {
+  using OpRewritePattern<ScheduleOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(TaskOp task,
+  LogicalResult matchAndRewrite(ScheduleOp schedule,
                                 PatternRewriter &rewriter) const override {
-    bool hasChanged = false;
+    for (auto task : llvm::make_early_inc_range(schedule.getOps<TaskOp>())) {
+      // Update the task argument type.
+      for (auto t :
+           llvm::zip(task.getBody()->getArguments(), task.getOperandTypes()))
+        std::get<0>(t).setType(std::get<1>(t));
 
-    SmallVector<Value, 4> buffers;
-    SmallVector<Location, 4> locs;
-    for (auto buffer :
-         llvm::make_early_inc_range(task.getOps<hls::BufferLikeInterface>())) {
-      buffer->moveBefore(task);
-      buffers.push_back(buffer.getMemref());
-      locs.push_back(buffer.getLoc());
-      hasChanged = true;
+      SmallVector<Value, 4> buffers;
+      SmallVector<Location, 4> locs;
+      for (auto buffer : llvm::make_early_inc_range(
+               task.getOps<hls::BufferLikeInterface>())) {
+        auto memref = buffer.getMemref();
+        auto type = buffer.getMemrefType();
+        memref.setType(getNewType(type));
+
+        // Move the buffer outside of task.
+        buffer->moveBefore(task);
+        buffers.push_back(memref);
+        locs.push_back(buffer.getLoc());
+      }
+
+      if (!buffers.empty()) {
+        auto args = task.getBody()->addArguments(ValueRange(buffers), locs);
+        for (auto t : llvm::zip(buffers, args))
+          std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
+
+        SmallVector<Value, 16> newInputs(task.inputs());
+        newInputs.append(buffers.begin(), buffers.end());
+        rewriter.setInsertionPoint(task);
+        auto newTask = rewriter.create<TaskOp>(
+            task.getLoc(), task.getYieldOp().getOperandTypes(), newInputs);
+        rewriter.inlineRegionBefore(task.body(), newTask.body(),
+                                    newTask.body().end());
+
+        rewriter.replaceOp(task, newTask.getResults());
+      }
     }
 
-    if (hasChanged) {
-      auto args = task.getBody()->addArguments(ValueRange(buffers), locs);
-      for (auto t : llvm::zip(buffers, args))
-        std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
-
-      SmallVector<Value, 16> newInputs(task.inputs());
-      newInputs.append(buffers.begin(), buffers.end());
-      rewriter.setInsertionPoint(task);
-      auto newTask = rewriter.create<TaskOp>(task.getLoc(),
-                                             task.getResultTypes(), newInputs);
-      rewriter.inlineRegionBefore(task.body(), newTask.body(),
-                                  newTask.body().end());
-
-      rewriter.replaceOp(task, newTask.getResults());
-    }
-    return success(hasChanged);
+    for (auto t : llvm::zip(schedule.getResults(),
+                            schedule.getReturnOp().getOperandTypes()))
+      std::get<0>(t).setType(std::get<1>(t));
+    return success();
   }
 };
 } // namespace
@@ -71,11 +99,26 @@ struct PlaceBuffer : public PlaceBufferBase<PlaceBuffer> {
     auto func = getOperation();
     auto context = func.getContext();
 
+    for (auto arg : func.getArguments())
+      if (auto type = arg.getType().dyn_cast<MemRefType>())
+        arg.setType(MemRefType::get(type.getShape(), type.getElementType(),
+                                    type.getLayout().getAffineMap(),
+                                    (unsigned)MemoryKind::DRAM));
+    func.setType(
+        FunctionType::get(context, func.front().getArgumentTypes(),
+                          func.front().getTerminator()->getOperandTypes()));
+
     mlir::RewritePatternSet patterns(context);
     patterns.add<BufferConversionPattern<memref::AllocOp>>(context);
     patterns.add<BufferConversionPattern<memref::AllocaOp>>(context);
-    patterns.add<PlaceBufferPattern>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+
+    patterns.clear();
+    patterns.add<PlaceBufferPattern>(context);
+    auto frozenPatterns = FrozenRewritePatternSet(std::move(patterns));
+    func.walk([&](ScheduleOp schedule) {
+      (void)applyOpPatternsAndFold(schedule, frozenPatterns);
+    });
   }
 };
 } // namespace

@@ -26,6 +26,7 @@ add_mlir_library(MLIRScaleHLSTransforms
 
   Memory/AffineStoreForward.cpp
   Memory/CreateMemrefSubview.cpp
+  Memory/FoldMemrefSubview.cpp
   Memory/LowerCopyToAffine.cpp
   Memory/PlaceBuffer.cpp
   Memory/PromoteBuffer.cpp

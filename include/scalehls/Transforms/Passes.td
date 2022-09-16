@@ -279,6 +279,11 @@ def CreateMemrefSubview :
   let constructor = "mlir::scalehls::createCreateMemrefSubviewPass()";
 }
 
+def FoldMemrefSubview : Pass<"scalehls-fold-memref-subview", "func::FuncOp"> {
+  let summary = "Fold subviews based on loop analysis";
+  let constructor = "mlir::scalehls::createFoldMemrefSubviewPass()";
+}
+
 def LowerCopyToAffine : Pass<"scalehls-lower-copy-to-affine", "func::FuncOp"> {
   let summary = "Convert copy and assign to affine loops";
   let constructor = "mlir::scalehls::createLowerCopyToAffinePass()";

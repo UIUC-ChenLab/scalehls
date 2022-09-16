@@ -16,7 +16,8 @@ static void createBufferAndCopy(MemRefType type, Value memref,
                                 OpBuilder &builder) {
   // We strip the original layout map and memory kind when constructing the
   // local buffer's memref type.
-  auto bufType = MemRefType::get(type.getShape(), type.getElementType());
+  auto bufType = MemRefType::get(type.getShape(), type.getElementType(),
+                                 AffineMap(), (unsigned)MemoryKind::BRAM_S2P);
   auto loc = builder.getUnknownLoc();
 
   // Check the read/write status of the memref.
@@ -47,7 +48,7 @@ struct PromoteBufferPattern : public OpRewritePattern<memref::SubViewOp> {
 
   LogicalResult matchAndRewrite(memref::SubViewOp subview,
                                 PatternRewriter &rewriter) const override {
-    if (!isInputOutput(subview.source()))
+    if (!isExternalBuffer(subview.source()))
       return failure();
 
     rewriter.setInsertionPointAfter(subview);
