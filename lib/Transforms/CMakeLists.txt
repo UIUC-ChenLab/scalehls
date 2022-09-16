@@ -20,16 +20,18 @@ add_mlir_library(MLIRScaleHLSTransforms
   Loop/AffineLoopPerfection.cpp
   Loop/AffineLoopTile.cpp
   Loop/AffineLoopUnrollJam.cpp
-  Loop/ConvertCopyToAffineLoops.cpp
   Loop/MaterializeReduction.cpp
   Loop/RemoveVariableBound.cpp
   Loop/SimplifyAffineIf.cpp
 
   Memory/AffineStoreForward.cpp
   Memory/CreateMemrefSubview.cpp
+  Memory/LowerCopyToAffine.cpp
+  Memory/PlaceBuffer.cpp
   Memory/PromoteBuffer.cpp
-  Memory/RaiseImplicitCopy.cpp
+  Memory/RaiseAffineToCopy.cpp
   Memory/ReduceInitialInterval.cpp
+  Memory/SimplifyCopy.cpp
   Memory/SimplifyMemrefAccess.cpp
 
   Tensor/TosaFakeQuantize.cpp

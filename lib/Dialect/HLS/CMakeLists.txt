@@ -5,4 +5,5 @@ add_mlir_dialect_library(MLIRHLS
   MLIRHLSIncGen
   MLIRHLSEnumsIncGen
   MLIRHLSAttributesIncGen
+  MLIRHLSInterfacesIncGen
   )

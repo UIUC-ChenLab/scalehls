@@ -71,8 +71,8 @@ struct ScaleHLSPyTorchPipelineV2Options
   //     *this, "dataflow-granularity",
   //     llvm::cl::desc("The granularity of dataflow (set 0 to disable)")};
 
-  Option<double> fusionComputeTolerance{
-      *this, "fusion-compute-tolerance", llvm::cl::init(100.0),
+  Option<double> fusionTolerance{
+      *this, "fusion-tolerance", llvm::cl::init(100.0),
       llvm::cl::desc("Fractional increase in additional computation tolerated "
                      "while loop fusing (default is 100.0)")};
 
@@ -123,22 +123,31 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(arith::createArithmeticBufferizePass());
         pm.addPass(mlir::createLinalgBufferizePass());
         pm.addPass(func::createFuncBufferizePass());
-        pm.addPass(bufferization::createBufferResultsToOutParamsPass());
         pm.addPass(scalehls::createBufferizeDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
         // Linalg to Affine conversion.
         pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
-        pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
+        pm.addPass(scalehls::createSimplifyCopyPass());
+        pm.addPass(scalehls::createLowerCopyToAffinePass());
         pm.addPass(mlir::createCanonicalizerPass());
 
         // Affine loop fusion.
-        pm.addPass(
-            scalehls::createAffineLoopFusionPass(opts.fusionComputeTolerance));
+        pm.addPass(scalehls::createAffineLoopFusionPass(opts.fusionTolerance));
+        pm.addPass(mlir::createAffineLoopNormalizePass());
+        pm.addPass(mlir::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
+
+        // Post-fusion loop optimization.
+        pm.addPass(scalehls::createRaiseAffineToCopyPass());
+        pm.addPass(scalehls::createSimplifyCopyPass());
+        pm.addPass(scalehls::createLowerCopyToAffinePass());
+        pm.addPass(mlir::createAffineScalarReplacementPass());
         pm.addPass(scalehls::createAffineStoreForwardPass());
-        pm.addPass(scalehls::createRaiseImplicitCopyPass());
-        pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
+        pm.addPass(mlir::createCanonicalizerPass());
+
+        // Place dataflow buffers.
+        pm.addPass(scalehls::createPlaceBufferPass());
 
         // // Vectorization.
         // if (opts.vectorSize) {
@@ -146,12 +155,10 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         //   pm.addPass(mlir::createCanonicalizerPass());
         // }
 
-        // Affine loop perfectization.
+        // Affine loop preprocess.
         pm.addPass(scalehls::createFuncPreprocessPass(opts.hlsTopFunc));
         pm.addPass(scalehls::createMaterializeReductionPass());
-        pm.addPass(bufferization::createBufferLoopHoistingPass());
         pm.addPass(scalehls::createAffineLoopPerfectionPass());
-        pm.addPass(mlir::createAffineScalarReplacementPass());
         pm.addPass(scalehls::createRemoveVariableBoundPass());
 
         // Affine loop tiling.
@@ -165,54 +172,59 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createCreateMemrefSubviewPass());
         pm.addPass(mlir::createCSEPass());
         pm.addPass(mlir::createCanonicalizerPass());
-        pm.addPass(scalehls::createPromoteBufferPass());
-        // pm.addPass(bufferization::createBufferLoopHoistingPass());
 
-        pm.addPass(scalehls::createConvertCopyToAffineLoopsPass(
-            /*convertInternCopyOnly=*/false));
-        pm.addPass(memref::createFoldSubViewOpsPass());
-        pm.addPass(mlir::createAffineLoopNormalizePass());
-        pm.addPass(mlir::createSimplifyAffineStructuresPass());
-        pm.addPass(mlir::createCanonicalizerPass());
+        return;
 
-        // Affine loop dataflowing.
-        pm.addPass(scalehls::createCreateDataflowFromAffinePass());
-        pm.addPass(mlir::createCanonicalizerPass());
+        // pm.addPass(scalehls::createPromoteBufferPass());
+        // // pm.addPass(bufferization::createBufferLoopHoistingPass());
 
-        // Lower dataflow.
-        pm.addPass(scalehls::createStreamDataflowPass());
-        pm.addPass(scalehls::createLowerDataflowPass());
-        pm.addPass(mlir::createCanonicalizerPass());
+        // pm.addPass(scalehls::createConvertCopyToAffineLoopsPass(
+        //     /*convertInternCopyOnly=*/false));
+        // pm.addPass(memref::createFoldSubViewOpsPass());
+        // pm.addPass(mlir::createAffineLoopNormalizePass());
+        // pm.addPass(mlir::createSimplifyAffineStructuresPass());
+        // pm.addPass(mlir::createCanonicalizerPass());
 
-        // Affine loop unrolling.
-        if (opts.loopUnrollFactor) {
-          pm.addPass(scalehls::createAffineLoopUnrollJamPass(
-              opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true));
-          pm.addPass(mlir::createAffineLoopNormalizePass());
-          pm.addPass(mlir::createSimplifyAffineStructuresPass());
-          pm.addPass(mlir::createCanonicalizerPass());
-        }
+        // // Affine loop dataflowing.
+        // pm.addPass(scalehls::createCreateDataflowFromAffinePass());
+        // pm.addPass(mlir::createCanonicalizerPass());
 
-        // Memory optimization.
-        pm.addPass(scalehls::createSimplifyAffineIfPass());
-        pm.addPass(scalehls::createAffineStoreForwardPass());
-        pm.addPass(scalehls::createSimplifyMemrefAccessPass());
-        pm.addPass(scalehls::createReduceInitialIntervalPass());
-        pm.addPass(mlir::createCanonicalizerPass());
+        // // Lower dataflow.
+        // pm.addPass(scalehls::createStreamDataflowPass());
+        // pm.addPass(scalehls::createLowerDataflowPass());
+        // pm.addPass(mlir::createCanonicalizerPass());
 
-        // Convert dataflow to func.
-        pm.addPass(scalehls::createCreateTokenStreamPass());
-        pm.addPass(scalehls::createConvertDataflowToFuncPass());
-        pm.addPass(scalehls::createRaiseImplicitCopyPass());
-        pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
+        // // Affine loop unrolling.
+        // if (opts.loopUnrollFactor) {
+        //   pm.addPass(scalehls::createAffineLoopUnrollJamPass(
+        //       opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true));
+        //   pm.addPass(mlir::createAffineLoopNormalizePass());
+        //   pm.addPass(mlir::createSimplifyAffineStructuresPass());
+        //   pm.addPass(mlir::createCanonicalizerPass());
+        // }
 
-        // Directive-level optimization.
-        pm.addPass(scalehls::createCreateAxiInterfacePass(opts.hlsTopFunc));
-        pm.addPass(scalehls::createLoopPipeliningPass());
-        pm.addPass(scalehls::createArrayPartitionPass());
-        pm.addPass(scalehls::createCreateHLSPrimitivePass());
-        pm.addPass(mlir::createCSEPass());
-        pm.addPass(mlir::createCanonicalizerPass());
+        // // Memory optimization.
+        // pm.addPass(scalehls::createSimplifyAffineIfPass());
+        // pm.addPass(scalehls::createAffineStoreForwardPass());
+        // pm.addPass(scalehls::createSimplifyMemrefAccessPass());
+        // pm.addPass(scalehls::createReduceInitialIntervalPass());
+        // pm.addPass(mlir::createCanonicalizerPass());
+
+        // // Convert dataflow to func.
+        // pm.addPass(scalehls::createCreateTokenStreamPass());
+        // pm.addPass(scalehls::createConvertDataflowToFuncPass());
+        // pm.addPass(scalehls::createRaiseImplicitCopyPass());
+        // pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
+
+        // pm.addPass(bufferization::createBufferResultsToOutParamsPass());
+
+        // // Directive-level optimization.
+        // pm.addPass(scalehls::createCreateAxiInterfacePass(opts.hlsTopFunc));
+        // pm.addPass(scalehls::createLoopPipeliningPass());
+        // pm.addPass(scalehls::createArrayPartitionPass());
+        // pm.addPass(scalehls::createCreateHLSPrimitivePass());
+        // pm.addPass(mlir::createCSEPass());
+        // pm.addPass(mlir::createCanonicalizerPass());
       });
 }
 

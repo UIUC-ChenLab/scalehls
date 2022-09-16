@@ -755,5 +755,7 @@ void FuncDirectiveAttr::print(AsmPrinter &p) const {
 #define GET_TYPEDEF_CLASSES
 #include "scalehls/Dialect/HLS/HLSTypes.cpp.inc"
 
+#include "scalehls/Dialect/HLS/HLSInterfaces.cpp.inc"
+
 #define GET_OP_CLASSES
 #include "scalehls/Dialect/HLS/HLS.cpp.inc"

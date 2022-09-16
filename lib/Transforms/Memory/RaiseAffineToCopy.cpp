@@ -13,7 +13,7 @@ using namespace mlir;
 using namespace scalehls;
 
 namespace {
-struct RaiseImplicitCopy : public RaiseImplicitCopyBase<RaiseImplicitCopy> {
+struct RaiseAffineToCopy : public RaiseAffineToCopyBase<RaiseAffineToCopy> {
   void runOnOperation() override {
     auto func = getOperation();
     auto builder = OpBuilder(func);
@@ -76,6 +76,6 @@ struct RaiseImplicitCopy : public RaiseImplicitCopyBase<RaiseImplicitCopy> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createRaiseImplicitCopyPass() {
-  return std::make_unique<RaiseImplicitCopy>();
+std::unique_ptr<Pass> scalehls::createRaiseAffineToCopyPass() {
+  return std::make_unique<RaiseAffineToCopy>();
 }

@@ -10,6 +10,7 @@
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
+include "scalehls/Dialect/HLS/Interfaces.td"
 
 //===----------------------------------------------------------------------===//
 // Traits and Type Constraints
@@ -208,7 +209,8 @@ def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
   }];
 }
 
-def BufferOp : HLSOp<"dataflow.buffer"> {
+def BufferOp : HLSOp<"dataflow.buffer", [
+      DeclareOpInterfaceMethods<BufferLikeInterface>]> {
   let summary = "Represent a dataflow buffer";
 
   let arguments = (ins I32Attr:$depth);
@@ -221,7 +223,8 @@ def BufferOp : HLSOp<"dataflow.buffer"> {
   ];
 }
 
-def ConstBufferOp : HLSOp<"dataflow.const_buffer"> {
+def ConstBufferOp : HLSOp<"dataflow.const_buffer", [
+      DeclareOpInterfaceMethods<BufferLikeInterface>]> {
   let summary = "Represent a cosntant dataflow buffer";
 
   let arguments = (ins ElementsAttr:$value);

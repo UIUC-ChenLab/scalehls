@@ -15,37 +15,8 @@ using namespace scalehls;
 using namespace hls;
 
 //===----------------------------------------------------------------------===//
-// Convert high dataflow to low dataflow
+// Convert dataflow task to node
 //===----------------------------------------------------------------------===//
-
-namespace {
-struct ConstBufferConversionPattern
-    : public OpRewritePattern<memref::GetGlobalOp> {
-  using OpRewritePattern<memref::GetGlobalOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(memref::GetGlobalOp op,
-                                PatternRewriter &rewriter) const override {
-    auto global = SymbolTable::lookupNearestSymbolFrom<memref::GlobalOp>(
-        op, op.nameAttr());
-    rewriter.replaceOpWithNewOp<ConstBufferOp>(op, global.type(),
-                                               global.getConstantInitValue());
-    return success();
-  }
-};
-} // namespace
-
-namespace {
-template <typename OpType>
-struct BufferConversionPattern : public OpRewritePattern<OpType> {
-  using OpRewritePattern<OpType>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(OpType op,
-                                PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<BufferOp>(op, op.getType());
-    return success();
-  }
-};
-} // namespace
 
 namespace {
 struct NodeConversionPattern : public OpRewritePattern<TaskOp> {
@@ -176,7 +147,7 @@ struct ScheduleOutputRemovePattern : public OpRewritePattern<ScheduleOp> {
 } // namespace
 
 //===----------------------------------------------------------------------===//
-// Legalize low dataflow
+// Legalize node-level dataflow
 //===----------------------------------------------------------------------===//
 
 namespace {
@@ -408,16 +379,12 @@ struct LowerDataflow : public LowerDataflowBase<LowerDataflow> {
     auto func = getOperation();
     auto context = func.getContext();
 
-    // Convert dataflow node operations.
+    // Convert dataflow task to node.
     ConversionTarget target(*context);
-    target.addIllegalOp<memref::GetGlobalOp, memref::AllocOp, memref::AllocaOp,
-                        TaskOp, YieldOp>();
-    target.addLegalOp<ConstBufferOp, BufferOp, NodeOp>();
+    target.addIllegalOp<TaskOp, YieldOp>();
+    target.addLegalOp<NodeOp>();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<ConstBufferConversionPattern>(context);
-    patterns.add<BufferConversionPattern<memref::AllocOp>>(context);
-    patterns.add<BufferConversionPattern<memref::AllocaOp>>(context);
     patterns.add<NodeConversionPattern>(context);
     if (failed(applyPartialConversion(func, target, std::move(patterns))))
       return signalPassFailure();

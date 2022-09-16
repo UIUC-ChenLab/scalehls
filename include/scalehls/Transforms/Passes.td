@@ -48,8 +48,7 @@ def FuncPreprocess : Pass<"scalehls-func-preprocess", "func::FuncOp"> {
 // Dataflow-related Passes
 //===----------------------------------------------------------------------===//
 
-def BufferizeDataflow :
-      Pass<"scalehls-bufferize-dataflow", "func::FuncOp"> {
+def BufferizeDataflow : Pass<"scalehls-bufferize-dataflow", "func::FuncOp"> {
   let summary = "Bufferize dataflow operations";
   let constructor = "mlir::scalehls::createBufferizeDataflowPass()";
 }
@@ -91,8 +90,7 @@ def LowerDataflow : Pass<"scalehls-lower-dataflow", "func::FuncOp"> {
   let constructor = "mlir::scalehls::createLowerDataflowPass()";
 }
 
-def StreamDataflow :
-      Pass<"scalehls-stream-dataflow", "func::FuncOp"> {
+def StreamDataflow : Pass<"scalehls-stream-dataflow", "func::FuncOp"> {
   let summary = "Stream dataflow operations";
   let constructor = "mlir::scalehls::createStreamDataflowPass()";
 }
@@ -167,30 +165,15 @@ def AffineLoopFusion : Pass<"scalehls-affine-loop-fusion", "func::FuncOp"> {
     ];
 }
 
-def ConvertCopyToAffineLoops :
-      Pass<"scalehls-convert-copy-to-affine-loops", "func::FuncOp"> {
-  let summary = "Convert copy and assign to affine loops";
+def AffineLoopOrderOpt :
+      Pass<"scalehls-affine-loop-order-opt", "func::FuncOp"> {
+  let summary = "Optimize the order of affine loop nests";
   let description = [{
-    This convert-copy-to-affine-loops pass will first remove redundant copies
-    and lower assigns to copies, and then convert copies to affine loops.
+    This affine-loop-order-opt pass will optimize the order of perfect affine
+    loop nests through polyhedral-based dependency analysis. The objective of
+    this pass is to maximize the distance of loop-carried dependencies.
   }];
-  let constructor = "mlir::scalehls::createConvertCopyToAffineLoopsPass()";
-
-  let options = [
-    Option<"internCopyOnly", "intern-copy-only", "bool", /*default=*/"true",
-           "only convert copy between internal memories">
-  ];
-}
-
-def MaterializeReduction :
-      Pass<"scalehls-materialize-reduction", "func::FuncOp"> {
-  let summary = "Materialize loop reductions";
-  let description = [{
-    This materialize-reduction pass will materialize loop reductions with local
-    buffer read/writes in order to expose more optimization opportunities
-    targeting HLS.
-  }];
-  let constructor = "mlir::scalehls::createMaterializeReductionPass()";
+  let constructor = "mlir::scalehls::createAffineLoopOrderOptPass()";
 }
 
 def AffineLoopPerfection :
@@ -205,18 +188,6 @@ def AffineLoopPerfection :
   let constructor = "mlir::scalehls::createAffineLoopPerfectionPass()";
 }
 
-def RemoveVariableBound :
-      Pass<"scalehls-remove-variable-bound", "func::FuncOp"> {
-  let summary = "Try to remove variable loop bounds";
-  let description = [{
-    This remove-variable-bound pass will try to remove the variable loop bounds.
-    Specifically, this is only feasible when the loop bound is an affine
-    expression of induction variables of other loops with constant lower and
-    upper bound.
-  }];
-  let constructor = "mlir::scalehls::createRemoveVariableBoundPass()";
-}
-
 def AffineLoopTile : Pass<"scalehls-affine-loop-tile", "func::FuncOp"> {
   let summary = "Tile affine loop nests and annotate point loops";
   let description = [{
@@ -228,17 +199,6 @@ def AffineLoopTile : Pass<"scalehls-affine-loop-tile", "func::FuncOp"> {
     Option<"tileSize", "tile-size", "unsigned", /*default=*/"4",
            "Use this tile size for all loops">
   ];
-}
-
-def AffineLoopOrderOpt :
-      Pass<"scalehls-affine-loop-order-opt", "func::FuncOp"> {
-  let summary = "Optimize the order of affine loop nests";
-  let description = [{
-    This affine-loop-order-opt pass will optimize the order of perfect affine
-    loop nests through polyhedral-based dependency analysis. The objective of
-    this pass is to maximize the distance of loop-carried dependencies.
-  }];
-  let constructor = "mlir::scalehls::createAffineLoopOrderOptPass()";
 }
 
 def AffineLoopUnrollJam :
@@ -261,6 +221,29 @@ def AffineLoopUnrollJam :
   ];
 }
 
+def MaterializeReduction :
+      Pass<"scalehls-materialize-reduction", "func::FuncOp"> {
+  let summary = "Materialize loop reductions";
+  let description = [{
+    This materialize-reduction pass will materialize loop reductions with local
+    buffer read/writes in order to expose more optimization opportunities
+    targeting HLS.
+  }];
+  let constructor = "mlir::scalehls::createMaterializeReductionPass()";
+}
+
+def RemoveVariableBound :
+      Pass<"scalehls-remove-variable-bound", "func::FuncOp"> {
+  let summary = "Try to remove variable loop bounds";
+  let description = [{
+    This remove-variable-bound pass will try to remove the variable loop bounds.
+    Specifically, this is only feasible when the loop bound is an affine
+    expression of induction variables of other loops with constant lower and
+    upper bound.
+  }];
+  let constructor = "mlir::scalehls::createRemoveVariableBoundPass()";
+}
+
 def SimplifyAffineIf : Pass<"scalehls-simplify-affine-if", "func::FuncOp"> {
   let summary = "Simplify affine if operations";
   let description = [{
@@ -275,6 +258,15 @@ def SimplifyAffineIf : Pass<"scalehls-simplify-affine-if", "func::FuncOp"> {
 // Memory-related Passes
 //===----------------------------------------------------------------------===//
 
+def AffineStoreForward : Pass<"scalehls-affine-store-forward", "func::FuncOp"> {
+  let summary = "Forward store to load, including conditional stores";
+  let description = [{
+    This affine-store-forward pass is similar to scal-repl, but supports to
+    forward stores located in if statements.
+  }];
+  let constructor = "mlir::scalehls::createAffineStoreForwardPass()";
+}
+
 def CreateMemrefSubview :
       Pass<"scalehls-create-memref-subview", "func::FuncOp"> {
   let summary = "Create subviews based on loop analysis";
@@ -287,37 +279,29 @@ def CreateMemrefSubview :
   let constructor = "mlir::scalehls::createCreateMemrefSubviewPass()";
 }
 
+def LowerCopyToAffine : Pass<"scalehls-lower-copy-to-affine", "func::FuncOp"> {
+  let summary = "Convert copy and assign to affine loops";
+  let constructor = "mlir::scalehls::createLowerCopyToAffinePass()";
+
+  let options = [
+    Option<"internalCopyOnly", "internal-copy-only", "bool", /*default=*/"true",
+           "only convert copy between internal memories">
+  ];
+}
+
+def PlaceBuffer : Pass<"scalehls-place-buffer", "func::FuncOp"> {
+  let summary = "Place dataflow buffers";
+  let constructor = "mlir::scalehls::createPlaceBufferPass()";
+}
+
 def PromoteBuffer : Pass<"scalehls-promote-buffer", "func::FuncOp"> {
   let summary = "Promote external buffer to on-chip buffer";
   let constructor = "mlir::scalehls::createPromoteBufferPass()";
 }
 
-def AffineStoreForward : Pass<"scalehls-affine-store-forward", "func::FuncOp"> {
-  let summary = "Forward store to load, including conditional stores";
-  let description = [{
-    This affine-store-forward pass is similar to scal-repl, but supports to
-    forward stores located in if statements.
-  }];
-  let constructor = "mlir::scalehls::createAffineStoreForwardPass()";
-}
-
-def SimplifyMemrefAccess :
-      Pass<"scalehls-simplify-memref-access", "func::FuncOp"> {
-  let summary = "Remove redundant load and store operations";
-  let description = [{
-    This simplify-memref-access pass will eliminate the known redundant load and
-    store operations for simplifying the memref access.
-  }];
-  let constructor = "mlir::scalehls::createSimplifyMemrefAccessPass()";
-}
-
-def RaiseImplicitCopy : Pass<"scalehls-raise-implicit-copy", "func::FuncOp"> {
+def RaiseAffineToCopy : Pass<"scalehls-raise-affine-to-copy", "func::FuncOp"> {
   let summary = "Raise copy in affine loops to memref.copy";
-  let description = [{
-    This raise-implicit-copy pass will detect implicit copy in affine loops and
-    raise to memref.copy in order to eliminate redundant copies.
-  }];
-  let constructor = "mlir::scalehls::createRaiseImplicitCopyPass()";
+  let constructor = "mlir::scalehls::createRaiseAffineToCopyPass()";
 }
 
 def ReduceInitialInterval :
@@ -330,9 +314,43 @@ def ReduceInitialInterval :
   let constructor = "mlir::scalehls::createReduceInitialIntervalPass()";
 }
 
+def SimplifyCopy : Pass<"scalehls-simplify-copy", "func::FuncOp"> {
+  let summary = "Simplify memref copy ops";
+  let constructor = "mlir::scalehls::createSimplifyCopyPass()";
+}
+
+def SimplifyMemrefAccess :
+      Pass<"scalehls-simplify-memref-access", "func::FuncOp"> {
+  let summary = "Remove redundant load and store operations";
+  let description = [{
+    This simplify-memref-access pass will eliminate the known redundant load and
+    store operations for simplifying the memref access.
+  }];
+  let constructor = "mlir::scalehls::createSimplifyMemrefAccessPass()";
+}
+
 //===----------------------------------------------------------------------===//
 // Directive-related Passes
 //===----------------------------------------------------------------------===//
+
+def ArrayPartition : Pass<"scalehls-array-partition", "ModuleOp"> {
+  let summary = "Apply optimized array partition strategy";
+  let description = [{
+    This array-partition pass will automatically search for the best array
+    partition solution for each on-chip memory instance and apply the solution
+    through changing the layout of the corresponding memref.
+  }];
+  let constructor = "mlir::scalehls::createArrayPartitionPass()";
+}
+
+def CreateHLSPrimitive : Pass<"scalehls-create-hls-primitive", "func::FuncOp"> {
+  let summary = "Create HLS C++ multiplification primitives";
+  let description = [{
+    This create-hls-primitive pass will convert 8-bits multiplifications to HLS
+    C++ primitives in order to utilize DSP instances in FPGA.
+  }];
+  let constructor = "mlir::scalehls::createCreateHLSPrimitivePass()";
+}
 
 def CreateAxiInterface : Pass<"scalehls-create-axi-interface", "ModuleOp"> {
   let summary = "Create AXI interfaces for the top function";
@@ -380,25 +398,6 @@ def LoopPipelining : Pass<"scalehls-loop-pipelining", "func::FuncOp"> {
     Option<"targetII", "target-ii", "unsigned", /*default=*/"1",
            "Positive number: the targeted II to achieve">
   ];
-}
-
-def ArrayPartition : Pass<"scalehls-array-partition", "ModuleOp"> {
-  let summary = "Apply optimized array partition strategy";
-  let description = [{
-    This array-partition pass will automatically search for the best array
-    partition solution for each on-chip memory instance and apply the solution
-    through changing the layout of the corresponding memref.
-  }];
-  let constructor = "mlir::scalehls::createArrayPartitionPass()";
-}
-
-def CreateHLSPrimitive : Pass<"scalehls-create-hls-primitive", "func::FuncOp"> {
-  let summary = "Create HLS C++ multiplification primitives";
-  let description = [{
-    This create-hls-primitive pass will convert 8-bits multiplifications to HLS
-    C++ primitives in order to utilize DSP instances in FPGA.
-  }];
-  let constructor = "mlir::scalehls::createCreateHLSPrimitivePass()";
 }
 
 def QoREstimation : Pass<"scalehls-qor-estimation", "ModuleOp"> {
