@@ -447,8 +447,8 @@ public:
       ++pos;
     }
 
-    if (firstSrcDepPos.value()) {
-      if (lastDstDepPos.value()) {
+    if (firstSrcDepPos.has_value()) {
+      if (lastDstDepPos.has_value()) {
         if (firstSrcDepPos.value() <= lastDstDepPos.value()) {
           // No valid insertion point exists which preserves dependences.
           return nullptr;
@@ -639,13 +639,13 @@ static bool canRemoveSrcNodeAfterFusion(
   // that all the dependences are preserved.
   if (hasOutDepsAfterFusion || !escapingMemRefs.empty()) {
     Optional<bool> isMaximal = fusionSlice.isMaximal();
-    if (!isMaximal.value()) {
+    if (!isMaximal) {
       LLVM_DEBUG(llvm::dbgs() << "Src loop can't be removed: can't determine "
                                  "if fusion is maximal\n");
       return false;
     }
 
-    if (!isMaximal.value()) {
+    if (!*isMaximal) {
       LLVM_DEBUG(llvm::dbgs()
                  << "Src loop can't be removed: fusion is not maximal\n");
       return false;
@@ -689,7 +689,7 @@ static void getProducerCandidates(unsigned dstId, MemRefDependenceGraph *mdg,
       srcIdCandidates.push_back(srcNode->id);
   }
 
-  std::sort(srcIdCandidates.begin(), srcIdCandidates.end());
+  llvm::sort(srcIdCandidates);
   srcIdCandidates.erase(
       std::unique(srcIdCandidates.begin(), srcIdCandidates.end()),
       srcIdCandidates.end());
@@ -796,18 +796,11 @@ bool MemRefDependenceGraph::init(TaskOp f) {
         Node node(nextNodeId++, &op);
         nodes.insert({node.id, node});
       }
-    } else if (auto effectInterface = dyn_cast<MemoryEffectOpInterface>(op)) {
+    } else if (hasEffect<MemoryEffects::Write, MemoryEffects::Free>(&op)) {
       // Create graph node for top-level op, which could have a memory write
       // side effect.
-      SmallVector<MemoryEffects::EffectInstance, 1> effects;
-      effectInterface.getEffects(effects);
-      if (llvm::any_of(effects, [](const MemoryEffects::EffectInstance &it) {
-            return isa<MemoryEffects::Write, MemoryEffects::Free>(
-                it.getEffect());
-          })) {
-        Node node(nextNodeId++, &op);
-        nodes.insert({node.id, node});
-      }
+      Node node(nextNodeId++, &op);
+      nodes.insert({node.id, node});
     }
   }
 
@@ -916,7 +909,7 @@ static Value createPrivateMemRef(AffineForOp forOp, Operation *srcStoreOpInst,
   // by 'srcStoreOpInst' at depth 'dstLoopDepth'.
   Optional<int64_t> numElements =
       region.getConstantBoundingSizeAndShape(&newShape, &lbs, &lbDivisors);
-  assert(numElements.value() && "non-constant number of elts in local buffer");
+  assert(numElements && "non-constant number of elts in local buffer");
 
   const FlatAffineValueConstraints *cst = region.getConstraints();
   // 'outerIVs' holds the values that this memory region is symbolic/parametric
@@ -1125,10 +1118,10 @@ static bool isFusionProfitable(Operation *srcOpInst, Operation *srcStoreOpInst,
   // loop nest at 'dstLoopDepth'.
   uint64_t minFusedLoopNestComputeCost = std::numeric_limits<uint64_t>::max();
   double maxStorageReduction = 0.0;
-  Optional<uint64_t> sliceMemEstimate = None;
+  Optional<uint64_t> sliceMemEstimate;
 
   // The best loop depth at which to materialize the slice.
-  Optional<unsigned> bestDstLoopDepth = None;
+  Optional<unsigned> bestDstLoopDepth;
 
   // Compute op instance count for the src loop nest without iteration slicing.
   uint64_t srcLoopNestCost = getComputeCost(srcLoopIVs[0], srcLoopNestStats);
@@ -1143,7 +1136,7 @@ static bool isFusionProfitable(Operation *srcOpInst, Operation *srcStoreOpInst,
 
   Optional<int64_t> maybeSrcWriteRegionSizeBytes =
       srcWriteRegion.getRegionSize();
-  if (!maybeSrcWriteRegionSizeBytes.value())
+  if (!maybeSrcWriteRegionSizeBytes.has_value())
     return false;
   int64_t srcWriteRegionSizeBytes = maybeSrcWriteRegionSizeBytes.value();
 
@@ -1185,7 +1178,7 @@ static bool isFusionProfitable(Operation *srcOpInst, Operation *srcStoreOpInst,
 
     Optional<int64_t> maybeSliceWriteRegionSizeBytes =
         sliceWriteRegion.getRegionSize();
-    if (!maybeSliceWriteRegionSizeBytes.value() ||
+    if (!maybeSliceWriteRegionSizeBytes.has_value() ||
         maybeSliceWriteRegionSizeBytes.value() == 0) {
       LLVM_DEBUG(llvm::dbgs()
                  << "Failed to get slice write region size at loopDepth: " << i
@@ -1234,7 +1227,7 @@ static bool isFusionProfitable(Operation *srcOpInst, Operation *srcStoreOpInst,
 
   // A simple cost model: fuse if it reduces the memory footprint.
 
-  if (!bestDstLoopDepth.value()) {
+  if (!bestDstLoopDepth) {
     LLVM_DEBUG(
         llvm::dbgs()
         << "All fusion choices involve more than the threshold amount of "
@@ -1242,13 +1235,13 @@ static bool isFusionProfitable(Operation *srcOpInst, Operation *srcStoreOpInst,
     return false;
   }
 
-  if (!bestDstLoopDepth.value()) {
+  if (!bestDstLoopDepth) {
     LLVM_DEBUG(llvm::dbgs() << "no fusion depth could be evaluated.\n");
     return false;
   }
 
   // Set dstLoopDepth based on best values from search.
-  *dstLoopDepth = bestDstLoopDepth.value();
+  *dstLoopDepth = *bestDstLoopDepth;
 
   LLVM_DEBUG(
       llvm::dbgs() << " LoopFusion fusion stats:"
@@ -1261,9 +1254,9 @@ static bool isFusionProfitable(Operation *srcOpInst, Operation *srcStoreOpInst,
   auto dstMemSize = getMemoryFootprintBytes(dstForOp);
   auto srcMemSize = getMemoryFootprintBytes(srcLoopIVs[0]);
 
-  Optional<double> storageReduction = None;
+  Optional<double> storageReduction;
 
-  if (!dstMemSize.has_value() || !srcMemSize.has_value()) {
+  if (!dstMemSize || !srcMemSize) {
     LLVM_DEBUG(llvm::dbgs()
                << "  fusion memory benefit cannot be evaluated; NOT fusing.\n");
     return false;
@@ -1272,7 +1265,7 @@ static bool isFusionProfitable(Operation *srcOpInst, Operation *srcStoreOpInst,
   auto srcMemSizeVal = srcMemSize.value();
   auto dstMemSizeVal = dstMemSize.value();
 
-  assert(sliceMemEstimate.has_value() && "expected value");
+  assert(sliceMemEstimate && "expected value");
   auto fusedMem = dstMemSizeVal + sliceMemEstimate.value();
 
   LLVM_DEBUG(llvm::dbgs() << "   src mem: " << srcMemSizeVal << "\n"
@@ -1298,8 +1291,7 @@ static bool isFusionProfitable(Operation *srcOpInst, Operation *srcStoreOpInst,
     msg << " fusion is most profitable at depth " << *dstLoopDepth << " with "
         << std::setprecision(2) << additionalComputeFraction
         << "% redundant computation and a ";
-    msg << (storageReduction.value() ? std::to_string(storageReduction.value())
-                                     : "<unknown>");
+    msg << (storageReduction ? std::to_string(*storageReduction) : "<unknown>");
     msg << "% storage reduction.\n";
     llvm::dbgs() << msg.str();
   });
@@ -1853,9 +1845,8 @@ public:
 
     // Search for siblings which load the same memref function argument.
     auto fn = dstNode->op->getParentOfType<TaskOp>();
-    for (unsigned i = 0, e = fn.getBody().front().getNumArguments(); i != e;
-         ++i) {
-      for (auto *user : fn.getBody().front().getArgument(i).getUsers()) {
+    for (unsigned i = 0, e = fn.getBody().getNumArguments(); i != e; ++i) {
+      for (auto *user : fn.getBody().getArgument(i).getUsers()) {
         if (auto loadOp = dyn_cast<AffineReadOpInterface>(user)) {
           // Gather loops surrounding 'use'.
           SmallVector<AffineForOp, 4> loops;

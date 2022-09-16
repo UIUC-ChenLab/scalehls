@@ -46,9 +46,9 @@ struct CreateTokenStream : public CreateTokenStreamBase<CreateTokenStream> {
         newNode.getBody().getBlocks().splice(newNode.getBody().end(),
                                              node.getBody().getBlocks());
         node.erase();
-        auto tokenArg = newNode.getBody().front().insertArgument(
-            outputIdx + newNode.getNumInputs(), token.getType(),
-            token.getLoc());
+        auto tokenArg =
+            newNode.getBody().insertArgument(outputIdx + newNode.getNumInputs(),
+                                             token.getType(), token.getLoc());
 
         b.setInsertionPointToEnd(&newNode.getBody().front());
         auto value = b.create<arith::ConstantOp>(loc, b.getBoolAttr(true));
@@ -68,7 +68,7 @@ struct CreateTokenStream : public CreateTokenStreamBase<CreateTokenStream> {
         newNode.getBody().getBlocks().splice(newNode.getBody().end(),
                                              node.getBody().getBlocks());
         node.erase();
-        auto tokenArg = newNode.getBody().front().insertArgument(
+        auto tokenArg = newNode.getBody().insertArgument(
             inputIdx, token.getType(), token.getLoc());
 
         b.setInsertionPointToStart(&newNode.getBody().front());

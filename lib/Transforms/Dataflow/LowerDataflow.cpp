@@ -41,7 +41,7 @@ struct NodeConversionPattern : public OpRewritePattern<TaskOp> {
     SmallVector<Value, 8> params;
     SmallVector<BlockArgument, 8> paramArgs;
     SmallVector<Location, 8> paramLocs;
-    for (auto arg : task.getBody().front().getArguments()) {
+    for (auto arg : task.getBody().getArguments()) {
       auto operand = task.getOperand(arg.getArgNumber());
 
       if (operand.getType().isa<MemRefType, StreamType>()) {
@@ -76,7 +76,7 @@ struct NodeConversionPattern : public OpRewritePattern<TaskOp> {
       std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
 
     auto newOutputArgs =
-        node.getBody().front().addArguments(ValueRange(outputs), outputLocs);
+        node.getBody().addArguments(ValueRange(outputs), outputLocs);
     for (auto t : llvm::zip(outputArgs, newOutputArgs))
       std::get<0>(t).replaceAllUsesExcept(std::get<1>(t), node);
 
@@ -206,7 +206,7 @@ struct MultiProducerRemovePattern : public OpRewritePattern<NodeOp> {
     rewriter.setInsertionPointToStart(&newNode.getBody().front());
     for (auto e : llvm::enumerate(targetArgs)) {
       auto newBufferArg = e.value();
-      auto bufferArg = newNode.getBody().front().insertArgument(
+      auto bufferArg = newNode.getBody().insertArgument(
           node.getNumInputs() + e.index(), newBufferArg.getType(),
           newBufferArg.getLoc());
       rewriter.create<memref::CopyOp>(loc, bufferArg, newBufferArg);
@@ -331,8 +331,7 @@ static NodeOp fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter) {
     auto &nodeOps = node.getBody().front().getOperations();
     auto &newNodeOps = newNode.getBody().front().getOperations();
     newNodeOps.splice(newNode.end(), nodeOps);
-    for (auto t :
-         llvm::zip(node.getBody().front().getArguments(), node.getOperands()))
+    for (auto t : llvm::zip(node.getBody().getArguments(), node.getOperands()))
       std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
     rewriter.eraseOp(node);
   }

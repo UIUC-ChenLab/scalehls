@@ -66,7 +66,7 @@ struct TaskBufferizationPattern : public OpRewritePattern<TaskOp> {
             rewriter.getUnknownLoc(), memrefType, input.get());
         input.set(memref);
 
-        auto arg = op.getBody().front().getArgument(input.getOperandNumber());
+        auto arg = op.getBody().getArgument(input.getOperandNumber());
         arg.setType(memrefType);
 
         rewriter.setInsertionPointToStart(&op.getBody().front());

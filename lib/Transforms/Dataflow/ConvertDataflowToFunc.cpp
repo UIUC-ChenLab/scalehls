@@ -140,7 +140,7 @@ struct DemoteConstBufferPattern : public OpRewritePattern<ConstBufferOp> {
       SmallVector<Value, 8> inputs(node.getInputs());
       inputs.push_back(buffer.getMemref());
 
-      auto newArg = node.getBody().front().insertArgument(
+      auto newArg = node.getBody().insertArgument(
           node.getNumInputs(), buffer.getType(), buffer.getLoc());
       buffer.getMemref().replaceAllUsesWith(newArg);
 

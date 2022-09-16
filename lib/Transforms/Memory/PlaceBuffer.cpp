@@ -50,8 +50,8 @@ struct PlaceBufferPattern : public OpRewritePattern<ScheduleOp> {
                                 PatternRewriter &rewriter) const override {
     for (auto task : llvm::make_early_inc_range(schedule.getOps<TaskOp>())) {
       // Update the task argument type.
-      for (auto t : llvm::zip(task.getBody().front().getArguments(),
-                              task.getOperandTypes()))
+      for (auto t :
+           llvm::zip(task.getBody().getArguments(), task.getOperandTypes()))
         std::get<0>(t).setType(std::get<1>(t));
 
       SmallVector<Value, 4> buffers;
@@ -69,8 +69,7 @@ struct PlaceBufferPattern : public OpRewritePattern<ScheduleOp> {
       }
 
       if (!buffers.empty()) {
-        auto args =
-            task.getBody().front().addArguments(ValueRange(buffers), locs);
+        auto args = task.getBody().addArguments(ValueRange(buffers), locs);
         for (auto t : llvm::zip(buffers, args))
           std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
 

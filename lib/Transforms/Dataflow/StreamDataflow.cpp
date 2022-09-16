@@ -41,7 +41,7 @@ struct TaskStreamingPattern : public OpRewritePattern<TaskOp> {
       auto stream = rewriter.create<ToStreamOp>(loc, streamType, input.get());
       input.set(stream);
 
-      auto arg = op.getBody().front().getArgument(input.getOperandNumber());
+      auto arg = op.getBody().getArgument(input.getOperandNumber());
       arg.setType(streamType);
 
       rewriter.setInsertionPointToStart(&op.getBody().front());

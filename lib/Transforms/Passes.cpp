@@ -176,13 +176,12 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createPromoteBufferPass());
         pm.addPass(scalehls::createLowerCopyToAffinePass(
             /*InternalCopyOnly=*/false));
-
-        return;
-
         pm.addPass(memref::createFoldMemRefAliasOpsPass());
         pm.addPass(mlir::createAffineLoopNormalizePass());
         pm.addPass(mlir::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
+
+        return;
 
         // // Affine loop dataflowing.
         // pm.addPass(scalehls::createCreateDataflowFromAffinePass());
