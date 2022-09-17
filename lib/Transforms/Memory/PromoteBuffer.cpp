@@ -31,7 +31,7 @@ static void createBufferAndCopy(MemRefType type, Value memref,
   // Allocate an on-chip buffer and replace all its uses.
   if (!readFlag && !writeFlag)
     return;
-  auto buf = builder.create<memref::AllocOp>(loc, bufType);
+  auto buf = builder.create<BufferOp>(loc, bufType);
   memref.replaceAllUsesWith(buf);
 
   if (readFlag)

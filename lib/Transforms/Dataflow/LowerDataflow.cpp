@@ -24,20 +24,22 @@ struct NodeConversionPattern : public OpRewritePattern<TaskOp> {
 
   LogicalResult matchAndRewrite(TaskOp task,
                                 PatternRewriter &rewriter) const override {
-    SmallVector<Value, 8> outputs;
-    SmallVector<Value, 8> outputArgs;
-    SmallVector<Location, 8> outputLocs;
+    SmallVector<Value, 4> outputsToReplace;
     for (auto output : task.getYieldOp().getOperands()) {
-      // TODO: How to handle this??
-      output.getDefiningOp()->moveBefore(task);
-      outputs.push_back(output);
-      outputArgs.push_back(output);
-      outputLocs.push_back(output.getLoc());
+      if (auto arg = output.dyn_cast<BlockArgument>())
+        outputsToReplace.push_back(task.getOperand(arg.getArgNumber()));
+      else
+        return task.emitOpError("must yield task arguments");
+      if (!output.getType().isa<MemRefType, StreamType>())
+        return task.emitOpError("must yield memref or stream values");
     }
 
     SmallVector<Value, 8> inputs;
     SmallVector<BlockArgument, 8> inputArgs;
     SmallVector<Location, 8> inputLocs;
+    SmallVector<Value, 8> outputs;
+    SmallVector<BlockArgument, 8> outputArgs;
+    SmallVector<Location, 8> outputLocs;
     SmallVector<Value, 8> params;
     SmallVector<BlockArgument, 8> paramArgs;
     SmallVector<Location, 8> paramLocs;
@@ -45,7 +47,12 @@ struct NodeConversionPattern : public OpRewritePattern<TaskOp> {
       auto operand = task.getOperand(arg.getArgNumber());
 
       if (operand.getType().isa<MemRefType, StreamType>()) {
-        if (llvm::any_of(arg.getUses(), isWritten)) {
+        if (llvm::any_of(arg.getUsers(),
+                         [](Operation *user) { return isa<TaskOp>(user); }))
+          return failure();
+        else if (llvm::any_of(arg.getUses(), [](OpOperand &use) {
+                   return isWritten(use) || isa<YieldOp>(use.getOwner());
+                 })) {
           outputs.push_back(operand);
           outputArgs.push_back(arg);
           outputLocs.push_back(operand.getLoc());
@@ -78,15 +85,26 @@ struct NodeConversionPattern : public OpRewritePattern<TaskOp> {
     auto newOutputArgs =
         node.getBody().addArguments(ValueRange(outputs), outputLocs);
     for (auto t : llvm::zip(outputArgs, newOutputArgs))
-      std::get<0>(t).replaceAllUsesExcept(std::get<1>(t), node);
+      std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
 
     auto newParamArgs = nodeBlock->addArguments(ValueRange(params), paramLocs);
     for (auto t : llvm::zip(paramArgs, newParamArgs))
       std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
 
-    rewriter.replaceOp(
-        task, ValueRange({outputs.begin(),
-                          std::next(outputs.begin(), task.getNumResults())}));
+    rewriter.replaceOp(task, outputsToReplace);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
+template <typename OpType>
+struct BufferConversionPattern : public OpRewritePattern<OpType> {
+  using OpRewritePattern<OpType>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(OpType op,
+                                PatternRewriter &rewriter) const override {
+    rewriter.replaceOpWithNewOp<BufferOp>(op, op.getType());
     return success();
   }
 };
@@ -224,7 +242,7 @@ struct BypassPathRemovePattern : public OpRewritePattern<NodeOp> {
 
   LogicalResult matchAndRewrite(NodeOp node,
                                 PatternRewriter &rewriter) const override {
-    if (node.getLevel().value())
+    if (node.getLevel())
       return failure();
     auto schedule = node.getScheduleOp();
 
@@ -234,7 +252,7 @@ struct BypassPathRemovePattern : public OpRewritePattern<NodeOp> {
         return failure();
 
       for (auto consumer : getConsumersInSchedule(output, schedule)) {
-        if (!consumer.getLevel().value())
+        if (!consumer.getLevel())
           return failure();
         level = std::max(level, consumer.getLevel().value() + 1);
       }
@@ -381,14 +399,11 @@ struct LowerDataflow : public LowerDataflowBase<LowerDataflow> {
     auto context = func.getContext();
 
     // Convert dataflow task to node.
-    ConversionTarget target(*context);
-    target.addIllegalOp<TaskOp, YieldOp>();
-    target.addLegalOp<NodeOp>();
-
     mlir::RewritePatternSet patterns(context);
     patterns.add<NodeConversionPattern>(context);
-    if (failed(applyPartialConversion(func, target, std::move(patterns))))
-      return signalPassFailure();
+    patterns.add<BufferConversionPattern<memref::AllocOp>>(context);
+    patterns.add<BufferConversionPattern<memref::AllocaOp>>(context);
+    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
     // Legalize dataflow schedule.
     patterns.clear();

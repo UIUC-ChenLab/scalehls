@@ -42,12 +42,23 @@ MemRefType getNewType(MemRefType type) {
   return newType;
 }
 
+MemRefType getNewDramType(MemRefType type) {
+  auto newType = MemRefType::get(type.getShape(), type.getElementType(),
+                                 type.getLayout().getAffineMap(),
+                                 (unsigned)MemoryKind::DRAM);
+  return newType;
+}
+
 namespace {
 struct PlaceBufferPattern : public OpRewritePattern<ScheduleOp> {
   using OpRewritePattern<ScheduleOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(ScheduleOp schedule,
                                 PatternRewriter &rewriter) const override {
+    llvm::SmallDenseSet<Value, 4> outputs(
+        schedule.getReturnOp().operand_begin(),
+        schedule.getReturnOp().operand_end());
+
     for (auto task : llvm::make_early_inc_range(schedule.getOps<TaskOp>())) {
       // Update the task argument type.
       for (auto t :
@@ -60,7 +71,13 @@ struct PlaceBufferPattern : public OpRewritePattern<ScheduleOp> {
                task.getOps<hls::BufferLikeInterface>())) {
         auto memref = buffer.getMemref();
         auto type = buffer.getMemrefType();
-        memref.setType(getNewType(type));
+        if (llvm::any_of(buffer->getUses(), [&](OpOperand &use) {
+              return use.getOwner() == task.getYieldOp() &&
+                     outputs.count(task.getResult(use.getOperandNumber()));
+            }))
+          memref.setType(getNewDramType(type));
+        else
+          memref.setType(getNewType(type));
 
         // Move the buffer outside of task.
         buffer->moveBefore(task);
@@ -101,12 +118,7 @@ struct PlaceBuffer : public PlaceBufferBase<PlaceBuffer> {
 
     for (auto arg : func.getArguments())
       if (auto type = arg.getType().dyn_cast<MemRefType>())
-        arg.setType(MemRefType::get(type.getShape(), type.getElementType(),
-                                    type.getLayout().getAffineMap(),
-                                    (unsigned)MemoryKind::DRAM));
-    func.setType(
-        FunctionType::get(context, func.front().getArgumentTypes(),
-                          func.front().getTerminator()->getOperandTypes()));
+        arg.setType(getNewDramType(type));
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<BufferConversionPattern<memref::AllocOp>>(context);
@@ -119,6 +131,10 @@ struct PlaceBuffer : public PlaceBufferBase<PlaceBuffer> {
     func.walk([&](ScheduleOp schedule) {
       (void)applyOpPatternsAndFold(schedule, frozenPatterns);
     });
+
+    func.setType(
+        FunctionType::get(context, func.front().getArgumentTypes(),
+                          func.front().getTerminator()->getOperandTypes()));
   }
 };
 } // namespace

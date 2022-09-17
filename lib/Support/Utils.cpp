@@ -496,7 +496,7 @@ void scalehls::getArrays(Block &block, SmallVectorImpl<Value> &arrays,
 
 Optional<unsigned> scalehls::getAverageTripCount(AffineForOp forOp) {
   if (auto optionalTripCount = getConstantTripCount(forOp))
-    return optionalTripCount.getValue();
+    return optionalTripCount.value();
   else {
     // TODO: A temporary approach to estimate the trip count. For now, we take
     // the average of the upper bound and lower bound of trip count as the

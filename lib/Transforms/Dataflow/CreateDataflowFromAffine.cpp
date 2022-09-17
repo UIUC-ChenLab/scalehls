@@ -24,7 +24,7 @@ struct TaskCreatePattern : public OpRewritePattern<ScheduleOp> {
           return isa<bufferization::BufferizationDialect, tosa::TosaDialect,
                      tensor::TensorDialect, linalg::LinalgDialect>(
                      op.getDialect()) ||
-                 isa<func::CallOp, TaskOp, NodeOp>(op);
+                 isa<func::CallOp, TaskOp, NodeOp, ScheduleOp>(op);
         }))
       return failure();
     auto &block = schedule.getRegion().front();

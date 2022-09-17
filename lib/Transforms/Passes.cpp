@@ -123,7 +123,6 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(arith::createArithmeticBufferizePass());
         pm.addPass(mlir::createLinalgBufferizePass());
         pm.addPass(func::createFuncBufferizePass());
-        pm.addPass(bufferization::createBufferResultsToOutParamsPass());
         pm.addPass(scalehls::createBufferizeDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
@@ -181,46 +180,46 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(mlir::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
-        return;
+        // Affine loop dataflowing.
+        pm.addPass(scalehls::createCreateDataflowFromAffinePass());
+        pm.addPass(mlir::createCanonicalizerPass());
 
-        // // Affine loop dataflowing.
-        // pm.addPass(scalehls::createCreateDataflowFromAffinePass());
-        // pm.addPass(mlir::createCanonicalizerPass());
+        // Lower dataflow.
+        pm.addPass(scalehls::createStreamDataflowPass());
+        pm.addPass(bufferization::createBufferResultsToOutParamsPass());
+        pm.addPass(scalehls::createLowerDataflowPass());
+        pm.addPass(mlir::createCanonicalizerPass());
 
-        // // Lower dataflow.
-        // pm.addPass(scalehls::createStreamDataflowPass());
-        // pm.addPass(scalehls::createLowerDataflowPass());
-        // pm.addPass(mlir::createCanonicalizerPass());
+        // Affine loop unrolling.
+        if (opts.loopUnrollFactor) {
+          pm.addPass(scalehls::createAffineLoopUnrollJamPass(
+              opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true));
+          pm.addPass(mlir::createAffineLoopNormalizePass());
+          pm.addPass(mlir::createSimplifyAffineStructuresPass());
+          pm.addPass(mlir::createCanonicalizerPass());
+        }
 
-        // // Affine loop unrolling.
-        // if (opts.loopUnrollFactor) {
-        //   pm.addPass(scalehls::createAffineLoopUnrollJamPass(
-        //       opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true));
-        //   pm.addPass(mlir::createAffineLoopNormalizePass());
-        //   pm.addPass(mlir::createSimplifyAffineStructuresPass());
-        //   pm.addPass(mlir::createCanonicalizerPass());
-        // }
+        // Memory optimization.
+        pm.addPass(scalehls::createSimplifyCopyPass());
+        pm.addPass(scalehls::createSimplifyAffineIfPass());
+        pm.addPass(mlir::createAffineScalarReplacementPass());
+        pm.addPass(scalehls::createAffineStoreForwardPass());
+        pm.addPass(scalehls::createSimplifyMemrefAccessPass());
+        pm.addPass(scalehls::createReduceInitialIntervalPass());
+        pm.addPass(mlir::createCanonicalizerPass());
 
-        // // Memory optimization.
-        // pm.addPass(scalehls::createSimplifyAffineIfPass());
-        // pm.addPass(scalehls::createAffineStoreForwardPass());
-        // pm.addPass(scalehls::createSimplifyMemrefAccessPass());
-        // pm.addPass(scalehls::createReduceInitialIntervalPass());
-        // pm.addPass(mlir::createCanonicalizerPass());
+        // Convert dataflow to func.
+        pm.addPass(scalehls::createCreateTokenStreamPass());
+        pm.addPass(scalehls::createConvertDataflowToFuncPass());
+        pm.addPass(mlir::createCanonicalizerPass());
 
-        // // Convert dataflow to func.
-        // pm.addPass(scalehls::createCreateTokenStreamPass());
-        // pm.addPass(scalehls::createConvertDataflowToFuncPass());
-        // pm.addPass(scalehls::createRaiseImplicitCopyPass());
-        // pm.addPass(scalehls::createConvertCopyToAffineLoopsPass());
-
-        // // Directive-level optimization.
-        // pm.addPass(scalehls::createCreateAxiInterfacePass(opts.hlsTopFunc));
-        // pm.addPass(scalehls::createLoopPipeliningPass());
-        // pm.addPass(scalehls::createArrayPartitionPass());
-        // pm.addPass(scalehls::createCreateHLSPrimitivePass());
-        // pm.addPass(mlir::createCSEPass());
-        // pm.addPass(mlir::createCanonicalizerPass());
+        // Directive-level optimization.
+        pm.addPass(scalehls::createCreateAxiInterfacePass(opts.hlsTopFunc));
+        pm.addPass(scalehls::createLoopPipeliningPass());
+        pm.addPass(scalehls::createArrayPartitionPass());
+        pm.addPass(scalehls::createCreateHLSPrimitivePass());
+        pm.addPass(mlir::createCSEPass());
+        pm.addPass(mlir::createCanonicalizerPass());
       });
 }
 

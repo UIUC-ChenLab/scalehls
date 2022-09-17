@@ -50,9 +50,7 @@ struct CreateAxiInterface : public CreateAxiInterfaceBase<CreateAxiInterface> {
     for (auto &op : llvm::make_early_inc_range(func.front()))
       if (isa<BufferOp, ConstBufferOp>(op)) {
         auto memrefType = op.getResult(0).getType().cast<MemRefType>();
-        // TODO: We use a magic number to determine whether to store the result
-        // in external memory.
-        if (memrefType.getNumElements() < 1024)
+        if (memrefType.getMemorySpaceAsInt() != (unsigned)MemoryKind::DRAM)
           continue;
         op.remove();
         builder.insert(&op);

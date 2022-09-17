@@ -19,6 +19,8 @@ def HLSDialect : Dialect {
     for representing HLS C++ specific structures and components in MLIR, while
     enabling comprehensive optimization for both performance and area.
   }];
+  let useDefaultTypePrinterParser = 1;
+  let useDefaultAttributePrinterParser = 1;
   let cppNamespace = "::mlir::scalehls::hls";
 }
 

@@ -178,12 +178,23 @@ ReturnOp ScheduleOp::getReturnOp() {
 
 LogicalResult ScheduleOp::verify() {
   if (getIsLegal()) {
-    if (!getOps<TaskOp>().empty())
-      return mlir::emitError(getLoc(), "contains task ops");
+    if (llvm::any_of(getOps(), [](Operation &op) {
+          return !isa<NodeOp, BufferOp, ConstBufferOp, StreamOp, ReturnOp>(op);
+        })) {
+      auto diag =
+          mlir::emitError(getLoc(), "legal schedule contains non-dataflow ops");
+      for (auto &op : getOps())
+        if (!isa<HLSDialect>(op.getDialect()))
+          diag.attachNote(op.getLoc())
+              .append("see current op:")
+              .appendOp(op, OpPrintingFlags().printGenericOpForm());
+      return diag;
+    }
 
     for (auto node : getOps<NodeOp>()) {
-      if (!node.getLevel().value()) {
-        auto diag = mlir::emitError(getLoc(), "contains node not scheduled: ");
+      if (!node.getLevel()) {
+        auto diag = mlir::emitError(
+            getLoc(), "legal schedule contains node not scheduled: ");
         diag.attachNote(node.getLoc())
             .append("see current node: ")
             .appendOp(*node, OpPrintingFlags().printGenericOpForm());
@@ -193,7 +204,8 @@ LogicalResult ScheduleOp::verify() {
         if (getConsumersInSchedule(output, *this).size() > 1 ||
             getProducersInSchedule(output, *this).size() > 1) {
           auto diag = mlir::emitError(
-              getLoc(), "violates single-consumer or single-producer\n");
+              getLoc(),
+              "legal schedule violates single-consumer or single-producer\n");
           diag << "see current buffer: " << output << "\n";
           for (auto user : output.getUsers())
             diag.attachNote(user->getLoc())
@@ -240,7 +252,7 @@ struct SimplifyTaskIOs : public OpRewritePattern<TaskOp> {
     // Identify input values that are used.
     llvm::SmallDenseSet<BlockArgument, 4> unusedArgs;
     SmallVector<Value, 4> usedInputs;
-    for (auto arg : task.getBody().front().getArguments())
+    for (auto arg : task.getBody().getArguments())
       if (arg.use_empty()) {
         hasUnusedPort = true;
         unusedArgs.insert(arg);
@@ -287,7 +299,7 @@ struct SimplifyTaskHierarchy : public OpRewritePattern<TaskOp> {
                          std::prev(taskOps.end()));
 
       for (auto t :
-           llvm::zip(task.getBody().front().getArguments(), task.getOperands()))
+           llvm::zip(task.getBody().getArguments(), task.getOperands()))
         std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
       rewriter.replaceOp(task, task.getYieldOp()->getOperands());
       return success();
@@ -314,7 +326,7 @@ YieldOp TaskOp::getYieldOp() {
 }
 
 LogicalResult TaskOp::verify() {
-  if (getOperandTypes() != getBody().front().getArgumentTypes())
+  if (getOperandTypes() != getBody().getArgumentTypes())
     return emitOpError("operand type doesn't align with argument type");
   return success();
 }
@@ -374,7 +386,7 @@ struct SimplifyNodeIOs : public OpRewritePattern<NodeOp> {
     SmallVector<Value, 4> usedInputs;
     SmallVector<Value, 4> usedOutputs;
     SmallVector<Value, 4> usedParams;
-    for (auto arg : node.getBody().front().getArguments())
+    for (auto arg : node.getBody().getArguments())
       if (arg.use_empty()) {
         hasUnusedPort = true;
         unusedArgs.insert(arg);
@@ -422,7 +434,7 @@ struct SimplifyNodeHierarchy : public OpRewritePattern<NodeOp> {
       scheduleOps.splice(node->getIterator(), nodeOps);
 
       for (auto t :
-           llvm::zip(node.getBody().front().getArguments(), node.getOperands()))
+           llvm::zip(node.getBody().getArguments(), node.getOperands()))
         std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
       rewriter.eraseOp(node);
       return success();
@@ -471,25 +483,22 @@ OperandKind NodeOp::getOperandKind(unsigned operandIdx) {
 /// Get the input, output, and param arguments.
 iterator_range<Block::args_iterator> NodeOp::getInputArgs() {
   auto range = getODSOperandIndexAndLength(0);
-  return {
-      std::next(getBody().front().args_begin(), range.first),
-      std::next(getBody().front().args_begin(), range.first + range.second)};
+  return {std::next(getBody().args_begin(), range.first),
+          std::next(getBody().args_begin(), range.first + range.second)};
 }
 iterator_range<Block::args_iterator> NodeOp::getOutputArgs() {
   auto range = getODSOperandIndexAndLength(1);
-  return {
-      std::next(getBody().front().args_begin(), range.first),
-      std::next(getBody().front().args_begin(), range.first + range.second)};
+  return {std::next(getBody().args_begin(), range.first),
+          std::next(getBody().args_begin(), range.first + range.second)};
 }
 iterator_range<Block::args_iterator> NodeOp::getParamArgs() {
   auto range = getODSOperandIndexAndLength(2);
-  return {
-      std::next(getBody().front().args_begin(), range.first),
-      std::next(getBody().front().args_begin(), range.first + range.second)};
+  return {std::next(getBody().args_begin(), range.first),
+          std::next(getBody().args_begin(), range.first + range.second)};
 }
 
 LogicalResult NodeOp::verify() {
-  if (getOperandTypes() != getBody().front().getArgumentTypes())
+  if (getOperandTypes() != getBody().getArgumentTypes())
     return emitOpError("operand type doesn't align with argument type");
 
   if (llvm::any_of(getParams(), [](Value param) {
