@@ -384,6 +384,7 @@ struct SimplifyNodeIOs : public OpRewritePattern<NodeOp> {
     // Identify input values that are used.
     llvm::SmallDenseSet<BlockArgument, 4> unusedArgs;
     SmallVector<Value, 4> usedInputs;
+    SmallVector<int32_t, 4> usedInputTaps;
     SmallVector<Value, 4> usedOutputs;
     SmallVector<Value, 4> usedParams;
     for (auto arg : node.getBody().getArguments())
@@ -392,9 +393,10 @@ struct SimplifyNodeIOs : public OpRewritePattern<NodeOp> {
         unusedArgs.insert(arg);
       } else {
         auto idx = arg.getArgNumber();
-        if (node.getOperandKind(idx) == OperandKind::INPUT)
+        if (node.getOperandKind(idx) == OperandKind::INPUT) {
           usedInputs.push_back(node.getOperand(idx));
-        else if (node.getOperandKind(idx) == OperandKind::OUTPUT)
+          usedInputTaps.push_back(node.getInputTap(idx));
+        } else if (node.getOperandKind(idx) == OperandKind::OUTPUT)
           usedOutputs.push_back(node.getOperand(idx));
         else
           usedParams.push_back(node.getOperand(idx));
@@ -405,10 +407,9 @@ struct SimplifyNodeIOs : public OpRewritePattern<NodeOp> {
     // Construct new dataflow node.
     if (hasUnusedPort) {
       rewriter.setInsertionPoint(node);
-      // TODO: This will lead to illegal node!
-      auto newNode =
-          rewriter.create<NodeOp>(node.getLoc(), usedInputs, usedOutputs,
-                                  usedParams, node.getLevelAttr());
+      auto newNode = rewriter.create<NodeOp>(
+          node.getLoc(), usedInputs, usedOutputs, usedParams,
+          rewriter.getI32ArrayAttr(usedInputTaps), node.getLevelAttr());
       rewriter.inlineRegionBefore(node.getBody(), newNode.getBody(),
                                   newNode.getBody().end());
       rewriter.eraseOp(node);
@@ -453,6 +454,17 @@ void NodeOp::getCanonicalizationPatterns(RewritePatternSet &results,
 /// Get the parent schedule op.
 ScheduleOp NodeOp::getScheduleOp() {
   return (*this)->getParentOfType<ScheduleOp>();
+}
+
+/// Get input taps.
+int32_t NodeOp::getInputTap(unsigned idx) {
+  return getInputTaps()[idx].cast<IntegerAttr>().getInt();
+}
+SmallVector<int32_t, 4> NodeOp::getInputTapsAsInt() {
+  SmallVector<int32_t, 4> array;
+  for (auto attr : getInputTaps())
+    array.push_back(attr.cast<IntegerAttr>().getInt());
+  return array;
 }
 
 /// Return the number of inputs, outputs, and params.
@@ -506,6 +518,12 @@ LogicalResult NodeOp::verify() {
       }))
     return emitOpError("node params should not be shaped or stream typed");
 
+  if (getInputs().size() != getInputTaps().size())
+    return emitOpError("node inputs and input taps are not aligned");
+  for (auto t : llvm::zip(getInputs(), getInputTapsAsInt()))
+    if (getBufferDepth(std::get<0>(t)) <= (unsigned)std::get<1>(t))
+      return emitOpError("node input tap is larger than buffer/stream depth");
+
   for (auto inputArg : getInputArgs())
     if (llvm::any_of(inputArg.getUses(), isWritten))
       return emitOpError("input operand is written");
@@ -518,6 +536,10 @@ LogicalResult NodeOp::verify() {
 //===----------------------------------------------------------------------===//
 // BufferOp and ConstBufferOp
 //===----------------------------------------------------------------------===//
+
+int32_t BufferOp::getBufferDepth() { return getDepth(); }
+
+int32_t ConstBufferOp::getBufferDepth() { return 1; }
 
 LogicalResult ConstBufferOp::verify() {
   auto memrefType = getType();

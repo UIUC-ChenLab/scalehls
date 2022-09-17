@@ -194,6 +194,7 @@ struct MultiProducerRemovePattern : public OpRewritePattern<NodeOp> {
 
     auto loc = rewriter.getUnknownLoc();
     auto newInputs = SmallVector<Value>(node.getInputs());
+    auto newInputTaps = node.getInputTapsAsInt();
     rewriter.setInsertionPoint(node);
 
     // Create new buffers and write to them instead of the original buffers. The
@@ -201,6 +202,7 @@ struct MultiProducerRemovePattern : public OpRewritePattern<NodeOp> {
     for (auto arg : targetArgs) {
       auto buffer = node.getOperand(arg.getArgNumber());
       newInputs.push_back(buffer);
+      newInputTaps.push_back(0);
       auto newBuffer = rewriter.create<BufferOp>(loc, arg.getType());
       node.setOperand(arg.getArgNumber(), newBuffer);
 
@@ -213,9 +215,9 @@ struct MultiProducerRemovePattern : public OpRewritePattern<NodeOp> {
     }
 
     // Create a new node and erase the original one.
-    auto newNode =
-        rewriter.create<NodeOp>(node.getLoc(), newInputs, node.getOutputs(),
-                                node.getParams(), node.getLevelAttr());
+    auto newNode = rewriter.create<NodeOp>(node.getLoc(), newInputs,
+                                           node.getOutputs(), node.getParams(),
+                                           newInputTaps, node.getLevelAttr());
     rewriter.inlineRegionBefore(node.getBody(), newNode.getBody(),
                                 newNode.getBody().end());
 
@@ -281,9 +283,9 @@ struct BypassPathRemovePattern : public OpRewritePattern<NodeOp> {
 
         // Construct a new node for data copy.
         rewriter.setInsertionPointAfter(currentNode);
-        auto newNode = rewriter.create<NodeOp>(
-            loc, ValueRange(currentBuf), ValueRange(newBuf), ValueRange(),
-            /*level=*/rewriter.getI32IntegerAttr(level + 1 - i));
+        auto newNode = rewriter.create<NodeOp>(loc, ValueRange(currentBuf),
+                                               ValueRange(newBuf));
+        newNode.setLevelAttr(rewriter.getI32IntegerAttr(level + 1 - i));
         auto block = rewriter.createBlock(&newNode.getBody());
         block->addArguments(TypeRange({currentBuf.getType(), newBuf.getType()}),
                             {currentBuf.getLoc(), newBuf.getLoc()});
@@ -316,6 +318,7 @@ static NodeOp fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter) {
 
   // Collect inputs, outputs, and params of the new node.
   llvm::SetVector<Value> inputs;
+  llvm::SmallVector<int32_t, 8> inputTaps;
   llvm::SmallVector<Location, 8> inputLocs;
   llvm::SetVector<Value> outputs;
   llvm::SmallVector<Location, 8> outputLocs;
@@ -323,9 +326,11 @@ static NodeOp fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter) {
   llvm::SmallVector<Location, 8> paramLocs;
 
   for (auto node : nodes) {
-    for (auto input : node.getInputs())
-      if (inputs.insert(input))
-        inputLocs.push_back(input.getLoc());
+    for (auto input : llvm::enumerate(node.getInputs()))
+      if (inputs.insert(input.value())) {
+        inputLocs.push_back(input.value().getLoc());
+        inputTaps.push_back(node.getInputTap(input.index()));
+      }
     for (auto output : node.getOutputs())
       if (outputs.insert(output))
         outputLocs.push_back(output.getLoc());
@@ -336,9 +341,9 @@ static NodeOp fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter) {
 
   // Construct the new node after the last node.
   rewriter.setInsertionPointAfter(nodes.back());
-  auto newNode =
-      rewriter.create<NodeOp>(rewriter.getUnknownLoc(), inputs.getArrayRef(),
-                              outputs.getArrayRef(), params.getArrayRef());
+  auto newNode = rewriter.create<NodeOp>(
+      rewriter.getUnknownLoc(), inputs.getArrayRef(), outputs.getArrayRef(),
+      params.getArrayRef(), inputTaps);
   auto block = rewriter.createBlock(&newNode.getBody());
   block->addArguments(ValueRange(inputs.getArrayRef()), inputLocs);
   block->addArguments(ValueRange(outputs.getArrayRef()), outputLocs);

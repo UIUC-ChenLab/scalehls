@@ -165,12 +165,14 @@ def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
     represent the operations contained by the node. The node can only take
     buffers or streams as inputs and outputs. Additionally, scalar values can be
     passed into a node as parameters, which will not be considered in the
-    dataflow.
+    dataflow. An attribute inputTaps is used to represent the level of buffer or
+    stream channel tap of each input.
   }];
 
   let arguments = (ins Variadic<AnyMemrefOrStream>:$inputs,
                        Variadic<AnyMemrefOrStream>:$outputs,
                        Variadic<AnyType>:$params,
+                       I32ArrayAttr:$inputTaps,
                        OptionalAttr<I32Attr>:$level);
   let regions = (region SizedRegion<1>:$body);
 
@@ -181,8 +183,29 @@ def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
 
   let builders = [
     OpBuilder<(ins "mlir::ValueRange":$inputs, "mlir::ValueRange":$outputs,
-                   "mlir::ValueRange":$params),
-        "build($_builder, $_state, inputs, outputs, params, nullptr);">,
+                   "mlir::ValueRange":$params, "ArrayRef<int32_t>":$inputTaps,
+                   "mlir::IntegerAttr":$level), [{
+          build($_builder, $_state, inputs, outputs, params,
+                $_builder.getI32ArrayAttr(inputTaps), level);
+        }]>,
+
+    OpBuilder<(ins "mlir::ValueRange":$inputs, "mlir::ValueRange":$outputs,
+                   "mlir::ValueRange":$params, "ArrayRef<int32_t>":$inputTaps),
+        [{
+          build($_builder, $_state, inputs, outputs, params,
+                $_builder.getI32ArrayAttr(inputTaps), nullptr);
+        }]>,
+    OpBuilder<(ins "mlir::ValueRange":$inputs, "mlir::ValueRange":$outputs,
+                   "ArrayRef<int32_t>":$inputTaps), [{
+          build($_builder, $_state, inputs, outputs, ValueRange(),
+                $_builder.getI32ArrayAttr(inputTaps), nullptr);
+        }]>,
+
+    OpBuilder<(ins "mlir::ValueRange":$inputs, "mlir::ValueRange":$outputs,
+                   "mlir::ValueRange":$params), [{
+          build($_builder, $_state, inputs, outputs, params,
+                SmallVector<int32_t>(inputs.size(), 0));
+        }]>,
     OpBuilder<(ins "mlir::ValueRange":$inputs, "mlir::ValueRange":$outputs),
         "build($_builder, $_state, inputs, outputs, ValueRange());">
   ];
@@ -192,6 +215,10 @@ def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
   let extraClassDeclaration = [{
     /// Get the parent schedule op.
     ScheduleOp getScheduleOp();
+
+    /// Get input taps.
+    int32_t getInputTap(unsigned idx);
+    SmallVector<int32_t, 4> getInputTapsAsInt();
 
     /// Get the number of inputs, outputs, and params.
     unsigned getNumInputs();

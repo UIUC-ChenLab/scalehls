@@ -40,9 +40,9 @@ struct CreateTokenStream : public CreateTokenStreamBase<CreateTokenStream> {
                        token.getChannel());
 
         b.setInsertionPoint(node);
-        auto newNode =
-            b.create<NodeOp>(node.getLoc(), node.getInputs(), outputs,
-                             node.getParams(), node.getLevelAttr());
+        auto newNode = b.create<NodeOp>(
+            node.getLoc(), node.getInputs(), outputs, node.getParams(),
+            node.getInputTapsAttr(), node.getLevelAttr());
         newNode.getBody().getBlocks().splice(newNode.getBody().end(),
                                              node.getBody().getBlocks());
         node.erase();
@@ -59,12 +59,14 @@ struct CreateTokenStream : public CreateTokenStreamBase<CreateTokenStream> {
         auto inputIdx = llvm::find(node.getInputs(), buffer.getMemref()) -
                         node.getInputs().begin();
         SmallVector<Value, 8> inputs(node.getInputs());
+        auto inputTaps = node.getInputTapsAsInt();
         inputs.insert(std::next(inputs.begin(), inputIdx), token.getChannel());
+        inputTaps.insert(std::next(inputTaps.begin(), inputIdx), 0);
 
         b.setInsertionPoint(node);
         auto newNode =
             b.create<NodeOp>(node.getLoc(), inputs, node.getOutputs(),
-                             node.getParams(), node.getLevelAttr());
+                             node.getParams(), inputTaps, node.getLevelAttr());
         newNode.getBody().getBlocks().splice(newNode.getBody().end(),
                                              node.getBody().getBlocks());
         node.erase();

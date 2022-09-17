@@ -15,16 +15,16 @@ def BufferLikeInterface : OpInterface<"BufferLikeInterface"> {
   }];
 
   let methods = [
-    InterfaceMethod<
-      "Return the memref result of the buffer",
+    InterfaceMethod<"Return the memref result of the buffer",
       "mlir::Value", "getMemref", (ins), [{ return $_op.getMemref(); }]
     >,
-    InterfaceMethod<
-      "Return the memref type of the buffer",
+    InterfaceMethod<"Return the memref type of the buffer",
       "mlir::MemRefType", "getMemrefType", (ins), [{
         return $_op.getMemref().getType().template cast<mlir::MemRefType>();
       }]
     >,
+    InterfaceMethod<"Return the depth of the buffer", "int32_t",
+                    "getBufferDepth">,
   ];
 }
 

@@ -136,6 +136,20 @@ static SmallVector<NodeOp, 4> getBufferUsers(Value buffer, ScheduleOp schedule,
   return nodes;
 }
 
+/// Get the depth of a buffer or stream channel. Note that only if the defining
+/// operation of the buffer is not a BufferOp or stream types, the returned
+/// result will be 1.
+unsigned scalehls::getBufferDepth(Value buffer) {
+  if (auto streamType = buffer.getType().dyn_cast<StreamType>()) {
+    return streamType.getDepth();
+  } else if (auto arg = buffer.dyn_cast<BlockArgument>()) {
+    if (auto node = dyn_cast<NodeOp>(arg.getParentBlock()->getParentOp()))
+      return getBufferDepth(node->getOperand(arg.getArgNumber()));
+  } else if (auto bufferOp = buffer.getDefiningOp<BufferLikeInterface>())
+    return bufferOp.getBufferDepth();
+  return 1;
+}
+
 SmallVector<NodeOp, 4>
 scalehls::getConsumersInScheduleExcept(Value buffer, ScheduleOp schedule,
                                        NodeOp exceptedOp) {

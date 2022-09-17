@@ -210,6 +210,9 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
 
         // Convert dataflow to func.
         pm.addPass(scalehls::createCreateTokenStreamPass());
+
+        return;
+
         pm.addPass(scalehls::createConvertDataflowToFuncPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
