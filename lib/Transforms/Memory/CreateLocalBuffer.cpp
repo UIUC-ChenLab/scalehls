@@ -43,7 +43,7 @@ static void createBufferAndCopy(MemRefType type, Value memref,
 }
 
 namespace {
-struct PromoteBufferPattern : public OpRewritePattern<memref::SubViewOp> {
+struct CreateLocalBufferPattern : public OpRewritePattern<memref::SubViewOp> {
   using OpRewritePattern<memref::SubViewOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(memref::SubViewOp subview,
@@ -59,7 +59,8 @@ struct PromoteBufferPattern : public OpRewritePattern<memref::SubViewOp> {
 } //  namespace
 
 namespace {
-struct PromoteBuffer : public scalehls::PromoteBufferBase<PromoteBuffer> {
+struct CreateLocalBuffer
+    : public scalehls::CreateLocalBufferBase<CreateLocalBuffer> {
   void runOnOperation() override {
     auto func = getOperation();
     auto builder = OpBuilder(func);
@@ -83,13 +84,13 @@ struct PromoteBuffer : public scalehls::PromoteBufferBase<PromoteBuffer> {
 
     // Promote subviews to local buffers.
     mlir::RewritePatternSet patterns(func.getContext());
-    patterns.add<PromoteBufferPattern>(func.getContext());
+    patterns.add<CreateLocalBufferPattern>(func.getContext());
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns),
                                        {false, true, 1});
   }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createPromoteBufferPass() {
-  return std::make_unique<PromoteBuffer>();
+std::unique_ptr<Pass> scalehls::createCreateLocalBufferPass() {
+  return std::make_unique<CreateLocalBuffer>();
 }

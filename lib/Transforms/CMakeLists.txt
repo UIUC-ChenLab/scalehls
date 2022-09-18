@@ -4,8 +4,9 @@ add_mlir_library(MLIRScaleHLSTransforms
   Dataflow/CreateDataflowFromAffine.cpp
   Dataflow/CreateDataflowFromTosa.cpp
   Dataflow/CreateTokenStream.cpp
-  Dataflow/FuncDuplication.cpp
+  Dataflow/LegalizeDataflow.cpp
   Dataflow/LowerDataflow.cpp
+  Dataflow/PlaceDataflowBuffer.cpp
   Dataflow/StreamDataflow.cpp
 
   Directive/ArrayPartition.cpp
@@ -25,11 +26,10 @@ add_mlir_library(MLIRScaleHLSTransforms
   Loop/SimplifyAffineIf.cpp
 
   Memory/AffineStoreForward.cpp
+  Memory/CreateLocalBuffer.cpp
   Memory/CreateMemrefSubview.cpp
   Memory/FoldMemrefSubview.cpp
   Memory/LowerCopyToAffine.cpp
-  Memory/PlaceBuffer.cpp
-  Memory/PromoteBuffer.cpp
   Memory/RaiseAffineToCopy.cpp
   Memory/ReduceInitialInterval.cpp
   Memory/SimplifyCopy.cpp
@@ -40,6 +40,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Tensor/TosaToLinalgCleanup.cpp
 
   DesignSpaceExplore.cpp
+  FuncDuplication.cpp
   FuncPreprocess.cpp
   Passes.cpp
   Utils.cpp

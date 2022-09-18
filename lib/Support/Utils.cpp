@@ -23,6 +23,9 @@ using namespace hls;
 //===----------------------------------------------------------------------===//
 
 ScheduleOp scalehls::wrapWithSchedule(Block *block) {
+  if (!block->getOps<ScheduleOp>().empty())
+    return ScheduleOp();
+
   OpBuilder builder(block, block->begin());
   ValueRange returnValues(block->getTerminator()->getOperands());
   auto loc = builder.getUnknownLoc();

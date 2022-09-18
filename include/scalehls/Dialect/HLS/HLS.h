@@ -7,6 +7,8 @@
 #ifndef SCALEHLS_DIALECT_HLS_HLS_H
 #define SCALEHLS_DIALECT_HLS_HLS_H
 
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Interfaces/ControlFlowInterfaces.h"

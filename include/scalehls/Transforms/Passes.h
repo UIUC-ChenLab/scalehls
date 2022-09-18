@@ -31,6 +31,7 @@ void registerTransformsPasses();
 
 std::unique_ptr<Pass>
 createDesignSpaceExplorePass(std::string dseTargetSpec = "");
+std::unique_ptr<Pass> createFuncDuplicationPass();
 std::unique_ptr<Pass>
 createFuncPreprocessPass(std::string hlsTopFunc = "forward");
 
@@ -40,8 +41,9 @@ std::unique_ptr<Pass> createConvertDataflowToFuncPass();
 std::unique_ptr<Pass> createCreateDataflowFromTosaPass();
 std::unique_ptr<Pass> createCreateDataflowFromAffinePass();
 std::unique_ptr<Pass> createCreateTokenStreamPass();
-std::unique_ptr<Pass> createFuncDuplicationPass();
+std::unique_ptr<Pass> createLegalizeDataflowPass();
 std::unique_ptr<Pass> createLowerDataflowPass();
+std::unique_ptr<Pass> createPlaceDataflowBufferPass();
 std::unique_ptr<Pass> createStreamDataflowPass();
 
 /// Tensor-related passes.
@@ -66,11 +68,10 @@ std::unique_ptr<Pass> createSimplifyAffineIfPass();
 
 /// Memory-related passes.
 std::unique_ptr<Pass> createAffineStoreForwardPass();
+std::unique_ptr<Pass> createCreateLocalBufferPass();
 std::unique_ptr<Pass> createCreateMemrefSubviewPass();
 std::unique_ptr<Pass> createFoldMemrefSubviewPass();
 std::unique_ptr<Pass> createLowerCopyToAffinePass(bool internalCopyOnly = true);
-std::unique_ptr<Pass> createPlaceBufferPass();
-std::unique_ptr<Pass> createPromoteBufferPass();
 std::unique_ptr<Pass> createRaiseAffineToCopyPass();
 std::unique_ptr<Pass> createReduceInitialIntervalPass();
 std::unique_ptr<Pass> createSimplifyCopyPass();

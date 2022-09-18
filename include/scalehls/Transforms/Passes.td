@@ -34,6 +34,11 @@ def DesignSpaceExplore : Pass<"scalehls-dse", "ModuleOp"> {
   ];
 }
 
+def FuncDuplication : Pass<"scalehls-func-duplication", "mlir::ModuleOp"> {
+  let summary = "Duplicate function for each function call";
+  let constructor = "mlir::scalehls::createFuncDuplicationPass()";
+}
+
 def FuncPreprocess : Pass<"scalehls-func-preprocess", "func::FuncOp"> {
   let summary = "Preprocess the functions subsequent ScaleHLS optimizations";
   let constructor = "mlir::scalehls::createFuncPreprocessPass()";
@@ -76,18 +81,23 @@ def CreateTokenStream : Pass<"scalehls-create-token-stream", "func::FuncOp"> {
   let constructor = "mlir::scalehls::createCreateTokenStreamPass()";
 }
 
-def FuncDuplication : Pass<"scalehls-func-duplication", "mlir::ModuleOp"> {
-  let summary = "Duplicate function for each function call";
-  let constructor = "mlir::scalehls::createFuncDuplicationPass()";
+def LegalizeDataflow : Pass<"scalehls-legalize-dataflow", "func::FuncOp"> {
+  let summary = "Legalize dataflow at node level";
+  let description = [{
+    This pass will legalize the dataflow to meet the single-producer and
+    single-consumer requirements of the dataflow schedule.
+  }];
+  let constructor = "mlir::scalehls::createLegalizeDataflowPass()";
 }
 
 def LowerDataflow : Pass<"scalehls-lower-dataflow", "func::FuncOp"> {
-  let summary = "Lower dataflow from high level to low level";
-  let description = [{
-    This pass will lower task to node while legalize the dataflow to meet the
-    single-producer and single-consumer requirements of the dataflow schedule.
-  }];
+  let summary = "Lower dataflow from task level to node level";
   let constructor = "mlir::scalehls::createLowerDataflowPass()";
+}
+
+def PlaceDataflowBuffer : Pass<"scalehls-dataflow-buffer", "func::FuncOp"> {
+  let summary = "Place dataflow buffers";
+  let constructor = "mlir::scalehls::createPlaceDataflowBufferPass()";
 }
 
 def StreamDataflow : Pass<"scalehls-stream-dataflow", "func::FuncOp"> {
@@ -267,6 +277,11 @@ def AffineStoreForward : Pass<"scalehls-affine-store-forward", "func::FuncOp"> {
   let constructor = "mlir::scalehls::createAffineStoreForwardPass()";
 }
 
+def CreateLocalBuffer : Pass<"scalehls-create-local-buffer", "func::FuncOp"> {
+  let summary = "Promote external buffer to on-chip buffer";
+  let constructor = "mlir::scalehls::createCreateLocalBufferPass()";
+}
+
 def CreateMemrefSubview :
       Pass<"scalehls-create-memref-subview", "func::FuncOp"> {
   let summary = "Create subviews based on loop analysis";
@@ -292,16 +307,6 @@ def LowerCopyToAffine : Pass<"scalehls-lower-copy-to-affine", "func::FuncOp"> {
     Option<"internalCopyOnly", "internal-copy-only", "bool", /*default=*/"true",
            "only convert copy between internal memories">
   ];
-}
-
-def PlaceBuffer : Pass<"scalehls-place-buffer", "func::FuncOp"> {
-  let summary = "Place dataflow buffers";
-  let constructor = "mlir::scalehls::createPlaceBufferPass()";
-}
-
-def PromoteBuffer : Pass<"scalehls-promote-buffer", "func::FuncOp"> {
-  let summary = "Promote external buffer to on-chip buffer";
-  let constructor = "mlir::scalehls::createPromoteBufferPass()";
 }
 
 def RaiseAffineToCopy : Pass<"scalehls-raise-affine-to-copy", "func::FuncOp"> {

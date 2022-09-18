@@ -50,7 +50,7 @@ MemRefType getNewDramType(MemRefType type) {
 }
 
 namespace {
-struct PlaceBufferPattern : public OpRewritePattern<ScheduleOp> {
+struct PlaceDataflowBufferPattern : public OpRewritePattern<ScheduleOp> {
   using OpRewritePattern<ScheduleOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(ScheduleOp schedule,
@@ -111,7 +111,8 @@ struct PlaceBufferPattern : public OpRewritePattern<ScheduleOp> {
 } // namespace
 
 namespace {
-struct PlaceBuffer : public PlaceBufferBase<PlaceBuffer> {
+struct PlaceDataflowBuffer
+    : public PlaceDataflowBufferBase<PlaceDataflowBuffer> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -126,7 +127,7 @@ struct PlaceBuffer : public PlaceBufferBase<PlaceBuffer> {
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
     patterns.clear();
-    patterns.add<PlaceBufferPattern>(context);
+    patterns.add<PlaceDataflowBufferPattern>(context);
     auto frozenPatterns = FrozenRewritePatternSet(std::move(patterns));
     func.walk([&](ScheduleOp schedule) {
       (void)applyOpPatternsAndFold(schedule, frozenPatterns);
@@ -139,6 +140,6 @@ struct PlaceBuffer : public PlaceBufferBase<PlaceBuffer> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createPlaceBufferPass() {
-  return std::make_unique<PlaceBuffer>();
+std::unique_ptr<Pass> scalehls::createPlaceDataflowBufferPass() {
+  return std::make_unique<PlaceDataflowBuffer>();
 }

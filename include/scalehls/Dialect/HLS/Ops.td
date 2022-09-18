@@ -48,7 +48,8 @@ def DataflowBufferLike : NativeOpTrait<"DataflowBufferLike">;
 //===----------------------------------------------------------------------===//
 
 def ScheduleOp : HLSOp<"dataflow.schedule", [AffineScope,
-      AutomaticAllocationScope, SingleBlockImplicitTerminator<"ReturnOp">]> {
+      AutomaticAllocationScope, SingleBlockImplicitTerminator<"ReturnOp">,
+      ParentOneOf<["func::FuncOp", "AffineForOp"]>]> {
   let summary = "Represent a schedule of dataflow";
   let description = [{
     This operation represents a dataflow schedule that has a region to contain
