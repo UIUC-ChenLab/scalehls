@@ -10,7 +10,6 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/DialectImplementation.h"
-#include "mlir/IR/Dominance.h"
 #include "scalehls/Support/Utils.h"
 #include "llvm/ADT/TypeSwitch.h"
 
@@ -40,208 +39,23 @@ void HLSDialect::initialize() {
 }
 
 //===----------------------------------------------------------------------===//
-// HLS dialect utils
-//===----------------------------------------------------------------------===//
-
-/// Timing attribute utils.
-TimingAttr hls::getTiming(Operation *op) {
-  return op->getAttrOfType<TimingAttr>("timing");
-}
-void hls::setTiming(Operation *op, TimingAttr timing) {
-  assert(timing.getBegin() <= timing.getEnd() && "invalid timing attribute");
-  op->setAttr("timing", timing);
-}
-void hls::setTiming(Operation *op, int64_t begin, int64_t end, int64_t latency,
-                    int64_t minII) {
-  auto timing = TimingAttr::get(op->getContext(), begin, end, latency, minII);
-  setTiming(op, timing);
-}
-
-/// Resource attribute utils.
-ResourceAttr hls::getResource(Operation *op) {
-  return op->getAttrOfType<ResourceAttr>("resource");
-}
-void hls::setResource(Operation *op, ResourceAttr resource) {
-  op->setAttr("resource", resource);
-}
-void hls::setResource(Operation *op, int64_t lut, int64_t dsp, int64_t bram) {
-  auto resource = ResourceAttr::get(op->getContext(), lut, dsp, bram);
-  setResource(op, resource);
-}
-
-/// Loop information attribute utils.
-LoopInfoAttr hls::getLoopInfo(Operation *op) {
-  return op->getAttrOfType<LoopInfoAttr>("loop_info");
-}
-void hls::setLoopInfo(Operation *op, LoopInfoAttr loopInfo) {
-  op->setAttr("loop_info", loopInfo);
-}
-void hls::setLoopInfo(Operation *op, int64_t flattenTripCount,
-                      int64_t iterLatency, int64_t minII) {
-  auto loopInfo =
-      LoopInfoAttr::get(op->getContext(), flattenTripCount, iterLatency, minII);
-  setLoopInfo(op, loopInfo);
-}
-
-/// Loop directives attribute utils.
-LoopDirectiveAttr hls::getLoopDirective(Operation *op) {
-  return op->getAttrOfType<LoopDirectiveAttr>("loop_directive");
-}
-void hls::setLoopDirective(Operation *op, LoopDirectiveAttr loopDirective) {
-  op->setAttr("loop_directive", loopDirective);
-}
-void hls::setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
-                           bool dataflow, bool flatten) {
-  auto loopDirective = LoopDirectiveAttr::get(op->getContext(), pipeline,
-                                              targetII, dataflow, flatten);
-  setLoopDirective(op, loopDirective);
-}
-
-/// Parrallel and point loop attribute utils.
-void hls::setParallelAttr(Operation *op) {
-  op->setAttr("parallel", UnitAttr::get(op->getContext()));
-}
-bool hls::hasParallelAttr(Operation *op) {
-  return op->hasAttrOfType<UnitAttr>("parallel");
-}
-void hls::setPointAttr(Operation *op) {
-  op->setAttr("point", UnitAttr::get(op->getContext()));
-}
-bool hls::hasPointAttr(Operation *op) {
-  return op->hasAttrOfType<UnitAttr>("point");
-}
-
-/// Function directives attribute utils.
-FuncDirectiveAttr hls::getFuncDirective(Operation *op) {
-  return op->getAttrOfType<FuncDirectiveAttr>("func_directive");
-}
-void hls::setFuncDirective(Operation *op, FuncDirectiveAttr funcDirective) {
-  op->setAttr("func_directive", funcDirective);
-}
-void hls::setFuncDirective(Operation *op, bool pipeline, int64_t targetInterval,
-                           bool dataflow) {
-  auto funcDirective = FuncDirectiveAttr::get(op->getContext(), pipeline,
-                                              targetInterval, dataflow);
-  setFuncDirective(op, funcDirective);
-}
-
-/// Top and runtime function attribute utils.
-void hls::setTopFuncAttr(Operation *op) {
-  op->setAttr("top_func", UnitAttr::get(op->getContext()));
-}
-bool hls::hasTopFuncAttr(Operation *op) {
-  return op->hasAttrOfType<UnitAttr>("top_func");
-}
-void hls::setRuntimeAttr(Operation *op) {
-  op->setAttr("runtime", UnitAttr::get(op->getContext()));
-}
-bool hls::hasRuntimeAttr(Operation *op) {
-  return op->hasAttrOfType<UnitAttr>("runtime");
-}
-
-//===----------------------------------------------------------------------===//
-// ScheduleOp and ReturnOp
+// DispatchOp
 //===----------------------------------------------------------------------===//
 
 namespace {
-struct SimplifyScheduleHierarchy : public OpRewritePattern<ScheduleOp> {
-  using OpRewritePattern<ScheduleOp>::OpRewritePattern;
+template <typename OpType>
+struct SimplifyDispatchOrTaskOutputs : public OpRewritePattern<OpType> {
+  using OpRewritePattern<OpType>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(ScheduleOp schedule,
+  LogicalResult matchAndRewrite(OpType op,
                                 PatternRewriter &rewriter) const override {
-    // If the schedule doesn't contain any task or node, the schedule can be
-    // fully inlined.
-    if (schedule.getOps<TaskOp>().empty() &&
-        schedule.getOps<NodeOp>().empty()) {
-      auto &scheduleOps = schedule.getBody().front().getOperations();
-      auto &parentOps = schedule->getBlock()->getOperations();
-      parentOps.splice(schedule->getIterator(), scheduleOps,
-                       scheduleOps.begin(), std::prev(scheduleOps.end()));
-
-      rewriter.replaceOp(schedule, schedule.getReturnOp()->getOperands());
-      return success();
-    }
-    return failure();
-  }
-};
-} // namespace
-
-void ScheduleOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                             MLIRContext *context) {
-  results.add<SimplifyScheduleHierarchy>(context);
-}
-
-/// Get the terminator return op.
-ReturnOp ScheduleOp::getReturnOp() {
-  return cast<ReturnOp>(getBody().front().getTerminator());
-}
-
-LogicalResult ScheduleOp::verify() {
-  if (getIsLegal()) {
-    if (llvm::any_of(getOps(), [](Operation &op) {
-          return !isa<NodeOp, BufferOp, ConstBufferOp, StreamOp, ReturnOp>(op);
-        })) {
-      auto diag =
-          mlir::emitError(getLoc(), "legal schedule contains non-dataflow ops");
-      for (auto &op : getOps())
-        if (!isa<HLSDialect>(op.getDialect()))
-          diag.attachNote(op.getLoc())
-              .append("see current op:")
-              .appendOp(op, OpPrintingFlags().printGenericOpForm());
-      return diag;
-    }
-
-    for (auto node : getOps<NodeOp>()) {
-      if (!node.getLevel()) {
-        auto diag = mlir::emitError(
-            getLoc(), "legal schedule contains node not scheduled: ");
-        diag.attachNote(node.getLoc())
-            .append("see current node: ")
-            .appendOp(*node, OpPrintingFlags().printGenericOpForm());
-        return diag;
-      }
-      for (auto output : node.getOutputs())
-        if (getConsumersInSchedule(output, *this).size() > 1 ||
-            getProducersInSchedule(output, *this).size() > 1) {
-          auto diag = mlir::emitError(
-              getLoc(),
-              "legal schedule violates single-consumer or single-producer\n");
-          diag << "see current buffer: " << output << "\n";
-          for (auto user : output.getUsers())
-            diag.attachNote(user->getLoc())
-                .append("see current buffer user: ")
-                .appendOp(*user, OpPrintingFlags().printGenericOpForm());
-          return diag;
-        }
-    }
-  }
-  return success();
-}
-
-LogicalResult ReturnOp::verify() {
-  if (getOperandTypes() !=
-      (*this)->getParentOfType<ScheduleOp>().getResultTypes())
-    return emitOpError("return type doesn't align with schedule type");
-  return success();
-}
-
-//===----------------------------------------------------------------------===//
-// TaskOp and YieldOp
-//===----------------------------------------------------------------------===//
-
-namespace {
-struct SimplifyTaskIOs : public OpRewritePattern<TaskOp> {
-  using OpRewritePattern<TaskOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(TaskOp task,
-                                PatternRewriter &rewriter) const override {
-    auto yield = task.getYieldOp();
+    auto yield = op.getYieldOp();
     bool hasUnusedPort = false;
 
     // Identify output values that are used.
     SmallVector<Value, 4> usedOutputs;
     SmallVector<Value, 4> usedResults;
-    for (auto result : task.getResults())
+    for (auto result : op.getResults())
       if (result.use_empty()) {
         hasUnusedPort = true;
       } else {
@@ -249,33 +63,20 @@ struct SimplifyTaskIOs : public OpRewritePattern<TaskOp> {
         usedResults.push_back(result);
       }
 
-    // Identify input values that are used.
-    llvm::SmallDenseSet<BlockArgument, 4> unusedArgs;
-    SmallVector<Value, 4> usedInputs;
-    for (auto arg : task.getBody().getArguments())
-      if (arg.use_empty()) {
-        hasUnusedPort = true;
-        unusedArgs.insert(arg);
-      } else {
-        usedInputs.push_back(task.getOperand(arg.getArgNumber()));
-      }
-    task.getBody().front().eraseArguments(
-        [&](BlockArgument arg) { return unusedArgs.count(arg); });
-
-    // Construct new graph task.
+    // Construct new op with only used outputs.
     if (hasUnusedPort) {
       rewriter.setInsertionPoint(yield);
       rewriter.replaceOpWithNewOp<YieldOp>(yield, usedOutputs);
 
-      rewriter.setInsertionPoint(task);
-      auto newTask = rewriter.create<TaskOp>(
-          task.getLoc(), ValueRange(usedOutputs), usedInputs);
-      rewriter.inlineRegionBefore(task.getBody(), newTask.getBody(),
+      rewriter.setInsertionPoint(op);
+      auto newTask =
+          rewriter.create<OpType>(op.getLoc(), ValueRange(usedOutputs));
+      rewriter.inlineRegionBefore(op.getBody(), newTask.getBody(),
                                   newTask.getBody().end());
       for (auto t : llvm::zip(usedResults, newTask.getResults()))
         std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
 
-      rewriter.eraseOp(task);
+      rewriter.eraseOp(op);
       return success();
     }
     return failure();
@@ -284,57 +85,74 @@ struct SimplifyTaskIOs : public OpRewritePattern<TaskOp> {
 } // namespace
 
 namespace {
-struct SimplifyTaskHierarchy : public OpRewritePattern<TaskOp> {
-  using OpRewritePattern<TaskOp>::OpRewritePattern;
+template <typename OpType>
+struct InlineDispatchOrTask : public OpRewritePattern<OpType> {
+  InlineDispatchOrTask(MLIRContext *context,
+                       llvm::function_ref<bool(OpType)> condition)
+      : OpRewritePattern<OpType>(context), condition(condition) {}
 
-  LogicalResult matchAndRewrite(TaskOp task,
+  LogicalResult matchAndRewrite(OpType op,
                                 PatternRewriter &rewriter) const override {
-    // If the parent schedule only contains the current task, then the task can
-    // be fully inlined.
-    if (llvm::hasSingleElement(task.getScheduleOp().getOps<TaskOp>())) {
-      auto &taskOps = task.getBody().front().getOperations();
-      auto &scheduleOps =
-          task.getScheduleOp().getBody().front().getOperations();
-      scheduleOps.splice(task->getIterator(), taskOps, taskOps.begin(),
-                         std::prev(taskOps.end()));
-
-      for (auto t :
-           llvm::zip(task.getBody().getArguments(), task.getOperands()))
-        std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
-      rewriter.replaceOp(task, task.getYieldOp()->getOperands());
+    if (condition(op)) {
+      auto &ops = op.getBody().front().getOperations();
+      auto &parentOps = op->getBlock()->getOperations();
+      parentOps.splice(op->getIterator(), ops, ops.begin(),
+                       std::prev(ops.end()));
+      rewriter.replaceOp(op, op.getYieldOp()->getOperands());
       return success();
     }
     return failure();
   }
+
+private:
+  llvm::function_ref<bool(OpType)> condition;
 };
 } // namespace
 
-void TaskOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                         MLIRContext *context) {
-  results.add<SimplifyTaskHierarchy>(context);
-  results.add<SimplifyTaskIOs>(context);
+void DispatchOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                             MLIRContext *context) {
+  results.add<SimplifyDispatchOrTaskOutputs<DispatchOp>>(context);
+  results.add<InlineDispatchOrTask<DispatchOp>>(
+      context, [](DispatchOp op) { return op.getOps<TaskOp>().empty(); });
 }
 
-/// Get the parent schedule op.
-ScheduleOp TaskOp::getScheduleOp() {
-  return (*this)->getParentOfType<ScheduleOp>();
+LogicalResult DispatchOp::verify() {
+  if (getResultTypes() != getYieldOp().getOperandTypes())
+    return emitOpError("yield type doesn't align with result type");
+  return success();
 }
 
-/// Get the terminator output op.
-YieldOp TaskOp::getYieldOp() {
+/// Get the terminator yield op.
+YieldOp DispatchOp::getYieldOp() {
   return cast<YieldOp>(getBody().front().getTerminator());
 }
 
+//===----------------------------------------------------------------------===//
+// TaskOp
+//===----------------------------------------------------------------------===//
+
+void TaskOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                         MLIRContext *context) {
+  results.add<SimplifyDispatchOrTaskOutputs<TaskOp>>(context);
+  results.add<InlineDispatchOrTask<TaskOp>>(context, [](TaskOp op) {
+    return llvm::hasSingleElement(op.getDispatchOp().getOps<TaskOp>());
+  });
+}
+
 LogicalResult TaskOp::verify() {
-  if (getOperandTypes() != getBody().getArgumentTypes())
-    return emitOpError("operand type doesn't align with argument type");
+  if (getResultTypes() != getYieldOp().getOperandTypes())
+    return emitOpError("yield type doesn't align with result type");
   return success();
 }
 
-LogicalResult YieldOp::verify() {
-  if (getOperandTypes() != (*this)->getParentOfType<TaskOp>().getResultTypes())
-    return emitOpError("yield type doesn't align with task type");
-  return success();
+/// Get the parent dispatch op.
+DispatchOp TaskOp::getDispatchOp() {
+  return (*this)->getParentOfType<DispatchOp>();
+}
+
+/// Get the terminator yield op.
+YieldOp TaskOp::getYieldOp() {
+  return cast<YieldOp>(getBody().front().getTerminator());
 }
 
 //===----------------------------------------------------------------------===//
@@ -367,6 +185,122 @@ OpFoldResult ToValueOp::fold(ArrayRef<Attribute>) {
     if (toStream.getValue().getType() == getType())
       return toStream.getValue();
   return {};
+}
+
+//===----------------------------------------------------------------------===//
+// ScheduleOp
+//===----------------------------------------------------------------------===//
+
+namespace {
+struct SimplifyScheduleOperands : public OpRewritePattern<ScheduleOp> {
+  using OpRewritePattern<ScheduleOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ScheduleOp schedule,
+                                PatternRewriter &rewriter) const override {
+    bool hasUnusedPort = false;
+
+    // Identify input values that are used.
+    llvm::SmallDenseSet<BlockArgument, 4> unusedArgs;
+    SmallVector<Value, 4> usedOperands;
+    for (auto arg : schedule.getBody().getArguments())
+      if (arg.use_empty()) {
+        hasUnusedPort = true;
+        unusedArgs.insert(arg);
+      } else {
+        usedOperands.push_back(schedule.getOperand(arg.getArgNumber()));
+      }
+    schedule.getBody().front().eraseArguments(
+        [&](BlockArgument arg) { return unusedArgs.count(arg); });
+
+    // Construct new schedule.
+    if (hasUnusedPort) {
+      rewriter.setInsertionPoint(schedule);
+      auto newSchedule =
+          rewriter.create<ScheduleOp>(schedule.getLoc(), usedOperands);
+      rewriter.inlineRegionBefore(schedule.getBody(), newSchedule.getBody(),
+                                  newSchedule.getBody().end());
+      rewriter.eraseOp(schedule);
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
+template <typename OpType>
+struct InlineScheduleOrNode : public OpRewritePattern<OpType> {
+  InlineScheduleOrNode(MLIRContext *context,
+                       llvm::function_ref<bool(OpType)> condition)
+      : OpRewritePattern<OpType>(context), condition(condition) {}
+
+  LogicalResult matchAndRewrite(OpType op,
+                                PatternRewriter &rewriter) const override {
+    if (condition(op)) {
+      auto &ops = op.getBody().front().getOperations();
+      auto &parentOps = op->getBlock()->getOperations();
+      parentOps.splice(op->getIterator(), ops);
+
+      for (auto t : llvm::zip(op.getBody().getArguments(), op.getOperands()))
+        std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
+      rewriter.eraseOp(op);
+      return success();
+    }
+    return failure();
+  }
+
+private:
+  llvm::function_ref<bool(OpType)> condition;
+};
+} // namespace
+
+void ScheduleOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                             MLIRContext *context) {
+  results.add<SimplifyScheduleOperands>(context);
+  results.add<InlineScheduleOrNode<ScheduleOp>>(
+      context, [](ScheduleOp op) { return op.getOps<NodeOp>().empty(); });
+}
+
+LogicalResult ScheduleOp::verify() {
+  if (getIsLegal()) {
+    if (llvm::any_of(getOps(), [](Operation &op) {
+          return !isa<NodeOp, BufferOp, ConstBufferOp, StreamOp>(op);
+        })) {
+      auto diag =
+          mlir::emitError(getLoc(), "legal schedule has illegal ops:\n");
+      for (auto &op : getOps())
+        if (!isa<NodeOp, BufferOp, ConstBufferOp, StreamOp>(op))
+          diag.attachNote(op.getLoc())
+              .append("see current op: ")
+              .appendOp(op, OpPrintingFlags().printGenericOpForm());
+      return diag;
+    }
+
+    for (auto node : getOps<NodeOp>()) {
+      if (!node.getLevel()) {
+        auto diag = mlir::emitError(getLoc(),
+                                    "legal schedule has node not scheduled:\n");
+        diag.attachNote(node.getLoc())
+            .append("see current node: ")
+            .appendOp(*node, OpPrintingFlags().printGenericOpForm());
+        return diag;
+      }
+      for (auto output : node.getOutputs())
+        if (getConsumersInSchedule(output, *this).size() > 1 ||
+            getProducersInSchedule(output, *this).size() > 1) {
+          auto diag = mlir::emitError(
+              getLoc(),
+              "legal schedule violates single-consumer or single-producer, ");
+          diag << "see current buffer: " << output << "\n";
+          for (auto user : output.getUsers())
+            diag.attachNote(user->getLoc())
+                .append("see current buffer user: ")
+                .appendOp(*user, OpPrintingFlags().printGenericOpForm());
+          return diag;
+        }
+    }
+  }
+  return success();
 }
 
 //===----------------------------------------------------------------------===//
@@ -420,35 +354,36 @@ struct SimplifyNodeIOs : public OpRewritePattern<NodeOp> {
 };
 } // namespace
 
-namespace {
-struct SimplifyNodeHierarchy : public OpRewritePattern<NodeOp> {
-  using OpRewritePattern<NodeOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(NodeOp node,
-                                PatternRewriter &rewriter) const override {
-    // If the parent schedule only contains the current node, then the node can
-    // be fully inlined.
-    if (llvm::hasSingleElement(node.getScheduleOp().getOps<NodeOp>())) {
-      auto &nodeOps = node.getBody().front().getOperations();
-      auto &scheduleOps =
-          node.getScheduleOp().getBody().front().getOperations();
-      scheduleOps.splice(node->getIterator(), nodeOps);
-
-      for (auto t :
-           llvm::zip(node.getBody().getArguments(), node.getOperands()))
-        std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
-      rewriter.eraseOp(node);
-      return success();
-    }
-    return failure();
-  }
-};
-} // namespace
-
 void NodeOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                          MLIRContext *context) {
-  results.add<SimplifyNodeHierarchy>(context);
   results.add<SimplifyNodeIOs>(context);
+  results.add<InlineScheduleOrNode<NodeOp>>(context, [](NodeOp op) {
+    return llvm::hasSingleElement(op.getScheduleOp().getOps<NodeOp>());
+  });
+}
+
+LogicalResult NodeOp::verify() {
+  if (getOperandTypes() != getBody().getArgumentTypes())
+    return emitOpError("operand type doesn't align with argument type");
+
+  if (llvm::any_of(getParams(), [](Value param) {
+        return param.getType().isa<ShapedType, StreamType>();
+      }))
+    return emitOpError("node params should not be shaped or stream typed");
+
+  if (getInputs().size() != getInputTaps().size())
+    return emitOpError("number of node inputs and input taps are not aligned");
+  for (auto t : llvm::zip(getInputs(), getInputTapsAsInt()))
+    if (getBufferDepth(std::get<0>(t)) <= (unsigned)std::get<1>(t))
+      return emitOpError("node input tap is larger than buffer/stream depth");
+
+  for (auto inputArg : getInputArgs())
+    if (llvm::any_of(inputArg.getUses(), isWritten))
+      return emitOpError("input operand is written");
+  for (auto outputArg : getOutputArgs())
+    if (!llvm::any_of(outputArg.getUses(), isWritten))
+      return emitOpError("output operand is not written");
+  return success();
 }
 
 /// Get the parent schedule op.
@@ -509,36 +444,11 @@ iterator_range<Block::args_iterator> NodeOp::getParamArgs() {
           std::next(getBody().args_begin(), range.first + range.second)};
 }
 
-LogicalResult NodeOp::verify() {
-  if (getOperandTypes() != getBody().getArgumentTypes())
-    return emitOpError("operand type doesn't align with argument type");
-
-  if (llvm::any_of(getParams(), [](Value param) {
-        return param.getType().isa<ShapedType, StreamType>();
-      }))
-    return emitOpError("node params should not be shaped or stream typed");
-
-  if (getInputs().size() != getInputTaps().size())
-    return emitOpError("node inputs and input taps are not aligned");
-  for (auto t : llvm::zip(getInputs(), getInputTapsAsInt()))
-    if (getBufferDepth(std::get<0>(t)) <= (unsigned)std::get<1>(t))
-      return emitOpError("node input tap is larger than buffer/stream depth");
-
-  for (auto inputArg : getInputArgs())
-    if (llvm::any_of(inputArg.getUses(), isWritten))
-      return emitOpError("input operand is written");
-  for (auto outputArg : getOutputArgs())
-    if (!llvm::any_of(outputArg.getUses(), isWritten))
-      return emitOpError("output operand is not written");
-  return success();
-}
-
 //===----------------------------------------------------------------------===//
 // BufferOp and ConstBufferOp
 //===----------------------------------------------------------------------===//
 
 int32_t BufferOp::getBufferDepth() { return getDepth(); }
-
 int32_t ConstBufferOp::getBufferDepth() { return 1; }
 
 LogicalResult ConstBufferOp::verify() {
@@ -648,6 +558,106 @@ struct SimplifyPrimCastOp : public OpRewritePattern<PrimCastOp> {
 void PrimCastOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                              MLIRContext *context) {
   results.add<SimplifyPrimCastOp>(context);
+}
+
+//===----------------------------------------------------------------------===//
+// HLS dialect utils
+//===----------------------------------------------------------------------===//
+
+/// Timing attribute utils.
+TimingAttr hls::getTiming(Operation *op) {
+  return op->getAttrOfType<TimingAttr>("timing");
+}
+void hls::setTiming(Operation *op, TimingAttr timing) {
+  assert(timing.getBegin() <= timing.getEnd() && "invalid timing attribute");
+  op->setAttr("timing", timing);
+}
+void hls::setTiming(Operation *op, int64_t begin, int64_t end, int64_t latency,
+                    int64_t minII) {
+  auto timing = TimingAttr::get(op->getContext(), begin, end, latency, minII);
+  setTiming(op, timing);
+}
+
+/// Resource attribute utils.
+ResourceAttr hls::getResource(Operation *op) {
+  return op->getAttrOfType<ResourceAttr>("resource");
+}
+void hls::setResource(Operation *op, ResourceAttr resource) {
+  op->setAttr("resource", resource);
+}
+void hls::setResource(Operation *op, int64_t lut, int64_t dsp, int64_t bram) {
+  auto resource = ResourceAttr::get(op->getContext(), lut, dsp, bram);
+  setResource(op, resource);
+}
+
+/// Loop information attribute utils.
+LoopInfoAttr hls::getLoopInfo(Operation *op) {
+  return op->getAttrOfType<LoopInfoAttr>("loop_info");
+}
+void hls::setLoopInfo(Operation *op, LoopInfoAttr loopInfo) {
+  op->setAttr("loop_info", loopInfo);
+}
+void hls::setLoopInfo(Operation *op, int64_t flattenTripCount,
+                      int64_t iterLatency, int64_t minII) {
+  auto loopInfo =
+      LoopInfoAttr::get(op->getContext(), flattenTripCount, iterLatency, minII);
+  setLoopInfo(op, loopInfo);
+}
+
+/// Loop directives attribute utils.
+LoopDirectiveAttr hls::getLoopDirective(Operation *op) {
+  return op->getAttrOfType<LoopDirectiveAttr>("loop_directive");
+}
+void hls::setLoopDirective(Operation *op, LoopDirectiveAttr loopDirective) {
+  op->setAttr("loop_directive", loopDirective);
+}
+void hls::setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
+                           bool dataflow, bool flatten) {
+  auto loopDirective = LoopDirectiveAttr::get(op->getContext(), pipeline,
+                                              targetII, dataflow, flatten);
+  setLoopDirective(op, loopDirective);
+}
+
+/// Parrallel and point loop attribute utils.
+void hls::setParallelAttr(Operation *op) {
+  op->setAttr("parallel", UnitAttr::get(op->getContext()));
+}
+bool hls::hasParallelAttr(Operation *op) {
+  return op->hasAttrOfType<UnitAttr>("parallel");
+}
+void hls::setPointAttr(Operation *op) {
+  op->setAttr("point", UnitAttr::get(op->getContext()));
+}
+bool hls::hasPointAttr(Operation *op) {
+  return op->hasAttrOfType<UnitAttr>("point");
+}
+
+/// Function directives attribute utils.
+FuncDirectiveAttr hls::getFuncDirective(Operation *op) {
+  return op->getAttrOfType<FuncDirectiveAttr>("func_directive");
+}
+void hls::setFuncDirective(Operation *op, FuncDirectiveAttr funcDirective) {
+  op->setAttr("func_directive", funcDirective);
+}
+void hls::setFuncDirective(Operation *op, bool pipeline, int64_t targetInterval,
+                           bool dataflow) {
+  auto funcDirective = FuncDirectiveAttr::get(op->getContext(), pipeline,
+                                              targetInterval, dataflow);
+  setFuncDirective(op, funcDirective);
+}
+
+/// Top and runtime function attribute utils.
+void hls::setTopFuncAttr(Operation *op) {
+  op->setAttr("top_func", UnitAttr::get(op->getContext()));
+}
+bool hls::hasTopFuncAttr(Operation *op) {
+  return op->hasAttrOfType<UnitAttr>("top_func");
+}
+void hls::setRuntimeAttr(Operation *op) {
+  op->setAttr("runtime", UnitAttr::get(op->getContext()));
+}
+bool hls::hasRuntimeAttr(Operation *op) {
+  return op->hasAttrOfType<UnitAttr>("runtime");
 }
 
 //===----------------------------------------------------------------------===//

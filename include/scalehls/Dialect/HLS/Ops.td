@@ -16,6 +16,8 @@ include "scalehls/Dialect/HLS/Interfaces.td"
 // Traits and Type Constraints
 //===----------------------------------------------------------------------===//
 
+def DataflowBufferLike : NativeOpTrait<"DataflowBufferLike">;
+
 class StreamOf<list<Type> allowedTypes> : Type<And<[
     CPred<"$_self.isa<mlir::scalehls::hls::StreamType>()">,
     Concat<"[](mlir::Type elementType) { return ",
@@ -36,84 +38,57 @@ class AxiOf<list<Type> allowedTypes> : Type<And<[
   "mlir::scalehls::hls::AxiType"
 >;
 
-def AnyAxi : AxiOf<[AnyType]>;
 def AnyStream : StreamOf<[AnyType]>;
 def AnyMemrefOrStream : Type<Or<[AnyMemRef.predicate, AnyStream.predicate]>,
     "memref or stream values">;
-
-def DataflowBufferLike : NativeOpTrait<"DataflowBufferLike">;
-
-//===----------------------------------------------------------------------===//
-// Dataflow Schedule Operation
-//===----------------------------------------------------------------------===//
-
-def ScheduleOp : HLSOp<"dataflow.schedule", [AffineScope,
-      AutomaticAllocationScope, SingleBlockImplicitTerminator<"ReturnOp">,
-      ParentOneOf<["func::FuncOp", "AffineForOp"]>]> {
-  let summary = "Represent a schedule of dataflow";
-  let description = [{
-    This operation represents a dataflow schedule that has a region to contain
-    the dataflow tasks or nodes to be scheduled.
-  }];
-
-  let arguments = (ins UnitAttr:$isLegal);
-  let results = (outs Variadic<AnyType>:$results);
-  let regions = (region SizedRegion<1>:$body);
-  let assemblyFormat = [{
-    attr-dict-with-keyword ( `legal` $isLegal^ )? ( `:` type($results)^ )? $body
-  }];
-
-  let builders = [
-    OpBuilder<(ins "mlir::TypeRange":$results),
-        "build($_builder, $_state, results, false);">
-  ];
-  let hasVerifier = 1;
-  let hasCanonicalizer = 1;
-
-  let extraClassDeclaration = [{
-    /// Get the terminator return op.
-    ReturnOp getReturnOp();
-  }];
-}
-
-def ReturnOp : HLSOp<"dataflow.return", [NoSideEffect, ReturnLike, Terminator,
-      HasParent<"ScheduleOp">]> {
-  let summary = "Terminate and return results of a schedule";
-
-  let arguments = (ins Variadic<AnyType>:$results);
-  let assemblyFormat = "$results attr-dict `:` type($results)";
-
-  let builders = [ OpBuilder<(ins), "build($_builder, $_state, llvm::None);"> ];
-  let hasVerifier = 1;
-}
+def AnyAxi : AxiOf<[AnyType]>;
 
 //===----------------------------------------------------------------------===//
 // High Dataflow Operations
 //===----------------------------------------------------------------------===//
 
-def TaskOp : HLSOp<"dataflow.task", [IsolatedFromAbove, AffineScope,
+def DispatchOp : HLSOp<"dataflow.dispatch", [AffineScope,
       AutomaticAllocationScope, SingleBlockImplicitTerminator<"YieldOp">,
-      HasParent<"ScheduleOp">]> {
-  let summary = "Represent a high-level task";
+      ParentOneOf<["func::FuncOp", "AffineForOp"]>]> {
+  let summary = "Represent a dataflow dispatch";
   let description = [{
-    This operation represents a task that has an isolated region to contain the
-    operations to be executed in the task.
+    Dispatch op has a transparent region that contains a list of task ops to be
+    dispatched. This op is designed to organize and manipulate task ops at a
+    high level and will be lowered to schedule op for dataflow scheduling.
   }];
 
-  let arguments = (ins Variadic<AnyType>:$inputs);
-  let results = (outs Variadic<AnyType>:$outputs);
+  let results = (outs Variadic<AnyType>:$results);
   let regions = (region SizedRegion<1>:$body);
-
-  let assemblyFormat = [{
-    `(` $inputs `)` attr-dict `:` functional-type($inputs, $outputs) $body
-  }];
+  let assemblyFormat = "attr-dict-with-keyword ( `:` type($results)^ )? $body";
 
   let hasVerifier = 1;
   let hasCanonicalizer = 1;
 
   let extraClassDeclaration = [{
-    /// Get the parent schedule op.
-    ScheduleOp getScheduleOp();
+    /// Get the terminator yield op.
+    YieldOp getYieldOp();
+  }];
+}
+
+def TaskOp : HLSOp<"dataflow.task", [AffineScope, AutomaticAllocationScope,
+      SingleBlockImplicitTerminator<"YieldOp">, HasParent<"DispatchOp">]> {
+  let summary = "Represent a dataflow task";
+  let description = [{
+    Task op has a transparent region that contains a list of ops to be executed
+    in the task. This op is designed to represent the task partition at a high
+    level and will be lowered to node op for dataflow scheduling.
+  }];
+
+  let results = (outs Variadic<AnyType>:$results);
+  let regions = (region SizedRegion<1>:$body);
+  let assemblyFormat = "attr-dict-with-keyword ( `:` type($results)^ )? $body";
+
+  let hasVerifier = 1;
+  let hasCanonicalizer = 1;
+
+  let extraClassDeclaration = [{
+    /// Get the parent dispatch op.
+    DispatchOp getDispatchOp();
 
     /// Get the terminator yield op.
     YieldOp getYieldOp();
@@ -121,14 +96,13 @@ def TaskOp : HLSOp<"dataflow.task", [IsolatedFromAbove, AffineScope,
 }
 
 def YieldOp : HLSOp<"dataflow.yield", [NoSideEffect, ReturnLike, Terminator,
-      HasParent<"TaskOp">]> {
-  let summary = "Terminate and yield results of a task";
+      ParentOneOf<["DispatchOp", "TaskOp"]>]> {
+  let summary = "Terminate and yield results of a dispatch or task op";
 
-  let arguments = (ins Variadic<AnyType>:$outputs);
-  let assemblyFormat = "$outputs attr-dict `:` type($outputs)";
+  let arguments = (ins Variadic<AnyType>:$results);
+  let assemblyFormat = "$results attr-dict `:` type($results)";
 
-  let builders = [ OpBuilder<(ins), "build($_builder, $_state, llvm::None);"> ];
-  let hasVerifier = 1;
+  let builders = [OpBuilder<(ins), "build($_builder, $_state, llvm::None);">];
 }
 
 def ToStreamOp : HLSOp<"dataflow.to_stream", [NoSideEffect]> {
@@ -157,24 +131,43 @@ def ToValueOp : HLSOp<"dataflow.to_value", [NoSideEffect]> {
 // Low Dataflow Operations
 //===----------------------------------------------------------------------===//
 
+def ScheduleOp : HLSOp<"dataflow.schedule", [IsolatedFromAbove, AffineScope,
+      AutomaticAllocationScope, SingleBlock, NoTerminator,
+      ParentOneOf<["func::FuncOp", "AffineForOp"]>]> {
+  let summary = "Represent a dataflow schedule";
+  let description = [{
+    Schedule op has an isolated region to contain a list of dataflow node ops to
+    be scheduled. This op can be explicitly marked as legal when all the
+    dataflow violations have been resolved and all the nodes has been scheduled.
+  }];
+
+  let arguments = (ins Variadic<AnyMemrefOrStream>:$operands,
+                       UnitAttr:$isLegal);
+  let regions = (region SizedRegion<1>:$body);
+  let assemblyFormat = [{
+    ( `legal` $isLegal^ )? ( `(` $operands^ `)` )? attr-dict-with-keyword
+    ( `:` type($operands)^ )? $body
+  }];
+
+  let hasVerifier = 1;
+  let hasCanonicalizer = 1;
+}
+
 def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
-      AutomaticAllocationScope, NoTerminator, SingleBlock,
+      AutomaticAllocationScope, SingleBlock, NoTerminator,
       AttrSizedOperandSegments, HasParent<"ScheduleOp">]> {
   let summary = "Represent a dataflow node";
   let description = [{
-    This operation represents a node of dataflow that has an isolated region to
-    represent the operations contained by the node. The node can only take
-    buffers or streams as inputs and outputs. Additionally, scalar values can be
-    passed into a node as parameters, which will not be considered in the
-    dataflow. An attribute inputTaps is used to represent the level of buffer or
-    stream channel tap of each input.
+    Node op has an isolated region to represent the ops contained by the node.
+    The node can only take buffers or streams as inputs and outputs. Meanwhile,
+    scalar values can be passed into a node as parameters, which will not be
+    considered in the dataflow. An attribute "inputTaps" is used to represent
+    the level of buffer or stream channel tap of each input.
   }];
 
   let arguments = (ins Variadic<AnyMemrefOrStream>:$inputs,
-                       Variadic<AnyMemrefOrStream>:$outputs,
-                       Variadic<AnyType>:$params,
-                       I32ArrayAttr:$inputTaps,
-                       OptionalAttr<I32Attr>:$level);
+      Variadic<AnyMemrefOrStream>:$outputs, Variadic<AnyType>:$params,
+      I32ArrayAttr:$inputTaps, OptionalAttr<I32Attr>:$level);
   let regions = (region SizedRegion<1>:$body);
 
   let assemblyFormat = [{
@@ -210,6 +203,7 @@ def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
     OpBuilder<(ins "mlir::ValueRange":$inputs, "mlir::ValueRange":$outputs),
         "build($_builder, $_state, inputs, outputs, ValueRange());">
   ];
+
   let hasVerifier = 1;
   let hasCanonicalizer = 1;
 
@@ -253,7 +247,7 @@ def BufferOp : HLSOp<"dataflow.buffer", [
 
 def ConstBufferOp : HLSOp<"dataflow.const_buffer", [
       DeclareOpInterfaceMethods<BufferLikeInterface>]> {
-  let summary = "Represent a cosntant dataflow buffer";
+  let summary = "Represent a constant dataflow buffer";
 
   let arguments = (ins ElementsAttr:$value);
   let results = (outs AnyMemRef:$memref);
