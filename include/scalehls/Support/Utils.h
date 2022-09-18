@@ -21,7 +21,8 @@ using namespace hls;
 // Dataflow utils
 //===----------------------------------------------------------------------===//
 
-ScheduleOp wrapWithSchedule(Block *block);
+/// Wrap the operations in the block with dispatch op.
+DispatchOp dispatchBlock(Block *block);
 
 /// Fuse the given operations into a new task. The new task will be created
 /// before the first operation and each operation will be inserted in order.

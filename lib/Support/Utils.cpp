@@ -22,26 +22,27 @@ using namespace hls;
 // Dataflow utils
 //===----------------------------------------------------------------------===//
 
-ScheduleOp scalehls::wrapWithSchedule(Block *block) {
-  if (!block->getOps<ScheduleOp>().empty())
-    return ScheduleOp();
+/// Wrap the operations in the block with dispatch op.
+DispatchOp scalehls::dispatchBlock(Block *block) {
+  if (!block->getOps<DispatchOp>().empty() ||
+      !isa<func::FuncOp, mlir::AffineForOp>(block->getParentOp()))
+    return DispatchOp();
 
   OpBuilder builder(block, block->begin());
   ValueRange returnValues(block->getTerminator()->getOperands());
   auto loc = builder.getUnknownLoc();
-  auto schedule = builder.create<ScheduleOp>(loc, returnValues);
+  auto dispatch = builder.create<DispatchOp>(loc, returnValues);
 
-  auto &scheduleBlock = schedule.getBody().emplaceBlock();
-  builder.setInsertionPointToEnd(&scheduleBlock);
-  builder.create<ReturnOp>(loc, returnValues);
+  auto &dispatchBlock = dispatch.getBody().emplaceBlock();
+  builder.setInsertionPointToEnd(&dispatchBlock);
+  builder.create<YieldOp>(loc, returnValues);
 
-  auto &scheduleOps = scheduleBlock.getOperations();
+  auto &dispatchOps = dispatchBlock.getOperations();
   auto &parentOps = block->getOperations();
-  scheduleOps.splice(scheduleBlock.begin(), parentOps,
+  dispatchOps.splice(dispatchBlock.begin(), parentOps,
                      std::next(parentOps.begin()), std::prev(parentOps.end()));
-
-  block->getTerminator()->setOperands(schedule.getResults());
-  return schedule;
+  block->getTerminator()->setOperands(dispatch.getResults());
+  return dispatch;
 }
 
 /// Fuse the given operations into a new task. The new task will be created
@@ -52,41 +53,39 @@ TaskOp scalehls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
   assert(!ops.empty() && "must fuse at least one op");
   llvm::SmallPtrSet<Operation *, 4> opsSet(ops.begin(), ops.end());
 
-  llvm::SetVector<Value> inputValues;
+  // // Collect input values.
+  // for (auto operand : op->getOperands())
+  //   if (!opsSet.count(operand.getDefiningOp()))
+  //     inputValues.insert(operand);
+
+  // // Collect input values of sub-regions through liveness analysis.
+  // if (op->getNumRegions() != 0) {
+  //   auto liveness = Liveness(op);
+  //   op->walk([&](Block *block) {
+  //     for (auto livein : liveness.getLiveIn(block))
+  //       if (auto arg = livein.dyn_cast<BlockArgument>()) {
+  //         if (!op->isAncestor(arg.getParentBlock()->getParentOp()))
+  //           inputValues.insert(livein);
+  //       } else if (!opsSet.count(livein.getDefiningOp()) &&
+  //                  !op->isAncestor(livein.getDefiningOp()))
+  //         inputValues.insert(livein);
+  //   });
+  // }
+
+  // Collect output values. This is not sufficient and may lead to empty-used
+  // outputs, which will be removed during canonicalization.
   llvm::SetVector<Value> outputValues;
-  for (auto op : ops) {
-    // Collect input values.
-    for (auto operand : op->getOperands())
-      if (!opsSet.count(operand.getDefiningOp()))
-        inputValues.insert(operand);
-
-    // Collect input values of sub-regions through liveness analysis.
-    if (op->getNumRegions() != 0) {
-      auto liveness = Liveness(op);
-      op->walk([&](Block *block) {
-        for (auto livein : liveness.getLiveIn(block))
-          if (auto arg = livein.dyn_cast<BlockArgument>()) {
-            if (!op->isAncestor(arg.getParentBlock()->getParentOp()))
-              inputValues.insert(livein);
-          } else if (!opsSet.count(livein.getDefiningOp()) &&
-                     !op->isAncestor(livein.getDefiningOp()))
-            inputValues.insert(livein);
-      });
-    }
-
-    // Collect output values. This is not sufficient and may lead to empty-used
-    // outputs, which will be removed furing cononicalization.
+  for (auto op : ops)
     for (auto result : op->getResults())
       if (llvm::any_of(result.getUsers(),
                        [&](Operation *user) { return !opsSet.count(user); }))
         outputValues.insert(result);
-  }
 
   // Create new graph task with all inputs and outputs.
   auto loc = rewriter.getUnknownLoc();
   rewriter.setInsertionPoint(ops.front());
-  auto task = rewriter.create<TaskOp>(
-      loc, ValueRange(outputValues.getArrayRef()), inputValues.getArrayRef());
+  auto task =
+      rewriter.create<TaskOp>(loc, ValueRange(outputValues.getArrayRef()));
   auto taskBlock = rewriter.createBlock(&task.getBody());
 
   // Move each targeted op into the new graph task.
@@ -95,21 +94,12 @@ TaskOp scalehls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
   for (auto op : ops)
     op->moveBefore(yield);
 
-  // Replace internal input uses with task arguments.
-  for (auto input : inputValues) {
-    auto arg = taskBlock->addArgument(input.getType(), input.getLoc());
-    input.replaceUsesWithIf(arg, [&](OpOperand &use) {
-      return task->isProperAncestor(use.getOwner());
-    });
-  }
-
   // Replace external output uses with the task results.
   unsigned idx = 0;
-  for (auto output : outputValues) {
+  for (auto output : outputValues)
     output.replaceUsesWithIf(task.getResult(idx++), [&](OpOperand &use) {
       return !task->isProperAncestor(use.getOwner());
     });
-  }
 
   // Inline all sub-tasks.
   for (auto subTask : llvm::make_early_inc_range(task.getOps<TaskOp>())) {
@@ -117,10 +107,6 @@ TaskOp scalehls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
     auto &taskOps = task.getBody().front().getOperations();
     taskOps.splice(subTask->getIterator(), subTaskOps, subTaskOps.begin(),
                    std::prev(subTaskOps.end()));
-
-    for (auto t : llvm::zip(subTask.getBody().front().getArguments(),
-                            subTask.getOperands()))
-      std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
     rewriter.replaceOp(subTask, subTask.getYieldOp()->getOperands());
   }
   return task;
@@ -184,6 +170,9 @@ bool scalehls::isWritten(OpOperand &use) {
     return node.getOperandKind(use) == OperandKind::OUTPUT;
   else if (auto copy = dyn_cast<memref::CopyOp>(use.getOwner()))
     return copy.target() == use.get();
+  else if (auto view = dyn_cast<ViewLikeOpInterface>(use.getOwner()))
+    return llvm::any_of(view->getUses(),
+                        [](OpOperand &viewUse) { return isWritten(viewUse); });
   return isa<mlir::AffineWriteOpInterface, memref::StoreOp, StreamWriteOp>(
       use.getOwner());
 }
