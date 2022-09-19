@@ -16,7 +16,7 @@ using namespace hls;
 namespace {
 /// This pattern will outline ops with the specified type.
 template <typename OpType>
-struct RootOutlinePattern : public OpRewritePattern<OpType> {
+struct OutlineRoot : public OpRewritePattern<OpType> {
   using OpRewritePattern<OpType>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(OpType op,
@@ -32,66 +32,62 @@ struct RootOutlinePattern : public OpRewritePattern<OpType> {
 namespace {
 /// This pattern will forward fuse ops with the specified type.
 template <typename OpType>
-struct ForwardFusePattern : public OpRewritePattern<OpType> {
-  ForwardFusePattern(MLIRContext *context, DominanceInfo &DT,
-                     PatternBenefit benefit = 1)
-      : OpRewritePattern<OpType>(context, benefit), DT(DT) {}
+struct ForwardFuse : public OpRewritePattern<OpType> {
+  using OpRewritePattern<OpType>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(OpType op,
                                 PatternRewriter &rewriter) const override {
     if (op->template getParentOfType<TaskOp>())
       return failure();
+    auto DT = DominanceInfo();
 
-    // We always select the dominating node as the target node to fuse.
-    TaskOp targetNode;
+    // Find all task users.
+    SmallVector<TaskOp, 4> taskUsers;
     for (auto user : op->getUsers())
-      if (auto node = dyn_cast<TaskOp>(user))
-        if (!targetNode || (targetNode && DT.dominates(node, targetNode)))
-          targetNode = node;
+      if (auto task = dyn_cast<TaskOp>(user->getParentOp()))
+        taskUsers.push_back(task);
+    if (taskUsers.empty())
+      return failure();
 
-    if (targetNode)
-      fuseOpsIntoTask({op, targetNode}, rewriter);
-    return success(targetNode);
+    // We always select the dominating task as the target to fuse.
+    llvm::sort(taskUsers, [&](auto a, auto b) { return DT.dominates(a, b); });
+    fuseOpsIntoTask({op, taskUsers.front()}, rewriter);
+    return success();
   }
-
-private:
-  DominanceInfo &DT;
 };
 } // namespace
 
 namespace {
 /// This pattern will backward fuse ops with the specified type.
 template <typename OpType>
-struct BackwardFusePattern : public OpRewritePattern<OpType> {
-  BackwardFusePattern(MLIRContext *context, DominanceInfo &DT,
-                      PatternBenefit benefit = 1)
-      : OpRewritePattern<OpType>(context, benefit), DT(DT) {}
+struct BackwardFuse : public OpRewritePattern<OpType> {
+  using OpRewritePattern<OpType>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(OpType op,
                                 PatternRewriter &rewriter) const override {
     if (op->template getParentOfType<TaskOp>())
       return failure();
+    auto DT = DominanceInfo();
 
-    // We always select the dominated node as the target node to fuse.
-    TaskOp targetNode;
+    // Find all task defining ops.
+    SmallVector<TaskOp, 4> taskDefOps;
     for (auto operand : op->getOperands())
-      if (auto node = operand.template getDefiningOp<TaskOp>())
-        if (!targetNode || (targetNode && DT.dominates(targetNode, node)))
-          targetNode = node;
+      if (auto task = operand.template getDefiningOp<TaskOp>())
+        taskDefOps.push_back(task);
+    if (taskDefOps.empty())
+      return failure();
 
-    if (targetNode)
-      fuseOpsIntoTask({targetNode, op}, rewriter);
-    return success(targetNode);
+    // We always select the dominated task as the target to fuse.
+    llvm::sort(taskDefOps, [&](auto a, auto b) { return DT.dominates(a, b); });
+    fuseOpsIntoTask({taskDefOps.back(), op}, rewriter);
+    return success();
   }
-
-private:
-  DominanceInfo &DT;
 };
 } // namespace
 
 namespace {
 /// This pattern will fuse constant ops with the specified type.
-struct ConstFusePattern : public OpRewritePattern<tosa::ConstOp> {
+struct FuseConstant : public OpRewritePattern<tosa::ConstOp> {
   using OpRewritePattern<tosa::ConstOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(tosa::ConstOp op,
@@ -119,27 +115,26 @@ struct CreateDataflowFromTosa
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
-    auto DT = DominanceInfo(func);
 
-    wrapWithSchedule(&func.front());
+    dispatchBlock(&func.front());
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<RootOutlinePattern<tosa::Conv2DOp>>(context);
-    patterns.add<RootOutlinePattern<tosa::AvgPool2dOp>>(context);
-    patterns.add<RootOutlinePattern<tosa::MaxPool2dOp>>(context);
-    patterns.add<RootOutlinePattern<tosa::MatMulOp>>(context);
-    patterns.add<RootOutlinePattern<tosa::MulOp>>(context);
-    patterns.add<RootOutlinePattern<tosa::AddOp>>(context);
-    patterns.add<RootOutlinePattern<tosa::SubOp>>(context);
-    patterns.add<RootOutlinePattern<tosa::RsqrtOp>>(context);
-    patterns.add<BackwardFusePattern<tosa::ClampOp>>(context, DT);
-    patterns.add<BackwardFusePattern<tosa::TransposeOp>>(context, DT);
-    patterns.add<ForwardFusePattern<tosa::ReshapeOp>>(context, DT);
+    patterns.add<OutlineRoot<tosa::Conv2DOp>>(context);
+    patterns.add<OutlineRoot<tosa::AvgPool2dOp>>(context);
+    patterns.add<OutlineRoot<tosa::MaxPool2dOp>>(context);
+    patterns.add<OutlineRoot<tosa::MatMulOp>>(context);
+    patterns.add<OutlineRoot<tosa::MulOp>>(context);
+    patterns.add<OutlineRoot<tosa::AddOp>>(context);
+    patterns.add<OutlineRoot<tosa::SubOp>>(context);
+    patterns.add<OutlineRoot<tosa::RsqrtOp>>(context);
+    patterns.add<BackwardFuse<tosa::ClampOp>>(context);
+    patterns.add<BackwardFuse<tosa::TransposeOp>>(context);
+    patterns.add<ForwardFuse<tosa::ReshapeOp>>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
     patterns.clear();
-    patterns.add<RootOutlinePattern<tosa::TransposeOp>>(context);
-    patterns.add<ConstFusePattern>(context);
+    patterns.add<OutlineRoot<tosa::TransposeOp>>(context);
+    // patterns.add<FuseConstant>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };

@@ -4,7 +4,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/IR/Dominance.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
@@ -15,8 +14,24 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
+struct ConvertGetGlobalToConstBuffer
+    : public OpRewritePattern<memref::GetGlobalOp> {
+  using OpRewritePattern<memref::GetGlobalOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(memref::GetGlobalOp op,
+                                PatternRewriter &rewriter) const override {
+    auto global = SymbolTable::lookupNearestSymbolFrom<memref::GlobalOp>(
+        op, op.nameAttr());
+    rewriter.replaceOpWithNewOp<ConstBufferOp>(op, global.type(),
+                                               global.getConstantInitValue());
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 template <typename OpType>
-struct BufferConversionPattern : public OpRewritePattern<OpType> {
+struct ConvertAllocToBuffer : public OpRewritePattern<OpType> {
   using OpRewritePattern<OpType>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(OpType op,
@@ -27,22 +42,17 @@ struct BufferConversionPattern : public OpRewritePattern<OpType> {
 };
 } // namespace
 
-MemRefType getNewType(MemRefType type) {
-  // TODO: For now, we just use a heuristic to determine the buffer
-  // placement location.
-  auto kind = MemoryKind::DRAM;
-  if (type.getNumElements() < 1024)
-    kind = MemoryKind::BRAM_S2P;
-
-  // We use MemorySpaceInt of MemRefType to represent the space of
-  // buffers. Here, we set the new memref type.
+// TODO: For now, we use a heuristic to determine the buffer location.
+static MemRefType getPlacedType(MemRefType type) {
+  auto kind =
+      type.getNumElements() < 1024 ? MemoryKind::BRAM_S2P : MemoryKind::DRAM;
   auto newType =
       MemRefType::get(type.getShape(), type.getElementType(),
                       type.getLayout().getAffineMap(), (unsigned)kind);
   return newType;
 }
 
-MemRefType getNewDramType(MemRefType type) {
+static MemRefType getPlacedOnDramType(MemRefType type) {
   auto newType = MemRefType::get(type.getShape(), type.getElementType(),
                                  type.getLayout().getAffineMap(),
                                  (unsigned)MemoryKind::DRAM);
@@ -50,65 +60,38 @@ MemRefType getNewDramType(MemRefType type) {
 }
 
 namespace {
-struct PlaceDataflowBufferPattern : public OpRewritePattern<ScheduleOp> {
-  using OpRewritePattern<ScheduleOp>::OpRewritePattern;
+struct PlaceBuffer : public OpRewritePattern<func::FuncOp> {
+  using OpRewritePattern<func::FuncOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(ScheduleOp schedule,
+  LogicalResult matchAndRewrite(func::FuncOp func,
                                 PatternRewriter &rewriter) const override {
-    llvm::SmallDenseSet<Value, 4> outputs(
-        schedule.getReturnOp().operand_begin(),
-        schedule.getReturnOp().operand_end());
+    for (auto arg : func.getArguments())
+      if (auto type = arg.getType().dyn_cast<MemRefType>())
+        arg.setType(getPlacedOnDramType(type));
 
-    for (auto task : llvm::make_early_inc_range(schedule.getOps<TaskOp>())) {
-      // Update the task argument type.
-      for (auto t :
-           llvm::zip(task.getBody().getArguments(), task.getOperandTypes()))
+    func.walk([](hls::BufferLikeInterface buffer) {
+      buffer.getMemref().setType(getPlacedType(buffer.getMemrefType()));
+    });
+
+    func.walk([](YieldOp yield) {
+      for (auto t : llvm::zip(yield->getParentOp()->getResults(),
+                              yield.getOperandTypes()))
         std::get<0>(t).setType(std::get<1>(t));
+    });
 
-      SmallVector<Value, 4> buffers;
-      SmallVector<Location, 4> locs;
-      for (auto buffer : llvm::make_early_inc_range(
-               task.getOps<hls::BufferLikeInterface>())) {
-        auto memref = buffer.getMemref();
-        auto type = buffer.getMemrefType();
-        if (llvm::any_of(buffer->getUses(), [&](OpOperand &use) {
-              return use.getOwner() == task.getYieldOp() &&
-                     outputs.count(task.getResult(use.getOperandNumber()));
-            }))
-          memref.setType(getNewDramType(type));
-        else
-          memref.setType(getNewType(type));
-
-        // Move the buffer outside of task.
-        buffer->moveBefore(task);
-        buffers.push_back(memref);
-        locs.push_back(buffer.getLoc());
-      }
-
-      if (!buffers.empty()) {
-        auto args = task.getBody().addArguments(ValueRange(buffers), locs);
-        for (auto t : llvm::zip(buffers, args))
-          std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
-
-        SmallVector<Value, 16> newInputs(task.getInputs());
-        newInputs.append(buffers.begin(), buffers.end());
-        rewriter.setInsertionPoint(task);
-        auto newTask = rewriter.create<TaskOp>(
-            task.getLoc(), task.getYieldOp().getOperandTypes(), newInputs);
-        rewriter.inlineRegionBefore(task.getBody(), newTask.getBody(),
-                                    newTask.getBody().end());
-
-        rewriter.replaceOp(task, newTask.getResults());
-      }
-    }
-
-    for (auto t : llvm::zip(schedule.getResults(),
-                            schedule.getReturnOp().getOperandTypes()))
-      std::get<0>(t).setType(std::get<1>(t));
+    func.setType(
+        FunctionType::get(func.getContext(), func.front().getArgumentTypes(),
+                          func.front().getTerminator()->getOperandTypes()));
     return success();
   }
 };
 } // namespace
+
+void scalehls::populateBufferConversionPatterns(RewritePatternSet &patterns) {
+  patterns.add<ConvertGetGlobalToConstBuffer>(patterns.getContext());
+  patterns.add<ConvertAllocToBuffer<memref::AllocOp>>(patterns.getContext());
+  patterns.add<ConvertAllocToBuffer<memref::AllocaOp>>(patterns.getContext());
+}
 
 namespace {
 struct PlaceDataflowBuffer
@@ -117,25 +100,19 @@ struct PlaceDataflowBuffer
     auto func = getOperation();
     auto context = func.getContext();
 
-    for (auto arg : func.getArguments())
-      if (auto type = arg.getType().dyn_cast<MemRefType>())
-        arg.setType(getNewDramType(type));
+    ConversionTarget target(*context);
+    target
+        .addIllegalOp<memref::GetGlobalOp, memref::AllocOp, memref::AllocaOp>();
+    target.addLegalOp<ConstBufferOp, BufferOp>();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<BufferConversionPattern<memref::AllocOp>>(context);
-    patterns.add<BufferConversionPattern<memref::AllocaOp>>(context);
-    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+    populateBufferConversionPatterns(patterns);
+    if (failed(applyPartialConversion(func, target, std::move(patterns))))
+      return signalPassFailure();
 
     patterns.clear();
-    patterns.add<PlaceDataflowBufferPattern>(context);
-    auto frozenPatterns = FrozenRewritePatternSet(std::move(patterns));
-    func.walk([&](ScheduleOp schedule) {
-      (void)applyOpPatternsAndFold(schedule, frozenPatterns);
-    });
-
-    func.setType(
-        FunctionType::get(context, func.front().getArgumentTypes(),
-                          func.front().getTerminator()->getOperandTypes()));
+    patterns.add<PlaceBuffer>(context);
+    (void)applyOpPatternsAndFold(func, std::move(patterns));
   }
 };
 } // namespace

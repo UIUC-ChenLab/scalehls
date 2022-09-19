@@ -5,7 +5,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Support/Utils.h"
-#include "mlir/Analysis/Liveness.h"
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/Utils.h"
@@ -51,26 +50,7 @@ DispatchOp scalehls::dispatchBlock(Block *block) {
 TaskOp scalehls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
                                  PatternRewriter &rewriter) {
   assert(!ops.empty() && "must fuse at least one op");
-  llvm::SmallPtrSet<Operation *, 4> opsSet(ops.begin(), ops.end());
-
-  // // Collect input values.
-  // for (auto operand : op->getOperands())
-  //   if (!opsSet.count(operand.getDefiningOp()))
-  //     inputValues.insert(operand);
-
-  // // Collect input values of sub-regions through liveness analysis.
-  // if (op->getNumRegions() != 0) {
-  //   auto liveness = Liveness(op);
-  //   op->walk([&](Block *block) {
-  //     for (auto livein : liveness.getLiveIn(block))
-  //       if (auto arg = livein.dyn_cast<BlockArgument>()) {
-  //         if (!op->isAncestor(arg.getParentBlock()->getParentOp()))
-  //           inputValues.insert(livein);
-  //       } else if (!opsSet.count(livein.getDefiningOp()) &&
-  //                  !op->isAncestor(livein.getDefiningOp()))
-  //         inputValues.insert(livein);
-  //   });
-  // }
+  llvm::SmallDenseSet<Operation *, 4> opsSet(ops.begin(), ops.end());
 
   // Collect output values. This is not sufficient and may lead to empty-used
   // outputs, which will be removed during canonicalization.
@@ -112,19 +92,6 @@ TaskOp scalehls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
   return task;
 }
 
-static SmallVector<NodeOp, 4> getBufferUsers(Value buffer, ScheduleOp schedule,
-                                             bool getProducer,
-                                             NodeOp exceptedOp) {
-  SmallVector<NodeOp, 4> nodes;
-  for (auto &use : buffer.getUses())
-    if (auto node = dyn_cast<NodeOp>(use.getOwner()))
-      if ((node != exceptedOp) && (node.getScheduleOp() == schedule) &&
-          ((getProducer && (node.getOperandKind(use) == OperandKind::OUTPUT)) ||
-           (!getProducer && (node.getOperandKind(use) == OperandKind::INPUT))))
-        nodes.push_back(node);
-  return nodes;
-}
-
 /// Get the depth of a buffer or stream channel. Note that only if the defining
 /// operation of the buffer is not a BufferOp or stream types, the returned
 /// result will be 1.
@@ -134,28 +101,37 @@ unsigned scalehls::getBufferDepth(Value buffer) {
   } else if (auto arg = buffer.dyn_cast<BlockArgument>()) {
     if (auto node = dyn_cast<NodeOp>(arg.getParentBlock()->getParentOp()))
       return getBufferDepth(node->getOperand(arg.getArgNumber()));
+    else if (auto schedule =
+                 dyn_cast<ScheduleOp>(arg.getParentBlock()->getParentOp()))
+      return getBufferDepth(schedule->getOperand(arg.getArgNumber()));
   } else if (auto bufferOp = buffer.getDefiningOp<BufferLikeInterface>())
     return bufferOp.getBufferDepth();
   return 1;
 }
 
-SmallVector<NodeOp, 4>
-scalehls::getConsumersInScheduleExcept(Value buffer, ScheduleOp schedule,
-                                       NodeOp exceptedOp) {
-  return getBufferUsers(buffer, schedule, false, exceptedOp);
+static SmallVector<NodeOp> getBufferUsers(Value buffer, bool getProducer,
+                                          NodeOp exceptedOp) {
+  SmallVector<NodeOp, 4> nodes;
+  for (auto &use : buffer.getUses())
+    if (auto node = dyn_cast<NodeOp>(use.getOwner()))
+      if (node != exceptedOp &&
+          ((getProducer && node.getOperandKind(use) == OperandKind::OUTPUT) ||
+           (!getProducer && node.getOperandKind(use) == OperandKind::INPUT)))
+        nodes.push_back(node);
+  return std::move(nodes);
 }
-SmallVector<NodeOp, 4>
-scalehls::getProducersInScheduleExcept(Value buffer, ScheduleOp schedule,
-                                       NodeOp exceptedOp) {
-  return getBufferUsers(buffer, schedule, true, exceptedOp);
+
+SmallVector<NodeOp> scalehls::getConsumersExcept(Value buffer, NodeOp except) {
+  return getBufferUsers(buffer, false, except);
 }
-SmallVector<NodeOp, 4> scalehls::getConsumersInSchedule(Value buffer,
-                                                        ScheduleOp schedule) {
-  return getConsumersInScheduleExcept(buffer, schedule, NodeOp());
+SmallVector<NodeOp> scalehls::getProducersExcept(Value buffer, NodeOp except) {
+  return getBufferUsers(buffer, true, except);
 }
-SmallVector<NodeOp, 4> scalehls::getProducersInSchedule(Value buffer,
-                                                        ScheduleOp schedule) {
-  return getProducersInScheduleExcept(buffer, schedule, NodeOp());
+SmallVector<NodeOp> scalehls::getConsumers(Value buffer) {
+  return getConsumersExcept(buffer, NodeOp());
+}
+SmallVector<NodeOp> scalehls::getProducers(Value buffer) {
+  return getProducersExcept(buffer, NodeOp());
 }
 
 bool scalehls::isExternalBuffer(Value value) {
@@ -164,10 +140,31 @@ bool scalehls::isExternalBuffer(Value value) {
   return false;
 }
 
+bool scalehls::isRead(OpOperand &use) {
+  // TODO: Any other cases?
+  if (auto node = dyn_cast<NodeOp>(use.getOwner()))
+    return node.getOperandKind(use) == OperandKind::INPUT;
+  else if (auto schedule = dyn_cast<ScheduleOp>(use.getOwner()))
+    return llvm::any_of(
+        schedule.getBody().getArgument(use.getOperandNumber()).getUses(),
+        [](OpOperand &argUse) { return isRead(argUse); });
+  else if (auto copy = dyn_cast<memref::CopyOp>(use.getOwner()))
+    return copy.source() == use.get();
+  else if (auto view = dyn_cast<ViewLikeOpInterface>(use.getOwner()))
+    return llvm::any_of(view->getUses(),
+                        [](OpOperand &viewUse) { return isRead(viewUse); });
+  return isa<mlir::AffineReadOpInterface, memref::LoadOp, StreamReadOp>(
+      use.getOwner());
+}
+
 bool scalehls::isWritten(OpOperand &use) {
   // TODO: Any other cases?
   if (auto node = dyn_cast<NodeOp>(use.getOwner()))
     return node.getOperandKind(use) == OperandKind::OUTPUT;
+  else if (auto schedule = dyn_cast<ScheduleOp>(use.getOwner()))
+    return llvm::any_of(
+        schedule.getBody().getArgument(use.getOperandNumber()).getUses(),
+        [](OpOperand &argUse) { return isWritten(argUse); });
   else if (auto copy = dyn_cast<memref::CopyOp>(use.getOwner()))
     return copy.target() == use.get();
   else if (auto view = dyn_cast<ViewLikeOpInterface>(use.getOwner()))

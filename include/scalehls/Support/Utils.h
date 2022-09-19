@@ -34,20 +34,17 @@ TaskOp fuseOpsIntoTask(ArrayRef<Operation *> ops, PatternRewriter &rewriter);
 /// result will be 1.
 unsigned getBufferDepth(Value buffer);
 
-SmallVector<NodeOp, 4> getConsumersInScheduleExcept(Value buffer,
-                                                    ScheduleOp schedule,
-                                                    NodeOp exceptedOp);
-SmallVector<NodeOp, 4> getProducersInScheduleExcept(Value buffer,
-                                                    ScheduleOp schedule,
-                                                    NodeOp exceptedOp);
-SmallVector<NodeOp, 4> getConsumersInSchedule(Value buffer,
-                                              ScheduleOp schedule);
-SmallVector<NodeOp, 4> getProducersInSchedule(Value buffer,
-                                              ScheduleOp schedule);
+SmallVector<NodeOp> getConsumersExcept(Value buffer, NodeOp exceptedOp);
+SmallVector<NodeOp> getProducersExcept(Value buffer, NodeOp exceptedOp);
+SmallVector<NodeOp> getConsumers(Value buffer);
+SmallVector<NodeOp> getProducers(Value buffer);
 
 bool isExternalBuffer(Value value);
 
+bool isRead(OpOperand &use);
 bool isWritten(OpOperand &use);
+
+void populateBufferConversionPatterns(RewritePatternSet &patterns);
 
 //===----------------------------------------------------------------------===//
 // Memory and loop analysis utils

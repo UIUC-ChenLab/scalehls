@@ -12,52 +12,6 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
-static void createBufferAndCopy(MemRefType type, Value memref,
-                                OpBuilder &builder) {
-  // We strip the original layout map and memory kind when constructing the
-  // local buffer's memref type.
-  auto bufType = MemRefType::get(type.getShape(), type.getElementType(),
-                                 AffineMap(), (unsigned)MemoryKind::BRAM_S2P);
-  auto loc = builder.getUnknownLoc();
-
-  // Check the read/write status of the memref.
-  auto readFlag = llvm::any_of(memref.getUsers(), [](Operation *op) {
-    return isa<mlir::AffineReadOpInterface, memref::LoadOp, func::CallOp>(op);
-  });
-  auto writeFlag = llvm::any_of(memref.getUsers(), [](Operation *op) {
-    return isa<mlir::AffineWriteOpInterface, memref::StoreOp, func::CallOp>(op);
-  });
-
-  // Allocate an on-chip buffer and replace all its uses.
-  if (!readFlag && !writeFlag)
-    return;
-  auto buf = builder.create<BufferOp>(loc, bufType);
-  memref.replaceAllUsesWith(buf);
-
-  if (readFlag)
-    builder.create<memref::CopyOp>(loc, memref, buf);
-  if (writeFlag) {
-    builder.setInsertionPoint(memref.getParentRegion()->back().getTerminator());
-    builder.create<memref::CopyOp>(loc, buf, memref);
-  }
-}
-
-namespace {
-struct CreateLocalBufferPattern : public OpRewritePattern<memref::SubViewOp> {
-  using OpRewritePattern<memref::SubViewOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(memref::SubViewOp subview,
-                                PatternRewriter &rewriter) const override {
-    if (!isExternalBuffer(subview.source()))
-      return failure();
-
-    rewriter.setInsertionPointAfter(subview);
-    createBufferAndCopy(subview.getType(), subview.result(), rewriter);
-    return success();
-  }
-};
-} //  namespace
-
 namespace {
 struct CreateLocalBuffer
     : public scalehls::CreateLocalBufferBase<CreateLocalBuffer> {
@@ -65,28 +19,36 @@ struct CreateLocalBuffer
     auto func = getOperation();
     auto builder = OpBuilder(func);
 
-    // We assume after create-axi-interface, we should not allocate any on-chip
-    // buffer in the top function. TODO: Make this an option.
-    // if (hasTopFuncAttr(func) || hasRuntimeAttr(func))
-    //   return;
+    func.walk([&](memref::SubViewOp subview) {
+      if (!isExternalBuffer(subview.source()))
+        return WalkResult::advance();
 
-    // Promote function arguments that are not only used by subviews.
-    for (auto arg : func.getArguments()) {
-      auto type = arg.getType().dyn_cast<MemRefType>();
-      if (!type || llvm::all_of(arg.getUsers(), [&](Operation *op) {
-            return isa<memref::SubViewOp>(op);
-          }))
-        continue;
+      // We strip the original layout map and memory kind when constructing the
+      // local buffer's memref type.
+      auto bufType = MemRefType::get(
+          subview.getType().getShape(), subview.getType().getElementType(),
+          AffineMap(), (unsigned)MemoryKind::BRAM_S2P);
 
-      builder.setInsertionPointToStart(&func.front());
-      createBufferAndCopy(type, arg, builder);
-    }
+      // Check the read/write status of the memref.
+      auto readFlag = llvm::any_of(subview->getUses(), isRead);
+      auto writeFlag = llvm::any_of(subview->getUses(), isWritten);
+      if (!readFlag && !writeFlag)
+        return WalkResult::advance();
 
-    // Promote subviews to local buffers.
-    mlir::RewritePatternSet patterns(func.getContext());
-    patterns.add<CreateLocalBufferPattern>(func.getContext());
-    (void)applyPatternsAndFoldGreedily(func, std::move(patterns),
-                                       {false, true, 1});
+      // Allocate an on-chip buffer and replace all its uses.
+      auto loc = builder.getUnknownLoc();
+      builder.setInsertionPointAfter(subview);
+      auto buf = builder.create<BufferOp>(loc, bufType);
+      subview.result().replaceAllUsesWith(buf);
+
+      if (readFlag)
+        builder.create<memref::CopyOp>(loc, subview, buf);
+      if (writeFlag) {
+        builder.setInsertionPoint(subview->getBlock()->getTerminator());
+        builder.create<memref::CopyOp>(loc, buf, subview);
+      }
+      return WalkResult::advance();
+    });
   }
 };
 } // namespace

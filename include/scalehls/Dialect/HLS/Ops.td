@@ -141,8 +141,7 @@ def ScheduleOp : HLSOp<"dataflow.schedule", [IsolatedFromAbove, AffineScope,
     dataflow violations have been resolved and all the nodes has been scheduled.
   }];
 
-  let arguments = (ins Variadic<AnyMemrefOrStream>:$operands,
-                       UnitAttr:$isLegal);
+  let arguments = (ins Variadic<AnyType>:$operands, UnitAttr:$isLegal);
   let regions = (region SizedRegion<1>:$body);
   let assemblyFormat = [{
     ( `legal` $isLegal^ )? ( `(` $operands^ `)` )? attr-dict-with-keyword
@@ -153,7 +152,7 @@ def ScheduleOp : HLSOp<"dataflow.schedule", [IsolatedFromAbove, AffineScope,
   let hasCanonicalizer = 1;
   let builders = [
     OpBuilder<(ins "mlir::ValueRange":$operands),
-        "build($_builder, $_state, opreands, false);">
+        "build($_builder, $_state, operands, false);">
   ];
 }
 
@@ -216,7 +215,7 @@ def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
 
     /// Get input taps.
     int32_t getInputTap(unsigned idx);
-    SmallVector<int32_t, 4> getInputTapsAsInt();
+    SmallVector<int32_t> getInputTapsAsInt();
 
     /// Get the number of inputs, outputs, and params.
     unsigned getNumInputs();

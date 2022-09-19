@@ -4,7 +4,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/IR/Dominance.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -14,95 +13,8 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-struct ScheduleBufferizationPattern : public OpRewritePattern<ScheduleOp> {
-  using OpRewritePattern<ScheduleOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(ScheduleOp op,
-                                PatternRewriter &rewriter) const override {
-    bool hasChanged = false;
-
-    // Bufferize outputs of the node.
-    for (auto result : op->getResults()) {
-      if (auto tensorType = result.getType().dyn_cast<TensorType>()) {
-        hasChanged = true;
-        auto memrefType =
-            MemRefType::get(tensorType.getShape(), tensorType.getElementType());
-        result.setType(memrefType);
-
-        rewriter.setInsertionPointAfter(op);
-        auto tensor = rewriter.create<bufferization::ToTensorOp>(
-            rewriter.getUnknownLoc(), tensorType, result);
-        result.replaceAllUsesExcept(tensor, tensor);
-
-        rewriter.setInsertionPoint(op.getReturnOp());
-        auto output = op.getReturnOp().getOperand(result.getResultNumber());
-        auto memref = rewriter.create<bufferization::ToMemrefOp>(
-            rewriter.getUnknownLoc(), memrefType, output);
-        op.getReturnOp()->getOpOperand(result.getResultNumber()).set(memref);
-      }
-    }
-    return success(hasChanged);
-  }
-};
-} // namespace
-
-namespace {
-struct TaskBufferizationPattern : public OpRewritePattern<TaskOp> {
-  using OpRewritePattern<TaskOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(TaskOp op,
-                                PatternRewriter &rewriter) const override {
-    bool hasChanged = false;
-
-    // Bufferize inputs of the node.
-    for (auto &input : llvm::make_early_inc_range(op->getOpOperands())) {
-      if (auto tensorType = input.get().getType().dyn_cast<TensorType>()) {
-        hasChanged = true;
-        auto memrefType =
-            MemRefType::get(tensorType.getShape(), tensorType.getElementType());
-
-        rewriter.setInsertionPoint(op);
-        auto memref = rewriter.create<bufferization::ToMemrefOp>(
-            rewriter.getUnknownLoc(), memrefType, input.get());
-        input.set(memref);
-
-        auto arg = op.getBody().getArgument(input.getOperandNumber());
-        arg.setType(memrefType);
-
-        rewriter.setInsertionPointToStart(&op.getBody().front());
-        auto tensor = rewriter.create<bufferization::ToTensorOp>(
-            rewriter.getUnknownLoc(), tensorType, arg);
-        arg.replaceAllUsesExcept(tensor, tensor);
-      }
-    }
-
-    // Bufferize outputs of the node.
-    for (auto result : op->getResults()) {
-      if (auto tensorType = result.getType().dyn_cast<TensorType>()) {
-        hasChanged = true;
-        auto memrefType =
-            MemRefType::get(tensorType.getShape(), tensorType.getElementType());
-        result.setType(memrefType);
-
-        rewriter.setInsertionPointAfter(op);
-        auto tensor = rewriter.create<bufferization::ToTensorOp>(
-            rewriter.getUnknownLoc(), tensorType, result);
-        result.replaceAllUsesExcept(tensor, tensor);
-
-        rewriter.setInsertionPoint(op.getYieldOp());
-        auto output = op.getYieldOp().getOperand(result.getResultNumber());
-        auto memref = rewriter.create<bufferization::ToMemrefOp>(
-            rewriter.getUnknownLoc(), memrefType, output);
-        op.getYieldOp()->getOpOperand(result.getResultNumber()).set(memref);
-      }
-    }
-    return success(hasChanged);
-  }
-};
-} // namespace
-
-namespace {
-struct ConstBufferConversionPattern
+/// FIXME: We actually don't need to apply this pattern on real workloads.
+struct ConvertGetGlobalToConstBuffer
     : public OpRewritePattern<memref::GetGlobalOp> {
   using OpRewritePattern<memref::GetGlobalOp>::OpRewritePattern;
 
@@ -118,15 +30,69 @@ struct ConstBufferConversionPattern
 } // namespace
 
 namespace {
+template <typename OpType>
+struct BufferizeDispatchOrTask : public OpRewritePattern<OpType> {
+  using OpRewritePattern<OpType>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(OpType op,
+                                PatternRewriter &rewriter) const override {
+    bool hasChanged = false;
+
+    for (auto result : op->getResults()) {
+      if (auto tensorType = result.getType().template dyn_cast<TensorType>()) {
+        auto memrefType =
+            MemRefType::get(tensorType.getShape(), tensorType.getElementType());
+        result.setType(memrefType);
+
+        auto loc = rewriter.getUnknownLoc();
+        rewriter.setInsertionPointAfter(op);
+        auto tensor = rewriter.template create<bufferization::ToTensorOp>(
+            loc, tensorType, result);
+        result.replaceAllUsesExcept(tensor, tensor);
+
+        rewriter.setInsertionPoint(op.getYieldOp());
+        auto output = op.getYieldOp().getOperand(result.getResultNumber());
+        auto memref = rewriter.template create<bufferization::ToMemrefOp>(
+            loc, memrefType, output);
+        op.getYieldOp()->getOpOperand(result.getResultNumber()).set(memref);
+        hasChanged = true;
+      }
+    }
+    return success(hasChanged);
+  }
+};
+} // namespace
+
+namespace {
+template <typename OpType> struct HoistAlloc : public OpRewritePattern<OpType> {
+  using OpRewritePattern<OpType>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(OpType op,
+                                PatternRewriter &rewriter) const override {
+    for (auto &result : op.getYieldOp()->getOpOperands())
+      if (auto alloc = result.get().template getDefiningOp<memref::AllocOp>())
+        if (op == alloc->getParentOp()) {
+          alloc->moveBefore(op);
+          op.getResult(result.getOperandNumber()).replaceAllUsesWith(alloc);
+          return success();
+        }
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
 struct BufferizeDataflow : public BufferizeDataflowBase<BufferizeDataflow> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<TaskBufferizationPattern>(context);
-    patterns.add<ScheduleBufferizationPattern>(context);
-    patterns.add<ConstBufferConversionPattern>(context);
+    patterns.add<ConvertGetGlobalToConstBuffer>(context);
+    patterns.add<BufferizeDispatchOrTask<DispatchOp>>(context);
+    patterns.add<BufferizeDispatchOrTask<TaskOp>>(context);
+    patterns.add<HoistAlloc<DispatchOp>>(context);
+    patterns.add<HoistAlloc<TaskOp>>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };

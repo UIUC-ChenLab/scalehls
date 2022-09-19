@@ -13,23 +13,21 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-/// Wrap operations in the front block into dataflow nodes based on heuristic if
-/// they have not.
-struct TaskCreatePattern : public OpRewritePattern<ScheduleOp> {
-  using OpRewritePattern<ScheduleOp>::OpRewritePattern;
+struct TaskPartition : public OpRewritePattern<DispatchOp> {
+  using OpRewritePattern<DispatchOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(ScheduleOp schedule,
+  LogicalResult matchAndRewrite(DispatchOp dispatch,
                                 PatternRewriter &rewriter) const override {
-    if (llvm::any_of(schedule.getOps(), [](Operation &op) {
+    if (llvm::any_of(dispatch.getOps(), [](Operation &op) {
           return isa<bufferization::BufferizationDialect, tosa::TosaDialect,
                      tensor::TensorDialect, linalg::LinalgDialect>(
                      op.getDialect()) ||
-                 isa<func::CallOp, TaskOp, NodeOp, ScheduleOp>(op);
+                 isa<func::CallOp, DispatchOp, TaskOp, ScheduleOp, NodeOp>(op);
         }))
       return failure();
-    auto &block = schedule.getRegion().front();
+    auto &block = dispatch.getRegion().front();
 
-    // Fuse operations into dataflow nodes. TODO: We need more case study to
+    // Fuse operations into dataflow tasks. TODO: We need more case study to
     // figure out any other operations need to be separately handled. For
     // example, how to handle AffineIfOp?
     SmallVector<Operation *, 4> opsToFuse;
@@ -71,33 +69,16 @@ struct CreateDataflowFromAffine
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
-    auto builder = OpBuilder(context);
 
-    // Generate dataflow schedules.
-    wrapWithSchedule(&func.front());
+    dispatchBlock(&func.front());
     AffineLoopBands targetBands;
     getLoopBands(func.front(), targetBands, /*allowHavingChilds=*/true);
     for (auto &band : llvm::reverse(targetBands))
-      wrapWithSchedule(band.back().getBody());
-
-    // Collect all constants in the block and localize them to uses.
-    SmallVector<Operation *, 16> constants;
-    func.walk([&](arith::ConstantOp op) { constants.push_back(op); });
-    for (auto constant : constants) {
-      for (auto &use : llvm::make_early_inc_range(constant->getUses())) {
-        builder.setInsertionPoint(use.getOwner());
-        auto cloneConstant = cast<arith::ConstantOp>(builder.clone(*constant));
-        use.set(cloneConstant.getResult());
-      }
-      constant->erase();
-    }
+      dispatchBlock(band.back().getBody());
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<TaskCreatePattern>(context);
-    auto frozenPatterns = FrozenRewritePatternSet(std::move(patterns));
-    func.walk([&](ScheduleOp schedule) {
-      (void)applyOpPatternsAndFold(schedule, frozenPatterns);
-    });
+    patterns.add<TaskPartition>(context);
+    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
 } // namespace

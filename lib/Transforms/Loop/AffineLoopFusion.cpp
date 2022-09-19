@@ -10,6 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Analysis/Liveness.h"
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/AffineStructures.h"
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
@@ -594,6 +595,11 @@ public:
     }
   }
   void dump() const { print(llvm::errs()); }
+
+  TaskOp getTask() { return task; }
+
+private:
+  TaskOp task;
 };
 
 /// Returns true if node 'srcId' can be removed after fusing it with node
@@ -719,7 +725,7 @@ void gatherEscapingMemrefs(unsigned id, MemRefDependenceGraph *mdg,
     if (escapingMemRefs.count(memref))
       continue;
     // Check if 'memref' escapes because it's a block argument.
-    if (memref.isa<BlockArgument>()) {
+    if (!mdg->getTask().getBody().isAncestor(memref.getParentRegion())) {
       escapingMemRefs.insert(memref);
       continue;
     }
@@ -739,6 +745,7 @@ void gatherEscapingMemrefs(unsigned id, MemRefDependenceGraph *mdg,
 // dependence graph at a different depth.
 bool MemRefDependenceGraph::init(TaskOp f) {
   LLVM_DEBUG(llvm::dbgs() << "--- Initializing MDG ---\n");
+  task = f;
   DenseMap<Value, SetVector<unsigned>> memrefAccesses;
 
   DenseMap<Operation *, unsigned> forToNodeMap;
@@ -1845,8 +1852,13 @@ public:
 
     // Search for siblings which load the same memref function argument.
     auto fn = dstNode->op->getParentOfType<TaskOp>();
-    for (unsigned i = 0, e = fn.getBody().getNumArguments(); i != e; ++i) {
-      for (auto *user : fn.getBody().getArgument(i).getUsers()) {
+    auto liveins = Liveness(fn).getLiveIn(&fn.getBody().front());
+    for (auto livein : liveins) {
+      auto users =
+          llvm::make_filter_range(livein.getUsers(), [&](Operation *user) {
+            return fn->isAncestor(user);
+          });
+      for (auto *user : users) {
         if (auto loadOp = dyn_cast<AffineReadOpInterface>(user)) {
           // Gather loops surrounding 'use'.
           SmallVector<AffineForOp, 4> loops;

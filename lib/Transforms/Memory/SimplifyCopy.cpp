@@ -15,7 +15,7 @@ using namespace hls;
 
 namespace {
 template <typename OpType>
-struct SimplifyBufferPattern : public OpRewritePattern<OpType> {
+struct SimplifyBuffer : public OpRewritePattern<OpType> {
   using OpRewritePattern<OpType>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(OpType buf,
@@ -37,8 +37,7 @@ struct SimplifyBufferPattern : public OpRewritePattern<OpType> {
     auto anotherVal = buf.getMemref() == copy.getSource() ? copy.getTarget()
                                                           : copy.getSource();
     if (auto anotherBuf = anotherVal.getDefiningOp())
-      if (!isa<OpType>(anotherBuf) ||
-          DT.dominates(buf.getOperation(), anotherBuf))
+      if (DT.dominates(buf.getOperation(), anotherBuf))
         return failure();
     if (buf.getType().getMemorySpaceAsInt() !=
         anotherVal.getType().template cast<MemRefType>().getMemorySpaceAsInt())
@@ -73,9 +72,9 @@ struct SimplifyCopy : public SimplifyCopyBase<SimplifyCopy> {
     auto context = func.getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<SimplifyBufferPattern<BufferOp>>(context);
-    patterns.add<SimplifyBufferPattern<memref::AllocOp>>(context);
-    patterns.add<SimplifyBufferPattern<memref::AllocaOp>>(context);
+    patterns.add<SimplifyBuffer<BufferOp>>(context);
+    patterns.add<SimplifyBuffer<memref::AllocOp>>(context);
+    patterns.add<SimplifyBuffer<memref::AllocaOp>>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };

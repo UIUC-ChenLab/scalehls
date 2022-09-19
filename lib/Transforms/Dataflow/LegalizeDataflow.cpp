@@ -27,7 +27,12 @@ struct MultiProducerRemovePattern : public OpRewritePattern<NodeOp> {
     SmallVector<BlockArgument, 4> targetArgs;
     for (auto arg : node.getOutputArgs()) {
       auto buffer = node.getOperand(arg.getArgNumber());
-      auto producers = getProducersInSchedule(buffer, schedule);
+      // If the buffer is defined outside of the parent schedule, then we cannot
+      // resolve the multi-producer violation through buffering.
+      if (buffer.isa<BlockArgument>())
+        continue;
+
+      SmallVector<NodeOp, 4> producers(getProducers(buffer));
       llvm::sort(producers, [&](NodeOp a, NodeOp b) {
         return DT.properlyDominates(a, b);
       });
@@ -40,7 +45,7 @@ struct MultiProducerRemovePattern : public OpRewritePattern<NodeOp> {
 
     auto loc = rewriter.getUnknownLoc();
     auto newInputs = SmallVector<Value>(node.getInputs());
-    auto newInputTaps = node.getInputTapsAsInt();
+    SmallVector<int32_t> newInputTaps(node.getInputTapsAsInt());
     rewriter.setInsertionPoint(node);
 
     // Create new buffers and write to them instead of the original buffers. The
@@ -54,8 +59,7 @@ struct MultiProducerRemovePattern : public OpRewritePattern<NodeOp> {
 
       buffer.replaceUsesWithIf(newBuffer, [&](OpOperand &use) {
         if (auto user = dyn_cast<NodeOp>(use.getOwner()))
-          return user.getScheduleOp() == schedule &&
-                 DT.properlyDominates(node, user);
+          return DT.properlyDominates(node, user);
         return false;
       });
     }
@@ -92,14 +96,14 @@ struct BypassPathRemovePattern : public OpRewritePattern<NodeOp> {
                                 PatternRewriter &rewriter) const override {
     if (node.getLevel())
       return failure();
-    auto schedule = node.getScheduleOp();
 
     unsigned level = 0;
     for (auto output : node.getOutputs()) {
-      if (!getProducersInScheduleExcept(output, schedule, node).empty())
+      // TODO: Consider to merge all producers into the same level.
+      if (!getProducersExcept(output, node).empty())
         return failure();
 
-      for (auto consumer : getConsumersInSchedule(output, schedule)) {
+      for (auto consumer : getConsumers(output)) {
         if (!consumer.getLevel())
           return failure();
         level = std::max(level, consumer.getLevel().value() + 1);
@@ -109,7 +113,7 @@ struct BypassPathRemovePattern : public OpRewritePattern<NodeOp> {
 
     for (auto output : node.getOutputs()) {
       SmallVector<std::pair<unsigned, NodeOp>, 4> worklist;
-      for (auto consumer : getConsumersInSchedule(output, schedule)) {
+      for (auto consumer : getConsumers(output)) {
         auto diff = level - consumer.getLevel().value();
         if (diff > 1)
           worklist.push_back({diff, consumer});
@@ -247,6 +251,9 @@ struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<MultiProducerRemovePattern>(context);
+    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+
+    patterns.clear();
     patterns.add<BypassPathRemovePattern>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 

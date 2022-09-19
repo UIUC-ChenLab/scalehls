@@ -123,6 +123,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(arith::createArithmeticBufferizePass());
         pm.addPass(mlir::createLinalgBufferizePass());
         pm.addPass(func::createFuncBufferizePass());
+        pm.addPass(bufferization::createBufferResultsToOutParamsPass());
         pm.addPass(scalehls::createBufferizeDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
@@ -186,12 +187,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
 
         // Lower dataflow.
         pm.addPass(scalehls::createStreamDataflowPass());
-        pm.addPass(bufferization::createBufferResultsToOutParamsPass());
         pm.addPass(scalehls::createLowerDataflowPass());
-        pm.addPass(scalehls::createSimplifyCopyPass());
-
-        return;
-
         pm.addPass(scalehls::createLegalizeDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
@@ -213,8 +209,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(mlir::createCanonicalizerPass());
 
         // Convert dataflow to func.
-        pm.addPass(scalehls::createCreateTokenStreamPass());
-
+        // pm.addPass(scalehls::createCreateTokenStreamPass());
         pm.addPass(scalehls::createConvertDataflowToFuncPass());
         pm.addPass(mlir::createCanonicalizerPass());
 

@@ -23,8 +23,8 @@ struct CreateTokenStream : public CreateTokenStreamBase<CreateTokenStream> {
     auto loc = b.getUnknownLoc();
 
     for (auto buffer : schedule.getOps<BufferOp>()) {
-      auto producers = getProducersInSchedule(buffer, schedule);
-      auto consumers = getConsumersInSchedule(buffer, schedule);
+      auto producers = getProducers(buffer);
+      auto consumers = getConsumers(buffer);
       if (producers.empty() || consumers.empty())
         continue;
 
@@ -59,7 +59,7 @@ struct CreateTokenStream : public CreateTokenStreamBase<CreateTokenStream> {
         auto inputIdx = llvm::find(node.getInputs(), buffer.getMemref()) -
                         node.getInputs().begin();
         SmallVector<Value, 8> inputs(node.getInputs());
-        auto inputTaps = node.getInputTapsAsInt();
+        SmallVector<int32_t> inputTaps(node.getInputTapsAsInt());
         inputs.insert(std::next(inputs.begin(), inputIdx), token.getChannel());
         inputTaps.insert(std::next(inputTaps.begin(), inputIdx), 0);
 

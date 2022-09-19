@@ -14,8 +14,8 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-struct CopyLoweringPattern : public OpRewritePattern<memref::CopyOp> {
-  CopyLoweringPattern(MLIRContext *context, bool internalCopyOnly = true)
+struct LowerCopy : public OpRewritePattern<memref::CopyOp> {
+  LowerCopy(MLIRContext *context, bool internalCopyOnly = true)
       : OpRewritePattern(context), internalCopyOnly(internalCopyOnly) {}
 
   using OpRewritePattern<memref::CopyOp>::OpRewritePattern;
@@ -73,7 +73,7 @@ struct LowerCopyToAffine : public LowerCopyToAffineBase<LowerCopyToAffine> {
 
     // Lower copy operation.
     mlir::RewritePatternSet patterns(context);
-    patterns.add<CopyLoweringPattern>(context, internalCopyOnly);
+    patterns.add<LowerCopy>(context, internalCopyOnly);
     (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
   }
 };

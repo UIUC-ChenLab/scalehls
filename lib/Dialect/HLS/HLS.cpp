@@ -262,34 +262,31 @@ void ScheduleOp::getCanonicalizationPatterns(RewritePatternSet &results,
 }
 
 LogicalResult ScheduleOp::verify() {
+  if (getOperandTypes() != getBody().getArgumentTypes())
+    return emitOpError("operand type doesn't align with argument type");
+
   if (getIsLegal()) {
-    if (llvm::any_of(getOps(), [](Operation &op) {
-          return !isa<NodeOp, BufferOp, ConstBufferOp, StreamOp>(op);
-        })) {
-      auto diag =
-          mlir::emitError(getLoc(), "legal schedule has illegal ops:\n");
-      for (auto &op : getOps())
-        if (!isa<NodeOp, BufferOp, ConstBufferOp, StreamOp>(op))
-          diag.attachNote(op.getLoc())
-              .append("see current op: ")
-              .appendOp(op, OpPrintingFlags().printGenericOpForm());
-      return diag;
-    }
+    for (auto &op : getOps())
+      if (!isa<NodeOp, BufferOp, ConstBufferOp, StreamOp>(op)) {
+        auto diag = emitOpError("legal schedule has illegal ops:\n");
+        diag.attachNote(op.getLoc())
+            .append("see current op: ")
+            .appendOp(op, OpPrintingFlags().printGenericOpForm());
+        return diag;
+      }
 
     for (auto node : getOps<NodeOp>()) {
       if (!node.getLevel()) {
-        auto diag = mlir::emitError(getLoc(),
-                                    "legal schedule has node not scheduled:\n");
+        auto diag = emitOpError("legal schedule has node not scheduled:\n");
         diag.attachNote(node.getLoc())
             .append("see current node: ")
             .appendOp(*node, OpPrintingFlags().printGenericOpForm());
         return diag;
       }
       for (auto output : node.getOutputs())
-        if (getConsumersInSchedule(output, *this).size() > 1 ||
-            getProducersInSchedule(output, *this).size() > 1) {
-          auto diag = mlir::emitError(
-              getLoc(),
+        if (getConsumers(output).size() > 1 ||
+            getProducers(output).size() > 1) {
+          auto diag = emitOpError(
               "legal schedule violates single-consumer or single-producer, ");
           diag << "see current buffer: " << output << "\n";
           for (auto user : output.getUsers())
@@ -367,15 +364,20 @@ LogicalResult NodeOp::verify() {
     return emitOpError("operand type doesn't align with argument type");
 
   if (llvm::any_of(getParams(), [](Value param) {
-        return param.getType().isa<ShapedType, StreamType>();
+        return param.getType().isa<MemRefType, StreamType>();
       }))
-    return emitOpError("node params should not be shaped or stream typed");
+    return emitOpError("node params should not be memref or stream typed");
 
   if (getInputs().size() != getInputTaps().size())
     return emitOpError("number of node inputs and input taps are not aligned");
-  for (auto t : llvm::zip(getInputs(), getInputTapsAsInt()))
-    if (getBufferDepth(std::get<0>(t)) <= (unsigned)std::get<1>(t))
-      return emitOpError("node input tap is larger than buffer/stream depth");
+  for (auto t : llvm::zip(getInputs(), getInputTapsAsInt())) {
+    auto depth = getBufferDepth(std::get<0>(t));
+    auto inputTap = (unsigned)std::get<1>(t);
+    if (depth <= inputTap) {
+      auto diag = emitOpError("node input tap is larger than buffer depth, ");
+      diag << "input tap: " << inputTap << ", depth: " << depth;
+    }
+  }
 
   for (auto inputArg : getInputArgs())
     if (llvm::any_of(inputArg.getUses(), isWritten))
@@ -395,8 +397,8 @@ ScheduleOp NodeOp::getScheduleOp() {
 int32_t NodeOp::getInputTap(unsigned idx) {
   return getInputTaps()[idx].cast<IntegerAttr>().getInt();
 }
-SmallVector<int32_t, 4> NodeOp::getInputTapsAsInt() {
-  SmallVector<int32_t, 4> array;
+SmallVector<int32_t> NodeOp::getInputTapsAsInt() {
+  SmallVector<int32_t> array;
   for (auto attr : getInputTaps())
     array.push_back(attr.cast<IntegerAttr>().getInt());
   return array;
