@@ -265,7 +265,7 @@ LogicalResult ScheduleOp::verify() {
   if (getOperandTypes() != getBody().getArgumentTypes())
     return emitOpError("operand type doesn't align with argument type");
 
-  if (getIsLegal()) {
+  if (getIsLegal())
     for (auto &op : getOps())
       if (!isa<NodeOp, BufferOp, ConstBufferOp, StreamOp>(op)) {
         auto diag = emitOpError("legal schedule has illegal ops:\n");
@@ -274,29 +274,6 @@ LogicalResult ScheduleOp::verify() {
             .appendOp(op, OpPrintingFlags().printGenericOpForm());
         return diag;
       }
-
-    for (auto node : getOps<NodeOp>()) {
-      if (!node.getLevel()) {
-        auto diag = emitOpError("legal schedule has node not scheduled:\n");
-        diag.attachNote(node.getLoc())
-            .append("see current node: ")
-            .appendOp(*node, OpPrintingFlags().printGenericOpForm());
-        return diag;
-      }
-      for (auto output : node.getOutputs())
-        if (getConsumers(output).size() > 1 ||
-            getProducers(output).size() > 1) {
-          auto diag = emitOpError(
-              "legal schedule violates single-consumer or single-producer, ");
-          diag << "see current buffer: " << output << "\n";
-          for (auto user : output.getUsers())
-            diag.attachNote(user->getLoc())
-                .append("see current buffer user: ")
-                .appendOp(*user, OpPrintingFlags().printGenericOpForm());
-          return diag;
-        }
-    }
-  }
   return success();
 }
 
@@ -385,6 +362,31 @@ LogicalResult NodeOp::verify() {
   for (auto outputArg : getOutputArgs())
     if (!llvm::any_of(outputArg.getUses(), isWritten))
       return emitOpError("output operand is not written");
+
+  if (getScheduleOp().getIsLegal()) {
+    if (!getLevel())
+      return emitOpError("node is not scheduled");
+
+    for (auto output : getOutputs()) {
+      // DRAM buffer allocated in the current schedule doesn't need to follow
+      // single-consumer single-producer rule.
+      if (auto type = output.getType().dyn_cast<MemRefType>())
+        if (type.getMemorySpaceAsInt() == (unsigned)MemoryKind::DRAM &&
+            output.getDefiningOp<BufferOp>())
+          continue;
+
+      if (getConsumers(output).size() > 1 || getProducers(output).size() > 1) {
+        auto diag = emitOpError(
+            "legal schedule violates single-consumer or single-producer, ");
+        diag << "see current buffer: " << output << "\n";
+        for (auto user : output.getUsers())
+          diag.attachNote(user->getLoc())
+              .append("see current buffer user: ")
+              .appendOp(*user, OpPrintingFlags().printGenericOpForm());
+        return diag;
+      }
+    }
+  }
   return success();
 }
 
@@ -394,11 +396,18 @@ ScheduleOp NodeOp::getScheduleOp() {
 }
 
 /// Get input taps.
-int32_t NodeOp::getInputTap(unsigned idx) {
+void NodeOp::setInputTap(unsigned idx, unsigned tap) {
+  SmallVector<int32_t> newInputTaps(llvm::map_range(
+      getInputTapsAsInt(), [](unsigned a) { return (int32_t)a; }));
+  newInputTaps[idx] = tap;
+  Builder builder(getContext());
+  setInputTapsAttr(builder.getI32ArrayAttr(newInputTaps));
+}
+unsigned NodeOp::getInputTap(unsigned idx) {
   return getInputTaps()[idx].cast<IntegerAttr>().getInt();
 }
-SmallVector<int32_t> NodeOp::getInputTapsAsInt() {
-  SmallVector<int32_t> array;
+SmallVector<unsigned> NodeOp::getInputTapsAsInt() {
+  SmallVector<unsigned> array;
   for (auto attr : getInputTaps())
     array.push_back(attr.cast<IntegerAttr>().getInt());
   return array;
@@ -454,6 +463,9 @@ int32_t BufferOp::getBufferDepth() { return getDepth(); }
 int32_t ConstBufferOp::getBufferDepth() { return 1; }
 
 LogicalResult ConstBufferOp::verify() {
+  if (llvm::any_of((*this)->getUses(), isWritten))
+    return emitOpError("const buffer cannot be written");
+
   auto memrefType = getType();
   auto attrType = getValue().getType().cast<TensorType>();
   if (memrefType.getElementType() != attrType.getElementType())

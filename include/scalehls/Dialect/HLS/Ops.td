@@ -180,27 +180,27 @@ def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
 
   let builders = [
     OpBuilder<(ins "mlir::ValueRange":$inputs, "mlir::ValueRange":$outputs,
-        "mlir::ValueRange":$params, "ArrayRef<int32_t>":$inputTaps,
+        "mlir::ValueRange":$params, "ArrayRef<unsigned>":$inputTaps,
         "mlir::IntegerAttr":$level), [{
+          auto newInputTaps = SmallVector<int32_t>(
+            llvm::map_range(inputTaps, [](unsigned a) { return (int32_t)a; }));
           build($_builder, $_state, inputs, outputs, params,
-                $_builder.getI32ArrayAttr(inputTaps), level);
+                $_builder.getI32ArrayAttr(newInputTaps), level);
         }]>,
 
     OpBuilder<(ins "mlir::ValueRange":$inputs, "mlir::ValueRange":$outputs,
-        "mlir::ValueRange":$params, "ArrayRef<int32_t>":$inputTaps), [{
-          build($_builder, $_state, inputs, outputs, params,
-                $_builder.getI32ArrayAttr(inputTaps), nullptr);
+        "mlir::ValueRange":$params, "ArrayRef<unsigned>":$inputTaps), [{
+          build($_builder, $_state, inputs, outputs, params, inputTaps, nullptr);
         }]>,
     OpBuilder<(ins "mlir::ValueRange":$inputs, "mlir::ValueRange":$outputs,
-        "ArrayRef<int32_t>":$inputTaps), [{
-          build($_builder, $_state, inputs, outputs, ValueRange(),
-                $_builder.getI32ArrayAttr(inputTaps), nullptr);
+        "ArrayRef<unsigned>":$inputTaps), [{
+          build($_builder, $_state, inputs, outputs, ValueRange(), inputTaps);
         }]>,
 
     OpBuilder<(ins "mlir::ValueRange":$inputs, "mlir::ValueRange":$outputs,
         "mlir::ValueRange":$params), [{
           build($_builder, $_state, inputs, outputs, params,
-                SmallVector<int32_t>(inputs.size(), 0));
+                SmallVector<unsigned>(inputs.size(), 0));
         }]>,
     OpBuilder<(ins "mlir::ValueRange":$inputs, "mlir::ValueRange":$outputs),
         "build($_builder, $_state, inputs, outputs, ValueRange());">
@@ -214,8 +214,9 @@ def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
     ScheduleOp getScheduleOp();
 
     /// Get input taps.
-    int32_t getInputTap(unsigned idx);
-    SmallVector<int32_t> getInputTapsAsInt();
+    void setInputTap(unsigned idx, unsigned tap);
+    unsigned getInputTap(unsigned idx);
+    SmallVector<unsigned> getInputTapsAsInt();
 
     /// Get the number of inputs, outputs, and params.
     unsigned getNumInputs();

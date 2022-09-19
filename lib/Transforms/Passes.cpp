@@ -189,6 +189,8 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createStreamDataflowPass());
         pm.addPass(scalehls::createLowerDataflowPass());
         pm.addPass(scalehls::createLegalizeDataflowPass());
+        pm.addPass(scalehls::createLowerCopyToAffinePass(
+            /*InternalCopyOnly=*/false));
         pm.addPass(mlir::createCanonicalizerPass());
 
         // Affine loop unrolling.

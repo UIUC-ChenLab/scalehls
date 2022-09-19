@@ -59,7 +59,7 @@ struct CreateTokenStream : public CreateTokenStreamBase<CreateTokenStream> {
         auto inputIdx = llvm::find(node.getInputs(), buffer.getMemref()) -
                         node.getInputs().begin();
         SmallVector<Value, 8> inputs(node.getInputs());
-        SmallVector<int32_t> inputTaps(node.getInputTapsAsInt());
+        SmallVector<unsigned> inputTaps(node.getInputTapsAsInt());
         inputs.insert(std::next(inputs.begin(), inputIdx), token.getChannel());
         inputTaps.insert(std::next(inputTaps.begin(), inputIdx), 0);
 

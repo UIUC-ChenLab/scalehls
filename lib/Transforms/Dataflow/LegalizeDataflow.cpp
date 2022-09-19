@@ -45,7 +45,7 @@ struct MultiProducerRemovePattern : public OpRewritePattern<NodeOp> {
 
     auto loc = rewriter.getUnknownLoc();
     auto newInputs = SmallVector<Value>(node.getInputs());
-    SmallVector<int32_t> newInputTaps(node.getInputTapsAsInt());
+    SmallVector<unsigned> newInputTaps(node.getInputTapsAsInt());
     rewriter.setInsertionPoint(node);
 
     // Create new buffers and write to them instead of the original buffers. The
@@ -121,10 +121,35 @@ struct BypassPathRemovePattern : public OpRewritePattern<NodeOp> {
       if (worklist.empty())
         continue;
 
+      // Sort all consumers in a descending order of level difference.
+      llvm::sort(worklist, [](auto a, auto b) { return a.first > b.first; });
+      auto maxDiff = worklist.front().first;
+
+      // If the output is written to a DRAM buffer allocated inside of the
+      // schedule, then we can set the depth of the DRAM buffer and use taps to
+      // access the data. In this way, we no longer need to allocate multiple
+      // buffers and construct explicit copy to move data. Instead, we can
+      // implement the ping-pong buffer in DRAM that saves the memory interface
+      // and logic resources.
+      if (auto buffer = output.getDefiningOp<BufferOp>())
+        if (auto type = output.getType().dyn_cast<MemRefType>())
+          if (type.getMemorySpaceAsInt() == (unsigned)MemoryKind::DRAM) {
+            buffer.setDepthAttr(rewriter.getI32IntegerAttr(maxDiff));
+            for (auto item : worklist) {
+              auto consumer = item.second;
+              auto idx = llvm::find(consumer.getInputs(), output) -
+                         consumer.getInputs().begin();
+              item.second.setInputTap(idx, item.first - 1);
+            }
+            continue;
+          }
+
+      // Otherwise, we need to construct a chain of buffers to hold data at each
+      // level and construct explicit copies to pass data between different
+      // dataflow levels.
       auto currentBuf = output;
       auto currentNode = node;
-      llvm::sort(worklist, [](auto a, auto b) { return a.first > b.first; });
-      for (unsigned i = 2, e = worklist.front().first; i <= e; ++i) {
+      for (unsigned i = 2; i <= maxDiff; ++i) {
         // Create a new buffer.
         auto loc = rewriter.getUnknownLoc();
         rewriter.setInsertionPoint(currentNode);
@@ -168,7 +193,7 @@ static NodeOp fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter) {
 
   // Collect inputs, outputs, and params of the new node.
   llvm::SetVector<Value> inputs;
-  llvm::SmallVector<int32_t, 8> inputTaps;
+  llvm::SmallVector<unsigned, 8> inputTaps;
   llvm::SmallVector<Location, 8> inputLocs;
   llvm::SetVector<Value> outputs;
   llvm::SmallVector<Location, 8> outputLocs;
