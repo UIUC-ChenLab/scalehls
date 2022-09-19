@@ -132,17 +132,16 @@ struct BypassPathRemovePattern : public OpRewritePattern<NodeOp> {
       // implement the ping-pong buffer in DRAM that saves the memory interface
       // and logic resources.
       if (auto buffer = output.getDefiningOp<BufferOp>())
-        if (auto type = output.getType().dyn_cast<MemRefType>())
-          if (type.getMemorySpaceAsInt() == (unsigned)MemoryKind::DRAM) {
-            buffer.setDepthAttr(rewriter.getI32IntegerAttr(maxDiff));
-            for (auto item : worklist) {
-              auto consumer = item.second;
-              auto idx = llvm::find(consumer.getInputs(), output) -
-                         consumer.getInputs().begin();
-              item.second.setInputTap(idx, item.first - 1);
-            }
-            continue;
+        if (isExternalBuffer(output)) {
+          buffer.setDepthAttr(rewriter.getI32IntegerAttr(maxDiff));
+          for (auto item : worklist) {
+            auto consumer = item.second;
+            auto idx = llvm::find(consumer.getInputs(), output) -
+                       consumer.getInputs().begin();
+            item.second.setInputTap(idx, item.first - 1);
           }
+          continue;
+        }
 
       // Otherwise, we need to construct a chain of buffers to hold data at each
       // level and construct explicit copies to pass data between different

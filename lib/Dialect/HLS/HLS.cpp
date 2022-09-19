@@ -370,10 +370,8 @@ LogicalResult NodeOp::verify() {
     for (auto output : getOutputs()) {
       // DRAM buffer allocated in the current schedule doesn't need to follow
       // single-consumer single-producer rule.
-      if (auto type = output.getType().dyn_cast<MemRefType>())
-        if (type.getMemorySpaceAsInt() == (unsigned)MemoryKind::DRAM &&
-            output.getDefiningOp<BufferOp>())
-          continue;
+      if (isExternalBuffer(output) && output.getDefiningOp<BufferOp>())
+        continue;
 
       if (getConsumers(output).size() > 1 || getProducers(output).size() > 1) {
         auto diag = emitOpError(

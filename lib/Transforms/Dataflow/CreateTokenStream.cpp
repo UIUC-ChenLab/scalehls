@@ -18,65 +18,98 @@ struct CreateTokenStream : public CreateTokenStreamBase<CreateTokenStream> {
     auto func = getOperation();
     auto context = func.getContext();
     OpBuilder b(context);
-
-    auto schedule = *func.getOps<ScheduleOp>().begin();
     auto loc = b.getUnknownLoc();
 
-    for (auto buffer : schedule.getOps<BufferOp>()) {
-      auto producers = getProducers(buffer);
-      auto consumers = getConsumers(buffer);
-      if (producers.empty() || consumers.empty())
-        continue;
+    func.walk([&](ScheduleOp schedule) {
+      if (!schedule.getIsLegal())
+        return WalkResult::advance();
 
-      b.setInsertionPointAfter(buffer);
-      auto token = b.create<StreamOp>(
-          loc, StreamType::get(b.getContext(), b.getI1Type(), 1));
+      SmallVector<Value> buffers;
+      for (auto arg : schedule.getBody().getArguments())
+        if (isExternalBuffer(arg))
+          buffers.push_back(arg);
+      for (auto bufferOp : schedule.getOps<BufferOp>())
+        if (isExternalBuffer(bufferOp))
+          buffers.push_back(bufferOp);
 
-      for (auto node : producers) {
-        auto outputIdx = llvm::find(node.getOutputs(), buffer.getMemref()) -
-                         node.getOutputs().begin();
-        SmallVector<Value, 8> outputs(node.getOutputs());
-        outputs.insert(std::next(outputs.begin(), outputIdx),
-                       token.getChannel());
+      for (auto buffer : buffers) {
+        auto producers = getProducers(buffer);
+        auto consumers = getConsumers(buffer);
+        if (!llvm::hasSingleElement(producers) || consumers.empty())
+          continue;
 
-        b.setInsertionPoint(node);
-        auto newNode = b.create<NodeOp>(
-            node.getLoc(), node.getInputs(), outputs, node.getParams(),
-            node.getInputTapsAttr(), node.getLevelAttr());
-        newNode.getBody().getBlocks().splice(newNode.getBody().end(),
-                                             node.getBody().getBlocks());
-        node.erase();
-        auto tokenArg =
-            newNode.getBody().insertArgument(outputIdx + newNode.getNumInputs(),
-                                             token.getType(), token.getLoc());
+        auto producer = producers.front();
+        auto outputIdx = llvm::find(producer.getOutputs(), buffer) -
+                         producer.getOutputs().begin();
+        SmallVector<Value, 8> outputs(producer.getOutputs());
+        SmallVector<StreamOp, 4> tokens;
 
-        b.setInsertionPointToEnd(&newNode.getBody().front());
-        auto value = b.create<arith::ConstantOp>(loc, b.getBoolAttr(true));
-        b.create<StreamWriteOp>(loc, tokenArg, value);
+        for (auto consumer : consumers) {
+          // Create new stream channel.
+          auto levelDiff =
+              producer.getLevel().value() - consumer.getLevel().value();
+          b.setInsertionPointAfterValue(buffer);
+          auto token = b.create<StreamOp>(
+              loc, StreamType::get(b.getContext(), b.getI1Type(), levelDiff),
+              levelDiff);
+          tokens.push_back(token);
+
+          // Add the stream channel as a new output argument of the producer.
+          outputs.insert(std::next(outputs.begin(), outputIdx),
+                         token.getChannel());
+          auto tokenArg = producer.getBody().insertArgument(
+              outputIdx++ + producer.getNumInputs(), token.getType(),
+              token.getLoc());
+
+          // Construct stream write on the producer side.
+          b.setInsertionPointToEnd(&producer.getBody().front());
+          auto value = b.create<arith::ConstantOp>(loc, b.getBoolAttr(true));
+          b.create<StreamWriteOp>(loc, tokenArg, value);
+        }
+
+        // Construct a new producer node.
+        b.setInsertionPoint(producer);
+        auto newProducer =
+            b.create<NodeOp>(producer.getLoc(), producer.getInputs(), outputs,
+                             producer.getParams(), producer.getInputTapsAttr(),
+                             producer.getLevelAttr());
+        newProducer.getBody().getBlocks().splice(
+            newProducer.getBody().end(), producer.getBody().getBlocks());
+        producer.erase();
+
+        for (auto t : llvm::zip(tokens, consumers)) {
+          auto token = std::get<0>(t);
+          auto consumer = std::get<1>(t);
+
+          // Add the stream channel as a new input argument of the consumer.
+          auto inputIdx = llvm::find(consumer.getInputs(), buffer) -
+                          consumer.getInputs().begin();
+          SmallVector<Value, 8> inputs(consumer.getInputs());
+          SmallVector<unsigned> inputTaps(consumer.getInputTapsAsInt());
+
+          inputs.insert(std::next(inputs.begin(), inputIdx),
+                        token.getChannel());
+          inputTaps.insert(std::next(inputTaps.begin(), inputIdx),
+                           token.getType().getDepth() - 1);
+          auto tokenArg = consumer.getBody().insertArgument(
+              inputIdx, token.getType(), token.getLoc());
+
+          // Construct stream write on the producer side.
+          b.setInsertionPointToStart(&consumer.getBody().front());
+          b.create<StreamReadOp>(loc, Type(), tokenArg);
+
+          // Construct a new consumer node.
+          b.setInsertionPoint(consumer);
+          auto newConsumer = b.create<NodeOp>(
+              consumer.getLoc(), inputs, consumer.getOutputs(),
+              consumer.getParams(), inputTaps, consumer.getLevelAttr());
+          newConsumer.getBody().getBlocks().splice(
+              newConsumer.getBody().end(), consumer.getBody().getBlocks());
+          consumer.erase();
+        }
       }
-
-      for (auto node : consumers) {
-        auto inputIdx = llvm::find(node.getInputs(), buffer.getMemref()) -
-                        node.getInputs().begin();
-        SmallVector<Value, 8> inputs(node.getInputs());
-        SmallVector<unsigned> inputTaps(node.getInputTapsAsInt());
-        inputs.insert(std::next(inputs.begin(), inputIdx), token.getChannel());
-        inputTaps.insert(std::next(inputTaps.begin(), inputIdx), 0);
-
-        b.setInsertionPoint(node);
-        auto newNode =
-            b.create<NodeOp>(node.getLoc(), inputs, node.getOutputs(),
-                             node.getParams(), inputTaps, node.getLevelAttr());
-        newNode.getBody().getBlocks().splice(newNode.getBody().end(),
-                                             node.getBody().getBlocks());
-        node.erase();
-        auto tokenArg = newNode.getBody().insertArgument(
-            inputIdx, token.getType(), token.getLoc());
-
-        b.setInsertionPointToStart(&newNode.getBody().front());
-        b.create<StreamReadOp>(loc, Type(), tokenArg);
-      }
-    }
+      return WalkResult::advance();
+    });
   }
 };
 } // namespace
