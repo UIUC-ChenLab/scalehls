@@ -308,7 +308,8 @@ def StreamWriteOp : HLSOp<"dataflow.stream_write"> {
 // AXI-related Operations
 //===----------------------------------------------------------------------===//
 
-def AxiBundleOp : HLSOp<"axi.bundle", [NoSideEffect]> {
+def AxiBundleOp : HLSOp<"axi.bundle", [NoSideEffect,
+    HasParent<"func::FuncOp">]> {
   let summary = "Represent an bundle of axi ports";
 
   let arguments = (ins StrAttr:$name);
@@ -316,7 +317,7 @@ def AxiBundleOp : HLSOp<"axi.bundle", [NoSideEffect]> {
   let assemblyFormat = "$name attr-dict `:` type($bundle)";
 }
 
-def AxiPortOp : HLSOp<"axi.port", [NoSideEffect]> {
+def AxiPortOp : HLSOp<"axi.port", [NoSideEffect, HasParent<"func::FuncOp">]> {
   let summary = "Represent an axi port";
 
   let arguments = (ins BundleType:$bundle, AnyAxi:$axi);
@@ -329,7 +330,7 @@ def AxiPortOp : HLSOp<"axi.port", [NoSideEffect]> {
   let hasVerifier = 1;
 }
 
-def AxiPackOp : HLSOp<"axi.pack", [NoSideEffect]> {
+def AxiPackOp : HLSOp<"axi.pack", [NoSideEffect, HasParent<"func::FuncOp">]> {
   let summary = "Pack a memref or scalar into an axi type";
 
   let arguments = (ins AnyType:$value);

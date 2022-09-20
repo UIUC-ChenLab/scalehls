@@ -94,6 +94,11 @@ struct ConvertDataflowToFunc
       if (failed(applyPartialConversion(func, target, std::move(patterns))))
         return signalPassFailure();
     }
+
+    // Remove memref global operations.
+    for (auto global :
+         llvm::make_early_inc_range(module.getOps<memref::GlobalOp>()))
+      global.erase();
   }
 };
 } // namespace

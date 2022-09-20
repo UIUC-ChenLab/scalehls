@@ -21,6 +21,9 @@ bool scalehls::applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
     if (directive.getDataflow())
       return false;
 
+  if (!targetLoop.getOps<func::CallOp>().empty())
+    return false;
+
   // All inner loops of the pipelined loop are automatically unrolled.
   if (!applyFullyLoopUnrolling(*targetLoop.getBody()))
     return false;

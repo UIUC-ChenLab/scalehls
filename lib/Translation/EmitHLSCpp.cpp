@@ -24,10 +24,15 @@ using namespace scalehls;
 static SmallString<16> getTypeName(Value val) {
   // Handle memref, tensor, and vector types.
   auto valType = val.getType();
-  if (auto arrayType = val.getType().dyn_cast<ShapedType>())
+  if (auto arrayType = valType.dyn_cast<ShapedType>())
     valType = arrayType.getElementType();
-  else if (auto streamType = val.getType().dyn_cast<StreamType>())
+  else if (auto streamType = valType.dyn_cast<StreamType>())
     valType = streamType.getElementType();
+  else if (auto axiType = valType.dyn_cast<AxiType>()) {
+    valType = axiType.getElementType();
+    if (auto arrayType = valType.dyn_cast<ShapedType>())
+      valType = arrayType.getElementType();
+  }
 
   // Handle float types.
   if (valType.isa<Float32Type>())
@@ -157,29 +162,59 @@ SmallString<8> ScaleHLSEmitterBase::addAlias(Value val, Value alias) {
   return valName;
 }
 
+static SmallString<8> getConstantString(Type type, Attribute attr) {
+  SmallString<8> string;
+  if (type.isInteger(1)) {
+    auto value = attr.cast<BoolAttr>().getValue();
+    string.append(value ? "true" : "false");
+
+  } else if (type.isIndex()) {
+    string.append("(int)");
+    auto value = attr.cast<IntegerAttr>().getInt();
+    string.append(std::to_string(value));
+
+  } else if (auto floatType = type.dyn_cast<FloatType>()) {
+    if (floatType.getWidth() == 32) {
+      string.append("(float)");
+      auto value = attr.cast<FloatAttr>().getValue().convertToFloat();
+      string.append(std::isfinite(value)
+                        ? std::to_string(value)
+                        : (value > 0 ? "INFINITY" : "-INFINITY"));
+    } else if (floatType.getWidth() == 64) {
+      string.append("(double)");
+      auto value = attr.cast<FloatAttr>().getValue().convertToDouble();
+      string.append(std::isfinite(value)
+                        ? std::to_string(value)
+                        : (value > 0 ? "INFINITY" : "-INFINITY"));
+    }
+  } else if (auto intType = type.dyn_cast<IntegerType>()) {
+    string.append("(");
+    if (intType.isSigned())
+      string.append("s");
+    string.append("int" + std::to_string(intType.getWidth()) + "_t)");
+
+    if (intType.isSigned()) {
+      auto value = attr.cast<IntegerAttr>().getValue().getSExtValue();
+      string.append(std::to_string(value));
+    } else if (intType.isUnsigned()) {
+      auto value = attr.cast<IntegerAttr>().getValue().getZExtValue();
+      string.append(std::to_string(value));
+    } else {
+      auto value = attr.cast<IntegerAttr>().getInt();
+      string.append(std::to_string(value));
+    }
+  }
+  return string;
+}
+
 SmallString<8> ScaleHLSEmitterBase::getName(Value val) {
   // For constant scalar operations, the constant number will be returned rather
   // than the value name.
-  if (auto defOp = val.getDefiningOp()) {
-    if (auto constOp = dyn_cast<arith::ConstantOp>(defOp)) {
-      auto constAttr = constOp.getValue();
-
-      if (auto floatAttr = constAttr.dyn_cast<FloatAttr>()) {
-        auto value = floatAttr.getValueAsDouble();
-        if (std::isfinite(value))
-          return SmallString<8>(std::to_string(value));
-        else if (value > 0)
-          return SmallString<8>("INFINITY");
-        else
-          return SmallString<8>("-INFINITY");
-
-      } else if (auto intAttr = constAttr.dyn_cast<IntegerAttr>()) {
-        auto value = intAttr.getInt();
-        return SmallString<8>(std::to_string(value));
-
-      } else if (auto boolAttr = constAttr.dyn_cast<BoolAttr>())
-        return SmallString<8>(std::to_string(boolAttr.getValue()));
-    }
+  if (auto constOp = val.getDefiningOp<arith::ConstantOp>()) {
+    auto string = getConstantString(constOp.getType(), constOp.getValue());
+    if (string.empty())
+      constOp.emitOpError("constant has invalid value");
+    return string;
   }
   return state.nameTable.lookup(val);
 }
@@ -194,6 +229,18 @@ public:
   using operand_range = Operation::operand_range;
   explicit ModuleEmitter(ScaleHLSEmitterState &state)
       : ScaleHLSEmitterBase(state) {}
+
+  /// HLS dialect operation emitters.
+  void emitStreamChannel(StreamOp op);
+  void emitStreamRead(StreamReadOp op);
+  void emitStreamWrite(StreamWriteOp op);
+  void emitAxiPort(AxiPortOp op);
+  void emitPrimMul(PrimMulOp op);
+  template <typename AssignOpType> void emitAssign(AssignOpType op);
+  void emitConstBuffer(ConstBufferOp op);
+
+  /// Control flow operation emitters.
+  void emitCall(func::CallOp op);
 
   /// SCF statement emitters.
   void emitScfFor(scf::ForOp op);
@@ -221,21 +268,7 @@ public:
   void emitLoad(memref::LoadOp op);
   void emitStore(memref::StoreOp op);
   void emitMemCpy(memref::CopyOp op);
-  void emitTensorStore(memref::TensorStoreOp op);
   template <typename OpType> void emitReshape(OpType op);
-  void emitTensorToMemref(bufferization::ToMemrefOp op);
-  void emitMemrefToTensor(bufferization::ToTensorOp op);
-
-  /// HLS dialect operation emitters.
-  void emitStreamChannel(StreamOp op);
-  void emitStreamRead(StreamReadOp op);
-  void emitStreamWrite(StreamWriteOp op);
-  void emitPrimMul(PrimMulOp op);
-  template <typename AssignOpType> void emitAssign(AssignOpType op);
-  void emitPrimConst(ConstBufferOp op);
-
-  /// Control flow operation emitters.
-  void emitCall(func::CallOp op);
 
   /// Standard expression emitters.
   void emitUnary(Operation *op, const char *syntax);
@@ -362,8 +395,28 @@ namespace {
 class StmtVisitor : public HLSVisitorBase<StmtVisitor, bool> {
 public:
   StmtVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
-
   using HLSVisitorBase::visitOp;
+
+  /// HLS dialect operations.
+  bool visitOp(BufferOp op) {
+    if (op.getDepth() == 1)
+      return emitter.emitAlloc(op), true;
+    return op.emitOpError("only support depth of 1"), false;
+  }
+  bool visitOp(ConstBufferOp op) { return emitter.emitConstBuffer(op), true; }
+  bool visitOp(StreamOp op) { return emitter.emitStreamChannel(op), true; }
+  bool visitOp(StreamReadOp op) { return emitter.emitStreamRead(op), true; }
+  bool visitOp(StreamWriteOp op) { return emitter.emitStreamWrite(op), true; }
+  bool visitOp(AxiBundleOp op) { return true; }
+  bool visitOp(AxiPortOp op) { return emitter.emitAxiPort(op), true; }
+  bool visitOp(AxiPackOp op) { return false; }
+  bool visitOp(PrimMulOp op) { return emitter.emitPrimMul(op), true; }
+  bool visitOp(PrimCastOp op) { return emitter.emitAssign(op), true; }
+
+  /// Function operations.
+  bool visitOp(func::CallOp op) { return emitter.emitCall(op), true; }
+  bool visitOp(func::ReturnOp op) { return true; }
+
   /// SCF statements.
   bool visitOp(scf::ForOp op) { return emitter.emitScfFor(op), true; };
   bool visitOp(scf::IfOp op) { return emitter.emitScfIf(op), true; };
@@ -391,7 +444,7 @@ public:
   bool visitOp(AffineVectorStoreOp op) { return false; }
   bool visitOp(AffineYieldOp op) { return emitter.emitAffineYield(op), true; }
 
-  /// Vector-related statements.
+  /// Vector statements.
   bool visitOp(vector::TransferReadOp op) {
     return emitter.emitTransferRead(op), true;
   };
@@ -402,17 +455,13 @@ public:
     return emitter.emitBroadcast(op), true;
   };
 
-  /// Memref-related statements.
+  /// Memref statements.
   bool visitOp(memref::AllocOp op) { return emitter.emitAlloc(op), true; }
   bool visitOp(memref::AllocaOp op) { return emitter.emitAlloc(op), true; }
   bool visitOp(memref::LoadOp op) { return emitter.emitLoad(op), true; }
   bool visitOp(memref::StoreOp op) { return emitter.emitStore(op), true; }
   bool visitOp(memref::DeallocOp op) { return true; }
   bool visitOp(memref::CopyOp op) { return emitter.emitMemCpy(op), true; }
-  bool visitOp(memref::TensorStoreOp op) {
-    return emitter.emitTensorStore(op), true;
-  }
-  bool visitOp(tensor::ReshapeOp op) { return emitter.emitReshape(op), true; }
   bool visitOp(memref::ReshapeOp op) { return emitter.emitReshape(op), true; }
   bool visitOp(memref::CollapseShapeOp op) {
     return emitter.emitReshape(op), true;
@@ -423,29 +472,6 @@ public:
   bool visitOp(memref::ReinterpretCastOp op) {
     return emitter.emitReshape(op), true;
   }
-  bool visitOp(bufferization::ToMemrefOp op) {
-    return emitter.emitTensorToMemref(op), true;
-  }
-  bool visitOp(bufferization::ToTensorOp op) {
-    return emitter.emitMemrefToTensor(op), true;
-  }
-
-  /// HLS dialect operations.
-  bool visitOp(BufferOp op) {
-    if (op.getDepth() == 1)
-      return emitter.emitAlloc(op), true;
-    return op.emitOpError("only support depth of 1"), false;
-  }
-  bool visitOp(ConstBufferOp op) { return emitter.emitPrimConst(op), true; }
-  bool visitOp(StreamOp op) { return emitter.emitStreamChannel(op), true; }
-  bool visitOp(StreamReadOp op) { return emitter.emitStreamRead(op), true; }
-  bool visitOp(StreamWriteOp op) { return emitter.emitStreamWrite(op), true; }
-  bool visitOp(PrimMulOp op) { return emitter.emitPrimMul(op), true; }
-  bool visitOp(PrimCastOp op) { return emitter.emitAssign(op), true; }
-
-  /// Control flow operations.
-  bool visitOp(func::CallOp op) { return emitter.emitCall(op), true; }
-  bool visitOp(func::ReturnOp op) { return true; }
 
 private:
   ModuleEmitter &emitter;
@@ -588,6 +614,177 @@ bool ExprVisitor::visitOp(arith::CmpIOp op) {
 //===----------------------------------------------------------------------===//
 // ModuleEmitter Class Definition
 //===----------------------------------------------------------------------===//
+
+/// HLS dialect operation emitters.
+void ModuleEmitter::emitConstBuffer(ConstBufferOp op) {
+  emitConstant(op);
+  emitArrayDirectives(op.getResult());
+}
+
+void ModuleEmitter::emitStreamChannel(StreamOp op) {
+  indent();
+  emitValue(op.getChannel());
+  os << ";";
+  emitInfoAndNewLine(op);
+}
+
+void ModuleEmitter::emitStreamRead(StreamReadOp op) {
+  indent();
+  if (op.getResult()) {
+    emitValue(op.getResult());
+    os << " = ";
+  }
+  emitValue(op.getChannel());
+  os << ".read(";
+  os << ");";
+  emitInfoAndNewLine(op);
+}
+
+void ModuleEmitter::emitStreamWrite(StreamWriteOp op) {
+  indent();
+  emitValue(op.getChannel());
+  os << ".write(";
+  emitValue(op.getValue());
+  os << ");";
+  emitInfoAndNewLine(op);
+}
+
+void ModuleEmitter::emitAxiPort(AxiPortOp op) {
+  addAlias(op.getAxi(), op.getValue());
+  auto bundleName = op.getBundle().getDefiningOp<AxiBundleOp>().getName();
+
+  // Array ports and scalar ports are handled separately. Here, we only
+  // handle MemRef types since we assume the IR has be fully bufferized.
+  if (auto memrefType = op.getType().dyn_cast<MemRefType>()) {
+    // Only emit interface pragma when the array is not fully partitioned.
+    if (!isFullyPartitioned(memrefType)) {
+      indent() << "#pragma HLS interface";
+      // For now, we set the offset of all m_axi interfaces as slave.
+      auto kind = MemoryKind(memrefType.getMemorySpaceAsInt());
+      if (kind == MemoryKind::DRAM) {
+        os << " m_axi offset=slave bundle=" << bundleName;
+      } else
+        os << " bram";
+
+      os << " port=";
+      emitValue(op.getValue());
+      os << "\n";
+
+      // Emit DRAM variable as stable.
+      if (kind == MemoryKind::DRAM) {
+        indent() << "#pragma HLS stable";
+        os << " variable=";
+        emitValue(op.getValue());
+        os << "\n";
+      }
+    }
+  } else {
+    indent() << "#pragma HLS interface s_axilite";
+    os << " port=";
+
+    // TODO: This is a temporary solution.
+    auto name = getName(op.getValue());
+    if (name.front() == "*"[0])
+      name.erase(name.begin());
+    os << name;
+    os << " bundle=" << bundleName << "\n";
+  }
+
+  // An empty line.
+  os << "\n";
+}
+
+void ModuleEmitter::emitPrimMul(PrimMulOp op) {
+  if (op.isPackMul()) {
+    // Declare the result C array.
+    if (!isDeclared(op.getC())) {
+      indent();
+      emitArrayDecl(op.getC());
+      os << ";\n";
+
+      indent() << "#pragma HLS array_partition variable=";
+      emitValue(op.getC());
+      os << " complete dim=0\n";
+    }
+
+    auto AIsVector = op.getA().getType().isa<VectorType>();
+    indent() << "pack_mul(";
+    emitValue(AIsVector ? op.getA() : op.getB());
+    os << ", ";
+    emitValue(AIsVector ? op.getB() : op.getA());
+    os << ", ";
+    emitValue(op.getC());
+    os << ");";
+    emitInfoAndNewLine(op);
+
+  } else {
+    // To ensure DSP is utilized, the two operands are casted to 16-bits integer
+    // before the multiplication.
+    auto rank = emitNestedLoopHeader(op.getC());
+    indent();
+    emitValue(op.getC(), rank);
+    os << " = (int16_t)";
+    emitValue(op.getA(), rank);
+    os << " * (int16_t)";
+    emitValue(op.getB(), rank);
+    os << ";";
+    emitInfoAndNewLine(op);
+    emitNestedLoopFooter(rank);
+  }
+}
+
+template <typename AssignOpType>
+void ModuleEmitter::emitAssign(AssignOpType op) {
+  unsigned rank = emitNestedLoopHeader(op.getResult());
+  indent();
+  emitValue(op.getResult(), rank);
+  os << " = ";
+  emitValue(op.getOperand(), rank);
+  os << ";";
+  emitInfoAndNewLine(op);
+  emitNestedLoopFooter(rank);
+}
+
+/// Control flow operation emitters.
+void ModuleEmitter::emitCall(func::CallOp op) {
+  // Handle returned value by the callee.
+  for (auto result : op.getResults()) {
+    if (!isDeclared(result)) {
+      indent();
+      if (result.getType().isa<ShapedType>())
+        emitArrayDecl(result);
+      else
+        emitValue(result);
+      os << ";\n";
+    }
+  }
+
+  // Emit the function call.
+  indent() << op.getCallee() << "(";
+
+  // Handle input arguments.
+  unsigned argIdx = 0;
+  for (auto arg : op.getOperands()) {
+    emitValue(arg);
+
+    if (argIdx++ != op.getNumOperands() - 1)
+      os << ", ";
+  }
+
+  // Handle output arguments.
+  for (auto result : op.getResults()) {
+    // The address should be passed in for scalar result arguments.
+    if (result.getType().isa<ShapedType>())
+      os << ", ";
+    else
+      os << ", &";
+
+    emitValue(result);
+  }
+
+  os << ");";
+  emitInfoAndNewLine(op);
+}
 
 /// SCF statement emitters.
 void ModuleEmitter::emitScfFor(scf::ForOp op) {
@@ -1200,17 +1397,6 @@ void ModuleEmitter::emitMemCpy(memref::CopyOp op) {
   os << "\n";
 }
 
-void ModuleEmitter::emitTensorStore(memref::TensorStoreOp op) {
-  auto rank = emitNestedLoopHeader(op.getOperand(0));
-  indent();
-  emitValue(op.getOperand(1), rank);
-  os << " = ";
-  emitValue(op.getOperand(0), rank);
-  os << ";";
-  emitInfoAndNewLine(op);
-  emitNestedLoopFooter(rank);
-}
-
 template <typename OpType> void ModuleEmitter::emitReshape(OpType op) {
   auto array = op->getResult(0);
   assert(!isDeclared(array) && "has been declared before.");
@@ -1232,167 +1418,6 @@ template <typename OpType> void ModuleEmitter::emitReshape(OpType op) {
 
   emitValue(op->getOperand(0));
   os << ";";
-  emitInfoAndNewLine(op);
-}
-
-void ModuleEmitter::emitTensorToMemref(bufferization::ToMemrefOp op) {
-  // A declared result indicates that the memref is output of the function, and
-  // has been declared in the function signature.
-  if (isDeclared(op.getResult())) {
-    auto rank = emitNestedLoopHeader(op.getResult());
-    indent();
-    emitValue(op.getResult(), rank);
-    os << " = ";
-    emitValue(op.getOperand(), rank);
-    os << ";";
-    emitInfoAndNewLine(op);
-    emitNestedLoopFooter(rank);
-  } else {
-    addAlias(op.getOperand(), op.getResult());
-    emitArrayDirectives(op.getResult());
-  }
-}
-
-void ModuleEmitter::emitMemrefToTensor(bufferization::ToTensorOp op) {
-  // A declared result indicates that the tensor is output of the function, and
-  // has been declared in the function signature.
-  if (isDeclared(op.getResult())) {
-    auto rank = emitNestedLoopHeader(op.getResult());
-    indent();
-    emitValue(op.getResult(), rank);
-    os << " = ";
-    emitValue(op.getOperand(), rank);
-    os << ";";
-    emitInfoAndNewLine(op);
-    emitNestedLoopFooter(rank);
-  } else {
-    addAlias(op.getOperand(), op.getResult());
-  }
-}
-
-/// HLS dialect operation emitters.
-void ModuleEmitter::emitStreamChannel(StreamOp op) {
-  indent();
-  emitValue(op.getChannel());
-  os << ";";
-  emitInfoAndNewLine(op);
-}
-
-void ModuleEmitter::emitStreamRead(StreamReadOp op) {
-  indent();
-  if (op.getResult()) {
-    emitValue(op.getResult());
-    os << " = ";
-  }
-  emitValue(op.getChannel());
-  os << ".read(";
-  os << ");";
-  emitInfoAndNewLine(op);
-}
-
-void ModuleEmitter::emitStreamWrite(StreamWriteOp op) {
-  indent();
-  emitValue(op.getChannel());
-  os << ".write(";
-  emitValue(op.getValue());
-  os << ");";
-  emitInfoAndNewLine(op);
-}
-
-void ModuleEmitter::emitPrimMul(PrimMulOp op) {
-  if (op.isPackMul()) {
-    // Declare the result C array.
-    if (!isDeclared(op.getC())) {
-      indent();
-      emitArrayDecl(op.getC());
-      os << ";\n";
-
-      indent() << "#pragma HLS array_partition variable=";
-      emitValue(op.getC());
-      os << " complete dim=0\n";
-    }
-
-    auto AIsVector = op.getA().getType().isa<VectorType>();
-    indent() << "pack_mul(";
-    emitValue(AIsVector ? op.getA() : op.getB());
-    os << ", ";
-    emitValue(AIsVector ? op.getB() : op.getA());
-    os << ", ";
-    emitValue(op.getC());
-    os << ");";
-    emitInfoAndNewLine(op);
-
-  } else {
-    // To ensure DSP is utilized, the two operands are casted to 16-bits integer
-    // before the multiplication.
-    auto rank = emitNestedLoopHeader(op.getC());
-    indent();
-    emitValue(op.getC(), rank);
-    os << " = (int16_t)";
-    emitValue(op.getA(), rank);
-    os << " * (int16_t)";
-    emitValue(op.getB(), rank);
-    os << ";";
-    emitInfoAndNewLine(op);
-    emitNestedLoopFooter(rank);
-  }
-}
-
-template <typename AssignOpType>
-void ModuleEmitter::emitAssign(AssignOpType op) {
-  unsigned rank = emitNestedLoopHeader(op.getResult());
-  indent();
-  emitValue(op.getResult(), rank);
-  os << " = ";
-  emitValue(op.getOperand(), rank);
-  os << ";";
-  emitInfoAndNewLine(op);
-  emitNestedLoopFooter(rank);
-}
-
-void ModuleEmitter::emitPrimConst(ConstBufferOp op) {
-  emitConstant(op);
-  emitArrayDirectives(op.getResult());
-}
-
-/// Control flow operation emitters.
-void ModuleEmitter::emitCall(func::CallOp op) {
-  // Handle returned value by the callee.
-  for (auto result : op.getResults()) {
-    if (!isDeclared(result)) {
-      indent();
-      if (result.getType().isa<ShapedType>())
-        emitArrayDecl(result);
-      else
-        emitValue(result);
-      os << ";\n";
-    }
-  }
-
-  // Emit the function call.
-  indent() << op.getCallee() << "(";
-
-  // Handle input arguments.
-  unsigned argIdx = 0;
-  for (auto arg : op.getOperands()) {
-    emitValue(arg);
-
-    if (argIdx++ != op.getNumOperands() - 1)
-      os << ", ";
-  }
-
-  // Handle output arguments.
-  for (auto result : op.getResults()) {
-    // The address should be passed in for scalar result arguments.
-    if (result.getType().isa<ShapedType>())
-      os << ", ";
-    else
-      os << ", &";
-
-    emitValue(result);
-  }
-
-  os << ");";
   emitInfoAndNewLine(op);
 }
 
@@ -1471,33 +1496,10 @@ template <typename OpType> void ModuleEmitter::emitConstant(OpType op) {
 
     unsigned elementIdx = 0;
     for (auto element : denseAttr.template getValues<Attribute>()) {
-      if (type.isF32()) {
-        auto value =
-            element.template cast<FloatAttr>().getValue().convertToFloat();
-        if (std::isfinite(value))
-          os << value;
-        else if (value > 0)
-          os << "INFINITY";
-        else
-          os << "-INFINITY";
-
-      } else if (type.isF64()) {
-        auto value =
-            element.template cast<FloatAttr>().getValue().convertToDouble();
-        if (std::isfinite(value))
-          os << value;
-        else if (value > 0)
-          os << "INFINITY";
-        else
-          os << "-INFINITY";
-
-      } else if (type.isInteger(1))
-        os << element.template cast<BoolAttr>().getValue();
-      else if (type.isIntOrIndex())
-        os << element.template cast<IntegerAttr>().getValue();
-      else
-        emitError(op, "array has unsupported element type.");
-
+      auto string = getConstantString(type, element);
+      if (string.empty())
+        op.emitOpError("constant has invalid value");
+      os << string;
       if (elementIdx++ != denseAttr.getNumElements() - 1)
         os << ", ";
     }
@@ -1537,7 +1539,10 @@ void ModuleEmitter::emitValue(Value val, unsigned rank, bool isPtr,
 void ModuleEmitter::emitArrayDecl(Value array) {
   assert(!isDeclared(array) && "has been declared before.");
 
-  auto arrayType = array.getType().cast<ShapedType>();
+  auto arrayType = array.getType().dyn_cast<ShapedType>();
+  if (auto axiType = array.getType().dyn_cast<AxiType>())
+    arrayType = axiType.getElementType();
+
   if (arrayType.hasStaticShape()) {
     emitValue(array);
     for (auto &shape : arrayType.getShape())
@@ -1699,48 +1704,48 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
   if (hasTopFuncAttr(func)) {
     indent() << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
 
-    for (auto &port : portList) {
-      // Array ports and scalar ports are handled separately. Here, we only
-      // handle MemRef types since we assume the IR has be fully bufferized.
-      if (auto memrefType = port.getType().dyn_cast<MemRefType>()) {
-        // Only emit interface pragma when the array is not fully partitioned.
-        if (!isFullyPartitioned(memrefType)) {
-          indent() << "#pragma HLS interface";
-          // For now, we set the offset of all m_axi interfaces as slave.
-          auto kind = MemoryKind(memrefType.getMemorySpaceAsInt());
-          if (kind == MemoryKind::DRAM) {
-            os << " m_axi offset=slave bundle=";
-            emitValue(port);
-          } else
-            os << " bram";
+    // for (auto &port : portList) {
+    //   // Array ports and scalar ports are handled separately. Here, we only
+    //   // handle MemRef types since we assume the IR has be fully bufferized.
+    //   if (auto memrefType = port.getType().dyn_cast<MemRefType>()) {
+    //     // Only emit interface pragma when the array is not fully
+    //     partitioned. if (!isFullyPartitioned(memrefType)) {
+    //       indent() << "#pragma HLS interface";
+    //       // For now, we set the offset of all m_axi interfaces as slave.
+    //       auto kind = MemoryKind(memrefType.getMemorySpaceAsInt());
+    //       if (kind == MemoryKind::DRAM) {
+    //         os << " m_axi offset=slave bundle=";
+    //         emitValue(port);
+    //       } else
+    //         os << " bram";
 
-          os << " port=";
-          emitValue(port);
-          os << "\n";
+    //       os << " port=";
+    //       emitValue(port);
+    //       os << "\n";
 
-          // Emit DRAM variable as stable.
-          if (kind == MemoryKind::DRAM) {
-            indent() << "#pragma HLS stable";
-            os << " variable=";
-            emitValue(port);
-            os << "\n";
-          }
-        }
-      } else {
-        indent() << "#pragma HLS interface s_axilite";
-        os << " port=";
+    //       // Emit DRAM variable as stable.
+    //       if (kind == MemoryKind::DRAM) {
+    //         indent() << "#pragma HLS stable";
+    //         os << " variable=";
+    //         emitValue(port);
+    //         os << "\n";
+    //       }
+    //     }
+    //   } else {
+    //     indent() << "#pragma HLS interface s_axilite";
+    //     os << " port=";
 
-        // TODO: This is a temporary solution.
-        auto name = getName(port);
-        if (name.front() == "*"[0])
-          name.erase(name.begin());
-        os << name;
-        os << " bundle=ctrl\n";
-      }
-    }
+    //     // TODO: This is a temporary solution.
+    //     auto name = getName(port);
+    //     if (name.front() == "*"[0])
+    //       name.erase(name.begin());
+    //     os << name;
+    //     os << " bundle=ctrl\n";
+    //   }
+    // }
 
-    // An empty line.
-    os << "\n";
+    // // An empty line.
+    // os << "\n";
 
     // Emit other pragmas for function ports.
     for (auto &port : portList)
@@ -1801,7 +1806,12 @@ void ModuleEmitter::emitFunction(func::FuncOp func) {
       emitArrayDecl(arg);
     else if (arg.getType().isa<StreamType>())
       emitValue(arg, /*rank=*/0, /*isPtr=*/false, /*isRef=*/true);
-    else
+    else if (auto axiType = arg.getType().dyn_cast<AxiType>()) {
+      if (axiType.getElementType().isa<ShapedType>())
+        emitArrayDecl(arg);
+      else
+        emitValue(arg);
+    } else
       emitValue(arg);
 
     portList.push_back(arg);

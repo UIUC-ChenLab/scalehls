@@ -505,6 +505,9 @@ LogicalResult StreamWriteOp::verify() {
 //===----------------------------------------------------------------------===//
 
 LogicalResult AxiPortOp::verify() {
+  if (!getAxi().isa<BlockArgument>())
+    return emitOpError("axi must be block arguments");
+
   if (getAxi().getType().cast<AxiType>().getElementType() !=
       getValue().getType())
     return emitOpError("axi type doesn't align with value type");

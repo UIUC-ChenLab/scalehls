@@ -23,6 +23,13 @@ public:
     auto *thisCast = static_cast<ConcreteType *>(this);
     return TypeSwitch<Operation *, ResultType>(op)
         .template Case<
+            // HLS dialect operations.
+            BufferOp, ConstBufferOp, StreamOp, StreamReadOp, StreamWriteOp,
+            AxiBundleOp, AxiPortOp, AxiPackOp, PrimMulOp, PrimCastOp,
+
+            // Function operations.
+            func::CallOp, func::ReturnOp,
+
             // SCF statements.
             scf::ForOp, scf::IfOp, scf::ParallelOp, scf::ReduceOp,
             scf::ReduceReturnOp, scf::YieldOp,
@@ -32,23 +39,15 @@ public:
             AffineMaxOp, AffineMinOp, AffineLoadOp, AffineStoreOp,
             AffineVectorLoadOp, AffineVectorStoreOp, AffineYieldOp,
 
-            // Vector-related statements.
+            // Vector statements.
             vector::TransferReadOp, vector::TransferWriteOp,
             vector::BroadcastOp,
 
-            // Memref-related statements.
+            // Memref statements.
             memref::AllocOp, memref::AllocaOp, memref::LoadOp, memref::StoreOp,
-            memref::DeallocOp, memref::CopyOp, memref::TensorStoreOp,
-            tensor::ReshapeOp, memref::ReshapeOp, memref::CollapseShapeOp,
-            memref::ExpandShapeOp, memref::ReinterpretCastOp,
-            bufferization::ToMemrefOp, bufferization::ToTensorOp,
-
-            // HLS dialect operations.
-            BufferOp, ConstBufferOp, StreamOp, StreamReadOp, StreamWriteOp,
-            PrimMulOp, PrimCastOp,
-
-            // Control flow operations.
-            func::CallOp, func::ReturnOp,
+            memref::DeallocOp, memref::CopyOp, memref::ReshapeOp,
+            memref::CollapseShapeOp, memref::ExpandShapeOp,
+            memref::ReinterpretCastOp,
 
             // Unary expressions.
             math::AbsIOp, math::AbsFOp, math::CeilOp, math::CosOp, math::SinOp,
@@ -97,6 +96,22 @@ public:
     return static_cast<ConcreteType *>(this)->visitUnhandledOp(op, args...);   \
   }
 
+  // HLS dialect operations.
+  HANDLE(BufferOp);
+  HANDLE(ConstBufferOp);
+  HANDLE(StreamOp);
+  HANDLE(StreamReadOp);
+  HANDLE(StreamWriteOp);
+  HANDLE(AxiBundleOp);
+  HANDLE(AxiPortOp);
+  HANDLE(AxiPackOp);
+  HANDLE(PrimMulOp);
+  HANDLE(PrimCastOp);
+
+  // Control flow operations.
+  HANDLE(func::CallOp);
+  HANDLE(func::ReturnOp);
+
   // SCF statements.
   HANDLE(scf::ForOp);
   HANDLE(scf::IfOp);
@@ -118,39 +133,22 @@ public:
   HANDLE(AffineVectorStoreOp);
   HANDLE(AffineYieldOp);
 
-  // Vector-related statements.
+  // Vector statements.
   HANDLE(vector::TransferReadOp);
   HANDLE(vector::TransferWriteOp);
   HANDLE(vector::BroadcastOp);
 
-  // Memref-related statements.
+  // Memref statements.
   HANDLE(memref::AllocOp);
   HANDLE(memref::AllocaOp);
   HANDLE(memref::LoadOp);
   HANDLE(memref::StoreOp);
   HANDLE(memref::DeallocOp);
   HANDLE(memref::CopyOp);
-  HANDLE(memref::TensorStoreOp);
-  HANDLE(tensor::ReshapeOp);
   HANDLE(memref::ReshapeOp);
   HANDLE(memref::CollapseShapeOp);
   HANDLE(memref::ExpandShapeOp);
   HANDLE(memref::ReinterpretCastOp);
-  HANDLE(bufferization::ToMemrefOp);
-  HANDLE(bufferization::ToTensorOp);
-
-  // HLS dialect operations.
-  HANDLE(BufferOp);
-  HANDLE(ConstBufferOp);
-  HANDLE(StreamOp);
-  HANDLE(StreamReadOp);
-  HANDLE(StreamWriteOp);
-  HANDLE(PrimMulOp);
-  HANDLE(PrimCastOp);
-
-  // Control flow operations.
-  HANDLE(func::CallOp);
-  HANDLE(func::ReturnOp);
 
   // Unary expressions.
   HANDLE(math::AbsIOp);
