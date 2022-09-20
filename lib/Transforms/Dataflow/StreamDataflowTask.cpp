@@ -106,7 +106,7 @@ struct HoistStream : public OpRewritePattern<OpType> {
 } // namespace
 
 namespace {
-struct StreamDataflow : public StreamDataflowBase<StreamDataflow> {
+struct StreamDataflowTask : public StreamDataflowTaskBase<StreamDataflowTask> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -122,6 +122,6 @@ struct StreamDataflow : public StreamDataflowBase<StreamDataflow> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createStreamDataflowPass() {
-  return std::make_unique<StreamDataflow>();
+std::unique_ptr<Pass> scalehls::createStreamDataflowTaskPass() {
+  return std::make_unique<StreamDataflowTask>();
 }

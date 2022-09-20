@@ -53,6 +53,12 @@ def FuncPreprocess : Pass<"scalehls-func-preprocess", "func::FuncOp"> {
 // Dataflow-related Passes
 //===----------------------------------------------------------------------===//
 
+def BalanceDataflowNode :
+      Pass<"scalehls-balance-dataflow-node", "func::FuncOp"> {
+  let summary = "Balance dataflow nodes";
+  let constructor = "mlir::scalehls::createBalanceDataflowNodePass()";
+}
+
 def BufferizeDataflow : Pass<"scalehls-bufferize-dataflow", "func::FuncOp"> {
   let summary = "Bufferize dataflow operations";
   let constructor = "mlir::scalehls::createBufferizeDataflowPass()";
@@ -77,17 +83,24 @@ def CreateDataflowFromTosa :
 }
 
 def CreateTokenStream : Pass<"scalehls-create-token-stream", "func::FuncOp"> {
-  let summary = "Create token stream channels based on the dataflow";
+  let summary = "Create token stream channels for DRAM buffers";
   let constructor = "mlir::scalehls::createCreateTokenStreamPass()";
 }
 
-def LegalizeDataflow : Pass<"scalehls-legalize-dataflow", "func::FuncOp"> {
+def EliminateMultiProducer :
+      Pass<"scalehls-eliminate-multi-producer", "func::FuncOp"> {
+  let summary = "Try to eliminate multi-producer violations";
+  let constructor = "mlir::scalehls::createEliminateMultiProducerPass()";
+}
+
+def LegalizeDataflowSchedule :
+      Pass<"scalehls-legalize-dataflow-schedule", "func::FuncOp"> {
   let summary = "Legalize dataflow at node level";
   let description = [{
     This pass will legalize the dataflow to meet the single-producer and
     single-consumer requirements of the dataflow schedule.
   }];
-  let constructor = "mlir::scalehls::createLegalizeDataflowPass()";
+  let constructor = "mlir::scalehls::createLegalizeDataflowSchedulePass()";
 }
 
 def LowerDataflow : Pass<"scalehls-lower-dataflow", "func::FuncOp"> {
@@ -100,9 +113,15 @@ def PlaceDataflowBuffer : Pass<"scalehls-dataflow-buffer", "func::FuncOp"> {
   let constructor = "mlir::scalehls::createPlaceDataflowBufferPass()";
 }
 
-def StreamDataflow : Pass<"scalehls-stream-dataflow", "func::FuncOp"> {
-  let summary = "Stream dataflow operations";
-  let constructor = "mlir::scalehls::createStreamDataflowPass()";
+def ScheduleDataflowNode :
+      Pass<"scalehls-schedule-dataflow-node", "func::FuncOp"> {
+  let summary = "Schedule dataflow nodes";
+  let constructor = "mlir::scalehls::createScheduleDataflowNodePass()";
+}
+
+def StreamDataflowTask : Pass<"scalehls-stream-dataflow-task", "func::FuncOp"> {
+  let summary = "Stream dataflow tasks";
+  let constructor = "mlir::scalehls::createStreamDataflowTaskPass()";
 }
 
 //===----------------------------------------------------------------------===//

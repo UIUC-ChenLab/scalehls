@@ -1,13 +1,16 @@
 add_mlir_library(MLIRScaleHLSTransforms
+  Dataflow/BalanceDataflowNode.cpp
   Dataflow/BufferizeDataflow.cpp
   Dataflow/ConvertDataflowToFunc.cpp
   Dataflow/CreateDataflowFromAffine.cpp
   Dataflow/CreateDataflowFromTosa.cpp
   Dataflow/CreateTokenStream.cpp
-  Dataflow/LegalizeDataflow.cpp
+  Dataflow/EliminateMultiProducer.cpp
+  Dataflow/LegalizeDataflowSchedule.cpp
   Dataflow/LowerDataflow.cpp
   Dataflow/PlaceDataflowBuffer.cpp
-  Dataflow/StreamDataflow.cpp
+  Dataflow/ScheduleDataflowNode.cpp
+  Dataflow/StreamDataflowTask.cpp
 
   Directive/ArrayPartition.cpp
   Directive/CreateAxiInterface.cpp

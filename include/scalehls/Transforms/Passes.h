@@ -36,15 +36,18 @@ std::unique_ptr<Pass>
 createFuncPreprocessPass(std::string hlsTopFunc = "forward");
 
 /// Dataflow-related passes.
+std::unique_ptr<Pass> createBalanceDataflowNodePass();
 std::unique_ptr<Pass> createBufferizeDataflowPass();
 std::unique_ptr<Pass> createConvertDataflowToFuncPass();
 std::unique_ptr<Pass> createCreateDataflowFromTosaPass();
 std::unique_ptr<Pass> createCreateDataflowFromAffinePass();
 std::unique_ptr<Pass> createCreateTokenStreamPass();
-std::unique_ptr<Pass> createLegalizeDataflowPass();
+std::unique_ptr<Pass> createEliminateMultiProducerPass();
+std::unique_ptr<Pass> createLegalizeDataflowSchedulePass();
 std::unique_ptr<Pass> createLowerDataflowPass();
 std::unique_ptr<Pass> createPlaceDataflowBufferPass();
-std::unique_ptr<Pass> createStreamDataflowPass();
+std::unique_ptr<Pass> createScheduleDataflowNodePass();
+std::unique_ptr<Pass> createStreamDataflowTaskPass();
 
 /// Tensor-related passes.
 std::unique_ptr<Pass> createTosaFakeQuantizePass();
