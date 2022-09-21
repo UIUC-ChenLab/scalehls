@@ -4,6 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Conversion/TosaToArith/TosaToArith.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "scalehls/Transforms/Passes.h"
@@ -68,6 +69,18 @@ struct ReshapeOpRewritePattern : public OpRewritePattern<tosa::ReshapeOp> {
 } // namespace
 
 namespace {
+struct RescaleRemovePattern : public OpRewritePattern<tosa::ApplyScaleOp> {
+  using OpRewritePattern<tosa::ApplyScaleOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(tosa::ApplyScaleOp scale,
+                                PatternRewriter &rewriter) const override {
+    rewriter.replaceOp(scale, scale.getValue());
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 struct TosaToLinalgCleanup
     : public TosaToLinalgCleanupBase<TosaToLinalgCleanup> {
   void runOnOperation() override {
@@ -75,13 +88,16 @@ struct TosaToLinalgCleanup
     auto context = func.getContext();
 
     ConversionTarget target(*context);
-    target.addIllegalOp<tensor::PadOp, tosa::ReshapeOp>();
+    target.addIllegalOp<tensor::PadOp, tosa::ReshapeOp, tosa::RescaleOp>();
     target.addLegalOp<linalg::GenericOp, linalg::YieldOp, linalg::InitTensorOp,
                       linalg::FillOp, arith::ConstantOp>();
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<ReshapeOpRewritePattern>(context);
     patterns.add<linalg::PadOpTransformationPattern>(context);
+    patterns.add<RescaleRemovePattern>(context);
+    // mlir::tosa::populateTosaRescaleToArithConversionPatterns(&patterns,
+    // true);
 
     if (failed(applyPartialConversion(func, target, std::move(patterns))))
       return signalPassFailure();

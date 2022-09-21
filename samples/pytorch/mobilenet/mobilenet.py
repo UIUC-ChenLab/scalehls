@@ -5,6 +5,7 @@ Modified based on (https://github.com/kuangliu/pytorch-cifar/blob/master/models/
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch_mlir
 
 
 class Block(nn.Module):
@@ -52,3 +53,9 @@ class MobileNet(nn.Module):
         out = torch.flatten(out, 1)  # out.view(out.size(0), -1)
         out = self.linear(out)
         return out
+
+
+module = torch_mlir.compile(MobileNet(), torch.ones(
+    1, 3, 32, 32), output_type=torch_mlir.OutputType.TOSA)
+
+print(module)

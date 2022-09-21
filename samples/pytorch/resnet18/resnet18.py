@@ -5,6 +5,7 @@ Modified based on (https://github.com/kuangliu/pytorch-cifar/blob/master/models/
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch_mlir
 
 
 class BasicBlock(nn.Module):
@@ -68,3 +69,9 @@ class ResNet(nn.Module):
 
 def ResNet18():
     return ResNet(BasicBlock, [2, 2, 2, 2])
+
+
+module = torch_mlir.compile(ResNet18(), torch.ones(
+    1, 3, 32, 32), output_type=torch_mlir.OutputType.TOSA)
+
+print(module)

@@ -4,6 +4,7 @@ Modified based on (https://github.com/kuangliu/pytorch-cifar/blob/master/models/
 
 import torch
 import torch.nn as nn
+import torch_mlir
 
 
 cfg = {
@@ -49,3 +50,9 @@ class VGG(nn.Module):
 
 def VGG16():
     return VGG('VGG16')
+
+
+module = torch_mlir.compile(VGG16(), torch.ones(
+    1, 3, 32, 32), output_type=torch_mlir.OutputType.TOSA)
+
+print(module)

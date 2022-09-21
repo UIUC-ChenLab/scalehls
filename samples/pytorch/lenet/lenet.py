@@ -5,6 +5,7 @@ Modified based on (https://github.com/kuangliu/pytorch-cifar/blob/master/models/
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch_mlir
 
 
 class LeNet(nn.Module):
@@ -28,3 +29,9 @@ class LeNet(nn.Module):
         out = F.relu(self.fc2(out))
         out = self.fc3(out)
         return out
+
+
+module = torch_mlir.compile(LeNet(), torch.ones(
+    1, 3, 32, 32), output_type=torch_mlir.OutputType.TOSA)
+
+print(module)

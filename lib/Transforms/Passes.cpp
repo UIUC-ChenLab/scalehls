@@ -4,7 +4,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "scalehls/Transforms/Passes.h"
 #include "mlir/Conversion/Passes.h"
 #include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/Dialect/Arithmetic/Transforms/Passes.h"
@@ -13,8 +12,10 @@
 #include "mlir/Dialect/Func/Transforms/Passes.h"
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
+#include "mlir/Dialect/Tosa/Transforms/Passes.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
+#include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
 using namespace scalehls;
