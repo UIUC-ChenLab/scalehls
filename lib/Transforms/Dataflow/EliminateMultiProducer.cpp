@@ -15,85 +15,108 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-struct BufferMultiProducer : public OpRewritePattern<NodeOp> {
-  using OpRewritePattern<NodeOp>::OpRewritePattern;
+struct BufferMultiProducer : public OpRewritePattern<ScheduleOp> {
+  using OpRewritePattern<ScheduleOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(NodeOp node,
+  LogicalResult matchAndRewrite(ScheduleOp schedule,
                                 PatternRewriter &rewriter) const override {
-    auto schedule = node.getScheduleOp();
     DominanceInfo DT(schedule);
+    auto loc = rewriter.getUnknownLoc();
     bool hasChanged = false;
 
-    // Get all argument buffers that need to be transformed.
-    SmallVector<BlockArgument, 4> bufferArgs;
-    SmallVector<BlockArgument, 4> externalBufferArgs;
-    for (auto arg : node.getOutputArgs()) {
-      auto buffer = node.getOperand(arg.getArgNumber());
+    SmallVector<Value> buffers;
+    for (auto bufferOp : schedule.getOps<BufferOp>())
+      buffers.push_back(bufferOp);
+
+    for (auto buffer : buffers) {
       SmallVector<NodeOp, 4> producers(getProducers(buffer));
-      llvm::sort(producers, [&](NodeOp a, NodeOp b) {
-        return DT.properlyDominates(a, b);
-      });
-
-      // If the current node is the dominating node or there's no other
-      // producers, we don't need to transform the buffer.
-      if (node == producers.front())
+      if (producers.size() <= 1)
         continue;
+      hasChanged = true;
 
-      // External and internal buffers will be traited differently.
-      if (!buffer.isa<BlockArgument>())
-        bufferArgs.push_back(arg);
-      else
-        externalBufferArgs.push_back(arg);
-    }
+      // Drop the dominating/leading producer, which doesn't need to be
+      // transformed.
+      llvm::sort(producers, [&](NodeOp a, NodeOp b) {
+        return DT.properlyDominates(b, a);
+      });
+      producers.pop_back();
 
-    // Handle internal buffers.
-    if (!bufferArgs.empty()) {
-      auto loc = rewriter.getUnknownLoc();
-      auto newInputs = SmallVector<Value>(node.getInputs());
-      SmallVector<unsigned> newInputTaps(node.getInputTapsAsInt());
-      rewriter.setInsertionPoint(node);
+      for (auto node : producers) {
+        auto newInputs = SmallVector<Value>(node.getInputs());
+        SmallVector<unsigned> newInputTaps(node.getInputTapsAsInt());
+        rewriter.setInsertionPoint(node);
 
-      // Create new buffers and write to them instead of the original buffers.
-      // The original buffer will be passed into the new node as inputs.
-      for (auto arg : bufferArgs) {
-        auto buffer = node.getOperand(arg.getArgNumber());
+        // Create a new buffer and write to them instead of the original buffer.
+        // The original buffer will be passed into the new node as inputs.
         newInputs.push_back(buffer);
         newInputTaps.push_back(0);
-        auto newBuffer = rewriter.create<BufferOp>(loc, arg.getType());
-        node.setOperand(arg.getArgNumber(), newBuffer);
+        auto newBuffer = rewriter.create<BufferOp>(loc, buffer.getType());
+        auto bufferIdx =
+            llvm::find(node.getOperands(), buffer) - node.operand_begin();
+        node.setOperand(bufferIdx, newBuffer);
 
         buffer.replaceUsesWithIf(newBuffer, [&](OpOperand &use) {
           if (auto user = dyn_cast<NodeOp>(use.getOwner()))
             return DT.properlyDominates(node, user);
           return false;
         });
-      }
 
-      // Create a new node and erase the original one.
-      auto newNode = rewriter.create<NodeOp>(
-          node.getLoc(), newInputs, node.getOutputs(), node.getParams(),
-          newInputTaps, node.getLevelAttr());
-      rewriter.inlineRegionBefore(node.getBody(), newNode.getBody(),
-                                  newNode.getBody().end());
+        // Create a new node and erase the original one.
+        auto newNode = rewriter.create<NodeOp>(
+            node.getLoc(), newInputs, node.getOutputs(), node.getParams(),
+            newInputTaps, node.getLevelAttr());
+        rewriter.inlineRegionBefore(node.getBody(), newNode.getBody(),
+                                    newNode.getBody().end());
+        rewriter.eraseOp(node);
 
-      // Insert new arguments and create explicit data copy from the original
-      // buffer to new buffer.
-      rewriter.setInsertionPointToStart(&newNode.getBody().front());
-      for (auto e : llvm::enumerate(bufferArgs)) {
-        auto newBufferArg = e.value();
+        // Insert new arguments and create explicit data copy from the original
+        // buffer to new buffer.
+        rewriter.setInsertionPointToStart(&newNode.getBody().front());
+        auto newBufferArg = newNode.getBody().getArgument(bufferIdx);
         auto bufferArg = newNode.getBody().insertArgument(
-            node.getNumInputs() + e.index(), newBufferArg.getType(),
+            newNode.getNumInputs() - 1, newBufferArg.getType(),
             newBufferArg.getLoc());
         rewriter.create<memref::CopyOp>(loc, bufferArg, newBufferArg);
       }
+    }
+    return success(hasChanged);
+  }
+};
+} // namespace
 
-      rewriter.eraseOp(node);
+namespace {
+struct MergeMultiProducer : public OpRewritePattern<ScheduleOp> {
+  using OpRewritePattern<ScheduleOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ScheduleOp schedule,
+                                PatternRewriter &rewriter) const override {
+    DominanceInfo DT(schedule);
+    bool hasChanged = false;
+
+    SmallVector<Value> externalBuffers;
+    for (auto arg : schedule.getBody().getArguments())
+      externalBuffers.push_back(arg);
+
+    for (auto buffer : externalBuffers) {
+      SmallVector<NodeOp> producers(getProducers(buffer));
+      if (producers.size() <= 1)
+        continue;
+
+      llvm::sort(producers, [&](NodeOp a, NodeOp b) {
+        return DT.properlyDominates(a, b);
+      });
+
+      auto allNodes = SmallVector<NodeOp>(schedule.getOps<NodeOp>().begin(),
+                                          schedule.getOps<NodeOp>().end());
+      auto ptr = llvm::find(allNodes, producers.front());
+      if (llvm::any_of(llvm::enumerate(producers), [&](auto node) {
+            return node.value() != *std::next(ptr, node.index());
+          }))
+        continue;
+
+      fuseNodeOps(producers, rewriter);
       hasChanged = true;
     }
-
-    // // TODO: Handle external buffers.
-    // if (!externalBufferArgs.empty()) {
-    // }
     return success(hasChanged);
   }
 };
@@ -108,6 +131,7 @@ struct EliminateMultiProducer
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<BufferMultiProducer>(context);
+    patterns.add<MergeMultiProducer>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
