@@ -147,9 +147,10 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createRaiseAffineToCopyPass());
         pm.addPass(scalehls::createSimplifyCopyPass());
         pm.addPass(scalehls::createLowerCopyToAffinePass());
-        pm.addPass(mlir::createAffineScalarReplacementPass());
         pm.addPass(scalehls::createAffineStoreForwardPass());
         pm.addPass(mlir::createCanonicalizerPass());
+
+        return;
 
         // Place dataflow buffers.
         pm.addPass(scalehls::createPlaceDataflowBufferPass());
@@ -211,9 +212,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
 
         // Memory optimization.
         pm.addPass(scalehls::createSimplifyAffineIfPass());
-        pm.addPass(mlir::createAffineScalarReplacementPass());
         pm.addPass(scalehls::createAffineStoreForwardPass());
-        pm.addPass(scalehls::createSimplifyMemrefAccessPass());
         pm.addPass(scalehls::createReduceInitialIntervalPass());
         pm.addPass(mlir::createCanonicalizerPass());
 

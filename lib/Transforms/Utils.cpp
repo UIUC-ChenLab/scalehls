@@ -23,12 +23,11 @@ static void addMemoryOptsPipeline(PassManager &pm) {
   pm.addPass(createAffineLoopNormalizePass());
   pm.addPass(createSimplifyAffineStructuresPass());
   pm.addPass(createCanonicalizerPass());
-  pm.addPass(createSimplifyAffineIfPass());
 
   // To simplify the memory accessing. Note that the store forwarding is
   // non-trivial and has a worst case complexity of O(n^2).
+  pm.addPass(createSimplifyAffineIfPass());
   pm.addPass(createAffineStoreForwardPass());
-  pm.addPass(createSimplifyMemrefAccessPass());
 
   // Generic common sub expression elimination.
   pm.addPass(createCSEPass());

@@ -36,7 +36,6 @@ add_mlir_library(MLIRScaleHLSTransforms
   Memory/ReduceInitialInterval.cpp
   Memory/SimplifyAffineIf.cpp
   Memory/SimplifyCopy.cpp
-  Memory/SimplifyMemrefAccess.cpp
 
   Tensor/TosaFakeQuantize.cpp
   Tensor/TosaSimplifyGraph.cpp

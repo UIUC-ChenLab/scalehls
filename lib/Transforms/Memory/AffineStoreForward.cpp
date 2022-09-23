@@ -70,8 +70,8 @@ static bool hasNoInterveningEffect(Operation *start, T memOp) {
         MemRefAccess destAccess(memOp);
 
         // FIXME: This is unsafe as the two memref may be alias with each other.
-        // This is also the most important change from the MLIR in-tree scalar
-        // replacement.
+        // This is also one of the most important change from the MLIR in-tree
+        // scalar replacement.
         if (srcAccess.memref != destAccess.memref)
           return;
 
@@ -214,16 +214,18 @@ static bool hasNoInterveningEffect(Operation *start, T memOp) {
 /// other operations will overwrite the memory loaded between the given load
 /// and store.  If such a value exists, the replaced `loadOp` will be added to
 /// `loadOpsToErase` and its memref will be added to `memrefsToErase`.
-static LogicalResult forwardStoreToLoad(
-    AffineReadOpInterface loadOp, SmallVectorImpl<Operation *> &loadOpsToErase,
-    SmallPtrSetImpl<Value> &memrefsToErase, DominanceInfo &domInfo) {
+static mlir::AffineReadOpInterface
+forwardStoreToLoad(mlir::AffineReadOpInterface loadOp,
+                   SmallVectorImpl<Operation *> &loadOpsToErase,
+                   SmallPtrSetImpl<Value> &memrefsToErase,
+                   DominanceInfo &domInfo) {
 
   // The store op candidate for forwarding that satisfies all conditions
   // to replace the load, if any.
-  Operation *lastWriteStoreOp = nullptr;
+  mlir::AffineWriteOpInterface lastWriteStoreOp = nullptr;
 
   for (auto *user : loadOp.getMemRef().getUsers()) {
-    auto storeOp = dyn_cast<AffineWriteOpInterface>(user);
+    auto storeOp = dyn_cast<mlir::AffineWriteOpInterface>(user);
     if (!storeOp)
       continue;
     MemRefAccess srcAccess(storeOp);
@@ -240,13 +242,21 @@ static LogicalResult forwardStoreToLoad(
     if (srcAccess != destAccess)
       continue;
 
-    // 2. The store has to dominate the load op to be candidate.
-    if (!domInfo.dominates(storeOp, loadOp))
+    // 2. The store has to dominate the load op to be candidate. Here, we cover
+    // a special case that the store is the sole operation insides of an if
+    // statement. If this is the case, we set the if statement as start for
+    // intervening effect searching.
+    Operation *startOp = storeOp;
+    if (auto ifOp = dyn_cast<mlir::AffineIfOp>(storeOp->getParentOp()))
+      if (!ifOp.hasElse() && ifOp.getThenBlock()->getOperations().size() == 2 &&
+          ifOp->getParentRegion()->isAncestor(loadOp->getParentRegion()))
+        startOp = ifOp;
+    if (!domInfo.dominates(startOp, loadOp))
       continue;
 
     // 3. Ensure there is no intermediate operation which could replace the
     // value in memory.
-    if (!hasNoInterveningEffect<MemoryEffects::Write>(storeOp, loadOp))
+    if (!hasNoInterveningEffect<MemoryEffects::Write>(startOp, loadOp))
       continue;
 
     // We now have a candidate for forwarding.
@@ -256,21 +266,46 @@ static LogicalResult forwardStoreToLoad(
   }
 
   if (!lastWriteStoreOp)
-    return failure();
+    return loadOp;
 
   // Perform the actual store to load forwarding.
-  Value storeVal =
-      cast<AffineWriteOpInterface>(lastWriteStoreOp).getValueToStore();
+  Value storeVal = lastWriteStoreOp.getValueToStore();
   // Check if 2 values have the same shape. This is needed for affine vector
   // loads and stores.
   if (storeVal.getType() != loadOp.getValue().getType())
-    return failure();
+    return loadOp;
+
+  if (!domInfo.dominates(lastWriteStoreOp, loadOp)) {
+    // Special case when the store is inside of an if statement.
+    auto ifOp = lastWriteStoreOp->getParentOfType<mlir::AffineIfOp>();
+    lastWriteStoreOp->moveBefore(ifOp);
+
+    // Create a load and select op as the new value to write.
+    auto builder = OpBuilder(ifOp);
+    builder.setInsertionPoint(lastWriteStoreOp);
+    auto newLoad = cast<mlir::AffineReadOpInterface>(builder.clone(*loadOp));
+    auto select = builder.create<hls::AffineSelectOp>(
+        ifOp.getLoc(), ifOp.getIntegerSet(), ifOp.getOperands(), storeVal,
+        newLoad.getValue());
+    ifOp->erase();
+
+    auto valueIdx = llvm::find(lastWriteStoreOp->getOperands(), storeVal) -
+                    lastWriteStoreOp->operand_begin();
+    lastWriteStoreOp->getOpOperand(valueIdx).set(select);
+    loadOp.getValue().replaceAllUsesWith(select);
+
+    // Record this to erase later.
+    loadOpsToErase.push_back(loadOp);
+    return newLoad;
+  }
+
+  // Normal case for direct forwarding.
   loadOp.getValue().replaceAllUsesWith(storeVal);
   // Record the memref for a later sweep to optimize away.
   memrefsToErase.insert(loadOp.getMemRef());
   // Record this to erase later.
   loadOpsToErase.push_back(loadOp);
-  return success();
+  return mlir::AffineReadOpInterface();
 }
 
 // This attempts to find stores which have no impact on the final result.
@@ -278,22 +313,19 @@ static LogicalResult forwardStoreToLoad(
 // 1) writeA and writeB have mathematically equivalent affine access functions.
 // 2) writeB postdominates writeA.
 // 3) There is no potential read between writeA and writeB.
-static void findUnusedStore(AffineWriteOpInterface writeA,
+static void findUnusedStore(mlir::AffineWriteOpInterface writeA,
                             SmallVectorImpl<Operation *> &opsToErase,
+                            SmallPtrSetImpl<Value> &memrefsToErase,
                             PostDominanceInfo &postDominanceInfo) {
-
+  auto memref = writeA.getMemRef();
   for (Operation *user : writeA.getMemRef().getUsers()) {
     // Only consider writing operations.
-    auto writeB = dyn_cast<AffineWriteOpInterface>(user);
+    auto writeB = dyn_cast<mlir::AffineWriteOpInterface>(user);
     if (!writeB)
       continue;
 
     // The operations must be distinct.
     if (writeB == writeA)
-      continue;
-
-    // Both operations must lie in the same region.
-    if (writeB->getParentRegion() != writeA->getParentRegion())
       continue;
 
     // Both operations must write to the same memory.
@@ -303,18 +335,41 @@ static void findUnusedStore(AffineWriteOpInterface writeA,
     if (srcAccess != destAccess)
       continue;
 
+    // Both operations must lie in the same region. Similarly, we consider a
+    // special case that when write A is the sole operation in an if statement,
+    // where write B is possible to be unused.
+    Operation *targetA = writeA;
+    Operation *targetB = writeB;
+    if (auto ifOpA = dyn_cast<mlir::AffineIfOp>(writeA->getParentOp())) {
+      if (!ifOpA.hasElse() &&
+          ifOpA.getThenBlock()->getOperations().size() == 2 &&
+          ifOpA->getParentRegion()->isAncestor(writeB->getParentRegion()))
+        targetA = ifOpA;
+      if (auto ifOpB = dyn_cast<mlir::AffineIfOp>(writeB->getParentOp()))
+        if (checkSameIfStatement(ifOpA, ifOpB))
+          targetB = ifOpB;
+    }
+    if (targetA->getParentRegion() != targetB->getParentRegion())
+      continue;
+
     // writeB must postdominate writeA.
-    if (!postDominanceInfo.postDominates(writeB, writeA))
+    if (!postDominanceInfo.postDominates(targetB, targetA))
       continue;
 
     // There cannot be an operation which reads from memory between
     // the two writes.
-    if (!hasNoInterveningEffect<MemoryEffects::Read>(writeA, writeB))
+    if (!hasNoInterveningEffect<MemoryEffects::Read>(targetA, writeB))
       continue;
 
-    opsToErase.push_back(writeA);
+    opsToErase.push_back(targetA);
     break;
   }
+
+  if (llvm::all_of(memref.getUsers(), [&](Operation *ownerOp) {
+        return isa<mlir::AffineWriteOpInterface>(ownerOp) ||
+               hasSingleEffect<MemoryEffects::Free>(ownerOp, memref);
+      }))
+    memrefsToErase.insert(memref);
 }
 
 // The load to load forwarding / redundant load elimination is similar to the
@@ -323,7 +378,7 @@ static void findUnusedStore(AffineWriteOpInterface writeA,
 // 1) loadA and loadB have mathematically equivalent affine access functions.
 // 2) loadB dominates loadA.
 // 3) There is no write between loadA and loadB.
-static void loadCSE(AffineReadOpInterface loadA,
+static void loadCSE(mlir::AffineReadOpInterface loadA,
                     SmallVectorImpl<Operation *> &loadOpsToErase,
                     DominanceInfo &domInfo) {
   SmallVector<AffineReadOpInterface, 4> loadCandidates;
@@ -414,11 +469,19 @@ static bool applyAffineStoreForward(func::FuncOp func) {
   SmallPtrSet<Value, 4> memrefsToErase;
 
   // Walk all load's and perform store to load forwarding.
-  func.walk([&](AffineReadOpInterface loadOp) {
-    if (failed(
-            forwardStoreToLoad(loadOp, opsToErase, memrefsToErase, domInfo))) {
-      loadCSE(loadOp, opsToErase, domInfo);
+  func.walk([&](mlir::AffineReadOpInterface loadOp) {
+    auto currentLoadOp = loadOp;
+    auto newLoadOp = mlir::AffineReadOpInterface();
+    while (1) {
+      newLoadOp = forwardStoreToLoad(currentLoadOp, opsToErase, memrefsToErase,
+                                     domInfo);
+      // If the current load op is erased or failed to transform, break.
+      if (!newLoadOp || newLoadOp == currentLoadOp)
+        break;
+      currentLoadOp = newLoadOp;
     }
+    if (newLoadOp)
+      loadCSE(newLoadOp, opsToErase, domInfo);
   });
 
   // Erase all load op's whose results were replaced with store fwd'ed ones.
@@ -427,8 +490,8 @@ static bool applyAffineStoreForward(func::FuncOp func) {
   opsToErase.clear();
 
   // Walk all store's and perform unused store elimination
-  func.walk([&](AffineWriteOpInterface storeOp) {
-    findUnusedStore(storeOp, opsToErase, postDomInfo);
+  func.walk([&](mlir::AffineWriteOpInterface storeOp) {
+    findUnusedStore(storeOp, opsToErase, memrefsToErase, postDomInfo);
   });
   // Erase all store op's which don't impact the program
   for (auto *op : opsToErase)
@@ -446,7 +509,7 @@ static bool applyAffineStoreForward(func::FuncOp func) {
       // could still erase it if the call had no side-effects.
       continue;
     if (llvm::any_of(memref.getUsers(), [&](Operation *ownerOp) {
-          return !isa<AffineWriteOpInterface>(ownerOp) &&
+          return !isa<mlir::AffineWriteOpInterface>(ownerOp) &&
                  !hasSingleEffect<MemoryEffects::Free>(ownerOp, memref);
         }))
       continue;

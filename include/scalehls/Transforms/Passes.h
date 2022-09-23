@@ -67,7 +67,6 @@ createAffineLoopUnrollJamPass(unsigned loopUnrollFactor = 1,
                               bool unrollPointLoopOnly = false);
 std::unique_ptr<Pass> createMaterializeReductionPass();
 std::unique_ptr<Pass> createRemoveVariableBoundPass();
-std::unique_ptr<Pass> createSimplifyAffineIfPass();
 
 /// Memory-related passes.
 std::unique_ptr<Pass> createAffineStoreForwardPass();
@@ -77,8 +76,8 @@ std::unique_ptr<Pass> createFoldMemrefSubviewPass();
 std::unique_ptr<Pass> createLowerCopyToAffinePass(bool internalCopyOnly = true);
 std::unique_ptr<Pass> createRaiseAffineToCopyPass();
 std::unique_ptr<Pass> createReduceInitialIntervalPass();
+std::unique_ptr<Pass> createSimplifyAffineIfPass();
 std::unique_ptr<Pass> createSimplifyCopyPass();
-std::unique_ptr<Pass> createSimplifyMemrefAccessPass();
 
 /// Directive-related passes.
 std::unique_ptr<Pass> createArrayPartitionPass();

@@ -348,16 +348,6 @@ def SimplifyCopy : Pass<"scalehls-simplify-copy", "func::FuncOp"> {
   let constructor = "mlir::scalehls::createSimplifyCopyPass()";
 }
 
-def SimplifyMemrefAccess :
-      Pass<"scalehls-simplify-memref-access", "func::FuncOp"> {
-  let summary = "Remove redundant load and store operations";
-  let description = [{
-    This simplify-memref-access pass will eliminate the known redundant load and
-    store operations for simplifying the memref access.
-  }];
-  let constructor = "mlir::scalehls::createSimplifyMemrefAccessPass()";
-}
-
 //===----------------------------------------------------------------------===//
 // Directive-related Passes
 //===----------------------------------------------------------------------===//

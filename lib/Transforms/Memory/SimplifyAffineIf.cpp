@@ -7,6 +7,7 @@
 #include "mlir/Dialect/Affine/Analysis/AffineStructures.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "scalehls/Support/Utils.h"
 #include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
@@ -125,32 +126,7 @@ struct RemoveRedundantIf : public OpRewritePattern<mlir::AffineIfOp> {
 };
 } // namespace
 
-namespace {
-struct ConvertIfToSelect : public OpRewritePattern<mlir::AffineIfOp> {
-  using OpRewritePattern<mlir::AffineIfOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(mlir::AffineIfOp ifOp,
-                                PatternRewriter &rewriter) const override {
-    auto thenBlock = ifOp.getThenBlock();
-    if (thenBlock->getOperations().size() == 2 && !ifOp.hasElse())
-      if (auto store = dyn_cast<mlir::AffineStoreOp>(thenBlock->front())) {
-        rewriter.setInsertionPoint(ifOp);
-        auto load = rewriter.create<mlir::AffineLoadOp>(
-            ifOp.getLoc(), store.getMemRef(), store.getAffineMap(),
-            store.getMapOperands());
-        auto select = rewriter.create<hls::AffineSelectOp>(
-            ifOp.getLoc(), ifOp.getIntegerSet(), ifOp.getOperands(),
-            store.getValue(), load);
-        store.getValueMutable().assign(select);
-        store->moveBefore(ifOp);
-        return success();
-      }
-    return failure();
-  }
-};
-} // namespace
-
-static bool checkSameIfStatement(AffineIfOp lhsOp, AffineIfOp rhsOp) {
+bool scalehls::checkSameIfStatement(AffineIfOp lhsOp, AffineIfOp rhsOp) {
   if (lhsOp == nullptr || rhsOp == nullptr)
     return false;
 
@@ -245,7 +221,6 @@ static bool applySimplifyAffineIf(func::FuncOp func) {
 
   mlir::RewritePatternSet patterns(context);
   patterns.add<RemoveRedundantIf>(context);
-  patterns.add<ConvertIfToSelect>(context);
   patterns.add<MergeSameIf>(context);
   (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   return true;

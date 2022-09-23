@@ -119,6 +119,8 @@ func::FuncOp getTopFunc(ModuleOp module, std::string topFuncName = "");
 
 func::FuncOp getRuntimeFunc(ModuleOp module, std::string runtimeFuncName = "");
 
+bool checkSameIfStatement(AffineIfOp lhsOp, AffineIfOp rhsOp);
+
 //===----------------------------------------------------------------------===//
 // PtrLikeMemRefAccess Struct Declaration
 //===----------------------------------------------------------------------===//
