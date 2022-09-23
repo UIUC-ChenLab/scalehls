@@ -273,16 +273,6 @@ def RemoveVariableBound :
   let constructor = "mlir::scalehls::createRemoveVariableBoundPass()";
 }
 
-def SimplifyAffineIf : Pass<"scalehls-simplify-affine-if", "func::FuncOp"> {
-  let summary = "Simplify affine if operations";
-  let description = [{
-    This simplify-affine-if pass will eliminate all redundant affine if
-    operations which will always take then or else branch, and merge all affine
-    if operations that having the same statement.
-  }];
-  let constructor = "mlir::scalehls::createSimplifyAffineIfPass()";
-}
-
 //===----------------------------------------------------------------------===//
 // Memory-related Passes
 //===----------------------------------------------------------------------===//
@@ -341,6 +331,16 @@ def ReduceInitialInterval :
     commutative operator trees and iteration variables.
   }];
   let constructor = "mlir::scalehls::createReduceInitialIntervalPass()";
+}
+
+def SimplifyAffineIf : Pass<"scalehls-simplify-affine-if", "func::FuncOp"> {
+  let summary = "Simplify affine if operations";
+  let description = [{
+    This simplify-affine-if pass will eliminate all redundant affine if
+    operations which will always take then or else branch, and merge all affine
+    if operations that having the same statement.
+  }];
+  let constructor = "mlir::scalehls::createSimplifyAffineIfPass()";
 }
 
 def SimplifyCopy : Pass<"scalehls-simplify-copy", "func::FuncOp"> {
