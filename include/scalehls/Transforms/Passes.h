@@ -40,6 +40,7 @@ std::unique_ptr<Pass> createBalanceDataflowNodePass();
 std::unique_ptr<Pass> createBufferizeDataflowPass();
 std::unique_ptr<Pass> createConvertDataflowToFuncPass();
 std::unique_ptr<Pass> createCreateDataflowFromTosaPass();
+std::unique_ptr<Pass> createCreateDataflowFromLinalgPass();
 std::unique_ptr<Pass> createCreateDataflowFromAffinePass();
 std::unique_ptr<Pass> createCreateTokenStreamPass();
 std::unique_ptr<Pass> createEliminateMultiProducerPass();

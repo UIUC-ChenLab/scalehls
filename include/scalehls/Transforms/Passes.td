@@ -72,13 +72,19 @@ def ConvertDataflowToFunc :
 
 def CreateDataflowFromAffine :
       Pass<"scalehls-create-dataflow-from-affine", "func::FuncOp"> {
-  let summary = "Create dataflow hierarchy to functions";
+  let summary = "Create dataflow hierarchy from affine loops";
   let constructor = "mlir::scalehls::createCreateDataflowFromAffinePass()";
+}
+
+def CreateDataflowFromLinalg :
+      Pass<"scalehls-create-dataflow-from-linalg", "func::FuncOp"> {
+  let summary = "Create dataflow hierarchy from linalg";
+  let constructor = "mlir::scalehls::createCreateDataflowFromLinalgPass()";
 }
 
 def CreateDataflowFromTosa :
       Pass<"scalehls-create-dataflow-from-tosa", "func::FuncOp"> {
-  let summary = "Create dataflow hierarchy to affine loops";
+  let summary = "Create dataflow hierarchy from tosa";
   let constructor = "mlir::scalehls::createCreateDataflowFromTosaPass()";
 }
 

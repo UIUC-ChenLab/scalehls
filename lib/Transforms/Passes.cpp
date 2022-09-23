@@ -104,20 +104,27 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         if (opts.loopTileSize < 2)
           llvm_unreachable("loop tile size must be larger than 1");
 
-        // TOSA fake quantization.
-        if (opts.fakeQuantize)
-          pm.addPass(scalehls::createTosaFakeQuantizePass());
+        // // TOSA fake quantization.
+        // if (opts.fakeQuantize)
+        //   pm.addPass(scalehls::createTosaFakeQuantizePass());
 
-        // TOSA optimization.
-        pm.addPass(scalehls::createTosaSimplifyGraphPass());
-        pm.addPass(scalehls::createCreateDataflowFromTosaPass());
+        // // TOSA optimization.
+        // pm.addPass(scalehls::createTosaSimplifyGraphPass());
+        // pm.addPass(scalehls::createCreateDataflowFromTosaPass());
+        // pm.addPass(mlir::createCanonicalizerPass());
+
+        // // TOSA to Linalg conversion.
+        // tosa::addTosaToLinalgPasses(pm);
+        // pm.addPass(scalehls::createTosaToLinalgCleanupPass());
+        // pm.addPass(tosa::createTosaToArith());
+        // pm.addPass(tosa::createTosaToTensor());
+        // pm.addPass(mlir::createLinalgGeneralizationPass());
+        // pm.addPass(mlir::createCanonicalizerPass());
+
+        // Linalg optimization.
         pm.addPass(mlir::createCanonicalizerPass());
-
-        // TOSA to Linalg conversion.
-        tosa::addTosaToLinalgPasses(pm);
-        pm.addPass(scalehls::createTosaToLinalgCleanupPass());
-        pm.addPass(tosa::createTosaToArith());
-        pm.addPass(tosa::createTosaToTensor());
+        pm.addPass(mlir::createLinalgElementwiseOpFusionPass());
+        pm.addPass(scalehls::createCreateDataflowFromLinalgPass());
         pm.addPass(mlir::createLinalgGeneralizationPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
@@ -129,6 +136,8 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(bufferization::createBufferResultsToOutParamsPass());
         pm.addPass(scalehls::createBufferizeDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
+
+        return;
 
         // Linalg to Affine conversion.
         pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
