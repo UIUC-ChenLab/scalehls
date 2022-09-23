@@ -12,6 +12,7 @@
 #include "mlir/Dialect/Func/Transforms/Passes.h"
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
+#include "mlir/Dialect/Tensor/Transforms/Passes.h"
 #include "mlir/Dialect/Tosa/Transforms/Passes.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
@@ -113,16 +114,17 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(mlir::createCanonicalizerPass());
 
         // TOSA to Linalg conversion.
-        pm.addNestedPass<func::FuncOp>(tosa::createTosaToLinalgNamed());
+        tosa::addTosaToLinalgPasses(pm);
         pm.addPass(scalehls::createTosaToLinalgCleanupPass());
-        pm.addNestedPass<func::FuncOp>(tosa::createTosaToLinalg());
         pm.addPass(tosa::createTosaToArith());
+        pm.addPass(tosa::createTosaToTensor());
         pm.addPass(mlir::createLinalgGeneralizationPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
         // Bufferization.
-        pm.addPass(arith::createArithmeticBufferizePass());
         pm.addPass(mlir::createLinalgBufferizePass());
+        pm.addPass(arith::createArithmeticBufferizePass());
+        pm.addPass(mlir::createTensorBufferizePass());
         pm.addPass(func::createFuncBufferizePass());
         pm.addPass(bufferization::createBufferResultsToOutParamsPass());
         pm.addPass(scalehls::createBufferizeDataflowPass());
@@ -130,6 +132,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
 
         // Linalg to Affine conversion.
         pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
+        pm.addPass(memref::createFoldMemRefAliasOpsPass());
         pm.addPass(scalehls::createSimplifyCopyPass());
         pm.addPass(scalehls::createLowerCopyToAffinePass());
         pm.addPass(mlir::createCanonicalizerPass());
@@ -164,11 +167,11 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createRemoveVariableBoundPass());
 
         // Affine loop tiling.
+        // pm.addPass(scalehls::createAffineLoopOrderOptPass());
         pm.addPass(scalehls::createAffineLoopTilePass(opts.loopTileSize));
         pm.addPass(mlir::createAffineLoopNormalizePass());
         pm.addPass(mlir::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
-        // pm.addPass(scalehls::createAffineLoopOrderOptPass());
 
         // Local buffer allocation.
         pm.addPass(scalehls::createCreateMemrefSubviewPass());

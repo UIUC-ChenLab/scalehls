@@ -88,7 +88,7 @@ struct BufferizeDataflow : public BufferizeDataflowBase<BufferizeDataflow> {
     auto context = func.getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<ConvertGetGlobalToConstBuffer>(context);
+    // patterns.add<ConvertGetGlobalToConstBuffer>(context);
     patterns.add<BufferizeDispatchOrTask<DispatchOp>>(context);
     patterns.add<BufferizeDispatchOrTask<TaskOp>>(context);
     patterns.add<HoistAlloc<DispatchOp>>(context);

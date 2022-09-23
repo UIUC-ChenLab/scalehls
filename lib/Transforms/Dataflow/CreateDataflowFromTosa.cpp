@@ -124,9 +124,10 @@ struct CreateDataflowFromTosa
     patterns.add<OutlineRoot<tosa::MaxPool2dOp>>(context);
     patterns.add<OutlineRoot<tosa::MatMulOp>>(context);
     patterns.add<OutlineRoot<tosa::MulOp>>(context);
-    patterns.add<OutlineRoot<tosa::AddOp>>(context);
     patterns.add<OutlineRoot<tosa::SubOp>>(context);
-    patterns.add<OutlineRoot<tosa::RsqrtOp>>(context);
+    patterns.add<OutlineRoot<tosa::AddOp>>(context);
+    patterns.add<OutlineRoot<tosa::DivOp>>(context);
+    patterns.add<BackwardFuse<tosa::RsqrtOp>>(context);
     patterns.add<BackwardFuse<tosa::ClampOp>>(context);
     patterns.add<BackwardFuse<tosa::TransposeOp>>(context);
     patterns.add<ForwardFuse<tosa::ReshapeOp>>(context);

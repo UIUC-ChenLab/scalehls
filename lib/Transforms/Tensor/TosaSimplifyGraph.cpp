@@ -11,29 +11,6 @@
 using namespace mlir;
 using namespace scalehls;
 
-namespace {
-struct ClampOpRewritePattern : public OpRewritePattern<tosa::ClampOp> {
-  using OpRewritePattern<tosa::ClampOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(tosa::ClampOp clamp,
-                                PatternRewriter &rewriter) const override {
-    auto transpose = clamp.getInput().getDefiningOp<tosa::TransposeOp>();
-    if (!transpose)
-      return failure();
-
-    clamp.getInputMutable().assign(transpose.getInput1());
-    clamp.getOutput().setType(transpose.getInput1().getType());
-
-    rewriter.setInsertionPointAfter(clamp);
-    auto cloneTranspose = cast<tosa::TransposeOp>(rewriter.clone(*transpose));
-
-    clamp.getOutput().replaceAllUsesWith(cloneTranspose.getOutput());
-    cloneTranspose.getInput1Mutable().assign(clamp.getOutput());
-    return success();
-  }
-};
-} // namespace
-
 /// A helper to get permuatation vector from value.
 static SmallVector<int64_t, 6> getPermValues(Value perm) {
   DenseIntElementsAttr permAttr;
@@ -46,7 +23,7 @@ static SmallVector<int64_t, 6> getPermValues(Value perm) {
 }
 
 namespace {
-struct TransposeOpRewritePattern : public OpRewritePattern<tosa::TransposeOp> {
+struct FoldTranspose : public OpRewritePattern<tosa::TransposeOp> {
   using OpRewritePattern<tosa::TransposeOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(tosa::TransposeOp transpose,
@@ -72,14 +49,41 @@ struct TransposeOpRewritePattern : public OpRewritePattern<tosa::TransposeOp> {
 } // namespace
 
 namespace {
-/// TODO: Expand this to all binary elementwise operations.
-struct AddOpRewritePattern : public OpRewritePattern<tosa::AddOp> {
-  using OpRewritePattern<tosa::AddOp>::OpRewritePattern;
+template <typename OpType>
+struct RewriteElmwUnary : public OpRewritePattern<OpType> {
+  using OpRewritePattern<OpType>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(tosa::AddOp add,
+  LogicalResult matchAndRewrite(OpType elmw,
                                 PatternRewriter &rewriter) const override {
-    auto input1Transpose = add.getInput1().getDefiningOp<tosa::TransposeOp>();
-    auto input2Transpose = add.getInput2().getDefiningOp<tosa::TransposeOp>();
+    auto transpose =
+        elmw->getOperand(0).template getDefiningOp<tosa::TransposeOp>();
+    if (!transpose)
+      return failure();
+
+    elmw->getOpOperand(0).set(transpose.getInput1());
+    elmw.getOutput().setType(transpose.getInput1().getType());
+
+    rewriter.setInsertionPointAfter(elmw);
+    auto cloneTranspose = cast<tosa::TransposeOp>(rewriter.clone(*transpose));
+
+    elmw.getOutput().replaceAllUsesWith(cloneTranspose.getOutput());
+    cloneTranspose.getInput1Mutable().assign(elmw.getOutput());
+    return success();
+  }
+};
+} // namespace
+
+namespace {
+template <typename OpType>
+struct RewriteElmwBinary : public OpRewritePattern<OpType> {
+  using OpRewritePattern<OpType>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(OpType elmw,
+                                PatternRewriter &rewriter) const override {
+    auto input1Transpose =
+        elmw->getOperand(0).template getDefiningOp<tosa::TransposeOp>();
+    auto input2Transpose =
+        elmw->getOperand(1).template getDefiningOp<tosa::TransposeOp>();
     if (!input1Transpose || !input2Transpose)
       return failure();
 
@@ -87,16 +91,16 @@ struct AddOpRewritePattern : public OpRewritePattern<tosa::AddOp> {
         getPermValues(input2Transpose.getPerms()))
       return failure();
 
-    add.getInput1Mutable().assign(input1Transpose.getInput1());
-    add.getInput2Mutable().assign(input2Transpose.getInput1());
-    add.getOutput().setType(input1Transpose.getInput1().getType());
+    elmw->getOpOperand(0).set(input1Transpose.getInput1());
+    elmw->getOpOperand(1).set(input2Transpose.getInput1());
+    elmw.getOutput().setType(input1Transpose.getInput1().getType());
 
-    rewriter.setInsertionPointAfter(add);
+    rewriter.setInsertionPointAfter(elmw);
     auto cloneTranspose =
         cast<tosa::TransposeOp>(rewriter.clone(*input1Transpose));
 
-    add.getOutput().replaceAllUsesWith(cloneTranspose.getOutput());
-    cloneTranspose.getInput1Mutable().assign(add.getOutput());
+    elmw.getOutput().replaceAllUsesWith(cloneTranspose.getOutput());
+    cloneTranspose.getInput1Mutable().assign(elmw.getOutput());
     return success();
   }
 };
@@ -109,9 +113,13 @@ struct TosaSimplifyGraph : public TosaSimplifyGraphBase<TosaSimplifyGraph> {
     auto context = func.getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<ClampOpRewritePattern>(context);
-    patterns.add<TransposeOpRewritePattern>(context);
-    patterns.add<AddOpRewritePattern>(context);
+    patterns.add<FoldTranspose>(context);
+    patterns.add<RewriteElmwUnary<tosa::ClampOp>>(context);
+    patterns.add<RewriteElmwUnary<tosa::RsqrtOp>>(context);
+    patterns.add<RewriteElmwBinary<tosa::AddOp>>(context);
+    patterns.add<RewriteElmwBinary<tosa::SubOp>>(context);
+    patterns.add<RewriteElmwBinary<tosa::MulOp>>(context);
+    patterns.add<RewriteElmwBinary<tosa::DivOp>>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
