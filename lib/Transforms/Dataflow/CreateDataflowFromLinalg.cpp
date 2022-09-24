@@ -115,7 +115,6 @@ struct CreateDataflowFromLinalg
     patterns.add<OutlineRootInterface<linalg::ContractionOpInterface>>(context);
     patterns.add<OutlineRootOp<linalg::GenericOp>>(context);
 
-    // patterns.add<BackwardFuseOp<>>(context);
     patterns.add<ForwardFuseOp<linalg::FillOp>>(context);
     patterns.add<ForwardFuseOp<linalg::InitTensorOp>>(context);
     patterns.add<ForwardFuseOp<tensor::PadOp>>(context);

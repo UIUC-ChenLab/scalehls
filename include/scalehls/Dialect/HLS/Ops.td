@@ -241,13 +241,13 @@ def BufferOp : HLSOp<"dataflow.buffer", [
       DeclareOpInterfaceMethods<BufferLikeInterface>]> {
   let summary = "Represent a dataflow buffer";
 
-  let arguments = (ins I32Attr:$depth);
+  let arguments = (ins I32Attr:$depth, OptionalAttr<AnyAttr>:$init_value);
   let results = (outs AnyMemRef:$memref);
   let assemblyFormat = "attr-dict `:` type($memref)";
 
   let builders = [
     OpBuilder<(ins "mlir::Type":$memref),
-        "build($_builder, $_state, memref, 1);">
+        "build($_builder, $_state, memref, 1, nullptr);">
   ];
 }
 

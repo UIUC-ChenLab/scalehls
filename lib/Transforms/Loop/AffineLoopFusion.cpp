@@ -960,7 +960,15 @@ static Value createPrivateMemRef(AffineForOp forOp, Operation *srcStoreOpInst,
   // consumer loop nests to reduce their live range. Currently they are added
   // at the beginning of the function, because loop nests can be reordered
   // during the fusion pass.
-  Value newMemRef = top.create<memref::AllocOp>(forOp.getLoc(), newMemRefType);
+  Attribute initValue;
+  unsigned depth = 1;
+  if (auto oldBuffer = oldMemRef.getDefiningOp<BufferOp>()) {
+    if (oldBuffer.getInitValue())
+      initValue = oldBuffer.getInitValue().value();
+    depth = oldBuffer.getDepth();
+  }
+  Value newMemRef =
+      top.create<BufferOp>(forOp.getLoc(), newMemRefType, depth, initValue);
 
   // Build an AffineMap to remap access functions based on lower bound offsets.
   SmallVector<AffineExpr, 4> remapExprs;

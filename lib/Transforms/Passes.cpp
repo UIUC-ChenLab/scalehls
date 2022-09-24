@@ -127,8 +127,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(mlir::createLinalgElementwiseOpFusionPass());
         pm.addPass(scalehls::createCreateDataflowFromLinalgPass());
-        pm.addPass(scalehls::createConvertTensorToLinalgPass());
-        pm.addPass(mlir::createLinalgGeneralizationPass());
+        pm.addPass(mlir::createConvertTensorToLinalgPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
         // Bufferization.
@@ -141,13 +140,12 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(mlir::createCanonicalizerPass());
 
         // Linalg to Affine conversion.
+        pm.addPass(mlir::createLinalgGeneralizationPass());
         pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
         pm.addPass(scalehls::createSimplifyCopyPass());
         pm.addPass(scalehls::createLowerCopyToAffinePass());
         pm.addPass(memref::createFoldMemRefAliasOpsPass());
         pm.addPass(mlir::createCanonicalizerPass());
-
-        return;
 
         // Affine loop fusion.
         pm.addPass(scalehls::createAffineLoopFusionPass(opts.fusionTolerance));

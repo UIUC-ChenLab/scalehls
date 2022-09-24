@@ -13,35 +13,6 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
-namespace {
-struct ConvertGetGlobalToConstBuffer
-    : public OpRewritePattern<memref::GetGlobalOp> {
-  using OpRewritePattern<memref::GetGlobalOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(memref::GetGlobalOp op,
-                                PatternRewriter &rewriter) const override {
-    auto global = SymbolTable::lookupNearestSymbolFrom<memref::GlobalOp>(
-        op, op.nameAttr());
-    rewriter.replaceOpWithNewOp<ConstBufferOp>(op, global.type(),
-                                               global.getConstantInitValue());
-    return success();
-  }
-};
-} // namespace
-
-namespace {
-template <typename OpType>
-struct ConvertAllocToBuffer : public OpRewritePattern<OpType> {
-  using OpRewritePattern<OpType>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(OpType op,
-                                PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<BufferOp>(op, op.getType());
-    return success();
-  }
-};
-} // namespace
-
 // TODO: For now, we use a heuristic to determine the buffer location.
 static MemRefType getPlacedType(MemRefType type) {
   auto kind =
@@ -87,11 +58,6 @@ struct PlaceBuffer : public OpRewritePattern<func::FuncOp> {
 };
 } // namespace
 
-void scalehls::populateBufferConversionPatterns(RewritePatternSet &patterns) {
-  patterns.add<ConvertGetGlobalToConstBuffer>(patterns.getContext());
-  patterns.add<ConvertAllocToBuffer<memref::AllocOp>>(patterns.getContext());
-}
-
 namespace {
 struct PlaceDataflowBuffer
     : public PlaceDataflowBufferBase<PlaceDataflowBuffer> {
@@ -99,17 +65,7 @@ struct PlaceDataflowBuffer
     auto func = getOperation();
     auto context = func.getContext();
 
-    ConversionTarget target(*context);
-    target
-        .addIllegalOp<memref::GetGlobalOp, memref::AllocOp, memref::AllocaOp>();
-    target.addLegalOp<ConstBufferOp, BufferOp>();
-
     mlir::RewritePatternSet patterns(context);
-    populateBufferConversionPatterns(patterns);
-    if (failed(applyPartialConversion(func, target, std::move(patterns))))
-      return signalPassFailure();
-
-    patterns.clear();
     patterns.add<PlaceBuffer>(context);
     (void)applyOpPatternsAndFold(func, std::move(patterns));
   }

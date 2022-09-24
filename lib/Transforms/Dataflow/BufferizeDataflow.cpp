@@ -4,6 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/IR/Dominance.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -47,16 +48,19 @@ struct BufferizeDispatchOrTask : public OpRewritePattern<OpType> {
 } // namespace
 
 namespace {
-template <typename OpType> struct HoistAlloc : public OpRewritePattern<OpType> {
+template <typename OpType>
+struct HoistBuffer : public OpRewritePattern<OpType> {
   using OpRewritePattern<OpType>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(OpType op,
                                 PatternRewriter &rewriter) const override {
     for (auto &result : op.getYieldOp()->getOpOperands())
-      if (auto alloc = result.get().template getDefiningOp<memref::AllocOp>())
-        if (op == alloc->getParentOp()) {
-          alloc->moveBefore(op);
-          op.getResult(result.getOperandNumber()).replaceAllUsesWith(alloc);
+      if (auto buffer =
+              result.get().template getDefiningOp<BufferLikeInterface>())
+        if (op == buffer->getParentOp()) {
+          buffer->moveBefore(op);
+          op.getResult(result.getOperandNumber())
+              .replaceAllUsesWith(buffer.getMemref());
           return success();
         }
     return failure();
@@ -65,17 +69,78 @@ template <typename OpType> struct HoistAlloc : public OpRewritePattern<OpType> {
 } // namespace
 
 namespace {
+// If an alloc is filled before any other uses, the alloc can be converted to a
+// buffer with initial value.
+template <typename OpType>
+struct ConvertAllocToBufferWithInitValue : public OpRewritePattern<OpType> {
+  using OpRewritePattern<OpType>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(OpType op,
+                                PatternRewriter &rewriter) const override {
+    DominanceInfo DT;
+    SmallVector<Operation *> users(op->user_begin(), op->user_end());
+    llvm::sort(users, [&](auto a, auto b) { return DT.dominates(a, b); });
+
+    if (auto fill = dyn_cast<linalg::FillOp>(users.front()))
+      if (auto constant = fill.value().getDefiningOp<arith::ConstantOp>()) {
+        rewriter.replaceOpWithNewOp<BufferOp>(op, op.getType(),
+                                              /*depth=*/1, constant.getValue());
+        rewriter.eraseOp(fill);
+        return success();
+      }
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
+template <typename OpType>
+struct ConvertAllocToBuffer : public OpRewritePattern<OpType> {
+  using OpRewritePattern<OpType>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(OpType op,
+                                PatternRewriter &rewriter) const override {
+    rewriter.replaceOpWithNewOp<BufferOp>(op, op.getType());
+    return success();
+  }
+};
+} // namespace
+
+namespace {
+struct ConvertGetGlobalToConstBuffer
+    : public OpRewritePattern<memref::GetGlobalOp> {
+  using OpRewritePattern<memref::GetGlobalOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(memref::GetGlobalOp op,
+                                PatternRewriter &rewriter) const override {
+    auto global = SymbolTable::lookupNearestSymbolFrom<memref::GlobalOp>(
+        op, op.nameAttr());
+    rewriter.replaceOpWithNewOp<ConstBufferOp>(op, global.type(),
+                                               global.getConstantInitValue());
+    return success();
+  }
+};
+} // namespace
+
+void scalehls::populateBufferConversionPatterns(RewritePatternSet &patterns) {
+  auto context = patterns.getContext();
+  patterns.add<ConvertAllocToBufferWithInitValue<memref::AllocOp>>(context);
+  patterns.add<ConvertAllocToBuffer<memref::AllocOp>>(context);
+  patterns.add<ConvertGetGlobalToConstBuffer>(context);
+}
+
+namespace {
 struct BufferizeDataflow : public BufferizeDataflowBase<BufferizeDataflow> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
 
     mlir::RewritePatternSet patterns(context);
-    // patterns.add<ConvertGetGlobalToConstBuffer>(context);
+    populateBufferConversionPatterns(patterns);
     patterns.add<BufferizeDispatchOrTask<DispatchOp>>(context);
     patterns.add<BufferizeDispatchOrTask<TaskOp>>(context);
-    patterns.add<HoistAlloc<DispatchOp>>(context);
-    patterns.add<HoistAlloc<TaskOp>>(context);
+    patterns.add<HoistBuffer<DispatchOp>>(context);
+    patterns.add<HoistBuffer<TaskOp>>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
