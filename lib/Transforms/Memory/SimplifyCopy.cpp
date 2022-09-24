@@ -14,11 +14,10 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-template <typename OpType>
-struct SimplifyBuffer : public OpRewritePattern<OpType> {
-  using OpRewritePattern<OpType>::OpRewritePattern;
+struct SimplifyBuffer : public OpRewritePattern<BufferOp> {
+  using OpRewritePattern<BufferOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(OpType buf,
+  LogicalResult matchAndRewrite(BufferOp buf,
                                 PatternRewriter &rewriter) const override {
     auto DT = DominanceInfo();
     auto getCopyUser = [&]() {
@@ -28,38 +27,57 @@ struct SimplifyBuffer : public OpRewritePattern<OpType> {
       return memref::CopyOp();
     };
 
-    // If the current buf is not used by any copy, return failure.
-    auto copy = getCopyUser();
+    // If the current buffer is not used by any copy, return failure.
+    memref::CopyOp copy = getCopyUser();
     if (!copy)
       return failure();
 
-    // If the current buf dominates another buf, return failure.
-    auto anotherVal = buf.getMemref() == copy.getSource() ? copy.getTarget()
-                                                          : copy.getSource();
-    if (auto anotherBuf = anotherVal.getDefiningOp())
-      if (DT.dominates(buf.getOperation(), anotherBuf))
-        return failure();
+    // Get the the other buffer of the copy op.
+    bool bufIsSource = buf.getMemref() == copy.getSource();
+    auto theOtherBuf = bufIsSource ? copy.getTarget() : copy.getSource();
+    auto theOtherOp = theOtherBuf.getDefiningOp();
+
+    // If the current buffer is allocated at different memory space with the
+    // the other buffer, return failure.
     if (buf.getType().getMemorySpaceAsInt() !=
-        anotherVal.getType().template cast<MemRefType>().getMemorySpaceAsInt())
+        theOtherBuf.getType().template cast<MemRefType>().getMemorySpaceAsInt())
       return failure();
 
-    // If the source memory is used after the copy op, we cannot eliminate the
-    // target memory. This is conservative?
+    // If the current buffer is source buffer and has initial value, but the the
+    // other buffer is a block argument or not a buffer op, return failure.
+    if (bufIsSource && buf.getInitValue() &&
+        (!theOtherOp || !isa<BufferOp>(theOtherOp)))
+      return failure();
+
+    // If the other buffer exists but doesn't dominate the current buffer,
+    // return failure.
+    if (theOtherOp && DT.dominates(buf.getOperation(), theOtherOp))
+      return failure();
+
+    // If the source buffer is used after the copy op, we cannot eliminate the
+    // copy op. This is conservative.
     if (llvm::any_of(copy.getSource().getUsers(), [&](Operation *user) {
           return DT.properlyDominates(copy, user);
         }))
       return failure();
 
-    // If the target memory is used before the copy op, we cannot eliminate
-    // the target memory. This is conservative?
+    // If the target buffer is used before the copy op, we cannot eliminate the
+    // copy op as well. This is conservative.
     if (llvm::any_of(copy.getTarget().getUsers(), [&](Operation *user) {
           return DT.properlyDominates(user, copy);
         }))
       return failure();
 
-    rewriter.replaceOp(buf, anotherVal);
-    rewriter.eraseOp(copy);
+    // If the other buffer doesn't have an initial value, we assign the initial
+    // value of current buffer to it. This is safe as undefined initial value
+    // means the users of the other buffer are not sensitive to it.
+    if (bufIsSource && buf.getInitValue())
+      cast<BufferOp>(theOtherOp).setInitValueAttr(buf.getInitValue().value());
 
+    // Finally, we can replace the current buffer with the other buffer and
+    // erase the copy op as well.
+    rewriter.replaceOp(buf, theOtherBuf);
+    rewriter.eraseOp(copy);
     return success();
   }
 };
@@ -72,8 +90,7 @@ struct SimplifyCopy : public SimplifyCopyBase<SimplifyCopy> {
     auto context = func.getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<SimplifyBuffer<BufferOp>>(context);
-    patterns.add<SimplifyBuffer<memref::AllocOp>>(context);
+    patterns.add<SimplifyBuffer>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };

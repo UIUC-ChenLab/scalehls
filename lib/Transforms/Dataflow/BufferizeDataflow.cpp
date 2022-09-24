@@ -125,7 +125,9 @@ struct ConvertGetGlobalToConstBuffer
 void scalehls::populateBufferConversionPatterns(RewritePatternSet &patterns) {
   auto context = patterns.getContext();
   patterns.add<ConvertAllocToBufferWithInitValue<memref::AllocOp>>(context);
+  patterns.add<ConvertAllocToBufferWithInitValue<memref::AllocaOp>>(context);
   patterns.add<ConvertAllocToBuffer<memref::AllocOp>>(context);
+  patterns.add<ConvertAllocToBuffer<memref::AllocaOp>>(context);
   patterns.add<ConvertGetGlobalToConstBuffer>(context);
 }
 

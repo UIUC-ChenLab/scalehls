@@ -1977,7 +1977,7 @@ public:
         continue;
       // Use list expected to match the dep graph info.
       auto *op = memref.getDefiningOp();
-      if (isa_and_nonnull<memref::AllocOp>(op))
+      if (isa_and_nonnull<BufferLikeInterface>(op))
         op->erase();
     }
   }
