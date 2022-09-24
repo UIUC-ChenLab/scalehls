@@ -51,9 +51,9 @@ std::unique_ptr<Pass> createScheduleDataflowNodePass();
 std::unique_ptr<Pass> createStreamDataflowTaskPass();
 
 /// Tensor-related passes.
+std::unique_ptr<Pass> createConvertTensorToLinalgPass();
 std::unique_ptr<Pass> createTosaFakeQuantizePass();
 std::unique_ptr<Pass> createTosaSimplifyGraphPass();
-std::unique_ptr<Pass> createTosaToLinalgCleanupPass();
 
 /// Loop-related passes.
 std::unique_ptr<Pass> createAffineLoopFusionPass(

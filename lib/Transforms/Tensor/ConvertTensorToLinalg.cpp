@@ -26,8 +26,8 @@ struct RemoveRescaleOp : public OpRewritePattern<tosa::ApplyScaleOp> {
 } // namespace
 
 namespace {
-struct TosaToLinalgCleanup
-    : public TosaToLinalgCleanupBase<TosaToLinalgCleanup> {
+struct ConvertTensorToLinalg
+    : public ConvertTensorToLinalgBase<ConvertTensorToLinalg> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -48,6 +48,6 @@ struct TosaToLinalgCleanup
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createTosaToLinalgCleanupPass() {
-  return std::make_unique<TosaToLinalgCleanup>();
+std::unique_ptr<Pass> scalehls::createConvertTensorToLinalgPass() {
+  return std::make_unique<ConvertTensorToLinalg>();
 }

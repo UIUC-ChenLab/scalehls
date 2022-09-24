@@ -51,7 +51,7 @@ struct ForwardFuse : public OpRewritePattern<OpType> {
 
     // We always select the dominating task as the target to fuse.
     llvm::sort(taskUsers, [&](auto a, auto b) { return DT.dominates(a, b); });
-    fuseOpsIntoTask({op, taskUsers.front()}, rewriter);
+    fuseOpsIntoTask({op, taskUsers.front()}, rewriter, /*insertToLastOp=*/true);
     return success();
   }
 };

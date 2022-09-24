@@ -38,9 +38,9 @@ add_mlir_library(MLIRScaleHLSTransforms
   Memory/SimplifyAffineIf.cpp
   Memory/SimplifyCopy.cpp
 
+  Tensor/ConvertTensorToLinalg.cpp
   Tensor/TosaFakeQuantize.cpp
   Tensor/TosaSimplifyGraph.cpp
-  Tensor/TosaToLinalgCleanup.cpp
 
   DesignSpaceExplore.cpp
   FuncDuplication.cpp

@@ -47,8 +47,8 @@ def AnyAxi : AxiOf<[AnyType]>;
 // High Dataflow Operations
 //===----------------------------------------------------------------------===//
 
-def DispatchOp : HLSOp<"dataflow.dispatch", [AffineScope,
-      AutomaticAllocationScope, SingleBlockImplicitTerminator<"YieldOp">,
+def DispatchOp : HLSOp<"dataflow.dispatch", [RecursiveSideEffects,
+      SingleBlockImplicitTerminator<"YieldOp">,
       ParentOneOf<["func::FuncOp", "AffineForOp"]>]> {
   let summary = "Represent a dataflow dispatch";
   let description = [{
@@ -70,7 +70,7 @@ def DispatchOp : HLSOp<"dataflow.dispatch", [AffineScope,
   }];
 }
 
-def TaskOp : HLSOp<"dataflow.task", [AffineScope, AutomaticAllocationScope,
+def TaskOp : HLSOp<"dataflow.task", [RecursiveSideEffects,
       SingleBlockImplicitTerminator<"YieldOp">, HasParent<"DispatchOp">]> {
   let summary = "Represent a dataflow task";
   let description = [{
@@ -131,8 +131,9 @@ def ToValueOp : HLSOp<"dataflow.to_value", [NoSideEffect]> {
 // Low Dataflow Operations
 //===----------------------------------------------------------------------===//
 
-def ScheduleOp : HLSOp<"dataflow.schedule", [IsolatedFromAbove, AffineScope,
-      AutomaticAllocationScope, SingleBlock, NoTerminator,
+def ScheduleOp : HLSOp<"dataflow.schedule", [
+      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>, IsolatedFromAbove,
+      AffineScope, SingleBlock, NoTerminator,
       ParentOneOf<["func::FuncOp", "AffineForOp"]>]> {
   let summary = "Represent a dataflow schedule";
   let description = [{
@@ -156,9 +157,10 @@ def ScheduleOp : HLSOp<"dataflow.schedule", [IsolatedFromAbove, AffineScope,
   ];
 }
 
-def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
-      AutomaticAllocationScope, SingleBlock, NoTerminator,
-      AttrSizedOperandSegments, HasParent<"ScheduleOp">]> {
+def NodeOp : HLSOp<"dataflow.node", [
+      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>, IsolatedFromAbove,
+      AffineScope, SingleBlock, NoTerminator, AttrSizedOperandSegments,
+      HasParent<"ScheduleOp">]> {
   let summary = "Represent a dataflow node";
   let description = [{
     Node op has an isolated region to represent the ops contained by the node.
@@ -235,6 +237,7 @@ def NodeOp : HLSOp<"dataflow.node", [IsolatedFromAbove, AffineScope,
 }
 
 def BufferOp : HLSOp<"dataflow.buffer", [
+      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
       DeclareOpInterfaceMethods<BufferLikeInterface>]> {
   let summary = "Represent a dataflow buffer";
 
@@ -249,6 +252,7 @@ def BufferOp : HLSOp<"dataflow.buffer", [
 }
 
 def ConstBufferOp : HLSOp<"dataflow.const_buffer", [
+      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
       DeclareOpInterfaceMethods<BufferLikeInterface>]> {
   let summary = "Represent a constant dataflow buffer";
 
@@ -259,7 +263,8 @@ def ConstBufferOp : HLSOp<"dataflow.const_buffer", [
   let hasVerifier = 1;
 }
 
-def StreamOp : HLSOp<"dataflow.stream"> {
+def StreamOp : HLSOp<"dataflow.stream", [
+      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Declare a stream channel";
 
   let arguments = (ins I32Attr:$depth);
@@ -273,7 +278,8 @@ def StreamOp : HLSOp<"dataflow.stream"> {
   ];
 }
 
-def StreamReadOp : HLSOp<"dataflow.stream_read"> {
+def StreamReadOp : HLSOp<"dataflow.stream_read", [
+      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Read a stream channel";
   let description = [{
     Read/pop a value from a stream channel. The absence of the result indicates
@@ -289,7 +295,8 @@ def StreamReadOp : HLSOp<"dataflow.stream_read"> {
   let hasVerifier = 1;
 }
 
-def StreamWriteOp : HLSOp<"dataflow.stream_write"> {
+def StreamWriteOp : HLSOp<"dataflow.stream_write", [
+      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Write a stream channel";
   let description = [{
     Write/push a value to a stream channel. Each stream channel can only be
@@ -373,8 +380,8 @@ def PrimMulOp : HLSOp<"prim.mul", [NoSideEffect]> {
   }];
 }
 
-def PrimCastOp : HLSOp<"prim.cast",
-    [SameOperandsAndResultShape, NoSideEffect]> {
+def PrimCastOp : HLSOp<"prim.cast", [
+      NoSideEffect, SameOperandsAndResultShape]> {
   let summary = "Cast primitive operation";
 
   let arguments = (ins 

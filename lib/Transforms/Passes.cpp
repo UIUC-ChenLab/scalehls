@@ -93,6 +93,9 @@ struct ScaleHLSPyTorchPipelineV2Options
   Option<bool> fakeQuantize{
       *this, "fake-quantize", llvm::cl::init(false),
       llvm::cl::desc("Trigger the fake quantization (just for testing use)")};
+
+  Option<bool> tosaInput{*this, "tosa-input", llvm::cl::init(false),
+                         llvm::cl::desc("Inidicate the input IR is TOSA")};
 };
 } // namespace
 
@@ -104,27 +107,27 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         if (opts.loopTileSize < 2)
           llvm_unreachable("loop tile size must be larger than 1");
 
-        // // TOSA fake quantization.
-        // if (opts.fakeQuantize)
-        //   pm.addPass(scalehls::createTosaFakeQuantizePass());
+        if (opts.tosaInput) {
+          // TOSA fake quantization.
+          if (opts.fakeQuantize)
+            pm.addPass(scalehls::createTosaFakeQuantizePass());
 
-        // // TOSA optimization.
-        // pm.addPass(scalehls::createTosaSimplifyGraphPass());
-        // pm.addPass(scalehls::createCreateDataflowFromTosaPass());
-        // pm.addPass(mlir::createCanonicalizerPass());
+          // TOSA optimization.
+          pm.addPass(scalehls::createTosaSimplifyGraphPass());
+          // pm.addPass(scalehls::createCreateDataflowFromTosaPass());
+          pm.addPass(mlir::createCanonicalizerPass());
 
-        // // TOSA to Linalg conversion.
-        // tosa::addTosaToLinalgPasses(pm);
-        // pm.addPass(scalehls::createTosaToLinalgCleanupPass());
-        // pm.addPass(tosa::createTosaToArith());
-        // pm.addPass(tosa::createTosaToTensor());
-        // pm.addPass(mlir::createLinalgGeneralizationPass());
-        // pm.addPass(mlir::createCanonicalizerPass());
+          // TOSA to Linalg conversion.
+          tosa::addTosaToLinalgPasses(pm);
+          pm.addPass(tosa::createTosaToArith());
+          pm.addPass(tosa::createTosaToTensor());
+        }
 
         // Linalg optimization.
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(mlir::createLinalgElementwiseOpFusionPass());
         pm.addPass(scalehls::createCreateDataflowFromLinalgPass());
+        pm.addPass(scalehls::createConvertTensorToLinalgPass());
         pm.addPass(mlir::createLinalgGeneralizationPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
@@ -137,14 +140,14 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createBufferizeDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
-        return;
-
         // Linalg to Affine conversion.
         pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
-        pm.addPass(memref::createFoldMemRefAliasOpsPass());
         pm.addPass(scalehls::createSimplifyCopyPass());
         pm.addPass(scalehls::createLowerCopyToAffinePass());
+        pm.addPass(memref::createFoldMemRefAliasOpsPass());
         pm.addPass(mlir::createCanonicalizerPass());
+
+        return;
 
         // Affine loop fusion.
         pm.addPass(scalehls::createAffineLoopFusionPass(opts.fusionTolerance));
@@ -163,6 +166,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
 
         // Place dataflow buffers.
         pm.addPass(scalehls::createPlaceDataflowBufferPass());
+        return;
 
         // // Vectorization.
         // if (opts.vectorSize) {

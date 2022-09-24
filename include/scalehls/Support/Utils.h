@@ -25,9 +25,11 @@ using namespace hls;
 DispatchOp dispatchBlock(Block *block);
 
 /// Fuse the given operations into a new task. The new task will be created
-/// before the first operation and each operation will be inserted in order.
-/// This method always succeeds even if the resulting IR is invalid.
-TaskOp fuseOpsIntoTask(ArrayRef<Operation *> ops, PatternRewriter &rewriter);
+/// before the first operation or last operation and each operation will be
+/// inserted in order. This method always succeeds even if the resulting IR is
+/// invalid.
+TaskOp fuseOpsIntoTask(ArrayRef<Operation *> ops, PatternRewriter &rewriter,
+                   bool insertToLastOp = false);
 
 NodeOp fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter);
 

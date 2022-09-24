@@ -13,23 +13,6 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-/// FIXME: We actually don't need to apply this pattern on real workloads.
-struct ConvertGetGlobalToConstBuffer
-    : public OpRewritePattern<memref::GetGlobalOp> {
-  using OpRewritePattern<memref::GetGlobalOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(memref::GetGlobalOp op,
-                                PatternRewriter &rewriter) const override {
-    auto global = SymbolTable::lookupNearestSymbolFrom<memref::GlobalOp>(
-        op, op.nameAttr());
-    rewriter.replaceOpWithNewOp<ConstBufferOp>(op, global.type(),
-                                               global.getConstantInitValue());
-    return success();
-  }
-};
-} // namespace
-
-namespace {
 template <typename OpType>
 struct BufferizeDispatchOrTask : public OpRewritePattern<OpType> {
   using OpRewritePattern<OpType>::OpRewritePattern;

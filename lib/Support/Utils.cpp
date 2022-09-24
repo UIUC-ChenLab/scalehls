@@ -45,10 +45,12 @@ DispatchOp scalehls::dispatchBlock(Block *block) {
 }
 
 /// Fuse the given operations into a new task. The new task will be created
-/// before the first operation and each operation will be inserted in order.
-/// This method always succeeds even if the resulting IR is invalid.
+/// before the first operation or last operation and each operation will be
+/// inserted in order. This method always succeeds even if the resulting IR is
+/// invalid.
 TaskOp scalehls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
-                                 PatternRewriter &rewriter) {
+                                 PatternRewriter &rewriter,
+                                 bool insertToLastOp) {
   assert(!ops.empty() && "must fuse at least one op");
   llvm::SmallDenseSet<Operation *, 4> opsSet(ops.begin(), ops.end());
 
@@ -63,7 +65,10 @@ TaskOp scalehls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
 
   // Create new graph task with all inputs and outputs.
   auto loc = rewriter.getUnknownLoc();
-  rewriter.setInsertionPoint(ops.front());
+  if (!insertToLastOp)
+    rewriter.setInsertionPoint(ops.front());
+  else
+    rewriter.setInsertionPoint(ops.back());
   auto task =
       rewriter.create<TaskOp>(loc, ValueRange(outputValues.getArrayRef()));
   auto taskBlock = rewriter.createBlock(&task.getBody());

@@ -280,6 +280,18 @@ LogicalResult ScheduleOp::verify() {
   return success();
 }
 
+void ScheduleOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  for (auto value : getOperands())
+    if (value.getType().isa<MemRefType, StreamType>()) {
+      effects.emplace_back(MemoryEffects::Read::get(), value,
+                           SideEffects::DefaultResource::get());
+      effects.emplace_back(MemoryEffects::Write::get(), value,
+                           SideEffects::DefaultResource::get());
+    }
+}
+
 //===----------------------------------------------------------------------===//
 // NodeOp
 //===----------------------------------------------------------------------===//
@@ -391,6 +403,20 @@ LogicalResult NodeOp::verify() {
   return success();
 }
 
+void NodeOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  for (auto value : getInputs())
+    effects.emplace_back(MemoryEffects::Read::get(), value,
+                         SideEffects::DefaultResource::get());
+  for (auto value : getOutputs()) {
+    effects.emplace_back(MemoryEffects::Read::get(), value,
+                         SideEffects::DefaultResource::get());
+    effects.emplace_back(MemoryEffects::Write::get(), value,
+                         SideEffects::DefaultResource::get());
+  }
+}
+
 /// Get the parent schedule op.
 ScheduleOp NodeOp::getScheduleOp() {
   return (*this)->getParentOfType<ScheduleOp>();
@@ -463,6 +489,13 @@ iterator_range<Block::args_iterator> NodeOp::getParamArgs() {
 int32_t BufferOp::getBufferDepth() { return getDepth(); }
 int32_t ConstBufferOp::getBufferDepth() { return 1; }
 
+void BufferOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  effects.emplace_back(MemoryEffects::Allocate::get(), getMemref(),
+                       SideEffects::DefaultResource::get());
+}
+
 LogicalResult ConstBufferOp::verify() {
   if (llvm::any_of((*this)->getUses(), isWritten))
     return emitOpError("const buffer cannot be written");
@@ -478,6 +511,13 @@ LogicalResult ConstBufferOp::verify() {
   return success();
 }
 
+void ConstBufferOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  effects.emplace_back(MemoryEffects::Allocate::get(), getMemref(),
+                       SideEffects::DefaultResource::get());
+}
+
 //===----------------------------------------------------------------------===//
 // StreamOp, StreamReadOp, and StreamWriteOp
 //===----------------------------------------------------------------------===//
@@ -488,6 +528,13 @@ LogicalResult StreamOp::verify() {
   return success();
 }
 
+void StreamOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  effects.emplace_back(MemoryEffects::Allocate::get(), getChannel(),
+                       SideEffects::DefaultResource::get());
+}
+
 LogicalResult StreamReadOp::verify() {
   if (getResult())
     if (getChannel().getType().cast<StreamType>().getElementType() !=
@@ -496,11 +543,25 @@ LogicalResult StreamReadOp::verify() {
   return success();
 }
 
+void StreamReadOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  effects.emplace_back(MemoryEffects::Read::get(), getChannel(),
+                       SideEffects::DefaultResource::get());
+}
+
 LogicalResult StreamWriteOp::verify() {
   if (getChannel().getType().cast<StreamType>().getElementType() !=
       getValue().getType())
     return emitOpError("value type doesn't align with channel type");
   return success();
+}
+
+void StreamWriteOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  effects.emplace_back(MemoryEffects::Write::get(), getChannel(),
+                       SideEffects::DefaultResource::get());
 }
 
 //===----------------------------------------------------------------------===//

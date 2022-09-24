@@ -74,7 +74,6 @@ struct SimplifyCopy : public SimplifyCopyBase<SimplifyCopy> {
     mlir::RewritePatternSet patterns(context);
     patterns.add<SimplifyBuffer<BufferOp>>(context);
     patterns.add<SimplifyBuffer<memref::AllocOp>>(context);
-    patterns.add<SimplifyBuffer<memref::AllocaOp>>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };

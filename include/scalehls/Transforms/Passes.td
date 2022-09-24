@@ -134,6 +134,12 @@ def StreamDataflowTask : Pass<"scalehls-stream-dataflow-task", "func::FuncOp"> {
 // Tensor-related Passes
 //===----------------------------------------------------------------------===//
 
+def ConvertTensorToLinalg :
+      Pass<"scalehls-convert-tensor-to-linalg", "func::FuncOp"> {
+  let summary = "Lower tosa::ReshapeOp and tensor::PadOp";
+  let constructor = "mlir::scalehls::createConvertTensorToLinalgPass()";
+}
+
 def TosaFakeQuantize : Pass<"scalehls-tosa-fake-quantize", "ModuleOp"> {
   let summary = "Convert to 8-bits quantized model (only for testing use)";
   let constructor = "mlir::scalehls::createTosaFakeQuantizePass()";
@@ -146,12 +152,6 @@ def TosaSimplifyGraph : Pass<"scalehls-tosa-simplify-graph", "func::FuncOp"> {
     through pattern matching.
   }];
   let constructor = "mlir::scalehls::createTosaSimplifyGraphPass()";
-}
-
-def TosaToLinalgCleanup :
-      Pass<"scalehls-tosa-to-linalg-cleanup", "func::FuncOp"> {
-  let summary = "Lower tosa::ReshapeOp and tensor::PadOp";
-  let constructor = "mlir::scalehls::createTosaToLinalgCleanupPass()";
 }
 
 //===----------------------------------------------------------------------===//

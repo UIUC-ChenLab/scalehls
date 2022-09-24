@@ -90,7 +90,6 @@ struct PlaceBuffer : public OpRewritePattern<func::FuncOp> {
 void scalehls::populateBufferConversionPatterns(RewritePatternSet &patterns) {
   patterns.add<ConvertGetGlobalToConstBuffer>(patterns.getContext());
   patterns.add<ConvertAllocToBuffer<memref::AllocOp>>(patterns.getContext());
-  patterns.add<ConvertAllocToBuffer<memref::AllocaOp>>(patterns.getContext());
 }
 
 namespace {
