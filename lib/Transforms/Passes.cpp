@@ -173,8 +173,6 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         // Place dataflow buffers.
         pm.addPass(scalehls::createPlaceDataflowBufferPass());
 
-        return;
-
         // Affine loop tiling.
         pm.addPass(scalehls::createFuncPreprocessPass(opts.hlsTopFunc));
         pm.addPass(scalehls::createAffineLoopPerfectionPass());
@@ -188,6 +186,8 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
             /*InternalCopyOnly=*/false));
         pm.addPass(memref::createFoldMemRefAliasOpsPass());
         scalehls::addSimplifyAffineLoopPasses(pm);
+
+        return;
 
         // Affine loop dataflowing.
         pm.addPass(scalehls::createCreateDataflowFromAffinePass());

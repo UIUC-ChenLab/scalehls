@@ -29,19 +29,22 @@ DispatchOp dispatchBlock(Block *block);
 /// inserted in order. This method always succeeds even if the resulting IR is
 /// invalid.
 TaskOp fuseOpsIntoTask(ArrayRef<Operation *> ops, PatternRewriter &rewriter,
-                   bool insertToLastOp = false);
+                       bool insertToLastOp = false);
 
 NodeOp fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter);
+
+SmallVector<NodeOp> getConsumersExcept(Value buffer, NodeOp exceptedOp);
+SmallVector<NodeOp> getProducersExcept(Value buffer, NodeOp exceptedOp);
+SmallVector<NodeOp> getConsumers(Value buffer);
+SmallVector<NodeOp> getProducers(Value buffer);
 
 /// Get the depth of a buffer or stream channel. Note that only if the defining
 /// operation of the buffer is not a BufferOp or stream types, the returned
 /// result will be 1.
 unsigned getBufferDepth(Value buffer);
 
-SmallVector<NodeOp> getConsumersExcept(Value buffer, NodeOp exceptedOp);
-SmallVector<NodeOp> getProducersExcept(Value buffer, NodeOp exceptedOp);
-SmallVector<NodeOp> getConsumers(Value buffer);
-SmallVector<NodeOp> getProducers(Value buffer);
+Value findBuffer(Value value);
+hls::BufferLikeInterface findBufferOp(Value value);
 
 bool isExternalBuffer(Value value);
 

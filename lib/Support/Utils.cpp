@@ -151,23 +151,6 @@ NodeOp scalehls::fuseNodeOps(ArrayRef<NodeOp> nodes,
   return newNode;
 }
 
-/// Get the depth of a buffer or stream channel. Note that only if the defining
-/// operation of the buffer is not a BufferOp or stream types, the returned
-/// result will be 1.
-unsigned scalehls::getBufferDepth(Value buffer) {
-  if (auto streamType = buffer.getType().dyn_cast<StreamType>()) {
-    return streamType.getDepth();
-  } else if (auto arg = buffer.dyn_cast<BlockArgument>()) {
-    if (auto node = dyn_cast<NodeOp>(arg.getParentBlock()->getParentOp()))
-      return getBufferDepth(node->getOperand(arg.getArgNumber()));
-    else if (auto schedule =
-                 dyn_cast<ScheduleOp>(arg.getParentBlock()->getParentOp()))
-      return getBufferDepth(schedule->getOperand(arg.getArgNumber()));
-  } else if (auto bufferOp = buffer.getDefiningOp<BufferLikeInterface>())
-    return bufferOp.getBufferDepth();
-  return 1;
-}
-
 static SmallVector<NodeOp> getBufferUsers(Value buffer, bool getProducer,
                                           NodeOp exceptedOp) {
   SmallVector<NodeOp, 4> nodes;
@@ -193,6 +176,38 @@ SmallVector<NodeOp> scalehls::getProducers(Value buffer) {
   return getProducersExcept(buffer, NodeOp());
 }
 
+Value scalehls::findBuffer(Value memref) {
+  if (auto arg = memref.dyn_cast<BlockArgument>()) {
+    if (auto node = dyn_cast<NodeOp>(arg.getParentBlock()->getParentOp()))
+      return findBuffer(node->getOperand(arg.getArgNumber()));
+    else if (auto schedule =
+                 dyn_cast<ScheduleOp>(arg.getParentBlock()->getParentOp()))
+      return findBuffer(schedule->getOperand(arg.getArgNumber()));
+    return memref;
+  } else if (auto viewOp = memref.getDefiningOp<ViewLikeOpInterface>())
+    return findBuffer(viewOp.getViewSource());
+  else if (auto buffer = memref.getDefiningOp<BufferLikeInterface>())
+    return buffer.getMemref();
+  return Value();
+}
+
+hls::BufferLikeInterface scalehls::findBufferOp(Value memref) {
+  if (auto buffer = findBuffer(memref))
+    return buffer.getDefiningOp<hls::BufferLikeInterface>();
+  return hls::BufferLikeInterface();
+}
+
+/// Get the depth of a buffer or stream channel. Note that only if the defining
+/// operation of the buffer is not a BufferOp or stream types, the returned
+/// result will be 1.
+unsigned scalehls::getBufferDepth(Value buffer) {
+  if (auto streamType = buffer.getType().dyn_cast<StreamType>()) {
+    return streamType.getDepth();
+  } else if (auto bufferOp = findBufferOp(buffer))
+    return bufferOp.getBufferDepth();
+  return 1;
+}
+
 bool scalehls::isExternalBuffer(Value value) {
   if (auto type = value.getType().dyn_cast<MemRefType>())
     return type.getMemorySpaceAsInt() == (unsigned)MemoryKind::DRAM;
@@ -212,8 +227,8 @@ bool scalehls::isRead(OpOperand &use) {
   else if (auto view = dyn_cast<ViewLikeOpInterface>(use.getOwner()))
     return llvm::any_of(view->getUses(),
                         [](OpOperand &viewUse) { return isRead(viewUse); });
-  return isa<mlir::AffineReadOpInterface, memref::LoadOp, StreamReadOp>(
-      use.getOwner());
+  return isa<mlir::AffineReadOpInterface, memref::LoadOp,
+             vector::TransferReadOp, StreamReadOp>(use.getOwner());
 }
 
 bool scalehls::isWritten(OpOperand &use) {
@@ -229,8 +244,8 @@ bool scalehls::isWritten(OpOperand &use) {
   else if (auto view = dyn_cast<ViewLikeOpInterface>(use.getOwner()))
     return llvm::any_of(view->getUses(),
                         [](OpOperand &viewUse) { return isWritten(viewUse); });
-  return isa<mlir::AffineWriteOpInterface, memref::StoreOp, StreamWriteOp>(
-      use.getOwner());
+  return isa<mlir::AffineWriteOpInterface, memref::StoreOp,
+             vector::TransferWriteOp, StreamWriteOp>(use.getOwner());
 }
 
 //===----------------------------------------------------------------------===//

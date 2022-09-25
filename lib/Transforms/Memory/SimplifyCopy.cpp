@@ -16,16 +16,6 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
-static Value findBuffer(Value memref) {
-  if (memref.isa<BlockArgument>())
-    return memref;
-  else if (auto buffer = memref.getDefiningOp<BufferOp>())
-    return buffer.getMemref();
-  else if (auto viewOp = memref.getDefiningOp<ViewLikeOpInterface>())
-    return findBuffer(viewOp.getViewSource());
-  return Value();
-}
-
 static void findBufferUsers(Value memref, SmallVector<Operation *> &users) {
   for (auto user : memref.getUsers()) {
     if (auto viewOp = dyn_cast<ViewLikeOpInterface>(user))

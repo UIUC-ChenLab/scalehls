@@ -41,6 +41,14 @@ struct CreateLocalBuffer
       auto buf = builder.create<BufferOp>(loc, bufType);
       subview.result().replaceAllUsesWith(buf);
 
+      // If the global buffer has initial value, set it to the local buffer as
+      // well. Is this necessary?
+      if (auto globalBufInterface = findBufferOp(subview.getSource()))
+        if (auto globalBuf =
+                dyn_cast<BufferOp>(globalBufInterface.getOperation()))
+          if (globalBuf.getInitValue())
+            buf.setInitValueAttr(globalBuf.getInitValue().value());
+
       if (readFlag)
         builder.create<memref::CopyOp>(loc, subview, buf);
       if (writeFlag) {

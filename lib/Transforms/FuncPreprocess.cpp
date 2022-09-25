@@ -52,24 +52,6 @@ struct MemrefStoreRaisePattern : public OpRewritePattern<memref::StoreOp> {
 } // namespace
 
 namespace {
-/// Legalize memref get_global to constant primitive.
-struct GetGlobalConvertPattern : public OpRewritePattern<memref::GetGlobalOp> {
-  using OpRewritePattern<memref::GetGlobalOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(memref::GetGlobalOp getGlobal,
-                                PatternRewriter &rewriter) const override {
-    auto global = SymbolTable::lookupNearestSymbolFrom<memref::GlobalOp>(
-        getGlobal, getGlobal.nameAttr());
-    rewriter.setInsertionPoint(getGlobal);
-    rewriter.replaceOpWithNewOp<ConstBufferOp>(
-        getGlobal, global.type(),
-        global.initial_valueAttr().cast<ElementsAttr>());
-    return success();
-  }
-};
-} // namespace
-
-namespace {
 struct AffineStoreUndefFoldPattern
     : public OpRewritePattern<mlir::AffineStoreOp> {
   using OpRewritePattern<mlir::AffineStoreOp>::OpRewritePattern;
@@ -200,21 +182,19 @@ bool scalehls::applyFuncPreprocess(func::FuncOp func, bool isTopFunc) {
   patterns.add<MemrefStoreRaisePattern>(context);
   patterns.add<AddIRaisePattern>(context);
   patterns.add<MulIRaisePattern>(context);
-  patterns.add<GetGlobalConvertPattern>(context);
-  vector::populateVectorTransferLoweringPatterns(patterns);
   patterns.add<AffineStoreUndefFoldPattern>(context);
   patterns.add<AllocaDemotePattern>(context);
+  scalehls::populateBufferConversionPatterns(patterns);
+  vector::populateVectorTransferLoweringPatterns(patterns);
   (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
-  // We don't support any scf or memref load/store operations.
+  // We don't support any scf or memref operations.
   if (WalkResult::interrupt() == func.walk([&](Operation *op) {
-        if (isa<scf::SCFDialect>(op->getDialect()) ||
-            isa<memref::LoadOp, memref::StoreOp>(op))
+        if (isa<scf::SCFDialect, memref::MemRefDialect>(op->getDialect()))
           return WalkResult::interrupt();
         return WalkResult::advance();
       }))
     return false;
-
   return true;
 }
 
