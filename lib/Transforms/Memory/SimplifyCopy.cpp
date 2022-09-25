@@ -8,77 +8,139 @@
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
+#include "llvm/Support/Debug.h"
+
+#define DEBUG_TYPE "scalehls-simplify-copy"
 
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+static Value findBuffer(Value memref) {
+  if (memref.isa<BlockArgument>())
+    return memref;
+  else if (auto buffer = memref.getDefiningOp<BufferOp>())
+    return buffer.getMemref();
+  else if (auto viewOp = memref.getDefiningOp<ViewLikeOpInterface>())
+    return findBuffer(viewOp.getViewSource());
+  return Value();
+}
+
+static void findBufferUsers(Value memref, SmallVector<Operation *> &users) {
+  for (auto user : memref.getUsers()) {
+    if (auto viewOp = dyn_cast<ViewLikeOpInterface>(user))
+      findBufferUsers(viewOp->getResult(0), users);
+    else
+      users.push_back(user);
+  }
+}
+
+static bool crossRegionDominates(Operation *a, Operation *b) {
+  if (a == b)
+    return true;
+  if (b->isAncestor(a))
+    return false;
+  while (a->getParentOp() && !a->getParentOp()->isAncestor(b))
+    a = a->getParentOp();
+  assert(a->getParentOp() && "reach top-level module op");
+  return DominanceInfo().dominates(a, b);
+}
+
 namespace {
-struct SimplifyBuffer : public OpRewritePattern<BufferOp> {
-  using OpRewritePattern<BufferOp>::OpRewritePattern;
+struct SimplifyBufferCopy : public OpRewritePattern<memref::CopyOp> {
+  using OpRewritePattern<memref::CopyOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(BufferOp buf,
+  LogicalResult matchAndRewrite(memref::CopyOp copy,
                                 PatternRewriter &rewriter) const override {
-    auto DT = DominanceInfo();
-    auto getCopyUser = [&]() {
-      for (auto user : buf->getUsers())
-        if (auto copyUser = dyn_cast<memref::CopyOp>(user))
-          return copyUser;
-      return memref::CopyOp();
-    };
+    LLVM_DEBUG(llvm::dbgs() << "\nCurrent copy: " << copy << "\n";);
 
-    // If the current buffer is not used by any copy, return failure.
-    memref::CopyOp copy = getCopyUser();
-    if (!copy)
-      return failure();
-
-    // Get the the other buffer of the copy op.
-    bool bufIsSource = buf.getMemref() == copy.getSource();
-    auto theOtherBuf = bufIsSource ? copy.getTarget() : copy.getSource();
-    auto theOtherOp = theOtherBuf.getDefiningOp();
-
-    // If the current buffer is allocated at different memory space with the
-    // the other buffer, return failure.
-    if (buf.getType().getMemorySpaceAsInt() !=
-        theOtherBuf.getType().template cast<MemRefType>().getMemorySpaceAsInt())
-      return failure();
-
-    // If the current buffer is source buffer and has initial value, but the the
-    // other buffer is a block argument or not a buffer op, return failure.
-    if (bufIsSource && buf.getInitValue() &&
-        (!theOtherOp || !isa<BufferOp>(theOtherOp)))
-      return failure();
-
-    // If the other buffer exists but doesn't dominate the current buffer,
+    // If the source and target buffers are allocated in different memory space,
     // return failure.
-    if (theOtherOp && DT.dominates(buf.getOperation(), theOtherOp))
+    auto sourceType = copy.getSource().getType().template cast<MemRefType>();
+    auto targetType = copy.getTarget().getType().template cast<MemRefType>();
+    if (sourceType.getMemorySpaceAsInt() != targetType.getMemorySpaceAsInt())
       return failure();
 
-    // If the source buffer is used after the copy op, we cannot eliminate the
-    // copy op. This is conservative.
-    if (llvm::any_of(copy.getSource().getUsers(), [&](Operation *user) {
-          return DT.properlyDominates(copy, user);
+    LLVM_DEBUG(llvm::dbgs() << "Located at the same memory space\n";);
+
+    // Both the source and target buffers should be block arguments or defined
+    // by BufferOp, otherwise return failure.
+    auto source = findBuffer(copy.getSource());
+    auto target = findBuffer(copy.getTarget());
+    if (!source || !target)
+      return failure();
+
+    LLVM_DEBUG(llvm::dbgs() << "Defined by block argument or BufferOp\n";);
+
+    // If both the source and target buffers are block arguments, return failure
+    // as either of them can be eliminated.
+    auto sourceBuf = source.getDefiningOp<BufferOp>();
+    auto targetBuf = target.getDefiningOp<BufferOp>();
+    if (!sourceBuf && !targetBuf)
+      return failure();
+
+    LLVM_DEBUG(llvm::dbgs() << "At least one buffer is replaceable\n";);
+
+    // We adopt a conservative condition that all users of the source buffer
+    // must dominate the copy and all users of the target buffer must be
+    // dominated by the copy.
+    SmallVector<Operation *> sourceUsers;
+    SmallVector<Operation *> targetUsers;
+    findBufferUsers(source, sourceUsers);
+    findBufferUsers(target, targetUsers);
+
+    if (!llvm::all_of(sourceUsers, [&](Operation *user) {
+          return crossRegionDominates(user, copy);
+        }))
+      return failure();
+    if (!llvm::all_of(targetUsers, [&](Operation *user) {
+          return crossRegionDominates(copy, user);
         }))
       return failure();
 
-    // If the target buffer is used before the copy op, we cannot eliminate the
-    // copy op as well. This is conservative.
-    if (llvm::any_of(copy.getTarget().getUsers(), [&](Operation *user) {
-          return DT.properlyDominates(user, copy);
-        }))
-      return failure();
+    LLVM_DEBUG(llvm::dbgs() << "Dominances are valid\n");
 
-    // If the other buffer doesn't have an initial value, we assign the initial
-    // value of current buffer to it. This is safe as undefined initial value
-    // means the users of the other buffer are not sensitive to it.
-    if (bufIsSource && buf.getInitValue())
-      cast<BufferOp>(theOtherOp).setInitValueAttr(buf.getInitValue().value());
+    auto sourceView = copy.getSource().getDefiningOp();
+    auto targetView = copy.getTarget().getDefiningOp();
+    DominanceInfo domInfo;
 
-    // Finally, we can replace the current buffer with the other buffer and
-    // erase the copy op as well.
-    rewriter.replaceOp(buf, theOtherBuf);
-    rewriter.eraseOp(copy);
-    return success();
+    // To replace the target buffer, the buffer must be directly defined by a
+    // BufferOp without view. Meanwhile, the source view should either be a
+    // block argument or dominate all users of the target buffer.
+    // TODO: The second condition is quite conservative and could be improved by
+    // analyzing whether the source view can be replaced to the location of the
+    // target buffer.
+    if (targetBuf && targetBuf == targetView &&
+        (!sourceView || llvm::all_of(targetUsers, [&](Operation *user) {
+          return domInfo.dominates(sourceView, user);
+        }))) {
+      LLVM_DEBUG(llvm::dbgs() << "Target and copy is erased\n");
+
+      rewriter.replaceOp(targetBuf, copy.getSource());
+      rewriter.eraseOp(copy);
+      return success();
+    }
+
+    // Similarly, we need the same conditions to replace the source buffer.
+    if (sourceBuf && sourceBuf == sourceView &&
+        (!targetView || llvm::all_of(sourceUsers, [&](Operation *user) {
+          return domInfo.dominates(targetView, user);
+        }))) {
+      // If the source buffer has initial value, the value must be pertained by
+      // the target buffer after the replacement. Therefore, we have some
+      // additional conditions here to check.
+      if (sourceBuf.getInitValue()) {
+        if (!targetBuf || (targetBuf.getInitValue() && targetBuf != targetView))
+          return failure();
+        targetBuf.setInitValueAttr(sourceBuf.getInitValue().value());
+      }
+      LLVM_DEBUG(llvm::dbgs() << "Source and copy are erased\n");
+
+      rewriter.replaceOp(sourceBuf, copy.getTarget());
+      rewriter.eraseOp(copy);
+      return success();
+    }
+    return failure();
   }
 };
 } // namespace
@@ -90,7 +152,7 @@ struct SimplifyCopy : public SimplifyCopyBase<SimplifyCopy> {
     auto context = func.getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<SimplifyBuffer>(context);
+    patterns.add<SimplifyBufferCopy>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };

@@ -31,7 +31,6 @@ add_mlir_library(MLIRScaleHLSTransforms
   Memory/AffineStoreForward.cpp
   Memory/CreateLocalBuffer.cpp
   Memory/CreateMemrefSubview.cpp
-  Memory/FoldMemrefSubview.cpp
   Memory/LowerCopyToAffine.cpp
   Memory/RaiseAffineToCopy.cpp
   Memory/ReduceInitialInterval.cpp

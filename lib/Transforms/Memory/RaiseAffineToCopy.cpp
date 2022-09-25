@@ -33,7 +33,8 @@ struct RaiseAffineToCopy : public RaiseAffineToCopyBase<RaiseAffineToCopy> {
       auto load = dyn_cast<AffineLoadOp>(*bodyOps.begin());
       auto store = dyn_cast<AffineStoreOp>(*std::next(bodyOps.begin()));
       if (!load || !store || load.getResult() != store.getValue() ||
-          load.getMemref().getType() != store.getMemref().getType() ||
+          load.getMemref().getType().getShape() !=
+              store.getMemref().getType().getShape() ||
           store.getMapOperands() != load.getMapOperands() ||
           store.getAffineMap() != load.getAffineMap())
         continue;

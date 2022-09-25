@@ -29,6 +29,10 @@ void registerScaleHLSDSEPipeline();
 void registerScaleHLSPyTorchPipelineV2();
 void registerTransformsPasses();
 
+void addCreateSubviewPasses(OpPassManager &pm);
+void addSimplifyCopyPasses(OpPassManager &pm);
+void addSimplifyAffineLoopPasses(OpPassManager &pm);
+
 std::unique_ptr<Pass>
 createDesignSpaceExplorePass(std::string dseTargetSpec = "");
 std::unique_ptr<Pass> createFuncDuplicationPass();
@@ -73,7 +77,6 @@ std::unique_ptr<Pass> createRemoveVariableBoundPass();
 std::unique_ptr<Pass> createAffineStoreForwardPass();
 std::unique_ptr<Pass> createCreateLocalBufferPass();
 std::unique_ptr<Pass> createCreateMemrefSubviewPass();
-std::unique_ptr<Pass> createFoldMemrefSubviewPass();
 std::unique_ptr<Pass> createLowerCopyToAffinePass(bool internalCopyOnly = true);
 std::unique_ptr<Pass> createRaiseAffineToCopyPass();
 std::unique_ptr<Pass> createReduceInitialIntervalPass();
