@@ -38,6 +38,7 @@ struct LowerCopy : public OpRewritePattern<memref::CopyOp> {
     SmallVector<Value, 4> ivs;
     for (auto dimSize : memrefType.getShape()) {
       auto loop = rewriter.create<mlir::AffineForOp>(loc, 0, dimSize);
+      setParallelAttr(loop);
       // If the copy op is not external, we consider the loop as point loop
       // that needs to be optimized later.
       if (!isExternalCopy)

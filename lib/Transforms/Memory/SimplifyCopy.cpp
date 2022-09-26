@@ -71,22 +71,66 @@ struct SimplifyBufferCopy : public OpRewritePattern<memref::CopyOp> {
 
     LLVM_DEBUG(llvm::dbgs() << "At least one buffer is replaceable\n";);
 
-    // We adopt a conservative condition that all users of the source buffer
-    // must dominate the copy and all users of the target buffer must be
-    // dominated by the copy.
+    // Collect all users of the source and target buffer.
     SmallVector<Operation *> sourceUsers;
     SmallVector<Operation *> targetUsers;
     findBufferUsers(source, sourceUsers);
     findBufferUsers(target, targetUsers);
 
-    if (!llvm::all_of(sourceUsers, [&](Operation *user) {
-          return crossRegionDominates(user, copy);
-        }))
+    // Collect the dominating and dominated buffer users.
+    SmallVector<Operation *> sourceDomUsers;
+    SmallVector<Operation *> sourcePostDomUsers;
+    SmallVector<Operation *> targetDomUsers;
+    SmallVector<Operation *> targetPostDomUsers;
+
+    for (auto user : sourceUsers) {
+      if (user == copy)
+        continue;
+      else if (crossRegionDominates(user, copy))
+        sourceDomUsers.push_back(user);
+      else
+        sourcePostDomUsers.push_back(user);
+    }
+
+    for (auto user : targetUsers) {
+      if (user == copy)
+        continue;
+      else if (crossRegionDominates(user, copy))
+        targetDomUsers.push_back(user);
+      else
+        targetPostDomUsers.push_back(user);
+    }
+
+    // A helper to check whether any user has write effect.
+    auto hasWriteUsers = [](SmallVector<Operation *> users) {
+      return llvm::any_of(users, [](Operation *user) {
+        return hasEffect<MemoryEffects::Write>(user);
+      });
+    };
+
+    // If the source buffer has write users dominated by the copy and the target
+    // buffer has users dominated by the copy, or vice versa, the copy cannot be
+    // eliminated.
+    if ((hasWriteUsers(sourcePostDomUsers) && !targetPostDomUsers.empty()) ||
+        (hasWriteUsers(targetPostDomUsers) && !sourcePostDomUsers.empty()))
       return failure();
-    if (!llvm::all_of(targetUsers, [&](Operation *user) {
-          return crossRegionDominates(copy, user);
-        }))
+
+    // If the source buffer has writer users dominating the copy and the target
+    // buffer has users dominating the copy, the copy cannot be eliminated.
+    // Meanwhile, as long as the target buffer has users dominating the copy,
+    // return failure.
+    if ((hasWriteUsers(sourceDomUsers) && !targetDomUsers.empty()) ||
+        hasWriteUsers(targetDomUsers))
       return failure();
+
+    // If both the source and target buffer have users dominating the copy
+    // (which should both be read only), the init value must be the same.
+    if (!sourceDomUsers.empty() && !targetDomUsers.empty())
+      if ((!sourceBuf || !targetBuf) ||
+          (sourceBuf.getInitValue() && targetBuf.getInitValue() &&
+           sourceBuf.getInitValue().value() !=
+               targetBuf.getInitValue().value()))
+        return failure();
 
     LLVM_DEBUG(llvm::dbgs() << "Dominances are valid\n");
 
@@ -116,8 +160,8 @@ struct SimplifyBufferCopy : public OpRewritePattern<memref::CopyOp> {
         (!targetView || llvm::all_of(sourceUsers, [&](Operation *user) {
           return domInfo.dominates(targetView, user);
         }))) {
-      // If the source buffer has initial value, the value must be pertained by
-      // the target buffer after the replacement. Therefore, we have some
+      // If the source buffer has initial value, the value must be pertained
+      // by the target buffer after the replacement. Therefore, we have some
       // additional conditions here to check.
       if (sourceBuf.getInitValue()) {
         if (!targetBuf || (targetBuf.getInitValue() && targetBuf != targetView))
