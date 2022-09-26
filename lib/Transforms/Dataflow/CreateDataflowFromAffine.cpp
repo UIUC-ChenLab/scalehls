@@ -33,8 +33,8 @@ struct TaskPartition : public OpRewritePattern<DispatchOp> {
     SmallVector<Operation *, 4> opsToFuse;
     unsigned taskIdx = 0;
     for (auto &op : llvm::make_early_inc_range(block)) {
-      if (isa<BufferOp, ConstBufferOp, memref::AllocOp, memref::AllocaOp>(op)) {
-        // Memories are moved to the begining and skipped.
+      if (hasEffect<MemoryEffects::Allocate>(&op)) {
+        // Memory allocs are moved to the begining and skipped.
         op.moveBefore(&block, block.begin());
 
       } else if (isa<AffineForOp, scf::ForOp>(op)) {

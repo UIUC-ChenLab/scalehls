@@ -43,12 +43,12 @@ SmallVector<NodeOp> getProducers(Value buffer);
 /// Get the depth of a buffer or stream channel. Note that only if the defining
 /// operation of the buffer is not a BufferOp or stream types, the returned
 /// result will be 1.
-unsigned getBufferDepth(Value buffer);
+unsigned getBufferDepth(Value memref);
 
-Value findBuffer(Value value);
-hls::BufferLikeInterface findBufferOp(Value value);
+Value findBuffer(Value memref);
+hls::BufferLikeInterface findBufferOp(Value memref);
 
-bool isExternalBuffer(Value value);
+bool isExternalBuffer(Value memref);
 
 bool isRead(OpOperand &use);
 bool isWritten(OpOperand &use);

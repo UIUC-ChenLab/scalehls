@@ -9,6 +9,7 @@
 
 using namespace mlir;
 using namespace scalehls;
+using namespace hls;
 
 namespace {
 struct MaterializeReductionPattern : public OpRewritePattern<AffineForOp> {
@@ -34,7 +35,7 @@ struct MaterializeReductionPattern : public OpRewritePattern<AffineForOp> {
       auto memrefType = MemRefType::get({1}, iterOperand.getType());
       auto map = rewriter.getConstantAffineMap(0);
       rewriter.setInsertionPoint(loop);
-      auto buf = rewriter.create<memref::AllocOp>(loc, memrefType);
+      auto buf = rewriter.create<BufferOp>(loc, memrefType);
       rewriter.create<AffineStoreOp>(loc, iterOperand, buf, map, ValueRange());
 
       // Load the iteration value from the buffer at the begining of loop and

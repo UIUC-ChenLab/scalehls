@@ -38,7 +38,7 @@ bool scalehls::applyAffineLoopPerfection(AffineLoopBand &band) {
           auto map = builder.getConstantAffineMap(0);
 
           builder.setInsertionPoint(band.front());
-          auto alloc = builder.create<memref::AllocOp>(loop.getLoc(), type);
+          auto alloc = builder.create<BufferOp>(loop.getLoc(), type);
           builder.setInsertionPointAfter(&op);
           builder.create<AffineStoreOp>(loop.getLoc(), result, alloc, map,
                                         ValueRange({}));
@@ -59,14 +59,10 @@ bool scalehls::applyAffineLoopPerfection(AffineLoopBand &band) {
     SmallVector<Operation *, 4> suffixOps;
     bool isPrefix = true;
     for (auto &op : loop.getOps()) {
-      // TODO: For now, any operations that generate memrefs should have been
-      // hoisted. Otherwise, the perfection cannot be done.
-      if (llvm::any_of(op.getResultTypes(),
-                       [](Type type) { return type.isa<MemRefType>(); }))
-        return false;
-
-      // TODO: Fow now, call ops are always not be perfectized.
-      if (isa<func::CallOp>(op))
+      // TODO: For now, any operations that allocate memrefs should have been
+      // hoisted. Otherwise, the perfection cannot be done. Call ops are always
+      // not be perfectized as well.
+      if (hasEffect<MemoryEffects::Allocate>(&op) || isa<func::CallOp>(op))
         return false;
 
       if (&op == childLoop) {
@@ -114,8 +110,7 @@ bool scalehls::applyAffineLoopPerfection(AffineLoopBand &band) {
       // Move all operations before the child loop to the innermost loop.
       auto destOp = &innermostLoop.front();
       for (auto op : prefixOps) {
-        if (isa<AffineWriteOpInterface, vector::TransferWriteOp>(op)) {
-          // FIXME: Now we only consider affine store operations.
+        if (hasEffect<MemoryEffects::Write>(op)) {
           builder.setInsertionPoint(destOp);
           auto ifOp = builder.create<AffineIfOp>(
               loop.getLoc(), ifCondition, ifOperands, /*withElseRegion=*/false);
@@ -160,8 +155,7 @@ bool scalehls::applyAffineLoopPerfection(AffineLoopBand &band) {
       // Move all operations after the child loop to the innermost loop.
       auto destOp = innermostLoop.getBody()->getTerminator();
       for (auto op : suffixOps) {
-        if (isa<AffineWriteOpInterface, vector::TransferWriteOp>(op)) {
-          // FIXME: Now we only consider affine store operations.
+        if (hasEffect<MemoryEffects::Write>(op)) {
           builder.setInsertionPoint(destOp);
           auto ifOp = builder.create<AffineIfOp>(
               loop.getLoc(), ifCondition, ifOperands, /*withElseRegion=*/false);

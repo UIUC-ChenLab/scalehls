@@ -186,7 +186,7 @@ Value scalehls::findBuffer(Value memref) {
     return memref;
   } else if (auto viewOp = memref.getDefiningOp<ViewLikeOpInterface>())
     return findBuffer(viewOp.getViewSource());
-  else if (auto buffer = memref.getDefiningOp<BufferLikeInterface>())
+  else if (auto buffer = memref.getDefiningOp<hls::BufferLikeInterface>())
     return buffer.getMemref();
   return Value();
 }
@@ -200,52 +200,50 @@ hls::BufferLikeInterface scalehls::findBufferOp(Value memref) {
 /// Get the depth of a buffer or stream channel. Note that only if the defining
 /// operation of the buffer is not a BufferOp or stream types, the returned
 /// result will be 1.
-unsigned scalehls::getBufferDepth(Value buffer) {
-  if (auto streamType = buffer.getType().dyn_cast<StreamType>()) {
+unsigned scalehls::getBufferDepth(Value memref) {
+  if (auto streamType = memref.getType().dyn_cast<StreamType>()) {
     return streamType.getDepth();
-  } else if (auto bufferOp = findBufferOp(buffer))
+  } else if (auto bufferOp = findBufferOp(memref))
     return bufferOp.getBufferDepth();
   return 1;
 }
 
-bool scalehls::isExternalBuffer(Value value) {
-  if (auto type = value.getType().dyn_cast<MemRefType>())
+bool scalehls::isExternalBuffer(Value memref) {
+  if (auto type = memref.getType().dyn_cast<MemRefType>())
     return type.getMemorySpaceAsInt() == (unsigned)MemoryKind::DRAM;
   return false;
 }
 
 bool scalehls::isRead(OpOperand &use) {
-  // TODO: Any other cases?
+  // For NodeOp and ScheduleOp, we don't rely on memory effect interface.
+  // Instead, we delve into its region to figure out the effect.
   if (auto node = dyn_cast<NodeOp>(use.getOwner()))
-    return node.getOperandKind(use) == OperandKind::INPUT;
+    return llvm::any_of(
+        node.getBody().getArgument(use.getOperandNumber()).getUses(),
+        [](OpOperand &argUse) { return isRead(argUse); });
   else if (auto schedule = dyn_cast<ScheduleOp>(use.getOwner()))
     return llvm::any_of(
         schedule.getBody().getArgument(use.getOperandNumber()).getUses(),
         [](OpOperand &argUse) { return isRead(argUse); });
-  else if (auto copy = dyn_cast<memref::CopyOp>(use.getOwner()))
-    return copy.source() == use.get();
   else if (auto view = dyn_cast<ViewLikeOpInterface>(use.getOwner()))
     return llvm::any_of(view->getUses(),
                         [](OpOperand &viewUse) { return isRead(viewUse); });
-  return isa<mlir::AffineReadOpInterface, memref::LoadOp,
-             vector::TransferReadOp, StreamReadOp>(use.getOwner());
+  return hasEffect<MemoryEffects::Read>(use.getOwner(), use.get());
 }
 
 bool scalehls::isWritten(OpOperand &use) {
-  // TODO: Any other cases?
+  // For ScheduleOp, we don't rely on memory effect interface. Instead, we delve
+  // into its region to figure out the effect.
   if (auto node = dyn_cast<NodeOp>(use.getOwner()))
     return node.getOperandKind(use) == OperandKind::OUTPUT;
   else if (auto schedule = dyn_cast<ScheduleOp>(use.getOwner()))
     return llvm::any_of(
         schedule.getBody().getArgument(use.getOperandNumber()).getUses(),
         [](OpOperand &argUse) { return isWritten(argUse); });
-  else if (auto copy = dyn_cast<memref::CopyOp>(use.getOwner()))
-    return copy.target() == use.get();
   else if (auto view = dyn_cast<ViewLikeOpInterface>(use.getOwner()))
     return llvm::any_of(view->getUses(),
                         [](OpOperand &viewUse) { return isWritten(viewUse); });
-  return isa<mlir::AffineWriteOpInterface, memref::StoreOp,
-             vector::TransferWriteOp, StreamWriteOp>(use.getOwner());
+  return hasEffect<MemoryEffects::Write>(use.getOwner(), use.get());
 }
 
 //===----------------------------------------------------------------------===//
