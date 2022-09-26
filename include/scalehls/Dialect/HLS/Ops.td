@@ -7,8 +7,9 @@
 #ifndef SCALEHLS_DIALECT_HLS_OPS_TD
 #define SCALEHLS_DIALECT_HLS_OPS_TD
 
-include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
+include "mlir/Interfaces/SideEffectInterfaces.td"
+include "mlir/IR/BuiltinAttributeInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "scalehls/Dialect/HLS/Interfaces.td"
 
@@ -241,10 +242,13 @@ def BufferOp : HLSOp<"dataflow.buffer", [
       DeclareOpInterfaceMethods<BufferLikeInterface>]> {
   let summary = "Represent a dataflow buffer";
 
-  let arguments = (ins I32Attr:$depth, OptionalAttr<AnyAttr>:$init_value);
+  let arguments = (ins I32Attr:$depth,
+                       OptionalAttr<TypedAttrInterface>:$init_value);
   let results = (outs AnyMemRef:$memref);
   let assemblyFormat = "attr-dict `:` type($memref)";
 
+  let hasVerifier = 1;
+  let hasCanonicalizer = 1;
   let builders = [
     OpBuilder<(ins "mlir::Type":$memref),
         "build($_builder, $_state, memref, 1, nullptr);">

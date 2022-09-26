@@ -64,7 +64,8 @@ forwardStoreToLoad(mlir::AffineReadOpInterface loadOp,
 
     // 3. Ensure there is no intermediate operation which could replace the
     // value in memory.
-    if (!hasNoInterveningEffect<MemoryEffects::Write>(startOp, loadOp))
+    if (!hasNoInterveningEffect<MemoryEffects::Write>(startOp, loadOp,
+                                                      loadOp.getMemRef()))
       continue;
 
     // We now have a candidate for forwarding.
@@ -166,7 +167,8 @@ static void findUnusedStore(mlir::AffineWriteOpInterface writeA,
 
     // There cannot be an operation which reads from memory between
     // the two writes.
-    if (!hasNoInterveningEffect<MemoryEffects::Read>(targetA, writeB))
+    if (!hasNoInterveningEffect<MemoryEffects::Read>(targetA, writeB,
+                                                     writeB.getMemRef()))
       continue;
 
     opsToErase.push_back(targetA);
@@ -209,7 +211,7 @@ static void loadCSE(mlir::AffineReadOpInterface loadA,
 
     // 3. There is no write between loadA and loadB.
     if (!hasNoInterveningEffect<MemoryEffects::Write>(loadB.getOperation(),
-                                                      loadA))
+                                                      loadA, loadA.getMemRef()))
       continue;
 
     // Check if two values have the same shape. This is needed for affine vector

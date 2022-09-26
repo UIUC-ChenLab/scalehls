@@ -23,17 +23,17 @@ struct CreateLocalBuffer
       if (!isExternalBuffer(subview.source()))
         return WalkResult::advance();
 
-      // We strip the original layout map and memory kind when constructing the
-      // local buffer's memref type.
-      auto bufType = MemRefType::get(
-          subview.getType().getShape(), subview.getType().getElementType(),
-          AffineMap(), (unsigned)MemoryKind::BRAM_S2P);
-
       // Check the read/write status of the memref.
       auto readFlag = llvm::any_of(subview->getUses(), isRead);
       auto writeFlag = llvm::any_of(subview->getUses(), isWritten);
       if (!readFlag && !writeFlag)
         return WalkResult::advance();
+
+      // We strip the original layout map and memory kind when constructing the
+      // local buffer's memref type.
+      auto bufType = MemRefType::get(
+          subview.getType().getShape(), subview.getType().getElementType(),
+          AffineMap(), (unsigned)MemoryKind::BRAM_S2P);
 
       // Allocate an on-chip buffer and replace all its uses.
       auto loc = builder.getUnknownLoc();
@@ -41,14 +41,12 @@ struct CreateLocalBuffer
       auto buf = builder.create<BufferOp>(loc, bufType);
       subview.result().replaceAllUsesWith(buf);
 
-      // If the global buffer has initial value, set it to the local buffer as
-      // well. Is this necessary?
-      if (auto globalBufInterface = findBufferOp(subview.getSource()))
-        if (auto globalBuf =
-                dyn_cast<BufferOp>(globalBufInterface.getOperation()))
-          if (globalBuf.getInitValue())
-            buf.setInitValueAttr(globalBuf.getInitValue().value());
+      // If the global buffer has initial value, set it to the local buffer.
+      auto globalBuf = findBufferOp(subview.getSource());
+      if (globalBuf && globalBuf.getBufferInitValue())
+        buf.setInitValueAttr(globalBuf.getBufferInitValue().value());
 
+      // Create explicit copy from/to the local buffer.
       if (readFlag)
         builder.create<memref::CopyOp>(loc, subview, buf);
       if (writeFlag) {

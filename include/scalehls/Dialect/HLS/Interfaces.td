@@ -25,6 +25,8 @@ def BufferLikeInterface : OpInterface<"BufferLikeInterface"> {
     >,
     InterfaceMethod<"Return the depth of the buffer", "int32_t",
                     "getBufferDepth">,
+    InterfaceMethod<"Return the initial value of the buffer",
+                    "llvm::Optional<mlir::TypedAttr>", "getBufferInitValue">,
   ];
 }
 

@@ -129,14 +129,14 @@ func::FuncOp getRuntimeFunc(ModuleOp module, std::string runtimeFuncName = "");
 bool checkSameIfStatement(AffineIfOp lhsOp, AffineIfOp rhsOp);
 
 /// Ensure that all operations that could be executed after `start`
-/// (noninclusive) and prior to `memOp` (e.g. on a control flow/op path
-/// between the operations) do not have the potential memory effect
-/// `EffectType` on `memOp`. `memOp`  is an operation that reads or writes to
-/// a memref. For example, if `EffectType` is MemoryEffects::Write, this method
-/// will check if there is no write to the memory between `start` and `memOp`
-/// that would change the read within `memOp`.
-template <typename EffectType, typename T>
-bool hasNoInterveningEffect(Operation *start, T memOp) {
+/// (noninclusive) and prior to `memOp` (e.g. on a control flow/op path between
+/// the operations) do not have the potential memory effect `EffectType` on
+/// `memOp`. `memOp`  is an operation that reads or writes to a memref. For
+/// example, if `EffectType` is MemoryEffects::Write, this method will check if
+/// there is no write to the memory between `start` and `memOp` that would
+/// change the read within `memOp`.
+template <typename EffectType>
+bool hasNoInterveningEffect(Operation *start, Operation *memOp, Value memref) {
   auto isLocallyAllocated = [](Value memref) {
     auto *defOp = memref.getDefiningOp();
     return defOp && hasSingleEffect<MemoryEffects::Allocate>(defOp, memref);
@@ -147,7 +147,6 @@ bool hasNoInterveningEffect(Operation *start, T memOp) {
   bool hasSideEffect = false;
 
   // Check whether the effect on memOp can be caused by a given operation op.
-  Value memref = memOp.getMemRef();
   std::function<void(Operation *)> checkOperation = [&](Operation *op) {
     // If the effect has alreay been found, early exit,
     if (hasSideEffect)
@@ -159,8 +158,8 @@ bool hasNoInterveningEffect(Operation *start, T memOp) {
 
       bool opMayHaveEffect = false;
       for (auto effect : effects) {
-        // If op causes EffectType on a potentially aliasing location for
-        // memOp, mark as having the effect.
+        // If op causes EffectType on a potentially aliasing location for memOp,
+        // mark as having the effect.
         if (isa<EffectType>(effect.getEffect())) {
           // TODO: This should be replaced with a check for no aliasing.
           // Aliasing information should be passed to this method.
@@ -176,9 +175,10 @@ bool hasNoInterveningEffect(Operation *start, T memOp) {
       if (!opMayHaveEffect)
         return;
 
-      // If the side effect comes from an affine read or write, try to
-      // prove the side effecting `op` cannot reach `memOp`.
-      if (isa<AffineReadOpInterface, AffineWriteOpInterface>(op)) {
+      // If the side effect comes from an affine read or write, try to prove the
+      // side effecting `op` cannot reach `memOp`.
+      if (isa<AffineReadOpInterface, AffineWriteOpInterface>(op) &&
+          isa<AffineReadOpInterface, AffineWriteOpInterface>(memOp)) {
         MemRefAccess srcAccess(op);
         MemRefAccess destAccess(memOp);
 

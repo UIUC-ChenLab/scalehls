@@ -486,14 +486,54 @@ iterator_range<Block::args_iterator> NodeOp::getParamArgs() {
 // BufferOp and ConstBufferOp
 //===----------------------------------------------------------------------===//
 
+namespace {
+struct FlattenReadOnlyBuffer : public OpRewritePattern<BufferOp> {
+  using OpRewritePattern<BufferOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(BufferOp buffer,
+                                PatternRewriter &rewriter) const override {
+    if (buffer.getInitValue() &&
+        llvm::all_of(buffer->getUsers(), [](Operation *user) {
+          return isa<mlir::AffineLoadOp>(user);
+        })) {
+      auto initValue = buffer.getInitValue().value();
+      auto constant =
+          rewriter.create<arith::ConstantOp>(buffer.getLoc(), initValue);
+      for (auto user : buffer->getUsers())
+        rewriter.replaceOp(user, constant.getResult());
+      rewriter.eraseOp(buffer);
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+void BufferOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                           MLIRContext *context) {
+  results.add<FlattenReadOnlyBuffer>(context);
+}
+
+LogicalResult BufferOp::verify() {
+  if (auto initValue = getInitValue())
+    if (initValue.value().getType() != getType().getElementType())
+      return emitOpError("initial value's type doesn't align with memref type");
+  return success();
+}
+
 int32_t BufferOp::getBufferDepth() { return getDepth(); }
-int32_t ConstBufferOp::getBufferDepth() { return 1; }
+Optional<TypedAttr> BufferOp::getBufferInitValue() { return getInitValue(); }
 
 void BufferOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
         &effects) {
   effects.emplace_back(MemoryEffects::Allocate::get(), getMemref(),
                        SideEffects::DefaultResource::get());
+}
+
+int32_t ConstBufferOp::getBufferDepth() { return 1; }
+Optional<TypedAttr> ConstBufferOp::getBufferInitValue() {
+  return Optional<TypedAttr>();
 }
 
 LogicalResult ConstBufferOp::verify() {

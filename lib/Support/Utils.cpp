@@ -233,7 +233,8 @@ bool scalehls::isRead(OpOperand &use) {
 
 bool scalehls::isWritten(OpOperand &use) {
   // For ScheduleOp, we don't rely on memory effect interface. Instead, we delve
-  // into its region to figure out the effect.
+  // into its region to figure out the effect. However, for NodeOp, we don't
+  // need this recursive approach any more.
   if (auto node = dyn_cast<NodeOp>(use.getOwner()))
     return node.getOperandKind(use) == OperandKind::OUTPUT;
   else if (auto schedule = dyn_cast<ScheduleOp>(use.getOwner()))
