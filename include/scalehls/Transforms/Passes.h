@@ -24,12 +24,14 @@ namespace scalehls {
 /// Fusion mode to attempt. The default mode `Greedy` does both
 /// producer-consumer and sibling fusion.
 enum AffineFusionMode { Greedy, ProducerConsumer, Sibling };
+enum CreateSubviewMode { Point, Reduction };
 
 void registerScaleHLSDSEPipeline();
 void registerScaleHLSPyTorchPipelineV2();
 void registerTransformsPasses();
 
-void addCreateSubviewPasses(OpPassManager &pm);
+void addCreateSubviewPasses(OpPassManager &pm,
+                            CreateSubviewMode mode = CreateSubviewMode::Point);
 void addSimplifyCopyPasses(OpPassManager &pm);
 void addSimplifyAffineLoopPasses(OpPassManager &pm);
 
@@ -70,14 +72,19 @@ std::unique_ptr<Pass> createAffineLoopTilePass(unsigned loopTileSize = 1);
 std::unique_ptr<Pass>
 createAffineLoopUnrollJamPass(unsigned loopUnrollFactor = 1,
                               bool unrollPointLoopOnly = false);
+std::unique_ptr<Pass> createDetectReductionPass();
 std::unique_ptr<Pass> createMaterializeReductionPass();
 std::unique_ptr<Pass> createRemoveVariableBoundPass();
 
 /// Memory-related passes.
 std::unique_ptr<Pass> createAffineStoreForwardPass();
-std::unique_ptr<Pass> createCreateLocalBufferPass();
-std::unique_ptr<Pass> createCreateMemrefSubviewPass();
-std::unique_ptr<Pass> createLowerCopyToAffinePass(bool internalCopyOnly = true);
+std::unique_ptr<Pass>
+createCreateLocalBufferPass(bool externalBufferOnly = true,
+                            bool registerOnly = false);
+std::unique_ptr<Pass> createCreateMemrefSubviewPass(
+    CreateSubviewMode createSubviewMode = CreateSubviewMode::Point);
+std::unique_ptr<Pass>
+createLowerCopyToAffinePass(bool internalCopyOnly = false);
 std::unique_ptr<Pass> createRaiseAffineToCopyPass();
 std::unique_ptr<Pass> createReduceInitialIntervalPass();
 std::unique_ptr<Pass> createSimplifyAffineIfPass();

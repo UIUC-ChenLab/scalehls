@@ -25,17 +25,6 @@ static void findBufferUsers(Value memref, SmallVector<Operation *> &users) {
   }
 }
 
-static bool crossRegionDominates(Operation *a, Operation *b) {
-  if (a == b)
-    return true;
-  if (b->isAncestor(a))
-    return false;
-  while (a->getParentOp() && !a->getParentOp()->isAncestor(b))
-    a = a->getParentOp();
-  assert(a->getParentOp() && "reach top-level module op");
-  return DominanceInfo().dominates(a, b);
-}
-
 namespace {
 struct SimplifyBufferCopy : public OpRewritePattern<memref::CopyOp> {
   using OpRewritePattern<memref::CopyOp>::OpRewritePattern;

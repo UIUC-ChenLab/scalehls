@@ -15,12 +15,21 @@ using namespace hls;
 namespace {
 struct CreateLocalBuffer
     : public scalehls::CreateLocalBufferBase<CreateLocalBuffer> {
+  CreateLocalBuffer() = default;
+  CreateLocalBuffer(bool argExternalBufferOnly, bool argRegisterOnly) {
+    externalBufferOnly = argExternalBufferOnly;
+    registerOnly = argRegisterOnly;
+  }
+
   void runOnOperation() override {
     auto func = getOperation();
     auto builder = OpBuilder(func);
 
     func.walk([&](memref::SubViewOp subview) {
-      if (!isExternalBuffer(subview.source()))
+      if (externalBufferOnly && !isExternalBuffer(subview.source()))
+        return WalkResult::advance();
+
+      if (registerOnly && subview.getType().getNumElements() != 1)
         return WalkResult::advance();
 
       // Check the read/write status of the memref.
@@ -59,6 +68,8 @@ struct CreateLocalBuffer
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createCreateLocalBufferPass() {
-  return std::make_unique<CreateLocalBuffer>();
+std::unique_ptr<Pass>
+scalehls::createCreateLocalBufferPass(bool externalBufferOnly,
+                                      bool registerOnly) {
+  return std::make_unique<CreateLocalBuffer>(externalBufferOnly, registerOnly);
 }

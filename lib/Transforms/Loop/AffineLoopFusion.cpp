@@ -5,10 +5,6 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-//
-// This file implements loop fusion.
-//
-//===----------------------------------------------------------------------===//
 
 #include "mlir/Analysis/Liveness.h"
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"

@@ -295,6 +295,13 @@ def AffineStoreForward : Pass<"scalehls-affine-store-forward", "func::FuncOp"> {
 def CreateLocalBuffer : Pass<"scalehls-create-local-buffer", "func::FuncOp"> {
   let summary = "Promote external buffer to on-chip buffer";
   let constructor = "mlir::scalehls::createCreateLocalBufferPass()";
+
+  let options = [
+    Option<"externalBufferOnly", "external-buffer-only", "bool",
+           /*default=*/"true", "only handle external buffers">,
+    Option<"registerOnly", "register-only", "bool",
+           /*default=*/"false", "only registers or single-element buffers">
+  ];
 }
 
 def CreateMemrefSubview :
@@ -307,6 +314,16 @@ def CreateMemrefSubview :
     memory.
   }];
   let constructor = "mlir::scalehls::createCreateMemrefSubviewPass()";
+
+  let options = [
+    Option<"createSubviewMode", "mode", "enum CreateSubviewMode",
+           /*default=*/"CreateSubviewMode::Point",
+           "loop band mode to create subviews", "llvm::cl::values("
+           "clEnumValN(CreateSubviewMode::Point, \"point\", "
+           "\"Create subviews on point loop band\"), "
+           "clEnumValN(CreateSubviewMode::Reduction, \"reduction\", "
+           "\"Create subviews on reduction loop band\"))">
+  ];
 }
 
 def LowerCopyToAffine : Pass<"scalehls-lower-copy-to-affine", "func::FuncOp"> {
@@ -314,8 +331,8 @@ def LowerCopyToAffine : Pass<"scalehls-lower-copy-to-affine", "func::FuncOp"> {
   let constructor = "mlir::scalehls::createLowerCopyToAffinePass()";
 
   let options = [
-    Option<"internalCopyOnly", "internal-copy-only", "bool", /*default=*/"true",
-           "only convert copy between internal memories">
+    Option<"internalCopyOnly", "internal-copy-only", "bool", /*default=*/"false",
+           "only convert copy between internal buffers">
   ];
 }
 

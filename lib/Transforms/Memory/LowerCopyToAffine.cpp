@@ -36,7 +36,12 @@ struct LowerCopy : public OpRewritePattern<memref::CopyOp> {
 
     // Create explicit memory copy using an affine loop nest.
     SmallVector<Value, 4> ivs;
+    auto constantZero = rewriter.create<arith::ConstantIndexOp>(loc, 0);
     for (auto dimSize : memrefType.getShape()) {
+      if (dimSize == 1) {
+        ivs.push_back(constantZero);
+        continue;
+      }
       auto loop = rewriter.create<mlir::AffineForOp>(loc, 0, dimSize);
       setParallelAttr(loop);
       // If the copy op is not external, we consider the loop as point loop
