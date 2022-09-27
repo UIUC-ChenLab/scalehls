@@ -26,6 +26,7 @@ public:
             // HLS dialect operations.
             BufferOp, ConstBufferOp, StreamOp, StreamReadOp, StreamWriteOp,
             AxiBundleOp, AxiPortOp, AxiPackOp, PrimMulOp, PrimCastOp,
+            hls::AffineSelectOp,
 
             // Function operations.
             func::CallOp, func::ReturnOp,
@@ -45,9 +46,7 @@ public:
 
             // Memref statements.
             memref::AllocOp, memref::AllocaOp, memref::LoadOp, memref::StoreOp,
-            memref::DeallocOp, memref::CopyOp, memref::ReshapeOp,
-            memref::CollapseShapeOp, memref::ExpandShapeOp,
-            memref::ReinterpretCastOp,
+            memref::DeallocOp, memref::CopyOp,
 
             // Unary expressions.
             math::AbsIOp, math::AbsFOp, math::CeilOp, math::CosOp, math::SinOp,
@@ -107,6 +106,7 @@ public:
   HANDLE(AxiPackOp);
   HANDLE(PrimMulOp);
   HANDLE(PrimCastOp);
+  HANDLE(hls::AffineSelectOp);
 
   // Control flow operations.
   HANDLE(func::CallOp);
@@ -145,10 +145,6 @@ public:
   HANDLE(memref::StoreOp);
   HANDLE(memref::DeallocOp);
   HANDLE(memref::CopyOp);
-  HANDLE(memref::ReshapeOp);
-  HANDLE(memref::CollapseShapeOp);
-  HANDLE(memref::ExpandShapeOp);
-  HANDLE(memref::ReinterpretCastOp);
 
   // Unary expressions.
   HANDLE(math::AbsIOp);

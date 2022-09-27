@@ -231,13 +231,14 @@ public:
       : ScaleHLSEmitterBase(state) {}
 
   /// HLS dialect operation emitters.
+  void emitConstBuffer(ConstBufferOp op);
   void emitStreamChannel(StreamOp op);
   void emitStreamRead(StreamReadOp op);
   void emitStreamWrite(StreamWriteOp op);
   void emitAxiPort(AxiPortOp op);
   void emitPrimMul(PrimMulOp op);
   template <typename AssignOpType> void emitAssign(AssignOpType op);
-  void emitConstBuffer(ConstBufferOp op);
+  void emitAffineSelect(hls::AffineSelectOp op);
 
   /// Control flow operation emitters.
   void emitCall(func::CallOp op);
@@ -412,6 +413,9 @@ public:
   bool visitOp(AxiPackOp op) { return false; }
   bool visitOp(PrimMulOp op) { return emitter.emitPrimMul(op), true; }
   bool visitOp(PrimCastOp op) { return emitter.emitAssign(op), true; }
+  bool visitOp(hls::AffineSelectOp op) {
+    return emitter.emitAffineSelect(op), true;
+  }
 
   /// Function operations.
   bool visitOp(func::CallOp op) { return emitter.emitCall(op), true; }
@@ -462,16 +466,16 @@ public:
   bool visitOp(memref::StoreOp op) { return emitter.emitStore(op), true; }
   bool visitOp(memref::DeallocOp op) { return true; }
   bool visitOp(memref::CopyOp op) { return emitter.emitMemCpy(op), true; }
-  bool visitOp(memref::ReshapeOp op) { return emitter.emitReshape(op), true; }
-  bool visitOp(memref::CollapseShapeOp op) {
-    return emitter.emitReshape(op), true;
-  }
-  bool visitOp(memref::ExpandShapeOp op) {
-    return emitter.emitReshape(op), true;
-  }
-  bool visitOp(memref::ReinterpretCastOp op) {
-    return emitter.emitReshape(op), true;
-  }
+  // bool visitOp(memref::ReshapeOp op) { return emitter.emitReshape(op), true;
+  // } bool visitOp(memref::CollapseShapeOp op) {
+  //   return emitter.emitReshape(op), true;
+  // }
+  // bool visitOp(memref::ExpandShapeOp op) {
+  //   return emitter.emitReshape(op), true;
+  // }
+  // bool visitOp(memref::ReinterpretCastOp op) {
+  //   return emitter.emitReshape(op), true;
+  // }
 
 private:
   ModuleEmitter &emitter;
@@ -743,6 +747,34 @@ void ModuleEmitter::emitAssign(AssignOpType op) {
   os << ";";
   emitInfoAndNewLine(op);
   emitNestedLoopFooter(rank);
+}
+
+void ModuleEmitter::emitAffineSelect(hls::AffineSelectOp op) {
+  indent();
+  emitValue(op.getResult());
+  os << " = (";
+  auto constrSet = op.getIntegerSet();
+  AffineExprEmitter constrEmitter(state, constrSet.getNumDims(),
+                                  op.getOperands());
+
+  // Emit all constraints.
+  unsigned constrIdx = 0;
+  for (auto &expr : constrSet.getConstraints()) {
+    constrEmitter.emitAffineExpr(expr);
+    if (constrSet.isEq(constrIdx))
+      os << " == 0";
+    else
+      os << " >= 0";
+
+    if (constrIdx++ != constrSet.getNumConstraints() - 1)
+      os << " && ";
+  }
+  os << ") ? ";
+  emitValue(op.getTrueValue());
+  os << " : ";
+  emitValue(op.getFalseValue());
+  os << ";";
+  emitInfoAndNewLine(op);
 }
 
 /// Control flow operation emitters.
@@ -1472,10 +1504,10 @@ void ModuleEmitter::emitSelect(arith::SelectOp op) {
   os << " = ";
   emitValue(op.getCondition(), conditionRank);
   os << " ? ";
-  os << "(" << getTypeName(op.getTrueValue()) << ")";
+  // os << "(" << getTypeName(op.getTrueValue()) << ")";
   emitValue(op.getTrueValue(), rank);
   os << " : ";
-  os << "(" << getTypeName(op.getFalseValue()) << ")";
+  // os << "(" << getTypeName(op.getFalseValue()) << ")";
   emitValue(op.getFalseValue(), rank);
   os << ";";
   emitInfoAndNewLine(op);
