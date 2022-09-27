@@ -12,6 +12,7 @@
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
+#include "mlir/IR/Dominance.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -293,6 +294,17 @@ void scalehls::getMemAccessesMap(Block &block, MemAccessesMap &map,
   }
 }
 
+bool scalehls::crossRegionDominates(Operation *a, Operation *b) {
+  if (a == b)
+    return true;
+  if (b->isAncestor(a))
+    return false;
+  while (a->getParentOp() && !a->getParentOp()->isAncestor(b))
+    a = a->getParentOp();
+  assert(a->getParentOp() && "reach top-level module op");
+  return DominanceInfo().dominates(a, b);
+}
+
 // Check if the lhsOp and rhsOp are in the same block. If so, return their
 // ancestors that are located at the same block. Note that in this check,
 // AffineIfOp is transparent.
@@ -513,6 +525,37 @@ bool scalehls::getTileAndPointLoopBand(const AffineLoopBand &band,
     } else {
       tileBand.clear();
       pointBand.clear();
+      return false;
+    }
+  }
+  return true;
+}
+
+/// Given a loop band, return true and get the parallel loop band outsides and
+/// the reduction loop band inside. If failed, return false.
+bool scalehls::getParallelAndReductionLoopBand(const AffineLoopBand &band,
+                                               AffineLoopBand &parallelBand,
+                                               AffineLoopBand &reductionBand) {
+  parallelBand.clear();
+  reductionBand.clear();
+  bool isReductionLoop = false;
+
+  for (auto loop : band) {
+    if (!isReductionLoop && (hasParallelAttr(loop) || isLoopParallel(loop)))
+      parallelBand.push_back(loop);
+
+    else if (isReductionLoop &&
+             !(hasParallelAttr(loop) || isLoopParallel(loop)))
+      reductionBand.push_back(loop);
+
+    else if (!isReductionLoop &&
+             !(hasParallelAttr(loop) || isLoopParallel(loop))) {
+      isReductionLoop = true;
+      reductionBand.push_back(loop);
+
+    } else {
+      parallelBand.clear();
+      reductionBand.clear();
       return false;
     }
   }

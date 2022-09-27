@@ -30,22 +30,22 @@ namespace hls {
 #include "scalehls/Dialect/HLS/HLSInterfaces.h.inc"
 
 enum class MemoryKind {
-  LUTRAM_1P = 0,
-  LUTRAM_2P = 1,
-  LUTRAM_S2P = 2,
-  LUTRAM_T2P = 3,
-  BRAM_1P = 4,
-  BRAM_2P = 5,
-  BRAM_S2P = 6,
-  BRAM_T2P = 7,
-  URAM_1P = 8,
-  URAM_2P = 9,
-  URAM_S2P = 10,
-  URAM_T2P = 11,
-  DRAM = 12
+  LUTRAM_1P,
+  LUTRAM_2P,
+  LUTRAM_S2P,
+  LUTRAM_T2P,
+  BRAM_1P,
+  BRAM_2P,
+  BRAM_S2P,
+  BRAM_T2P,
+  URAM_1P,
+  URAM_2P,
+  URAM_S2P,
+  URAM_T2P,
+  DRAM
 };
-enum class PartitionKind { CYCLIC = 0, BLOCK = 1, NONE = 2 };
-enum class OperandKind { INPUT = 0, OUTPUT = 1, PARAM = 2 };
+enum class PartitionKind { CYCLIC, BLOCK, NONE };
+enum class OperandKind { INPUT, OUTPUT, PARAM };
 
 /// Timing attribute utils.
 TimingAttr getTiming(Operation *op);

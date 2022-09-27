@@ -73,6 +73,8 @@ using MemAccessesMap = DenseMap<Value, SmallVector<Operation *, 16>>;
 void getMemAccessesMap(Block &block, MemAccessesMap &map,
                        bool includeVectorTransfer = false);
 
+bool crossRegionDominates(Operation *a, Operation *b);
+
 /// Check if the lhsOp and rhsOp are in the same block. If so, return their
 /// ancestors that are located at the same block. Note that in this check,
 /// AffineIfOp is transparent.
@@ -103,6 +105,10 @@ unsigned getChildLoopNum(Operation *op);
 bool getTileAndPointLoopBand(const AffineLoopBand &band,
                              AffineLoopBand &tileBand,
                              AffineLoopBand &pointBand);
+
+bool getParallelAndReductionLoopBand(const AffineLoopBand &band,
+                                     AffineLoopBand &parallelBand,
+                                     AffineLoopBand &reductionBand);
 
 /// Get the whole loop band given the outermost loop and return it in "band".
 /// Meanwhile, the return value is the innermost loop of this loop band.
