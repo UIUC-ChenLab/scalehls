@@ -191,9 +191,30 @@ static void findUnusedStore(mlir::AffineWriteOpInterface writeA,
 static void loadCSE(mlir::AffineReadOpInterface loadA,
                     SmallVectorImpl<Operation *> &loadOpsToErase,
                     DominanceInfo &domInfo) {
-  SmallVector<AffineReadOpInterface, 4> loadCandidates;
+  if (auto buffer = loadA.getMemRef().getDefiningOp<BufferOp>())
+    if (auto initValue = buffer.getInitValue())
+      if (llvm::all_of(buffer->getUsers(), [&](Operation *user) {
+            if (auto store = dyn_cast<mlir::AffineWriteOpInterface>(user)) {
+              if (crossRegionDominates(store, loadA))
+                return false;
+              if (checkDependence(store, loadA))
+                return false;
+              return true;
+            }
+            return true;
+          })) {
+        auto builder = OpBuilder(loadA);
+        builder.setInsertionPoint(loadA);
+        auto constantInitValue = builder.create<arith::ConstantOp>(
+            loadA.getLoc(), initValue.value());
+        loadA.getValue().replaceAllUsesWith(constantInitValue);
+        loadOpsToErase.push_back(loadA);
+        return;
+      }
+
+  SmallVector<mlir::AffineReadOpInterface, 4> loadCandidates;
   for (auto *user : loadA.getMemRef().getUsers()) {
-    auto loadB = dyn_cast<AffineReadOpInterface>(user);
+    auto loadB = dyn_cast<mlir::AffineReadOpInterface>(user);
     if (!loadB || loadB == loadA)
       continue;
 
@@ -225,8 +246,8 @@ static void loadCSE(mlir::AffineReadOpInterface loadA,
   // Of the legal load candidates, use the one that dominates all others
   // to minimize the subsequent need to loadCSE
   Value loadB;
-  for (AffineReadOpInterface option : loadCandidates) {
-    if (llvm::all_of(loadCandidates, [&](AffineReadOpInterface depStore) {
+  for (mlir::AffineReadOpInterface option : loadCandidates) {
+    if (llvm::all_of(loadCandidates, [&](mlir::AffineReadOpInterface depStore) {
           return depStore == option ||
                  domInfo.dominates(option.getOperation(),
                                    depStore.getOperation());
