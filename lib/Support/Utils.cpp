@@ -480,28 +480,6 @@ unsigned scalehls::getChildLoopNum(Operation *op) {
   return childNum;
 }
 
-/// Get the whole loop band given the innermost loop and return it in "band".
-static void getLoopBandFromInnermost(AffineForOp forOp, AffineLoopBand &band) {
-  band.clear();
-  AffineLoopBand reverseBand;
-
-  auto currentLoop = forOp;
-  while (true) {
-    reverseBand.push_back(currentLoop);
-
-    auto parentLoop = currentLoop->getParentOfType<AffineForOp>();
-    if (!parentLoop)
-      break;
-
-    if (getChildLoopNum(parentLoop) == 1)
-      currentLoop = parentLoop;
-    else
-      break;
-  }
-
-  band.append(reverseBand.rbegin(), reverseBand.rend());
-}
-
 /// Given a tiled loop band, return true and get the tile (tile-space) loop band
 /// and the point (intra-tile) loop band. If failed, return false.
 bool scalehls::getTileAndPointLoopBand(const AffineLoopBand &band,
@@ -577,6 +555,28 @@ AffineForOp scalehls::getLoopBandFromOutermost(AffineForOp forOp,
       break;
   }
   return band.back();
+}
+AffineForOp scalehls::getLoopBandFromInnermost(AffineForOp forOp,
+                                               AffineLoopBand &band) {
+  band.clear();
+  AffineLoopBand reverseBand;
+
+  auto currentLoop = forOp;
+  while (true) {
+    reverseBand.push_back(currentLoop);
+
+    auto parentLoop = currentLoop->getParentOfType<AffineForOp>();
+    if (!parentLoop)
+      break;
+
+    if (getChildLoopNum(parentLoop) == 1)
+      currentLoop = parentLoop;
+    else
+      break;
+  }
+
+  band.append(reverseBand.rbegin(), reverseBand.rend());
+  return band.front();
 }
 
 /// Collect all loop bands in the "block" and return them in "bands". If

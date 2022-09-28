@@ -4,6 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Dialect/Affine/LoopUtils.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
@@ -31,9 +32,18 @@ struct InlineSchedule : public OpRewritePattern<ScheduleOp> {
       if (auto func = dyn_cast<func::FuncOp>(schedule->getParentOp()))
         setFuncDirective(func, /*pipeline=*/false, /*targetInterval=*/1,
                          /*dataflow=*/true);
-      else if (auto loop = dyn_cast<mlir::AffineForOp>(schedule->getParentOp()))
-        setLoopDirective(loop, /*pipeline=*/false, /*targetII=*/1,
+      else if (auto loop =
+                   dyn_cast<mlir::AffineForOp>(schedule->getParentOp())) {
+        // If the schedule is located insided of a loop nest, try to coalesce
+        // them into a flattened loop.
+        AffineLoopBand band;
+        getLoopBandFromInnermost(loop, band);
+        auto dataflowLoop = loop;
+        if (isPerfectlyNested(band) && succeeded(coalesceLoops(band)))
+          dataflowLoop = band.front();
+        setLoopDirective(dataflowLoop, /*pipeline=*/false, /*targetII=*/1,
                          /*dataflow=*/true, /*flattern=*/false);
+      }
     }
     rewriter.eraseOp(schedule);
     return success();
@@ -64,7 +74,7 @@ struct ConvertNodeToFunc : public OpRewritePattern<NodeOp> {
     rewriter.setInsertionPoint(node);
     rewriter.replaceOpWithNewOp<func::CallOp>(node, subFunc,
                                               node.getOperands());
-    setFuncDirective(subFunc, false, 1, true);
+    // setFuncDirective(subFunc, false, 1, true);
     return success();
   }
 

@@ -110,9 +110,11 @@ bool getParallelAndReductionLoopBand(const AffineLoopBand &band,
                                      AffineLoopBand &parallelBand,
                                      AffineLoopBand &reductionBand);
 
-/// Get the whole loop band given the outermost loop and return it in "band".
-/// Meanwhile, the return value is the innermost loop of this loop band.
+/// Get the whole loop band given the outermost or innermost loop and return it
+/// in "band". Meanwhile, the return value is the innermost or outermost loop of
+/// this loop band.
 AffineForOp getLoopBandFromOutermost(AffineForOp forOp, AffineLoopBand &band);
+AffineForOp getLoopBandFromInnermost(AffineForOp forOp, AffineLoopBand &band);
 
 /// Collect all loop bands in the "block" and return them in "bands". If
 /// "allowHavingChilds" is true, loop bands containing more than 1 other loop

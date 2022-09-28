@@ -114,7 +114,8 @@ def LowerDataflow : Pass<"scalehls-lower-dataflow", "func::FuncOp"> {
   let constructor = "mlir::scalehls::createLowerDataflowPass()";
 }
 
-def PlaceDataflowBuffer : Pass<"scalehls-dataflow-buffer", "func::FuncOp"> {
+def PlaceDataflowBuffer :
+      Pass<"scalehls-place-dataflow-buffer", "func::FuncOp"> {
   let summary = "Place dataflow buffers";
   let constructor = "mlir::scalehls::createPlaceDataflowBufferPass()";
 }
