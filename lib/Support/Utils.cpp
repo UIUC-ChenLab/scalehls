@@ -13,6 +13,7 @@
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/IR/Dominance.h"
+#include "mlir/IR/IntegerSet.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -98,6 +99,7 @@ TaskOp scalehls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
   return task;
 }
 
+/// Fuse multiple nodes into a new node.
 NodeOp scalehls::fuseNodeOps(ArrayRef<NodeOp> nodes,
                              PatternRewriter &rewriter) {
   assert((nodes.size() > 1) && "must fuse at least two nodes");
@@ -164,6 +166,7 @@ static SmallVector<NodeOp> getBufferUsers(Value buffer, bool getProducer,
   return std::move(nodes);
 }
 
+/// Get the consumer/producer nodes of the given buffer expect the given op.
 SmallVector<NodeOp> scalehls::getConsumersExcept(Value buffer, NodeOp except) {
   return getBufferUsers(buffer, false, except);
 }
@@ -177,6 +180,7 @@ SmallVector<NodeOp> scalehls::getProducers(Value buffer) {
   return getProducersExcept(buffer, NodeOp());
 }
 
+/// Find buffer value or buffer op across the dataflow hierarchy.
 Value scalehls::findBuffer(Value memref) {
   if (auto arg = memref.dyn_cast<BlockArgument>()) {
     if (auto node = dyn_cast<NodeOp>(arg.getParentBlock()->getParentOp()))
@@ -191,7 +195,6 @@ Value scalehls::findBuffer(Value memref) {
     return buffer.getMemref();
   return Value();
 }
-
 hls::BufferLikeInterface scalehls::findBufferOp(Value memref) {
   if (auto buffer = findBuffer(memref))
     return buffer.getDefiningOp<hls::BufferLikeInterface>();
@@ -215,6 +218,7 @@ bool scalehls::isExternalBuffer(Value memref) {
   return false;
 }
 
+/// Check whether the given use has read/write semantics.
 bool scalehls::isRead(OpOperand &use) {
   // For NodeOp and ScheduleOp, we don't rely on memory effect interface.
   // Instead, we delve into its region to figure out the effect.
@@ -231,7 +235,6 @@ bool scalehls::isRead(OpOperand &use) {
                         [](OpOperand &viewUse) { return isRead(viewUse); });
   return hasEffect<MemoryEffects::Read>(use.getOwner(), use.get());
 }
-
 bool scalehls::isWritten(OpOperand &use) {
   // For ScheduleOp, we don't rely on memory effect interface. Instead, we delve
   // into its region to figure out the effect. However, for NodeOp, we don't
@@ -251,6 +254,90 @@ bool scalehls::isWritten(OpOperand &use) {
 //===----------------------------------------------------------------------===//
 // Memory and loop analysis utils
 //===----------------------------------------------------------------------===//
+
+/// Return a pair which indicates whether the if statement is always true or
+/// false, respectively. The returned result is one-hot.
+std::pair<bool, bool> scalehls::ifAlwaysTrueOrFalse(mlir::AffineIfOp ifOp) {
+  auto set = ifOp.getIntegerSet();
+  auto operands = SmallVector<Value, 4>(ifOp.getOperands().begin(),
+                                        ifOp.getOperands().end());
+
+  // Compose all associated AffineApplyOp into the current if operation.
+  while (llvm::any_of(operands, [](Value v) {
+    return isa_and_nonnull<AffineApplyOp>(v.getDefiningOp());
+  })) {
+    composeSetAndOperands(set, operands);
+  }
+
+  // Replace the original integer set and operands with the composed integer
+  // set and operands.
+  ifOp.setIntegerSet(set);
+  ifOp->setOperands(operands);
+
+  // Construct the constraints of the if statement. For now, we only add the
+  // loop induction constraints and integer set constraint.
+  // TODO: handle unsuccessufl domain addition.
+  FlatAffineValueConstraints constrs;
+  constrs.addAffineIfOpDomain(ifOp);
+  for (auto operand : operands)
+    if (isForInductionVar(operand)) {
+      auto iv = getForInductionVarOwner(operand);
+      if (failed(constrs.addAffineForOpDomain(iv)))
+        continue;
+    }
+
+  bool alwaysTrue = false;
+  bool alwaysFalse = false;
+
+  if (set.getNumInputs() == 0) {
+    // If the integer set is pure constant set, determine whether the
+    // condition is always true or always false.
+    SmallVector<bool, 4> flagList;
+    unsigned idx = 0;
+    for (auto expr : set.getConstraints()) {
+      bool eqFlag = set.isEq(idx++);
+      auto constValue = expr.cast<AffineConstantExpr>().getValue();
+
+      if (eqFlag)
+        flagList.push_back(constValue == 0);
+      else
+        flagList.push_back(constValue >= 0);
+    }
+
+    // Only when all sub-conditions are met, the if statement is always true.
+    // Otherwise, the statement if always false.
+    if (llvm::all_of(flagList, [&](bool flag) { return flag; }))
+      alwaysTrue = true;
+    else
+      alwaysFalse = true;
+
+  } else if (constrs.isEmpty()) {
+    // If there is no solution for the constraints, the condition will always
+    // be false.
+    alwaysFalse = true;
+  }
+
+  // Assert only one of the two flags are true.
+  assert((!alwaysTrue || !alwaysFalse) && "unexpected if condition");
+  return {alwaysTrue, alwaysFalse};
+}
+
+/// Check whether the two given if statements have the same condition.
+bool scalehls::checkSameIfStatement(AffineIfOp lhsOp, AffineIfOp rhsOp) {
+  if (lhsOp == nullptr || rhsOp == nullptr)
+    return false;
+
+  auto lhsSet = lhsOp.getIntegerSet();
+  auto rhsSet = rhsOp.getIntegerSet();
+
+  // TODO: support if statement with return values.
+  if (lhsOp.getNumResults() != 0 || rhsOp.getNumResults() != 0 ||
+      lhsOp.getOperands() != rhsOp.getOperands() ||
+      lhsSet.getConstraints() != rhsSet.getConstraints() ||
+      lhsSet.getEqFlags() != rhsSet.getEqFlags())
+    return false;
+  return true;
+}
 
 /// Parse array attributes.
 SmallVector<int64_t, 8> scalehls::getIntArrayAttrValue(Operation *op,

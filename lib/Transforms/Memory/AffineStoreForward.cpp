@@ -57,7 +57,8 @@ forwardStoreToLoad(mlir::AffineReadOpInterface loadOp,
     Operation *startOp = storeOp;
     if (auto ifOp = dyn_cast<mlir::AffineIfOp>(storeOp->getParentOp()))
       if (!ifOp.hasElse() && ifOp.getThenBlock()->getOperations().size() == 2 &&
-          ifOp->getParentRegion()->isAncestor(loadOp->getParentRegion()))
+          ifOp->getParentRegion()->isAncestor(loadOp->getParentRegion()) &&
+          !ifAlwaysTrueOrFalse(ifOp).second)
         startOp = ifOp;
     if (!domInfo.dominates(startOp, loadOp))
       continue;

@@ -33,8 +33,10 @@ DispatchOp dispatchBlock(Block *block);
 TaskOp fuseOpsIntoTask(ArrayRef<Operation *> ops, PatternRewriter &rewriter,
                        bool insertToLastOp = false);
 
+/// Fuse multiple nodes into a new node.
 NodeOp fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter);
 
+/// Get the consumer/producer nodes of the given buffer expect the given op.
 SmallVector<NodeOp> getConsumersExcept(Value buffer, NodeOp exceptedOp);
 SmallVector<NodeOp> getProducersExcept(Value buffer, NodeOp exceptedOp);
 SmallVector<NodeOp> getConsumers(Value buffer);
@@ -45,11 +47,13 @@ SmallVector<NodeOp> getProducers(Value buffer);
 /// result will be 1.
 unsigned getBufferDepth(Value memref);
 
+/// Find buffer value or buffer op across the dataflow hierarchy.
 Value findBuffer(Value memref);
 hls::BufferLikeInterface findBufferOp(Value memref);
 
 bool isExternalBuffer(Value memref);
 
+/// Check whether the given use has read/write semantics.
 bool isRead(OpOperand &use);
 bool isWritten(OpOperand &use);
 
@@ -58,6 +62,13 @@ void populateBufferConversionPatterns(RewritePatternSet &patterns);
 //===----------------------------------------------------------------------===//
 // Memory and loop analysis utils
 //===----------------------------------------------------------------------===//
+
+/// Return a pair which indicates whether the if statement is always true or
+/// false, respectively. The returned result is one-hot.
+std::pair<bool, bool> ifAlwaysTrueOrFalse(mlir::AffineIfOp ifOp);
+
+/// Check whether the two given if statements have the same condition.
+bool checkSameIfStatement(AffineIfOp lhsOp, AffineIfOp rhsOp);
 
 /// Parse array attributes.
 SmallVector<int64_t, 8> getIntArrayAttrValue(Operation *op, StringRef name);
@@ -133,8 +144,6 @@ bool checkDependence(Operation *A, Operation *B);
 func::FuncOp getTopFunc(ModuleOp module, std::string topFuncName = "");
 
 func::FuncOp getRuntimeFunc(ModuleOp module, std::string runtimeFuncName = "");
-
-bool checkSameIfStatement(AffineIfOp lhsOp, AffineIfOp rhsOp);
 
 /// Ensure that all operations that could be executed after `start`
 /// (noninclusive) and prior to `memOp` (e.g. on a control flow/op path between
