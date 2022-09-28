@@ -117,6 +117,10 @@ struct ScaleHLSPyTorchPipelineV2Options
 
   Option<bool> tosaInput{*this, "tosa-input", llvm::cl::init(false),
                          llvm::cl::desc("Inidicate the input IR is TOSA")};
+
+  Option<unsigned> debugPoint{
+      *this, "debug-point", llvm::cl::init(0),
+      llvm::cl::desc("Stop the pipeline at the given debug point")};
 };
 } // namespace
 
@@ -144,12 +148,18 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
           pm.addPass(tosa::createTosaToTensor());
         }
 
+        if (opts.debugPoint == 1)
+          return;
+
         // Linalg optimization.
         pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(mlir::createLinalgElementwiseOpFusionPass());
         pm.addPass(scalehls::createCreateDataflowFromLinalgPass());
         pm.addPass(mlir::createConvertTensorToLinalgPass());
         pm.addPass(mlir::createCanonicalizerPass());
+
+        if (opts.debugPoint == 2)
+          return;
 
         // Bufferization.
         pm.addPass(mlir::createLinalgBufferizePass());
@@ -160,16 +170,25 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createBufferizeDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
+        if (opts.debugPoint == 2)
+          return;
+
         // Linalg to Affine conversion.
         pm.addPass(mlir::createLinalgGeneralizationPass());
         pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
         scalehls::addSimplifyCopyPasses(pm);
+
+        if (opts.debugPoint == 3)
+          return;
 
         // Affine loop fusion.
         pm.addPass(scalehls::createAffineLoopFusionPass(opts.fusionTolerance));
         scalehls::addSimplifyAffineLoopPasses(pm);
         scalehls::addCreateSubviewPasses(pm);
         scalehls::addSimplifyCopyPasses(pm);
+
+        if (opts.debugPoint == 4)
+          return;
 
         // Optimize and place dataflow buffers.
         pm.addPass(scalehls::createPlaceDataflowBufferPass());
@@ -182,12 +201,18 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createAffineStoreForwardPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
+        if (opts.debugPoint == 5)
+          return;
+
         // Affine loop tiling.
         pm.addPass(scalehls::createFuncPreprocessPass(opts.hlsTopFunc));
         pm.addPass(bufferization::createBufferLoopHoistingPass());
         pm.addPass(scalehls::createAffineLoopPerfectionPass());
         pm.addPass(scalehls::createAffineLoopTilePass(opts.loopTileSize));
         scalehls::addSimplifyAffineLoopPasses(pm);
+
+        if (opts.debugPoint == 6)
+          return;
 
         // Local buffer allocation.
         scalehls::addCreateSubviewPasses(pm);
@@ -196,10 +221,16 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(memref::createFoldMemRefAliasOpsPass());
         scalehls::addSimplifyAffineLoopPasses(pm);
 
+        if (opts.debugPoint == 7)
+          return;
+
         // Affine loop dataflowing.
         pm.addPass(scalehls::createCreateDataflowFromAffinePass());
         pm.addPass(scalehls::createStreamDataflowTaskPass());
         pm.addPass(mlir::createCanonicalizerPass());
+
+        if (opts.debugPoint == 8)
+          return;
 
         // Lower dataflow.
         pm.addPass(scalehls::createLowerDataflowPass());
@@ -210,12 +241,18 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createLowerCopyToAffinePass());
         pm.addPass(mlir::createCanonicalizerPass());
 
+        if (opts.debugPoint == 9)
+          return;
+
         // Affine loop unrolling.
         if (opts.loopUnrollFactor) {
           pm.addPass(scalehls::createAffineLoopUnrollJamPass(
               opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true));
           scalehls::addSimplifyAffineLoopPasses(pm);
         }
+
+        if (opts.debugPoint == 10)
+          return;
 
         // // Vectorization.
         // if (opts.vectorSize) {
@@ -229,10 +266,16 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createReduceInitialIntervalPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
+        if (opts.debugPoint == 11)
+          return;
+
         // Convert dataflow to func.
         pm.addPass(scalehls::createCreateTokenStreamPass());
         pm.addPass(scalehls::createConvertDataflowToFuncPass());
         pm.addPass(mlir::createCanonicalizerPass());
+
+        if (opts.debugPoint == 12)
+          return;
 
         // Directive-level optimization.
         pm.addPass(scalehls::createCreateAxiInterfacePass(opts.hlsTopFunc));
