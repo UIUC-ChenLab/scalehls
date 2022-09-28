@@ -276,7 +276,6 @@ std::pair<bool, bool> scalehls::ifAlwaysTrueOrFalse(mlir::AffineIfOp ifOp) {
 
   // Construct the constraints of the if statement. For now, we only add the
   // loop induction constraints and integer set constraint.
-  // TODO: handle unsuccessufl domain addition.
   FlatAffineValueConstraints constrs;
   constrs.addAffineIfOpDomain(ifOp);
   for (auto operand : operands)

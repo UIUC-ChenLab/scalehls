@@ -701,13 +701,44 @@ struct AlwaysTrueOrFalseSelect : public OpRewritePattern<AffineSelectOp> {
 
   LogicalResult matchAndRewrite(AffineSelectOp op,
                                 PatternRewriter &rewriter) const override {
-    auto isTriviallyTrue = [](IntegerSet iSet) {
-      return (iSet.getNumEqualities() == 1 && iSet.getNumInequalities() == 0 &&
-              iSet.getConstraint(0) == 0);
-    };
-    if (op.getIntegerSet().isEmptyIntegerSet())
+    auto set = op.getIntegerSet();
+    bool alwaysTrue = false;
+    bool alwaysFalse = false;
+
+    if (set.isEmptyIntegerSet())
+      alwaysFalse = true;
+
+    else if (set.getNumInputs() == 0) {
+      SmallVector<bool, 4> flagList;
+      for (auto expr : llvm::enumerate(set.getConstraints())) {
+        auto constValue = expr.value().cast<AffineConstantExpr>().getValue();
+        flagList.push_back(set.isEq(expr.index()) ? constValue == 0
+                                                  : constValue >= 0);
+      }
+      alwaysTrue = llvm::all_of(flagList, [](bool flag) { return flag; });
+      alwaysFalse = !alwaysTrue;
+
+    } else {
+      // Create the base constraints from the integer set attached to SelectOp.
+      FlatAffineValueConstraints constrs(set);
+
+      // Bind vars in the constraints to SelectOp args.
+      auto args = SmallVector<Value, 4>(op.getArgs());
+      constrs.setValues(0, constrs.getNumDimAndSymbolVars(), args);
+
+      // Add induction variable constraints.
+      for (auto arg : args)
+        if (isForInductionVar(arg))
+          (void)constrs.addAffineForOpDomain(getForInductionVarOwner(arg));
+
+      // Always false if there's no known solution for the constraints.
+      alwaysFalse = constrs.isEmpty();
+    }
+
+    // Replace uses if always-false or true is proved.
+    if (alwaysFalse)
       rewriter.replaceOp(op, op.getFalseValue());
-    else if (isTriviallyTrue(op.getIntegerSet()))
+    else if (alwaysTrue)
       rewriter.replaceOp(op, op.getTrueValue());
     else
       return failure();
