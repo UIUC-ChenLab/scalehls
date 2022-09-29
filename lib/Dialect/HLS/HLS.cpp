@@ -583,12 +583,12 @@ LogicalResult StreamReadOp::verify() {
   return success();
 }
 
-void StreamReadOp::getEffects(
-    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
-        &effects) {
-  effects.emplace_back(MemoryEffects::Read::get(), getChannel(),
-                       SideEffects::DefaultResource::get());
-}
+// void StreamReadOp::getEffects(
+//     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+//         &effects) {
+//   effects.emplace_back(MemoryEffects::Read::get(), getChannel(),
+//                        SideEffects::DefaultResource::get());
+// }
 
 LogicalResult StreamWriteOp::verify() {
   if (getChannel().getType().cast<StreamType>().getElementType() !=
@@ -597,12 +597,12 @@ LogicalResult StreamWriteOp::verify() {
   return success();
 }
 
-void StreamWriteOp::getEffects(
-    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
-        &effects) {
-  effects.emplace_back(MemoryEffects::Write::get(), getChannel(),
-                       SideEffects::DefaultResource::get());
-}
+// void StreamWriteOp::getEffects(
+//     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+//         &effects) {
+//   effects.emplace_back(MemoryEffects::Write::get(), getChannel(),
+//                        SideEffects::DefaultResource::get());
+// }
 
 //===----------------------------------------------------------------------===//
 // AxiBundleOp, AxiPortOp, and AxiPackOp

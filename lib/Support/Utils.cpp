@@ -233,7 +233,8 @@ bool scalehls::isRead(OpOperand &use) {
   else if (auto view = dyn_cast<ViewLikeOpInterface>(use.getOwner()))
     return llvm::any_of(view->getUses(),
                         [](OpOperand &viewUse) { return isRead(viewUse); });
-  return hasEffect<MemoryEffects::Read>(use.getOwner(), use.get());
+  return hasEffect<MemoryEffects::Read>(use.getOwner(), use.get()) ||
+         isa<StreamReadOp>(use.getOwner());
 }
 bool scalehls::isWritten(OpOperand &use) {
   // For ScheduleOp, we don't rely on memory effect interface. Instead, we delve
@@ -248,7 +249,8 @@ bool scalehls::isWritten(OpOperand &use) {
   else if (auto view = dyn_cast<ViewLikeOpInterface>(use.getOwner()))
     return llvm::any_of(view->getUses(),
                         [](OpOperand &viewUse) { return isWritten(viewUse); });
-  return hasEffect<MemoryEffects::Write>(use.getOwner(), use.get());
+  return hasEffect<MemoryEffects::Write>(use.getOwner(), use.get()) ||
+         isa<StreamWriteOp>(use.getOwner());
 }
 
 //===----------------------------------------------------------------------===//

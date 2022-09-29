@@ -93,7 +93,8 @@ struct SimplifyBufferCopy : public OpRewritePattern<memref::CopyOp> {
     // A helper to check whether any user has write effect.
     auto hasWriteUsers = [](SmallVector<Operation *> users) {
       return llvm::any_of(users, [](Operation *user) {
-        return hasEffect<MemoryEffects::Write>(user);
+        return hasEffect<MemoryEffects::Write>(user) ||
+               isa<StreamWriteOp>(user);
       });
     };
 

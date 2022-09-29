@@ -13,7 +13,6 @@
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Interfaces/ControlFlowInterfaces.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
-
 #include "scalehls/Dialect/HLS/HLSDialect.h.inc"
 #include "scalehls/Dialect/HLS/HLSEnums.h.inc"
 
@@ -46,6 +45,12 @@ enum class MemoryKind {
 };
 enum class PartitionKind { CYCLIC, BLOCK, NONE };
 enum class OperandKind { INPUT, OUTPUT, PARAM };
+
+namespace StreamEffects {
+struct Instantiate : public MemoryEffects::Effect::Base<Instantiate> {};
+struct Push : public MemoryEffects::Effect::Base<Push> {};
+struct Pop : public MemoryEffects::Effect::Base<Pop> {};
+} // namespace StreamEffects
 
 /// Timing attribute utils.
 TimingAttr getTiming(Operation *op);

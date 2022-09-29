@@ -282,8 +282,7 @@ def StreamOp : HLSOp<"dataflow.stream", [
   ];
 }
 
-def StreamReadOp : HLSOp<"dataflow.stream_read", [
-      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+def StreamReadOp : HLSOp<"dataflow.stream_read", []> {
   let summary = "Read a stream channel";
   let description = [{
     Read/pop a value from a stream channel. The absence of the result indicates
@@ -299,8 +298,7 @@ def StreamReadOp : HLSOp<"dataflow.stream_read", [
   let hasVerifier = 1;
 }
 
-def StreamWriteOp : HLSOp<"dataflow.stream_write", [
-      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+def StreamWriteOp : HLSOp<"dataflow.stream_write", []> {
   let summary = "Write a stream channel";
   let description = [{
     Write/push a value to a stream channel. Each stream channel can only be
