@@ -28,23 +28,25 @@ namespace hls {
 
 #include "scalehls/Dialect/HLS/HLSInterfaces.h.inc"
 
+enum class PartitionKind { CYCLIC, BLOCK, NONE };
+enum class OperandKind { INPUT, OUTPUT, PARAM };
 enum class MemoryKind {
   LUTRAM_1P,
-  LUTRAM_2P,
   LUTRAM_S2P,
   LUTRAM_T2P,
   BRAM_1P,
-  BRAM_2P,
   BRAM_S2P,
   BRAM_T2P,
   URAM_1P,
-  URAM_2P,
   URAM_S2P,
   URAM_T2P,
   DRAM
 };
-enum class PartitionKind { CYCLIC, BLOCK, NONE };
-enum class OperandKind { INPUT, OUTPUT, PARAM };
+
+bool isRam1P(MemoryKind kind);
+bool isRamS2P(MemoryKind kind);
+bool isRamT2P(MemoryKind kind);
+bool isDram(MemoryKind kind);
 
 namespace StreamEffects {
 struct Instantiate : public MemoryEffects::Effect::Base<Instantiate> {};

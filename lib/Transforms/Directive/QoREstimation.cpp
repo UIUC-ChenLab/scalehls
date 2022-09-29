@@ -123,13 +123,13 @@ void ScaleHLSEstimator::estimateLoadStoreTiming(Operation *op, int64_t begin) {
       for (unsigned p = 0; p < partitionNum; ++p) {
         MemPortInfo info;
 
-        if (storageType == MemoryKind::BRAM_1P)
+        if (isRam1P(storageType))
           info.rdwrPort = 1;
-        else if (storageType == MemoryKind::BRAM_T2P)
+        else if (isRamT2P(storageType))
           info.rdwrPort = 2;
-        else if (storageType == MemoryKind::BRAM_S2P)
+        else if (isRamS2P(storageType))
           info.rdPort = 1, info.wrPort = 1;
-        else if (storageType == MemoryKind::DRAM)
+        else if (isDram(storageType))
           info.rdPort = UINT_MAX, info.wrPort = UINT_MAX;
         else
           llvm_unreachable("unknown memory kind");
@@ -238,7 +238,7 @@ int64_t ScaleHLSEstimator::getResMinII(int64_t begin, int64_t end,
     auto storageType = MemoryKind(memrefType.getMemorySpaceAsInt());
 
     // FIXME: Study how Vivado HLS handle AXI interfaces.
-    if (storageType == MemoryKind::DRAM)
+    if (isDram(storageType))
       continue;
 
     auto accessNum = SmallVector<int64_t, 16>(partitionNum, 0);
@@ -253,9 +253,9 @@ int64_t ScaleHLSEstimator::getResMinII(int64_t begin, int64_t end,
 
           for (int64_t idx = 0; idx < partitionNum; ++idx) {
             auto &info = memPortInfos[idx];
-            if (storageType == MemoryKind::BRAM_1P && info.rdwrPort < 1)
+            if (isRam1P(storageType) && info.rdwrPort < 1)
               ++accessNum[idx];
-            else if (storageType == MemoryKind::BRAM_T2P && info.rdwrPort < 2)
+            else if (isRamT2P(storageType) && info.rdwrPort < 2)
               ++accessNum[idx];
             else if (info.rdPort < 1)
               ++accessNum[idx];
@@ -824,16 +824,14 @@ ResourceAttr ScaleHLSEstimator::calculateResource(Operation *funcOrLoop) {
       if (auto resource = getResource(op))
         dspNum += resource.getDsp();
 
-    } else if (isa<memref::AllocaOp, memref::AllocOp>(op)) {
+    } else if (isa<BufferOp>(op)) {
       auto memrefType = op->getResult(0).getType().cast<MemRefType>();
       if (memrefType.getNumElements() > 1) {
         auto partitionNum = getPartitionFactors(memrefType);
         auto storageType = MemoryKind(memrefType.getMemorySpaceAsInt());
 
         // TODO: Support URAM and interface BRAMs?
-        if (storageType == MemoryKind::BRAM_1P ||
-            storageType == MemoryKind::BRAM_S2P ||
-            storageType == MemoryKind::BRAM_T2P) {
+        if (!isDram(storageType)) {
           // Multiply bit width of type.
           // TODO: handle index types.
           int64_t memrefSize = memrefType.getElementTypeBitWidth() *
