@@ -56,6 +56,6 @@ class MobileNet(nn.Module):
 
 
 module = torch_mlir.compile(MobileNet(), torch.ones(
-    1, 3, 32, 32), output_type=torch_mlir.OutputType.TOSA)
+    1, 3, 32, 32), output_type=torch_mlir.OutputType.LINALG_ON_TENSORS)
 
 print(module)

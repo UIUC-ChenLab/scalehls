@@ -72,6 +72,6 @@ def ResNet18():
 
 
 module = torch_mlir.compile(ResNet18(), torch.ones(
-    1, 3, 32, 32), output_type=torch_mlir.OutputType.TOSA)
+    1, 3, 32, 32), output_type=torch_mlir.OutputType.LINALG_ON_TENSORS)
 
 print(module)

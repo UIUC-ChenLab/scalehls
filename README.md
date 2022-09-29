@@ -71,19 +71,16 @@ $ pyscalehls.py test_gemm.c -f test_gemm > test_gemm_pyscalehls.cpp
 ```
 
 ## Compiling PyTorch Model
-If you have installed [Torch-MLIR](https://github.com/llvm/torch-mlir) with SHA [ea371a9](https://github.com/llvm/torch-mlir/tree/ea371a9bf2860cf5f0741b28b0bf68e9a9c3d08b), you should be able to run the following test:
+If you have installed [Torch-MLIR](https://github.com/llvm/torch-mlir) with SHA [4ef6e69](https://github.com/llvm/torch-mlir/tree/4ef6e69ed49f309aa70ea40f12bf7488cd8e3434), you should be able to run the following test:
 ```sh
 $ cd samples/pytorch/resnet18
 
-$ # Parse PyTorch model to TOSA dialect (with Torch-MLIR mlir_venv activated).
-$ # This may take several minutes to compile due to the large amount of weights.
-$ python3 export_resnet18_mlir.py | torch-mlir-opt \
-    -torchscript-module-to-torch-backend-pipeline="optimize=true" \
-    -torch-backend-to-tosa-backend-pipeline="optimize=true" > resnet18.mlir
+$ # Parse PyTorch model to LinAlg dialect (with Torch-MLIR mlir_venv activated).
+$ python3 resnet18_torchvision.py > resnet18.mlir
 
 $ # Optimize the model and emit C++ code.
 $ scalehls-opt resnet18.mlir \
-    -scalehls-pytorch-pipeline-v2="top-func=forward loop-tile-size=4 loop-unroll-factor=2" \
+    -scalehls-pytorch-pipeline-v2="top-func=forward loop-tile-size=8 loop-unroll-factor=4" \
     | scalehls-translate -emit-hlscpp > resnet18.cpp
 ```
 
