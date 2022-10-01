@@ -102,6 +102,87 @@ struct BackwardFuseOp : public OpRewritePattern<OpType> {
 } // namespace
 
 namespace {
+/// Forward fuse generic tensor copies.
+struct ForwardFuseGenericOp : public OpRewritePattern<linalg::GenericOp> {
+  using OpRewritePattern<linalg::GenericOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(linalg::GenericOp op,
+                                PatternRewriter &rewriter) const override {
+    bool matched = false;
+    if (op.getNumInputs() == 1 && op.getNumOutputs() == 1) {
+      auto body = op.getBody();
+      if (body->getArgument(0) == body->getTerminator()->getOperand(0) &&
+          llvm::hasSingleElement(body->getOperations()))
+        matched = true;
+    }
+
+    if (matched) {
+      auto pattern = ForwardFuseOp<linalg::GenericOp>(getContext());
+      return pattern.matchAndRewrite(op, rewriter);
+    }
+    return failure();
+  }
+};
+} // namespace
+
+bool isElementwiseGenericOp(linalg::GenericOp op) {
+  // All loops must be parallel loop.
+  if (op.getNumParallelLoops() != op.getNumLoops())
+    return false;
+
+  for (auto valueMap : llvm::zip(op.getOperands(), op.getIndexingMapsArray())) {
+    auto type = std::get<0>(valueMap).getType().cast<ShapedType>();
+    auto map = std::get<1>(valueMap);
+
+    // If the operand doens't have static shape, the index map must be identity.
+    if (!type.hasStaticShape()) {
+      if (!map.isIdentity())
+        return false;
+      continue;
+    }
+
+    // Otherwise, each dimension must either have a size of one or have identity
+    // access index.
+    unsigned index = map.getNumDims() - type.getRank();
+    for (auto shapeExpr : llvm::zip(type.getShape(), map.getResults())) {
+      auto dimSize = std::get<0>(shapeExpr);
+      auto expr = std::get<1>(shapeExpr);
+      if (expr != getAffineDimExpr(index++, expr.getContext()) && dimSize != 1)
+        return false;
+    }
+  }
+  return true;
+}
+
+namespace {
+/// Backward fuse generic tensor elementwise ops.
+struct BackwardFuseGenericOp : public OpRewritePattern<linalg::GenericOp> {
+  using OpRewritePattern<linalg::GenericOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(linalg::GenericOp op,
+                                PatternRewriter &rewriter) const override {
+    if (isElementwiseGenericOp(op)) {
+      auto pattern = BackwardFuseOp<linalg::GenericOp>(getContext());
+      return pattern.matchAndRewrite(op, rewriter);
+    }
+    return failure();
+  }
+};
+} // namespace
+
+static void
+populateForwardBackwardFusePatterns(mlir::RewritePatternSet &patterns) {
+  auto context = patterns.getContext();
+  patterns.add<BackwardFuseGenericOp>(context);
+  patterns.add<ForwardFuseGenericOp>(context);
+  patterns.add<ForwardFuseOp<linalg::FillOp>>(context);
+  patterns.add<ForwardFuseOp<linalg::InitTensorOp>>(context);
+  patterns.add<ForwardFuseOp<tensor::PadOp>>(context);
+  patterns.add<ForwardFuseOp<tensor::CollapseShapeOp>>(context);
+  patterns.add<ForwardFuseOp<tensor::ExpandShapeOp>>(context);
+}
+
+namespace {
 struct CreateDataflowFromLinalg
     : public CreateDataflowFromLinalgBase<CreateDataflowFromLinalg> {
   void runOnOperation() override {
@@ -113,13 +194,12 @@ struct CreateDataflowFromLinalg
     mlir::RewritePatternSet patterns(context);
     patterns.add<OutlineRootInterface<linalg::ConvolutionOpInterface>>(context);
     patterns.add<OutlineRootInterface<linalg::ContractionOpInterface>>(context);
-    patterns.add<OutlineRootOp<linalg::GenericOp>>(context);
+    populateForwardBackwardFusePatterns(patterns);
+    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
-    patterns.add<ForwardFuseOp<linalg::FillOp>>(context);
-    patterns.add<ForwardFuseOp<linalg::InitTensorOp>>(context);
-    patterns.add<ForwardFuseOp<tensor::PadOp>>(context);
-    patterns.add<ForwardFuseOp<tensor::CollapseShapeOp>>(context);
-    patterns.add<ForwardFuseOp<tensor::ExpandShapeOp>>(context);
+    patterns.clear();
+    patterns.add<OutlineRootOp<linalg::GenericOp>>(context);
+    populateForwardBackwardFusePatterns(patterns);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
