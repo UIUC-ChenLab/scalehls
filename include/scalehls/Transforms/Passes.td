@@ -93,6 +93,27 @@ def CreateTokenStream : Pass<"scalehls-create-token-stream", "func::FuncOp"> {
   let constructor = "mlir::scalehls::createCreateTokenStreamPass()";
 }
 
+def DataflowAwareLoopUnrollJam :
+      Pass<"scalehls-dataflow-aware-loop-unroll-jam", "func::FuncOp"> {
+  let summary = "Unroll affine loop nests based on the dataflow structure";
+  let description = [{
+    This pass calculates the overall loop unroll factor of each dataflow node
+    based on the amount of associated computations. Then, unroll and jam from
+    the outermost loop until the overall unroll factor reaches the caculated
+    factor. Optionally, optimize the loop order after the unrolling.
+  }];
+  let constructor = "mlir::scalehls::createDataflowAwareLoopUnrollJamPass()";
+
+  let options = [
+    Option<"maxUnrollFactor", "max-unroll-factor", "unsigned", /*default=*/"1",
+           "Positive number: the maximum factor of unrolling">,
+    Option<"pointLoopOnly", "point-loop-only", "bool", /*default=*/"false",
+           "Only apply unroll and jam to point loop band">,
+    Option<"loopOrderOpt", "loop-order-opt", "bool", /*default=*/"false",
+           "Whether loop order optimization after unrolling">
+  ];
+}
+
 def EliminateMultiProducer :
       Pass<"scalehls-eliminate-multi-producer", "func::FuncOp"> {
   let summary = "Try to eliminate multi-producer violations";

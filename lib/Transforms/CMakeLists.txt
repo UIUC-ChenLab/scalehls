@@ -6,6 +6,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Dataflow/CreateDataflowFromLinalg.cpp
   Dataflow/CreateDataflowFromTosa.cpp
   Dataflow/CreateTokenStream.cpp
+  Dataflow/DataflowAwareLoopUnrollJam.cpp
   Dataflow/EliminateMultiProducer.cpp
   Dataflow/LegalizeDataflowSchedule.cpp
   Dataflow/LowerDataflow.cpp

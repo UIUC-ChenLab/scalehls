@@ -49,6 +49,9 @@ std::unique_ptr<Pass> createCreateDataflowFromTosaPass();
 std::unique_ptr<Pass> createCreateDataflowFromLinalgPass();
 std::unique_ptr<Pass> createCreateDataflowFromAffinePass();
 std::unique_ptr<Pass> createCreateTokenStreamPass();
+std::unique_ptr<Pass>
+createDataflowAwareLoopUnrollJamPass(unsigned loopUnrollFactor = 1,
+                                     bool unrollPointLoopOnly = false);
 std::unique_ptr<Pass> createEliminateMultiProducerPass();
 std::unique_ptr<Pass> createLegalizeDataflowSchedulePass();
 std::unique_ptr<Pass> createLowerDataflowPass();
