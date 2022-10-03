@@ -30,6 +30,43 @@ bool scalehls::applyFullyLoopUnrolling(Block &block, unsigned maxIterNum) {
   return true;
 }
 
+/// Apply loop unroll and jam to the loop band with the given unroll factor.
+bool scalehls::applyLoopUnrollJam(AffineLoopBand &band, unsigned unrollFactor,
+                                  bool loopOrderOpt) {
+  if (unrollFactor == 1)
+    return true;
+  TileList sizes;
+  unsigned remainTileSize = unrollFactor;
+
+  // Calculate the tiling size of each loop level.
+  for (auto it = band.rbegin(), e = band.rend(); it != e; ++it) {
+    if (auto optionalTripCount = getConstantTripCount(*it)) {
+      auto tripCount = optionalTripCount.value();
+      auto size = tripCount;
+
+      if (remainTileSize >= tripCount)
+        remainTileSize = (remainTileSize + tripCount - 1) / tripCount;
+      else if (remainTileSize > 1) {
+        size = 1;
+        while (size < remainTileSize || tripCount % size != 0)
+          ++size;
+        remainTileSize = 1;
+      } else
+        size = 1;
+
+      sizes.push_back(size);
+    } else
+      sizes.push_back(1);
+  }
+  std::reverse(sizes.begin(), sizes.end());
+
+  // Apply loop tiling and then unroll all point loops
+  applyLoopTiling(band, sizes, /*loopNormalize=*/false);
+  if (loopOrderOpt)
+    applyAffineLoopOrderOpt(band);
+  return applyFullyLoopUnrolling(*band.back().getBody());
+}
+
 namespace {
 struct AffineLoopUnrollJam
     : public AffineLoopUnrollJamBase<AffineLoopUnrollJam> {
@@ -53,37 +90,8 @@ struct AffineLoopUnrollJam
           continue;
         band = pointBand;
       }
-
-      TileList sizes;
-      unsigned remainTileSize = unrollFactor;
-
-      // Calculate the tiling size of each loop level.
-      for (auto it = band.rbegin(), e = band.rend(); it != e; ++it) {
-        if (auto optionalTripCount = getConstantTripCount(*it)) {
-          auto tripCount = optionalTripCount.value();
-          auto size = tripCount;
-
-          if (remainTileSize >= tripCount)
-            remainTileSize = (remainTileSize + tripCount - 1) / tripCount;
-          else if (remainTileSize > 1) {
-            size = 1;
-            while (size < remainTileSize || tripCount % size != 0)
-              ++size;
-            remainTileSize = 1;
-          } else
-            size = 1;
-
-          sizes.push_back(size);
-        } else
-          sizes.push_back(1);
-      }
-      std::reverse(sizes.begin(), sizes.end());
-
-      // Apply loop tiling and then unroll all point loops
-      applyLoopTiling(band, sizes, /*loopNormalize=*/false);
-      if (loopOrderOpt.getValue())
-        applyAffineLoopOrderOpt(band);
-      applyFullyLoopUnrolling(*band.back().getBody());
+      applyLoopUnrollJam(band, unrollFactor.getValue(),
+                         loopOrderOpt.getValue());
     }
   }
 };

@@ -39,13 +39,12 @@ bool applyLoopTiling(AffineLoopBand &band, TileList tileList,
 bool applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
                          unsigned targetII);
 
+/// Apply loop unroll and jam to the loop band with the given unroll factor.
+bool applyLoopUnrollJam(AffineLoopBand &band, unsigned unrollFactor,
+                        bool loopOrderOpt = false);
+
 /// Fully unroll all loops insides of a loop block.
 bool applyFullyLoopUnrolling(Block &block, unsigned maxIterNum = 10);
-
-/// Apply dataflow (coarse-grained pipeline) to the block. "gran" determines the
-/// minimum granularity of dataflowing while "balance" indicates whether buffers
-/// are inserted to balance the dataflow pipeline.
-bool applyDataflow(Block &block, unsigned gran, bool balance);
 
 /// Apply the specified array partition factors and kinds.
 bool applyArrayPartition(Value array, ArrayRef<unsigned> factors,

@@ -22,53 +22,135 @@ struct DataflowAwareLoopUnrollJam
     pointLoopOnly = unrollPointLoopOnly;
   }
 
+  /// A helper to get the complexity of a schedule.
+  Optional<unsigned long> getScheduleComplexity(ScheduleOp schedule) const {
+    unsigned long scheduleComplexity = 0;
+    for (auto node : schedule.getOps<NodeOp>()) {
+      if (!nodeComplexityMap.count(node))
+        return Optional<unsigned long>();
+      scheduleComplexity =
+          std::max(scheduleComplexity, nodeComplexityMap.lookup(node));
+    }
+    return scheduleComplexity;
+  }
+
+  /// A helper to get the complexity of the given block
+  Optional<unsigned long> getBlockComplexity(Block *block) const {
+    unsigned long complexity = 0;
+    for (auto &op : block->getOperations()) {
+      assert(!isa<NodeOp>(op) && "must not be node op");
+
+      if (auto schedule = dyn_cast<ScheduleOp>(op)) {
+        auto scheduleComplexity = getScheduleComplexity(schedule);
+        if (!scheduleComplexity.has_value())
+          return Optional<unsigned long>();
+        complexity += scheduleComplexity.value();
+
+      } else if (auto loop = dyn_cast<mlir::AffineForOp>(op)) {
+        auto loopComplexity = getBlockComplexity(loop.getBody());
+        auto loopTripCount = getAverageTripCount(loop);
+        if (!loopComplexity.has_value() || !loopTripCount.has_value())
+          return Optional<unsigned long>();
+        complexity += loopTripCount.value() * loopComplexity.value();
+
+      } else if (auto ifOp = dyn_cast<mlir::AffineIfOp>(op)) {
+        auto thenComplexity = getBlockComplexity(ifOp.getThenBlock());
+        if (!thenComplexity.has_value())
+          return Optional<unsigned long>();
+        auto ifComplexity = thenComplexity.value();
+
+        if (ifOp.hasElse()) {
+          auto elseComplexity = getBlockComplexity(ifOp.getElseBlock());
+          if (!elseComplexity.has_value())
+            return Optional<unsigned long>();
+          ifComplexity = std::max(ifComplexity, elseComplexity.value());
+        }
+        complexity += ifComplexity;
+
+      } else if (!op.hasTrait<OpTrait::IsTerminator>())
+        complexity += 1;
+    }
+    return complexity;
+  }
+
   void runOnOperation() override {
-    AffineLoopBands targetBands;
-    getLoopBands(getOperation().front(), targetBands);
-    // getTileableBands(getOperation(), &targetBands);
+    auto func = getOperation();
 
-    for (auto &band : targetBands) {
-      if (pointLoopOnly) {
-        AffineLoopBand tileBand;
-        AffineLoopBand pointBand;
-        if (!getTileAndPointLoopBand(band, tileBand, pointBand) ||
-            pointBand.empty())
-          continue;
-        band = pointBand;
+    // Try to calculate the computational complexity of each node.
+    auto result = func.walk([&](NodeOp node) {
+      auto nodeComplexity = getBlockComplexity(&node.getBody().front());
+      if (!nodeComplexity.has_value()) {
+        node.emitOpError("failed to calculate node complexity");
+        return WalkResult::interrupt();
+      }
+      nodeComplexityMap.insert({node, nodeComplexity.value()});
+      return WalkResult::advance();
+    });
+
+    // Try to calculate the unroll factors of the nodes contained in each
+    // dataflow schedule.
+    result = func.walk<WalkOrder::PreOrder>([&](ScheduleOp schedule) {
+      unsigned long scheduleUnrollFactor = maxUnrollFactor.getValue();
+      if (auto parentNode = schedule->getParentOfType<NodeOp>()) {
+        if (!nodeUnrollFactorMap.count(parentNode)) {
+          parentNode.emitOpError("failed to get parent node's unroll factor");
+          return WalkResult::interrupt();
+        }
+        scheduleUnrollFactor = nodeUnrollFactorMap.lookup(parentNode);
       }
 
-      TileList sizes;
-      unsigned remainTileSize = maxUnrollFactor;
-
-      // Calculate the tiling size of each loop level.
-      for (auto it = band.rbegin(), e = band.rend(); it != e; ++it) {
-        if (auto optionalTripCount = getConstantTripCount(*it)) {
-          auto tripCount = optionalTripCount.value();
-          auto size = tripCount;
-
-          if (remainTileSize >= tripCount)
-            remainTileSize = (remainTileSize + tripCount - 1) / tripCount;
-          else if (remainTileSize > 1) {
-            size = 1;
-            while (size < remainTileSize || tripCount % size != 0)
-              ++size;
-            remainTileSize = 1;
-          } else
-            size = 1;
-
-          sizes.push_back(size);
-        } else
-          sizes.push_back(1);
+      auto scheduleComplexity = getScheduleComplexity(schedule);
+      if (!scheduleComplexity.has_value()) {
+        schedule.emitOpError("failed to get schedule complexity");
+        return WalkResult::interrupt();
       }
-      std::reverse(sizes.begin(), sizes.end());
 
-      // Apply loop tiling and then unroll all point loops
-      applyLoopTiling(band, sizes, /*loopNormalize=*/false);
-      if (loopOrderOpt.getValue())
-        applyAffineLoopOrderOpt(band);
-      applyFullyLoopUnrolling(*band.back().getBody());
+      for (auto node : schedule.getOps<NodeOp>()) {
+        if (!nodeComplexityMap.count(node)) {
+          node.emitOpError("failed to get node complexity");
+          return WalkResult::interrupt();
+        }
+        auto nodeUnrollFactor = 1 + scheduleUnrollFactor *
+                                        nodeComplexityMap.lookup(node) /
+                                        scheduleComplexity.value();
+        nodeUnrollFactorMap.insert({node, nodeUnrollFactor});
+      }
+      return WalkResult::advance();
+    });
+
+    // Unroll each dataflow node based the calculated unroll factor.
+    for (auto p : nodeUnrollFactorMap) {
+      auto node = p.first;
+      AffineLoopBands bands;
+
+      // Collect all loop bands to be unrolled.
+      node.walk([&](AffineForOp loop) {
+        if (loop->getParentOfType<NodeOp>() == node &&
+            loop.getOps<mlir::AffineForOp>().empty() &&
+            loop.getOps<ScheduleOp>().empty()) {
+          AffineLoopBand band;
+          getLoopBandFromInnermost(loop, band);
+          bands.push_back(band);
+        }
+      });
+
+      for (auto &band : bands) {
+        if (pointLoopOnly) {
+          AffineLoopBand tileBand;
+          AffineLoopBand pointBand;
+          if (!getTileAndPointLoopBand(band, tileBand, pointBand) ||
+              pointBand.empty())
+            continue;
+          band = pointBand;
+        }
+        applyLoopUnrollJam(band, p.second, loopOrderOpt.getValue());
+      }
     }
   }
+
+private:
+  llvm::SmallDenseMap<NodeOp, unsigned long> nodeComplexityMap;
+  llvm::SmallDenseMap<NodeOp, unsigned long> nodeUnrollFactorMap;
 };
 } // namespace
 
