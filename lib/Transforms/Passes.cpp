@@ -107,6 +107,13 @@ struct ScaleHLSPyTorchPipelineV2Options
       *this, "loop-unroll-factor", llvm::cl::init(0),
       llvm::cl::desc("The overall loop unrolling factor (set 0 to disable)")};
 
+  Option<bool> placeExternalBuffer{
+      *this, "place-external-buffer", llvm::cl::init(true),
+      llvm::cl::desc("Place buffers in external memories")};
+
+  Option<bool> axiInterface{*this, "axi-interface", llvm::cl::init(true),
+                            llvm::cl::desc("Create AXI interface")};
+
   // Option<unsigned> vectorSize{
   //     *this, "vector-size",
   //     llvm::cl::desc("The size of vectorization (set 0 to disable)")};
@@ -129,9 +136,6 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
       "scalehls-pytorch-pipeline-v2",
       "Compile TOSA (from Torch-MLIR) to HLS C++ version 2",
       [](OpPassManager &pm, const ScaleHLSPyTorchPipelineV2Options &opts) {
-        if (opts.loopTileSize < 2)
-          llvm_unreachable("loop tile size must be larger than 1");
-
         if (opts.tosaInput) {
           // TOSA fake quantization.
           if (opts.fakeQuantize)
@@ -191,7 +195,8 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
           return;
 
         // Optimize and place dataflow buffers.
-        pm.addPass(scalehls::createPlaceDataflowBufferPass());
+        pm.addPass(
+            scalehls::createPlaceDataflowBufferPass(opts.placeExternalBuffer));
         scalehls::addCreateSubviewPasses(pm, CreateSubviewMode::Reduction);
         pm.addPass(scalehls::createCreateLocalBufferPass(
             /*externalBufferOnly=*/false, /*registerOnly=*/true));
@@ -280,7 +285,8 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
           return;
 
         // Directive-level optimization.
-        pm.addPass(scalehls::createCreateAxiInterfacePass(opts.hlsTopFunc));
+        if (opts.axiInterface)
+          pm.addPass(scalehls::createCreateAxiInterfacePass(opts.hlsTopFunc));
         pm.addPass(scalehls::createLoopPipeliningPass());
         pm.addPass(scalehls::createArrayPartitionPass());
         pm.addPass(scalehls::createCreateHLSPrimitivePass());

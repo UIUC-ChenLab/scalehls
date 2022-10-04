@@ -13,26 +13,29 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
-// TODO: For now, we use a heuristic to determine the buffer location.
-static MemRefType getPlacedType(MemRefType type) {
-  auto kind =
-      type.getNumElements() < 1024 ? MemoryKind::BRAM_S2P : MemoryKind::DRAM;
-  auto newType =
-      MemRefType::get(type.getShape(), type.getElementType(),
-                      type.getLayout().getAffineMap(), (unsigned)kind);
-  return newType;
-}
-
-static MemRefType getPlacedOnDramType(MemRefType type) {
-  auto newType = MemRefType::get(type.getShape(), type.getElementType(),
-                                 type.getLayout().getAffineMap(),
-                                 (unsigned)MemoryKind::DRAM);
-  return newType;
-}
-
 namespace {
 struct PlaceBuffer : public OpRewritePattern<func::FuncOp> {
-  using OpRewritePattern<func::FuncOp>::OpRewritePattern;
+  PlaceBuffer(MLIRContext *context, bool placeExternalBuffer)
+      : OpRewritePattern<func::FuncOp>(context),
+        placeExternalBuffer(placeExternalBuffer) {}
+
+  // TODO: For now, we use a heuristic to determine the buffer location.
+  MemRefType getPlacedType(MemRefType type) const {
+    auto kind = placeExternalBuffer && type.getNumElements() >= 1024
+                    ? MemoryKind::DRAM
+                    : MemoryKind::BRAM_S2P;
+    auto newType =
+        MemRefType::get(type.getShape(), type.getElementType(),
+                        type.getLayout().getAffineMap(), (unsigned)kind);
+    return newType;
+  }
+
+  MemRefType getPlacedOnDramType(MemRefType type) const {
+    auto newType = MemRefType::get(type.getShape(), type.getElementType(),
+                                   type.getLayout().getAffineMap(),
+                                   (unsigned)MemoryKind::DRAM);
+    return newType;
+  }
 
   LogicalResult matchAndRewrite(func::FuncOp func,
                                 PatternRewriter &rewriter) const override {
@@ -40,7 +43,7 @@ struct PlaceBuffer : public OpRewritePattern<func::FuncOp> {
       if (auto type = arg.getType().dyn_cast<MemRefType>())
         arg.setType(getPlacedOnDramType(type));
 
-    func.walk([](hls::BufferLikeInterface buffer) {
+    func.walk([&](hls::BufferLikeInterface buffer) {
       buffer.getMemref().setType(getPlacedType(buffer.getMemrefType()));
     });
 
@@ -55,23 +58,32 @@ struct PlaceBuffer : public OpRewritePattern<func::FuncOp> {
                           func.front().getTerminator()->getOperandTypes()));
     return success();
   }
+
+private:
+  bool placeExternalBuffer;
 };
 } // namespace
 
 namespace {
 struct PlaceDataflowBuffer
     : public PlaceDataflowBufferBase<PlaceDataflowBuffer> {
+  PlaceDataflowBuffer() = default;
+  explicit PlaceDataflowBuffer(bool argPlaceExternalBuffer) {
+    placeExternalBuffer = argPlaceExternalBuffer;
+  }
+
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<PlaceBuffer>(context);
+    patterns.add<PlaceBuffer>(context, placeExternalBuffer);
     (void)applyOpPatternsAndFold(func, std::move(patterns));
   }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createPlaceDataflowBufferPass() {
-  return std::make_unique<PlaceDataflowBuffer>();
+std::unique_ptr<Pass>
+scalehls::createPlaceDataflowBufferPass(bool placeExternalBuffer) {
+  return std::make_unique<PlaceDataflowBuffer>(placeExternalBuffer);
 }

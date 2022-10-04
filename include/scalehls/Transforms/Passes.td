@@ -139,6 +139,11 @@ def PlaceDataflowBuffer :
       Pass<"scalehls-place-dataflow-buffer", "func::FuncOp"> {
   let summary = "Place dataflow buffers";
   let constructor = "mlir::scalehls::createPlaceDataflowBufferPass()";
+
+  let options = [
+    Option<"placeExternalBuffer", "place-external-buffer", "bool",
+           /*default=*/"true", "Place buffers in external buffers">
+  ];
 }
 
 def ScheduleDataflowNode :

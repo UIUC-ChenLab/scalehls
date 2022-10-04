@@ -22,6 +22,15 @@ bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList,
   if (!isPerfectlyNested(band))
     return false;
 
+  // If all tile sizes are one, we don't need to do anything but annotating all
+  // loops as point loop.
+  if (llvm::all_of(tileList, [](unsigned size) { return size == 1; })) {
+    for (auto loop : band)
+      if (annotatePointLoop)
+        setPointAttr(loop);
+    return true;
+  }
+
   // Record the original band size and attributes to make use of later.
   auto originalBandSize = band.size();
   SmallVector<std::pair<bool, bool>, 6> flags;

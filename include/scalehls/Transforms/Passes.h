@@ -55,7 +55,8 @@ createDataflowAwareLoopUnrollJamPass(unsigned loopUnrollFactor = 1,
 std::unique_ptr<Pass> createEliminateMultiProducerPass();
 std::unique_ptr<Pass> createLegalizeDataflowSchedulePass();
 std::unique_ptr<Pass> createLowerDataflowPass();
-std::unique_ptr<Pass> createPlaceDataflowBufferPass();
+std::unique_ptr<Pass>
+createPlaceDataflowBufferPass(bool placeExternalBuffer = true);
 std::unique_ptr<Pass> createScheduleDataflowNodePass();
 std::unique_ptr<Pass> createStreamDataflowTaskPass();
 
