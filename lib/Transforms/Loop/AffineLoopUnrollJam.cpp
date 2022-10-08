@@ -38,6 +38,9 @@ bool scalehls::applyLoopUnrollJam(AffineLoopBand &band, unsigned unrollFactor,
   TileList sizes;
   unsigned remainTileSize = unrollFactor;
 
+  if (loopOrderOpt)
+    applyAffineLoopOrderOpt(band);
+
   // Calculate the tiling size of each loop level.
   for (auto it = band.rbegin(), e = band.rend(); it != e; ++it) {
     if (auto optionalTripCount = getConstantTripCount(*it)) {
@@ -60,10 +63,8 @@ bool scalehls::applyLoopUnrollJam(AffineLoopBand &band, unsigned unrollFactor,
   }
   std::reverse(sizes.begin(), sizes.end());
 
-  // Apply loop tiling and then unroll all point loops
+  // Apply loop tiling and then unroll all point loops.
   applyLoopTiling(band, sizes, /*loopNormalize=*/false);
-  if (loopOrderOpt)
-    applyAffineLoopOrderOpt(band);
   return applyFullyLoopUnrolling(*band.back().getBody());
 }
 
@@ -71,9 +72,11 @@ namespace {
 struct AffineLoopUnrollJam
     : public AffineLoopUnrollJamBase<AffineLoopUnrollJam> {
   AffineLoopUnrollJam() = default;
-  AffineLoopUnrollJam(unsigned loopUnrollFactor, bool unrollPointLoopOnly) {
+  AffineLoopUnrollJam(unsigned loopUnrollFactor, bool unrollPointLoopOnly,
+                      bool argLoopOrderOpt) {
     unrollFactor = loopUnrollFactor;
     pointLoopOnly = unrollPointLoopOnly;
+    loopOrderOpt = argLoopOrderOpt;
   }
 
   void runOnOperation() override {
@@ -97,9 +100,8 @@ struct AffineLoopUnrollJam
 };
 } // namespace
 
-std::unique_ptr<Pass>
-scalehls::createAffineLoopUnrollJamPass(unsigned loopUnrollFactor,
-                                        bool unrollPointLoopOnly) {
-  return std::make_unique<AffineLoopUnrollJam>(loopUnrollFactor,
-                                               unrollPointLoopOnly);
+std::unique_ptr<Pass> scalehls::createAffineLoopUnrollJamPass(
+    unsigned loopUnrollFactor, bool unrollPointLoopOnly, bool loopOrderOpt) {
+  return std::make_unique<AffineLoopUnrollJam>(
+      loopUnrollFactor, unrollPointLoopOnly, loopOrderOpt);
 }

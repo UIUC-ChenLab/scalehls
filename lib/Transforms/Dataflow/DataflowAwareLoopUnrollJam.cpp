@@ -17,9 +17,10 @@ struct DataflowAwareLoopUnrollJam
     : public DataflowAwareLoopUnrollJamBase<DataflowAwareLoopUnrollJam> {
   DataflowAwareLoopUnrollJam() = default;
   DataflowAwareLoopUnrollJam(unsigned loopUnrollFactor,
-                             bool unrollPointLoopOnly) {
+                             bool unrollPointLoopOnly, bool argLoopOrderOpt) {
     maxUnrollFactor = loopUnrollFactor;
     pointLoopOnly = unrollPointLoopOnly;
+    loopOrderOpt = argLoopOrderOpt;
   }
 
   /// A helper to get the complexity of a schedule.
@@ -154,9 +155,8 @@ private:
 };
 } // namespace
 
-std::unique_ptr<Pass>
-scalehls::createDataflowAwareLoopUnrollJamPass(unsigned loopUnrollFactor,
-                                               bool unrollPointLoopOnly) {
-  return std::make_unique<DataflowAwareLoopUnrollJam>(loopUnrollFactor,
-                                                      unrollPointLoopOnly);
+std::unique_ptr<Pass> scalehls::createDataflowAwareLoopUnrollJamPass(
+    unsigned loopUnrollFactor, bool unrollPointLoopOnly, bool loopOrderOpt) {
+  return std::make_unique<DataflowAwareLoopUnrollJam>(
+      loopUnrollFactor, unrollPointLoopOnly, loopOrderOpt);
 }
