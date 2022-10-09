@@ -292,6 +292,13 @@ void ScheduleOp::getEffects(
     }
 }
 
+/// FIXME: Check whether the schedule is dependence free.
+bool ScheduleOp::isDependenceFree() {
+  if (auto loop = dyn_cast<mlir::AffineForOp>((*this)->getParentOp()))
+    return hasParallelAttr(loop);
+  return false;
+}
+
 //===----------------------------------------------------------------------===//
 // NodeOp
 //===----------------------------------------------------------------------===//

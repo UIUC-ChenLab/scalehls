@@ -212,6 +212,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createFuncPreprocessPass(opts.hlsTopFunc));
         pm.addPass(bufferization::createBufferLoopHoistingPass());
         pm.addPass(scalehls::createAffineLoopPerfectionPass());
+        pm.addPass(scalehls::createAffineLoopOrderOptPass());
         pm.addPass(scalehls::createAffineLoopTilePass(opts.loopTileSize));
         scalehls::addSimplifyAffineLoopPasses(pm);
 

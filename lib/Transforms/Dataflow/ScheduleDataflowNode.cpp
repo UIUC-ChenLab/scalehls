@@ -23,6 +23,10 @@ struct ALAPScheduleNode : public OpRewritePattern<NodeOp> {
 
     unsigned level = 0;
     for (auto output : node.getOutputs()) {
+      if (output.isa<BlockArgument>() &&
+          node.getScheduleOp().isDependenceFree())
+        continue;
+
       // TODO: Consider to merge all producers into the same level.
       if (!getProducersExcept(output, node).empty())
         return failure();

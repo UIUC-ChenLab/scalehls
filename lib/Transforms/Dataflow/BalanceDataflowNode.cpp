@@ -22,6 +22,10 @@ struct BufferBypassPath : public OpRewritePattern<NodeOp> {
       return failure();
 
     for (auto output : node.getOutputs()) {
+      if (output.isa<BlockArgument>() &&
+          node.getScheduleOp().isDependenceFree())
+        continue;
+
       SmallVector<std::pair<unsigned, NodeOp>, 4> worklist;
       for (auto consumer : getConsumers(output)) {
         auto diff = node.getLevel().value() - consumer.getLevel().value();

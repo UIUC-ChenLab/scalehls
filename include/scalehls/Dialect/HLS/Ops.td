@@ -156,6 +156,11 @@ def ScheduleOp : HLSOp<"dataflow.schedule", [
     OpBuilder<(ins "mlir::ValueRange":$operands),
         "build($_builder, $_state, operands, false);">
   ];
+
+  let extraClassDeclaration = [{
+    /// FIXME: Check whether the schedule is dependence free.
+    bool isDependenceFree();
+  }];
 }
 
 def NodeOp : HLSOp<"dataflow.node", [
@@ -181,6 +186,8 @@ def NodeOp : HLSOp<"dataflow.node", [
     functional-type($inputs, $outputs) ( `[` type($params)^ `]` )? $body
   }];
 
+  let hasVerifier = 1;
+  let hasCanonicalizer = 1;
   let builders = [
     OpBuilder<(ins "mlir::ValueRange":$inputs, "mlir::ValueRange":$outputs,
         "mlir::ValueRange":$params, "ArrayRef<unsigned>":$inputTaps,
@@ -208,9 +215,6 @@ def NodeOp : HLSOp<"dataflow.node", [
     OpBuilder<(ins "mlir::ValueRange":$inputs, "mlir::ValueRange":$outputs),
         "build($_builder, $_state, inputs, outputs, ValueRange());">
   ];
-
-  let hasVerifier = 1;
-  let hasCanonicalizer = 1;
 
   let extraClassDeclaration = [{
     /// Get the parent schedule op.
