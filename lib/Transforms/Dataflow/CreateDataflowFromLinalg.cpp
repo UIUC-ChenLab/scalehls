@@ -125,35 +125,6 @@ struct ForwardFuseGenericOp : public OpRewritePattern<linalg::GenericOp> {
 };
 } // namespace
 
-bool isElementwiseGenericOp(linalg::GenericOp op) {
-  // All loops must be parallel loop.
-  if (op.getNumParallelLoops() != op.getNumLoops())
-    return false;
-
-  for (auto valueMap : llvm::zip(op.getOperands(), op.getIndexingMapsArray())) {
-    auto type = std::get<0>(valueMap).getType().cast<ShapedType>();
-    auto map = std::get<1>(valueMap);
-
-    // If the operand doens't have static shape, the index map must be identity.
-    if (!type.hasStaticShape()) {
-      if (!map.isIdentity())
-        return false;
-      continue;
-    }
-
-    // Otherwise, each dimension must either have a size of one or have identity
-    // access index.
-    unsigned index = map.getNumDims() - type.getRank();
-    for (auto shapeExpr : llvm::zip(type.getShape(), map.getResults())) {
-      auto dimSize = std::get<0>(shapeExpr);
-      auto expr = std::get<1>(shapeExpr);
-      if (expr != getAffineDimExpr(index++, expr.getContext()) && dimSize != 1)
-        return false;
-    }
-  }
-  return true;
-}
-
 namespace {
 /// Backward fuse generic tensor elementwise ops.
 struct BackwardFuseGenericOp : public OpRewritePattern<linalg::GenericOp> {

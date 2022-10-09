@@ -12,6 +12,7 @@
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "scalehls/Dialect/HLS/HLS.h"
 
 namespace mlir {
@@ -58,6 +59,12 @@ bool isRead(OpOperand &use);
 bool isWritten(OpOperand &use);
 
 void populateBufferConversionPatterns(RewritePatternSet &patterns);
+
+//===----------------------------------------------------------------------===//
+// Linalg analysis utils
+//===----------------------------------------------------------------------===//
+
+bool isElementwiseGenericOp(linalg::GenericOp op);
 
 //===----------------------------------------------------------------------===//
 // Memory and loop analysis utils

@@ -16,6 +16,28 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+namespace {
+struct SplitElementwiseGenericOp : public OpRewritePattern<linalg::GenericOp> {
+  using OpRewritePattern<linalg::GenericOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(linalg::GenericOp op,
+                                PatternRewriter &rewriter) const override {
+    if (isElementwiseGenericOp(op) && op.getNumInputs() == 1 &&
+        op.getNumOutputs() == 1) {
+      auto &input = op->getOpOperand(0);
+      auto &output = op->getOpOperand(1);
+      if (input.get() == output.get())
+        return failure();
+
+      rewriter.create<memref::CopyOp>(op.getLoc(), input.get(), output.get());
+      input.set(output.get());
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
 static void findBufferUsers(Value memref, SmallVector<Operation *> &users) {
   for (auto user : memref.getUsers()) {
     if (auto viewOp = dyn_cast<ViewLikeOpInterface>(user))
@@ -176,6 +198,7 @@ struct SimplifyCopy : public SimplifyCopyBase<SimplifyCopy> {
     auto context = func.getContext();
 
     mlir::RewritePatternSet patterns(context);
+    patterns.add<SplitElementwiseGenericOp>(context);
     patterns.add<SimplifyBufferCopy>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
