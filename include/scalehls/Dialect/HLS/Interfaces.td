@@ -30,4 +30,30 @@ def BufferLikeInterface : OpInterface<"BufferLikeInterface"> {
   ];
 }
 
+def StageLikeInterface : OpInterface<"StageLikeInterface"> {
+  let description = [{
+    This interface is used to represent dataflow stage.
+  }];
+
+  let methods = [    
+    InterfaceMethod<"Return body region of the stage",
+      "mlir::Region &", "getBody", (ins), "return $_op.getBody();">,
+    InterfaceMethod<"Check whether the stage has hierarchy",
+      "bool", "hasHierarchy", (ins), [{
+        return $_op.walk([&](StageLikeInterface stage) {
+          if (stage != $_op)
+            return WalkResult::interrupt();
+          return WalkResult::advance();
+        }).wasInterrupted();
+      }]>,
+    InterfaceMethod<"Return whether the value is a stage livein",
+                    "bool", "isLivein", (ins "mlir::Value":$value)>,
+    InterfaceMethod<"Return the liveins of the stage",
+                    "llvm::SmallVector<mlir::Value>", "getLiveins">,
+    InterfaceMethod<"Return the internal users of a stage livein",
+                    "llvm::SmallVector<mlir::Operation *>", "getLiveinUsers",
+                    (ins "mlir::Value":$livein)>,
+  ];
+}
+
 #endif // SCALEHLS_DIALECT_HLS_INTERFACES_TD

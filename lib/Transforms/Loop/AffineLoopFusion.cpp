@@ -205,7 +205,7 @@ public:
 
   // Initializes the dependence graph based on operations in 'f'.
   // Returns true on success, false otherwise.
-  bool init(TaskOp f);
+  bool init(hls::StageLikeInterface f);
 
   // Returns the graph node for 'id'.
   Node *getNode(unsigned id) {
@@ -592,10 +592,10 @@ public:
   }
   void dump() const { print(llvm::errs()); }
 
-  TaskOp getTask() { return task; }
+  hls::StageLikeInterface getStage() { return stage; }
 
 private:
-  TaskOp task;
+  hls::StageLikeInterface stage;
 };
 
 /// Returns true if node 'srcId' can be removed after fusing it with node
@@ -720,8 +720,8 @@ void gatherEscapingMemrefs(unsigned id, MemRefDependenceGraph *mdg,
     auto memref = cast<AffineWriteOpInterface>(storeOpInst).getMemRef();
     if (escapingMemRefs.count(memref))
       continue;
-    // Check if 'memref' escapes because it's a block argument.
-    if (!mdg->getTask().getBody().isAncestor(memref.getParentRegion())) {
+    // Check if 'memref' escapes the stage.
+    if (mdg->getStage().isLivein(memref)) {
       escapingMemRefs.insert(memref);
       continue;
     }
@@ -739,9 +739,9 @@ void gatherEscapingMemrefs(unsigned id, MemRefDependenceGraph *mdg,
 // Assigns each node in the graph a node id based on program order in 'f'.
 // TODO: Add support for taking a Block arg to construct the
 // dependence graph at a different depth.
-bool MemRefDependenceGraph::init(TaskOp f) {
+bool MemRefDependenceGraph::init(hls::StageLikeInterface f) {
   LLVM_DEBUG(llvm::dbgs() << "--- Initializing MDG ---\n");
-  task = f;
+  stage = f;
   DenseMap<Value, SetVector<unsigned>> memrefAccesses;
 
   DenseMap<Operation *, unsigned> forToNodeMap;
@@ -893,7 +893,7 @@ static Value createPrivateMemRef(AffineForOp forOp, Operation *srcStoreOpInst,
   // Create builder to insert alloc op just before 'forOp'.
   OpBuilder b(forInst);
   // Builder to create constants at the top level.
-  OpBuilder top(forInst->getParentOfType<TaskOp>().getBody());
+  OpBuilder top(forInst->getParentOfType<hls::StageLikeInterface>().getBody());
   // Create new memref type based on slice bounds.
   auto oldMemRef = cast<AffineWriteOpInterface>(srcStoreOpInst).getMemRef();
   auto oldMemRefType = oldMemRef.getType().cast<MemRefType>();
@@ -1862,14 +1862,9 @@ public:
     };
 
     // Search for siblings which load the same memref function argument.
-    auto fn = dstNode->op->getParentOfType<TaskOp>();
-    auto liveins = Liveness(fn).getLiveIn(&fn.getBody().front());
-    for (auto livein : liveins) {
-      auto users =
-          llvm::make_filter_range(livein.getUsers(), [&](Operation *user) {
-            return fn->isAncestor(user);
-          });
-      for (auto *user : users) {
+    auto fn = dstNode->op->getParentOfType<hls::StageLikeInterface>();
+    for (auto livein : fn.getLiveins()) {
+      for (auto *user : fn.getLiveinUsers(livein)) {
         if (auto loadOp = dyn_cast<AffineReadOpInterface>(user)) {
           // Gather loops surrounding 'use'.
           SmallVector<AffineForOp, 4> loops;
@@ -1989,11 +1984,15 @@ public:
 } // namespace
 
 void LoopFusion::runOnOperation() {
-  getOperation().walk([&](TaskOp task) {
+  getOperation().walk([&](hls::StageLikeInterface stage) {
+    if (stage.hasHierarchy())
+      return WalkResult::advance();
+
     MemRefDependenceGraph g;
-    if (!g.init(task))
-      return task.emitOpError("failed to apply loop fusion"),
-             signalPassFailure();
+    if (!g.init(stage)) {
+      stage.emitOpError("failed to apply loop fusion");
+      signalPassFailure();
+    }
 
     Optional<unsigned> fastMemorySpaceOpt;
     if (fastMemorySpace.hasValue())
@@ -2008,5 +2007,6 @@ void LoopFusion::runOnOperation() {
       fusion.runSiblingFusionOnly();
     else
       fusion.runGreedyFusion();
+    return WalkResult::advance();
   });
 }

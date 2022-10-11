@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Dialect/HLS/HLS.h"
+#include "mlir/Analysis/Liveness.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -156,6 +157,24 @@ DispatchOp TaskOp::getDispatchOp() {
 /// Get the terminator yield op.
 YieldOp TaskOp::getYieldOp() {
   return cast<YieldOp>(getBody().front().getTerminator());
+}
+
+bool TaskOp::isLivein(Value value) {
+  auto liveins = Liveness(*this).getLiveIn(&(*this).getBody().front());
+  return liveins.count(value);
+}
+
+SmallVector<Value> TaskOp::getLiveins() {
+  auto liveins = Liveness(*this).getLiveIn(&(*this).getBody().front());
+  return {liveins.begin(), liveins.end()};
+}
+
+SmallVector<Operation *> TaskOp::getLiveinUsers(Value livein) {
+  assert(isLivein(livein) && "invalid livein");
+  auto users = llvm::make_filter_range(livein.getUsers(), [&](Operation *user) {
+    return (*this)->isAncestor(user);
+  });
+  return {users.begin(), users.end()};
 }
 
 //===----------------------------------------------------------------------===//
@@ -441,10 +460,10 @@ unsigned NodeOp::getInputTap(unsigned idx) {
   return getInputTaps()[idx].cast<IntegerAttr>().getInt();
 }
 SmallVector<unsigned> NodeOp::getInputTapsAsInt() {
-  SmallVector<unsigned> array;
-  for (auto attr : getInputTaps())
-    array.push_back(attr.cast<IntegerAttr>().getInt());
-  return array;
+  auto array = llvm::map_range(getInputTaps(), [](Attribute attr) {
+    return attr.cast<IntegerAttr>().getInt();
+  });
+  return {array.begin(), array.end()};
 }
 
 /// Return the number of inputs, outputs, and params.
@@ -487,6 +506,22 @@ iterator_range<Block::args_iterator> NodeOp::getParamArgs() {
   auto range = getODSOperandIndexAndLength(2);
   return {std::next(getBody().args_begin(), range.first),
           std::next(getBody().args_begin(), range.first + range.second)};
+}
+
+bool NodeOp::isLivein(Value value) {
+  return value.isa<BlockArgument>() &&
+         value.getParentRegion() == &(*this).getBody();
+}
+
+SmallVector<Value> NodeOp::getLiveins() {
+  auto args = (*this).getBody().getArguments();
+  return {args.begin(), args.end()};
+}
+
+SmallVector<Operation *> NodeOp::getLiveinUsers(Value livein) {
+  assert(isLivein(livein) && "invalid livein");
+  auto users = livein.getUsers();
+  return {users.begin(), users.end()};
 }
 
 //===----------------------------------------------------------------------===//

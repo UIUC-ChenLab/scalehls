@@ -71,7 +71,8 @@ def DispatchOp : HLSOp<"dataflow.dispatch", [RecursiveSideEffects,
   }];
 }
 
-def TaskOp : HLSOp<"dataflow.task", [RecursiveSideEffects,
+def TaskOp : HLSOp<"dataflow.task", [
+      DeclareOpInterfaceMethods<StageLikeInterface>, RecursiveSideEffects,
       SingleBlockImplicitTerminator<"YieldOp">, HasParent<"DispatchOp">]> {
   let summary = "Represent a dataflow task";
   let description = [{
@@ -164,7 +165,8 @@ def ScheduleOp : HLSOp<"dataflow.schedule", [
 }
 
 def NodeOp : HLSOp<"dataflow.node", [
-      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>, IsolatedFromAbove,
+      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
+      DeclareOpInterfaceMethods<StageLikeInterface>, IsolatedFromAbove,
       AffineScope, SingleBlock, NoTerminator, AttrSizedOperandSegments,
       HasParent<"ScheduleOp">]> {
   let summary = "Represent a dataflow node";
