@@ -38,6 +38,7 @@ bool scalehls::applyLoopUnrollJam(AffineLoopBand &band, unsigned unrollFactor,
   TileList sizes;
   unsigned remainTileSize = unrollFactor;
 
+  // FIXME: Unknown issue causing failure in order opt.
   if (loopOrderOpt)
     applyAffineLoopOrderOpt(band);
 

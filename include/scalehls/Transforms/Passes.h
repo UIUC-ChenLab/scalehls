@@ -52,7 +52,7 @@ std::unique_ptr<Pass> createCreateTokenStreamPass();
 std::unique_ptr<Pass>
 createDataflowAwareLoopUnrollJamPass(unsigned loopUnrollFactor = 1,
                                      bool unrollPointLoopOnly = false,
-                                     bool loopOrderOpt = true);
+                                     bool loopOrderOpt = false);
 std::unique_ptr<Pass> createEliminateMultiProducerPass();
 std::unique_ptr<Pass> createLegalizeDataflowSchedulePass();
 std::unique_ptr<Pass> createLowerDataflowPass();
