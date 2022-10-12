@@ -21,6 +21,7 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/Transforms/Passes.h"
 #include "scalehls/Dialect/HLS/HLS.h"
+#include "scalehls/Support/Utils.h"
 #include "scalehls/Transforms/Passes.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
@@ -1532,7 +1533,9 @@ public:
             if (producerConsumerMemrefs.count(
                     cast<AffineWriteOpInterface>(op).getMemRef()))
               dstMemrefOps.push_back(op);
-          unsigned dstLoopDepthTest = getInnermostCommonLoopDepth(dstMemrefOps);
+          AffineLoopBand dstSurroundingLoops;
+          unsigned dstLoopDepthTest =
+              getInnermostCommonLoopDepth(dstMemrefOps, &dstSurroundingLoops);
 
           // Check the feasibility of fusing src loop nest into dst loop nest
           // at loop depths in range [1, dstLoopDepthTest].
@@ -1548,6 +1551,15 @@ public:
             if (result.value == FusionResult::Success)
               maxLegalFusionDepth = i;
           }
+
+          // FIXME: This is a super hacky approach to avoid fusing into
+          // reduction loops.
+          AffineLoopBand parallelBand;
+          AffineLoopBand reductionBand;
+          if (getParallelAndReductionLoopBand(dstSurroundingLoops, parallelBand,
+                                              reductionBand))
+            maxLegalFusionDepth =
+                std::min(maxLegalFusionDepth, (unsigned)parallelBand.size());
 
           if (maxLegalFusionDepth == 0) {
             LLVM_DEBUG(llvm::dbgs()
@@ -1762,7 +1774,7 @@ public:
       SmallVector<Operation *, 2> dstLoadOpInsts;
       dstNode->getLoadOpsForMemref(memref, &dstLoadOpInsts);
 
-      SmallVector<AffineForOp, 4> dstLoopIVs;
+      AffineLoopBand dstLoopIVs;
       getLoopIVs(*dstLoadOpInsts[0], &dstLoopIVs);
       unsigned dstLoopDepthTest = dstLoopIVs.size();
       auto sibAffineForOp = cast<AffineForOp>(sibNode->op);
@@ -1780,6 +1792,15 @@ public:
         if (result.value == FusionResult::Success)
           maxLegalFusionDepth = i;
       }
+
+      // FIXME: This is a super hacky approach to avoid fusing into reduction
+      // loops.
+      AffineLoopBand parallelBand;
+      AffineLoopBand reductionBand;
+      if (getParallelAndReductionLoopBand(dstLoopIVs, parallelBand,
+                                          reductionBand))
+        maxLegalFusionDepth =
+            std::min(maxLegalFusionDepth, (unsigned)parallelBand.size());
 
       // Skip if fusion is not feasible at any loop depths.
       if (maxLegalFusionDepth == 0)

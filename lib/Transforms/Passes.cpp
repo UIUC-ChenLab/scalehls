@@ -86,10 +86,10 @@ struct ScaleHLSPyTorchPipelineV2Options
   //     *this, "dataflow-granularity",
   //     llvm::cl::desc("The granularity of dataflow (set 0 to disable)")};
 
-  Option<double> fusionTolerance{
-      *this, "fusion-tolerance", llvm::cl::init(300.0),
-      llvm::cl::desc("Fractional increase in additional computation tolerated "
-                     "while loop fusing (default is 100.0)")};
+  // Option<double> fusionTolerance{
+  //     *this, "fusion-tolerance", llvm::cl::init(100.0),
+  //     llvm::cl::desc("Additional computation tolerated while loop fusing "
+  //                    "(default is 100.0)")};
 
   Option<unsigned> loopTileSize{
       *this, "loop-tile-size", llvm::cl::init(2),
@@ -181,7 +181,8 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
           return;
 
         // Affine loop fusion.
-        pm.addPass(scalehls::createAffineLoopFusionPass(opts.fusionTolerance));
+        pm.addPass(scalehls::createFuncPreprocessPass(opts.hlsTopFunc));
+        pm.addPass(scalehls::createAffineLoopFusionPass(1.0, 0, 0, true));
         scalehls::addSimplifyAffineLoopPasses(pm);
         scalehls::addCreateSubviewPasses(pm);
         pm.addPass(scalehls::createRaiseAffineToCopyPass());
