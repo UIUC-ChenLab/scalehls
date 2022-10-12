@@ -167,6 +167,16 @@ def ConvertTensorToLinalg :
   let constructor = "mlir::scalehls::createConvertTensorToLinalgPass()";
 }
 
+def LinalgFakeQuantize : Pass<"scalehls-linalg-fake-quantize", "ModuleOp"> {
+  let summary = "Convert to quantized model (only for testing use)";
+  let constructor = "mlir::scalehls::createLinalgFakeQuantizePass()";
+
+  let options = [
+    Option<"quanBits", "quan-bits", "unsigned", /*default=*/"8",
+           "the number of bits for quantization">
+  ];
+}
+
 def TosaFakeQuantize : Pass<"scalehls-tosa-fake-quantize", "ModuleOp"> {
   let summary = "Convert to 8-bits quantized model (only for testing use)";
   let constructor = "mlir::scalehls::createTosaFakeQuantizePass()";
