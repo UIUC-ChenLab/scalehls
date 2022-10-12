@@ -129,10 +129,6 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
       "Compile TOSA (from Torch-MLIR) to HLS C++ version 2",
       [](OpPassManager &pm, const ScaleHLSPyTorchPipelineV2Options &opts) {
         if (opts.tosaInput) {
-          // TOSA fake quantization.
-          if (opts.fakeQuantize)
-            pm.addPass(scalehls::createTosaFakeQuantizePass());
-
           // TOSA optimization.
           pm.addPass(scalehls::createTosaSimplifyGraphPass());
           // pm.addPass(scalehls::createCreateDataflowFromTosaPass());
@@ -144,11 +140,15 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
           pm.addPass(tosa::createTosaToTensor());
         }
 
+        // Linalg fake quantization.
+        if (opts.fakeQuantize)
+          pm.addPass(scalehls::createTosaFakeQuantizePass());
+        pm.addPass(mlir::createCanonicalizerPass());
+
         if (opts.debugPoint == 1)
           return;
 
         // Linalg optimization.
-        pm.addPass(mlir::createCanonicalizerPass());
         pm.addPass(mlir::createLinalgElementwiseOpFusionPass());
         pm.addPass(scalehls::createCreateDataflowFromLinalgPass());
         pm.addPass(mlir::createConvertTensorToLinalgPass());
