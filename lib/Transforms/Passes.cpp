@@ -247,7 +247,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
 
         // Affine loop unrolling.
         if (opts.loopUnrollFactor) {
-          pm.addPass(scalehls::createDataflowAwareLoopUnrollJamPass(
+          pm.addPass(scalehls::createParallelizeDataflowNodePass(
               opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true));
           // pm.addPass(scalehls::createAffineLoopUnrollJamPass(
           //     opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true));

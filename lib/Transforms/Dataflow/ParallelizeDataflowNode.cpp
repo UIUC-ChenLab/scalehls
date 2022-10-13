@@ -6,21 +6,42 @@
 
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
 #include "mlir/Dialect/Affine/LoopUtils.h"
+#include "mlir/Dialect/Affine/Utils.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
 
+// /// Apply loop vectorization to the loop band.
+// static bool applyLoopVectorization(AffineLoopBand &band,
+//                                    unsigned vectorizeFactor) {
+//   assert(!band.empty() && "no loops provided");
+//   if (vectorizeFactor == 1)
+//     return true;
+
+//   // We require all loops to be parallel loop.
+//   for (auto loop : band)
+//     if (!(hasParallelAttr(loop) || isLoopParallel(loop)))
+//       return false;
+
+//   // Calculate the vectorization size of each loop level.
+//   auto loopSet = llvm::DenseSet<Operation *>(band.begin(), band.end());
+//   auto sizes = getDistributedFactors(vectorizeFactor, band);
+
+//   // Apply loop vectorization.
+//   vectorizeAffineLoops(band.front()->getParentOp(), loopSet,
+//                        SmallVector<int64_t>(sizes.begin(), sizes.end()), {});
+//   return true;
+// }
+
 namespace {
-struct DataflowAwareLoopUnrollJam
-    : public DataflowAwareLoopUnrollJamBase<DataflowAwareLoopUnrollJam> {
-  DataflowAwareLoopUnrollJam() = default;
-  DataflowAwareLoopUnrollJam(unsigned loopUnrollFactor,
-                             bool unrollPointLoopOnly, bool argLoopOrderOpt) {
+struct ParallelizeDataflowNode
+    : public ParallelizeDataflowNodeBase<ParallelizeDataflowNode> {
+  ParallelizeDataflowNode() = default;
+  ParallelizeDataflowNode(unsigned loopUnrollFactor, bool unrollPointLoopOnly) {
     maxUnrollFactor = loopUnrollFactor;
     pointLoopOnly = unrollPointLoopOnly;
-    loopOrderOpt = argLoopOrderOpt;
   }
 
   /// A helper to get the complexity of a schedule.
@@ -52,7 +73,8 @@ struct DataflowAwareLoopUnrollJam
         auto loopTripCount = getAverageTripCount(loop);
         if (!loopComplexity.has_value() || !loopTripCount.has_value())
           return Optional<unsigned long>();
-        complexity += loopTripCount.value() * loopComplexity.value();
+        complexity += loopTripCount.value() *
+                      std::max((unsigned long)1, loopComplexity.value());
 
       } else if (auto ifOp = dyn_cast<mlir::AffineIfOp>(op)) {
         auto thenComplexity = getBlockComplexity(ifOp.getThenBlock());
@@ -67,9 +89,9 @@ struct DataflowAwareLoopUnrollJam
           ifComplexity = std::max(ifComplexity, elseComplexity.value());
         }
         complexity += ifComplexity;
-
-      } else if (!op.hasTrait<OpTrait::IsTerminator>())
-        complexity += 1;
+      }
+      // else if (!op.hasTrait<OpTrait::IsTerminator>())
+      //   complexity += 1;
     }
     return complexity;
   }
@@ -136,6 +158,13 @@ struct DataflowAwareLoopUnrollJam
       });
 
       for (auto &band : bands) {
+        // For loop band that has effect on external buffers, we should directly
+        // unroll them without considering whether it's point loop.
+        if (hasEffectOnExternalBuffer(band.front())) {
+          applyLoopUnrollJam(band, p.second);
+          continue;
+        }
+
         if (pointLoopOnly) {
           AffineLoopBand tileBand;
           AffineLoopBand pointBand;
@@ -144,7 +173,7 @@ struct DataflowAwareLoopUnrollJam
             continue;
           band = pointBand;
         }
-        applyLoopUnrollJam(band, p.second, loopOrderOpt.getValue());
+        applyLoopUnrollJam(band, p.second);
       }
     }
   }
@@ -155,8 +184,9 @@ private:
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createDataflowAwareLoopUnrollJamPass(
-    unsigned loopUnrollFactor, bool unrollPointLoopOnly, bool loopOrderOpt) {
-  return std::make_unique<DataflowAwareLoopUnrollJam>(
-      loopUnrollFactor, unrollPointLoopOnly, loopOrderOpt);
+std::unique_ptr<Pass>
+scalehls::createParallelizeDataflowNodePass(unsigned loopUnrollFactor,
+                                            bool unrollPointLoopOnly) {
+  return std::make_unique<ParallelizeDataflowNode>(loopUnrollFactor,
+                                                   unrollPointLoopOnly);
 }

@@ -49,13 +49,12 @@ std::unique_ptr<Pass> createCreateDataflowFromTosaPass();
 std::unique_ptr<Pass> createCreateDataflowFromLinalgPass();
 std::unique_ptr<Pass> createCreateDataflowFromAffinePass();
 std::unique_ptr<Pass> createCreateTokenStreamPass();
-std::unique_ptr<Pass>
-createDataflowAwareLoopUnrollJamPass(unsigned loopUnrollFactor = 1,
-                                     bool unrollPointLoopOnly = false,
-                                     bool loopOrderOpt = false);
 std::unique_ptr<Pass> createEliminateMultiProducerPass();
 std::unique_ptr<Pass> createLegalizeDataflowSchedulePass();
 std::unique_ptr<Pass> createLowerDataflowPass();
+std::unique_ptr<Pass>
+createParallelizeDataflowNodePass(unsigned loopUnrollFactor = 1,
+                                  bool unrollPointLoopOnly = false);
 std::unique_ptr<Pass>
 createPlaceDataflowBufferPass(bool placeExternalBuffer = true);
 std::unique_ptr<Pass> createScheduleDataflowNodePass();
@@ -77,8 +76,7 @@ std::unique_ptr<Pass> createAffineLoopPerfectionPass();
 std::unique_ptr<Pass> createAffineLoopTilePass(unsigned loopTileSize = 1);
 std::unique_ptr<Pass>
 createAffineLoopUnrollJamPass(unsigned loopUnrollFactor = 1,
-                              bool unrollPointLoopOnly = false,
-                              bool loopOrderOpt = true);
+                              bool unrollPointLoopOnly = false);
 std::unique_ptr<Pass> createDetectReductionPass();
 std::unique_ptr<Pass> createMaterializeReductionPass();
 std::unique_ptr<Pass> createRemoveVariableBoundPass();

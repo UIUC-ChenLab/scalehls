@@ -33,36 +33,16 @@ bool scalehls::applyFullyLoopUnrolling(Block &block, unsigned maxIterNum) {
 /// Apply loop unroll and jam to the loop band with the given unroll factor.
 bool scalehls::applyLoopUnrollJam(AffineLoopBand &band, unsigned unrollFactor,
                                   bool loopOrderOpt) {
+  assert(!band.empty() && "no loops provided");
   if (unrollFactor == 1)
     return true;
-  TileList sizes;
-  unsigned remainTileSize = unrollFactor;
+
+  // Calculate the tiling size of each loop level.
+  auto sizes = getDistributedFactors(unrollFactor, band);
 
   // FIXME: Unknown issue causing failure in order opt.
   if (loopOrderOpt)
     applyAffineLoopOrderOpt(band);
-
-  // Calculate the tiling size of each loop level.
-  for (auto it = band.rbegin(), e = band.rend(); it != e; ++it) {
-    if (auto optionalTripCount = getConstantTripCount(*it)) {
-      auto tripCount = optionalTripCount.value();
-      auto size = tripCount;
-
-      if (remainTileSize >= tripCount)
-        remainTileSize = (remainTileSize + tripCount - 1) / tripCount;
-      else if (remainTileSize > 1) {
-        size = 1;
-        while (size < remainTileSize || tripCount % size != 0)
-          ++size;
-        remainTileSize = 1;
-      } else
-        size = 1;
-
-      sizes.push_back(size);
-    } else
-      sizes.push_back(1);
-  }
-  std::reverse(sizes.begin(), sizes.end());
 
   // Apply loop tiling and then unroll all point loops.
   applyLoopTiling(band, sizes, /*loopNormalize=*/false);
@@ -73,11 +53,9 @@ namespace {
 struct AffineLoopUnrollJam
     : public AffineLoopUnrollJamBase<AffineLoopUnrollJam> {
   AffineLoopUnrollJam() = default;
-  AffineLoopUnrollJam(unsigned loopUnrollFactor, bool unrollPointLoopOnly,
-                      bool argLoopOrderOpt) {
+  AffineLoopUnrollJam(unsigned loopUnrollFactor, bool unrollPointLoopOnly) {
     unrollFactor = loopUnrollFactor;
     pointLoopOnly = unrollPointLoopOnly;
-    loopOrderOpt = argLoopOrderOpt;
   }
 
   void runOnOperation() override {
@@ -86,6 +64,13 @@ struct AffineLoopUnrollJam
     // getTileableBands(getOperation(), &targetBands);
 
     for (auto &band : targetBands) {
+      // For loop band that has effect on external buffers, we should directly
+      // unroll them without considering whether it's point loop.
+      if (hasEffectOnExternalBuffer(band.front())) {
+        applyLoopUnrollJam(band, unrollFactor.getValue());
+        continue;
+      }
+
       if (pointLoopOnly) {
         AffineLoopBand tileBand;
         AffineLoopBand pointBand;
@@ -94,15 +79,15 @@ struct AffineLoopUnrollJam
           continue;
         band = pointBand;
       }
-      applyLoopUnrollJam(band, unrollFactor.getValue(),
-                         loopOrderOpt.getValue());
+      applyLoopUnrollJam(band, unrollFactor.getValue());
     }
   }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createAffineLoopUnrollJamPass(
-    unsigned loopUnrollFactor, bool unrollPointLoopOnly, bool loopOrderOpt) {
-  return std::make_unique<AffineLoopUnrollJam>(
-      loopUnrollFactor, unrollPointLoopOnly, loopOrderOpt);
+std::unique_ptr<Pass>
+scalehls::createAffineLoopUnrollJamPass(unsigned loopUnrollFactor,
+                                        bool unrollPointLoopOnly) {
+  return std::make_unique<AffineLoopUnrollJam>(loopUnrollFactor,
+                                               unrollPointLoopOnly);
 }

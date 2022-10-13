@@ -290,6 +290,49 @@ bool scalehls::isElementwiseGenericOp(linalg::GenericOp op) {
 // Memory and loop analysis utils
 //===----------------------------------------------------------------------===//
 
+/// The current op or contained ops have effect on external buffers.
+bool scalehls::hasEffectOnExternalBuffer(Operation *op) {
+  auto result = op->walk([](MemoryEffectOpInterface effectOp) {
+    SmallVector<MemoryEffects::EffectInstance> effects;
+    effectOp.getEffects(effects);
+    for (auto effect : effects)
+      if (isExternalBuffer(effect.getValue()))
+        return WalkResult::interrupt();
+    return WalkResult::advance();
+  });
+  return result.wasInterrupted();
+}
+
+/// Distribute the given factor from the innermost loop of the given loop band,
+/// so that we can apply vectorize, unroll and jam, etc.
+SmallVector<unsigned, 8> scalehls::getDistributedFactors(
+    unsigned factor, const SmallVectorImpl<mlir::AffineForOp> &band) {
+  SmallVector<unsigned, 8> sizes;
+  unsigned remainFactor = factor;
+
+  for (auto it = band.rbegin(), e = band.rend(); it != e; ++it) {
+    if (auto optionalTripCount = getConstantTripCount(*it)) {
+      auto tripCount = optionalTripCount.value();
+      auto size = tripCount;
+
+      if (remainFactor >= tripCount)
+        remainFactor = (remainFactor + tripCount - 1) / tripCount;
+      else if (remainFactor > 1) {
+        size = 1;
+        while (size < remainFactor || tripCount % size != 0)
+          ++size;
+        remainFactor = 1;
+      } else
+        size = 1;
+
+      sizes.push_back(size);
+    } else
+      sizes.push_back(1);
+  }
+  std::reverse(sizes.begin(), sizes.end());
+  return sizes;
+}
+
 /// Return a pair which indicates whether the if statement is always true or
 /// false, respectively. The returned result is one-hot.
 std::pair<bool, bool> scalehls::ifAlwaysTrueOrFalse(mlir::AffineIfOp ifOp) {

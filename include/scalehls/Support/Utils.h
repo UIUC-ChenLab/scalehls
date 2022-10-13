@@ -70,6 +70,15 @@ bool isElementwiseGenericOp(linalg::GenericOp op);
 // Memory and loop analysis utils
 //===----------------------------------------------------------------------===//
 
+/// The current op or contained ops have effect on external buffers.
+bool hasEffectOnExternalBuffer(Operation *op);
+
+/// Distribute the given factor from the innermost loop of the given loop band,
+/// so that we can apply vectorize, unroll and jam, etc.
+SmallVector<unsigned, 8>
+getDistributedFactors(unsigned factor,
+                      const SmallVectorImpl<mlir::AffineForOp> &band);
+
 /// Return a pair which indicates whether the if statement is always true or
 /// false, respectively. The returned result is one-hot.
 std::pair<bool, bool> ifAlwaysTrueOrFalse(mlir::AffineIfOp ifOp);
