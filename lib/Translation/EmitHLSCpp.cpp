@@ -674,13 +674,14 @@ void ModuleEmitter::emitAxiPort(AxiPortOp op) {
       emitValue(op.getValue());
       os << "\n";
 
-      // Emit DRAM variable as stable.
-      if (kind == MemoryKind::DRAM) {
-        indent() << "#pragma HLS stable";
-        os << " variable=";
-        emitValue(op.getValue());
-        os << "\n";
-      }
+      // // Emit DRAM variable as stable.
+      // if (kind == MemoryKind::DRAM) {
+      //   indent() << "#pragma HLS stable";
+      //   os << " variable=";
+      //   emitValue(op.getValue());
+      //   os << "\n";
+      // }
+      emitArrayDirectives(op.getValue());
     }
   } else {
     indent() << "#pragma HLS interface s_axilite";
@@ -1688,7 +1689,10 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
     if (factors[dim] != 1) {
       emitPragmaFlag = true;
 
-      indent() << "#pragma HLS array_partition";
+      if (isExternalBuffer(memref))
+        indent() << "#pragma HLS array_reshape";
+      else
+        indent() << "#pragma HLS array_partition";
       os << " variable=";
       emitValue(memref);
 

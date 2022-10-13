@@ -654,9 +654,13 @@ LogicalResult AxiPortOp::verify() {
   if (!getAxi().isa<BlockArgument>())
     return emitOpError("axi must be block arguments");
 
-  if (getAxi().getType().cast<AxiType>().getElementType() !=
-      getValue().getType())
+  auto axiType =
+      getAxi().getType().cast<AxiType>().getElementType().cast<MemRefType>();
+  auto valueType = getValue().getType().cast<MemRefType>();
+  if (axiType.getElementType() != valueType.getElementType() ||
+      axiType.getShape() != valueType.getShape())
     return emitOpError("axi type doesn't align with value type");
+
   if (getAxi().getType().cast<AxiType>().getKind() !=
       getBundle().getType().cast<BundleType>().getKind())
     return emitOpError("axi kind doesn't align with bundle kind");
