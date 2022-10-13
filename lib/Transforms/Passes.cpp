@@ -142,7 +142,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
 
         // Linalg fake quantization.
         if (opts.fakeQuantize)
-          pm.addPass(scalehls::createTosaFakeQuantizePass());
+          pm.addPass(scalehls::createLinalgFakeQuantizePass());
         pm.addPass(mlir::createCanonicalizerPass());
 
         if (opts.debugPoint == 1)

@@ -65,6 +65,28 @@ private:
 } // namespace
 
 namespace {
+/// FIXME: This is super hacky for hoisting all buffers placed in dram to the
+/// top level dispatch.
+struct HoistDramBuffer
+    : public OpInterfaceRewritePattern<hls::BufferLikeInterface> {
+  using OpInterfaceRewritePattern<
+      hls::BufferLikeInterface>::OpInterfaceRewritePattern;
+
+  LogicalResult matchAndRewrite(hls::BufferLikeInterface buffer,
+                                PatternRewriter &rewriter) const override {
+    if (!isExternalBuffer(buffer.getMemref()))
+      return failure();
+    if (auto dispatch = buffer->getParentOfType<DispatchOp>())
+      if (isa<func::FuncOp>(dispatch->getParentOp())) {
+        buffer->moveBefore(dispatch);
+        return success();
+      }
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
 struct PlaceDataflowBuffer
     : public PlaceDataflowBufferBase<PlaceDataflowBuffer> {
   PlaceDataflowBuffer() = default;
@@ -79,6 +101,10 @@ struct PlaceDataflowBuffer
     mlir::RewritePatternSet patterns(context);
     patterns.add<PlaceBuffer>(context, placeExternalBuffer);
     (void)applyOpPatternsAndFold(func, std::move(patterns));
+
+    patterns.clear();
+    patterns.add<HoistDramBuffer>(context);
+    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
 } // namespace

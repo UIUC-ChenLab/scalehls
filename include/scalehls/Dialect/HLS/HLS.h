@@ -31,7 +31,7 @@ namespace hls {
 enum class PartitionKind { CYCLIC, BLOCK, NONE };
 enum class OperandKind { INPUT, OUTPUT, PARAM };
 enum class MemoryKind {
-  LUTRAM_1P,
+  LUTRAM_1P = 1,
   LUTRAM_S2P,
   LUTRAM_T2P,
   BRAM_1P,
