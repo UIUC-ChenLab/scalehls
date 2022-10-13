@@ -106,16 +106,15 @@ struct ScaleHLSPyTorchPipelineV2Options
   Option<bool> axiInterface{*this, "axi-interface", llvm::cl::init(true),
                             llvm::cl::desc("Create AXI interface")};
 
-  // Option<unsigned> vectorSize{
-  //     *this, "vector-size",
-  //     llvm::cl::desc("The size of vectorization (set 0 to disable)")};
+  Option<bool> vectorize{*this, "vectorize", llvm::cl::init(false),
+                         llvm::cl::desc("Vectorize with factor of 2")};
+
+  Option<bool> tosaInput{*this, "tosa-input", llvm::cl::init(false),
+                         llvm::cl::desc("Inidicate the input IR is TOSA")};
 
   Option<bool> fakeQuantize{
       *this, "fake-quantize", llvm::cl::init(false),
       llvm::cl::desc("Trigger the fake quantization (just for testing use)")};
-
-  Option<bool> tosaInput{*this, "tosa-input", llvm::cl::init(false),
-                         llvm::cl::desc("Inidicate the input IR is TOSA")};
 
   Option<unsigned> debugPoint{
       *this, "debug-point", llvm::cl::init(0),
@@ -194,17 +193,13 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         if (opts.debugPoint == 5)
           return;
 
-        // Optimize and place dataflow buffers.
+        // Place dataflow buffers.
         pm.addPass(
             scalehls::createPlaceDataflowBufferPass(opts.placeExternalBuffer));
-        // scalehls::addCreateSubviewPasses(pm, CreateSubviewMode::Reduction);
-        // pm.addPass(scalehls::createCreateLocalBufferPass(
-        //     /*externalBufferOnly=*/false, /*registerOnly=*/true));
-        // pm.addPass(scalehls::createLowerCopyToAffinePass());
-        // pm.addPass(memref::createFoldMemRefAliasOpsPass());
-        // pm.addPass(mlir::createCanonicalizerPass());
-        // pm.addPass(scalehls::createAffineStoreForwardPass());
-        // pm.addPass(mlir::createCanonicalizerPass());
+        if (opts.vectorize) {
+          pm.addPass(mlir::createSuperVectorizePass({2}));
+          pm.addPass(mlir::createCanonicalizerPass());
+        }
 
         if (opts.debugPoint == 6)
           return;
@@ -261,12 +256,6 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
 
         if (opts.debugPoint == 11)
           return;
-
-        // // Vectorization.
-        // if (opts.vectorSize) {
-        //   pm.addPass(mlir::createSuperVectorizePass({opts.vectorSize}));
-        //   pm.addPass(mlir::createCanonicalizerPass());
-        // }
 
         // Memory optimization.
         pm.addPass(scalehls::createSimplifyAffineIfPass());
