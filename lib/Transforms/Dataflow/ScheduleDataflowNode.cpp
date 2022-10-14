@@ -31,7 +31,7 @@ struct ALAPScheduleNode : public OpRewritePattern<NodeOp> {
       if (!getProducersExcept(output, node).empty())
         return failure();
 
-      for (auto consumer : getConsumers(output)) {
+      for (auto consumer : getConsumersExcept(output, node)) {
         if (!consumer.getLevel())
           return failure();
         level = std::max(level, consumer.getLevel().value() + 1);

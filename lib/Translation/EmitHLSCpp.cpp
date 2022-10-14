@@ -674,13 +674,13 @@ void ModuleEmitter::emitAxiPort(AxiPortOp op) {
       emitValue(op.getValue());
       os << "\n";
 
-      // // Emit DRAM variable as stable.
-      // if (kind == MemoryKind::DRAM) {
-      //   indent() << "#pragma HLS stable";
-      //   os << " variable=";
-      //   emitValue(op.getValue());
-      //   os << "\n";
-      // }
+      // Emit DRAM variable as stable.
+      if (kind == MemoryKind::DRAM) {
+        indent() << "#pragma HLS stable";
+        os << " variable=";
+        emitValue(op.getValue());
+        os << "\n";
+      }
       emitArrayDirectives(op.getValue());
     }
   } else {

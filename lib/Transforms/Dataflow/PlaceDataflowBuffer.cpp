@@ -77,7 +77,7 @@ struct HoistDramBuffer
     if (!isExternalBuffer(buffer.getMemref()))
       return failure();
     if (auto dispatch = buffer->getParentOfType<DispatchOp>())
-      if (isa<func::FuncOp>(dispatch->getParentOp())) {
+      if (dispatch->getParentOfType<DispatchOp>()) {
         buffer->moveBefore(dispatch);
         return success();
       }

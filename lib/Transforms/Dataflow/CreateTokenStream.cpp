@@ -34,8 +34,7 @@ struct CreateTokenStream : public CreateTokenStreamBase<CreateTokenStream> {
 
       for (auto buffer : buffers) {
         auto producers = getProducers(buffer);
-        auto consumers = getConsumers(buffer);
-        if (!llvm::hasSingleElement(producers) || consumers.empty())
+        if (!llvm::hasSingleElement(producers))
           continue;
 
         auto producer = producers.front();
@@ -44,7 +43,13 @@ struct CreateTokenStream : public CreateTokenStreamBase<CreateTokenStream> {
         SmallVector<Value, 8> outputs(producer.getOutputs());
         SmallVector<StreamOp, 4> tokens;
 
+        auto consumers = getConsumersExcept(buffer, producer);
+        if (consumers.empty())
+          continue;
+
         for (auto consumer : consumers) {
+          if (consumer == producer)
+            continue;
           // Create new stream channel.
           auto levelDiff =
               producer.getLevel().value() - consumer.getLevel().value();
