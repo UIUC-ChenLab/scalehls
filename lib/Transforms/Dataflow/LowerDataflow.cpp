@@ -184,6 +184,7 @@ struct SplitNodeExternalBufferAccess : public OpRewritePattern<NodeOp> {
     bool hasChanged = false;
 
     SmallVector<BlockArgument, 16> inputArgs(node.getInputArgs());
+    SmallVector<BlockArgument, 16> outputArgs(node.getOutputArgs());
     for (auto arg : inputArgs) {
       // If the buffer is not an external buffer or has zero or one schedule
       // users, we have nothing to do.
@@ -204,15 +205,14 @@ struct SplitNodeExternalBufferAccess : public OpRewritePattern<NodeOp> {
       }
     }
 
-    unsigned argIdx = 0;
-    SmallVector<BlockArgument, 16> outputArgs(node.getInputArgs());
-    for (auto arg : outputArgs) {
+    for (auto arg : llvm::enumerate(outputArgs)) {
       // If the buffer is not an external buffer or has zero or one schedule
       // users, we have nothing to do.
-      auto uses = llvm::make_filter_range(arg.getUses(), [&](auto &use) {
-        return isa<ScheduleOp>(use.getOwner());
-      });
-      if (!isExternalBuffer(arg) || uses.empty() ||
+      auto uses =
+          llvm::make_filter_range(arg.value().getUses(), [&](auto &use) {
+            return isa<ScheduleOp>(use.getOwner());
+          });
+      if (!isExternalBuffer(arg.value()) || uses.empty() ||
           llvm::hasSingleElement(uses))
         continue;
 
@@ -226,14 +226,15 @@ struct SplitNodeExternalBufferAccess : public OpRewritePattern<NodeOp> {
           continue;
         }
         if (useIsWritten) {
-          newOutputs.push_back(newOutputs[argIdx++]);
+          newOutputs.push_back(newOutputs[arg.index()]);
           auto newArg = nodeBody.insertArgument(numInputs + numOutputs++,
-                                                arg.getType(), arg.getLoc());
+                                                arg.value().getType(),
+                                                arg.value().getLoc());
           use.set(newArg);
         } else {
-          newInputs.push_back(newOutputs[argIdx++]);
-          auto newArg =
-              nodeBody.insertArgument(numInputs++, arg.getType(), arg.getLoc());
+          newInputs.push_back(newOutputs[arg.index()]);
+          auto newArg = nodeBody.insertArgument(
+              numInputs++, arg.value().getType(), arg.value().getLoc());
           use.set(newArg);
         }
         hasChanged = true;
