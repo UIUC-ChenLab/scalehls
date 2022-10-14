@@ -86,10 +86,10 @@ struct ScaleHLSPyTorchPipelineV2Options
   //     *this, "dataflow-granularity",
   //     llvm::cl::desc("The granularity of dataflow (set 0 to disable)")};
 
-  // Option<double> fusionTolerance{
-  //     *this, "fusion-tolerance", llvm::cl::init(100.0),
-  //     llvm::cl::desc("Additional computation tolerated while loop fusing "
-  //                    "(default is 100.0)")};
+  Option<double> fusionTolerance{
+      *this, "fusion-tolerance", llvm::cl::init(100.0),
+      llvm::cl::desc("Additional computation tolerated while loop fusing "
+                     "(default is 100.0)")};
 
   Option<unsigned> loopTileSize{
       *this, "loop-tile-size", llvm::cl::init(2),
@@ -102,6 +102,10 @@ struct ScaleHLSPyTorchPipelineV2Options
   Option<bool> placeExternalBuffer{
       *this, "place-external-buffer", llvm::cl::init(true),
       llvm::cl::desc("Place buffers in external memories")};
+
+  Option<bool> dataflowLeafNode{
+      *this, "dataflow-leaf-node", llvm::cl::init(false),
+      llvm::cl::desc("Automatically dataflow leaf nodes")};
 
   Option<bool> axiInterface{*this, "axi-interface", llvm::cl::init(true),
                             llvm::cl::desc("Create AXI interface")};
@@ -181,7 +185,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
 
         // Affine loop fusion.
         pm.addPass(scalehls::createFuncPreprocessPass(opts.hlsTopFunc));
-        pm.addPass(scalehls::createAffineLoopFusionPass(1.0, 0, 0, true));
+        pm.addPass(scalehls::createAffineLoopFusionPass(opts.fusionTolerance));
         scalehls::addSimplifyAffineLoopPasses(pm);
         scalehls::addCreateSubviewPasses(pm);
         pm.addPass(scalehls::createRaiseAffineToCopyPass());
@@ -268,7 +272,8 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
 
         // Convert dataflow to func.
         pm.addPass(scalehls::createCreateTokenStreamPass());
-        pm.addPass(scalehls::createConvertDataflowToFuncPass());
+        pm.addPass(
+            scalehls::createConvertDataflowToFuncPass(opts.dataflowLeafNode));
         pm.addPass(mlir::createCanonicalizerPass());
 
         if (opts.debugPoint == 13)

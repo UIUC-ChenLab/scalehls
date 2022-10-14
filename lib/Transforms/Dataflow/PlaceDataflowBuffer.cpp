@@ -76,11 +76,11 @@ struct HoistDramBuffer
                                 PatternRewriter &rewriter) const override {
     if (!isExternalBuffer(buffer.getMemref()))
       return failure();
-    if (auto dispatch = buffer->getParentOfType<DispatchOp>())
-      if (dispatch->getParentOfType<DispatchOp>()) {
-        buffer->moveBefore(dispatch);
-        return success();
-      }
+    // Alwasy move external buffer out of task.
+    if (auto task = buffer->getParentOfType<TaskOp>()) {
+      buffer->moveBefore(task);
+      return success();
+    }
     return failure();
   }
 };

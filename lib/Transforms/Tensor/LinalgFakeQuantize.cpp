@@ -73,13 +73,13 @@ struct LinalgFakeQuantize : public LinalgFakeQuantizeBase<LinalgFakeQuantize> {
   /// Get the quantized type from float scalar or tensor type.
   Type getQuantizeType(Type type) {
     auto integerType = IntegerType::get(type.getContext(), quanBits.getValue());
-    if (type.isa<Float32Type>())
+    if (type.isa<FloatType>())
       return integerType;
     if (type.isa<IntegerType, IndexType>())
       return type;
 
     if (auto tensorType = type.dyn_cast<RankedTensorType>()) {
-      if (tensorType.getElementType().isa<Float32Type>())
+      if (tensorType.getElementType().isa<FloatType>())
         return RankedTensorType::get(tensorType.getShape(), integerType);
       if (tensorType.getElementType().isa<IntegerType, IndexType>())
         return type;
@@ -187,6 +187,7 @@ struct LinalgFakeQuantize : public LinalgFakeQuantizeBase<LinalgFakeQuantize> {
     patterns.add<ArithFloatToInt<arith::RemFOp, arith::RemUIOp>>(context);
     patterns.add<ArithFloatToInt<arith::SubFOp, arith::SubIOp>>(context);
     patterns.add<ArithFloatToInt<arith::TruncFOp, arith::TruncIOp>>(context);
+    patterns.add<ArithFloatToInt<math::AbsFOp, math::AbsIOp>>(context);
     (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
   }
 };

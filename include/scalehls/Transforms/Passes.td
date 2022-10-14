@@ -68,6 +68,11 @@ def ConvertDataflowToFunc :
       Pass<"scalehls-convert-dataflow-to-func", "ModuleOp"> {
   let summary = "Convert dataflow to function dialect";
   let constructor = "mlir::scalehls::createConvertDataflowToFuncPass()";
+
+  let options = [
+    Option<"dataflowLeafNode", "dataflow-leaf-node", "bool",
+           /*default=*/"false", "Automatically dataflow leaf nodes">
+  ];
 }
 
 def CreateDataflowFromAffine :

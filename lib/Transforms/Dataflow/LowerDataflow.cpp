@@ -137,7 +137,8 @@ struct SplitScheduleExternalBufferAccess : public OpRewritePattern<ScheduleOp> {
     SmallVector<Value, 16> newOperands(schedule.getOperands());
     bool hasChanged = false;
 
-    for (auto arg : llvm::make_early_inc_range(scheduleBody.getArguments())) {
+    SmallVector<BlockArgument, 16> args(scheduleBody.getArguments());
+    for (auto arg : args) {
       // If the buffer is not an external buffer or has zero or one node users,
       // we have nothing to do.
       auto uses = llvm::make_filter_range(arg.getUses(), [&](auto &use) {
@@ -182,7 +183,8 @@ struct SplitNodeExternalBufferAccess : public OpRewritePattern<NodeOp> {
     auto numOutputs = node.getNumOutputs();
     bool hasChanged = false;
 
-    for (auto arg : llvm::make_early_inc_range(node.getInputArgs())) {
+    SmallVector<BlockArgument, 16> inputArgs(node.getInputArgs());
+    for (auto arg : inputArgs) {
       // If the buffer is not an external buffer or has zero or one schedule
       // users, we have nothing to do.
       auto uses = llvm::make_filter_range(arg.getUses(), [&](auto &use) {
@@ -203,7 +205,8 @@ struct SplitNodeExternalBufferAccess : public OpRewritePattern<NodeOp> {
     }
 
     unsigned argIdx = 0;
-    for (auto arg : llvm::make_early_inc_range(node.getOutputArgs())) {
+    SmallVector<BlockArgument, 16> outputArgs(node.getInputArgs());
+    for (auto arg : outputArgs) {
       // If the buffer is not an external buffer or has zero or one schedule
       // users, we have nothing to do.
       auto uses = llvm::make_filter_range(arg.getUses(), [&](auto &use) {

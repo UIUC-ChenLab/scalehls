@@ -53,16 +53,22 @@ struct InlineSchedule : public OpRewritePattern<ScheduleOp> {
 
 namespace {
 struct ConvertNodeToFunc : public OpRewritePattern<NodeOp> {
-  ConvertNodeToFunc(MLIRContext *context, StringRef prefix, unsigned &nodeIdx)
-      : OpRewritePattern<NodeOp>(context), prefix(prefix), nodeIdx(nodeIdx) {}
+  ConvertNodeToFunc(MLIRContext *context, StringRef prefix, unsigned &nodeIdx,
+                    bool dataflowLeafNode)
+      : OpRewritePattern<NodeOp>(context), prefix(prefix), nodeIdx(nodeIdx),
+        dataflowLeafNode(dataflowLeafNode) {}
 
   LogicalResult matchAndRewrite(NodeOp node,
                                 PatternRewriter &rewriter) const override {
     // Create a new sub-function.
     rewriter.setInsertionPoint(node->getParentOfType<func::FuncOp>());
+    auto attr = FuncDirectiveAttr::get(node->getContext(), /*pipeline=*/false,
+                                       /*targetInterval=*/1,
+                                       /*dataflow=*/dataflowLeafNode);
     auto subFunc = rewriter.create<func::FuncOp>(
         node.getLoc(), prefix.str() + "_node" + std::to_string(nodeIdx++),
-        rewriter.getFunctionType(node.getOperandTypes(), TypeRange()));
+        rewriter.getFunctionType(node.getOperandTypes(), TypeRange()),
+        NamedAttribute(rewriter.getStringAttr("func_directive"), attr));
 
     // Inline the contents of the dataflow node.
     rewriter.inlineRegionBefore(node.getBodyRegion(), subFunc.getBody(),
@@ -74,19 +80,26 @@ struct ConvertNodeToFunc : public OpRewritePattern<NodeOp> {
     rewriter.setInsertionPoint(node);
     rewriter.replaceOpWithNewOp<func::CallOp>(node, subFunc,
                                               node.getOperands());
-    // setFuncDirective(subFunc, false, 1, true);
+    // setFuncDirective(subFunc, /*pipeline=*/false, /*targetInterval=*/1,
+    //                  /*dataflow=*/true);
     return success();
   }
 
 private:
   StringRef prefix;
   unsigned &nodeIdx;
+  bool dataflowLeafNode;
 };
 } // namespace
 
 namespace {
 struct ConvertDataflowToFunc
     : public ConvertDataflowToFuncBase<ConvertDataflowToFunc> {
+  ConvertDataflowToFunc() = default;
+  explicit ConvertDataflowToFunc(bool argDataflowLeafNode) {
+    dataflowLeafNode = argDataflowLeafNode;
+  }
+
   void runOnOperation() override {
     auto module = getOperation();
     auto context = module.getContext();
@@ -100,7 +113,8 @@ struct ConvertDataflowToFunc
       unsigned nodeIdx = 0;
       mlir::RewritePatternSet patterns(context);
       patterns.add<InlineSchedule>(context);
-      patterns.add<ConvertNodeToFunc>(context, func.getName(), nodeIdx);
+      patterns.add<ConvertNodeToFunc>(context, func.getName(), nodeIdx,
+                                      dataflowLeafNode.getValue());
       if (failed(applyPartialConversion(func, target, std::move(patterns))))
         return signalPassFailure();
     }
@@ -113,6 +127,7 @@ struct ConvertDataflowToFunc
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createConvertDataflowToFuncPass() {
-  return std::make_unique<ConvertDataflowToFunc>();
+std::unique_ptr<Pass>
+scalehls::createConvertDataflowToFuncPass(bool dataflowLeafNode) {
+  return std::make_unique<ConvertDataflowToFunc>(dataflowLeafNode);
 }
