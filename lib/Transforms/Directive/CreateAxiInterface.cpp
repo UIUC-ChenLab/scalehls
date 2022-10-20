@@ -44,8 +44,18 @@ struct CreateAxiInterface : public CreateAxiInterfaceBase<CreateAxiInterface> {
 
     // Move each buffers allocated in the top function to the runtime function.
     // Collect all values that will be converted to AXI.
-    SmallVector<Value, 32> targets(mainBlock->args_begin(),
-                                   mainBlock->args_end());
+    SmallVector<Value, 32> targets;
+    SmallVector<Value, 32> ports;
+    for (auto arg : mainBlock->getArguments()) {
+      if (arg.getType().isa<MemRefType, StreamType>())
+        targets.push_back(arg);
+      else {
+        ports.push_back(arg);
+        auto newArg = func.front().addArgument(arg.getType(), arg.getLoc());
+        arg.replaceAllUsesWith(newArg);
+      }
+    }
+
     builder.setInsertionPointToEnd(mainBlock);
     for (auto &op : llvm::make_early_inc_range(func.front()))
       if (isa<BufferOp, ConstBufferOp>(op)) {
@@ -58,7 +68,6 @@ struct CreateAxiInterface : public CreateAxiInterfaceBase<CreateAxiInterface> {
       }
 
     // Add new AXI ports to the top function.
-    SmallVector<Value, 32> axiPorts;
     unsigned axiIdx = 0;
     for (auto value : targets) {
       for (auto &use : llvm::make_early_inc_range(value.getUses())) {
@@ -72,7 +81,7 @@ struct CreateAxiInterface : public CreateAxiInterfaceBase<CreateAxiInterface> {
             BundleType::get(context, AxiKindAttr::get(context, axiKind));
 
         builder.setInsertionPointToEnd(mainBlock);
-        axiPorts.push_back(builder.create<AxiPackOp>(loc, axiType, value));
+        ports.push_back(builder.create<AxiPackOp>(loc, axiType, value));
         auto axiArg = func.front().addArgument(axiType, value.getLoc());
 
         builder.setInsertionPointToStart(&func.front());
@@ -85,7 +94,7 @@ struct CreateAxiInterface : public CreateAxiInterfaceBase<CreateAxiInterface> {
     // Update the top function and call.
     builder.setInsertionPointToEnd(mainBlock);
     auto call = builder.create<func::CallOp>(func.getLoc(), func.getName(),
-                                             func.getResultTypes(), axiPorts);
+                                             func.getResultTypes(), ports);
     func.setType(call.getCalleeType());
     builder.create<func::ReturnOp>(loc, call.getResults());
   }
