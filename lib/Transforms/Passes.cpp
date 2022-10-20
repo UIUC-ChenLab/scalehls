@@ -134,7 +134,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         if (opts.tosaInput) {
           // TOSA optimization.
           pm.addPass(scalehls::createTosaSimplifyGraphPass());
-          // pm.addPass(scalehls::createCreateDataflowFromTosaPass());
+          pm.addPass(scalehls::createCreateDataflowFromTosaPass());
           pm.addPass(mlir::createCanonicalizerPass());
 
           // TOSA to Linalg conversion.
