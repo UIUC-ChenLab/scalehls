@@ -138,8 +138,9 @@ void TaskOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                          MLIRContext *context) {
   results.add<SimplifyDispatchOrTaskOutputs<TaskOp>>(context);
   results.add<InlineDispatchOrTask<TaskOp>>(context, [](TaskOp op) {
-    return llvm::hasSingleElement(op.getDispatchOp().getOps<TaskOp>()) ||
-           llvm::hasSingleElement(op.getOps());
+    return llvm::hasSingleElement(op.getOps());
+    // return llvm::hasSingleElement(op.getDispatchOp().getOps<TaskOp>()) ||
+    //        llvm::hasSingleElement(op.getOps());
   });
 }
 
@@ -373,7 +374,8 @@ void NodeOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                          MLIRContext *context) {
   results.add<SimplifyNodeIOs>(context);
   results.add<InlineScheduleOrNode<NodeOp>>(context, [](NodeOp op) {
-    return llvm::hasSingleElement(op.getScheduleOp().getOps<NodeOp>());
+    return false;
+    // return llvm::hasSingleElement(op.getScheduleOp().getOps<NodeOp>());
   });
 }
 
