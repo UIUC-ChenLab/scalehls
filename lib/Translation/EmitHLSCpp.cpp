@@ -17,6 +17,9 @@
 using namespace mlir;
 using namespace scalehls;
 
+static llvm::cl::opt<bool> emitVitisDirectives("emit-vitis-directives",
+                                               llvm::cl::init(false));
+
 //===----------------------------------------------------------------------===//
 // Utils
 //===----------------------------------------------------------------------===//
@@ -51,17 +54,17 @@ static SmallString<16> getTypeName(Value val) {
       if (intType.getSignedness() == IntegerType::SignednessSemantics::Unsigned)
         signedness = "u";
 
-      switch (intType.getWidth()) {
-      case 8:
-      case 16:
-      case 32:
-      case 64:
-        return SmallString<16>(signedness + "int" +
-                               std::to_string(intType.getWidth()) + "_t");
-      default:
-        return SmallString<16>("ap_" + signedness + "int<" +
-                               std::to_string(intType.getWidth()) + ">");
-      }
+      // switch (intType.getWidth()) {
+      // case 8:
+      // case 16:
+      // case 32:
+      // case 64:
+      //   return SmallString<16>(signedness + "int" +
+      //                          std::to_string(intType.getWidth()) + "_t");
+      // default:
+      return SmallString<16>("ap_" + signedness + "int<" +
+                             std::to_string(intType.getWidth()) + ">");
+      // }
     }
   } else
     val.getDefiningOp()->emitError("has unsupported type.");
@@ -188,10 +191,13 @@ static SmallString<8> getConstantString(Type type, Attribute attr) {
                         : (value > 0 ? "INFINITY" : "-INFINITY"));
     }
   } else if (auto intType = type.dyn_cast<IntegerType>()) {
+    std::string signedness = "";
+    if (intType.getSignedness() == IntegerType::SignednessSemantics::Unsigned)
+      signedness = "u";
+
     string.append("(");
-    if (intType.isSigned())
-      string.append("s");
-    string.append("int" + std::to_string(intType.getWidth()) + "_t)");
+    string.append("ap_" + signedness + "int<" +
+                  std::to_string(intType.getWidth()) + ">)");
 
     if (intType.isSigned()) {
       auto value = attr.cast<IntegerAttr>().getValue().getSExtValue();
@@ -666,7 +672,10 @@ void ModuleEmitter::emitAxiPort(AxiPortOp op) {
       // For now, we set the offset of all m_axi interfaces as slave.
       auto kind = MemoryKind(memrefType.getMemorySpaceAsInt());
       if (kind == MemoryKind::DRAM) {
-        os << " m_axi offset=slave bundle=" << bundleName;
+        // FIXME: We have issues on using m_axi as the bitwith after reshaping
+        // is not power of 2.
+        // os << " m_axi offset=slave bundle=" << bundleName;
+        os << " ap_memory";
       } else
         os << " bram";
 
@@ -728,9 +737,9 @@ void ModuleEmitter::emitPrimMul(PrimMulOp op) {
     auto rank = emitNestedLoopHeader(op.getC());
     indent();
     emitValue(op.getC(), rank);
-    os << " = (int16_t)";
+    os << " = (ap_int<16>)";
     emitValue(op.getA(), rank);
-    os << " * (int16_t)";
+    os << " * (ap_int<16>)";
     emitValue(op.getB(), rank);
     os << ";";
     emitInfoAndNewLine(op);
@@ -1689,10 +1698,12 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
     if (factors[dim] != 1) {
       emitPragmaFlag = true;
 
-      if (isExternalBuffer(memref))
-        indent() << "#pragma HLS array_reshape";
-      else
-        indent() << "#pragma HLS array_partition";
+      // FIXME: Array reshape sometimes will cause Vivado fail to reason about
+      // the memory parallelism.
+      // if (isExternalBuffer(memref))
+      //   indent() << "#pragma HLS array_reshape";
+      // else
+      indent() << "#pragma HLS array_partition";
       os << " variable=";
       emitValue(memref);
 
@@ -1713,19 +1724,59 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
   if (kind != MemoryKind::DRAM && !isFullyPartitioned(type)) {
     emitPragmaFlag = true;
 
-    indent() << "#pragma HLS resource";
-    os << " variable=";
-    emitValue(memref);
+    if (emitVitisDirectives.getValue()) {
+      indent() << "#pragma HLS bind_storage";
+      os << " variable=";
+      emitValue(memref);
 
-    os << " core=";
-    if (kind == MemoryKind::BRAM_1P)
-      os << "ram_1p_bram";
-    else if (kind == MemoryKind::BRAM_S2P)
-      os << "ram_s2p_bram";
-    else if (kind == MemoryKind::BRAM_T2P)
-      os << "ram_t2p_bram";
-    else
-      os << "ram_s2p_bram";
+      switch (kind) {
+      case MemoryKind::LUTRAM_1P:
+        os << " type=ram_1p impl=lutram";
+        break;
+      case MemoryKind::LUTRAM_S2P:
+        os << " type=ram_s2p impl=lutram";
+        break;
+      case MemoryKind::LUTRAM_T2P:
+        os << " type=ram_t2p impl=lutram";
+        break;
+      case MemoryKind::BRAM_1P:
+        os << " type=ram_1p impl=bram";
+        break;
+      case MemoryKind::BRAM_S2P:
+        os << " type=ram_s2p impl=bram";
+        break;
+      case MemoryKind::BRAM_T2P:
+        os << " type=ram_t2p impl=bram";
+        break;
+      case MemoryKind::URAM_1P:
+        os << " type=ram_1p impl=uram";
+        break;
+      case MemoryKind::URAM_S2P:
+        os << " type=ram_s2p impl=uram";
+        break;
+      case MemoryKind::URAM_T2P:
+        os << " type=ram_t2p impl=uram";
+        break;
+      default:
+        os << " type=ram_s2p impl=bram";
+        break;
+      }
+    } else {
+      indent() << "#pragma HLS resource";
+      os << " variable=";
+      emitValue(memref);
+
+      os << " core=";
+      if (kind == MemoryKind::BRAM_1P)
+        os << "ram_1p_bram";
+      else if (kind == MemoryKind::BRAM_S2P)
+        os << "ram_s2p_bram";
+      else if (kind == MemoryKind::BRAM_T2P)
+        os << "ram_t2p_bram";
+      else
+        os << "ram_s2p_bram";
+    }
+    // Emit a new line.
     os << "\n";
   }
 
@@ -1782,12 +1833,12 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
 
     // // An empty line.
     // os << "\n";
-
-    // Emit other pragmas for function ports.
-    for (auto &port : portList)
-      if (port.getType().isa<MemRefType>())
-        emitArrayDirectives(port);
   }
+
+  // Emit other pragmas for function ports.
+  for (auto &port : portList)
+    if (port.getType().isa<MemRefType>())
+      emitArrayDirectives(port);
 
   auto funcDirect = getFuncDirective(func);
   if (!funcDirect)
@@ -1960,7 +2011,7 @@ LogicalResult scalehls::emitHLSCpp(ModuleOp module, llvm::raw_ostream &os) {
 
 void scalehls::registerEmitHLSCppTranslation() {
   static TranslateFromMLIRRegistration toHLSCpp(
-      "emit-hlscpp", emitHLSCpp, [&](DialectRegistry &registry) {
+      "scalehls-emit-hlscpp", emitHLSCpp, [&](DialectRegistry &registry) {
         scalehls::registerAllDialects(registry);
       });
 }
