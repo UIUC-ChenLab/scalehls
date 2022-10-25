@@ -256,6 +256,11 @@ struct SplitNodeExternalBufferAccess : public OpRewritePattern<NodeOp> {
 
 namespace {
 struct LowerDataflow : public LowerDataflowBase<LowerDataflow> {
+  LowerDataflow() = default;
+  explicit LowerDataflow(bool argSplitExternalAccess) {
+    splitExternalAccess = argSplitExternalAccess;
+  }
+
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -285,14 +290,17 @@ struct LowerDataflow : public LowerDataflowBase<LowerDataflow> {
     if (failed(applyPartialConversion(func, target, std::move(patterns))))
       return signalPassFailure();
 
-    patterns.clear();
-    patterns.add<SplitScheduleExternalBufferAccess>(context);
-    patterns.add<SplitNodeExternalBufferAccess>(context);
-    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+    if (splitExternalAccess.getValue()) {
+      patterns.clear();
+      patterns.add<SplitScheduleExternalBufferAccess>(context);
+      patterns.add<SplitNodeExternalBufferAccess>(context);
+      (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+    }
   }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createLowerDataflowPass() {
-  return std::make_unique<LowerDataflow>();
+std::unique_ptr<Pass>
+scalehls::createLowerDataflowPass(bool splitExternalAccess) {
+  return std::make_unique<LowerDataflow>(splitExternalAccess);
 }

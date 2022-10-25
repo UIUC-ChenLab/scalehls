@@ -52,7 +52,7 @@ std::unique_ptr<Pass> createCreateDataflowFromAffinePass();
 std::unique_ptr<Pass> createCreateTokenStreamPass();
 std::unique_ptr<Pass> createEliminateMultiProducerPass();
 std::unique_ptr<Pass> createLegalizeDataflowSchedulePass();
-std::unique_ptr<Pass> createLowerDataflowPass();
+std::unique_ptr<Pass> createLowerDataflowPass(bool splitExternalAccess = true);
 std::unique_ptr<Pass>
 createParallelizeDataflowNodePass(unsigned loopUnrollFactor = 1,
                                   bool unrollPointLoopOnly = false);

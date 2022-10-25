@@ -117,6 +117,11 @@ def LegalizeDataflowSchedule :
 def LowerDataflow : Pass<"scalehls-lower-dataflow", "func::FuncOp"> {
   let summary = "Lower dataflow from task level to node level";
   let constructor = "mlir::scalehls::createLowerDataflowPass()";
+
+  let options = [
+    Option<"splitExternalAccess", "split-external-access", "bool",
+           /*default=*/"true", "whether split external memory accesses">
+  ];
 }
 
 def ParallelizeDataflowNode :
@@ -271,7 +276,7 @@ def AffineLoopTile : Pass<"scalehls-affine-loop-tile", "func::FuncOp"> {
   let constructor = "mlir::scalehls::createAffineLoopTilePass()";
 
   let options = [
-    Option<"tileSize", "tile-size", "unsigned", /*default=*/"4",
+    Option<"tileSize", "tile-size", "unsigned", /*default=*/"1",
            "Use this tile size for all loops">
   ];
 }
@@ -369,8 +374,8 @@ def LowerCopyToAffine : Pass<"scalehls-lower-copy-to-affine", "func::FuncOp"> {
   let constructor = "mlir::scalehls::createLowerCopyToAffinePass()";
 
   let options = [
-    Option<"internalCopyOnly", "internal-copy-only", "bool", /*default=*/"false",
-           "only convert copy between internal buffers">
+    Option<"internalCopyOnly", "internal-copy-only", "bool",
+           /*default=*/"false", "only convert copy between internal buffers">
   ];
 }
 
