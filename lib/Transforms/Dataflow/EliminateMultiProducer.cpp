@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/IR/Dominance.h"
+#include "mlir/IR/IntegerSet.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -68,13 +69,85 @@ struct BufferMultiProducer : public OpRewritePattern<ScheduleOp> {
                                     newNode.getBody().end());
         rewriter.eraseOp(node);
 
-        // Insert new arguments and create explicit data copy from the original
-        // buffer to new buffer.
+        // Insert new arguments for the original buffer.
         rewriter.setInsertionPointToStart(&newNode.getBody().front());
         auto newBufferArg = newNode.getBody().getArgument(bufferIdx);
         auto bufferArg = newNode.getBody().insertArgument(
             newNode.getNumInputs() - 1, newBufferArg.getType(),
             newBufferArg.getLoc());
+
+        // If the only read user of the buffer is affine load, we can avoid to
+        // create a redundant data copy.
+        auto readUses = llvm::make_filter_range(
+            newBufferArg.getUses(), [](OpOperand &use) { return isRead(use); });
+        if (llvm::hasSingleElement(readUses))
+          if (auto read = dyn_cast<mlir::AffineReadOpInterface>(
+                  readUses.begin()->getOwner())) {
+            // We need to make sure all the indices of the affine load are known
+            // loop induction variables and meanwhile the load has identity
+            // memory access map.
+            AffineLoopBand band;
+            getLoopIVs(*read, &band);
+
+            llvm::SmallDenseSet<Value> depInductionVars;
+            for (auto loop : band)
+              depInductionVars.insert(loop.getInductionVar());
+
+            auto noEscapeIndex = true;
+            for (auto operand : read.getMapOperands())
+              if (!depInductionVars.erase(operand))
+                noEscapeIndex = false;
+
+            if (noEscapeIndex && read.getAffineMap().isIdentity()) {
+              SmallVector<AffineExpr, 4> ifExprs;
+              SmallVector<bool, 4> ifEqFlags;
+              SmallVector<Value, 4> ifOperands;
+              unsigned dim = 0;
+              for (auto iv : depInductionVars) {
+                auto loop = getForInductionVarOwner(iv);
+
+                // Create all components required by constructing if operation.
+                if (loop.hasConstantLowerBound()) {
+                  ifExprs.push_back(rewriter.getAffineDimExpr(dim++) -
+                                    loop.getConstantLowerBound());
+                  ifOperands.push_back(loop.getInductionVar());
+                } else {
+                  // Non-constant case requires to integrate the bound affine
+                  // expression and operands into the condition integer set.
+                  auto lowerExpr = loop.getLowerBoundMap().getResult(0);
+                  auto lowerOperands = loop.getLowerBoundOperands();
+                  SmallVector<AffineExpr, 4> newDims;
+                  for (unsigned i = 0, e = lowerOperands.size(); i < e; ++i)
+                    newDims.push_back(rewriter.getAffineDimExpr(i + dim + 1));
+                  lowerExpr = lowerExpr.replaceDimsAndSymbols(newDims, {});
+
+                  ifExprs.push_back(rewriter.getAffineDimExpr(dim) - lowerExpr);
+                  ifOperands.push_back(loop.getInductionVar());
+                  ifOperands.append(lowerOperands.begin(), lowerOperands.end());
+                  dim += lowerOperands.size() + 1;
+                }
+                ifEqFlags.push_back(true);
+              }
+
+              rewriter.setInsertionPoint(read);
+              auto value = rewriter.create<mlir::AffineLoadOp>(
+                  read.getLoc(), bufferArg, read.getMapOperands());
+
+              if (!ifExprs.empty()) {
+                auto ifCondition = IntegerSet::get(dim, 0, ifExprs, ifEqFlags);
+                auto ifOp = rewriter.create<AffineIfOp>(
+                    read.getLoc(), ifCondition, ifOperands, false);
+                rewriter.setInsertionPointToStart(ifOp.getThenBlock());
+              }
+
+              rewriter.create<mlir::AffineStoreOp>(
+                  read.getLoc(), value, newBufferArg, read.getMapOperands());
+              continue;
+            }
+          }
+
+        // Otherwise, we need to create explicit data copy from the original
+        // buffer to new buffer.
         rewriter.create<memref::CopyOp>(loc, bufferArg, newBufferArg);
       }
     }
