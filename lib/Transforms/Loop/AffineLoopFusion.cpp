@@ -1680,11 +1680,13 @@ public:
               Value newMemRef = createPrivateMemRef(
                   dstAffineForOp, storesForMemref[0], bestDstLoopDepth,
                   fastMemorySpace, localBufSizeThreshold);
-              // Create new node in dependence graph for 'newMemRef' alloc op.
-              unsigned newMemRefNodeId =
-                  mdg->addNode(newMemRef.getDefiningOp());
-              // Add edge from 'newMemRef' node to dstNode.
-              mdg->addEdge(newMemRefNodeId, dstId, newMemRef);
+              if (newMemRef.getDefiningOp()) {
+                // Create new node in dependence graph for 'newMemRef' alloc op.
+                unsigned newMemRefNodeId =
+                    mdg->addNode(newMemRef.getDefiningOp());
+                // Add edge from 'newMemRef' node to dstNode.
+                mdg->addEdge(newMemRefNodeId, dstId, newMemRef);
+              }
             }
             // One or more entries for 'newMemRef' alloc op are inserted into
             // the DenseMap mdg->nodes. Since an insertion may cause DenseMap to
