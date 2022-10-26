@@ -232,6 +232,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         // Affine loop dataflowing.
         pm.addPass(scalehls::createCreateDataflowFromAffinePass());
         pm.addPass(scalehls::createStreamDataflowTaskPass());
+        pm.addPass(scalehls::createCollapseMemrefUnitDimsPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
         if (opts.debugPoint == 9)

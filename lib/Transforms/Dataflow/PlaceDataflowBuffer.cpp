@@ -53,9 +53,9 @@ struct PlaceBuffer : public OpRewritePattern<func::FuncOp> {
         std::get<0>(t).setType(std::get<1>(t));
     });
 
-    func.setType(
-        FunctionType::get(func.getContext(), func.front().getArgumentTypes(),
-                          func.front().getTerminator()->getOperandTypes()));
+    func.setType(rewriter.getFunctionType(
+        func.front().getArgumentTypes(),
+        func.front().getTerminator()->getOperandTypes()));
     return success();
   }
 

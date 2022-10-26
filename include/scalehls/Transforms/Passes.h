@@ -84,6 +84,7 @@ std::unique_ptr<Pass> createRemoveVariableBoundPass();
 
 /// Memory-related passes.
 std::unique_ptr<Pass> createAffineStoreForwardPass();
+std::unique_ptr<Pass> createCollapseMemrefUnitDimsPass();
 std::unique_ptr<Pass>
 createCreateLocalBufferPass(bool externalBufferOnly = true,
                             bool registerOnly = false);
