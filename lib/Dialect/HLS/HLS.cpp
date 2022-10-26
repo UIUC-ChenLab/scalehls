@@ -916,13 +916,16 @@ bool hls::isRam1P(MemoryKind kind) {
   return kind == MemoryKind::LUTRAM_1P || kind == MemoryKind::BRAM_1P ||
          kind == MemoryKind::URAM_1P;
 }
+bool hls::isRam2P(MemoryKind kind) {
+  return kind == MemoryKind::LUTRAM_2P || kind == MemoryKind::BRAM_2P ||
+         kind == MemoryKind::URAM_2P;
+}
 bool hls::isRamS2P(MemoryKind kind) {
   return kind == MemoryKind::LUTRAM_S2P || kind == MemoryKind::BRAM_S2P ||
          kind == MemoryKind::URAM_S2P;
 }
 bool hls::isRamT2P(MemoryKind kind) {
-  return kind == MemoryKind::LUTRAM_T2P || kind == MemoryKind::BRAM_T2P ||
-         kind == MemoryKind::URAM_T2P;
+  return kind == MemoryKind::BRAM_T2P || kind == MemoryKind::URAM_T2P;
 }
 bool hls::isDram(MemoryKind kind) { return kind == MemoryKind::DRAM; }
 

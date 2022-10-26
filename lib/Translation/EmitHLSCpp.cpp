@@ -672,8 +672,7 @@ void ModuleEmitter::emitAxiPort(AxiPortOp op) {
       // For now, we set the offset of all m_axi interfaces as slave.
       auto kind = MemoryKind(memrefType.getMemorySpaceAsInt());
       if (kind == MemoryKind::DRAM) {
-        // FIXME: We have issues on using m_axi as the bitwith after reshaping
-        // is not power of 2.
+        // FIXME: AXI cannot be directly enabled with the current model.
         // os << " m_axi offset=slave bundle=" << bundleName;
         os << " ap_memory";
       } else
@@ -1698,11 +1697,7 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
     if (factors[dim] != 1) {
       emitPragmaFlag = true;
 
-      // FIXME: Array reshape sometimes will cause Vivado fail to reason about
-      // the memory parallelism.
-      // if (isExternalBuffer(memref))
-      //   indent() << "#pragma HLS array_reshape";
-      // else
+      // FIXME: How to handle external memories?
       indent() << "#pragma HLS array_partition";
       os << " variable=";
       emitValue(memref);
@@ -1714,7 +1709,14 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
         os << " cyclic";
 
       os << " factor=" << factors[dim];
-      os << " dim=" << dim + 1 << "\n";
+
+      // Vitis HLS has a wierd feature/bug that will automatically collapse the
+      // first dimension if its size is equal to one.
+      auto directiveDim = dim + 1;
+      if (emitVitisDirectives.getValue())
+        if (type.getShape().front() == 1)
+          directiveDim = dim;
+      os << " dim=" << directiveDim << "\n";
     }
   }
 
@@ -1733,14 +1735,17 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
       case MemoryKind::LUTRAM_1P:
         os << " type=ram_1p impl=lutram";
         break;
+      case MemoryKind::LUTRAM_2P:
+        os << " type=ram_2p impl=lutram";
+        break;
       case MemoryKind::LUTRAM_S2P:
         os << " type=ram_s2p impl=lutram";
         break;
-      case MemoryKind::LUTRAM_T2P:
-        os << " type=ram_t2p impl=lutram";
-        break;
       case MemoryKind::BRAM_1P:
         os << " type=ram_1p impl=bram";
+        break;
+      case MemoryKind::BRAM_2P:
+        os << " type=ram_2p impl=bram";
         break;
       case MemoryKind::BRAM_S2P:
         os << " type=ram_s2p impl=bram";
@@ -1750,6 +1755,9 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
         break;
       case MemoryKind::URAM_1P:
         os << " type=ram_1p impl=uram";
+        break;
+      case MemoryKind::URAM_2P:
+        os << " type=ram_2p impl=uram";
         break;
       case MemoryKind::URAM_S2P:
         os << " type=ram_s2p impl=uram";
@@ -1767,14 +1775,44 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
       emitValue(memref);
 
       os << " core=";
-      if (kind == MemoryKind::BRAM_1P)
+      switch (kind) {
+      case MemoryKind::LUTRAM_1P:
+        os << "ram_1p_lutram";
+        break;
+      case MemoryKind::LUTRAM_2P:
+        os << "ram_2p_lutram";
+        break;
+      case MemoryKind::LUTRAM_S2P:
+        os << "ram_s2p_lutram";
+        break;
+      case MemoryKind::BRAM_1P:
         os << "ram_1p_bram";
-      else if (kind == MemoryKind::BRAM_S2P)
+        break;
+      case MemoryKind::BRAM_2P:
+        os << "ram_2p_bram";
+        break;
+      case MemoryKind::BRAM_S2P:
         os << "ram_s2p_bram";
-      else if (kind == MemoryKind::BRAM_T2P)
+        break;
+      case MemoryKind::BRAM_T2P:
         os << "ram_t2p_bram";
-      else
+        break;
+      case MemoryKind::URAM_1P:
+        os << "ram_1p_uram";
+        break;
+      case MemoryKind::URAM_2P:
+        os << "ram_2p_uram";
+        break;
+      case MemoryKind::URAM_S2P:
+        os << "ram_s2p_uram";
+        break;
+      case MemoryKind::URAM_T2P:
+        os << "ram_t2p_uram";
+        break;
+      default:
         os << "ram_s2p_bram";
+        break;
+      }
     }
     // Emit a new line.
     os << "\n";
@@ -1788,52 +1826,8 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
 void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
                                            ArrayRef<Value> portList) {
   // Only top function should emit interface pragmas.
-  if (hasTopFuncAttr(func)) {
+  if (hasTopFuncAttr(func))
     indent() << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
-
-    // for (auto &port : portList) {
-    //   // Array ports and scalar ports are handled separately. Here, we only
-    //   // handle MemRef types since we assume the IR has be fully bufferized.
-    //   if (auto memrefType = port.getType().dyn_cast<MemRefType>()) {
-    //     // Only emit interface pragma when the array is not fully
-    //     partitioned. if (!isFullyPartitioned(memrefType)) {
-    //       indent() << "#pragma HLS interface";
-    //       // For now, we set the offset of all m_axi interfaces as slave.
-    //       auto kind = MemoryKind(memrefType.getMemorySpaceAsInt());
-    //       if (kind == MemoryKind::DRAM) {
-    //         os << " m_axi offset=slave bundle=";
-    //         emitValue(port);
-    //       } else
-    //         os << " bram";
-
-    //       os << " port=";
-    //       emitValue(port);
-    //       os << "\n";
-
-    //       // Emit DRAM variable as stable.
-    //       if (kind == MemoryKind::DRAM) {
-    //         indent() << "#pragma HLS stable";
-    //         os << " variable=";
-    //         emitValue(port);
-    //         os << "\n";
-    //       }
-    //     }
-    //   } else {
-    //     indent() << "#pragma HLS interface s_axilite";
-    //     os << " port=";
-
-    //     // TODO: This is a temporary solution.
-    //     auto name = getName(port);
-    //     if (name.front() == "*"[0])
-    //       name.erase(name.begin());
-    //     os << name;
-    //     os << " bundle=ctrl\n";
-    //   }
-    // }
-
-    // // An empty line.
-    // os << "\n";
-  }
 
   // Emit other pragmas for function ports.
   for (auto &port : portList)
