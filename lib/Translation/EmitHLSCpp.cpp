@@ -19,6 +19,8 @@ using namespace scalehls;
 
 static llvm::cl::opt<bool> emitVitisDirectives("emit-vitis-directives",
                                                llvm::cl::init(false));
+static llvm::cl::opt<bool> enforceFalseDependency("enforce-false-dependency",
+                                                  llvm::cl::init(false));
 
 //===----------------------------------------------------------------------===//
 // Utils
@@ -1673,14 +1675,26 @@ void ModuleEmitter::emitBlock(Block &block) {
   }
 }
 
-void ModuleEmitter::emitLoopDirectives(Operation *op) {
-  auto loopDirect = getLoopDirective(op);
+void ModuleEmitter::emitLoopDirectives(Operation *loop) {
+  auto loopDirect = getLoopDirective(loop);
   if (!loopDirect)
     return;
 
-  if (loopDirect.getPipeline())
+  if (loopDirect.getPipeline()) {
     indent() << "#pragma HLS pipeline II=" << loopDirect.getTargetII() << "\n";
-  else if (loopDirect.getDataflow())
+    if (enforceFalseDependency.getValue()) {
+      llvm::SmallDenseSet<Value> memrefs;
+      for (auto &op : loop->getRegion(0).getOps()) {
+        if (auto affineStore = dyn_cast<mlir::AffineWriteOpInterface>(op))
+          memrefs.insert(affineStore.getMemRef());
+        else if (auto store = dyn_cast<memref::StoreOp>(op))
+          memrefs.insert(store.getMemRef());
+      }
+      for (auto memref : memrefs)
+        indent() << "#pragma HLS dependence variable=" << getName(memref)
+                 << " dependent=false\n";
+    }
+  } else if (loopDirect.getDataflow())
     indent() << "#pragma HLS dataflow\n";
 }
 
