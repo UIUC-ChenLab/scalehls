@@ -233,24 +233,25 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createCreateDataflowFromAffinePass());
         pm.addPass(scalehls::createStreamDataflowTaskPass());
         pm.addPass(scalehls::createCollapseMemrefUnitDimsPass());
+        pm.addPass(scalehls::createAffineStoreForwardPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
         if (opts.debugPoint == 9)
           return;
 
-        // Lower dataflow.
+        // Lower and optimize dataflow.
         pm.addPass(scalehls::createLowerDataflowPass());
         pm.addPass(scalehls::createEliminateMultiProducerPass());
         pm.addPass(scalehls::createScheduleDataflowNodePass());
         pm.addPass(scalehls::createBalanceDataflowNodePass());
-        pm.addPass(scalehls::createLegalizeDataflowSchedulePass());
         pm.addPass(scalehls::createLowerCopyToAffinePass());
+        pm.addPass(scalehls::createAffineStoreForwardPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
         if (opts.debugPoint == 10)
           return;
 
-        // Affine loop unrolling.
+        // Parallelize dataflow.
         if (opts.loopUnrollFactor) {
           pm.addPass(scalehls::createParallelizeDataflowNodePass(
               opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true));
@@ -272,6 +273,7 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
           return;
 
         // Convert dataflow to func.
+        pm.addPass(scalehls::createLegalizeDataflowSchedulePass());
         pm.addPass(scalehls::createCreateTokenStreamPass());
         pm.addPass(
             scalehls::createConvertDataflowToFuncPass(opts.dataflowLeafNode));
