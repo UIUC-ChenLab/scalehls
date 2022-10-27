@@ -1780,7 +1780,7 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
         os << " type=ram_t2p impl=uram";
         break;
       default:
-        os << " type=ram_s2p impl=bram";
+        os << " type=ram_t2p impl=bram";
         break;
       }
     } else {
@@ -1824,7 +1824,7 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
         os << "ram_t2p_uram";
         break;
       default:
-        os << "ram_s2p_bram";
+        os << "ram_t2p_bram";
         break;
       }
     }

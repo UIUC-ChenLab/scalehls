@@ -42,7 +42,7 @@ struct CreateLocalBuffer
       // local buffer's memref type.
       auto bufType = MemRefType::get(
           subview.getType().getShape(), subview.getType().getElementType(),
-          AffineMap(), (unsigned)MemoryKind::BRAM_S2P);
+          AffineMap(), (unsigned)MemoryKind::BRAM_T2P);
 
       // Allocate an on-chip buffer and replace all its uses.
       auto loc = builder.getUnknownLoc();

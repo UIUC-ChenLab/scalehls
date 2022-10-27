@@ -23,7 +23,7 @@ struct PlaceBuffer : public OpRewritePattern<func::FuncOp> {
   MemRefType getPlacedType(MemRefType type) const {
     auto kind = placeExternalBuffer && type.getNumElements() >= 1024
                     ? MemoryKind::DRAM
-                    : MemoryKind::BRAM_S2P;
+                    : MemoryKind::BRAM_T2P;
     auto newType =
         MemRefType::get(type.getShape(), type.getElementType(),
                         type.getLayout().getAffineMap(), (unsigned)kind);
