@@ -56,5 +56,4 @@ add_mlir_library(MLIRScaleHLSTransforms
 
   LINK_LIBS PUBLIC
   MLIRHLS
-  MLIRScaleHLSSupport
   )

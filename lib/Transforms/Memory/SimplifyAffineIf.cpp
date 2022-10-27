@@ -6,7 +6,7 @@
 
 #include "mlir/Dialect/Affine/Analysis/AffineStructures.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "scalehls/Support/Utils.h"
+#include "scalehls/Dialect/HLS/Utils.h"
 #include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;

@@ -4,15 +4,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "scalehls/Dialect/HLS/HLS.h"
 #include "mlir/Analysis/Liveness.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/IntegerSet.h"
-#include "scalehls/Support/Utils.h"
+#include "scalehls/Dialect/HLS/Utils.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 using namespace mlir;

@@ -7,7 +7,7 @@
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "scalehls/Support/Utils.h"
+#include "scalehls/Dialect/HLS/Utils.h"
 #include "scalehls/Transforms/Passes.h"
 #include "llvm/Support/Debug.h"
 
