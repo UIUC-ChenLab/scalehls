@@ -18,9 +18,18 @@ namespace scalehls {
 
 using namespace hls;
 
+using AffineLoopBand = SmallVector<AffineForOp, 6>;
+using AffineLoopBands = std::vector<AffineLoopBand>;
+
 //===----------------------------------------------------------------------===//
 // Dataflow utils
 //===----------------------------------------------------------------------===//
+
+/// Get the root affine loop contained by the node.
+AffineForOp getNodeRootLoop(NodeOp currentNode);
+
+/// Get the affine loop band contained by the node.
+AffineLoopBand getNodeLoopBand(NodeOp currentNode);
 
 /// Wrap the operations in the block with dispatch op.
 DispatchOp dispatchBlock(Block *block);
@@ -86,9 +95,6 @@ bool checkSameIfStatement(AffineIfOp lhsOp, AffineIfOp rhsOp);
 
 /// Parse array attributes.
 SmallVector<int64_t, 8> getIntArrayAttrValue(Operation *op, StringRef name);
-
-using AffineLoopBand = SmallVector<AffineForOp, 6>;
-using AffineLoopBands = std::vector<AffineLoopBand>;
 
 /// For storing all affine memory access operations (including AffineLoadOp, and
 /// AffineStoreOp) indexed by the corresponding memref.

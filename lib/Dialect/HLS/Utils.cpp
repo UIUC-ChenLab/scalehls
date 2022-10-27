@@ -23,6 +23,20 @@ using namespace hls;
 // Dataflow utils
 //===----------------------------------------------------------------------===//
 
+/// Get the root affine loop contained by the node.
+AffineForOp scalehls::getNodeRootLoop(NodeOp currentNode) {
+  assert(llvm::hasSingleElement(currentNode.getOps<AffineForOp>()) &&
+         "node must only contain one loop band");
+  return *currentNode.getOps<AffineForOp>().begin();
+}
+
+/// Get the affine loop band contained by the node.
+AffineLoopBand scalehls::getNodeLoopBand(NodeOp currentNode) {
+  AffineLoopBand band;
+  getLoopBandFromOutermost(getNodeRootLoop(currentNode), band);
+  return band;
+}
+
 /// Wrap the operations in the block with dispatch op.
 DispatchOp scalehls::dispatchBlock(Block *block) {
   if (!block->getOps<DispatchOp>().empty() ||

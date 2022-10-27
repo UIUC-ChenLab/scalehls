@@ -83,3 +83,27 @@ ComplexityAnalysis::calculateBlockComplexity(Block *block) const {
   }
   return complexity;
 }
+
+CorrelationAnalysis::CorrelationAnalysis(func::FuncOp func) {
+  func.walk([](hls::BufferLikeInterface buffer) {
+    // For now, we don't consider external memories in the correlation analysis.
+    if (isExternalBuffer(buffer.getMemref()))
+      return WalkResult::advance();
+
+    auto isAnalyzable = [](NodeOp node) {
+      return !cast<hls::StageLikeInterface>(node.getOperation())
+                  .hasHierarchy() &&
+             llvm::hasSingleElement(node.getOps<AffineForOp>());
+    };
+
+    for (auto producer : getProducers(buffer.getMemref())) {
+      if (!isAnalyzable(producer))
+        continue;
+      for (auto consumer : getConsumersExcept(buffer.getMemref(), producer)) {
+        if (!isAnalyzable(consumer))
+          continue;
+      }
+    }
+    return WalkResult::advance();
+  });
+}

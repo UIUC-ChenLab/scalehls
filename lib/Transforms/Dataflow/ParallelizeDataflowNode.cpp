@@ -51,7 +51,7 @@ struct ParallelizeDataflowNode
 
     // Try to calculate the unroll factors of the nodes contained in each
     // dataflow schedule.
-    auto result = func.walk<WalkOrder::PreOrder>([&](ScheduleOp schedule) {
+    func.walk<WalkOrder::PreOrder>([&](ScheduleOp schedule) {
       unsigned long scheduleUnrollFactor = maxUnrollFactor.getValue();
       if (auto parentNode = schedule->getParentOfType<NodeOp>()) {
         if (!nodeUnrollFactorMap.count(parentNode)) {
