@@ -7,6 +7,7 @@
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
 #include "mlir/Dialect/Affine/LoopUtils.h"
 #include "mlir/Dialect/Affine/Utils.h"
+#include "scalehls/Dialect/HLS/Analysis.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
@@ -44,75 +45,13 @@ struct ParallelizeDataflowNode
     pointLoopOnly = unrollPointLoopOnly;
   }
 
-  /// A helper to get the complexity of a schedule.
-  Optional<unsigned long> getScheduleComplexity(ScheduleOp schedule) const {
-    unsigned long scheduleComplexity = 0;
-    for (auto node : schedule.getOps<NodeOp>()) {
-      if (!nodeComplexityMap.count(node))
-        return Optional<unsigned long>();
-      scheduleComplexity =
-          std::max(scheduleComplexity, nodeComplexityMap.lookup(node));
-    }
-    return scheduleComplexity;
-  }
-
-  /// A helper to get the complexity of the given block
-  Optional<unsigned long> getBlockComplexity(Block *block) const {
-    unsigned long complexity = 0;
-    for (auto &op : block->getOperations()) {
-      assert(!isa<NodeOp>(op) && "must not be node op");
-
-      if (auto schedule = dyn_cast<ScheduleOp>(op)) {
-        auto scheduleComplexity = getScheduleComplexity(schedule);
-        if (!scheduleComplexity.has_value())
-          return Optional<unsigned long>();
-        complexity += scheduleComplexity.value();
-
-      } else if (auto loop = dyn_cast<mlir::AffineForOp>(op)) {
-        auto loopComplexity = getBlockComplexity(loop.getBody());
-        auto loopTripCount = getAverageTripCount(loop);
-        if (!loopComplexity.has_value() || !loopTripCount.has_value())
-          return Optional<unsigned long>();
-        complexity += loopTripCount.value() *
-                      std::max((unsigned long)1, loopComplexity.value());
-
-      } else if (auto ifOp = dyn_cast<mlir::AffineIfOp>(op)) {
-        auto thenComplexity = getBlockComplexity(ifOp.getThenBlock());
-        if (!thenComplexity.has_value())
-          return Optional<unsigned long>();
-        auto ifComplexity = thenComplexity.value();
-
-        if (ifOp.hasElse()) {
-          auto elseComplexity = getBlockComplexity(ifOp.getElseBlock());
-          if (!elseComplexity.has_value())
-            return Optional<unsigned long>();
-          ifComplexity = std::max(ifComplexity, elseComplexity.value());
-        }
-        complexity += ifComplexity;
-      }
-      // else if (!op.hasTrait<OpTrait::IsTerminator>())
-      //   complexity += 1;
-    }
-    return complexity;
-  }
-
   void runOnOperation() override {
     auto func = getOperation();
-
-    // Try to calculate the computational complexity of each node.
-    auto result = func.walk([&](NodeOp node) {
-      auto nodeComplexity = getBlockComplexity(&node.getBody().front());
-      if (!nodeComplexity.has_value()) {
-        node.emitOpError("failed to calculate node complexity");
-        return WalkResult::interrupt();
-      }
-      nodeComplexityMap.insert({node, nodeComplexity.value()});
-      return WalkResult::advance();
-    });
+    auto ca = ComplexityAnalysis(func);
 
     // Try to calculate the unroll factors of the nodes contained in each
     // dataflow schedule.
-    result = func.walk<WalkOrder::PreOrder>([&](ScheduleOp schedule) {
+    auto result = func.walk<WalkOrder::PreOrder>([&](ScheduleOp schedule) {
       unsigned long scheduleUnrollFactor = maxUnrollFactor.getValue();
       if (auto parentNode = schedule->getParentOfType<NodeOp>()) {
         if (!nodeUnrollFactorMap.count(parentNode)) {
@@ -122,19 +61,20 @@ struct ParallelizeDataflowNode
         scheduleUnrollFactor = nodeUnrollFactorMap.lookup(parentNode);
       }
 
-      auto scheduleComplexity = getScheduleComplexity(schedule);
+      auto scheduleComplexity = ca.getScheduleComplexity(schedule);
       if (!scheduleComplexity.has_value()) {
         schedule.emitOpError("failed to get schedule complexity");
         return WalkResult::interrupt();
       }
 
       for (auto node : schedule.getOps<NodeOp>()) {
-        if (!nodeComplexityMap.count(node)) {
+        auto nodeComplexity = ca.getNodeComplexity(node);
+        if (!nodeComplexity.has_value()) {
           node.emitOpError("failed to get node complexity");
           return WalkResult::interrupt();
         }
         auto nodeUnrollFactor = 1 + scheduleUnrollFactor *
-                                        nodeComplexityMap.lookup(node) /
+                                        nodeComplexity.value() /
                                         scheduleComplexity.value();
         nodeUnrollFactorMap.insert({node, nodeUnrollFactor});
       }
@@ -179,7 +119,6 @@ struct ParallelizeDataflowNode
   }
 
 private:
-  llvm::SmallDenseMap<NodeOp, unsigned long> nodeComplexityMap;
   llvm::SmallDenseMap<NodeOp, unsigned long> nodeUnrollFactorMap;
 };
 } // namespace
