@@ -19,6 +19,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Directive/CreateHLSPrimitive.cpp
   Directive/FuncPipelining.cpp
   Directive/LoopPipelining.cpp
+  Directive/LowerAffine.cpp
   Directive/QoREstimation.cpp
 
   Loop/AffineLoopFusion.cpp

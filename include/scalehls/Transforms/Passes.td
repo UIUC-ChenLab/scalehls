@@ -482,6 +482,11 @@ def LoopPipelining : Pass<"scalehls-loop-pipelining", "func::FuncOp"> {
   ];
 }
 
+def LowerAffine : Pass<"scalehls-lower-affine", "func::FuncOp"> {
+  let summary = "Lower AffineSelectOp and AffineForOp";
+  let constructor = "mlir::scalehls::createLowerAffinePass()";
+}
+
 def QoREstimation : Pass<"scalehls-qor-estimation", "ModuleOp"> {
   let summary = "Estimate the performance and resource utilization";
   let description = [{
