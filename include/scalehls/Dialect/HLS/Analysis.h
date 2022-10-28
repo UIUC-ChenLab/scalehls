@@ -127,6 +127,9 @@ public:
     return nodeCorrelationMap.lookup(node);
   }
 
+  auto begin() { return nodeCorrelationMap.begin(); }
+  auto end() { return nodeCorrelationMap.end(); }
+
 private:
   SmallVector<Correlation> correlations;
   llvm::SmallDenseMap<NodeOp, CorrelationList> nodeCorrelationMap;

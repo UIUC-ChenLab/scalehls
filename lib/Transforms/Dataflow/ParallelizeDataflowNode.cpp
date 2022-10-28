@@ -10,6 +10,9 @@
 #include "scalehls/Dialect/HLS/Analysis.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
+#include "llvm/Support/Debug.h"
+
+#define DEBUG_TYPE "parallelize-dataflow-node"
 
 using namespace mlir;
 using namespace scalehls;
@@ -48,7 +51,7 @@ struct ParallelizeDataflowNode
   /// Try to calculate the unroll factors of the nodes contained in each
   /// dataflow schedule.
   void getNodeUnrollFactorMap(func::FuncOp func) {
-    auto CA = ComplexityAnalysis(func);
+    auto CompAnal = ComplexityAnalysis(func);
     nodeUnrollFactorMap.clear();
 
     func.walk<WalkOrder::PreOrder>([&](ScheduleOp schedule) {
@@ -61,14 +64,14 @@ struct ParallelizeDataflowNode
         scheduleUnrollFactor = nodeUnrollFactorMap.lookup(parentNode);
       }
 
-      auto scheduleComplexity = CA.getScheduleComplexity(schedule);
+      auto scheduleComplexity = CompAnal.getScheduleComplexity(schedule);
       if (!scheduleComplexity.has_value()) {
         schedule.emitOpError("failed to get schedule complexity");
         return WalkResult::interrupt();
       }
 
       for (auto node : schedule.getOps<NodeOp>()) {
-        auto nodeComplexity = CA.getNodeComplexity(node);
+        auto nodeComplexity = CompAnal.getNodeComplexity(node);
         if (!nodeComplexity.has_value()) {
           node.emitOpError("failed to get node complexity");
           return WalkResult::interrupt();
@@ -120,10 +123,34 @@ struct ParallelizeDataflowNode
     }
   }
 
+  /// Unroll loops based on the correlations between dataflow nodes.
+  void applyCorrelationAwareUnroll(func::FuncOp func) {
+    auto CorrAnal = CorrelationAnalysis(func);
+
+    // We first sort all nodes in a decending order of their associated number
+    // of correlations. The rationale is nodes that have more correlations
+    // should be optimized first.
+    SmallVector<std::pair<NodeOp, unsigned>> nodes;
+    for (auto nodeAndCors : CorrAnal)
+      nodes.push_back({nodeAndCors.first, nodeAndCors.second.size()});
+    llvm::sort(nodes, [](auto a, auto b) { return a.second > b.second; });
+
+    LLVM_DEBUG(
+        // clang-format off
+        for (auto node : nodes) {
+          llvm::dbgs() << "\nCorrelations: " << node.second << "\n";
+          llvm::dbgs() << "Node at " << node.first.getLoc() << ": \n"
+                       << node.first << "\n";
+        }
+        // clang-format on
+    );
+  }
+
   void runOnOperation() override {
     auto func = getOperation();
     getNodeUnrollFactorMap(func);
-    applyNaiveLoopUnroll();
+    // applyNaiveLoopUnroll();
+    applyCorrelationAwareUnroll(func);
   }
 
 private:

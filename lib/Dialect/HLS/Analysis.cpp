@@ -6,6 +6,9 @@
 
 #include "scalehls/Dialect/HLS/Analysis.h"
 #include "scalehls/Transforms/Utils.h"
+#include "llvm/Support/Debug.h"
+
+#define DEBUG_TYPE "dataflow-analysis"
 
 using namespace mlir;
 using namespace scalehls;
@@ -182,6 +185,26 @@ CorrelationAnalysis::CorrelationAnalysis(func::FuncOp func) {
 
         auto correlation = Correlation(producer, consumer, bufferOp,
                                        sourceToTargetMap, targetToSourceMap);
+        LLVM_DEBUG(
+            // clang-format off
+            llvm::dbgs() << "\n--------- Correlation ----------\n";
+            llvm::dbgs() << "Buffer at " << bufferOp.getLoc() << ": "
+                         << bufferOp << "\n";
+            llvm::dbgs() << "Producer at " << producer.getLoc() << ":\n"
+                         << producer << "\n";
+            llvm::dbgs() << "Consumer at " << consumer.getLoc() << ":\n"
+                         << consumer << "\n";
+            llvm::dbgs() << "Source-to-target Map: { ";
+            for (auto i : sourceToTargetMap)
+              llvm::dbgs() << i << " ";
+            llvm::dbgs() << "}\n";
+            llvm::dbgs() << "Target-to-source Map: { ";
+            for (auto i : targetToSourceMap)
+              llvm::dbgs() << i << " ";
+            llvm::dbgs() << "}\n";
+            // clang-format on
+        );
+
         correlations.push_back(correlation);
         nodeCorrelationMap[producer].push_back(&correlations.back());
         nodeCorrelationMap[consumer].push_back(&correlations.back());
