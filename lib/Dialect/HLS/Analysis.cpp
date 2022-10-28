@@ -84,24 +84,107 @@ ComplexityAnalysis::calculateBlockComplexity(Block *block) const {
   return complexity;
 }
 
-CorrelationAnalysis::CorrelationAnalysis(func::FuncOp func) {
-  func.walk([](hls::BufferLikeInterface buffer) {
-    // For now, we don't consider external memories in the correlation analysis.
-    if (isExternalBuffer(buffer.getMemref()))
+SmallVector<int64_t> getBufferIndexToLoopDepthMap(NodeOp node, Value buffer) {
+  if (cast<hls::StageLikeInterface>(node.getOperation()).hasHierarchy() ||
+      !llvm::hasSingleElement(node.getOps<AffineForOp>()))
+    return SmallVector<int64_t>();
+
+  auto band = getNodeLoopBand(node);
+  auto localBuffer = node.getBody().getArgument(
+      llvm::find(node.getOperands(), buffer) - node.operand_begin());
+
+  SmallVector<Value> bufferIndices;
+  auto result = band.front().walk([&](Operation *op) {
+    Value memref;
+    AffineMap map;
+    SmallVector<Value> indices;
+    if (auto read = dyn_cast<mlir::AffineReadOpInterface>(op)) {
+      memref = read.getMemRef();
+      map = read.getAffineMap();
+      indices = read.getMapOperands();
+    } else if (auto write = dyn_cast<mlir::AffineWriteOpInterface>(op)) {
+      memref = write.getMemRef();
+      map = write.getAffineMap();
+      indices = write.getMapOperands();
+    } else
       return WalkResult::advance();
 
-    auto isAnalyzable = [](NodeOp node) {
-      return !cast<hls::StageLikeInterface>(node.getOperation())
-                  .hasHierarchy() &&
-             llvm::hasSingleElement(node.getOps<AffineForOp>());
-    };
+    if (memref != localBuffer)
+      return WalkResult::advance();
+    if (!map.isIdentity())
+      return WalkResult::interrupt();
 
-    for (auto producer : getProducers(buffer.getMemref())) {
-      if (!isAnalyzable(producer))
+    if (bufferIndices.empty())
+      bufferIndices = indices;
+    else if (bufferIndices != indices)
+      return WalkResult::interrupt();
+    return WalkResult::advance();
+  });
+
+  if (result.wasInterrupted())
+    return SmallVector<int64_t>();
+
+  SmallVector<int64_t> depths;
+  for (auto index : bufferIndices) {
+    if (isForInductionVar(index)) {
+      auto loop = getForInductionVarOwner(index);
+      unsigned depth = llvm::find(band, loop) - band.begin();
+      if (depth != band.size()) {
+        depths.push_back(depth);
         continue;
-      for (auto consumer : getConsumersExcept(buffer.getMemref(), producer)) {
-        if (!isAnalyzable(consumer))
+      }
+    }
+    depths.push_back(-1);
+  }
+  return depths;
+}
+
+SmallVector<int64_t> getPermuteMap(NodeOp node, SmallVector<int64_t> lhsDepths,
+                                   SmallVector<int64_t> rhsDepths) {
+  assert(lhsDepths.size() == rhsDepths.size() && "incorrect number of depths");
+  SmallVector<int64_t> permuteMap;
+
+  for (int64_t i = 0, e = getNodeLoopBand(node).size(); i < e; i++) {
+    unsigned index = llvm::find(rhsDepths, i) - rhsDepths.begin();
+    if (index != rhsDepths.size())
+      if (lhsDepths[index] != -1) {
+        permuteMap.push_back(lhsDepths[index]);
+        continue;
+      }
+    permuteMap.push_back(-1);
+  }
+  return permuteMap;
+}
+
+CorrelationAnalysis::CorrelationAnalysis(func::FuncOp func) {
+  func.walk([&](hls::BufferLikeInterface bufferOp) {
+    auto buffer = bufferOp.getMemref();
+
+    // For now, we don't consider external memories in the correlation analysis.
+    if (isExternalBuffer(buffer))
+      return WalkResult::advance();
+
+    // TODO: Support nested node and node that has multiple loop bands.
+    for (auto producer : getProducers(buffer)) {
+      auto sourceDepths = getBufferIndexToLoopDepthMap(producer, buffer);
+      if (sourceDepths.empty())
+        continue;
+
+      for (auto consumer : getConsumersExcept(buffer, producer)) {
+        auto targetDepths = getBufferIndexToLoopDepthMap(consumer, buffer);
+        if (targetDepths.empty())
           continue;
+
+        auto sourceToTargetMap =
+            getPermuteMap(consumer, sourceDepths, targetDepths);
+        auto targetToSourceMap =
+            getPermuteMap(producer, targetDepths, sourceDepths);
+
+        auto correlation = Correlation(producer, consumer, bufferOp,
+                                       sourceToTargetMap, targetToSourceMap);
+        correlations.push_back(correlation);
+        nodeCorrelationMap[producer].push_back(&correlations.back());
+        nodeCorrelationMap[consumer].push_back(&correlations.back());
       }
     }
     return WalkResult::advance();

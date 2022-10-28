@@ -45,12 +45,12 @@ struct ParallelizeDataflowNode
     pointLoopOnly = unrollPointLoopOnly;
   }
 
-  void runOnOperation() override {
-    auto func = getOperation();
-    auto ca = ComplexityAnalysis(func);
+  /// Try to calculate the unroll factors of the nodes contained in each
+  /// dataflow schedule.
+  void getNodeUnrollFactorMap(func::FuncOp func) {
+    auto CA = ComplexityAnalysis(func);
+    nodeUnrollFactorMap.clear();
 
-    // Try to calculate the unroll factors of the nodes contained in each
-    // dataflow schedule.
     func.walk<WalkOrder::PreOrder>([&](ScheduleOp schedule) {
       unsigned long scheduleUnrollFactor = maxUnrollFactor.getValue();
       if (auto parentNode = schedule->getParentOfType<NodeOp>()) {
@@ -61,14 +61,14 @@ struct ParallelizeDataflowNode
         scheduleUnrollFactor = nodeUnrollFactorMap.lookup(parentNode);
       }
 
-      auto scheduleComplexity = ca.getScheduleComplexity(schedule);
+      auto scheduleComplexity = CA.getScheduleComplexity(schedule);
       if (!scheduleComplexity.has_value()) {
         schedule.emitOpError("failed to get schedule complexity");
         return WalkResult::interrupt();
       }
 
       for (auto node : schedule.getOps<NodeOp>()) {
-        auto nodeComplexity = ca.getNodeComplexity(node);
+        auto nodeComplexity = CA.getNodeComplexity(node);
         if (!nodeComplexity.has_value()) {
           node.emitOpError("failed to get node complexity");
           return WalkResult::interrupt();
@@ -80,8 +80,10 @@ struct ParallelizeDataflowNode
       }
       return WalkResult::advance();
     });
+  }
 
-    // Unroll each dataflow node based the calculated unroll factor.
+  /// Unroll each dataflow node based the calculated unroll factor.
+  void applyNaiveLoopUnroll() {
     for (auto p : nodeUnrollFactorMap) {
       auto node = p.first;
       AffineLoopBands bands;
@@ -116,6 +118,12 @@ struct ParallelizeDataflowNode
         applyLoopUnrollJam(band, p.second);
       }
     }
+  }
+
+  void runOnOperation() override {
+    auto func = getOperation();
+    getNodeUnrollFactorMap(func);
+    applyNaiveLoopUnroll();
   }
 
 private:
