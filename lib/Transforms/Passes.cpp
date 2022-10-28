@@ -225,6 +225,9 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         pm.addPass(scalehls::createLowerCopyToAffinePass());
         pm.addPass(memref::createFoldMemRefAliasOpsPass());
         scalehls::addSimplifyAffineLoopPasses(pm);
+        pm.addPass(scalehls::createCollapseMemrefUnitDimsPass());
+        pm.addPass(scalehls::createAffineStoreForwardPass());
+        pm.addPass(mlir::createCanonicalizerPass());
 
         if (opts.debugPoint == 8)
           return;
@@ -232,8 +235,6 @@ void scalehls::registerScaleHLSPyTorchPipelineV2() {
         // Affine loop dataflowing.
         pm.addPass(scalehls::createCreateDataflowFromAffinePass());
         pm.addPass(scalehls::createStreamDataflowTaskPass());
-        pm.addPass(scalehls::createCollapseMemrefUnitDimsPass());
-        pm.addPass(scalehls::createAffineStoreForwardPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
         if (opts.debugPoint == 9)

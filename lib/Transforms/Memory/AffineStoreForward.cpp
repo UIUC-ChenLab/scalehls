@@ -192,6 +192,8 @@ static void findUnusedStore(mlir::AffineWriteOpInterface writeA,
 static void loadCSE(mlir::AffineReadOpInterface loadA,
                     SmallVectorImpl<Operation *> &loadOpsToErase,
                     DominanceInfo &domInfo) {
+  // FIXME: This is not safe!!! After task is created from affine, we should not
+  // apply this as the dependencies cannot be identified correctly.
   if (auto buffer = loadA.getMemRef().getDefiningOp<BufferOp>())
     if (auto initValue = buffer.getInitValue())
       if (llvm::all_of(buffer->getUsers(), [&](Operation *user) {
