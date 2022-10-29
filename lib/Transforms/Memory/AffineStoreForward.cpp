@@ -213,26 +213,26 @@ static void loadCSE(mlir::AffineReadOpInterface loadA,
                     DominanceInfo &domInfo) {
   // FIXME: This is not safe!!! After task is created from affine, we should not
   // apply this as the dependencies cannot be identified correctly.
-  if (auto buffer = loadA.getMemRef().getDefiningOp<BufferOp>())
-    if (auto initValue = buffer.getInitValue())
-      if (llvm::all_of(buffer->getUsers(), [&](Operation *user) {
-            if (auto store = dyn_cast<mlir::AffineWriteOpInterface>(user)) {
-              if (crossRegionDominates(store, loadA))
-                return false;
-              if (checkDependence(store, loadA))
-                return false;
-              return true;
-            }
-            return true;
-          })) {
-        auto builder = OpBuilder(loadA);
-        builder.setInsertionPoint(loadA);
-        auto constantInitValue = builder.create<arith::ConstantOp>(
-            loadA.getLoc(), initValue.value());
-        loadA.getValue().replaceAllUsesWith(constantInitValue);
-        loadOpsToErase.push_back(loadA);
-        return;
-      }
+  // if (auto buffer = loadA.getMemRef().getDefiningOp<BufferOp>())
+  //   if (auto initValue = buffer.getInitValue())
+  //     if (llvm::all_of(buffer->getUsers(), [&](Operation *user) {
+  //           if (auto store = dyn_cast<mlir::AffineWriteOpInterface>(user)) {
+  //             if (crossRegionDominates(store, loadA))
+  //               return false;
+  //             if (checkDependence(store, loadA))
+  //               return false;
+  //             return true;
+  //           }
+  //           return true;
+  //         })) {
+  //       auto builder = OpBuilder(loadA);
+  //       builder.setInsertionPoint(loadA);
+  //       auto constantInitValue = builder.create<arith::ConstantOp>(
+  //           loadA.getLoc(), initValue.value());
+  //       loadA.getValue().replaceAllUsesWith(constantInitValue);
+  //       loadOpsToErase.push_back(loadA);
+  //       return;
+  //     }
 
   SmallVector<mlir::AffineReadOpInterface, 4> loadCandidates;
   for (auto *user : loadA.getMemRef().getUsers()) {

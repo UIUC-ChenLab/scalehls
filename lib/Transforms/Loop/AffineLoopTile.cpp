@@ -69,15 +69,18 @@ bool scalehls::applyLoopTiling(AffineLoopBand &band, FactorList tileList,
       setPointAttr(pointLoop);
   }
 
-  // Collect the normalized tile band.
+  // Always normalize point loop band.
+  for (auto loop : pointBand)
+    (void)normalizeAffineFor(loop);
+
+  // Normalize tiled loop band if required.
   if (loopNormalize) {
     band.clear();
-    for (auto loop : tiledBand) {
-      (void)normalizeAffineFor(loop);
-      auto tripCount = getConstantTripCount(loop);
-      if (!tripCount || tripCount.value() != 1)
+    for (auto loop : tiledBand)
+      if (failed(promoteIfSingleIteration(loop))) {
+        (void)normalizeAffineFor(loop);
         band.push_back(loop);
-    }
+      }
   } else
     band = tiledBand;
   return true;
@@ -122,7 +125,7 @@ struct AffineLoopTile : public AffineLoopTileBase<AffineLoopTile> {
       if (avoidMaxMinBounds)
         adjustToDivisorsOfTripCounts(band, &tileSizes);
 
-      applyLoopTiling(band, tileSizes, /*loopNormalize=*/false);
+      applyLoopTiling(band, tileSizes, /*loopNormalize=*/true);
     }
   }
 

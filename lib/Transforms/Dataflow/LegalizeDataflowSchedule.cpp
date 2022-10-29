@@ -26,6 +26,7 @@ struct FuseSameLevelNodes : public OpRewritePattern<ScheduleOp> {
         return failure();
     }
 
+    // TODO: Only if they are sharing the same input, we should merge them.
     bool hasChanged = false;
     for (const auto &p : worklist)
       if (p.second.size() > 1) {

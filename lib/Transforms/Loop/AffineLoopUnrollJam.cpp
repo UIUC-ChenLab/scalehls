@@ -32,31 +32,34 @@ bool scalehls::applyFullyLoopUnrolling(Block &block, unsigned maxIterNum) {
 
 /// Apply unroll and jam to the loop band with the given overall unroll factor.
 bool scalehls::applyLoopUnrollJam(AffineLoopBand &band,
-                                  unsigned overallUnrollFactor,
-                                  bool loopOrderOpt) {
+                                  unsigned overallUnrollFactor) {
   assert(!band.empty() && "no loops provided");
   if (overallUnrollFactor == 1)
     return true;
 
   // Calculate the tiling size of each loop level.
   auto sizes = getDistributedFactors(overallUnrollFactor, band);
-  return applyLoopUnrollJam(band, sizes, loopOrderOpt);
+  return applyLoopUnrollJam(band, sizes);
 }
 
 /// Apply unroll and jam to the loop band with the given unroll factors.
 bool scalehls::applyLoopUnrollJam(AffineLoopBand &band,
-                                  FactorList unrollFactors, bool loopOrderOpt) {
+                                  FactorList unrollFactors) {
   assert(!band.empty() && "no loops provided");
   if (llvm::all_of(unrollFactors, [](unsigned factor) { return factor == 1; }))
     return true;
 
-  // FIXME: Unknown issue causing failure in order opt.
-  if (loopOrderOpt)
-    applyAffineLoopOrderOpt(band);
-
   // Apply loop tiling and then unroll all point loops.
   applyLoopTiling(band, unrollFactors, /*loopNormalize=*/false);
-  return applyFullyLoopUnrolling(*band.back().getBody());
+  auto result = applyFullyLoopUnrolling(*band.back().getBody());
+  auto tiledBand = band;
+
+  // Promote single iteration tiled loop band.
+  band.clear();
+  for (auto loop : tiledBand)
+    if (failed(promoteIfSingleIteration(loop)))
+      band.push_back(loop);
+  return result;
 }
 
 namespace {

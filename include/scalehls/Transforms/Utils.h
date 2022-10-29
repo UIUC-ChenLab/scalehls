@@ -39,12 +39,10 @@ bool applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
                          unsigned targetII);
 
 /// Apply unroll and jam to the loop band with the given overall unroll factor.
-bool applyLoopUnrollJam(AffineLoopBand &band, unsigned unrollFactor,
-                        bool loopOrderOpt = false);
+bool applyLoopUnrollJam(AffineLoopBand &band, unsigned unrollFactor);
 
 /// Apply unroll and jam to the loop band with the given unroll factors.
-bool applyLoopUnrollJam(AffineLoopBand &band, FactorList unrollFactors,
-                        bool loopOrderOpt = false);
+bool applyLoopUnrollJam(AffineLoopBand &band, FactorList unrollFactors);
 
 /// Fully unroll all loops insides of a loop block.
 bool applyFullyLoopUnrolling(Block &block, unsigned maxIterNum = 10);
