@@ -15,6 +15,12 @@
 using namespace mlir;
 using namespace scalehls;
 
+/// A helper to check whether an ifOp is valid to be replaced with select.
+bool isValid(AffineIfOp ifOp, Operation *targetOp) {
+  return !ifOp.hasElse() && ifOp.getThenBlock()->getOperations().size() == 2 &&
+         ifOp->getParentRegion()->isAncestor(targetOp->getParentRegion());
+}
+
 /// Attempt to eliminate loadOp by replacing it with a value stored into memory
 /// which the load is guaranteed to retrieve. This check involves three
 /// components: 1) The store and load must be on the same location 2) The store
@@ -56,9 +62,7 @@ forwardStoreToLoad(mlir::AffineReadOpInterface loadOp,
     // intervening effect searching.
     Operation *startOp = storeOp;
     if (auto ifOp = dyn_cast<mlir::AffineIfOp>(storeOp->getParentOp()))
-      if (!ifOp.hasElse() && ifOp.getThenBlock()->getOperations().size() == 2 &&
-          ifOp->getParentRegion()->isAncestor(loadOp->getParentRegion()) &&
-          !ifAlwaysTrueOrFalse(ifOp).second)
+      if (isValid(ifOp, loadOp) && !ifAlwaysTrueOrFalse(ifOp).second)
         startOp = ifOp;
     if (!domInfo.dominates(startOp, loadOp))
       continue;
@@ -151,13 +155,14 @@ static void findUnusedStore(mlir::AffineWriteOpInterface writeA,
     Operation *targetA = writeA;
     Operation *targetB = writeB;
     if (auto ifOpA = dyn_cast<mlir::AffineIfOp>(writeA->getParentOp())) {
-      if (!ifOpA.hasElse() &&
-          ifOpA.getThenBlock()->getOperations().size() == 2 &&
-          ifOpA->getParentRegion()->isAncestor(writeB->getParentRegion()))
+      if (isValid(ifOpA, writeB))
         targetA = ifOpA;
       if (auto ifOpB = dyn_cast<mlir::AffineIfOp>(writeB->getParentOp()))
         if (checkSameIfStatement(ifOpA, ifOpB))
           targetB = ifOpB;
+    } else if (auto ifOpB = dyn_cast<mlir::AffineIfOp>(writeB->getParentOp())) {
+      if (isValid(ifOpB, writeA))
+        targetB = ifOpB;
     }
     if (targetA->getParentRegion() != targetB->getParentRegion())
       continue;
@@ -172,6 +177,20 @@ static void findUnusedStore(mlir::AffineWriteOpInterface writeA,
                                                      writeB.getMemRef()))
       continue;
 
+    if (targetA == writeA && targetB != writeB) {
+      auto ifOp = cast<AffineIfOp>(targetB);
+      writeB->moveBefore(ifOp);
+
+      auto builder = OpBuilder(ifOp);
+      builder.setInsertionPoint(writeB);
+      auto select = builder.create<hls::AffineSelectOp>(
+          ifOp.getLoc(), ifOp.getIntegerSet(), ifOp.getOperands(),
+          writeB.getValueToStore(), writeA.getValueToStore());
+      ifOp->erase();
+
+      writeB.getValueToStore().replaceUsesWithIf(
+          select, [&](OpOperand &use) { return use.getOwner() == writeB; });
+    }
     opsToErase.push_back(targetA);
     break;
   }

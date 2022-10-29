@@ -77,18 +77,22 @@ public:
 
   // Get the correlated node of the current node.
   NodeOp getCorrelatedNode(NodeOp currentNode) const {
-    return isSourceNode(currentNode) ? sourceNode : targetNode;
+    return isSourceNode(currentNode) ? targetNode : sourceNode;
+  }
+
+  SmallVector<int64_t> getCorrelateMap(NodeOp currentNode) const {
+    if (isSourceNode(currentNode))
+      return sourceToTargetMap;
+    else
+      return targetToSourceMap;
   }
 
   // Permute factors of the current node to the correlated node.
-  FactorList permuteFactors(NodeOp currentNode,
-                            FactorList &factors) {
+  FactorList permuteFactors(NodeOp currentNode, FactorList &factors) {
     assert(factors.size() == getNodeLoopBand(currentNode).size() &&
            "invalid permutation factors");
-    if (isSourceNode(currentNode))
-      return permuteFactorsWithMap(factors, sourceToTargetMap);
-    else
-      return permuteFactorsWithMap(factors, targetToSourceMap);
+    auto correlateMap = getCorrelateMap(currentNode);
+    return permuteFactorsWithMap(factors, correlateMap);
   }
 
 private:

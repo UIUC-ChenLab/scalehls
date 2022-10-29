@@ -204,13 +204,29 @@ struct ParallelizeDataflowNode
           llvm::dbgs() << "Node at " << node.getLoc() << ": \n" << node << "\n";
           // clang-format on
       );
-
       nodeUnrollFactorsMap[node] = factors;
+
       for (auto corr : corrList) {
         auto corrNode = corr.getCorrelatedNode(node);
         if (nodeUnrollFactorsMap.count(corrNode))
           continue;
         auto corrFactors = corr.permuteFactors(node, factors);
+
+        LLVM_DEBUG(
+            // clang-format off
+            llvm::dbgs() << "----------\n";
+            llvm::dbgs() << "Correlate Map: { ";
+            for (auto factor : corr.getCorrelateMap(node))
+              llvm::dbgs() << factor << " ";
+            llvm::dbgs() << "}\n";
+            llvm::dbgs() << "Correlated Factors: { ";
+            for (auto factor : corrFactors)
+              llvm::dbgs() << factor << " ";
+            llvm::dbgs() << "}\n";
+            llvm::dbgs() << "Correlated Node at " << corrNode.getLoc() << ": \n"
+                         << corrNode << "\n";
+            // clang-format on
+        );
         nodeUnrollFactorsMap[corrNode] = corrFactors;
       }
     }
