@@ -1680,21 +1680,12 @@ void ModuleEmitter::emitLoopDirectives(Operation *loop) {
   if (!loopDirect)
     return;
 
-  if (loopDirect.getPipeline()) {
+  if (!hasParallelAttr(loop) && enforceFalseDependency.getValue())
+    indent() << "#pragma HLS dependence false\n";
+
+  if (loopDirect.getPipeline())
     indent() << "#pragma HLS pipeline II=" << loopDirect.getTargetII() << "\n";
-    if (enforceFalseDependency.getValue()) {
-      llvm::SmallDenseSet<Value> memrefs;
-      for (auto &op : loop->getRegion(0).getOps()) {
-        if (auto affineStore = dyn_cast<mlir::AffineWriteOpInterface>(op))
-          memrefs.insert(affineStore.getMemRef());
-        else if (auto store = dyn_cast<memref::StoreOp>(op))
-          memrefs.insert(store.getMemRef());
-      }
-      for (auto memref : memrefs)
-        indent() << "#pragma HLS dependence variable=" << getName(memref)
-                 << " dependent=false\n";
-    }
-  } else if (loopDirect.getDataflow())
+  else if (loopDirect.getDataflow())
     indent() << "#pragma HLS dataflow\n";
 }
 
@@ -1842,6 +1833,9 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
   // Only top function should emit interface pragmas.
   if (hasTopFuncAttr(func))
     indent() << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
+
+  if (func->getAttr("inline"))
+    indent() << "#pragma HLS inline\n";
 
   // Emit other pragmas for function ports.
   for (auto &port : portList)
