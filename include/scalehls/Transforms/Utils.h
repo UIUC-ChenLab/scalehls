@@ -30,8 +30,7 @@ bool applyRemoveVariableBound(AffineLoopBand &band);
 
 /// Apply loop tiling to the input loop band and sink all intra-tile loops to
 /// the innermost loop with the original loop order.
-using TileList = SmallVector<unsigned, 8>;
-bool applyLoopTiling(AffineLoopBand &band, TileList tileList,
+bool applyLoopTiling(AffineLoopBand &band, FactorList tileList,
                      bool loopNormalize = true, bool annotatePointLoop = true);
 
 /// Apply loop pipelining to the pipelineLoc of the input loop band, all inner
@@ -39,8 +38,12 @@ bool applyLoopTiling(AffineLoopBand &band, TileList tileList,
 bool applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
                          unsigned targetII);
 
-/// Apply loop unroll and jam to the loop band with the given unroll factor.
+/// Apply unroll and jam to the loop band with the given overall unroll factor.
 bool applyLoopUnrollJam(AffineLoopBand &band, unsigned unrollFactor,
+                        bool loopOrderOpt = false);
+
+/// Apply unroll and jam to the loop band with the given unroll factors.
+bool applyLoopUnrollJam(AffineLoopBand &band, FactorList unrollFactors,
                         bool loopOrderOpt = false);
 
 /// Fully unroll all loops insides of a loop block.
@@ -64,10 +67,10 @@ bool applyMemoryOpts(func::FuncOp func);
 /// passed in because the post-tiling optimizations have to take function as
 /// target, e.g. canonicalizer and array partition.
 bool applyOptStrategy(AffineLoopBand &band, func::FuncOp func,
-                      TileList tileList, unsigned targetII);
+                      FactorList tileList, unsigned targetII);
 
 /// Apply optimization strategy to a function.
-bool applyOptStrategy(func::FuncOp func, ArrayRef<TileList> tileLists,
+bool applyOptStrategy(func::FuncOp func, ArrayRef<FactorList> tileLists,
                       ArrayRef<unsigned> targetIIs);
 
 } // namespace scalehls

@@ -30,22 +30,32 @@ bool scalehls::applyFullyLoopUnrolling(Block &block, unsigned maxIterNum) {
   return true;
 }
 
-/// Apply loop unroll and jam to the loop band with the given unroll factor.
-bool scalehls::applyLoopUnrollJam(AffineLoopBand &band, unsigned unrollFactor,
+/// Apply unroll and jam to the loop band with the given overall unroll factor.
+bool scalehls::applyLoopUnrollJam(AffineLoopBand &band,
+                                  unsigned overallUnrollFactor,
                                   bool loopOrderOpt) {
   assert(!band.empty() && "no loops provided");
-  if (unrollFactor == 1)
+  if (overallUnrollFactor == 1)
     return true;
 
   // Calculate the tiling size of each loop level.
-  auto sizes = getDistributedFactors(unrollFactor, band);
+  auto sizes = getDistributedFactors(overallUnrollFactor, band);
+  return applyLoopUnrollJam(band, sizes, loopOrderOpt);
+}
+
+/// Apply unroll and jam to the loop band with the given unroll factors.
+bool scalehls::applyLoopUnrollJam(AffineLoopBand &band,
+                                  FactorList unrollFactors, bool loopOrderOpt) {
+  assert(!band.empty() && "no loops provided");
+  if (llvm::all_of(unrollFactors, [](unsigned factor) { return factor == 1; }))
+    return true;
 
   // FIXME: Unknown issue causing failure in order opt.
   if (loopOrderOpt)
     applyAffineLoopOrderOpt(band);
 
   // Apply loop tiling and then unroll all point loops.
-  applyLoopTiling(band, sizes, /*loopNormalize=*/false);
+  applyLoopTiling(band, unrollFactors, /*loopNormalize=*/false);
   return applyFullyLoopUnrolling(*band.back().getBody());
 }
 

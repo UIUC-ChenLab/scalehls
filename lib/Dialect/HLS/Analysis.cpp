@@ -183,8 +183,8 @@ CorrelationAnalysis::CorrelationAnalysis(func::FuncOp func) {
         auto targetToSourceMap =
             getPermuteMap(producer, targetDepths, sourceDepths);
 
-        auto correlation = Correlation(producer, consumer, bufferOp,
-                                       sourceToTargetMap, targetToSourceMap);
+        auto corr = Correlation(producer, consumer, bufferOp, sourceToTargetMap,
+                                targetToSourceMap);
         LLVM_DEBUG(
             // clang-format off
             llvm::dbgs() << "\n--------- Correlation ----------\n";
@@ -205,9 +205,9 @@ CorrelationAnalysis::CorrelationAnalysis(func::FuncOp func) {
             // clang-format on
         );
 
-        correlations.push_back(correlation);
-        nodeCorrelationMap[producer].push_back(&correlations.back());
-        nodeCorrelationMap[consumer].push_back(&correlations.back());
+        // correlations.push_back(corr);
+        nodeCorrelationMap[producer].push_back(corr);
+        nodeCorrelationMap[consumer].push_back(corr);
       }
     }
     return WalkResult::advance();

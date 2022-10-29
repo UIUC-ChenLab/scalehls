@@ -16,7 +16,7 @@ using namespace hls;
 
 /// Apply loop tiling to the input loop band and sink all intra-tile loops to
 /// the innermost loop with the original loop order.
-bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList,
+bool scalehls::applyLoopTiling(AffineLoopBand &band, FactorList tileList,
                                bool loopNormalize, bool annotatePointLoop) {
   assert(!band.empty() && "no loops provided");
   if (!isPerfectlyNested(band))
@@ -85,8 +85,8 @@ bool scalehls::applyLoopTiling(AffineLoopBand &band, TileList tileList,
 
 /// Reduces each tile size to the largest divisor of the corresponding trip
 /// count (if the trip count is known).
-static void adjustToDivisorsOfTripCounts(ArrayRef<AffineForOp> band,
-                                         SmallVectorImpl<unsigned> *tileSizes) {
+void scalehls::adjustToDivisorsOfTripCounts(
+    ArrayRef<AffineForOp> band, SmallVectorImpl<unsigned> *tileSizes) {
   assert(band.size() == tileSizes->size() && "invalid tile size count");
   for (unsigned i = 0, e = band.size(); i < e; i++) {
     unsigned &tSizeAdjusted = (*tileSizes)[i];

@@ -61,7 +61,7 @@ static void updateParetoPoints(SmallVector<DesignPointType, 16> &paretoPoints) {
 // LoopDesignSpace Class Definition
 //===----------------------------------------------------------------------===//
 
-static void emitTileListDebugInfo(TileList tileList) {
+static void emitTileListDebugInfo(FactorList tileList) {
   LLVM_DEBUG(llvm::dbgs() << "(";
              for (unsigned i = 0, e = tileList.size(); i < e; ++i) {
                llvm::dbgs() << tileList[i];
@@ -139,10 +139,10 @@ LoopDesignSpace::LoopDesignSpace(func::FuncOp func, AffineLoopBand &band,
 }
 
 /// Return the actual tile vector given a tile config.
-TileList LoopDesignSpace::getTileList(TileConfig config) {
+FactorList LoopDesignSpace::getTileList(TileConfig config) {
   assert(config < validTileConfigNum && "invalid tile config");
 
-  TileList tileList;
+  FactorList tileList;
   unsigned factor = 1;
   for (auto validSizes : validTileSizesList) {
     auto idx = config / factor % validSizes.size();
@@ -155,7 +155,7 @@ TileList LoopDesignSpace::getTileList(TileConfig config) {
 }
 
 /// Return the corresponding tile config given a tile list.
-TileConfig LoopDesignSpace::getTileConfig(TileList tileList) {
+TileConfig LoopDesignSpace::getTileConfig(FactorList tileList) {
   assert(tileList.size() == validTileSizesList.size() && "invalid tile list");
 
   TileConfig config = 0;
@@ -510,7 +510,7 @@ bool FuncDesignSpace::exportParetoDesigns(unsigned outputNum,
   for (auto &funcPoint : paretoPoints) {
     // Only export sampled points.
     if (sampleIndex % sampleStep == 0) {
-      std::vector<TileList> tileLists;
+      std::vector<FactorList> tileLists;
       SmallVector<unsigned, 4> targetIIs;
 
       for (unsigned i = 0; i < loopDesignSpaces.size(); ++i) {
@@ -771,7 +771,7 @@ bool ScaleHLSExplorer::exploreDesignSpace(func::FuncOp func, bool directiveOnly,
   // Apply the best function design point under the constraints.
   for (auto &funcPoint : funcSpace.paretoPoints) {
     if (funcPoint.dspNum <= maxDspNum) {
-      std::vector<TileList> tileLists;
+      std::vector<FactorList> tileLists;
       SmallVector<unsigned, 4> targetIIs;
 
       for (unsigned i = 0; i < targetNum; ++i) {

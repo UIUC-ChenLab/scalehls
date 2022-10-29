@@ -81,8 +81,8 @@ public:
   }
 
   // Permute factors of the current node to the correlated node.
-  SmallVector<unsigned> permuteFactors(NodeOp currentNode,
-                                       SmallVector<unsigned> factors) {
+  FactorList permuteFactors(NodeOp currentNode,
+                            FactorList &factors) {
     assert(factors.size() == getNodeLoopBand(currentNode).size() &&
            "invalid permutation factors");
     if (isSourceNode(currentNode))
@@ -95,9 +95,9 @@ private:
   /// Permute "factors" with "map" and return the permuted factors. Note that
   /// "-1" in the permutation map indicates the output factor on the
   /// corresponding position is one.
-  SmallVector<unsigned> permuteFactorsWithMap(SmallVector<unsigned> factors,
-                                              SmallVector<int64_t> map) const {
-    SmallVector<unsigned> permutedFactors;
+  FactorList permuteFactorsWithMap(FactorList &factors,
+                                   SmallVectorImpl<int64_t> &map) const {
+    FactorList permutedFactors;
     for (auto i : map) {
       if (i >= 0 && i < (int64_t)factors.size())
         permutedFactors.push_back(factors[i]);
@@ -118,7 +118,7 @@ private:
 
 /// Correlations analysis between dataflow nodes.
 class CorrelationAnalysis {
-  using CorrelationList = SmallVector<Correlation *, 4>;
+  using CorrelationList = SmallVector<Correlation, 4>;
 
 public:
   CorrelationAnalysis(func::FuncOp func);
@@ -131,7 +131,7 @@ public:
   auto end() { return nodeCorrelationMap.end(); }
 
 private:
-  SmallVector<Correlation> correlations;
+  // SmallVector<Correlation> correlations;
   llvm::SmallDenseMap<NodeOp, CorrelationList> nodeCorrelationMap;
 };
 

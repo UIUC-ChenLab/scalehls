@@ -20,6 +20,7 @@ using namespace hls;
 
 using AffineLoopBand = SmallVector<AffineForOp, 6>;
 using AffineLoopBands = std::vector<AffineLoopBand>;
+using FactorList = SmallVector<unsigned, 8>;
 
 //===----------------------------------------------------------------------===//
 // Dataflow utils
@@ -76,6 +77,11 @@ bool isElementwiseGenericOp(linalg::GenericOp op);
 //===----------------------------------------------------------------------===//
 // Memory and loop analysis utils
 //===----------------------------------------------------------------------===//
+
+/// Reduces each tile size to the largest divisor of the corresponding trip
+/// count (if the trip count is known).
+void adjustToDivisorsOfTripCounts(ArrayRef<AffineForOp> band,
+                                  SmallVectorImpl<unsigned> *tileSizes);
 
 /// The current op or contained ops have effect on external buffers.
 bool hasEffectOnExternalBuffer(Operation *op);

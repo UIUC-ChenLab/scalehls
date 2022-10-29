@@ -41,10 +41,10 @@ public:
                            bool directiveOnly);
 
   /// Return the actual tile vector given a tile config.
-  TileList getTileList(TileConfig config);
+  FactorList getTileList(TileConfig config);
 
   /// Return the corresponding tile config given a tile list.
-  TileConfig getTileConfig(TileList tileList);
+  TileConfig getTileConfig(FactorList tileList);
 
   /// Calculate the Euclid distance of config a and config b.
   float getTileConfigDistance(TileConfig configA, TileConfig configB);

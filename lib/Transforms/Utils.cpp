@@ -47,7 +47,7 @@ bool scalehls::applyMemoryOpts(func::FuncOp func) {
 /// passed in because the post-tiling optimizations have to take function as
 /// target, e.g. canonicalizer and array partition.
 bool scalehls::applyOptStrategy(AffineLoopBand &band, func::FuncOp func,
-                                TileList tileList, unsigned targetII) {
+                                FactorList tileList, unsigned targetII) {
   // By design the input function must be the ancestor of the input loop band.
   if (!func->isProperAncestor(band.front()))
     return false;
@@ -68,7 +68,8 @@ bool scalehls::applyOptStrategy(AffineLoopBand &band, func::FuncOp func,
 }
 
 /// Apply optimization strategy to a function.
-bool scalehls::applyOptStrategy(func::FuncOp func, ArrayRef<TileList> tileLists,
+bool scalehls::applyOptStrategy(func::FuncOp func,
+                                ArrayRef<FactorList> tileLists,
                                 ArrayRef<unsigned> targetIIs) {
   AffineLoopBands bands;
   getLoopBands(func.front(), bands);
