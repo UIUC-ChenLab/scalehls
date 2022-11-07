@@ -1680,12 +1680,15 @@ void ModuleEmitter::emitLoopDirectives(Operation *loop) {
   if (!loopDirect)
     return;
 
-  if (!hasParallelAttr(loop) && enforceFalseDependency.getValue())
+  if (!hasParallelAttr(loop) && !loopDirect.getDataflow() &&
+      enforceFalseDependency.getValue())
     indent() << "#pragma HLS dependence false\n";
 
-  if (loopDirect.getPipeline())
+  if (loopDirect.getPipeline()) {
     indent() << "#pragma HLS pipeline II=" << loopDirect.getTargetII() << "\n";
-  else if (loopDirect.getDataflow())
+    // if (enforceFalseDependency.getValue())
+    //   indent() << "#pragma HLS dependence false\n";
+  } else if (loopDirect.getDataflow())
     indent() << "#pragma HLS dataflow\n";
 }
 
