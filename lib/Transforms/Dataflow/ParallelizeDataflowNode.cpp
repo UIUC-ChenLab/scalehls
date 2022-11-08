@@ -62,6 +62,11 @@ struct ParallelizeDataflowNode
           return WalkResult::interrupt();
         }
         scheduleUnrollFactor = nodeParallelFactorMap.lookup(parentNode);
+        // FIXME: A hacky method to hand tune the factors and resolve
+        // outstanding dataflow nodes.
+        if (auto annoFactorAttr = schedule->getAttr("factor"))
+          if (auto annoFactor = annoFactorAttr.dyn_cast<IntegerAttr>())
+            scheduleUnrollFactor *= annoFactor.getInt();
       }
 
       auto scheduleComplexity = compAnal.getScheduleComplexity(schedule);
