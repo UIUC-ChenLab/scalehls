@@ -271,6 +271,7 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
 
         // Find the max array access distance in the current block.
         unsigned maxDistance = 0;
+        unsigned maxCommonDivisor = 0;
         bool requireMux = false;
 
         for (unsigned i = 0; i < accessNum; ++i) {
@@ -287,56 +288,57 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
             if (auto constDistance = newExpr.dyn_cast<AffineConstantExpr>()) {
               unsigned distance = std::abs(constDistance.getValue());
               maxDistance = std::max(maxDistance, distance);
+              maxCommonDivisor = std::gcd(distance, maxCommonDivisor);
             } else
               requireMux = true;
           }
         }
-
-        // Determine array partition strategy.
-        // TODO: take storage type into consideration.
-        // TODO: the partition strategy requires more case study.
         ++maxDistance;
-        if (maxDistance == 1) {
-          // This means all accesses have the same index, and this dimension
-          // should not be partitioned.
+
+        // This means all accesses have the same index, and this dimension
+        // should not be partitioned.
+        if (maxDistance == 1)
           continue;
 
-        } else if (accessNum >= maxDistance) {
+        // Determine array partition factor and kind.
+        // TODO: take storage type into consideration.
+        unsigned factor = 1;
+        PartitionKind kind = PartitionKind::NONE;
+        if (accessNum >= maxDistance) {
           // This means some elements are accessed more than once or exactly
           // once, and successive elements are accessed. In most cases, apply
           // "cyclic" partition should be the best solution.
-          unsigned factor = maxDistance;
-          if (factor > partitions[dim].second) {
-            // The rationale here is if the accessing partition index cannot be
-            // determined and partition factor is more than 3, a multiplexer
-            // will be generated and the memory access operation will be wrapped
-            // into a function call, which will cause dependency problems and
-            // make the latency and II even worse.
-            if (requireMux)
-              for (auto i = 3; i > 0; --i) {
-                if (factor % i == 0) {
-                  partitions[dim] = PartitionInfo(PartitionKind::CYCLIC, i);
-                  break;
-                }
-              }
-            else
-              partitions[dim] = PartitionInfo(PartitionKind::CYCLIC, factor);
-          }
+          factor = maxDistance;
+          kind = PartitionKind::CYCLIC;
+        } else if (maxCommonDivisor > 1) {
+          // This means the memory access is perfectly strided.
+          factor = maxDistance;
+          while (factor % maxCommonDivisor != 0)
+            factor++;
+          kind = PartitionKind::CYCLIC;
         } else {
-          // This means discrete elements are accessed. Typically, "block"
-          // partition will be most benefit for this occasion.
-          unsigned factor = accessNum;
-          if (factor > partitions[dim].second) {
-            if (requireMux)
-              for (auto i = 3; i > 0; --i) {
-                if (factor % i == 0) {
-                  partitions[dim] = PartitionInfo(PartitionKind::BLOCK, i);
-                  break;
-                }
+          // This means elements are accessed in a descrete manner however not
+          // strided. Typically, "block" partition will be the most benefitial
+          // partition strategy.
+          factor = accessNum;
+          kind = PartitionKind::BLOCK;
+        }
+
+        // The rationale here is if the accessing partition index cannot be
+        // determined and partition factor is more than 3, a multiplexer will be
+        // generated and the memory access operation will be wrapped into a
+        // function call, which will cause dependency problems and make the
+        // latency and II even worse.
+        if (factor > partitions[dim].second) {
+          if (requireMux)
+            for (auto i = 3; i > 0; --i) {
+              if (factor % i == 0) {
+                partitions[dim] = PartitionInfo(PartitionKind::CYCLIC, i);
+                break;
               }
-            else
-              partitions[dim] = PartitionInfo(PartitionKind::BLOCK, factor);
-          }
+            }
+          else
+            partitions[dim] = PartitionInfo(PartitionKind::CYCLIC, factor);
         }
       }
     }
