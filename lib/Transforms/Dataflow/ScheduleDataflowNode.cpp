@@ -27,8 +27,10 @@ struct ALAPScheduleNode : public OpRewritePattern<NodeOp> {
           node.getScheduleOp().isDependenceFree())
         continue;
 
-      // Stop to schedule if encounter multi-producer violation.
-      if (!getProducersExcept(output, node).empty())
+      // Stop to schedule the node if we encounter multi-producer or
+      // multi-consumer violation.
+      if (getConsumersExcept(output, node).size() > 1 ||
+          getProducers(output).size() > 1)
         return failure();
 
       for (auto consumer : getConsumersExcept(output, node)) {
@@ -53,6 +55,12 @@ struct ScheduleDataflowNode
     mlir::RewritePatternSet patterns(context);
     patterns.add<ALAPScheduleNode>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+
+    func.walk([&](ScheduleOp schedule) {
+      if (llvm::all_of(schedule.getOps<NodeOp>(),
+                       [](NodeOp node) { return node.getLevel(); }))
+        schedule.setIsLegalAttr(UnitAttr::get(context));
+    });
   }
 };
 } // namespace

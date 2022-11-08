@@ -60,7 +60,6 @@ struct FuseMultiConsumer : public OpRewritePattern<ScheduleOp> {
         hasChanged = true;
       }
     }
-    schedule.setIsLegalAttr(rewriter.getUnitAttr());
     return success(hasChanged);
   }
 };

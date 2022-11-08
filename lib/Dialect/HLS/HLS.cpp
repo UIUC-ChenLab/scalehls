@@ -413,7 +413,8 @@ LogicalResult NodeOp::verify() {
       if (isExternalBuffer(output) && output.getDefiningOp<BufferOp>())
         continue;
 
-      if (getConsumers(output).size() > 1 || getProducers(output).size() > 1) {
+      if (getConsumersExcept(output, *this).size() > 1 ||
+          getProducers(output).size() > 1) {
         auto diag = emitOpError(
             "legal schedule violates single-consumer or single-producer, ");
         diag << "see current buffer: " << output << "\n";

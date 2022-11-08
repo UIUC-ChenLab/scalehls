@@ -34,7 +34,7 @@ struct InlineSchedule : public OpRewritePattern<ScheduleOp> {
                          /*dataflow=*/true);
       else if (auto loop =
                    dyn_cast<mlir::AffineForOp>(schedule->getParentOp())) {
-        // If the schedule is located insided of a loop nest, try to coalesce
+        // If the schedule is located inside of a loop nest, try to coalesce
         // them into a flattened loop.
         AffineLoopBand band;
         getLoopBandFromInnermost(loop, band);
@@ -69,6 +69,11 @@ struct ConvertNodeToFunc : public OpRewritePattern<NodeOp> {
         node.getLoc(), prefix.str() + "_node" + std::to_string(nodeIdx++),
         rewriter.getFunctionType(node.getOperandTypes(), TypeRange()),
         NamedAttribute(rewriter.getStringAttr("func_directive"), attr));
+
+    // FIXME: A better method to judge whether to inline the node.
+    if (!cast<hls::StageLikeInterface>(node.getOperation()).hasHierarchy() &&
+        llvm::hasSingleElement(node.getOps<AffineForOp>()))
+      subFunc->setAttr("inline", rewriter.getUnitAttr());
 
     // Inline the contents of the dataflow node.
     rewriter.inlineRegionBefore(node.getBodyRegion(), subFunc.getBody(),
@@ -115,8 +120,9 @@ struct ConvertDataflowToFunc
       patterns.add<InlineSchedule>(context);
       patterns.add<ConvertNodeToFunc>(context, func.getName(), nodeIdx,
                                       dataflowLeafNode.getValue());
-      if (failed(applyPartialConversion(func, target, std::move(patterns))))
-        return signalPassFailure();
+      (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+      // if (failed(applyPartialConversion(func, target, std::move(patterns))))
+      //   return signalPassFailure();
     }
 
     // Remove memref global operations.
