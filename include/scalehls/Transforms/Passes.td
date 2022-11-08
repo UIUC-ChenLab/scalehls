@@ -98,20 +98,19 @@ def CreateTokenStream : Pass<"scalehls-create-token-stream", "func::FuncOp"> {
   let constructor = "mlir::scalehls::createCreateTokenStreamPass()";
 }
 
+def EliminateMultiConsumer :
+      Pass<"scalehls-eliminate-multi-consumer", "func::FuncOp"> {
+  let summary = "Eliminate multi-consumer violations";
+  let description = [{
+    This pass will insert explicit fork nodes to eliminate multi-consumers.
+  }];
+  let constructor = "mlir::scalehls::createEliminateMultiConsumerPass()";
+}
+
 def EliminateMultiProducer :
       Pass<"scalehls-eliminate-multi-producer", "func::FuncOp"> {
   let summary = "Try to eliminate multi-producer violations";
   let constructor = "mlir::scalehls::createEliminateMultiProducerPass()";
-}
-
-def LegalizeDataflowSchedule :
-      Pass<"scalehls-legalize-dataflow-schedule", "func::FuncOp"> {
-  let summary = "Legalize dataflow at node level";
-  let description = [{
-    This pass will legalize the dataflow to meet the single-producer and
-    single-consumer requirements of the dataflow schedule.
-  }];
-  let constructor = "mlir::scalehls::createLegalizeDataflowSchedulePass()";
 }
 
 def LowerDataflow : Pass<"scalehls-lower-dataflow", "func::FuncOp"> {

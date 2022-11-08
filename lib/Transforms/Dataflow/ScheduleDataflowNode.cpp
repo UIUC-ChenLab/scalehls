@@ -27,7 +27,7 @@ struct ALAPScheduleNode : public OpRewritePattern<NodeOp> {
           node.getScheduleOp().isDependenceFree())
         continue;
 
-      // TODO: Consider to merge all producers into the same level.
+      // Stop to schedule if encounter multi-producer violation.
       if (!getProducersExcept(output, node).empty())
         return failure();
 

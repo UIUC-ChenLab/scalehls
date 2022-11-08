@@ -13,7 +13,7 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-struct BufferBypassPath : public OpRewritePattern<NodeOp> {
+struct InsertCopyNode : public OpRewritePattern<NodeOp> {
   using OpRewritePattern<NodeOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(NodeOp node,
@@ -110,7 +110,7 @@ struct BalanceDataflowNode
     auto context = func.getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<BufferBypassPath>(context);
+    patterns.add<InsertCopyNode>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };

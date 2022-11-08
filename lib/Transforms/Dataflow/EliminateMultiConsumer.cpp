@@ -24,7 +24,7 @@ static void getNodesToMerge(llvm::SmallDenseSet<NodeOp> const &allNodes,
 }
 
 namespace {
-struct FuseSameLevelNodes : public OpRewritePattern<ScheduleOp> {
+struct FuseMultiConsumer : public OpRewritePattern<ScheduleOp> {
   using OpRewritePattern<ScheduleOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(ScheduleOp schedule,
@@ -67,22 +67,70 @@ struct FuseSameLevelNodes : public OpRewritePattern<ScheduleOp> {
 } // namespace
 
 namespace {
-struct LegalizeDataflowSchedule
-    : public LegalizeDataflowScheduleBase<LegalizeDataflowSchedule> {
+struct InsertForkNode : public OpRewritePattern<NodeOp> {
+  using OpRewritePattern<NodeOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(NodeOp node,
+                                PatternRewriter &rewriter) const override {
+    auto loc = rewriter.getUnknownLoc();
+
+    auto hasChanged = false;
+    for (auto output : node.getOutputs()) {
+      auto consumers = getConsumersExcept(output, node);
+      if (consumers.size() < 2)
+        continue;
+
+      hasChanged = true;
+      rewriter.setInsertionPointAfter(node);
+      SmallVector<Value> buffers;
+      SmallVector<Location> bufferLocs;
+
+      // Insert a buffer for each consumer.
+      for (auto consumer : consumers) {
+        auto buffer = rewriter.create<BufferOp>(loc, output.getType());
+        output.replaceUsesWithIf(
+            buffer, [&](OpOperand &use) { return use.getOwner() == consumer; });
+        buffers.push_back(buffer);
+        bufferLocs.push_back(loc);
+      }
+
+      // Create a new fork node.
+      auto fork = rewriter.create<NodeOp>(loc, output, buffers);
+      auto block = rewriter.createBlock(&fork.getBody());
+      auto outputArg = block->addArgument(output.getType(), output.getLoc());
+      auto bufferArgs = block->addArguments(ValueRange(buffers), bufferLocs);
+
+      // Create explicit copy from the original output to the buffers.
+      rewriter.setInsertionPointToStart(block);
+      for (auto bufferArg : bufferArgs)
+        rewriter.create<memref::CopyOp>(loc, outputArg, bufferArg);
+    }
+    return success(hasChanged);
+  }
+};
+} // namespace
+
+namespace {
+struct EliminateMultiConsumer
+    : public EliminateMultiConsumerBase<EliminateMultiConsumer> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<FuseSameLevelNodes>(context);
-    auto frozenPatterns = FrozenRewritePatternSet(std::move(patterns));
-    func.walk([&](ScheduleOp schedule) {
-      (void)applyOpPatternsAndFold(schedule, frozenPatterns);
-    });
+    patterns.add<InsertForkNode>(context);
+    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+
+    // mlir::RewritePatternSet patterns(context);
+    // patterns.add<FuseMultiConsumer>(context);
+    // auto frozenPatterns = FrozenRewritePatternSet(std::move(patterns));
+    // func.walk([&](ScheduleOp schedule) {
+    //   (void)applyOpPatternsAndFold(schedule, frozenPatterns);
+    // });
   }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createLegalizeDataflowSchedulePass() {
-  return std::make_unique<LegalizeDataflowSchedule>();
+std::unique_ptr<Pass> scalehls::createEliminateMultiConsumerPass() {
+  return std::make_unique<EliminateMultiConsumer>();
 }
