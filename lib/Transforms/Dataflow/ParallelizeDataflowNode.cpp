@@ -64,9 +64,12 @@ struct ParallelizeDataflowNode
         scheduleUnrollFactor = nodeParallelFactorMap.lookup(parentNode);
         // FIXME: A hacky method to hand tune the factors and resolve
         // outstanding dataflow nodes.
-        if (auto annoFactorAttr = schedule->getAttr("factor"))
-          if (auto annoFactor = annoFactorAttr.dyn_cast<IntegerAttr>())
+        if (auto attr = schedule->getAttr("increase"))
+          if (auto annoFactor = attr.dyn_cast<IntegerAttr>())
             scheduleUnrollFactor *= annoFactor.getInt();
+        if (auto attr = schedule->getAttr("decrease"))
+          if (auto annoFactor = attr.dyn_cast<IntegerAttr>())
+            scheduleUnrollFactor /= annoFactor.getInt();
       }
 
       auto scheduleComplexity = compAnal.getScheduleComplexity(schedule);
@@ -85,6 +88,16 @@ struct ParallelizeDataflowNode
                                         nodeComplexity.value() /
                                         scheduleComplexity.value();
         nodeParallelFactorMap.insert({node, nodeUnrollFactor});
+
+        LLVM_DEBUG(
+            // clang-format off
+          llvm::dbgs() << "\nNode Complexity: " << nodeComplexity.value() << "\n";
+          llvm::dbgs() << "Schedule Complexity: " << scheduleComplexity.value() << "\n";
+          llvm::dbgs() << "Node Factor: " << nodeUnrollFactor << "\n";
+          llvm::dbgs() << "Schedule Factor: " << scheduleUnrollFactor << "\n";
+          llvm::dbgs() << "Node at " << node.getLoc() << ": \n" << node << "\n";
+            // clang-format on
+        );
       }
       return WalkResult::advance();
     });
@@ -181,21 +194,48 @@ struct ParallelizeDataflowNode
         return overallFactor;
       };
 
-      // Increase the unroll factor from the innermost loop level until we reach
-      // the parallel factor.
-      unsigned index = band.size() - 1;
-      while (parallelFactor > getOverallFactor(factors) &&
-             llvm::any_of(llvm::zip(tripCounts, factors), [&](auto t) {
-               return std::get<0>(t) > std::get<1>(t);
-             })) {
-        auto tripCount = tripCounts[index];
-        auto &factor = factors[index];
-
+      auto increaseFactor = [](unsigned tripCount, unsigned &factor) {
         if (tripCount > factor || factor == 1)
           factor++;
         while (tripCount % factor != 0)
           factor++;
-        index = index == 0 ? band.size() - 1 : index - 1;
+      };
+
+      // Increase the unroll factors until reach the overall factor.
+      while (parallelFactor > getOverallFactor(factors)) {
+        // Candidates list recording the loop depth, current factor, and the
+        // increasing rate.
+        SmallVector<std::tuple<unsigned, unsigned, float>> candidates;
+        for (auto t : llvm::enumerate(llvm::zip(tripCounts, factors))) {
+          auto tripCount = std::get<0>(t.value());
+          auto factor = std::get<1>(t.value());
+          auto newFactor = factor;
+
+          increaseFactor(tripCount, newFactor);
+          if (newFactor != factor)
+            candidates.push_back(
+                {t.index(), factor, (float)newFactor / factor});
+        }
+
+        // Break the while loop if there's no candidates available.
+        if (candidates.empty())
+          break;
+
+        // Sort the candidates. Smaller increasing rate, smaller current factor,
+        // and larger loop depth is preferred. Smaller increasing rate can help
+        // to match the overall parallel factor as much as possible. Smaller
+        // current factor can help to distribute the overall parallel evenly.
+        llvm::sort(candidates, [](auto a, auto b) {
+          if (std::get<2>(a) != std::get<2>(b))
+            return std::get<2>(a) < std::get<2>(b);
+          else if (std::get<1>(a) != std::get<1>(b))
+            return std::get<1>(a) < std::get<1>(b);
+          else
+            return std::get<0>(a) > std::get<0>(b);
+        });
+
+        auto index = std::get<0>(candidates.front());
+        increaseFactor(tripCounts[index], factors[index]);
       }
 
       LLVM_DEBUG(
