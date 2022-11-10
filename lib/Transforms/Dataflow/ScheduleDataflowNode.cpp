@@ -27,11 +27,12 @@ struct ALAPScheduleNode : public OpRewritePattern<NodeOp> {
           node.getScheduleOp().isDependenceFree())
         continue;
 
-      // Stop to schedule the node if we encounter multi-producer or
+      // Stop to schedule the node if an internal buffer has multi-producer or
       // multi-consumer violation.
-      if (getConsumersExcept(output, node).size() > 1 ||
-          getProducers(output).size() > 1)
-        return failure();
+      if (!isExternalBuffer(output) || !output.getDefiningOp<BufferOp>())
+        if (getConsumersExcept(output, node).size() > 1 ||
+            getProducers(output).size() > 1)
+          return failure();
 
       for (auto consumer : getConsumersExcept(output, node)) {
         if (!consumer.getLevel())
