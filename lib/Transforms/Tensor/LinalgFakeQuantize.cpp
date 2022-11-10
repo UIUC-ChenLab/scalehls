@@ -6,7 +6,6 @@
 
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
-#include "llvm/Support/RandomNumberGenerator.h"
 
 using namespace mlir;
 using namespace scalehls;

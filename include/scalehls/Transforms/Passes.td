@@ -174,6 +174,11 @@ def ConvertTensorToLinalg :
   let constructor = "mlir::scalehls::createConvertTensorToLinalgPass()";
 }
 
+def LinalgAnalyzeModel : Pass<"scalehls-linalg-analyze-model", "func::FuncOp"> {
+  let summary = "Analyze the operation number of a linalg model";
+  let constructor = "mlir::scalehls::createLinalgAnalyzeModelPass()";
+}
+
 def LinalgFakeQuantize : Pass<"scalehls-linalg-fake-quantize", "ModuleOp"> {
   let summary = "Convert to quantized model (only for testing use)";
   let constructor = "mlir::scalehls::createLinalgFakeQuantizePass()";
