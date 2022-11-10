@@ -20,10 +20,11 @@ struct PlaceBuffer : public OpRewritePattern<func::FuncOp> {
         placeExternalBuffer(placeExternalBuffer) {}
 
   // TODO: For now, we use a heuristic to determine the buffer location.
-  MemRefType getPlacedType(MemRefType type) const {
-    auto kind = placeExternalBuffer && type.getNumElements() >= 1024
-                    ? MemoryKind::DRAM
-                    : MemoryKind::BRAM_T2P;
+  MemRefType getPlacedType(MemRefType type, bool isConstBuffer) const {
+    auto kind = MemoryKind::BRAM_T2P;
+    if (placeExternalBuffer || isConstBuffer)
+      kind = type.getNumElements() >= 1024 ? MemoryKind::DRAM
+                                           : MemoryKind::BRAM_T2P;
     auto newType =
         MemRefType::get(type.getShape(), type.getElementType(),
                         type.getLayout().getAffineMap(), (unsigned)kind);
@@ -44,7 +45,8 @@ struct PlaceBuffer : public OpRewritePattern<func::FuncOp> {
         arg.setType(getPlacedOnDramType(type));
 
     func.walk([&](hls::BufferLikeInterface buffer) {
-      buffer.getMemref().setType(getPlacedType(buffer.getMemrefType()));
+      buffer.getMemref().setType(getPlacedType(
+          buffer.getMemrefType(), isa<ConstBufferOp>(buffer.getOperation())));
     });
 
     func.walk([](YieldOp yield) {

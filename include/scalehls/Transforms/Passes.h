@@ -27,8 +27,9 @@ enum AffineFusionMode { Greedy, ProducerConsumer, Sibling };
 enum CreateSubviewMode { Point, Reduction };
 
 void registerScaleHLSDSEPipeline();
-void registerScaleHLSPyTorchPipelineV2();
-void registerScaleHLSPyTorchPipelineV2Post();
+void registerScaleFlowPyTorchPipeline();
+void registerScaleFlowPyTorchPipelinePost();
+void registerScaleHLSPyTorchPipeline();
 void registerTransformsPasses();
 
 void addCreateSubviewPasses(OpPassManager &pm,
@@ -52,6 +53,7 @@ std::unique_ptr<Pass> createCreateDataflowFromLinalgPass();
 std::unique_ptr<Pass> createCreateDataflowFromAffinePass();
 std::unique_ptr<Pass> createCreateTokenStreamPass();
 std::unique_ptr<Pass> createEliminateMultiConsumerPass();
+std::unique_ptr<Pass> createEliminateMultiConsumerDeprecatedPass();
 std::unique_ptr<Pass> createEliminateMultiProducerPass();
 std::unique_ptr<Pass> createLowerDataflowPass(bool splitExternalAccess = true);
 std::unique_ptr<Pass>
@@ -59,7 +61,8 @@ createParallelizeDataflowNodePass(unsigned loopUnrollFactor = 1,
                                   bool unrollPointLoopOnly = false);
 std::unique_ptr<Pass>
 createPlaceDataflowBufferPass(bool placeExternalBuffer = true);
-std::unique_ptr<Pass> createScheduleDataflowNodePass();
+std::unique_ptr<Pass>
+createScheduleDataflowNodePass(bool ignoreViolations = false);
 std::unique_ptr<Pass> createStreamDataflowTaskPass();
 
 /// Tensor-related passes.

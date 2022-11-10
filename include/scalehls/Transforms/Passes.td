@@ -107,6 +107,17 @@ def EliminateMultiConsumer :
   let constructor = "mlir::scalehls::createEliminateMultiConsumerPass()";
 }
 
+def EliminateMultiConsumerDeprecated :
+      Pass<"scalehls-eliminate-multi-consumer-deprecated", "func::FuncOp"> {
+  let summary = "Eliminate multi-consumer violations";
+  let description = [{
+    This pass will merge multiple consumers into one node.
+  }];
+  let constructor = [{
+    mlir::scalehls::createEliminateMultiConsumerDeprecatedPass()
+  }];
+}
+
 def EliminateMultiProducer :
       Pass<"scalehls-eliminate-multi-producer", "func::FuncOp"> {
   let summary = "Try to eliminate multi-producer violations";
@@ -157,6 +168,11 @@ def ScheduleDataflowNode :
       Pass<"scalehls-schedule-dataflow-node", "func::FuncOp"> {
   let summary = "Schedule dataflow nodes";
   let constructor = "mlir::scalehls::createScheduleDataflowNodePass()";
+
+  let options = [
+    Option<"ignoreViolations", "ignore-violations", "bool",
+           /*default=*/"false", "Ignore multi-consumer or producer violations">
+  ];
 }
 
 def StreamDataflowTask : Pass<"scalehls-stream-dataflow-task", "func::FuncOp"> {

@@ -58,13 +58,12 @@ struct CreateAxiInterface : public CreateAxiInterfaceBase<CreateAxiInterface> {
 
     builder.setInsertionPointToEnd(mainBlock);
     for (auto &op : llvm::make_early_inc_range(func.front()))
-      if (isa<BufferOp, ConstBufferOp>(op)) {
-        auto memrefType = op.getResult(0).getType().cast<MemRefType>();
-        if (memrefType.getMemorySpaceAsInt() != (unsigned)MemoryKind::DRAM)
+      if (auto buffer = dyn_cast<hls::BufferLikeInterface>(op)) {
+        if (!isExternalBuffer(buffer.getMemref()))
           continue;
-        op.remove();
-        builder.insert(&op);
-        targets.push_back(op.getResult(0));
+        buffer->remove();
+        builder.insert(buffer);
+        targets.push_back(buffer.getMemref());
       }
 
     // Add new AXI ports to the top function.

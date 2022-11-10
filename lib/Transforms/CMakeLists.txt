@@ -7,6 +7,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Dataflow/CreateDataflowFromTosa.cpp
   Dataflow/CreateTokenStream.cpp
   Dataflow/EliminateMultiConsumer.cpp
+  Dataflow/EliminateMultiConsumerDeprecated.cpp
   Dataflow/EliminateMultiProducer.cpp
   Dataflow/LowerDataflow.cpp
   Dataflow/ParallelizeDataflowNode.cpp
