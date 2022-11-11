@@ -277,11 +277,11 @@ bool scalehls::isElementwiseGenericOp(linalg::GenericOp op) {
     return false;
 
   for (auto valueMap : llvm::zip(op.getOperands(), op.getIndexingMapsArray())) {
-    auto type = std::get<0>(valueMap).getType().cast<ShapedType>();
+    auto type = std::get<0>(valueMap).getType().dyn_cast<ShapedType>();
     auto map = std::get<1>(valueMap);
 
     // If the operand doens't have static shape, the index map must be identity.
-    if (!type.hasStaticShape()) {
+    if (!type || !type.hasStaticShape()) {
       if (!map.isIdentity())
         return false;
       continue;
