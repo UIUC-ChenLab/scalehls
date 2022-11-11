@@ -147,7 +147,7 @@ populateForwardBackwardFusePatterns(mlir::RewritePatternSet &patterns) {
   patterns.add<BackwardFuseGenericOp>(context);
   patterns.add<ForwardFuseGenericOp>(context);
   patterns.add<ForwardFuseOp<linalg::FillOp>>(context);
-  patterns.add<ForwardFuseOp<linalg::InitTensorOp>>(context);
+  patterns.add<ForwardFuseOp<tensor::EmptyOp>>(context);
   patterns.add<ForwardFuseOp<tensor::PadOp>>(context);
   patterns.add<ForwardFuseOp<tensor::CollapseShapeOp>>(context);
   patterns.add<ForwardFuseOp<tensor::ExpandShapeOp>>(context);

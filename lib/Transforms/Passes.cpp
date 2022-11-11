@@ -6,7 +6,7 @@
 
 #include "mlir/Conversion/Passes.h"
 #include "mlir/Dialect/Affine/Passes.h"
-#include "mlir/Dialect/Arithmetic/Transforms/Passes.h"
+#include "mlir/Dialect/Arith/Transforms/Passes.h"
 #include "mlir/Dialect/Bufferization/Transforms/Passes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Func/Transforms/Passes.h"
@@ -158,7 +158,7 @@ void scalehls::registerScaleFlowPyTorchPipeline() {
 
         // Bufferization.
         pm.addPass(mlir::createLinalgBufferizePass());
-        pm.addPass(arith::createArithmeticBufferizePass());
+        pm.addPass(arith::createArithBufferizePass());
         pm.addPass(mlir::createTensorBufferizePass());
         pm.addPass(func::createFuncBufferizePass());
         pm.addPass(bufferization::createBufferResultsToOutParamsPass());
@@ -372,7 +372,7 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
 
         // Bufferization.
         pm.addPass(mlir::createLinalgBufferizePass());
-        pm.addPass(arith::createArithmeticBufferizePass());
+        pm.addPass(arith::createArithBufferizePass());
         pm.addPass(mlir::createTensorBufferizePass());
         pm.addPass(func::createFuncBufferizePass());
         pm.addPass(bufferization::createBufferResultsToOutParamsPass());

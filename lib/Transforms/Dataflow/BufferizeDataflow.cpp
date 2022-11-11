@@ -114,8 +114,8 @@ struct ConvertGetGlobalToConstBuffer
   LogicalResult matchAndRewrite(memref::GetGlobalOp op,
                                 PatternRewriter &rewriter) const override {
     auto global = SymbolTable::lookupNearestSymbolFrom<memref::GlobalOp>(
-        op, op.nameAttr());
-    rewriter.replaceOpWithNewOp<ConstBufferOp>(op, global.type(),
+        op, op.getNameAttr());
+    rewriter.replaceOpWithNewOp<ConstBufferOp>(op, global.getType(),
                                                global.getConstantInitValue());
     return success();
   }

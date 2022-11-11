@@ -99,7 +99,7 @@ struct LowerAffine : public LowerAffineBase<LowerAffine> {
 
     ConversionTarget target(*context);
     target.addIllegalDialect<mlir::AffineDialect>();
-    target.addLegalDialect<arith::ArithmeticDialect, memref::MemRefDialect,
+    target.addLegalDialect<arith::ArithDialect, memref::MemRefDialect,
                            scf::SCFDialect, vector::VectorDialect>();
     if (failed(applyPartialConversion(func, target, std::move(patterns))))
       return signalPassFailure();

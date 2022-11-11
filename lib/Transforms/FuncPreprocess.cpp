@@ -23,7 +23,7 @@ struct MemrefLoadRaisePattern : public OpRewritePattern<memref::LoadOp> {
     if (llvm::all_of(load.getIndices(), [&](Value operand) {
           return isValidDim(operand) || isValidSymbol(operand);
         })) {
-      rewriter.replaceOpWithNewOp<AffineLoadOp>(load, load.memref(),
+      rewriter.replaceOpWithNewOp<AffineLoadOp>(load, load.getMemref(),
                                                 load.getIndices());
       return success();
     }
@@ -43,7 +43,7 @@ struct MemrefStoreRaisePattern : public OpRewritePattern<memref::StoreOp> {
           return isValidDim(operand) || isValidSymbol(operand);
         })) {
       rewriter.replaceOpWithNewOp<AffineStoreOp>(
-          store, store.value(), store.memref(), store.getIndices());
+          store, store.getValue(), store.getMemref(), store.getIndices());
       return success();
     }
     return failure();

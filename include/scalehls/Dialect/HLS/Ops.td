@@ -48,7 +48,7 @@ def AnyAxi : AxiOf<[AnyType]>;
 // High Dataflow Operations
 //===----------------------------------------------------------------------===//
 
-def DispatchOp : HLSOp<"dataflow.dispatch", [RecursiveSideEffects,
+def DispatchOp : HLSOp<"dataflow.dispatch", [RecursiveMemoryEffects,
       SingleBlockImplicitTerminator<"YieldOp">,
       ParentOneOf<["func::FuncOp", "AffineForOp"]>]> {
   let summary = "Represent a dataflow dispatch";
@@ -72,7 +72,7 @@ def DispatchOp : HLSOp<"dataflow.dispatch", [RecursiveSideEffects,
 }
 
 def TaskOp : HLSOp<"dataflow.task", [
-      DeclareOpInterfaceMethods<StageLikeInterface>, RecursiveSideEffects,
+      DeclareOpInterfaceMethods<StageLikeInterface>, RecursiveMemoryEffects,
       SingleBlockImplicitTerminator<"YieldOp">, HasParent<"DispatchOp">]> {
   let summary = "Represent a dataflow task";
   let description = [{
@@ -97,7 +97,7 @@ def TaskOp : HLSOp<"dataflow.task", [
   }];
 }
 
-def YieldOp : HLSOp<"dataflow.yield", [NoSideEffect, ReturnLike, Terminator,
+def YieldOp : HLSOp<"dataflow.yield", [NoMemoryEffect, ReturnLike, Terminator,
       ParentOneOf<["DispatchOp", "TaskOp"]>]> {
   let summary = "Terminate and yield results of a dispatch or task op";
 
@@ -107,7 +107,7 @@ def YieldOp : HLSOp<"dataflow.yield", [NoSideEffect, ReturnLike, Terminator,
   let builders = [OpBuilder<(ins), "build($_builder, $_state, llvm::None);">];
 }
 
-def ToStreamOp : HLSOp<"dataflow.to_stream", [NoSideEffect]> {
+def ToStreamOp : HLSOp<"dataflow.to_stream", [NoMemoryEffect]> {
   let summary = "Convert a scalar value to a stream channel";
 
   let arguments = (ins AnyType:$value);
@@ -118,7 +118,7 @@ def ToStreamOp : HLSOp<"dataflow.to_stream", [NoSideEffect]> {
   let hasFolder = 1;
 }
 
-def ToValueOp : HLSOp<"dataflow.to_value", [NoSideEffect]> {
+def ToValueOp : HLSOp<"dataflow.to_value", [NoMemoryEffect]> {
   let summary = "Convert a stream to a scalar value";
 
   let arguments = (ins AnyStream:$stream);
@@ -153,10 +153,6 @@ def ScheduleOp : HLSOp<"dataflow.schedule", [
 
   let hasVerifier = 1;
   let hasCanonicalizer = 1;
-  let builders = [
-    OpBuilder<(ins "mlir::ValueRange":$operands),
-        "build($_builder, $_state, operands, false);">
-  ];
 
   let extraClassDeclaration = [{
     /// FIXME: Check whether the schedule is dependence free.
@@ -323,7 +319,7 @@ def StreamWriteOp : HLSOp<"dataflow.stream_write", []> {
 // AXI-related Operations
 //===----------------------------------------------------------------------===//
 
-def AxiBundleOp : HLSOp<"axi.bundle", [NoSideEffect,
+def AxiBundleOp : HLSOp<"axi.bundle", [NoMemoryEffect,
     HasParent<"func::FuncOp">]> {
   let summary = "Represent an bundle of axi ports";
 
@@ -332,7 +328,7 @@ def AxiBundleOp : HLSOp<"axi.bundle", [NoSideEffect,
   let assemblyFormat = "$name attr-dict `:` type($bundle)";
 }
 
-def AxiPortOp : HLSOp<"axi.port", [NoSideEffect, HasParent<"func::FuncOp">]> {
+def AxiPortOp : HLSOp<"axi.port", [NoMemoryEffect, HasParent<"func::FuncOp">]> {
   let summary = "Represent an axi port";
 
   let arguments = (ins BundleType:$bundle, AnyAxi:$axi);
@@ -345,7 +341,7 @@ def AxiPortOp : HLSOp<"axi.port", [NoSideEffect, HasParent<"func::FuncOp">]> {
   let hasVerifier = 1;
 }
 
-def AxiPackOp : HLSOp<"axi.pack", [NoSideEffect, HasParent<"func::FuncOp">]> {
+def AxiPackOp : HLSOp<"axi.pack", [NoMemoryEffect, HasParent<"func::FuncOp">]> {
   let summary = "Pack a memref or scalar into an axi type";
 
   let arguments = (ins AnyType:$value);
@@ -359,7 +355,7 @@ def AxiPackOp : HLSOp<"axi.pack", [NoSideEffect, HasParent<"func::FuncOp">]> {
 // Primitive Operations
 //===----------------------------------------------------------------------===//
 
-def PrimMulOp : HLSOp<"prim.mul", [NoSideEffect]> {
+def PrimMulOp : HLSOp<"prim.mul", [NoMemoryEffect]> {
   let summary = "Multiplication primitive operation";
   let description = [{
     This primitive performs C = A * B, where A and B are 8-bits integers, while
@@ -389,7 +385,7 @@ def PrimMulOp : HLSOp<"prim.mul", [NoSideEffect]> {
 }
 
 def PrimCastOp : HLSOp<"prim.cast", [
-      NoSideEffect, SameOperandsAndResultShape]> {
+      NoMemoryEffect, SameOperandsAndResultShape]> {
   let summary = "Cast primitive operation";
 
   let arguments = (ins 
@@ -404,7 +400,7 @@ def PrimCastOp : HLSOp<"prim.cast", [
   let hasCanonicalizer = 1;
 }
 
-def AffineSelectOp : HLSOp<"affine.select", [NoSideEffect]> {
+def AffineSelectOp : HLSOp<"affine.select", [NoMemoryEffect]> {
   let summary = "if-then-else operation";
 
   let arguments = (ins Variadic<AnyType>:$args, AnyType:$true_value,

@@ -35,7 +35,7 @@ struct SubViewSinkPattern : public OpRewritePattern<func::CallOp> {
         // Get the current argument and replace all its uses.
         auto argIdx = newInputs.size();
         auto arg = func.getArgument(argIdx);
-        arg.replaceAllUsesWith(cloneSubview.result());
+        arg.replaceAllUsesWith(cloneSubview.getResult());
         func.eraseArgument(argIdx);
 
         // Insert new arguments and replace the operand of the cloned subview.

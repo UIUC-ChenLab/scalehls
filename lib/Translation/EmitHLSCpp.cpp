@@ -1428,13 +1428,13 @@ void ModuleEmitter::emitStore(memref::StoreOp op) {
 
 void ModuleEmitter::emitMemCpy(memref::CopyOp op) {
   indent() << "memcpy(";
-  emitValue(op.target());
+  emitValue(op.getTarget());
   os << ", ";
   emitValue(op.getSource());
   os << ", ";
 
-  auto type = op.target().getType().cast<MemRefType>();
-  os << type.getNumElements() << " * sizeof(" << getTypeName(op.target())
+  auto type = op.getTarget().getType().cast<MemRefType>();
+  os << type.getNumElements() << " * sizeof(" << getTypeName(op.getTarget())
      << "));";
   emitInfoAndNewLine(op);
   os << "\n";
@@ -2016,7 +2016,8 @@ LogicalResult scalehls::emitHLSCpp(ModuleOp module, llvm::raw_ostream &os) {
 
 void scalehls::registerEmitHLSCppTranslation() {
   static TranslateFromMLIRRegistration toHLSCpp(
-      "scalehls-emit-hlscpp", emitHLSCpp, [&](DialectRegistry &registry) {
+      "scalehls-emit-hlscpp", "Translate MLIR into synthesizable C++",
+      emitHLSCpp, [&](DialectRegistry &registry) {
         scalehls::registerAllDialects(registry);
       });
 }

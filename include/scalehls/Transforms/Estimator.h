@@ -62,7 +62,7 @@ public:
     return setTiming(op, begin, begin + 1, 1, 1), true;
   }
   bool visitOp(memref::CopyOp op, int64_t begin) {
-    auto type = op.target().getType().cast<MemRefType>();
+    auto type = op.getTarget().getType().cast<MemRefType>();
     return setTiming(op, begin, begin + type.getNumElements(), 1, 1), true;
   }
 

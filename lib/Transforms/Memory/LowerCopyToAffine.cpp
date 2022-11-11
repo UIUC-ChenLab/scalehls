@@ -23,8 +23,8 @@ struct LowerCopy : public OpRewritePattern<memref::CopyOp> {
   LogicalResult matchAndRewrite(memref::CopyOp copy,
                                 PatternRewriter &rewriter) const override {
     // Check whether the copy op communicates with inputs or outputs.
-    auto isExternalCopy =
-        isExternalBuffer(copy.source()) || isExternalBuffer(copy.target());
+    auto isExternalCopy = isExternalBuffer(copy.getSource()) ||
+                          isExternalBuffer(copy.getTarget());
 
     // Return failure if we don't need to lower external copies.
     if (internalCopyOnly && isExternalCopy)
@@ -32,7 +32,7 @@ struct LowerCopy : public OpRewritePattern<memref::CopyOp> {
 
     rewriter.setInsertionPoint(copy);
     auto loc = copy.getLoc();
-    auto memrefType = copy.source().getType().cast<MemRefType>();
+    auto memrefType = copy.getSource().getType().cast<MemRefType>();
 
     // Create explicit memory copy using an affine loop nest.
     SmallVector<Value, 4> ivs;
@@ -53,8 +53,9 @@ struct LowerCopy : public OpRewritePattern<memref::CopyOp> {
     }
 
     // Create affine load/store operations.
-    auto value = rewriter.create<mlir::AffineLoadOp>(loc, copy.source(), ivs);
-    rewriter.create<mlir::AffineStoreOp>(loc, value, copy.target(), ivs);
+    auto value =
+        rewriter.create<mlir::AffineLoadOp>(loc, copy.getSource(), ivs);
+    rewriter.create<mlir::AffineStoreOp>(loc, value, copy.getTarget(), ivs);
 
     rewriter.eraseOp(copy);
     return success();

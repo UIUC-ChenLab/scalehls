@@ -26,7 +26,7 @@ struct CreateLocalBuffer
     auto builder = OpBuilder(func);
 
     func.walk([&](memref::SubViewOp subview) {
-      if (externalBufferOnly && !isExternalBuffer(subview.source()))
+      if (externalBufferOnly && !isExternalBuffer(subview.getSource()))
         return WalkResult::advance();
 
       if (registerOnly && subview.getType().getNumElements() != 1)
@@ -48,7 +48,7 @@ struct CreateLocalBuffer
       auto loc = builder.getUnknownLoc();
       builder.setInsertionPointAfter(subview);
       auto buf = builder.create<BufferOp>(loc, bufType);
-      subview.result().replaceAllUsesWith(buf);
+      subview.getResult().replaceAllUsesWith(buf);
 
       // If the global buffer has initial value, set it to the local buffer.
       auto globalBuf = findBufferOp(subview.getSource());

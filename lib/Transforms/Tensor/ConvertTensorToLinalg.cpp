@@ -34,7 +34,7 @@ struct ConvertTensorToLinalg
 
     ConversionTarget target(*context);
     target.addIllegalOp<tensor::PadOp, tosa::RescaleOp>();
-    target.addLegalOp<linalg::GenericOp, linalg::YieldOp, linalg::InitTensorOp,
+    target.addLegalOp<linalg::GenericOp, linalg::YieldOp, tensor::EmptyOp,
                       linalg::FillOp, arith::ConstantOp>();
 
     mlir::RewritePatternSet patterns(context);
