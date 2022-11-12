@@ -84,9 +84,9 @@ struct ParallelizeDataflowNode
           node.emitOpError("failed to get node complexity");
           return WalkResult::interrupt();
         }
-        auto nodeUnrollFactor = 1 + scheduleUnrollFactor *
-                                        nodeComplexity.value() /
-                                        scheduleComplexity.value();
+        auto nodeUnrollFactor = std::max(
+            (unsigned long)1, scheduleUnrollFactor * nodeComplexity.value() /
+                                  scheduleComplexity.value());
         nodeParallelFactorMap.insert({node, nodeUnrollFactor});
 
         LLVM_DEBUG(
