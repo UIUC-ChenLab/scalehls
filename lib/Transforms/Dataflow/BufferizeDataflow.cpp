@@ -48,6 +48,24 @@ struct BufferizeDispatchOrTask : public OpRewritePattern<OpType> {
 } // namespace
 
 namespace {
+struct BufferizeTensorEmpty : public OpRewritePattern<tensor::EmptyOp> {
+  using OpRewritePattern<tensor::EmptyOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(tensor::EmptyOp op,
+                                PatternRewriter &rewriter) const override {
+    auto tensorType = op.getType();
+    auto memrefType =
+        MemRefType::get(tensorType.getShape(), tensorType.getElementType());
+    rewriter.setInsertionPoint(op);
+    auto buffer = rewriter.create<BufferOp>(op.getLoc(), memrefType);
+    rewriter.replaceOpWithNewOp<bufferization::ToTensorOp>(op, tensorType,
+                                                           buffer);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 template <typename OpType>
 struct HoistBuffer : public OpRewritePattern<OpType> {
   using OpRewritePattern<OpType>::OpRewritePattern;
@@ -143,6 +161,7 @@ struct BufferizeDataflow : public BufferizeDataflowBase<BufferizeDataflow> {
     patterns.add<BufferizeDispatchOrTask<TaskOp>>(context);
     patterns.add<HoistBuffer<DispatchOp>>(context);
     patterns.add<HoistBuffer<TaskOp>>(context);
+    patterns.add<BufferizeTensorEmpty>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
