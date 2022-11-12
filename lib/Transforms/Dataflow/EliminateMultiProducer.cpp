@@ -51,8 +51,8 @@ struct BufferMultiProducer : public OpRewritePattern<ScheduleOp> {
         newInputs.push_back(buffer);
         newInputTaps.push_back(0);
         auto newBuffer = rewriter.create<BufferOp>(loc, buffer.getType());
-        auto bufferIdx =
-            llvm::find(node.getOperands(), buffer) - node.operand_begin();
+        auto bufferIdx = llvm::find(node.getOutputs(), buffer) -
+                         node.getOutputs().begin() + node.getNumInputs();
         node.setOperand(bufferIdx, newBuffer);
 
         buffer.replaceUsesWithIf(newBuffer, [&](OpOperand &use) {
@@ -147,8 +147,9 @@ struct BufferMultiProducer : public OpRewritePattern<ScheduleOp> {
           }
 
         // Otherwise, we need to create explicit data copy from the original
-        // buffer to new buffer.
-        rewriter.create<memref::CopyOp>(loc, bufferArg, newBufferArg);
+        // buffer to new buffer if the new buffer is ever read.
+        if (!readUses.empty())
+          rewriter.create<memref::CopyOp>(loc, bufferArg, newBufferArg);
       }
     }
     return success(hasChanged);

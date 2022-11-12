@@ -88,7 +88,6 @@ struct LinalgFakeQuantize : public LinalgFakeQuantizeBase<LinalgFakeQuantize> {
 
   template <typename ValueType>
   DenseIntElementsAttr generateRandomValues(Type quanType, unsigned size) {
-    std::srand(time(0));
     unsigned maxValue = std::pow(2, quanBits.getValue());
     SmallVector<ValueType, 64> values;
     for (unsigned i = 0; i < size; ++i)
@@ -100,6 +99,7 @@ struct LinalgFakeQuantize : public LinalgFakeQuantizeBase<LinalgFakeQuantize> {
     auto module = getOperation();
     auto context = module.getContext();
     auto builder = OpBuilder(context);
+    std::srand(time(0));
 
     auto result = module.walk([&](Block *block) {
       // Convert the type of block arguments.

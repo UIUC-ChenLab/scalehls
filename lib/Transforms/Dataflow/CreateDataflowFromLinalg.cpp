@@ -66,6 +66,7 @@ struct ForwardFuseOp : public OpRewritePattern<OpType> {
       return failure();
 
     // We always select the dominating task as the target to fuse.
+    // FIXME: Check there's no intervening ops in between.
     llvm::sort(taskUsers, [&](auto a, auto b) { return DT.dominates(a, b); });
     fuseOpsIntoTask({op, taskUsers.front()}, rewriter, /*insertToLastOp=*/true);
     return success();
@@ -94,8 +95,9 @@ struct BackwardFuseOp : public OpRewritePattern<OpType> {
       return failure();
 
     // We always select the dominated task as the target to fuse.
+    // FIXME: Check there's no intervening ops in between.
     llvm::sort(taskDefOps, [&](auto a, auto b) { return DT.dominates(a, b); });
-    fuseOpsIntoTask({taskDefOps.back(), op}, rewriter);
+    fuseOpsIntoTask({taskDefOps.back(), op}, rewriter, /*insertToLastOp=*/true);
     return success();
   }
 };
@@ -109,10 +111,19 @@ struct ForwardFuseGenericOp : public OpRewritePattern<linalg::GenericOp> {
   LogicalResult matchAndRewrite(linalg::GenericOp op,
                                 PatternRewriter &rewriter) const override {
     bool matched = false;
-    if (op.getNumInputs() == 1 && op.getNumOutputs() == 1) {
-      auto body = op.getBody();
-      if (body->getArgument(0) == body->getTerminator()->getOperand(0) &&
-          llvm::hasSingleElement(body->getOperations()))
+    auto body = op.getBody();
+
+    if (op.getNumOutputs() == 1 &&
+        llvm::hasSingleElement(body->getOperations())) {
+      auto output = body->getTerminator()->getOperand(0);
+
+      // Copy from input to output.
+      if (op.getNumInputs() == 1 && output == body->getArgument(0))
+        matched = true;
+
+      // Copy from constant to output.
+      if (output.getDefiningOp<tosa::ConstOp>() ||
+          output.getDefiningOp<arith::ConstantOp>())
         matched = true;
     }
 
@@ -151,6 +162,7 @@ populateForwardBackwardFusePatterns(mlir::RewritePatternSet &patterns) {
   patterns.add<ForwardFuseOp<tensor::PadOp>>(context);
   patterns.add<ForwardFuseOp<tensor::CollapseShapeOp>>(context);
   patterns.add<ForwardFuseOp<tensor::ExpandShapeOp>>(context);
+  patterns.add<ForwardFuseOp<tensor::InsertSliceOp>>(context);
 }
 
 namespace {
