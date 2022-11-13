@@ -88,9 +88,15 @@ bool hasEffectOnExternalBuffer(Operation *op);
 
 /// Distribute the given factor from the innermost loop of the given loop band,
 /// so that we can apply vectorize, unroll and jam, etc.
-SmallVector<unsigned, 8>
+FactorList
 getDistributedFactors(unsigned factor,
                       const SmallVectorImpl<mlir::AffineForOp> &band);
+
+/// Distribute the given factor evenly on all loop levels, this method can fail
+/// due to non-constant loop bounds.
+LogicalResult
+getEvenlyDistributedFactors(unsigned factor, FactorList &factors,
+                            const SmallVectorImpl<mlir::AffineForOp> &band);
 
 /// Return a pair which indicates whether the if statement is always true or
 /// false, respectively. The returned result is one-hot.

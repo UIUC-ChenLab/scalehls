@@ -319,9 +319,9 @@ bool scalehls::hasEffectOnExternalBuffer(Operation *op) {
 
 /// Distribute the given factor from the innermost loop of the given loop band,
 /// so that we can apply vectorize, unroll and jam, etc.
-SmallVector<unsigned, 8> scalehls::getDistributedFactors(
+FactorList scalehls::getDistributedFactors(
     unsigned factor, const SmallVectorImpl<mlir::AffineForOp> &band) {
-  SmallVector<unsigned, 8> sizes;
+  FactorList factors;
   unsigned remainFactor = factor;
 
   for (auto it = band.rbegin(), e = band.rend(); it != e; ++it) {
@@ -339,12 +339,82 @@ SmallVector<unsigned, 8> scalehls::getDistributedFactors(
       } else
         size = 1;
 
-      sizes.push_back(size);
+      factors.push_back(size);
     } else
-      sizes.push_back(1);
+      factors.push_back(1);
   }
-  std::reverse(sizes.begin(), sizes.end());
-  return sizes;
+  std::reverse(factors.begin(), factors.end());
+  return factors;
+}
+
+/// Distribute the given factor evenly on all loop levels, this method can fail
+/// due to non-constant loop bounds.
+LogicalResult scalehls::getEvenlyDistributedFactors(
+    unsigned factor, FactorList &factors,
+    const SmallVectorImpl<mlir::AffineForOp> &band) {
+  // If we cannot figure out the trip count of the any loop of the loop
+  // band, skip the current node.
+  FactorList tripCounts;
+  for (auto loop : band) {
+    if (auto tripCount = getConstantTripCount(loop))
+      tripCounts.push_back(tripCount.value());
+    else
+      break;
+  }
+  if (tripCounts.size() != band.size())
+    return failure();
+
+  // A helper to calculate the overall factors of the given factors.
+  auto getOverallFactor = [](FactorList factors) {
+    unsigned overallFactor = 1;
+    for (auto factor : factors)
+      overallFactor *= factor;
+    return overallFactor;
+  };
+
+  auto increaseFactor = [](unsigned tripCount, unsigned &factor) {
+    if (tripCount > factor || factor == 1)
+      factor++;
+    while (tripCount % factor != 0)
+      factor++;
+  };
+
+  // Increase the unroll factors until reach the overall factor.
+  while (factor > getOverallFactor(factors)) {
+    // Candidates list recording the loop depth, current factor, and the
+    // increasing rate.
+    SmallVector<std::tuple<unsigned, unsigned, float>> candidates;
+    for (auto t : llvm::enumerate(llvm::zip(tripCounts, factors))) {
+      auto tripCount = std::get<0>(t.value());
+      auto factor = std::get<1>(t.value());
+      auto newFactor = factor;
+
+      increaseFactor(tripCount, newFactor);
+      if (newFactor != factor)
+        candidates.push_back({t.index(), factor, (float)newFactor / factor});
+    }
+
+    // Break the while loop if there's no candidates available.
+    if (candidates.empty())
+      break;
+
+    // Sort the candidates. Smaller increasing rate, smaller current factor,
+    // and larger loop depth is preferred. Smaller increasing rate can help
+    // to match the overall parallel factor as much as possible. Smaller
+    // current factor can help to distribute the overall parallel evenly.
+    llvm::sort(candidates, [](auto a, auto b) {
+      if (std::get<2>(a) != std::get<2>(b))
+        return std::get<2>(a) < std::get<2>(b);
+      else if (std::get<1>(a) != std::get<1>(b))
+        return std::get<1>(a) < std::get<1>(b);
+      else
+        return std::get<0>(a) > std::get<0>(b);
+    });
+
+    auto index = std::get<0>(candidates.front());
+    increaseFactor(tripCounts[index], factors[index]);
+  }
+  return success();
 }
 
 /// Return a pair which indicates whether the if statement is always true or

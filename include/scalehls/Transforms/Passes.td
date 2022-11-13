@@ -149,7 +149,9 @@ def ParallelizeDataflowNode :
     Option<"maxUnrollFactor", "max-unroll-factor", "unsigned", /*default=*/"1",
            "Positive number: the maximum factor of unrolling">,
     Option<"pointLoopOnly", "point-loop-only", "bool", /*default=*/"false",
-           "Only apply unroll and jam to point loop band">
+           "Only apply unroll and jam to point loop band">,
+    Option<"optimizeLevel", "optimize-level", "unsigned", /*default=*/"2",
+           "0 = none; 1 = complexity-aware; 2 = complexity and correlation-aware">
   ];
 }
 

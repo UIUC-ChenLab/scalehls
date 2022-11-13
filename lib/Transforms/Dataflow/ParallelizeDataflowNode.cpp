@@ -43,9 +43,11 @@ namespace {
 struct ParallelizeDataflowNode
     : public ParallelizeDataflowNodeBase<ParallelizeDataflowNode> {
   ParallelizeDataflowNode() = default;
-  ParallelizeDataflowNode(unsigned loopUnrollFactor, bool unrollPointLoopOnly) {
+  ParallelizeDataflowNode(unsigned loopUnrollFactor, bool unrollPointLoopOnly,
+                          unsigned argOptimizeLevel) {
     maxUnrollFactor = loopUnrollFactor;
     pointLoopOnly = unrollPointLoopOnly;
+    optimizeLevel = argOptimizeLevel;
   }
 
   /// Try to calculate the unroll factors of the nodes contained in each
@@ -118,10 +120,14 @@ struct ParallelizeDataflowNode
     });
 
     for (auto &band : bands) {
+      auto factors = FactorList(band.size(), 1);
+      if (failed(getEvenlyDistributedFactors(parallelFactor, factors, band)))
+        factors = getDistributedFactors(parallelFactor, band);
+
       // For loop band that has effect on external buffers, we should directly
       // unroll them without considering whether it's point loop.
       if (hasEffectOnExternalBuffer(band.front())) {
-        applyLoopUnrollJam(band, parallelFactor);
+        applyLoopUnrollJam(band, factors);
         continue;
       }
 
@@ -133,7 +139,7 @@ struct ParallelizeDataflowNode
           continue;
         band = pointBand;
       }
-      applyLoopUnrollJam(band, parallelFactor);
+      applyLoopUnrollJam(band, factors);
     }
   }
 
@@ -174,69 +180,8 @@ struct ParallelizeDataflowNode
         factors = nodeUnrollFactorsMap.lookup(node);
       }
 
-      // If we cannot figure out the trip count of the any loop of the loop
-      // band, skip the current node.
-      FactorList tripCounts;
-      for (auto loop : band) {
-        if (auto tripCount = getConstantTripCount(loop))
-          tripCounts.push_back(tripCount.value());
-        else
-          break;
-      }
-      if (tripCounts.size() != band.size())
+      if (failed(getEvenlyDistributedFactors(parallelFactor, factors, band)))
         continue;
-
-      // A helper to calculate the overall factors of the given factors.
-      auto getOverallFactor = [](FactorList factors) {
-        unsigned overallFactor = 1;
-        for (auto factor : factors)
-          overallFactor *= factor;
-        return overallFactor;
-      };
-
-      auto increaseFactor = [](unsigned tripCount, unsigned &factor) {
-        if (tripCount > factor || factor == 1)
-          factor++;
-        while (tripCount % factor != 0)
-          factor++;
-      };
-
-      // Increase the unroll factors until reach the overall factor.
-      while (parallelFactor > getOverallFactor(factors)) {
-        // Candidates list recording the loop depth, current factor, and the
-        // increasing rate.
-        SmallVector<std::tuple<unsigned, unsigned, float>> candidates;
-        for (auto t : llvm::enumerate(llvm::zip(tripCounts, factors))) {
-          auto tripCount = std::get<0>(t.value());
-          auto factor = std::get<1>(t.value());
-          auto newFactor = factor;
-
-          increaseFactor(tripCount, newFactor);
-          if (newFactor != factor)
-            candidates.push_back(
-                {t.index(), factor, (float)newFactor / factor});
-        }
-
-        // Break the while loop if there's no candidates available.
-        if (candidates.empty())
-          break;
-
-        // Sort the candidates. Smaller increasing rate, smaller current factor,
-        // and larger loop depth is preferred. Smaller increasing rate can help
-        // to match the overall parallel factor as much as possible. Smaller
-        // current factor can help to distribute the overall parallel evenly.
-        llvm::sort(candidates, [](auto a, auto b) {
-          if (std::get<2>(a) != std::get<2>(b))
-            return std::get<2>(a) < std::get<2>(b);
-          else if (std::get<1>(a) != std::get<1>(b))
-            return std::get<1>(a) < std::get<1>(b);
-          else
-            return std::get<0>(a) > std::get<0>(b);
-        });
-
-        auto index = std::get<0>(candidates.front());
-        increaseFactor(tripCounts[index], factors[index]);
-      }
 
       LLVM_DEBUG(
           // clang-format off
@@ -292,10 +237,25 @@ struct ParallelizeDataflowNode
   void runOnOperation() override {
     auto func = getOperation();
     getNodeParallelFactorMap(func);
-    // for (auto p : nodeParallelFactorMap) {
-    //   applyNaiveLoopUnroll(p.first, p.second);
-    // }
-    applyCorrelationAwareUnroll(func);
+    switch (optimizeLevel.getValue()) {
+    case 0:
+      // Low optimization option.
+      for (auto p : nodeParallelFactorMap)
+        applyNaiveLoopUnroll(p.first, maxUnrollFactor.getValue());
+      break;
+    case 1:
+      // Middle optimization option (complexity-aware).
+      for (auto p : nodeParallelFactorMap)
+        applyNaiveLoopUnroll(p.first, p.second);
+      break;
+    case 2:
+      // High optimization option (complexity and correlation-aware).
+      applyCorrelationAwareUnroll(func);
+      break;
+    default:
+      llvm_unreachable("invalid optimize level");
+      break;
+    }
   }
 
 private:
@@ -305,7 +265,8 @@ private:
 
 std::unique_ptr<Pass>
 scalehls::createParallelizeDataflowNodePass(unsigned loopUnrollFactor,
-                                            bool unrollPointLoopOnly) {
-  return std::make_unique<ParallelizeDataflowNode>(loopUnrollFactor,
-                                                   unrollPointLoopOnly);
+                                            bool unrollPointLoopOnly,
+                                            unsigned optimizeLevel) {
+  return std::make_unique<ParallelizeDataflowNode>(
+      loopUnrollFactor, unrollPointLoopOnly, optimizeLevel);
 }

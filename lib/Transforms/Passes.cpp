@@ -93,11 +93,17 @@ struct ScaleFlowPyTorchPipelineOptions
 
   Option<unsigned> loopTileSize{
       *this, "loop-tile-size", llvm::cl::init(2),
-      llvm::cl::desc("The tile size of each loop (must larger than 1)")};
+      llvm::cl::desc("The tile size of each loop (must larger equal to 1)")};
 
   Option<unsigned> loopUnrollFactor{
       *this, "loop-unroll-factor", llvm::cl::init(0),
       llvm::cl::desc("The overall loop unrolling factor (set 0 to disable)")};
+
+  Option<unsigned> parallelizeOptimizeLevel{
+      *this, "parallelize-optimize-level", llvm::cl::init(2),
+      llvm::cl::desc(
+          "The optimization level in dataflow parallelization: 0 = none; 1 = "
+          "complexity-aware; 2 = complexity and correlation-aware")};
 
   Option<bool> placeExternalBuffer{
       *this, "place-external-buffer", llvm::cl::init(true),
@@ -254,9 +260,8 @@ void scalehls::registerScaleFlowPyTorchPipeline() {
         // Parallelize dataflow.
         if (opts.loopUnrollFactor) {
           pm.addPass(scalehls::createParallelizeDataflowNodePass(
-              opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true));
-          // pm.addPass(scalehls::createAffineLoopUnrollJamPass(
-          //     opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true));
+              opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true,
+              opts.parallelizeOptimizeLevel));
           pm.addPass(mlir::createSimplifyAffineStructuresPass());
           pm.addPass(mlir::createCanonicalizerPass());
         }
@@ -291,6 +296,7 @@ void scalehls::registerScaleFlowPyTorchPipeline() {
       });
 }
 
+/// FIXME: Don't use! This is just for testing purpose.
 void scalehls::registerScaleFlowPyTorchPipelinePost() {
   PassPipelineRegistration<ScaleFlowPyTorchPipelineOptions>(
       "scaleflow-pytorch-pipeline-post",
@@ -467,8 +473,6 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
 
         // Parallelize dataflow.
         if (opts.loopUnrollFactor) {
-          // pm.addPass(scalehls::createParallelizeDataflowNodePass(
-          //     opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true));
           pm.addPass(scalehls::createAffineLoopUnrollJamPass(
               opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true));
           pm.addPass(mlir::createSimplifyAffineStructuresPass());
