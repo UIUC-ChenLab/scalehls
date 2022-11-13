@@ -59,7 +59,8 @@ std::unique_ptr<Pass> createLowerDataflowPass(bool splitExternalAccess = true);
 std::unique_ptr<Pass>
 createParallelizeDataflowNodePass(unsigned loopUnrollFactor = 1,
                                   bool unrollPointLoopOnly = false,
-                                  unsigned optimizeLevel = 2);
+                                  bool complexityAware = true,
+                                  bool correlationAware = true);
 std::unique_ptr<Pass>
 createPlaceDataflowBufferPass(bool placeExternalBuffer = true);
 std::unique_ptr<Pass>

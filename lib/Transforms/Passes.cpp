@@ -99,11 +99,13 @@ struct ScaleFlowPyTorchPipelineOptions
       *this, "loop-unroll-factor", llvm::cl::init(0),
       llvm::cl::desc("The overall loop unrolling factor (set 0 to disable)")};
 
-  Option<unsigned> parallelizeOptimizeLevel{
-      *this, "parallelize-optimize-level", llvm::cl::init(2),
-      llvm::cl::desc(
-          "The optimization level in dataflow parallelization: 0 = none; 1 = "
-          "complexity-aware; 2 = complexity and correlation-aware")};
+  Option<bool> complexityAware{
+      *this, "complexity-aware", llvm::cl::init(true),
+      llvm::cl::desc("Whether to consider node complexity in the transform")};
+
+  Option<bool> correlationAware{
+      *this, "correlation-aware", llvm::cl::init(true),
+      llvm::cl::desc("Whether to consider node correlation in the transform")};
 
   Option<bool> placeExternalBuffer{
       *this, "place-external-buffer", llvm::cl::init(true),
@@ -261,7 +263,7 @@ void scalehls::registerScaleFlowPyTorchPipeline() {
         if (opts.loopUnrollFactor) {
           pm.addPass(scalehls::createParallelizeDataflowNodePass(
               opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true,
-              opts.parallelizeOptimizeLevel));
+              opts.complexityAware, opts.correlationAware));
           pm.addPass(mlir::createSimplifyAffineStructuresPass());
           pm.addPass(mlir::createCanonicalizerPass());
         }

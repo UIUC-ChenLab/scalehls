@@ -44,10 +44,11 @@ struct ParallelizeDataflowNode
     : public ParallelizeDataflowNodeBase<ParallelizeDataflowNode> {
   ParallelizeDataflowNode() = default;
   ParallelizeDataflowNode(unsigned loopUnrollFactor, bool unrollPointLoopOnly,
-                          unsigned argOptimizeLevel) {
+                          bool argComplexityAware, bool argCorrelationAware) {
     maxUnrollFactor = loopUnrollFactor;
     pointLoopOnly = unrollPointLoopOnly;
-    optimizeLevel = argOptimizeLevel;
+    complexityAware = argComplexityAware;
+    correlationAware = argCorrelationAware;
   }
 
   /// Try to calculate the unroll factors of the nodes contained in each
@@ -105,8 +106,13 @@ struct ParallelizeDataflowNode
     });
   }
 
-  /// Unroll dataflow node with the given parallel factor.
+  /// Unroll dataflow node with the given parallel factor. If the pass is not
+  /// complexity aware, always unroll with the max unroll factor.
   void applyNaiveLoopUnroll(NodeOp node, unsigned parallelFactor) {
+    auto unrollFactor = parallelFactor;
+    if (!complexityAware)
+      unrollFactor = maxUnrollFactor.getValue();
+
     // Collect all loop bands to be unrolled.
     AffineLoopBands bands;
     node.walk([&](AffineForOp loop) {
@@ -120,18 +126,10 @@ struct ParallelizeDataflowNode
     });
 
     for (auto &band : bands) {
-      auto factors = FactorList(band.size(), 1);
-      if (failed(getEvenlyDistributedFactors(parallelFactor, factors, band)))
-        factors = getDistributedFactors(parallelFactor, band);
-
       // For loop band that has effect on external buffers, we should directly
       // unroll them without considering whether it's point loop.
-      if (hasEffectOnExternalBuffer(band.front())) {
-        applyLoopUnrollJam(band, factors);
-        continue;
-      }
-
-      if (pointLoopOnly) {
+      // FIXME: Need a better solution on handling external buffers.
+      if (pointLoopOnly && !hasEffectOnExternalBuffer(band.front())) {
         AffineLoopBand tileBand;
         AffineLoopBand pointBand;
         if (!getTileAndPointLoopBand(band, tileBand, pointBand) ||
@@ -139,6 +137,10 @@ struct ParallelizeDataflowNode
           continue;
         band = pointBand;
       }
+
+      auto factors = FactorList(band.size(), 1);
+      if (failed(getEvenlyDistributedFactors(unrollFactor, factors, band)))
+        factors = getDistributedFactors(unrollFactor, band);
       applyLoopUnrollJam(band, factors);
     }
   }
@@ -162,13 +164,15 @@ struct ParallelizeDataflowNode
       auto corrList = corrAnal.getCorrelations(node);
 
       // If the correlation list is empty, which means the correlation analysis
-      // failed, or the parallel factor is not found, skip the current node.
-      if (corrList.empty() || !nodeParallelFactorMap.count(node))
+      // failed, skip the current node.
+      if (corrList.empty())
         continue;
 
       // Get the parallel factor and loop band associated with the current node.
       // Also initialize the unroll factors as one.
-      auto parallelFactor = nodeParallelFactorMap.lookup(node);
+      auto parallelFactor = maxUnrollFactor.getValue();
+      if (complexityAware && nodeParallelFactorMap.count(node))
+        parallelFactor = nodeParallelFactorMap.lookup(node);
       auto band = getNodeLoopBand(node);
       auto factors = FactorList(band.size(), 1);
 
@@ -181,7 +185,7 @@ struct ParallelizeDataflowNode
       }
 
       if (failed(getEvenlyDistributedFactors(parallelFactor, factors, band)))
-        continue;
+        factors = getDistributedFactors(parallelFactor, band);
 
       LLVM_DEBUG(
           // clang-format off
@@ -237,25 +241,11 @@ struct ParallelizeDataflowNode
   void runOnOperation() override {
     auto func = getOperation();
     getNodeParallelFactorMap(func);
-    switch (optimizeLevel.getValue()) {
-    case 0:
-      // Low optimization option.
-      for (auto p : nodeParallelFactorMap)
-        applyNaiveLoopUnroll(p.first, maxUnrollFactor.getValue());
-      break;
-    case 1:
-      // Middle optimization option (complexity-aware).
+    if (correlationAware)
+      applyCorrelationAwareUnroll(func);
+    else
       for (auto p : nodeParallelFactorMap)
         applyNaiveLoopUnroll(p.first, p.second);
-      break;
-    case 2:
-      // High optimization option (complexity and correlation-aware).
-      applyCorrelationAwareUnroll(func);
-      break;
-    default:
-      llvm_unreachable("invalid optimize level");
-      break;
-    }
   }
 
 private:
@@ -263,10 +253,9 @@ private:
 };
 } // namespace
 
-std::unique_ptr<Pass>
-scalehls::createParallelizeDataflowNodePass(unsigned loopUnrollFactor,
-                                            bool unrollPointLoopOnly,
-                                            unsigned optimizeLevel) {
+std::unique_ptr<Pass> scalehls::createParallelizeDataflowNodePass(
+    unsigned loopUnrollFactor, bool unrollPointLoopOnly, bool complexityAware,
+    bool correlationAware) {
   return std::make_unique<ParallelizeDataflowNode>(
-      loopUnrollFactor, unrollPointLoopOnly, optimizeLevel);
+      loopUnrollFactor, unrollPointLoopOnly, complexityAware, correlationAware);
 }
