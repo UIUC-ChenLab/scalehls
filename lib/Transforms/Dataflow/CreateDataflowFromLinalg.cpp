@@ -158,7 +158,7 @@ populateForwardBackwardFusePatterns(mlir::RewritePatternSet &patterns) {
   patterns.add<BackwardFuseGenericOp>(context);
   patterns.add<ForwardFuseGenericOp>(context);
   patterns.add<ForwardFuseOp<linalg::FillOp>>(context);
-  // patterns.add<ForwardFuseOp<tensor::EmptyOp>>(context);
+  patterns.add<ForwardFuseOp<tensor::EmptyOp>>(context);
   patterns.add<ForwardFuseOp<tensor::PadOp>>(context);
   patterns.add<ForwardFuseOp<tensor::CollapseShapeOp>>(context);
   patterns.add<ForwardFuseOp<tensor::ExpandShapeOp>>(context);
@@ -171,8 +171,21 @@ struct CreateDataflowFromLinalg
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
+    auto builder = OpBuilder(context);
 
     dispatchBlock(&func.front());
+
+    // Collect all empty tensors in the function and localize them to uses.
+    SmallVector<Operation *, 16> empties;
+    func.walk([&](tensor::EmptyOp op) { empties.push_back(op); });
+    for (auto empty : empties) {
+      for (auto &use : llvm::make_early_inc_range(empty->getUses())) {
+        builder.setInsertionPoint(use.getOwner());
+        auto cloneEmpty = cast<tensor::EmptyOp>(builder.clone(*empty));
+        use.set(cloneEmpty.getResult());
+      }
+      empty->erase();
+    }
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<OutlineRootInterface<linalg::ConvolutionOpInterface>>(context);

@@ -914,13 +914,11 @@ static Value createPrivateMemRef(AffineForOp forOp, Operation *srcStoreOpInst,
       region.getConstantBoundingSizeAndShape(&newShape, &lbs, &lbDivisors);
   assert(numElements && "non-constant number of elts in local buffer");
 
-  // // FIXME: We want to avoid any memory reduction due to reduction loops.
-  // // Here is a temporary solution to work around that.
-  // if (llvm::any_of(llvm::zip(newShape, oldMemRefType.getShape()), [](auto t)
-  // {
-  //       return std::get<0>(t) == 1 && std::get<1>(t) != 1;
-  //     }))
-  //   return oldMemRef;
+  // FIXME: We want to avoid any memory reduced to single element memory due to
+  // reduction loops. Here is a temporary solution to work around that.
+  if (llvm::all_of(llvm::zip(newShape, oldMemRefType.getShape()),
+                   [](auto t) { return std::get<0>(t) == 1; }))
+    return oldMemRef;
 
   const FlatAffineValueConstraints *cst = region.getConstraints();
   // 'outerIVs' holds the values that this memory region is symbolic/parametric
