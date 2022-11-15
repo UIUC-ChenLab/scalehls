@@ -71,17 +71,25 @@ $ pyscalehls.py test_gemm.c -f test_gemm > test_gemm_pyscalehls.cpp
 ```
 
 ## Compiling PyTorch Model
-If you have installed [Torch-MLIR](https://github.com/llvm/torch-mlir) with SHA [4ef6e69](https://github.com/llvm/torch-mlir/tree/4ef6e69ed49f309aa70ea40f12bf7488cd8e3434), you should be able to run the following test:
+Install the pre-built [Torch-MLIR](https://github.com/llvm/torch-mlir) front-end:
+```
+$ python -m venv mlir_venv
+$ source mlir_venv/bin/activate
+$ python -m pip install --upgrade pip
+$ pip install --pre torch-mlir torchvision -f https://llvm.github.io/torch-mlir/package-index/ --extra-index-url https://download.pytorch.org/whl/nightly/cpu
+```
+
+Once Torch-MLIR is installed, you should be able to run the following test:
 ```sh
 $ cd samples/pytorch/resnet18
 
 $ # Parse PyTorch model to LinAlg dialect (with Torch-MLIR mlir_venv activated).
-$ python3 resnet18_torchvision.py > resnet18.mlir
+$ python3 resnet18.py > resnet18.mlir
 
 $ # Optimize the model and emit C++ code.
 $ scalehls-opt resnet18.mlir \
-    -scalehls-pytorch-pipeline-v2="top-func=forward loop-tile-size=8 loop-unroll-factor=4" \
-    | scalehls-translate -emit-hlscpp > resnet18.cpp
+    -scaleflow-pytorch-pipeline="top-func=forward loop-tile-size=8 loop-unroll-factor=4" \
+    | scalehls-translate -scalehls-emit-hlscpp > resnet18.cpp
 ```
 
 ## Repository Layout
