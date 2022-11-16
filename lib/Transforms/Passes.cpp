@@ -111,6 +111,10 @@ struct ScaleFlowPyTorchPipelineOptions
       *this, "place-external-buffer", llvm::cl::init(true),
       llvm::cl::desc("Place buffers in external memories")};
 
+  Option<bool> balanceDataflow{
+      *this, "balance-dataflow", llvm::cl::init(true),
+      llvm::cl::desc("Whether to balance the dataflow")};
+
   Option<bool> axiInterface{*this, "axi-interface", llvm::cl::init(true),
                             llvm::cl::desc("Create AXI interface")};
 
@@ -251,7 +255,8 @@ void scalehls::registerScaleFlowPyTorchPipeline() {
         pm.addPass(scalehls::createEliminateMultiProducerPass());
         pm.addPass(scalehls::createEliminateMultiConsumerPass());
         pm.addPass(scalehls::createScheduleDataflowNodePass());
-        pm.addPass(scalehls::createBalanceDataflowNodePass());
+        if (opts.balanceDataflow.getValue())
+          pm.addPass(scalehls::createBalanceDataflowNodePass());
         pm.addPass(scalehls::createLowerCopyToAffinePass());
         pm.addPass(scalehls::createAffineStoreForwardPass());
         pm.addPass(mlir::createCanonicalizerPass());
@@ -281,6 +286,7 @@ void scalehls::registerScaleFlowPyTorchPipeline() {
           return;
 
         // Convert dataflow to func.
+        pm.addPass(scalehls::createLegalizeDataflowPass());
         pm.addPass(scalehls::createCreateTokenStreamPass());
         pm.addPass(scalehls::createConvertDataflowToFuncPass());
         pm.addPass(mlir::createCanonicalizerPass());
