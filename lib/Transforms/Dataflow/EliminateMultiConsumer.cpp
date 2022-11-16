@@ -24,8 +24,8 @@ struct InsertForkNode : public OpRewritePattern<NodeOp> {
     for (auto output : node.getOutputs()) {
       // DRAM buffer allocated in the current schedule doesn't need to follow
       // single-consumer single-producer rule.
-      if (isExternalBuffer(output) && output.getDefiningOp<BufferOp>())
-        continue;
+      // if (isExternalBuffer(output) && output.getDefiningOp<BufferOp>())
+      //   continue;
 
       auto consumers = getDependentConsumers(output, node);
       if (consumers.size() < 2)

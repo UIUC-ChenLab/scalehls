@@ -128,11 +128,6 @@ NodeOp scalehls::fuseNodeOps(ArrayRef<NodeOp> nodes,
   llvm::SmallVector<Location, 8> paramLocs;
 
   for (auto node : nodes) {
-    for (auto input : llvm::enumerate(node.getInputs()))
-      if (inputs.insert(input.value())) {
-        inputLocs.push_back(input.value().getLoc());
-        inputTaps.push_back(node.getInputTap(input.index()));
-      }
     for (auto output : node.getOutputs())
       if (outputs.insert(output))
         outputLocs.push_back(output.getLoc());
@@ -140,6 +135,15 @@ NodeOp scalehls::fuseNodeOps(ArrayRef<NodeOp> nodes,
       if (params.insert(param))
         paramLocs.push_back(param.getLoc());
   }
+  for (auto node : nodes)
+    for (auto input : llvm::enumerate(node.getInputs())) {
+      if (outputs.count(input.value()))
+        continue;
+      if (inputs.insert(input.value())) {
+        inputLocs.push_back(input.value().getLoc());
+        inputTaps.push_back(node.getInputTap(input.index()));
+      }
+    }
 
   // Construct the new node after the last node.
   rewriter.setInsertionPointAfter(nodes.back());
@@ -198,7 +202,7 @@ SmallVector<NodeOp> scalehls::getDependentConsumers(Value buffer, NodeOp node) {
 
   DominanceInfo domInfo;
   SmallVector<NodeOp> nodes;
-  for (auto consumer : getUsersExcept(buffer, OperandKind::INPUT, node))
+  for (auto consumer : getConsumersExcept(buffer, node))
     if (!ignoreBackDependence || domInfo.properlyDominates(node, consumer))
       nodes.push_back(consumer);
   return nodes;

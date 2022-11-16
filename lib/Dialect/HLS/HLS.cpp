@@ -397,11 +397,18 @@ LogicalResult NodeOp::verify() {
   }
 
   for (auto inputArg : getInputArgs())
-    if (llvm::any_of(inputArg.getUses(), isWritten))
-      return emitOpError("input operand is written");
+    if (llvm::any_of(inputArg.getUses(), isWritten)) {
+      auto diag = emitOpError("input operand ");
+      diag << inputArg << " is written";
+      return diag;
+    }
+
   for (auto outputArg : getOutputArgs())
-    if (!llvm::any_of(outputArg.getUses(), isWritten))
-      return emitOpError("output operand is not written");
+    if (!llvm::any_of(outputArg.getUses(), isWritten)) {
+      auto diag = emitOpError("output operand ");
+      diag << outputArg << " is not written";
+      return diag;
+    }
 
   if (getScheduleOp().getIsLegal()) {
     if (!getLevel())
