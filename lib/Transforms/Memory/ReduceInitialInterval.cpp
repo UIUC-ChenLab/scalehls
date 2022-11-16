@@ -81,6 +81,9 @@ static bool findCommutativeChain(Operation *op, AffineWriteOpInterface store,
 static bool optimizeCommutativeChain(SmallVectorImpl<Operation *> &headOps,
                                      SmallVectorImpl<Operation *> &chainOps,
                                      PatternRewriter &rewriter) {
+  if (headOps.empty() || chainOps.empty())
+    return false;
+
   // Get the first operator of the chain and the target operand to operate on.
   auto firstOp = *chainOps.begin();
   auto &targetOperand =

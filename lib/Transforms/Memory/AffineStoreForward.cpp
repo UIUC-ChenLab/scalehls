@@ -56,14 +56,17 @@ forwardStoreToLoad(mlir::AffineReadOpInterface loadOp,
     if (srcAccess != destAccess)
       continue;
 
-    // 2. The store has to dominate the load op to be candidate. Here, we cover
-    // a special case that the store is the sole operation insides of an if
-    // statement. If this is the case, we set the if statement as start for
-    // intervening effect searching.
+    // Here, we cover a special case that the store is the sole operation
+    // insides of an if statement. If this is the case, we set the if statement
+    // as start for intervening effect searching.
     Operation *startOp = storeOp;
-    if (auto ifOp = dyn_cast<mlir::AffineIfOp>(storeOp->getParentOp()))
-      if (isValid(ifOp, loadOp) && !ifAlwaysTrueOrFalse(ifOp).second)
-        startOp = ifOp;
+    if (startOp->getParentRegion() != loadOp->getParentRegion()) {
+      if (auto ifOp = dyn_cast<mlir::AffineIfOp>(storeOp->getParentOp()))
+        if (isValid(ifOp, loadOp) && !ifAlwaysTrueOrFalse(ifOp).second)
+          startOp = ifOp;
+    }
+
+    // 2. The store has to dominate the load op to be candidate.
     if (!domInfo.dominates(startOp, loadOp))
       continue;
 
@@ -154,18 +157,21 @@ static void findUnusedStore(mlir::AffineWriteOpInterface writeA,
     // where write B is possible to be unused.
     Operation *targetA = writeA;
     Operation *targetB = writeB;
-    if (auto ifOpA = dyn_cast<mlir::AffineIfOp>(writeA->getParentOp())) {
-      if (isValid(ifOpA, writeB))
-        targetA = ifOpA;
-      if (auto ifOpB = dyn_cast<mlir::AffineIfOp>(writeB->getParentOp()))
-        if (checkSameIfStatement(ifOpA, ifOpB))
+    if (targetA->getParentRegion() != targetB->getParentRegion()) {
+      if (auto ifOpA = dyn_cast<mlir::AffineIfOp>(writeA->getParentOp())) {
+        if (isValid(ifOpA, writeB))
+          targetA = ifOpA;
+        if (auto ifOpB = dyn_cast<mlir::AffineIfOp>(writeB->getParentOp()))
+          if (checkSameIfStatement(ifOpA, ifOpB))
+            targetB = ifOpB;
+      } else if (auto ifOpB =
+                     dyn_cast<mlir::AffineIfOp>(writeB->getParentOp())) {
+        if (isValid(ifOpB, writeA))
           targetB = ifOpB;
-    } else if (auto ifOpB = dyn_cast<mlir::AffineIfOp>(writeB->getParentOp())) {
-      if (isValid(ifOpB, writeA))
-        targetB = ifOpB;
+      }
+      if (targetA->getParentRegion() != targetB->getParentRegion())
+        continue;
     }
-    if (targetA->getParentRegion() != targetB->getParentRegion())
-      continue;
 
     // writeB must postdominate writeA.
     if (!postDominanceInfo.postDominates(targetB, targetA))
