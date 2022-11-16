@@ -15,6 +15,133 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
+struct SplitScheduleExternalBufferAccess : public OpRewritePattern<ScheduleOp> {
+  using OpRewritePattern<ScheduleOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ScheduleOp schedule,
+                                PatternRewriter &rewriter) const override {
+    auto &scheduleBody = schedule.getBody();
+    SmallVector<Value, 16> newOperands(schedule.getOperands());
+    bool hasChanged = false;
+
+    SmallVector<BlockArgument, 16> args(scheduleBody.getArguments());
+    for (auto arg : args) {
+      // If the buffer is not an external buffer or has zero or one node users,
+      // we have nothing to do.
+      auto uses = llvm::make_filter_range(arg.getUses(), [&](auto &use) {
+        return isa<NodeOp>(use.getOwner());
+      });
+      if (!isExternalBuffer(arg) || uses.empty() ||
+          llvm::hasSingleElement(uses))
+        continue;
+
+      // Add a new argument and new input for each additional uses.
+      for (auto &use : llvm::make_early_inc_range(llvm::drop_begin(uses))) {
+        newOperands.push_back(newOperands[arg.getArgNumber()]);
+        auto newArg = scheduleBody.addArgument(arg.getType(), arg.getLoc());
+        use.set(newArg);
+        hasChanged = true;
+      }
+    }
+
+    if (hasChanged) {
+      auto newSchedule = rewriter.create<ScheduleOp>(
+          schedule.getLoc(), newOperands, schedule.getIsLegalAttr());
+      rewriter.inlineRegionBefore(scheduleBody, newSchedule.getBody(),
+                                  newSchedule.getBody().end());
+      rewriter.eraseOp(schedule);
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
+struct SplitNodeExternalBufferAccess : public OpRewritePattern<NodeOp> {
+  using OpRewritePattern<NodeOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(NodeOp node,
+                                PatternRewriter &rewriter) const override {
+    auto &nodeBody = node.getBody();
+    SmallVector<Value, 16> newInputs(node.getInputs());
+    SmallVector<Value, 16> newOutputs(node.getOutputs());
+    auto numInputs = node.getNumInputs();
+    auto numOutputs = node.getNumOutputs();
+    bool hasChanged = false;
+
+    SmallVector<BlockArgument, 16> inputArgs(node.getInputArgs());
+    SmallVector<BlockArgument, 16> outputArgs(node.getOutputArgs());
+    for (auto arg : inputArgs) {
+      // If the buffer is not an external buffer or has zero or one schedule
+      // users, we have nothing to do.
+      auto uses = llvm::make_filter_range(arg.getUses(), [&](auto &use) {
+        return isa<ScheduleOp>(use.getOwner());
+      });
+      if (!isExternalBuffer(arg) || uses.empty() ||
+          llvm::hasSingleElement(uses))
+        continue;
+
+      // Add a new argument and new input for each additional uses.
+      for (auto &use : llvm::make_early_inc_range(llvm::drop_begin(uses))) {
+        newInputs.push_back(newInputs[arg.getArgNumber()]);
+        auto newArg =
+            nodeBody.insertArgument(numInputs++, arg.getType(), arg.getLoc());
+        use.set(newArg);
+        hasChanged = true;
+      }
+    }
+
+    for (auto arg : llvm::enumerate(outputArgs)) {
+      // If the buffer is not an external buffer or has zero or one schedule
+      // users, we have nothing to do.
+      auto uses =
+          llvm::make_filter_range(arg.value().getUses(), [&](auto &use) {
+            return isa<ScheduleOp>(use.getOwner());
+          });
+      if (!isExternalBuffer(arg.value()) || uses.empty() ||
+          llvm::hasSingleElement(uses))
+        continue;
+
+      // Add a new argument and new input or output for each additional uses
+      // apart from the first written use.
+      bool outputFlag = false;
+      for (auto &use : llvm::make_early_inc_range(uses)) {
+        auto useIsWritten = isWritten(use);
+        if (useIsWritten && !outputFlag) {
+          outputFlag = true;
+          continue;
+        }
+        if (useIsWritten) {
+          newOutputs.push_back(newOutputs[arg.index()]);
+          auto newArg = nodeBody.insertArgument(numInputs + numOutputs++,
+                                                arg.value().getType(),
+                                                arg.value().getLoc());
+          use.set(newArg);
+        } else {
+          newInputs.push_back(newOutputs[arg.index()]);
+          auto newArg = nodeBody.insertArgument(
+              numInputs++, arg.value().getType(), arg.value().getLoc());
+          use.set(newArg);
+        }
+        hasChanged = true;
+      }
+    }
+
+    if (hasChanged) {
+      auto newNode = rewriter.create<NodeOp>(node.getLoc(), newInputs,
+                                             newOutputs, node.getParams());
+      rewriter.inlineRegionBefore(nodeBody, newNode.getBody(),
+                                  newNode.getBody().end());
+      rewriter.eraseOp(node);
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
 struct InlineSchedule : public OpRewritePattern<ScheduleOp> {
   using OpRewritePattern<ScheduleOp>::OpRewritePattern;
 
@@ -53,22 +180,16 @@ struct InlineSchedule : public OpRewritePattern<ScheduleOp> {
 
 namespace {
 struct ConvertNodeToFunc : public OpRewritePattern<NodeOp> {
-  ConvertNodeToFunc(MLIRContext *context, StringRef prefix, unsigned &nodeIdx,
-                    bool dataflowLeafNode)
-      : OpRewritePattern<NodeOp>(context), prefix(prefix), nodeIdx(nodeIdx),
-        dataflowLeafNode(dataflowLeafNode) {}
+  ConvertNodeToFunc(MLIRContext *context, StringRef prefix, unsigned &nodeIdx)
+      : OpRewritePattern<NodeOp>(context), prefix(prefix), nodeIdx(nodeIdx) {}
 
   LogicalResult matchAndRewrite(NodeOp node,
                                 PatternRewriter &rewriter) const override {
     // Create a new sub-function.
     rewriter.setInsertionPoint(node->getParentOfType<func::FuncOp>());
-    auto attr = FuncDirectiveAttr::get(node->getContext(), /*pipeline=*/false,
-                                       /*targetInterval=*/1,
-                                       /*dataflow=*/dataflowLeafNode);
     auto subFunc = rewriter.create<func::FuncOp>(
         node.getLoc(), prefix.str() + "_node" + std::to_string(nodeIdx++),
-        rewriter.getFunctionType(node.getOperandTypes(), TypeRange()),
-        NamedAttribute(rewriter.getStringAttr("func_directive"), attr));
+        rewriter.getFunctionType(node.getOperandTypes(), TypeRange()));
 
     // FIXME: A better method to judge whether to inline the node.
     if (!cast<hls::StageLikeInterface>(node.getOperation()).hasHierarchy() &&
@@ -85,15 +206,12 @@ struct ConvertNodeToFunc : public OpRewritePattern<NodeOp> {
     rewriter.setInsertionPoint(node);
     rewriter.replaceOpWithNewOp<func::CallOp>(node, subFunc,
                                               node.getOperands());
-    // setFuncDirective(subFunc, /*pipeline=*/false, /*targetInterval=*/1,
-    //                  /*dataflow=*/true);
     return success();
   }
 
 private:
   StringRef prefix;
   unsigned &nodeIdx;
-  bool dataflowLeafNode;
 };
 } // namespace
 
@@ -101,13 +219,20 @@ namespace {
 struct ConvertDataflowToFunc
     : public ConvertDataflowToFuncBase<ConvertDataflowToFunc> {
   ConvertDataflowToFunc() = default;
-  explicit ConvertDataflowToFunc(bool argDataflowLeafNode) {
-    dataflowLeafNode = argDataflowLeafNode;
+  explicit ConvertDataflowToFunc(bool argSplitExternalAccess) {
+    splitExternalAccess = argSplitExternalAccess;
   }
 
   void runOnOperation() override {
     auto module = getOperation();
     auto context = module.getContext();
+
+    if (splitExternalAccess.getValue()) {
+      mlir::RewritePatternSet patterns(context);
+      patterns.add<SplitScheduleExternalBufferAccess>(context);
+      patterns.add<SplitNodeExternalBufferAccess>(context);
+      (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
+    }
 
     for (auto func :
          llvm::make_early_inc_range(module.getOps<func::FuncOp>())) {
@@ -118,8 +243,7 @@ struct ConvertDataflowToFunc
       unsigned nodeIdx = 0;
       mlir::RewritePatternSet patterns(context);
       patterns.add<InlineSchedule>(context);
-      patterns.add<ConvertNodeToFunc>(context, func.getName(), nodeIdx,
-                                      dataflowLeafNode.getValue());
+      patterns.add<ConvertNodeToFunc>(context, func.getName(), nodeIdx);
       (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
       // if (failed(applyPartialConversion(func, target, std::move(patterns))))
       //   return signalPassFailure();
@@ -134,6 +258,6 @@ struct ConvertDataflowToFunc
 } // namespace
 
 std::unique_ptr<Pass>
-scalehls::createConvertDataflowToFuncPass(bool dataflowLeafNode) {
-  return std::make_unique<ConvertDataflowToFunc>(dataflowLeafNode);
+scalehls::createConvertDataflowToFuncPass(bool splitExternalAccess) {
+  return std::make_unique<ConvertDataflowToFunc>(splitExternalAccess);
 }
