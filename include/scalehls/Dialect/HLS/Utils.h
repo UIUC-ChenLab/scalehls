@@ -46,10 +46,11 @@ TaskOp fuseOpsIntoTask(ArrayRef<Operation *> ops, PatternRewriter &rewriter,
 NodeOp fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter);
 
 /// Get the consumer/producer nodes of the given buffer expect the given op.
-SmallVector<NodeOp> getConsumersExcept(Value buffer, NodeOp exceptedOp);
-SmallVector<NodeOp> getProducersExcept(Value buffer, NodeOp exceptedOp);
+SmallVector<NodeOp> getConsumersExcept(Value buffer, NodeOp except);
+SmallVector<NodeOp> getProducersExcept(Value buffer, NodeOp except);
 SmallVector<NodeOp> getConsumers(Value buffer);
 SmallVector<NodeOp> getProducers(Value buffer);
+SmallVector<NodeOp> getDependentConsumers(Value buffer, NodeOp node);
 
 /// Get the depth of a buffer or stream channel. Note that only if the defining
 /// operation of the buffer is not a BufferOp or stream types, the returned

@@ -26,22 +26,14 @@ struct ALAPScheduleNode : public OpRewritePattern<NodeOp> {
     DominanceInfo domInfo;
     unsigned level = 0;
     for (auto output : node.getOutputs()) {
-      // If the buffer is defined outside of the schedule and the schedule is
-      // dependence free, we can ignore back dependences in the scheduling.
-      bool ignoreBackDependence = output.isa<BlockArgument>() &&
-                                  node.getScheduleOp().isDependenceFree();
-
       // Stop to schedule the node if an internal buffer has multi-producer or
       // multi-consumer violation.
       if (!ignoreViolations)
-        if (!isExternalBuffer(output) || !output.getDefiningOp<BufferOp>())
-          if (getConsumersExcept(output, node).size() > 1 ||
-              getProducers(output).size() > 1)
-            return failure();
+        if (getDependentConsumers(output, node).size() > 1 ||
+            getProducers(output).size() > 1)
+          return failure();
 
-      for (auto consumer : getConsumersExcept(output, node)) {
-        if (ignoreBackDependence && domInfo.dominates(consumer, node))
-          continue;
+      for (auto consumer : getDependentConsumers(output, node)) {
         if (!consumer.getLevel())
           return failure();
         level = std::max(level, consumer.getLevel().value() + 1);

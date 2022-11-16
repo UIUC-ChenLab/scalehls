@@ -43,7 +43,7 @@ struct CreateTokenStream : public CreateTokenStreamBase<CreateTokenStream> {
         SmallVector<Value, 8> outputs(producer.getOutputs());
         SmallVector<StreamOp, 4> tokens;
 
-        auto consumers = getConsumersExcept(buffer, producer);
+        auto consumers = getDependentConsumers(buffer, producer);
         if (consumers.empty())
           continue;
 

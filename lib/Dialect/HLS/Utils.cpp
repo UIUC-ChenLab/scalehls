@@ -168,30 +168,40 @@ NodeOp scalehls::fuseNodeOps(ArrayRef<NodeOp> nodes,
   return newNode;
 }
 
-static SmallVector<NodeOp> getBufferUsers(Value buffer, bool getProducer,
-                                          NodeOp exceptedOp) {
-  SmallVector<NodeOp, 4> nodes;
+static auto getUsersExcept(Value buffer, OperandKind kind, NodeOp except) {
+  SmallVector<NodeOp> nodes;
   for (auto &use : buffer.getUses())
     if (auto node = dyn_cast<NodeOp>(use.getOwner()))
-      if (node != exceptedOp &&
-          ((getProducer && node.getOperandKind(use) == OperandKind::OUTPUT) ||
-           (!getProducer && node.getOperandKind(use) == OperandKind::INPUT)))
+      if (node != except && node.getOperandKind(use) == kind)
         nodes.push_back(node);
-  return std::move(nodes);
+  return nodes;
 }
 
 /// Get the consumer/producer nodes of the given buffer expect the given op.
 SmallVector<NodeOp> scalehls::getConsumersExcept(Value buffer, NodeOp except) {
-  return getBufferUsers(buffer, false, except);
+  return getUsersExcept(buffer, OperandKind::INPUT, except);
 }
 SmallVector<NodeOp> scalehls::getProducersExcept(Value buffer, NodeOp except) {
-  return getBufferUsers(buffer, true, except);
+  return getUsersExcept(buffer, OperandKind::OUTPUT, except);
 }
 SmallVector<NodeOp> scalehls::getConsumers(Value buffer) {
   return getConsumersExcept(buffer, NodeOp());
 }
 SmallVector<NodeOp> scalehls::getProducers(Value buffer) {
   return getProducersExcept(buffer, NodeOp());
+}
+SmallVector<NodeOp> scalehls::getDependentConsumers(Value buffer, NodeOp node) {
+  // If the buffer is defined outside of a dependence free schedule op, we can
+  // ignore back dependences.
+  bool ignoreBackDependence =
+      buffer.isa<BlockArgument>() && node.getScheduleOp().isDependenceFree();
+
+  DominanceInfo domInfo;
+  SmallVector<NodeOp> nodes;
+  for (auto consumer : getUsersExcept(buffer, OperandKind::INPUT, node))
+    if (!ignoreBackDependence || domInfo.properlyDominates(node, consumer))
+      nodes.push_back(consumer);
+  return nodes;
 }
 
 /// Find buffer value or buffer op across the dataflow hierarchy.

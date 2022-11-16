@@ -313,7 +313,7 @@ void ScheduleOp::getEffects(
 bool ScheduleOp::isDependenceFree() {
   if (auto loop = dyn_cast<mlir::AffineForOp>((*this)->getParentOp()))
     return hasParallelAttr(loop);
-  return false;
+  return isa<func::FuncOp>((*this)->getParentOp());
 }
 
 //===----------------------------------------------------------------------===//
@@ -408,12 +408,7 @@ LogicalResult NodeOp::verify() {
       return emitOpError("node is not scheduled");
 
     for (auto output : getOutputs()) {
-      // DRAM buffer allocated in the current schedule doesn't need to follow
-      // single-consumer single-producer rule.
-      if (isExternalBuffer(output) && output.getDefiningOp<BufferOp>())
-        continue;
-
-      if (getConsumersExcept(output, *this).size() > 1 ||
+      if (getDependentConsumers(output, *this).size() > 1 ||
           getProducers(output).size() > 1) {
         auto diag = emitOpError(
             "legal schedule violates single-consumer or single-producer, ");

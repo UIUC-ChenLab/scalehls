@@ -27,7 +27,7 @@ struct InsertForkNode : public OpRewritePattern<NodeOp> {
       if (isExternalBuffer(output) && output.getDefiningOp<BufferOp>())
         continue;
 
-      auto consumers = getConsumersExcept(output, node);
+      auto consumers = getDependentConsumers(output, node);
       if (consumers.size() < 2)
         continue;
 

@@ -27,7 +27,7 @@ struct InsertCopyNode : public OpRewritePattern<NodeOp> {
         continue;
 
       SmallVector<std::pair<unsigned, NodeOp>, 4> worklist;
-      for (auto consumer : getConsumersExcept(output, node)) {
+      for (auto consumer : getDependentConsumers(output, node)) {
         auto diff = node.getLevel().value() - consumer.getLevel().value();
         if (diff > 1)
           worklist.push_back({diff, consumer});
