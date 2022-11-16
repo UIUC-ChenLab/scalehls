@@ -29,7 +29,7 @@ enum CreateSubviewMode { Point, Reduction };
 void registerScaleHLSDSEPipeline();
 void registerScaleFlowPyTorchPipeline();
 void registerScaleFlowPyTorchPipelinePost();
-void registerScaleHLSPyTorchPipeline();
+void registerScaleFlowCppPipeline();
 void registerTransformsPasses();
 
 void addCreateSubviewPasses(OpPassManager &pm,
@@ -47,7 +47,7 @@ createFuncPreprocessPass(std::string hlsTopFunc = "forward");
 std::unique_ptr<Pass> createBalanceDataflowNodePass();
 std::unique_ptr<Pass> createBufferizeDataflowPass();
 std::unique_ptr<Pass>
-createConvertDataflowToFuncPass(bool dataflowLeafNode = false);
+createConvertDataflowToFuncPass(bool splitExternalAccess = true);
 std::unique_ptr<Pass> createCreateDataflowFromTosaPass();
 std::unique_ptr<Pass> createCreateDataflowFromLinalgPass();
 std::unique_ptr<Pass> createCreateDataflowFromAffinePass();
@@ -56,11 +56,9 @@ std::unique_ptr<Pass> createEliminateMultiConsumerPass();
 std::unique_ptr<Pass> createEliminateMultiConsumerDeprecatedPass();
 std::unique_ptr<Pass> createEliminateMultiProducerPass();
 std::unique_ptr<Pass> createLowerDataflowPass(bool splitExternalAccess = true);
-std::unique_ptr<Pass>
-createParallelizeDataflowNodePass(unsigned loopUnrollFactor = 1,
-                                  bool unrollPointLoopOnly = false,
-                                  bool complexityAware = true,
-                                  bool correlationAware = true);
+std::unique_ptr<Pass> createParallelizeDataflowNodePass(
+    unsigned loopUnrollFactor = 1, bool unrollPointLoopOnly = false,
+    bool complexityAware = true, bool correlationAware = true);
 std::unique_ptr<Pass>
 createPlaceDataflowBufferPass(bool placeExternalBuffer = true);
 std::unique_ptr<Pass>

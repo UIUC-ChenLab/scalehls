@@ -70,8 +70,8 @@ def ConvertDataflowToFunc :
   let constructor = "mlir::scalehls::createConvertDataflowToFuncPass()";
 
   let options = [
-    Option<"dataflowLeafNode", "dataflow-leaf-node", "bool",
-           /*default=*/"false", "Automatically dataflow leaf nodes">
+    Option<"splitExternalAccess", "split-external-access", "bool",
+           /*default=*/"true", "whether split external memory accesses">
   ];
 }
 
