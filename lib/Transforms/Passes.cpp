@@ -265,13 +265,12 @@ void scalehls::registerScaleFlowPyTorchPipeline() {
           return;
 
         // Parallelize dataflow.
-        if (opts.loopUnrollFactor) {
-          pm.addPass(scalehls::createParallelizeDataflowNodePass(
-              opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true,
-              opts.complexityAware, opts.correlationAware));
-          pm.addPass(mlir::createSimplifyAffineStructuresPass());
-          pm.addPass(mlir::createCanonicalizerPass());
-        }
+        pm.addPass(scalehls::createParallelizeDataflowNodePass(
+            opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true,
+            opts.complexityAware, opts.correlationAware));
+        pm.addPass(mlir::createSimplifyAffineStructuresPass());
+        pm.addPass(scalehls::createLegalizeDataflowPass());
+        pm.addPass(mlir::createCanonicalizerPass());
 
         if (opts.debugPoint == 11)
           return;
@@ -286,7 +285,6 @@ void scalehls::registerScaleFlowPyTorchPipeline() {
           return;
 
         // Convert dataflow to func.
-        pm.addPass(scalehls::createLegalizeDataflowPass());
         pm.addPass(scalehls::createCreateTokenStreamPass());
         pm.addPass(scalehls::createConvertDataflowToFuncPass());
         pm.addPass(mlir::createCanonicalizerPass());

@@ -553,15 +553,125 @@ struct FlattenReadOnlyBuffer : public OpRewritePattern<BufferOp> {
 };
 } // namespace
 
+static NodeOp sinkBufferIntoNode(NodeOp node, BufferOp buffer,
+                                 PatternRewriter &rewriter) {
+  assert(node->getParentRegion() == buffer->getParentRegion() &&
+         "node and buffer is not at the same region");
+  SmallVector<Value> inputs;
+  SmallVector<unsigned, 8> inputTaps;
+  SmallVector<Value> outputs;
+  llvm::BitVector eraseIndices;
+
+  for (auto input : llvm::enumerate(node.getInputs())) {
+    if (input.value() != buffer) {
+      inputs.push_back(input.value());
+      inputTaps.push_back(node.getInputTap(input.index()));
+      eraseIndices.push_back(false);
+    } else {
+      auto arg = node.getBody().getArgument(input.index());
+      arg.replaceAllUsesWith(buffer);
+      eraseIndices.push_back(true);
+    }
+  }
+  for (auto output : llvm::enumerate(node.getOutputs())) {
+    if (output.value() != buffer) {
+      outputs.push_back(output.value());
+      eraseIndices.push_back(false);
+    } else {
+      auto arg =
+          node.getBody().getArgument(node.getNumInputs() + output.index());
+      arg.replaceAllUsesWith(buffer);
+      eraseIndices.push_back(true);
+    }
+  }
+  for (unsigned i = 0; i < node.getNumParams(); ++i)
+    eraseIndices.push_back(false);
+
+  auto &nodeBlock = node.getBody().front();
+  buffer->moveBefore(&nodeBlock.front());
+  nodeBlock.eraseArguments(eraseIndices);
+
+  rewriter.setInsertionPointAfter(node);
+  auto newNode =
+      rewriter.create<NodeOp>(node.getLoc(), inputs, outputs, node.getParams(),
+                              inputTaps, node.getLevelAttr());
+  rewriter.inlineRegionBefore(node.getBody(), newNode.getBody(),
+                              newNode.getBody().begin());
+  rewriter.eraseOp(node);
+  return newNode;
+}
+
+static ScheduleOp sinkBufferIntoSchedule(ScheduleOp schedule, BufferOp buffer,
+                                         PatternRewriter &rewriter) {
+  assert(schedule->getParentRegion() == buffer->getParentRegion() &&
+         "node and buffer is not at the same region");
+  SmallVector<Value> operands;
+  llvm::BitVector eraseIndices;
+
+  for (auto operand : llvm::enumerate(schedule.getOperands())) {
+    if (operand.value() != buffer) {
+      operands.push_back(operand.value());
+      eraseIndices.push_back(false);
+    } else
+      eraseIndices.push_back(true);
+  }
+
+  auto &scheduleBlock = schedule.getBody().front();
+  buffer->moveBefore(&scheduleBlock.front());
+  scheduleBlock.eraseArguments(eraseIndices);
+
+  rewriter.setInsertionPointAfter(schedule);
+  auto newSchedule = rewriter.create<ScheduleOp>(schedule.getLoc(), operands,
+                                                 schedule.getIsLegalAttr());
+  rewriter.inlineRegionBefore(schedule.getBody(), newSchedule.getBody(),
+                              newSchedule.getBody().begin());
+  rewriter.eraseOp(schedule);
+  return newSchedule;
+}
+
+namespace {
+struct SinkInternalBuffer : public OpRewritePattern<BufferOp> {
+  using OpRewritePattern<BufferOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(BufferOp buffer,
+                                PatternRewriter &rewriter) const override {
+    if (!isExternalBuffer(buffer) &&
+        llvm::hasSingleElement(buffer->getUsers())) {
+      auto user = *buffer->getUsers().begin();
+
+      // Sink the buffer into the node or schedule user.
+      if (user->getParentRegion() == buffer->getParentRegion() &&
+          isa<NodeOp, ScheduleOp>(user)) {
+        if (auto node = dyn_cast<NodeOp>(user))
+          sinkBufferIntoNode(node, buffer, rewriter);
+        else if (auto schedule = dyn_cast<ScheduleOp>(user))
+          sinkBufferIntoSchedule(schedule, buffer, rewriter);
+        return success();
+      }
+    }
+    return failure();
+  }
+};
+} // namespace
+
 void BufferOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                            MLIRContext *context) {
   results.add<FlattenReadOnlyBuffer>(context);
+  results.add<SinkInternalBuffer>(context);
 }
 
 LogicalResult BufferOp::verify() {
   if (auto initValue = getInitValue())
     if (initValue.value().getType() != getType().getElementType())
       return emitOpError("initial value's type doesn't align with memref type");
+
+  if (isExternalBuffer(*this)) {
+    if (auto node = dyn_cast<NodeOp>((*this)->getParentOp()))
+      return emitOpError("external buffer should not be placed in node");
+    if (auto schedule = dyn_cast<ScheduleOp>((*this)->getParentOp()))
+      if (!isa<func::FuncOp>(schedule->getParentOp()))
+        return emitOpError("external buffer must be placed in top schedule");
+  }
   return success();
 }
 

@@ -160,24 +160,59 @@ struct FuseBypassPath : public OpRewritePattern<ScheduleOp> {
 };
 } // namespace
 
+template <typename RecursiveOpType, typename OpType>
+static void updateSignatureRecursively(OpType node) {
+  llvm::SmallDenseSet<RecursiveOpType> schedules;
+  for (auto t : llvm::zip(node.getOperands(), node.getBody().getArguments())) {
+    std::get<1>(t).setType(std::get<0>(t).getType());
+    for (auto user : std::get<1>(t).getUsers())
+      if (auto schedule = dyn_cast<RecursiveOpType>(user))
+        schedules.insert(schedule);
+  }
+  for (auto schedule : schedules)
+    updateSignatureRecursively<OpType>(schedule);
+}
+
+namespace {
+struct AllocateInternalBuffer : public OpRewritePattern<BufferOp> {
+  using OpRewritePattern<BufferOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(BufferOp buffer,
+                                PatternRewriter &rewriter) const override {
+    if (isExternalBuffer(buffer) && llvm::hasSingleElement(buffer->getUsers()))
+      if (auto node = dyn_cast<NodeOp>(*buffer->user_begin())) {
+        auto newType = MemRefType::get(
+            buffer.getType().getShape(), buffer.getType().getElementType(),
+            AffineMap(), (unsigned)MemoryKind::BRAM_T2P);
+        buffer.getMemref().setType(newType);
+        updateSignatureRecursively<ScheduleOp>(node);
+        return success();
+      }
+    return failure();
+  }
+};
+} // namespace
+
 namespace {
 struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
 
-    mlir::RewritePatternSet pattern1(context);
-    pattern1.add<FuseMultiConsumer>(context);
-    auto frozenPattern1 = FrozenRewritePatternSet(std::move(pattern1));
-
-    mlir::RewritePatternSet pattern2(context);
-    pattern2.add<FuseBypassPath>(context);
-    auto frozenPattern2 = FrozenRewritePatternSet(std::move(pattern2));
+    // Fuse multi consumer and bypass path dataflow nodes.
+    mlir::RewritePatternSet patterns(context);
+    patterns.add<FuseMultiConsumer>(context);
+    patterns.add<FuseBypassPath>(context);
+    auto frozenPatterns = FrozenRewritePatternSet(std::move(patterns));
 
     func.walk([&](ScheduleOp schedule) {
-      (void)applyOpPatternsAndFold(schedule, frozenPattern1);
-      (void)applyOpPatternsAndFold(schedule, frozenPattern2);
+      (void)applyOpPatternsAndFold(schedule, frozenPatterns);
     });
+
+    // // Reallocate internal buffers.
+    // patterns.clear();
+    // patterns.add<AllocateInternalBuffer>(context);
+    // (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
 } // namespace
