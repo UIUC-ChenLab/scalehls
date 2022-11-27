@@ -63,15 +63,6 @@ struct ScheduleDataflowNode
     mlir::RewritePatternSet patterns(context);
     patterns.add<ALAPScheduleNode>(context, ignoreViolations.getValue());
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
-
-    // If we considered multi-consumer and producer violations in this pass, set
-    // schedule ops as legal if applicable.
-    if (!ignoreViolations.getValue())
-      func.walk([&](ScheduleOp schedule) {
-        if (llvm::all_of(schedule.getOps<NodeOp>(),
-                         [](NodeOp node) { return node.getLevel(); }))
-          schedule.setIsLegalAttr(UnitAttr::get(context));
-      });
   }
 };
 } // namespace

@@ -86,6 +86,10 @@ static void collectBypassNodes(
           node.getScheduleOp().isDependenceFree())
         continue;
 
+      // We don't consider external buffers in the bypass elimination.
+      if (isExternalBuffer(output))
+        continue;
+
       SmallVector<std::pair<unsigned, NodeOp>, 4> bypassNodes;
       for (auto consumer : getDependentConsumers(output, node)) {
         auto diff = node.getLevel().value() - consumer.getLevel().value();
@@ -207,6 +211,10 @@ struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
 
     func.walk([&](ScheduleOp schedule) {
       (void)applyOpPatternsAndFold(schedule, frozenPatterns);
+
+      if (llvm::all_of(schedule.getOps<NodeOp>(),
+                       [](NodeOp node) { return node.getLevel(); }))
+        schedule.setIsLegalAttr(UnitAttr::get(context));
     });
 
     // // Reallocate internal buffers.
