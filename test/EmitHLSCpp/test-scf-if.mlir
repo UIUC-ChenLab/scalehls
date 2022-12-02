@@ -4,8 +4,8 @@ func.func @test_scf_if(%arg0: index, %arg1: memref<16xindex>) {
   %c11 = arith.constant 11 : index
   %c0 = arith.constant 0 : index
 
-  // CHECK: int v2 = v0 + 11;
-  // CHECK: bool v3 = v2 > 0;
+  // CHECK: int v2 = v0 + (int)11;
+  // CHECK: bool v3 = v2 > (int)0;
   // CHECK: int v4;
   // CHECK: int v5[16];
   // CHECK: if (v3) {

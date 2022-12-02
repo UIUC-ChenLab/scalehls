@@ -2,7 +2,7 @@
 
 func.func @test_integer_binary(%arg0: i32, %arg1: i32) -> i32 {
 
-  // CHECK: int32_t [[VAL_0:.*]] = [[ARG_0:.*]] + [[ARG_1:.*]];
+  // CHECK: ap_int<32> [[VAL_0:.*]] = [[ARG_0:.*]] + [[ARG_1:.*]];
   %0 = arith.addi %arg0, %arg1 : i32
   // CHECK: -
   %1 = arith.subi %arg0, %0 : i32
@@ -29,7 +29,7 @@ func.func @test_integer_binary(%arg0: i32, %arg1: i32) -> i32 {
   // CHECK: >>
   %12 = arith.shrui %arg0, %11 : i32
 
-  // CHECK: int32_t [[VAL_3:.*]] = max([[ARG_0:.*]], [[VAL_2:.*]]);
+  // CHECK: ap_int<32> [[VAL_3:.*]] = max([[ARG_0:.*]], [[VAL_2:.*]]);
   %13 = arith.maxsi %arg0, %12 : i32
 
   // CHECK: *[[VAL_4:.*]] = min([[ARG_0:.*]], [[VAL_3]]);
@@ -51,7 +51,7 @@ func.func @test_float_binary_unary(%arg0: f32, %arg1: f32) -> f32 {
   %4 = arith.remf %arg0, %3 : f32
 
   // CHECK: float [[VAL_2:.*]] = abs([[VAL_1:.*]]);
-  %5 = math.abs %4 : f32
+  %5 = math.absf %4 : f32
   // CHECK: ceil
   %6 = math.ceil %5 : f32
   // CHECK: -
@@ -90,7 +90,7 @@ func.func @test_special_expr(%arg0: i1, %arg1: index, %arg2: index) -> index {
   // CHECK: int [[VAL_0:.*]] = [[ARG_0:.*]] ? [[ARG_1:.*]] : [[ARG_2:.*]];
   %0 = arith.select %arg0, %arg1, %arg2 : i1, index
 
-  // CHECK: int32_t [[VAL_1:.*]] = [[VAL_0:.*]];
+  // CHECK: ap_int<32> [[VAL_1:.*]] = [[VAL_0:.*]];
   %1 = arith.index_cast %0 : index to i32
 
   // CHECK: *[[VAL_2:.*]] = [[VAL_0:.*]]

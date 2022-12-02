@@ -218,12 +218,13 @@ static SmallString<8> getConstantString(Type type, Attribute attr) {
 SmallString<8> ScaleHLSEmitterBase::getName(Value val) {
   // For constant scalar operations, the constant number will be returned rather
   // than the value name.
-  if (auto constOp = val.getDefiningOp<arith::ConstantOp>()) {
-    auto string = getConstantString(constOp.getType(), constOp.getValue());
-    if (string.empty())
-      constOp.emitOpError("constant has invalid value");
-    return string;
-  }
+  if (auto constOp = val.getDefiningOp<arith::ConstantOp>())
+    if (!constOp.getType().isa<ShapedType>()) {
+      auto string = getConstantString(constOp.getType(), constOp.getValue());
+      if (string.empty())
+        constOp.emitOpError("constant has invalid value");
+      return string;
+    }
   return state.nameTable.lookup(val);
 }
 

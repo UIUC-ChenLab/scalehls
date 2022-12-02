@@ -7,18 +7,18 @@ func.func @test_scf_for(%arg0: memref<16xindex>, %arg1: index) {
   %c2 = arith.constant 2 : index
   %c16 = arith.constant 16 : index
 
-  // CHECK: int v2 = v1 + 11;
-  // CHECK: int v3 = v1 - 11;
+  // CHECK: int v2 = v1 + (int)11;
+  // CHECK: int v3 = v1 - (int)11;
   %ub = arith.addi %arg1, %c11 : index
   %lb = arith.subi %arg1, %c11 : index
 
-  // CHECK: for (int v4 = 0; v4 < v2; v4 += 2) {
+  // CHECK: for (int v4 = (int)0; v4 < v2; v4 += (int)2) {
   scf.for %i = %c0 to %ub step %c2 {
 
-    // CHECK: for (int v5 = v3; v5 < 16; v5 += 1) {
+    // CHECK: for (int v5 = v3; v5 < (int)16; v5 += (int)1) {
     scf.for %j = %lb to %c16 step %c1 {
 
-      // CHECK: for (int v6 = 0; v6 < 16; v6 += 2) {
+      // CHECK: for (int v6 = (int)0; v6 < (int)16; v6 += (int)2) {
       scf.for %k = %c0 to %c16 step %c2 {
 
         // CHECK: int v7 = v0[v4];

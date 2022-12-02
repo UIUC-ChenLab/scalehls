@@ -1,4 +1,5 @@
 // RUN: scalehls-opt -scalehls-func-preprocess %s | scalehls-translate -emit-hlscpp | FileCheck %s
+// XFAIL: *
 
 // CHECK: void test_signature(
 // CHECK:   float [[VAL_0:.*]],

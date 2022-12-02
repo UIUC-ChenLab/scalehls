@@ -125,6 +125,8 @@ void ScaleHLSEstimator::estimateLoadStoreTiming(Operation *op, int64_t begin) {
 
         if (isRam1P(storageType))
           info.rdwrPort = 1;
+        else if (isRam2P(storageType))
+          info.rdwrPort = 1, info.rdPort = 1;
         else if (isRamT2P(storageType))
           info.rdwrPort = 2;
         else if (isRamS2P(storageType))

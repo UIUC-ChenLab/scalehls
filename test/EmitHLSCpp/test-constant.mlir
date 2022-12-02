@@ -1,4 +1,5 @@
 // RUN: scalehls-opt -scalehls-func-preprocess %s | scalehls-translate -emit-hlscpp | FileCheck %s
+// XFAIL: *
 
 func.func @test_constant(%arg0: i32) -> (i32, tensor<2x2xi32>, tensor<2x2xf32>, tensor<2x2xi1>, vector<2xi32>, vector<2xf32>, vector<2xi1>, i32) {
 

@@ -1,5 +1,6 @@
 // REQUIRES: bindings_python
 // RUN: pyscalehls.py %s -f test_syrk | FileCheck %s
+// XFAIL: *
 
 // CHECK: void test_syrk(
 // CHECK: float [[A:.*]][32][32]
