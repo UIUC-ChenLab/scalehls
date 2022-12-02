@@ -1834,13 +1834,21 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
 void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
                                            ArrayRef<Value> portList) {
   // Only top function should emit interface pragmas.
-  if (hasTopFuncAttr(func))
+  if (hasTopFuncAttr(func)) {
     indent() << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
+    for (auto &port : portList)
+      if (!port.getType().isa<ShapedType, StreamType>()) {
+        auto name = getName(port);
+        if (name.front() == "*"[0])
+          name.erase(name.begin());
+        indent() << "#pragma HLS interface s_axilite port=" << name
+                 << " bundle=ctrl\n";
+      }
+  }
 
   if (func->getAttr("inline"))
     indent() << "#pragma HLS inline\n";
 
-  // Emit other pragmas for function ports.
   for (auto &port : portList)
     if (port.getType().isa<MemRefType>())
       emitArrayDirectives(port);

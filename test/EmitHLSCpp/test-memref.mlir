@@ -1,4 +1,4 @@
-// RUN: scalehls-translate -emit-hlscpp %s | FileCheck %s
+// RUN: scalehls-translate -scalehls-emit-hlscpp %s | FileCheck %s
 
 func.func @test_memref() {
   %c0 = arith.constant 0 : index

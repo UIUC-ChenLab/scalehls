@@ -1,4 +1,4 @@
-// RUN: scalehls-translate -emit-hlscpp %s | FileCheck %s
+// RUN: scalehls-translate -scalehls-emit-hlscpp %s | FileCheck %s
 
 #add = affine_map<(d0)[s0] -> (d0 + s0 + 11)>
 #sub = affine_map<(d0)[s0] -> (d0 - s0 - 11)>

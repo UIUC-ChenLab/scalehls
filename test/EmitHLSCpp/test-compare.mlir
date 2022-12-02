@@ -1,4 +1,4 @@
-// RUN: scalehls-translate -emit-hlscpp %s | FileCheck %s
+// RUN: scalehls-translate -scalehls-emit-hlscpp %s | FileCheck %s
 
 func.func @test_integer_compare(%arg0: i32, %arg1: i32) -> i1 {
 

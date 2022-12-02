@@ -1,4 +1,4 @@
-// RUN: scalehls-translate -emit-hlscpp %s | FileCheck %s
+// RUN: scalehls-translate -scalehls-emit-hlscpp %s | FileCheck %s
 
 #set0 = affine_set<(d0)[s0]: (d0 + s0 >= 0, d0 * s0 == 0)>
 
@@ -7,7 +7,7 @@ func.func @test_affine_if(%arg0: index, %arg1: memref<16xindex>) -> index {
 
   // CHECK: int v3;
   // CHECK: int v4[16];
-  // CHECK: if ((v0 + 11) >= 0 && (v0 * 11) == 0) {
+  // CHECK: if ((v0 + (int)11) >= 0 && (v0 * (int)11) == 0) {
   %0:2 = affine.if #set0 (%arg0)[%c11] -> (index, memref<16xindex>) {
 
     // CHECK: v3 = v0;
