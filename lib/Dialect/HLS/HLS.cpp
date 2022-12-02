@@ -415,6 +415,11 @@ LogicalResult NodeOp::verify() {
       return emitOpError("node is not scheduled");
 
     for (auto output : getOutputs()) {
+      // DRAM buffer is not considered - the dependencies associated with them
+      // are handled later by tokens.
+      if (isExternalBuffer(output))
+        continue;
+
       if (getDependentConsumers(output, *this).size() > 1 ||
           getProducers(output).size() > 1) {
         auto diag = emitOpError(

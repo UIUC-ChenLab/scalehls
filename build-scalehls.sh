@@ -85,10 +85,10 @@ fi
 # Run building.
 if [ "${CMAKE_GENERATOR}" == "Ninja" ]; then
   ninja
-  ninja check-mlir-clang
+  ninja check-cgeist
 else
   make -j "$(nproc)"
-  make -j "$(nproc)" check-mlir-clang
+  make -j "$(nproc)" check-cgeist
 fi
 
 echo ""

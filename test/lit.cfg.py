@@ -69,7 +69,7 @@ tools = [
     'pyscalehls.py',
     'scalehls-opt',
     'scalehls-translate',
-    'mlir-clang'
+    'cgeist'
 ]
 
 # The following tools are optional

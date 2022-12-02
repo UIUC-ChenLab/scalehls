@@ -67,7 +67,7 @@ struct FuseMultiConsumer : public OpRewritePattern<ScheduleOp> {
         hasChanged = true;
       }
     }
-    schedule.setIsLegalAttr(rewriter.getUnitAttr());
+    // schedule.setIsLegalAttr(rewriter.getUnitAttr());
     return success(hasChanged);
   }
 };
@@ -86,7 +86,8 @@ static void collectBypassNodes(
           node.getScheduleOp().isDependenceFree())
         continue;
 
-      // We don't consider external buffers in the bypass elimination.
+      // DRAM buffer is not considered - the dependencies associated with them
+      // are handled later by tokens.
       if (isExternalBuffer(output))
         continue;
 
