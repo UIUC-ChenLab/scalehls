@@ -134,7 +134,7 @@ void ScaleHLSEstimator::estimateLoadStoreTiming(Operation *op, int64_t begin) {
         else if (isDram(storageType))
           info.rdPort = UINT_MAX, info.wrPort = UINT_MAX;
         else
-          llvm_unreachable("unknown memory kind");
+          info.rdwrPort = 2;
 
         memPortInfos.push_back(info);
       }

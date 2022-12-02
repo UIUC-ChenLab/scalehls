@@ -56,13 +56,13 @@ To optimize C/C++ kernels with the design space exploration (DSE) engine, run:
 $ cd samples/polybench/gemm
 
 $ # Parse C/C++ kernel into MLIR.
-$ mlir-clang test_gemm.c -function=test_gemm -S \
+$ cgeist test_gemm.c -function=test_gemm -S \
     -memref-fullrank -raise-scf-to-affine > test_gemm.mlir
 
 $ # Launch the DSE and emit the optimized design as C++ code.
 $ scalehls-opt test_gemm.mlir -debug-only=scalehls \
     -scalehls-dse-pipeline="top-func=test_gemm target-spec=../config.json" \
-    | scalehls-translate -emit-hlscpp > test_gemm_dse.cpp
+    | scalehls-translate -scalehls-emit-hlscpp > test_gemm_dse.cpp
 ```
 
 If Python binding is enabled, we provide a `pyscalehls` tool to showcase the `scalehls` Python library:

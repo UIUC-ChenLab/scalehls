@@ -1,3 +1,7 @@
+get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
+get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
+get_property(translation_libs GLOBAL PROPERTY MLIR_TRANSLATION_LIBS)
+
 ################################################################################
 # Set up Python binding tools
 ################################################################################
@@ -18,7 +22,11 @@ declare_mlir_python_extension(ScaleHLSBindingsPythonExtension.Core
   EMBED_CAPI_LINK_LIBS
     MLIRScaleHLSCAPIHLS
     MLIRScaleHLSCAPIEmitHLSCpp
+    MLIRCAPITransforms
   PRIVATE_LINK_LIBS
+    ${dialect_libs}
+    ${conversion_libs}
+    ${translation_libs}
     LLVMSupport
     MLIRScaleHLSTransforms
 )
@@ -66,7 +74,9 @@ add_mlir_python_common_capi_library(ScaleHLSBindingsPythonCAPI
   OUTPUT_DIRECTORY "${SCALEHLS_PYTHON_PACKAGES_DIR}/scalehls_core/mlir/_mlir_libs"
   RELATIVE_INSTALL_ROOT "../../../.."
   DECLARED_SOURCES
-    MLIRPythonSources
+    MLIRPythonSources.Core
+    MLIRPythonSources.Dialects
+    MLIRPythonSources.ExecutionEngine
     ScaleHLSBindingsPythonSources
     ScaleHLSBindingsPythonExtension
 )
@@ -79,7 +89,9 @@ add_mlir_python_modules(ScaleHLSMLIRPythonModules
   ROOT_PREFIX "${SCALEHLS_PYTHON_PACKAGES_DIR}/scalehls_core/mlir"
   INSTALL_PREFIX "python_packages/scalehls_core/mlir"
   DECLARED_SOURCES
-    MLIRPythonSources
+    MLIRPythonSources.Core
+    MLIRPythonSources.Dialects
+    MLIRPythonSources.ExecutionEngine
     # We need the scalehls extensions co-located with the MLIR extensions. When
     # the namespace is unified, this moves to the below.
     ScaleHLSBindingsPythonExtension

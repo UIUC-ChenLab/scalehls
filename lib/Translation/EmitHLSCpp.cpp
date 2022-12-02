@@ -1838,7 +1838,7 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
   if (hasTopFuncAttr(func)) {
     indent() << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
     for (auto &port : portList)
-      if (!port.getType().isa<ShapedType, StreamType>()) {
+      if (!port.getType().isa<ShapedType, StreamType, AxiType>()) {
         auto name = getName(port);
         if (name.front() == "*"[0])
           name.erase(name.begin());

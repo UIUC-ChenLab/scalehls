@@ -1773,29 +1773,6 @@ module attributes {torch.debug_module_name = "ResNet"} {
 // CHECK:   ap_int<8> v482[64][28][28]
 // CHECK: ) {	// L604
 // CHECK:   #pragma HLS interface s_axilite port=return bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v460 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v461 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v462 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v463 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v464 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v465 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v466 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v467 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v468 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v469 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v470 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v471 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v472 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v473 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v474 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v475 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v476 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v477 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v478 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v479 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v480 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v481 bundle=ctrl
-// CHECK:   #pragma HLS interface s_axilite port=v482 bundle=ctrl
 // CHECK:   #pragma HLS dataflow
 
 // CHECK:   #pragma HLS interface ap_memory port=v482
