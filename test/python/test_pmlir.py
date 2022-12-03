@@ -4,9 +4,10 @@
 from pmlir import *
 
 
-@pmlir_function()
+@pmlir_function_ast()
 def foo(a: int, b: int) -> int:
-    return a + b
+    c = a + b
+    return c
 
 
 # CHECK: module {
