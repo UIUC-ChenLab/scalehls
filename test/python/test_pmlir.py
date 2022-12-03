@@ -5,9 +5,14 @@ from pmlir import *
 
 
 @pmlir_function()
-def test_gemm():
-    return
+def foo(a: int, b: int) -> int:
+    return a + b
 
 
-# CHECK: module
-compile(test_gemm)
+# CHECK: module {
+# CHECK:   func.func @foo(%arg0: i32, %arg1: i32) -> i32 {
+# CHECK:     %0 = arith.addi %arg0, %arg1 : i32
+# CHECK:     return %0 : i32
+# CHECK:   }
+# CHECK: }
+pmlir_compile(foo)

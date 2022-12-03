@@ -14,6 +14,7 @@ class GlobalContext(object):
         self.loc = Location.unknown(self.ctx)
         self.mod = Module.create(self.loc)
         scalehls.register_dialects(self.ctx)
+        self.ctx.load_all_available_dialects()
 
     def get_context(self):
         return self.ctx

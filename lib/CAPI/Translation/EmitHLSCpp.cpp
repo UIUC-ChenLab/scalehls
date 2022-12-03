@@ -13,8 +13,9 @@
 using namespace mlir;
 using namespace scalehls;
 
-MlirLogicalResult mlirEmitHlsCpp(MlirModule module, MlirStringCallback callback,
-                                 void *userData) {
+MlirLogicalResult scalehlsEmitHlsCpp(MlirModule module,
+                                     MlirStringCallback callback,
+                                     void *userData) {
   mlir::detail::CallbackOstream stream(callback, userData);
   return wrap(emitHLSCpp(unwrap(module), stream));
 }

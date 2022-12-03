@@ -15,6 +15,9 @@ extern "C" {
 
 MLIR_DECLARE_CAPI_DIALECT_REGISTRATION(HLS, hls);
 
+MLIR_CAPI_EXPORTED void
+scalehlsRegisterAllDialects(MlirDialectRegistry registry);
+
 #ifdef __cplusplus
 }
 #endif

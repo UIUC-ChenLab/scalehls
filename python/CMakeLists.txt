@@ -4,6 +4,8 @@ declare_mlir_python_sources(ScaleHLSPMLIRPythonSources
     pmlir/__init__.py
     pmlir/context.py
     pmlir/func.py
+    pmlir/type.py
+    pmlir/value.py
 )
 
 add_mlir_python_modules(ScaleHLSPMLIRPythonModules

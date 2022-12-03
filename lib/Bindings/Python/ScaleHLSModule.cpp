@@ -237,7 +237,7 @@ static bool emitHlsCpp(MlirModule mod, py::object fileObject) {
   PyFileAccumulator accum(fileObject, false);
   py::gil_scoped_release();
   return mlirLogicalResultIsSuccess(
-      mlirEmitHlsCpp(mod, accum.getCallback(), accum.getUserData()));
+      scalehlsEmitHlsCpp(mod, accum.getCallback(), accum.getUserData()));
 }
 
 //===----------------------------------------------------------------------===//
@@ -253,10 +253,15 @@ PYBIND11_MODULE(_scalehls, m) {
     // Get the MlirContext capsule from PyMlirContext capsule.
     auto wrappedCapsule = capsule.attr(MLIR_PYTHON_CAPI_PTR_ATTR);
     MlirContext context = mlirPythonCapsuleToContext(wrappedCapsule.ptr());
+    MlirDialectRegistry registry = mlirDialectRegistryCreate();
 
-    MlirDialectHandle hls = mlirGetDialectHandle__hls__();
-    mlirDialectHandleRegisterDialect(hls, context);
-    mlirDialectHandleLoadDialect(hls, context);
+    scalehlsRegisterAllDialects(registry);
+    mlirContextAppendDialectRegistry(context, registry);
+    mlirDialectRegistryDestroy(registry);
+
+    // MlirDialectHandle hls = mlirGetDialectHandle__hls__();
+    // mlirDialectHandleRegisterDialect(hls, context);
+    // mlirDialectHandleLoadDialect(hls, context);
   });
 
   // Loop transform APIs.

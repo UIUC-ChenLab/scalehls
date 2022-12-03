@@ -13,9 +13,8 @@
 extern "C" {
 #endif
 
-MLIR_CAPI_EXPORTED MlirLogicalResult mlirEmitHlsCpp(MlirModule module,
-                                                    MlirStringCallback callback,
-                                                    void *userData);
+MLIR_CAPI_EXPORTED MlirLogicalResult scalehlsEmitHlsCpp(
+    MlirModule module, MlirStringCallback callback, void *userData);
 
 #ifdef __cplusplus
 }
