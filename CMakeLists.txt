@@ -99,6 +99,7 @@ if(SCALEHLS_ENABLE_BINDINGS_PYTHON)
   message(STATUS "Python prefix = '${PYTHON_MODULE_PREFIX}', "
                  "suffix = '${PYTHON_MODULE_SUFFIX}', "
                  "extension = '${PYTHON_MODULE_EXTENSION}'")
+  add_subdirectory(python)
 else()
   message(STATUS "ScaleHLS Python bindings are disabled.")
 endif()

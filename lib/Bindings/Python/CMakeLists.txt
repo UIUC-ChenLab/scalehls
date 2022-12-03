@@ -43,7 +43,7 @@ declare_mlir_python_sources(ScaleHLSBindingsPythonSources
 )
 
 ################################################################################
-# Declare dialect-specific bindings.
+# Declare dialect-specific bindings
 ################################################################################
 
 # Ensure the build directory for generated Python files exists. Ninja is able to
@@ -56,10 +56,11 @@ declare_mlir_python_sources(ScaleHLSBindingsPythonSources.Dialects
 declare_mlir_dialect_python_bindings(
   ADD_TO_PARENT ScaleHLSBindingsPythonSources.Dialects
   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
-  TD_FILE scalehls/dialects/HLSOps.td
+  TD_FILE scalehls/dialects/HLS.td
   SOURCES
     scalehls/dialects/hls.py
-  DIALECT_NAME hls)
+  DIALECT_NAME hls
+)
 
 ################################################################################
 # Build composite binaries
@@ -74,9 +75,7 @@ add_mlir_python_common_capi_library(ScaleHLSBindingsPythonCAPI
   OUTPUT_DIRECTORY "${SCALEHLS_PYTHON_PACKAGES_DIR}/scalehls_core/mlir/_mlir_libs"
   RELATIVE_INSTALL_ROOT "../../../.."
   DECLARED_SOURCES
-    MLIRPythonSources.Core
-    MLIRPythonSources.Dialects
-    MLIRPythonSources.ExecutionEngine
+    MLIRPythonSources
     ScaleHLSBindingsPythonSources
     ScaleHLSBindingsPythonExtension
 )
@@ -89,9 +88,7 @@ add_mlir_python_modules(ScaleHLSMLIRPythonModules
   ROOT_PREFIX "${SCALEHLS_PYTHON_PACKAGES_DIR}/scalehls_core/mlir"
   INSTALL_PREFIX "python_packages/scalehls_core/mlir"
   DECLARED_SOURCES
-    MLIRPythonSources.Core
-    MLIRPythonSources.Dialects
-    MLIRPythonSources.ExecutionEngine
+    MLIRPythonSources
     # We need the scalehls extensions co-located with the MLIR extensions. When
     # the namespace is unified, this moves to the below.
     ScaleHLSBindingsPythonExtension

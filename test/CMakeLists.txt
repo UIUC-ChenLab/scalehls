@@ -19,6 +19,7 @@ set(SCALEHLS_TEST_DEPENDS
 if(SCALEHLS_ENABLE_BINDINGS_PYTHON)
   list(APPEND SCALEHLS_TEST_DEPENDS ScaleHLSMLIRPythonModules)
   list(APPEND SCALEHLS_TEST_DEPENDS ScaleHLSPythonModules)
+  list(APPEND SCALEHLS_TEST_DEPENDS ScaleHLSPMLIRPythonModules)
 endif()
 
 add_lit_testsuite(check-scalehls "Running the scalehls regression tests"
