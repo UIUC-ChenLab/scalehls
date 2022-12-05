@@ -6,13 +6,19 @@ ScaleHLS is a High-level Synthesis (HLS) framework on [MLIR](https://mlir.llvm.o
 
 By using the MLIR framework that can be better tuned to particular algorithms at different representation levels, ScaleHLS is more scalable and customizable towards various applications coming with intrinsic structural or functional hierarchies. ScaleHLS represents HLS designs at multiple levels of abstraction and provides an HLS-dedicated analysis and transform library (in both C++ and Python) to solve the optimization problems at the suitable representation levels. Using this library, we've developed a design space exploration engine to generate optimized HLS designs automatically.
 
-For more details, please see our [HPCA'22 paper](https://arxiv.org/abs/2107.11673):
+For more details, please see our [HPCA'22](https://doi.org/10.1109/HPCA53966.2022.00060) and [DAC'22](https://doi.org/10.1145/3489517.3530631) paper:
 ```bibtex
-@article{ye2021scalehls,
+@inproceedings{yehpca2022scalehls,
   title={ScaleHLS: A New Scalable High-Level Synthesis Framework on Multi-Level Intermediate Representation},
   author={Ye, Hanchen and Hao, Cong and Cheng, Jianyi and Jeong, Hyunmin and Huang, Jack and Neuendorffer, Stephen and Chen, Deming},
-  journal={arXiv preprint arXiv:2107.11673},
-  year={2021}
+  booktitle={2022 IEEE International Symposium on High-Performance Computer Architecture (HPCA)},
+  year={2022}
+}
+@inproceedings{yedac2022scalehls,
+  title={ScaleHLS: a scalable high-level synthesis framework with multi-level transformations and optimizations},
+  author={Ye, Hanchen and Jun, HyeGang and Jeong, Hyunmin and Neuendorffer, Stephen and Chen, Deming},
+  booktitle={Proceedings of the 59th ACM/IEEE Design Automation Conference},
+  year={2022}
 }
 ```
 
