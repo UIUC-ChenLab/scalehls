@@ -9,8 +9,8 @@ from functools import wraps
 from inspect import getsource
 import ast
 
-from mlir.ir import InsertionPoint, Value, IntegerType, F32Type, IntegerAttr, FloatAttr, BoolAttr
-from mlir.dialects import func as func_dialect, arith
+from mlir.ir import InsertionPoint, Value, IndexType, IntegerType, F32Type, IntegerAttr, FloatAttr, BoolAttr
+from mlir.dialects import func as func_dialect, arith, scf
 from .context import get_context, get_location, get_module
 from .type import convert_to_mlir_type
 
@@ -318,6 +318,34 @@ class FuncBuilder(ast.NodeVisitor):
     #         else:
     #             raise Exception('Only support 32 bit ints for inveft operation')
     #     return mlir_result
+
+    def visit_For(self, node: ast.For) -> Any:
+        if (isinstance(node.iter, ast.Call)):
+            if (isinstance(node.iter.func, ast.Name)):
+                if (node.iter.func.id == 'range'):
+                    step = arith.ConstantOp(
+                        IndexType.get(), IntegerAttr.get(IndexType.get(), 1)).result
+                    lb, ub = None, None
+                    if (isinstance(node.iter.args[0], ast.Constant)):
+                        lb = arith.ConstantOp(
+                            IndexType.get(), IntegerAttr.get(IndexType.get(), node.iter.args[0].value)).result
+                    if (isinstance(node.iter.args[1], ast.Constant)):
+                        ub = arith.ConstantOp(
+                            IndexType.get(), IntegerAttr.get(IndexType.get(), node.iter.args[1].value)).result
+                    if (not lb or not ub):
+                        raise Exception("lower or upper bound not found")
+
+                    scf_for = scf.ForOp(lb, ub, step)
+                    if (isinstance(node.target, ast.Name)):
+                        self.mlir_value_map[node.target.id] = scf_for.induction_variable
+                    else:
+                        Exception("Only scalar iv is supported")
+                    with InsertionPoint.at_block_begin(scf_for.body):
+                        for stmt in node.body:
+                            self.visit(stmt)
+                        scf.YieldOp([])
+                    return
+        raise Exception("Only range function is supported")
 
     def visit_Return(self, node: ast.Return) -> Any:
         if (node.value):
