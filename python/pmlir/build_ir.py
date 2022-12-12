@@ -9,8 +9,8 @@ from functools import wraps
 from inspect import getsource
 import ast
 
-from mlir.ir import InsertionPoint, Value, IndexType, IntegerType, F32Type, IntegerAttr, FloatAttr, BoolAttr
-from mlir.dialects import func as func_dialect, arith, scf
+from mlir.ir import InsertionPoint, Value, IndexType, IntegerType, F32Type, IntegerAttr, FloatAttr, BoolAttr, MemRefType
+from mlir.dialects import func as func_dialect, arith, scf, memref
 from .context import get_context, get_location, get_module
 from .type import convert_to_mlir_type
 
@@ -89,15 +89,23 @@ class FuncBuilder(ast.NodeVisitor):
         if (not mlir_value):
             raise Exception("value operand cannot be resolved")
         if (isinstance(node.targets[0], ast.Name)):
+            # working here...
             self.mlir_value_map[node.targets[0].id] = mlir_value
         else:
             raise Exception("only scalar assignment is supported")
 
     def visit_Name(self, node: ast.Name) -> Any:
-        mlir_value = self.mlir_value_map.get(node.id)
-        if (not mlir_value):
-            raise Exception(node.id + " cannot be resolved")
-        return mlir_value
+        if (isinstance(node.ctx, ast.Load)):
+            mlir_value = self.mlir_value_map.get(node.id)
+            if (not mlir_value):
+                raise Exception(node.id + " cannot be resolved")
+            memref_type = MemRefType(mlir_value.type)
+            if (memref_type.rank is 0):
+                return memref.LoadOp(mlir_value).result
+            else:
+                raise Exception("only scalar is supported")
+        else:
+            raise Exception("only load context is supported")
 
     def visit_BinOp(self, node: ast.BinOp) -> Any:
         mlir_lhs = self.visit(node.left)
@@ -382,8 +390,17 @@ def pmlir_function_ast():
             func_ast = ast.parse(getsource(func))
             print(ast.dump(func_ast, indent=4))
 
-            builder = FuncBuilder(entry_block.arguments)
             with InsertionPoint.at_block_begin(entry_block):
+                new_args = []
+                for arg in entry_block.arguments:
+                    if (isinstance(arg.type, MemRefType)):
+                        new_args.append(arg)
+                    else:
+                        memref_type = MemRefType.get([], arg.type)
+                        memref_arg = memref.AllocOp(memref_type, [], []).memref
+                        memref.StoreOp(arg, memref_arg, [])
+                        new_args.append(memref_arg)
+                builder = FuncBuilder(new_args)
                 builder.visit(func_ast)
         return wrapper
     return decorator

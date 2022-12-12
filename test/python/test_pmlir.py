@@ -6,6 +6,14 @@ from pmlir import *
 
 @pmlir_function_ast()
 def foo(a: int, b: int) -> int:
+    # array = [int] * 16
+    # --> %array = memref.alloc : memref<16xi32>
+    # array[a] = b
+    # --> %a_index = arith.index_cast %a : i32
+    # --> memref.store %b, %array[%a] : memref<16xi32>
+    # c = array[a]
+    # --> %c = memref.load %array[%a] : memref<16xi32>
+    # return c
     c = a + b
     return c
 
