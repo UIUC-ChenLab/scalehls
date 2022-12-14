@@ -111,7 +111,7 @@ class FuncBuilder(ast.NodeVisitor):
             if (not mlir_value):
                 raise Exception(node.id + " cannot be resolved")
             memref_type = MemRefType(mlir_value.type)
-            if (memref_type.rank is 0):
+            if (memref_type.rank == 0):
                 return memref.LoadOp(mlir_value).result
             else:
                 raise Exception("only scalar is supported")
@@ -121,7 +121,7 @@ class FuncBuilder(ast.NodeVisitor):
     def visit_BinOp(self, node: ast.BinOp) -> Any:
         mlir_lhs = self.visit(node.left)
         mlir_rhs = self.visit(node.right)
-        print (str(mlir_lhs.type))
+        # print (str(mlir_lhs.type))
         if (not mlir_lhs or not mlir_rhs):
             raise Exception("lhs or rhs operand cannot be resolved")
         elif (isinstance(node.op, ast.Add)):
@@ -404,7 +404,7 @@ class FuncBuilder(ast.NodeVisitor):
     def visit_Return(self, node: ast.Return) -> Any:
         if (node.value):
             mlir_value = self.visit(node.value)
-            print('Return value' + str(mlir_value))
+            # print('Return value' + str(mlir_value))
             if (not mlir_value):
                 raise Exception("value operand cannot be resolved")
             func_dialect.ReturnOp([mlir_value])
@@ -426,18 +426,14 @@ class FuncBuilder(ast.NodeVisitor):
                 if(mlir_size):
                     mlir_datatype = knowntypes(node.keywords[0].value.id)
                     return [True,mlir_size, mlir_datatype] #True refers to the function defines a np array
-                    print(mlir_size)
-                    print(mlir_datatype)
+                    # print(mlir_size)
+                    # print(mlir_datatype)
                 else:
                     raise Exception("Arrays with datatype of int of float is supported")
             else:
                 return [False]
         else:
             return [False]
-
-
-
-
 
 
 def pmlir_function_ast():
@@ -463,7 +459,7 @@ def pmlir_function_ast():
             entry_block = func_op.add_entry_block()
 
             func_ast = ast.parse(getsource(func))
-            print(ast.dump(func_ast, indent=4))
+            # print(ast.dump(func_ast, indent=4))
 
             with InsertionPoint.at_block_begin(entry_block):
                 new_args = []
@@ -475,7 +471,7 @@ def pmlir_function_ast():
                         memref_arg = memref.AllocOp(memref_type, [], []).memref
                         memref.StoreOp(arg, memref_arg, [])
                         new_args.append(memref_arg)
-                    print(arg.type)
+                    # print(arg.type)
 
                 builder = FuncBuilder(new_args)
                 builder.visit(func_ast)
