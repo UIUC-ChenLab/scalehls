@@ -85,15 +85,26 @@ class FuncBuilder(ast.NodeVisitor):
     def visit_Assign(self, node: ast.Assign) -> Any:
         if len(node.targets) > 1:
             raise Exception("multiple elements assign is not supported")
-        mlir_value = self.visit(node.value)
-        if (not mlir_value):
-            raise Exception("value operand cannot be resolved")
-        if (isinstance(node.targets[0], ast.Name)):
-            # working here...
+        # allocating and loading data
+        if (isinstance(node.value , ast.Call)): # Define an array , I think the function ast.Call need Hanchen to see how to debug (catch the mistakes of my mind)
+            # TODO:other functions should be included
+            mlir_value = self.visit(node.value)
+            if (not mlir_value):
+                raise Exception("value operand cannot be resolved")
             self.mlir_value_map[node.targets[0].id] = mlir_value
+            memref.StoreOp(node.value, memref_arg, [])
+            return mlir_value
         else:
-            raise Exception("only scalar assignment is supported")
-
+            mlir_value = self.visit(node.value)# visit Constant
+            # restoring data
+            if (not mlir_value):
+                raise Exception("value operand cannot be resolved")
+            memref_type = MemRefType.get([], mlir_value.type)
+            memref_arg = memref.AllocOp(memref_type, [], []).memref
+            memref.StoreOp(mlir_value, memref_arg, [])
+            self.mlir_value_map[node.targets[0].id] = memref_arg
+            return memref_arg
+            
     def visit_Name(self, node: ast.Name) -> Any:
         if (isinstance(node.ctx, ast.Load)):
             mlir_value = self.mlir_value_map.get(node.id)
@@ -110,7 +121,7 @@ class FuncBuilder(ast.NodeVisitor):
     def visit_BinOp(self, node: ast.BinOp) -> Any:
         mlir_lhs = self.visit(node.left)
         mlir_rhs = self.visit(node.right)
-        #print (str(mlir_lhs.type))
+        print (str(mlir_lhs.type))
         if (not mlir_lhs or not mlir_rhs):
             raise Exception("lhs or rhs operand cannot be resolved")
         elif (isinstance(node.op, ast.Add)):
@@ -290,6 +301,16 @@ class FuncBuilder(ast.NodeVisitor):
             raise Exception('Unsupported data type')
         return mlir_result
 
+    def visit_Index(self , node: ast.Index):
+        if (isinstance(node.value , ast.Constant)):
+            mlir_value = node.value.value
+            if(isinstance(mlir_value, int)):
+                mlir_result = arith.ConstantOp(IntegerType.get_signless(
+                    32), IntegerAttr.get(IntegerType.get_signless(32), mlir_value)).result
+            else:
+                raise Exception('Only integer is supported by Index')
+            return mlir_result
+
     def visit_BoolOp(self, node: ast.BoolOp) -> Any:
         mlir_lhs = self.visit(node.values[0])
         mlir_rhs = self.visit(node.values[1])
@@ -342,6 +363,16 @@ class FuncBuilder(ast.NodeVisitor):
         return mlir_result
 
 
+    def visit_Call(self, node: ast.Call) -> Any:
+        is_nparray_result = self.is_nparray(node)
+        if (is_nparray_result[0]):# It is assigning array language
+            memref_type = MemRefType.get(is_nparray_result[1], convert_to_mlir_type(is_nparray_result[2]))# create a MemRefType
+            memref_arg = memref.AllocOp(memref_type, [], []).memref
+            return memref_arg
+        else:
+            raise Exception('Only creating an array is supported!')
+
+
     def visit_For(self, node: ast.For) -> Any:
         if (isinstance(node.iter, ast.Call)):
             if (isinstance(node.iter.func, ast.Name)):
@@ -373,11 +404,40 @@ class FuncBuilder(ast.NodeVisitor):
     def visit_Return(self, node: ast.Return) -> Any:
         if (node.value):
             mlir_value = self.visit(node.value)
+            print('Return value' + str(mlir_value))
             if (not mlir_value):
                 raise Exception("value operand cannot be resolved")
             func_dialect.ReturnOp([mlir_value])
         else:
             func_dialect.ReturnOp()
+
+    def is_nparray(self, node: ast.Call) -> Any:
+        if(isinstance(node, ast.Call)):
+            if(node.func.value.id == 'numpy' and node.func.attr == 'empty'): # to check whether it is used for defining an nparray
+                for i in node.args:
+                    if(isinstance(node.args[0] , ast.Constant)):
+                        mlir_size = [node.args[0].value]
+                    elif(isinstance(node.args[0] , ast.Tuple)):
+                        mlir_size = []
+                        for j in node.args[0].elts:
+                            mlir_size = mlir_size.append(node.args[0].elts[j].value)
+                    else:
+                        raise Exception("The size should be given!")
+                if(mlir_size):
+                    mlir_datatype = knowntypes(node.keywords[0].value.id)
+                    return [True,mlir_size, mlir_datatype] #True refers to the function defines a np array
+                    print(mlir_size)
+                    print(mlir_datatype)
+                else:
+                    raise Exception("Arrays with datatype of int of float is supported")
+            else:
+                return [False]
+        else:
+            return [False]
+
+
+
+
 
 
 def pmlir_function_ast():
@@ -415,6 +475,8 @@ def pmlir_function_ast():
                         memref_arg = memref.AllocOp(memref_type, [], []).memref
                         memref.StoreOp(arg, memref_arg, [])
                         new_args.append(memref_arg)
+                    print(arg.type)
+
                 builder = FuncBuilder(new_args)
                 builder.visit(func_ast)
         return wrapper

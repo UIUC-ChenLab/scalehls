@@ -2,11 +2,14 @@
 # RUN: %PYTHON %s | FileCheck %s
 
 from pmlir import *
+import numpy
 
 
 @pmlir_function_ast()
-def foo(a: int, b: int) -> int:
-    # array = [int] * 16
+def foo(a: int,b: int) -> int:
+    c = a + b
+    return c
+    # array = numpy.empty(3,dtype=int)
     # --> %array = memref.alloc : memref<16xi32>
     # array[a] = b
     # --> %a_index = arith.index_cast %a : i32
@@ -14,8 +17,8 @@ def foo(a: int, b: int) -> int:
     # c = array[a]
     # --> %c = memref.load %array[%a] : memref<16xi32>
     # return c
-    c = a + b
-    return c
+    # c = a + b
+    # return a
 
 
 # CHECK: module {
