@@ -9,7 +9,7 @@ from functools import wraps
 from inspect import getsource
 import ast
 
-from mlir.ir import InsertionPoint, Value, IntegerType, F32Type, IntegerAttr, FloatAttr, BoolAttr
+from mlir.ir import InsertionPoint, Value, IntegerType, F32Type, IntegerAttr, FloatAttr
 from mlir.dialects import func as func_dialect, arith
 from .context import get_context, get_location, get_module
 from .type import convert_to_mlir_type
@@ -244,7 +244,9 @@ class FuncBuilder(ast.NodeVisitor):
 
     def visit_Constant(self, node: ast.Constant) -> Any:
         mlir_value = node.value
-        if (isinstance(mlir_value, int)):
+        if (isinstance(mlir_value, bool)):
+            mlir_result = arith.ConstantOp(IntegerType.get_signless(1), IntegerAttr.get(IntegerType.get_signless(1), mlir_value)).result
+        elif (isinstance(mlir_value, int)):
             mlir_result = arith.ConstantOp(IntegerType.get_signless(32), IntegerAttr.get(IntegerType.get_signless(32), mlir_value)).result
         elif (isinstance(mlir_value, float)):
             mlir_result = arith.ConstantOp(F32Type.get(), FloatAttr.get(F32Type.get(), mlir_value)).result
@@ -269,19 +271,35 @@ class FuncBuilder(ast.NodeVisitor):
                 raise Exception("Only accepts boolean types for Or operator")
         return mlir_result
 
-    # def visit_UnaryOp(self, node: ast.UnaryOp) -> Any:
-    #     mlir_value = self.visit(node.operand)
-    #     all_ones = 2 ** 32 - 1
-    #     mlir_ones = IntegerAttr.get(IntegerType.get_signless(32), 3)
-    #     print (str(mlir_value.type) == 'i32')
-    #     # if (not mlir_value):
-    #     #     raise Exception('Operand expression cannot be resolved')
-    #     if (isinstance(node.op, ast.Invert)):
-    #         if (str(mlir_value.type) == 'i32'):
-    #             mlir_result = arith.XOrIOp(mlir_value, mlir_value).result
-    #         else:
-    #             raise Exception('Only support 32 bit ints for inveft operation')
-    #     return mlir_result
+    def visit_UnaryOp(self, node: ast.UnaryOp) -> Any:
+        mlir_value = self.visit(node.operand)
+        if (not mlir_value):
+            raise Exception('Operand expression cannot be resolved')
+        elif (isinstance(node.op, ast.Invert)):
+            if (str(mlir_value.type) == 'i32'):
+                all_ones = self.visit(ast.Constant(2 ** 32 - 1))
+                mlir_result = arith.XOrIOp(mlir_value, all_ones).result
+            else:
+                raise Exception('Only support 32 bit ints for invert operation')
+        elif (isinstance(node.op, ast.Not)):
+            if (str(mlir_value.type) == 'i1'):
+                bool_one = self.visit(ast.Constant(True))
+                mlir_result = arith.XOrIOp(mlir_value, bool_one).result
+            else:
+                raise Exception("only support Not operation on boolean expressions")
+        elif (isinstance(node.op, ast.USub)):
+            if (str(mlir_value.type) == 'i32'):
+                int_zero = self.visit(ast.Constant(0))
+                mlir_result = arith.SubIOp(int_zero, mlir_value).result
+            elif (str(mlir_value.type) == 'f32'):
+                float_zero = self.visit(ast.Constant(0.0))
+                mlir_result = arith.SubFOp(float_zero, mlir_value).result
+            else:
+                raise Exception("Only support Unary Sub operation on float and int expressions")
+        else:
+            raise Exception("Unary Add operation currently unsupported")
+        return mlir_result
+
 
     def visit_Return(self, node: ast.Return) -> Any:
         if (node.value):
