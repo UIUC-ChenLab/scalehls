@@ -9,8 +9,8 @@ from functools import wraps
 from inspect import getsource
 import ast
 
-from mlir.ir import InsertionPoint, Value, IntegerType, F32Type, IntegerAttr, FloatAttr, BoolAttr
-from mlir.dialects import func as func_dialect, arith
+from mlir.ir import InsertionPoint, Value, IntegerType, F32Type, IntegerAttr, FloatAttr, MemRefType
+from mlir.dialects import func as func_dialect, arith, memref
 from .context import get_context, get_location, get_module
 from .type import convert_to_mlir_type
 
