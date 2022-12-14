@@ -9,7 +9,7 @@ from functools import wraps
 from inspect import getsource
 import ast
 
-from mlir.ir import InsertionPoint, Value, IntegerType, F32Type, IntegerAttr, FloatAttr
+from mlir.ir import InsertionPoint, Value, IntegerType, F32Type, IntegerAttr, FloatAttr, BoolAttr
 from mlir.dialects import func as func_dialect, arith
 from .context import get_context, get_location, get_module
 from .type import convert_to_mlir_type
@@ -89,15 +89,23 @@ class FuncBuilder(ast.NodeVisitor):
         if (not mlir_value):
             raise Exception("value operand cannot be resolved")
         if (isinstance(node.targets[0], ast.Name)):
+            # working here...
             self.mlir_value_map[node.targets[0].id] = mlir_value
         else:
             raise Exception("only scalar assignment is supported")
 
     def visit_Name(self, node: ast.Name) -> Any:
-        mlir_value = self.mlir_value_map.get(node.id)
-        if (not mlir_value):
-            raise Exception(node.id + " cannot be resolved")
-        return mlir_value
+        if (isinstance(node.ctx, ast.Load)):
+            mlir_value = self.mlir_value_map.get(node.id)
+            if (not mlir_value):
+                raise Exception(node.id + " cannot be resolved")
+            memref_type = MemRefType(mlir_value.type)
+            if (memref_type.rank is 0):
+                return memref.LoadOp(mlir_value).result
+            else:
+                raise Exception("only scalar is supported")
+        else:
+            raise Exception("only load context is supported")
 
     def visit_BinOp(self, node: ast.BinOp) -> Any:
         mlir_lhs = self.visit(node.left)
@@ -111,77 +119,88 @@ class FuncBuilder(ast.NodeVisitor):
             elif (str(mlir_lhs.type) == 'f32' == str(mlir_rhs.type)):
                 mlir_result = arith.AddFOp(mlir_lhs, mlir_rhs).result
             else:
-                raise Exception("Combination of data types currently not supported")
+                raise Exception(
+                    "Combination of data types currently not supported")
         elif (isinstance(node.op, ast.Sub)):
             if (str(mlir_lhs.type) == 'i32' == str(mlir_rhs.type)):
                 mlir_result = arith.SubIOp(mlir_lhs, mlir_rhs).result
             elif (str(mlir_lhs.type) == 'f32' == str(mlir_rhs.type)):
                 mlir_result = arith.SubFOp(mlir_lhs, mlir_rhs).result
             else:
-                raise Exception("Combination of data types currently not supported")
+                raise Exception(
+                    "Combination of data types currently not supported")
         elif (isinstance(node.op, ast.Mult)):
             if (str(mlir_lhs.type) == 'i32' == str(mlir_rhs.type)):
                 mlir_result = arith.MulIOp(mlir_lhs, mlir_rhs).result
             elif (str(mlir_lhs.type) == 'f32' == str(mlir_rhs.type)):
                 mlir_result = arith.MulFOp(mlir_lhs, mlir_rhs).result
             else:
-                raise Exception("Combination of data types currently not supported")    
+                raise Exception(
+                    "Combination of data types currently not supported")
         elif (isinstance(node.op, ast.Div)):
             if (str(mlir_lhs.type) == 'i32' == str(mlir_rhs.type)):
                 mlir_result = arith.DivSIOp(mlir_lhs, mlir_rhs).result
             elif (str(mlir_lhs.type) == 'f32' == str(mlir_rhs.type)):
                 mlir_result = arith.DivFOp(mlir_lhs, mlir_rhs).result
             else:
-                raise Exception("Combination of data types currently not supported")
-        elif (isinstance(node.op,ast.LShift)):
+                raise Exception(
+                    "Combination of data types currently not supported")
+        elif (isinstance(node.op, ast.LShift)):
             if (str(mlir_lhs.type) == 'i32' == str(mlir_rhs.type)):
                 mlir_result = arith.ShLIOp(mlir_lhs, mlir_rhs).result
             elif (str(mlir_lhs.type) == 'f32' == str(mlir_rhs.type)):
                 raise Exception("Shift operation on float not supported")
             else:
-                raise Exception("Combination of data types currently not supported")
+                raise Exception(
+                    "Combination of data types currently not supported")
         elif (isinstance(node.op, ast.RShift)):
             if (str(mlir_lhs.type) == 'i32' == str(mlir_rhs.type)):
                 mlir_result = arith.ShRSIOp(mlir_lhs, mlir_rhs).result
             elif (str(mlir_lhs.type) == 'f32' == str(mlir_rhs.type)):
                 raise Exception("Shift operation on float not supported")
             else:
-                raise Exception("Combination of data types currently not supported")
+                raise Exception(
+                    "Combination of data types currently not supported")
         elif (isinstance(node.op, ast.BitAnd)):
             if (str(mlir_lhs.type) == 'i32' == str(mlir_rhs.type)):
                 mlir_result = arith.AndIOp(mlir_lhs, mlir_rhs).result
             elif (str(mlir_lhs.type) == 'f32' == str(mlir_rhs.type)):
                 raise Exception("And operation on float not supported")
             else:
-                raise Exception("Combination of data types currently not supported")
+                raise Exception(
+                    "Combination of data types currently not supported")
         elif (isinstance(node.op, ast.BitOr)):
             if (str(mlir_lhs.type) == 'i32' == str(mlir_rhs.type)):
                 mlir_result = arith.OrIOp(mlir_lhs, mlir_rhs).result
             elif (str(mlir_lhs.type) == 'f32' == str(mlir_rhs.type)):
                 raise Exception("Or operation on float not supported")
             else:
-                raise Exception("Combination of data types currently not supported")
+                raise Exception(
+                    "Combination of data types currently not supported")
         elif (isinstance(node.op, ast.BitXor)):
             if (str(mlir_lhs.type) == 'i32' == str(mlir_rhs.type)):
                 mlir_result = arith.XOrIOp(mlir_lhs, mlir_rhs).result
             elif (str(mlir_lhs.type) == 'f32' == str(mlir_rhs.type)):
                 raise Exception("Xor operation on float not supported")
             else:
-                raise Exception("Combination of data types currently not supported")
+                raise Exception(
+                    "Combination of data types currently not supported")
         elif (isinstance(node.op, ast.FloorDiv)):
             if (str(mlir_lhs.type) == 'i32' == str(mlir_rhs.type)):
                 mlir_result = arith.FloorDivSIOp(mlir_lhs, mlir_rhs).result
             elif (str(mlir_lhs.type) == 'f32' == str(mlir_rhs.type)):
                 raise Exception("Floor operation on float not supported")
             else:
-                raise Exception("Combination of data types currently not supported")
+                raise Exception(
+                    "Combination of data types currently not supported")
         elif (isinstance(node.op, ast.Mod)):
             if (str(mlir_lhs.type) == 'i32' == str(mlir_rhs.type)):
                 mlir_result = arith.RemSIOp(mlir_lhs, mlir_rhs).result
             elif (str(mlir_lhs.type) == 'f32' == str(mlir_rhs.type)):
                 mlir_result = arith.RemFOp(mlir_lhs, mlir_rhs).result
             else:
-                raise Exception("Combination of data types currently not supported")
+                raise Exception(
+                    "Combination of data types currently not supported")
         else:
             raise Exception("does not support this operation at this time")
         return mlir_result
@@ -198,58 +217,77 @@ class FuncBuilder(ast.NodeVisitor):
             raise Exception("lhs or rhs operand cannot be resolved")
         elif (isinstance(mlir_ops, ast.Gt)):
             if (str(mlir_lhs.type) == 'i32' == str(mlir_comparators.type)):
-                mlir_result = arith.CmpIOp(IntegerType.get_signless(1), IntegerAttr.get(IntegerType.get_signless(64), 4), lhs = mlir_lhs, rhs = mlir_comparators).result
+                mlir_result = arith.CmpIOp(IntegerType.get_signless(1), IntegerAttr.get(
+                    IntegerType.get_signless(64), 4), lhs=mlir_lhs, rhs=mlir_comparators).result
             elif (str(mlir_lhs.type) == 'f32' == str(mlir_comparators.type)):
-                mlir_result = arith.CmpFOp(IntegerType.get_signless(1), IntegerAttr.get(IntegerType.get_signless(64), 4), lhs = mlir_lhs, rhs = mlir_comparators).result
+                mlir_result = arith.CmpFOp(IntegerType.get_signless(1), IntegerAttr.get(
+                    IntegerType.get_signless(64), 4), lhs=mlir_lhs, rhs=mlir_comparators).result
             else:
-                raise Exception('Combination of data types not currently supported')
+                raise Exception(
+                    'Combination of data types not currently supported')
         elif (isinstance(mlir_ops, ast.Lt)):
             if (str(mlir_lhs.type) == 'i32' == str(mlir_comparators.type)):
-                mlir_result = arith.CmpIOp(IntegerType.get_signless(1), IntegerAttr.get(IntegerType.get_signless(64), 2), lhs = mlir_lhs, rhs = mlir_comparators).result
+                mlir_result = arith.CmpIOp(IntegerType.get_signless(1), IntegerAttr.get(
+                    IntegerType.get_signless(64), 2), lhs=mlir_lhs, rhs=mlir_comparators).result
             elif (str(mlir_lhs.type) == 'f32' == str(mlir_comparators.type)):
-                mlir_result = arith.CmpFOp(IntegerType.get_signless(1), IntegerAttr.get(IntegerType.get_signless(64), 2), lhs = mlir_lhs, rhs = mlir_comparators).result
+                mlir_result = arith.CmpFOp(IntegerType.get_signless(1), IntegerAttr.get(
+                    IntegerType.get_signless(64), 2), lhs=mlir_lhs, rhs=mlir_comparators).result
             else:
-                raise Exception('Combination of data types not currently supported')
+                raise Exception(
+                    'Combination of data types not currently supported')
         elif (isinstance(mlir_ops, ast.Eq)):
             if (str(mlir_lhs.type) == 'i32' == str(mlir_comparators.type)):
-                mlir_result = arith.CmpIOp(IntegerType.get_signless(1), IntegerAttr.get(IntegerType.get_signless(64), 0), lhs = mlir_lhs, rhs = mlir_comparators).result
+                mlir_result = arith.CmpIOp(IntegerType.get_signless(1), IntegerAttr.get(
+                    IntegerType.get_signless(64), 0), lhs=mlir_lhs, rhs=mlir_comparators).result
             elif (str(mlir_lhs.type) == 'f32' == str(mlir_comparators.type)):
-                mlir_result = arith.CmpFOp(IntegerType.get_signless(1), IntegerAttr.get(IntegerType.get_signless(64), 0), lhs = mlir_lhs, rhs = mlir_comparators).result
+                mlir_result = arith.CmpFOp(IntegerType.get_signless(1), IntegerAttr.get(
+                    IntegerType.get_signless(64), 0), lhs=mlir_lhs, rhs=mlir_comparators).result
             else:
-                raise Exception('Combination of data types not currently supported')
+                raise Exception(
+                    'Combination of data types not currently supported')
         elif (isinstance(mlir_ops, ast.NotEq)):
             if (str(mlir_lhs.type) == 'i32' == str(mlir_comparators.type)):
-                mlir_result = arith.CmpIOp(IntegerType.get_signless(1), IntegerAttr.get(IntegerType.get_signless(64), 1), lhs = mlir_lhs, rhs = mlir_comparators).result
+                mlir_result = arith.CmpIOp(IntegerType.get_signless(1), IntegerAttr.get(
+                    IntegerType.get_signless(64), 1), lhs=mlir_lhs, rhs=mlir_comparators).result
             elif (str(mlir_lhs.type) == 'f32' == str(mlir_comparators.type)):
-                mlir_result = arith.CmpFOp(IntegerType.get_signless(1), IntegerAttr.get(IntegerType.get_signless(64), 1), lhs = mlir_lhs, rhs = mlir_comparators).result
+                mlir_result = arith.CmpFOp(IntegerType.get_signless(1), IntegerAttr.get(
+                    IntegerType.get_signless(64), 1), lhs=mlir_lhs, rhs=mlir_comparators).result
             else:
-                raise Exception('Combination of data types not currently supported')
+                raise Exception(
+                    'Combination of data types not currently supported')
         elif (isinstance(mlir_ops, ast.LtE)):
             if (str(mlir_lhs.type) == 'i32' == str(mlir_comparators.type)):
-                mlir_result = arith.CmpIOp(IntegerType.get_signless(1), IntegerAttr.get(IntegerType.get_signless(64), 3), lhs = mlir_lhs, rhs = mlir_comparators).result
+                mlir_result = arith.CmpIOp(IntegerType.get_signless(1), IntegerAttr.get(
+                    IntegerType.get_signless(64), 3), lhs=mlir_lhs, rhs=mlir_comparators).result
             elif (str(mlir_lhs.type) == 'f32' == str(mlir_comparators.type)):
-                mlir_result = arith.CmpFOp(IntegerType.get_signless(1), IntegerAttr.get(IntegerType.get_signless(64), 3), lhs = mlir_lhs, rhs = mlir_comparators).result
+                mlir_result = arith.CmpFOp(IntegerType.get_signless(1), IntegerAttr.get(
+                    IntegerType.get_signless(64), 3), lhs=mlir_lhs, rhs=mlir_comparators).result
             else:
-                raise Exception('Combination of data types not currently supported')
+                raise Exception(
+                    'Combination of data types not currently supported')
         elif (isinstance(mlir_ops, ast.GtE)):
             if (str(mlir_lhs.type) == 'i32' == str(mlir_comparators.type)):
-                mlir_result = arith.CmpIOp(IntegerType.get_signless(1), IntegerAttr.get(IntegerType.get_signless(64), 5), lhs = mlir_lhs, rhs = mlir_comparators).result
+                mlir_result = arith.CmpIOp(IntegerType.get_signless(1), IntegerAttr.get(
+                    IntegerType.get_signless(64), 5), lhs=mlir_lhs, rhs=mlir_comparators).result
             elif (str(mlir_lhs.type) == 'f32' == str(mlir_comparators.type)):
-                mlir_result = arith.CmpFOp(IntegerType.get_signless(1), IntegerAttr.get(IntegerType.get_signless(64), 5), lhs = mlir_lhs, rhs = mlir_comparators).result
+                mlir_result = arith.CmpFOp(IntegerType.get_signless(1), IntegerAttr.get(
+                    IntegerType.get_signless(64), 5), lhs=mlir_lhs, rhs=mlir_comparators).result
             else:
-                raise Exception('Combination of data types not currently supported')
+                raise Exception(
+                    'Combination of data types not currently supported')
         else:
             raise Exception("does not support this operation at this time")
         return mlir_result
 
     def visit_Constant(self, node: ast.Constant) -> Any:
         mlir_value = node.value
-        if (isinstance(mlir_value, bool)):
-            mlir_result = arith.ConstantOp(IntegerType.get_signless(1), IntegerAttr.get(IntegerType.get_signless(1), mlir_value)).result
-        elif (isinstance(mlir_value, int)):
+        if (isinstance(mlir_value, int)):
             mlir_result = arith.ConstantOp(IntegerType.get_signless(32), IntegerAttr.get(IntegerType.get_signless(32), mlir_value)).result
         elif (isinstance(mlir_value, float)):
-            mlir_result = arith.ConstantOp(F32Type.get(), FloatAttr.get(F32Type.get(), mlir_value)).result
+            mlir_result = arith.ConstantOp(
+                F32Type.get(), FloatAttr.get(F32Type.get(), mlir_value)).result
+        else:
+            raise Exception('Unsupported data type')
         return mlir_result
 
     def visit_BoolOp(self, node: ast.BoolOp) -> Any:
@@ -258,7 +296,8 @@ class FuncBuilder(ast.NodeVisitor):
         if (not mlir_lhs or not mlir_rhs):
             raise Exception("lhs or rhs operand cannot be resolved")
         elif (len(node.values) > 2):
-            raise Exception("Please use parentheses to separate chained boolean operators")
+            raise Exception(
+                "Please use parentheses to separate chained boolean operators")
         elif (isinstance(node.op, ast.And)):
             if (str(mlir_lhs.type) == 'i1' == str(mlir_rhs.type)):
                 mlir_result = arith.AndIOp(mlir_lhs, mlir_rhs).result
@@ -269,6 +308,8 @@ class FuncBuilder(ast.NodeVisitor):
                 mlir_result = arith.OrIOp(mlir_lhs, mlir_rhs).result
             else:
                 raise Exception("Only accepts boolean types for Or operator")
+        else:
+            raise Exception('Unsupported boolean operation')
         return mlir_result
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> Any:
@@ -300,6 +341,34 @@ class FuncBuilder(ast.NodeVisitor):
             raise Exception("Unary Add operation currently unsupported")
         return mlir_result
 
+
+    def visit_For(self, node: ast.For) -> Any:
+        if (isinstance(node.iter, ast.Call)):
+            if (isinstance(node.iter.func, ast.Name)):
+                if (node.iter.func.id == 'range'):
+                    step = arith.ConstantOp(
+                        IndexType.get(), IntegerAttr.get(IndexType.get(), 1)).result
+                    lb, ub = None, None
+                    if (isinstance(node.iter.args[0], ast.Constant)):
+                        lb = arith.ConstantOp(
+                            IndexType.get(), IntegerAttr.get(IndexType.get(), node.iter.args[0].value)).result
+                    if (isinstance(node.iter.args[1], ast.Constant)):
+                        ub = arith.ConstantOp(
+                            IndexType.get(), IntegerAttr.get(IndexType.get(), node.iter.args[1].value)).result
+                    if (not lb or not ub):
+                        raise Exception("lower or upper bound not found")
+
+                    scf_for = scf.ForOp(lb, ub, step)
+                    if (isinstance(node.target, ast.Name)):
+                        self.mlir_value_map[node.target.id] = scf_for.induction_variable
+                    else:
+                        Exception("Only scalar iv is supported")
+                    with InsertionPoint.at_block_begin(scf_for.body):
+                        for stmt in node.body:
+                            self.visit(stmt)
+                        scf.YieldOp([])
+                    return
+        raise Exception("Only range function is supported")
 
     def visit_Return(self, node: ast.Return) -> Any:
         if (node.value):
@@ -334,10 +403,19 @@ def pmlir_function_ast():
             entry_block = func_op.add_entry_block()
 
             func_ast = ast.parse(getsource(func))
-            print(ast.dump(func_ast))
+            print(ast.dump(func_ast, indent=4))
 
-            builder = FuncBuilder(entry_block.arguments)
             with InsertionPoint.at_block_begin(entry_block):
+                new_args = []
+                for arg in entry_block.arguments:
+                    if (isinstance(arg.type, MemRefType)):
+                        new_args.append(arg)
+                    else:
+                        memref_type = MemRefType.get([], arg.type)
+                        memref_arg = memref.AllocOp(memref_type, [], []).memref
+                        memref.StoreOp(arg, memref_arg, [])
+                        new_args.append(memref_arg)
+                builder = FuncBuilder(new_args)
                 builder.visit(func_ast)
         return wrapper
     return decorator
