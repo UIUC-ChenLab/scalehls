@@ -14,6 +14,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/MLProgram/IR/MLProgram.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
@@ -42,7 +43,8 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
     mlir::scf::SCFDialect,
     mlir::scalehls::hls::HLSDialect,
     mlir::LLVM::LLVMDialect,
-    mlir::DLTIDialect
+    mlir::DLTIDialect,
+    mlir::ml_program::MLProgramDialect
   >();
   // clang-format on
 }

@@ -163,6 +163,7 @@ populateForwardBackwardFusePatterns(mlir::RewritePatternSet &patterns) {
   patterns.add<ForwardFuseOp<tensor::CollapseShapeOp>>(context);
   patterns.add<ForwardFuseOp<tensor::ExpandShapeOp>>(context);
   patterns.add<ForwardFuseOp<tensor::InsertSliceOp>>(context);
+  patterns.add<ForwardFuseOp<tensor::ExtractSliceOp>>(context);
 }
 
 namespace {
