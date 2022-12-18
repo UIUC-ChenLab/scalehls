@@ -86,24 +86,28 @@ class FuncBuilder(ast.NodeVisitor):
         if len(node.targets) > 1:
             raise Exception("multiple elements assign is not supported")
         # allocating and loading data
-        if (isinstance(node.value , ast.Call)): # Define an array , I think the function ast.Call need Hanchen to see how to debug (catch the mistakes of my mind)
-            # TODO:other functions should be included
-            mlir_value = self.visit(node.value)
-            if (not mlir_value):
-                raise Exception("value operand cannot be resolved")
-            self.mlir_value_map[node.targets[0].id] = mlir_value
-            memref.StoreOp(node.value, memref_arg, [])
+        if (node.targets[0] in self.mlir_value_map):
+            mlir_value = self.visit(node.value) 
             return mlir_value
         else:
-            mlir_value = self.visit(node.value)# visit Constant
-            # restoring data
-            if (not mlir_value):
-                raise Exception("value operand cannot be resolved")
-            memref_type = MemRefType.get([], mlir_value.type)
-            memref_arg = memref.AllocOp(memref_type, [], []).memref
-            memref.StoreOp(mlir_value, memref_arg, [])
-            self.mlir_value_map[node.targets[0].id] = memref_arg
-            return memref_arg
+            if (isinstance(node.value , ast.Call)): # Define an array , I think the function ast.Call need Hanchen to see how to debug (catch the mistakes of my mind)
+                # TODO:other functions should be included
+                mlir_value = self.visit(node.value)
+                if (not mlir_value):
+                    raise Exception("value operand cannot be resolved")
+                self.mlir_value_map[node.targets[0].id] = mlir_value
+                memref.StoreOp(node.value, memref_arg, [])
+                return mlir_value
+            else:
+                mlir_value = self.visit(node.value)# visit Constant
+                # restoring data
+                if (not mlir_value):
+                    raise Exception("value operand cannot be resolved")
+                memref_type = MemRefType.get([], mlir_value.type)
+                memref_arg = memref.AllocOp(memref_type, [], []).memref
+                memref.StoreOp(mlir_value, memref_arg, [])
+                self.mlir_value_map[node.targets[0].id] = memref_arg
+                return memref_arg
             
     def visit_Name(self, node: ast.Name) -> Any:
         if (isinstance(node.ctx, ast.Load)):

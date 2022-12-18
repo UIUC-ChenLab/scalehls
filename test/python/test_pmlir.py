@@ -8,6 +8,7 @@ import numpy
 @pmlir_function_ast()
 def foo(a: int,b: int) -> int:
     c = a + b
+    c = c + a
     return c
     # array = numpy.empty(3,dtype=int)
     # --> %array = memref.alloc : memref<16xi32>
