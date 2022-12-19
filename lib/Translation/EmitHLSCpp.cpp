@@ -2008,7 +2008,7 @@ void pack_mul(int8_t A[2], int8_t B, int16_t C[2]) {
     if (auto func = dyn_cast<func::FuncOp>(op)) {
       if (!emittedFuncs.count(func) && !hasRuntimeAttr(func))
         emitFunction(func);
-    } else
+    } else if (!isa<ml_program::GlobalOp>(op))
       emitError(&op, "is unsupported operation");
   }
 }
