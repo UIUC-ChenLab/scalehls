@@ -333,12 +333,12 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
           if (requireMux)
             for (auto i = 3; i > 0; --i) {
               if (factor % i == 0) {
-                partitions[dim] = PartitionInfo(PartitionKind::CYCLIC, i);
+                partitions[dim] = PartitionInfo(kind, i);
                 break;
               }
             }
           else
-            partitions[dim] = PartitionInfo(PartitionKind::CYCLIC, factor);
+            partitions[dim] = PartitionInfo(kind, factor);
         }
       }
     }
