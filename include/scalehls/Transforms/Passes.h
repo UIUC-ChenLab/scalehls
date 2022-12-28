@@ -60,7 +60,8 @@ std::unique_ptr<Pass> createParallelizeDataflowNodePass(
     unsigned loopUnrollFactor = 1, bool unrollPointLoopOnly = false,
     bool complexityAware = true, bool correlationAware = true);
 std::unique_ptr<Pass>
-createPlaceDataflowBufferPass(bool placeExternalBuffer = true);
+createPlaceDataflowBufferPass(unsigned threshold = 1024,
+                              bool placeExternalBuffer = true);
 std::unique_ptr<Pass>
 createScheduleDataflowNodePass(bool ignoreViolations = false);
 std::unique_ptr<Pass> createStreamDataflowTaskPass();

@@ -15,16 +15,17 @@ using namespace hls;
 
 namespace {
 struct PlaceBuffer : public OpRewritePattern<func::FuncOp> {
-  PlaceBuffer(MLIRContext *context, bool placeExternalBuffer)
-      : OpRewritePattern<func::FuncOp>(context),
+  PlaceBuffer(MLIRContext *context, unsigned threshold,
+              bool placeExternalBuffer)
+      : OpRewritePattern<func::FuncOp>(context), threshold(threshold),
         placeExternalBuffer(placeExternalBuffer) {}
 
   // TODO: For now, we use a heuristic to determine the buffer location.
   MemRefType getPlacedType(MemRefType type, bool isConstBuffer) const {
     auto kind = MemoryKind::BRAM_T2P;
     if (placeExternalBuffer || isConstBuffer)
-      kind = type.getNumElements() >= 1024 ? MemoryKind::DRAM
-                                           : MemoryKind::BRAM_T2P;
+      kind = type.getNumElements() >= threshold ? MemoryKind::DRAM
+                                                : MemoryKind::BRAM_T2P;
     auto newType =
         MemRefType::get(type.getShape(), type.getElementType(),
                         type.getLayout().getAffineMap(), (unsigned)kind);
@@ -62,6 +63,7 @@ struct PlaceBuffer : public OpRewritePattern<func::FuncOp> {
   }
 
 private:
+  unsigned threshold;
   bool placeExternalBuffer;
 };
 } // namespace
@@ -92,7 +94,9 @@ namespace {
 struct PlaceDataflowBuffer
     : public PlaceDataflowBufferBase<PlaceDataflowBuffer> {
   PlaceDataflowBuffer() = default;
-  explicit PlaceDataflowBuffer(bool argPlaceExternalBuffer) {
+  explicit PlaceDataflowBuffer(unsigned argThreshold,
+                               bool argPlaceExternalBuffer) {
+    threshold = argThreshold;
     placeExternalBuffer = argPlaceExternalBuffer;
   }
 
@@ -101,7 +105,7 @@ struct PlaceDataflowBuffer
     auto context = func.getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<PlaceBuffer>(context, placeExternalBuffer);
+    patterns.add<PlaceBuffer>(context, threshold, placeExternalBuffer);
     (void)applyOpPatternsAndFold(func, std::move(patterns));
 
     patterns.clear();
@@ -112,6 +116,7 @@ struct PlaceDataflowBuffer
 } // namespace
 
 std::unique_ptr<Pass>
-scalehls::createPlaceDataflowBufferPass(bool placeExternalBuffer) {
-  return std::make_unique<PlaceDataflowBuffer>(placeExternalBuffer);
+scalehls::createPlaceDataflowBufferPass(unsigned threshold,
+                                        bool placeExternalBuffer) {
+  return std::make_unique<PlaceDataflowBuffer>(threshold, placeExternalBuffer);
 }

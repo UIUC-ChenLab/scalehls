@@ -107,6 +107,10 @@ struct ScaleFlowPyTorchPipelineOptions
       *this, "correlation-aware", llvm::cl::init(true),
       llvm::cl::desc("Whether to consider node correlation in the transform")};
 
+  Option<unsigned> externalBufferThreshold{
+      *this, "external-buffer-threshold", llvm::cl::init(1024),
+      llvm::cl::desc("The threshold of placing external buffers")};
+
   Option<bool> placeExternalBuffer{
       *this, "place-external-buffer", llvm::cl::init(true),
       llvm::cl::desc("Place buffers in external memories")};
@@ -206,8 +210,8 @@ void scalehls::registerScaleFlowPyTorchPipeline() {
           return;
 
         // Place dataflow buffers.
-        pm.addPass(
-            scalehls::createPlaceDataflowBufferPass(opts.placeExternalBuffer));
+        pm.addPass(scalehls::createPlaceDataflowBufferPass(
+            opts.externalBufferThreshold, opts.placeExternalBuffer));
 
         // if (opts.vectorize) {
         //   pm.addPass(mlir::createSuperVectorizePass({2}));
@@ -375,8 +379,8 @@ void scalehls::registerScaleFlowCppPipeline() {
           return;
 
         // Place dataflow buffers.
-        pm.addPass(
-            scalehls::createPlaceDataflowBufferPass(opts.placeExternalBuffer));
+        pm.addPass(scalehls::createPlaceDataflowBufferPass(
+            opts.externalBufferThreshold, opts.placeExternalBuffer));
 
         // if (opts.vectorize) {
         //   pm.addPass(mlir::createSuperVectorizePass({2}));

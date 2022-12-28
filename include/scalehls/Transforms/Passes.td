@@ -157,6 +157,8 @@ def PlaceDataflowBuffer :
   let constructor = "mlir::scalehls::createPlaceDataflowBufferPass()";
 
   let options = [
+    Option<"threshold", "threshold", "unsigned", /*default=*/"1024",
+           "Positive number: the threshold of placing external buffers">,
     Option<"placeExternalBuffer", "place-external-buffer", "bool",
            /*default=*/"true", "Place buffers in external buffers">
   ];
