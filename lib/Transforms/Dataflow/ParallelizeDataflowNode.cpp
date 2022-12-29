@@ -17,27 +17,24 @@
 using namespace mlir;
 using namespace scalehls;
 
-// /// Apply loop vectorization to the loop band.
-// static bool applyLoopVectorization(AffineLoopBand &band,
-//                                    unsigned vectorizeFactor) {
-//   assert(!band.empty() && "no loops provided");
-//   if (vectorizeFactor == 1)
-//     return true;
+/// Apply loop vectorization to the loop band.
+static bool applyLoopVectorization(AffineLoopBand &band,
+                                   FactorList vectorFactors) {
+  assert(!band.empty() && "no loops provided");
+  if (llvm::all_of(vectorFactors, [](unsigned factor) { return factor == 1; }))
+    return true;
 
-//   // We require all loops to be parallel loop.
-//   for (auto loop : band)
-//     if (!(hasParallelAttr(loop) || isLoopParallel(loop)))
-//       return false;
+  // We require all loops to be parallel loop.
+  for (auto loop : band)
+    if (!(hasParallelAttr(loop) || isLoopParallel(loop)))
+      return false;
 
-//   // Calculate the vectorization size of each loop level.
-//   auto loopSet = llvm::DenseSet<Operation *>(band.begin(), band.end());
-//   auto sizes = getDistributedFactors(vectorizeFactor, band);
-
-//   // Apply loop vectorization.
-//   vectorizeAffineLoops(band.front()->getParentOp(), loopSet,
-//                        SmallVector<int64_t>(sizes.begin(), sizes.end()), {});
-//   return true;
-// }
+  // Apply loop vectorization.
+  auto loopSet = llvm::DenseSet<Operation *>(band.begin(), band.end());
+  auto sizes = SmallVector<int64_t>(vectorFactors.begin(), vectorFactors.end());
+  vectorizeAffineLoops(band.front()->getParentOp(), loopSet, sizes, {});
+  return true;
+}
 
 namespace {
 struct ParallelizeDataflowNode
@@ -229,7 +226,10 @@ struct ParallelizeDataflowNode
     // correlation-aware unroll factors.
     for (auto p : nodeUnrollFactorsMap) {
       auto band = getNodeLoopBand(p.first);
-      applyLoopUnrollJam(band, p.second);
+      if (hasEffectOnExternalBuffer(band.front()))
+        applyLoopVectorization(band, p.second);
+      else
+        applyLoopUnrollJam(band, p.second);
     }
 
     // Apply naive unroll to other loops.
