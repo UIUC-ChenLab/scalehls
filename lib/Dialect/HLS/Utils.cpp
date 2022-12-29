@@ -366,10 +366,12 @@ FactorList scalehls::getDistributedFactors(
 LogicalResult scalehls::getEvenlyDistributedFactors(
     unsigned factor, FactorList &factors,
     const SmallVectorImpl<mlir::AffineForOp> &band) {
-  // If we cannot figure out the trip count of the any loop of the loop
-  // band, skip the current node.
+  // If we cannot figure out the trip count of the any loop of the loop band,
+  // skip the current node.
+  SmallVector<bool> reducFlags;
   FactorList tripCounts;
   for (auto loop : band) {
+    reducFlags.push_back(!(hasParallelAttr(loop) || isLoopParallel(loop)));
     if (auto tripCount = getConstantTripCount(loop))
       tripCounts.push_back(tripCount.value());
     else
@@ -395,37 +397,45 @@ LogicalResult scalehls::getEvenlyDistributedFactors(
 
   // Increase the unroll factors until reach the overall factor.
   while (factor > getOverallFactor(factors)) {
-    // Candidates list recording the loop depth, current factor, and the
-    // increasing rate.
-    SmallVector<std::tuple<unsigned, unsigned, float>> candidates;
-    for (auto t : llvm::enumerate(llvm::zip(tripCounts, factors))) {
-      auto tripCount = std::get<0>(t.value());
-      auto factor = std::get<1>(t.value());
+    // Candidates list recording the reduction flag, current factor, increasing
+    // rate, and the loop level (for indexing purpose).
+    SmallVector<std::tuple<bool, float, unsigned, unsigned>> candidates;
+    for (auto t : llvm::enumerate(llvm::zip(reducFlags, tripCounts, factors))) {
+      auto flag = std::get<0>(t.value());
+      auto tripCount = std::get<1>(t.value());
+      auto factor = std::get<2>(t.value());
       auto newFactor = factor;
 
       increaseFactor(tripCount, newFactor);
       if (newFactor != factor)
-        candidates.push_back({t.index(), factor, (float)newFactor / factor});
+        candidates.push_back(
+            {flag, (float)newFactor / factor, factor, t.index()});
     }
 
     // Break the while loop if there's no candidates available.
     if (candidates.empty())
       break;
 
-    // Sort the candidates. Smaller increasing rate, smaller current factor,
-    // and larger loop depth is preferred. Smaller increasing rate can help
-    // to match the overall parallel factor as much as possible. Smaller
-    // current factor can help to distribute the overall parallel evenly.
+    // Sort the candidate factors. The rationale is: 1) Non-reduction loop can
+    // help to best parallelize the band. 2) Smaller increasing rate can help to
+    // match the overall parallel factor as much as possible. 3) Smaller current
+    // factor can help to distribute the overall parallel evenly.
     llvm::sort(candidates, [](auto a, auto b) {
-      if (std::get<2>(a) != std::get<2>(b))
-        return std::get<2>(a) < std::get<2>(b);
+      // Non-reduction loop is preferred.
+      if (std::get<0>(a) != std::get<0>(b))
+        return std::get<0>(a) < std::get<0>(b);
+      // Smaller increasing rate is preferred.
       else if (std::get<1>(a) != std::get<1>(b))
         return std::get<1>(a) < std::get<1>(b);
+      // Smaller current factor is preferred.
+      else if (std::get<2>(a) != std::get<2>(b))
+        return std::get<2>(a) < std::get<2>(b);
+      // Inner loop is preferred for deterministic result.
       else
-        return std::get<0>(a) > std::get<0>(b);
+        return std::get<3>(a) > std::get<3>(b);
     });
 
-    auto index = std::get<0>(candidates.front());
+    auto index = std::get<3>(candidates.front());
     increaseFactor(tripCounts[index], factors[index]);
   }
   return success();
