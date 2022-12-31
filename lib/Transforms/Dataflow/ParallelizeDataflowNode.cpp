@@ -136,7 +136,9 @@ struct ParallelizeDataflowNode
       }
 
       auto factors = FactorList(band.size(), 1);
-      if (failed(getEvenlyDistributedFactors(unrollFactor, factors, band)))
+      SmallVector<FactorList> constrFactors;
+      if (failed(getEvenlyDistributedFactors(unrollFactor, factors, band,
+                                             constrFactors)))
         factors = getDistributedFactors(unrollFactor, band);
       applyLoopUnrollJam(band, factors);
     }
@@ -149,19 +151,21 @@ struct ParallelizeDataflowNode
     // We first sort all nodes in a decending order of their associated number
     // of correlations. The rationale is nodes that have more correlations
     // should be optimized first.
-    SmallVector<std::pair<NodeOp, unsigned>> nodeAndNums;
-    for (auto nodeAndList : corrAnal)
-      nodeAndNums.push_back({nodeAndList.first, nodeAndList.second.size()});
-    llvm::sort(nodeAndNums, [](auto a, auto b) { return a.second > b.second; });
+    SmallVector<std::pair<NodeOp, unsigned>> worklist;
+    for (auto &nodeAndList : corrAnal)
+      worklist.push_back({nodeAndList.first, nodeAndList.second.size()});
+    llvm::sort(worklist, [](auto a, auto b) { return a.second < b.second; });
 
     // Optimize the unroll factors from the most critical node.
     llvm::SmallDenseMap<NodeOp, FactorList> nodeUnrollFactorsMap;
-    for (auto nodeAndNum : nodeAndNums) {
-      auto node = nodeAndNum.first;
-      auto corrList = corrAnal.getCorrelations(node);
+    while (!worklist.empty()) {
+      auto current = worklist.pop_back_val();
+      auto node = current.first;
+      auto corrNum = current.second;
 
       // If the correlation list is empty, which means the correlation analysis
       // failed, skip the current node.
+      auto corrList = corrAnal.getCorrelations(node);
       if (corrList.empty())
         continue;
 
@@ -173,39 +177,37 @@ struct ParallelizeDataflowNode
       auto band = getNodeLoopBand(node);
       auto factors = FactorList(band.size(), 1);
 
-      // If the unroll factors already exist, which means the node is correlated
-      // with a visited node, we overwrite the initialized unroll factors with
-      // the existing one.
-      if (nodeUnrollFactorsMap.count(node)) {
-        assert(factors.size() == band.size() && "incorrect factor number");
-        factors = nodeUnrollFactorsMap.lookup(node);
-      }
-
-      if (failed(getEvenlyDistributedFactors(parallelFactor, factors, band)))
-        factors = getDistributedFactors(parallelFactor, band);
-
-      LLVM_DEBUG(
-          // clang-format off
-          llvm::dbgs() << "\nCorrelations: " << nodeAndNum.second << "\n";
-          llvm::dbgs() << "Parallel: " << parallelFactor << "\n";
-          llvm::dbgs() << "Factors: { ";
-          for (auto factor : factors)
-            llvm::dbgs() << factor << " ";
-          llvm::dbgs() << "}\n";
-          llvm::dbgs() << "Node at " << node.getLoc() << ": \n" << node << "\n";
-          // clang-format on
-      );
-      nodeUnrollFactorsMap[node] = factors;
-
+      // Collect the loop unroll factors of all correlated nodes that have been
+      // traversed. Additionally, collect the node and factors of external
+      // buffer correlations for later use.
+      SmallVector<FactorList> corrFactorsList;
+      SmallVector<std::pair<NodeOp, FactorList>> externalNodeAndFactorsList;
       for (auto corr : corrList) {
         auto corrNode = corr.getCorrelatedNode(node);
-        if (nodeUnrollFactorsMap.count(corrNode))
+        if (!nodeUnrollFactorsMap.count(corrNode))
           continue;
-        auto corrFactors = corr.permuteFactors(node, factors);
+
+        // Permute the unroll factors of correlated node with the permutation
+        // map recorded in the correlation.
+        auto corrFactors = corr.permuteFactors(
+            corrNode, nodeUnrollFactorsMap.lookup(corrNode));
+
+        corrFactorsList.push_back(corrFactors);
+        if (isExternalBuffer(corr.getBuffer().getMemref())) {
+          // Make sure each factor is larger than the corresponding factor of
+          // the external buffer correlatations.
+          FactorList newFactors;
+          for (auto t : llvm::zip(factors, corrFactors))
+            newFactors.push_back(std::max(std::get<0>(t), std::get<1>(t)));
+          factors = newFactors;
+          externalNodeAndFactorsList.push_back({corrNode, corrFactors});
+        }
 
         LLVM_DEBUG(
             // clang-format off
             llvm::dbgs() << "----------\n";
+            llvm::dbgs() << "Shared buffer at " << corr.getBuffer().getLoc()
+                         << ": " << *corr.getBuffer() << "\n";
             llvm::dbgs() << "Correlate Map: { ";
             for (auto factor : corr.getCorrelateMap(node))
               llvm::dbgs() << factor << " ";
@@ -218,8 +220,33 @@ struct ParallelizeDataflowNode
                          << corrNode << "\n";
             // clang-format on
         );
-        nodeUnrollFactorsMap[corrNode] = corrFactors;
       }
+
+      // Distribute factor based on the constraints and record in the map.
+      if (failed(getEvenlyDistributedFactors(parallelFactor, factors, band,
+                                             corrFactorsList)))
+        factors = getDistributedFactors(parallelFactor, band);
+      nodeUnrollFactorsMap[node] = factors;
+
+      // If the final factors are not equal to the factors of any external
+      // buffer correlated node, we need to recalculate the node as they must be
+      // identical eventually.
+      for (auto externalNodeAndFactors : externalNodeAndFactorsList)
+        if (factors != externalNodeAndFactors.second)
+          worklist.push_back({externalNodeAndFactors.first, 0});
+
+      LLVM_DEBUG(
+          // clang-format off
+          llvm::dbgs() << "\nCorrelations: " << corrNum << "\n";
+          llvm::dbgs() << "Parallel: " << parallelFactor << "\n";
+          llvm::dbgs() << "Factors: { ";
+          for (auto factor : factors)
+            llvm::dbgs() << factor << " ";
+          llvm::dbgs() << "}\n";
+          llvm::dbgs() << "Node at " << node.getLoc() << ": \n" << node << "\n";
+          llvm::dbgs() << "==========\n";
+          // clang-format on
+      );
     }
 
     // Apply unroll and jam to loops that is successfully calculated for
