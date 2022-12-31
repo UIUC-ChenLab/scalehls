@@ -172,6 +172,8 @@ NodeOp scalehls::fuseNodeOps(ArrayRef<NodeOp> nodes,
   return newNode;
 }
 
+/// A helper to get all users of a buffer except the given node and with the
+/// given kind (producer or consumer).
 static auto getUsersExcept(Value buffer, OperandKind kind, NodeOp except) {
   SmallVector<NodeOp> nodes;
   for (auto &use : buffer.getUses())
@@ -181,7 +183,7 @@ static auto getUsersExcept(Value buffer, OperandKind kind, NodeOp except) {
   return nodes;
 }
 
-/// Get the consumer/producer nodes of the given buffer expect the given op.
+/// Get the consumer/producer nodes of the given buffer expect the given node.
 SmallVector<NodeOp> scalehls::getConsumersExcept(Value buffer, NodeOp except) {
   return getUsersExcept(buffer, OperandKind::INPUT, except);
 }
@@ -206,6 +208,71 @@ SmallVector<NodeOp> scalehls::getDependentConsumers(Value buffer, NodeOp node) {
     if (!ignoreBackDependence || domInfo.properlyDominates(node, consumer))
       nodes.push_back(consumer);
   return nodes;
+}
+
+/// A helper to get all nested users of a buffer except the given node and with
+/// the given kind (producer or consumer).
+static SmallVector<std::pair<NodeOp, Value>>
+getNestedUsersExcept(Value buffer, OperandKind kind, NodeOp except) {
+  SmallVector<std::tuple<NodeOp, Value, OperandKind>> worklist;
+
+  // A helper to append all node users of the given buffer.
+  auto appendWorklist = [&](Value buffer) {
+    for (auto &use : buffer.getUses())
+      if (auto node = dyn_cast<NodeOp>(use.getOwner()))
+        if (node != except)
+          worklist.push_back({node, buffer, node.getOperandKind(use)});
+  };
+
+  // Initialize the worklist.
+  appendWorklist(buffer);
+
+  SmallVector<std::pair<NodeOp, Value>> nestedUsers;
+  while (!worklist.empty()) {
+    auto current = worklist.pop_back_val();
+    auto node = std::get<0>(current);
+    auto nodeBuffer = std::get<1>(current);
+    auto nodeKind = std::get<2>(current);
+
+    // If the current node doesn't have hierarchy, we add it to results if the
+    // node kind is aligned.
+    if (!cast<hls::StageLikeInterface>(node.getOperation()).hasHierarchy()) {
+      if (nodeKind == kind)
+        nestedUsers.push_back({node, nodeBuffer});
+      continue;
+    }
+
+    // Otherwise, we should delve into the hierarchy and traverse all contained
+    // schedules.
+    auto index =
+        llvm::find(node.getOperands(), nodeBuffer) - node.operand_begin();
+    assert(index != node.getNumOperands() && "invalid node or node buffer");
+    auto arg = node.getBody().getArgument(index);
+
+    for (auto &use : arg.getUses())
+      if (auto schedule = dyn_cast<ScheduleOp>(use.getOwner()))
+        appendWorklist(schedule.getBody().getArgument(use.getOperandNumber()));
+  }
+  return nestedUsers;
+}
+
+/// Get the nested consumer/producer nodes of the given buffer expect the given
+/// node.
+SmallVector<std::pair<NodeOp, Value>>
+scalehls::getNestedConsumersExcept(Value buffer, NodeOp except) {
+  return getNestedUsersExcept(buffer, OperandKind::INPUT, except);
+}
+SmallVector<std::pair<NodeOp, Value>>
+scalehls::getNestedProducersExcept(Value buffer, NodeOp except) {
+  return getNestedUsersExcept(buffer, OperandKind::OUTPUT, except);
+}
+SmallVector<std::pair<NodeOp, Value>>
+scalehls::getNestedConsumers(Value buffer) {
+  return getNestedConsumersExcept(buffer, NodeOp());
+}
+SmallVector<std::pair<NodeOp, Value>>
+scalehls::getNestedProducers(Value buffer) {
+  return getNestedProducersExcept(buffer, NodeOp());
 }
 
 /// Find buffer value or buffer op across the dataflow hierarchy.

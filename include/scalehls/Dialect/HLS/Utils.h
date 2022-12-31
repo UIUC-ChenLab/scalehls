@@ -52,6 +52,15 @@ SmallVector<NodeOp> getConsumers(Value buffer);
 SmallVector<NodeOp> getProducers(Value buffer);
 SmallVector<NodeOp> getDependentConsumers(Value buffer, NodeOp node);
 
+/// Get the nested consumer/producer nodes of the given buffer expect the given
+/// node. The corresponding buffer values are also returned.
+SmallVector<std::pair<NodeOp, Value>> getNestedConsumersExcept(Value buffer,
+                                                               NodeOp except);
+SmallVector<std::pair<NodeOp, Value>> getNestedProducersExcept(Value buffer,
+                                                               NodeOp except);
+SmallVector<std::pair<NodeOp, Value>> getNestedConsumers(Value buffer);
+SmallVector<std::pair<NodeOp, Value>> getNestedProducers(Value buffer);
+
 /// Get the depth of a buffer or stream channel. Note that only if the defining
 /// operation of the buffer is not a BufferOp or stream types, the returned
 /// result will be 1.
