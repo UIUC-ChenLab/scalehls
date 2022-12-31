@@ -102,11 +102,13 @@ FactorList
 getDistributedFactors(unsigned factor,
                       const SmallVectorImpl<mlir::AffineForOp> &band);
 
-/// Distribute the given factor evenly on all loop levels, this method can fail
-/// due to non-constant loop bounds.
+/// Distribute the given factor evenly on all loop levels. The generated factors
+/// are garanteed to be divisors of the factors in given "costrFactorsList".
+/// This method can fail due to non-constant loop bounds.
 LogicalResult
-getEvenlyDistributedFactors(unsigned factor, FactorList &factors,
-                            const SmallVectorImpl<mlir::AffineForOp> &band);
+getEvenlyDistributedFactors(unsigned maxFactor, FactorList &factors,
+                            const SmallVectorImpl<mlir::AffineForOp> &band,
+                            const SmallVectorImpl<FactorList> &constrFactors);
 
 /// Return a pair which indicates whether the if statement is always true or
 /// false, respectively. The returned result is one-hot.

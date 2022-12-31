@@ -428,52 +428,88 @@ FactorList scalehls::getDistributedFactors(
   return factors;
 }
 
-/// Distribute the given factor evenly on all loop levels, this method can fail
-/// due to non-constant loop bounds.
+/// Distribute the given factor evenly on all loop levels. The generated factors
+/// are garanteed to be divisors of the factors in given "costrFactorsList".
+/// This method can fail due to non-constant loop trip counts.
 LogicalResult scalehls::getEvenlyDistributedFactors(
-    unsigned factor, FactorList &factors,
-    const SmallVectorImpl<mlir::AffineForOp> &band) {
-  // If we cannot figure out the trip count of the any loop of the loop band,
-  // skip the current node.
-  SmallVector<bool> reducFlags;
+    unsigned maxFactor, FactorList &factors,
+    const SmallVectorImpl<mlir::AffineForOp> &band,
+    const SmallVectorImpl<FactorList> &constrFactors) {
+  // Traverse each loop in the given loop band.
+  SmallVector<FactorList> constrs;
+  SmallVector<bool> reductionFlags;
   FactorList tripCounts;
-  for (auto loop : band) {
-    reducFlags.push_back(!(hasParallelAttr(loop) || isLoopParallel(loop)));
-    if (auto tripCount = getConstantTripCount(loop))
-      tripCounts.push_back(tripCount.value());
-    else
-      break;
+  for (auto loop : llvm::enumerate(band)) {
+    // Collect the loop trip counts. If any trip count cannot be resolved, we
+    // return failure.
+    auto tripCount = getConstantTripCount(loop.value());
+    if (!tripCount.has_value())
+      return failure();
+    tripCounts.push_back(tripCount.value());
+
+    // Collect the constraints at each loop level. Basically, this transposes
+    // the two-dimension argument "constrFactorsList".
+    FactorList constr;
+    for (auto &factors : constrFactors) {
+      assert(tripCount.value() % factors[loop.index()] == 0 &&
+             "contraint factor isn't divisor of corresponding trip count");
+      constr.push_back(factors[loop.index()]);
+    }
+    constrs.push_back(constr);
+
+    // Collect the reduction loop flags.
+    reductionFlags.push_back(!hasParallelAttr(loop.value()) &&
+                             !isLoopParallel(loop.value()));
   }
-  if (tripCounts.size() != band.size())
-    return failure();
+
+  // A helper to increase the factor until all contraints are met.
+  auto increaseFactor = [&](unsigned &factor, unsigned loopDepth) {
+    auto tripCount = tripCounts[loopDepth];
+    auto constr = constrs[loopDepth];
+
+    assert(factor <= tripCount && "current factor larger than trip count");
+    if (factor < tripCount || factor == 1)
+      factor++;
+
+    while (tripCount % factor != 0 || llvm::any_of(constr, [&](unsigned v) {
+             return v % factor != 0 && factor % v != 0;
+           }))
+      factor++;
+  };
 
   // A helper to calculate the overall factors of the given factors.
-  auto getOverallFactor = [](FactorList factors) {
+  auto canReturn = [&](FactorList factors) {
+    // Check whether the current overall factor is larger equal to the max
+    // factor to achieve.
     unsigned overallFactor = 1;
     for (auto factor : factors)
       overallFactor *= factor;
-    return overallFactor;
-  };
+    if (maxFactor > overallFactor)
+      return false;
 
-  auto increaseFactor = [](unsigned tripCount, unsigned &factor) {
-    if (tripCount > factor || factor == 1)
-      factor++;
-    while (tripCount % factor != 0)
-      factor++;
+    // Check whether the current factors meet all constraints.
+    for (auto t : llvm::zip(factors, constrs)) {
+      auto factor = std::get<0>(t);
+      auto constr = std::get<1>(t);
+      if (llvm::any_of(constr, [&](unsigned v) {
+            return v % factor != 0 && factor % v != 0;
+          }))
+        return false;
+    }
+    return true;
   };
 
   // Increase the unroll factors until reach the overall factor.
-  while (factor > getOverallFactor(factors)) {
-    // Candidates list recording the reduction flag, current factor, increasing
-    // rate, and the loop level (for indexing purpose).
+  while (!canReturn(factors)) {
+    // Candidates list holding the reduction flag, increasing rate, current
+    // factor, and the loop depth.
     SmallVector<std::tuple<bool, float, unsigned, unsigned>> candidates;
-    for (auto t : llvm::enumerate(llvm::zip(reducFlags, tripCounts, factors))) {
+    for (auto t : llvm::enumerate(llvm::zip(reductionFlags, factors))) {
       auto flag = std::get<0>(t.value());
-      auto tripCount = std::get<1>(t.value());
-      auto factor = std::get<2>(t.value());
+      auto factor = std::get<1>(t.value());
       auto newFactor = factor;
 
-      increaseFactor(tripCount, newFactor);
+      increaseFactor(newFactor, t.index());
       if (newFactor != factor)
         candidates.push_back(
             {flag, (float)newFactor / factor, factor, t.index()});
@@ -483,27 +519,31 @@ LogicalResult scalehls::getEvenlyDistributedFactors(
     if (candidates.empty())
       break;
 
-    // Sort the candidate factors. The rationale is: 1) Non-reduction loop can
-    // help to best parallelize the band. 2) Smaller increasing rate can help to
+    // Sort the candidate factors. The rationale is: 1) Parallel loop can help
+    // to best parallelize the band. 2) Smaller increasing rate can help to
     // match the overall parallel factor as much as possible. 3) Smaller current
-    // factor can help to distribute the overall parallel evenly.
+    // factor can help to distribute the overall parallel evenly. 4) Always
+    // choose inner loop can help to achieve deterministic transformation result
+    // of the pass.
     llvm::sort(candidates, [](auto a, auto b) {
-      // Non-reduction loop is preferred.
+      // Parallel loop is preferred.
       if (std::get<0>(a) != std::get<0>(b))
         return std::get<0>(a) < std::get<0>(b);
+
       // Smaller increasing rate is preferred.
-      else if (std::get<1>(a) != std::get<1>(b))
+      if (std::get<1>(a) != std::get<1>(b))
         return std::get<1>(a) < std::get<1>(b);
+
       // Smaller current factor is preferred.
-      else if (std::get<2>(a) != std::get<2>(b))
+      if (std::get<2>(a) != std::get<2>(b))
         return std::get<2>(a) < std::get<2>(b);
-      // Inner loop is preferred for deterministic result.
-      else
-        return std::get<3>(a) > std::get<3>(b);
+
+      // Inner loop is preferred.
+      return std::get<3>(a) > std::get<3>(b);
     });
 
-    auto index = std::get<3>(candidates.front());
-    increaseFactor(tripCounts[index], factors[index]);
+    auto depth = std::get<3>(candidates.front());
+    increaseFactor(factors[depth], depth);
   }
   return success();
 }

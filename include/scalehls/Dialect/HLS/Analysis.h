@@ -93,7 +93,7 @@ public:
   }
 
   // Permute factors of the current node to the correlated node.
-  FactorList permuteFactors(NodeOp currentNode, FactorList &factors) {
+  FactorList permuteFactors(NodeOp currentNode, const FactorList &factors) {
     assert(factors.size() == getNodeLoopBand(currentNode).size() &&
            "invalid permutation factors");
     auto correlateMap = getCorrelateMap(currentNode);
@@ -104,7 +104,7 @@ private:
   /// Permute "factors" with "map" and return the permuted factors. Note that
   /// "-1" in the permutation map indicates the output factor on the
   /// corresponding position is one.
-  FactorList permuteFactorsWithMap(FactorList &factors,
+  FactorList permuteFactorsWithMap(const FactorList &factors,
                                    SmallVectorImpl<int64_t> &map) const {
     FactorList permutedFactors;
     for (auto i : map) {
