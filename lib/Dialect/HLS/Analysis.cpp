@@ -93,33 +93,40 @@ SmallVector<int64_t> getBufferIndexToLoopDepthMap(NodeOp node, Value buffer) {
     return SmallVector<int64_t>();
 
   auto band = getNodeLoopBand(node);
-  auto localBuffer = node.getBody().getArgument(
-      llvm::find(node.getOperands(), buffer) - node.operand_begin());
+  auto index = llvm::find(node.getOperands(), buffer) - node.operand_begin();
+  assert(index != node.getNumOperands() && "invalid node or node buffer");
+  auto localBuffer = node.getBody().getArgument(index);
 
-  SmallVector<Value> bufferIndices;
+  // Collect the buffer accessing map and indices in the current loop band.
+  auto bufferMap = AffineMap::get(buffer.getContext());
+  SmallVector<Value> bufferOperands;
   auto result = band.front().walk([&](Operation *op) {
     Value memref;
-    AffineMap map;
-    SmallVector<Value> indices;
+    auto map = AffineMap::get(buffer.getContext());
+    SmallVector<Value> operands;
     if (auto read = dyn_cast<mlir::AffineReadOpInterface>(op)) {
       memref = read.getMemRef();
       map = read.getAffineMap();
-      indices = read.getMapOperands();
+      operands = read.getMapOperands();
     } else if (auto write = dyn_cast<mlir::AffineWriteOpInterface>(op)) {
       memref = write.getMemRef();
       map = write.getAffineMap();
-      indices = write.getMapOperands();
+      operands = write.getMapOperands();
     } else
       return WalkResult::advance();
 
+    // If the op is not accessing the local buffer, skip it.
     if (memref != localBuffer)
       return WalkResult::advance();
-    if (!map.isIdentity())
-      return WalkResult::interrupt();
 
-    if (bufferIndices.empty())
-      bufferIndices = indices;
-    else if (bufferIndices != indices)
+    // Record the buffer accessing map and operands.
+    if (bufferMap.isEmpty())
+      bufferMap = map;
+    if (bufferOperands.empty())
+      bufferOperands = operands;
+
+    // If the buffer accessing map or operands are not aligned, interrupt it.
+    if (bufferMap != map || bufferOperands != operands)
       return WalkResult::interrupt();
     return WalkResult::advance();
   });
@@ -127,17 +134,33 @@ SmallVector<int64_t> getBufferIndexToLoopDepthMap(NodeOp node, Value buffer) {
   if (result.wasInterrupted())
     return SmallVector<int64_t>();
 
+  // Traverse each buffer dimension to determine the loop iv that is associated
+  // with the index of the corresponding dimension.
   SmallVector<int64_t> depths;
-  for (auto index : bufferIndices) {
-    if (isForInductionVar(index)) {
-      auto loop = getForInductionVarOwner(index);
+  for (auto expr : bufferMap.getResults()) {
+    // Get the flattened form of the expr, which is a sum of products in an
+    // order of [dims, symbols, locals, constant].
+    llvm::SmallVector<int64_t> flattenedExpr;
+    if (failed(getFlattenedAffineExpr(expr, bufferMap.getNumDims(),
+                                      bufferMap.getNumSymbols(),
+                                      &flattenedExpr)))
+      return SmallVector<int64_t>();
+
+    int64_t loopDepth = -1;
+    for (unsigned i = 0, e = bufferMap.getNumDims(); i < e; ++i) {
+      auto loop = getForInductionVarOwner(bufferOperands[i]);
+      if (flattenedExpr[i] == 0 || !loop)
+        continue;
+
       unsigned depth = llvm::find(band, loop) - band.begin();
       if (depth != band.size()) {
-        depths.push_back(depth);
-        continue;
+        // TODO: Support buffer index to involve multiple loop ivs.
+        if (loopDepth != -1)
+          return SmallVector<int64_t>();
+        loopDepth = depth;
       }
     }
-    depths.push_back(-1);
+    depths.push_back(loopDepth);
   }
   return depths;
 }
@@ -163,18 +186,20 @@ CorrelationAnalysis::CorrelationAnalysis(func::FuncOp func) {
   func.walk([&](hls::BufferLikeInterface bufferOp) {
     auto buffer = bufferOp.getMemref();
 
-    // For now, we don't consider external memories in the correlation analysis.
-    if (isExternalBuffer(buffer))
-      return WalkResult::advance();
-
-    // TODO: Support nested node and node that has multiple loop bands.
-    for (auto producer : getProducers(buffer)) {
-      auto sourceDepths = getBufferIndexToLoopDepthMap(producer, buffer);
+    // TODO: Support node that has multiple loop bands.
+    for (auto producerPair : getNestedProducers(buffer)) {
+      auto producer = producerPair.first;
+      auto producerBuffer = producerPair.second;
+      auto sourceDepths =
+          getBufferIndexToLoopDepthMap(producer, producerBuffer);
       if (sourceDepths.empty())
         continue;
 
-      for (auto consumer : getConsumersExcept(buffer, producer)) {
-        auto targetDepths = getBufferIndexToLoopDepthMap(consumer, buffer);
+      for (auto consumerPair : getNestedConsumersExcept(buffer, producer)) {
+        auto consumer = consumerPair.first;
+        auto consumerBuffer = consumerPair.second;
+        auto targetDepths =
+            getBufferIndexToLoopDepthMap(consumer, consumerBuffer);
         if (targetDepths.empty())
           continue;
 
@@ -183,8 +208,9 @@ CorrelationAnalysis::CorrelationAnalysis(func::FuncOp func) {
         auto targetToSourceMap =
             getPermuteMap(producer, targetDepths, sourceDepths);
 
-        auto corr = Correlation(producer, consumer, bufferOp, sourceToTargetMap,
-                                targetToSourceMap);
+        auto corr =
+            Correlation(producer, consumer, bufferOp, producerBuffer,
+                        consumerBuffer, sourceToTargetMap, targetToSourceMap);
         LLVM_DEBUG(
             // clang-format off
             llvm::dbgs() << "\n--------- Correlation ----------\n";

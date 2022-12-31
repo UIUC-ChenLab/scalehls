@@ -33,11 +33,12 @@ private:
 class Correlation {
 public:
   Correlation(NodeOp sourceNode, NodeOp targetNode,
-              hls::BufferLikeInterface buffer,
-              SmallVector<int64_t> sourceToTargetMap,
+              hls::BufferLikeInterface sharedBuffer, Value sourceBuffer,
+              Value targetBuffer, SmallVector<int64_t> sourceToTargetMap,
               SmallVector<int64_t> targetToSourceMap)
-      : sourceNode(sourceNode), targetNode(targetNode), buffer(buffer),
-        sourceToTargetMap(sourceToTargetMap),
+      : sourceNode(sourceNode), targetNode(targetNode),
+        sharedBuffer(sharedBuffer), sourceBuffer(sourceBuffer),
+        targetBuffer(targetBuffer), sourceToTargetMap(sourceToTargetMap),
         targetToSourceMap(targetToSourceMap) {
     // Make sure the source-to-target and target-to-source map is valid.
     if (!sourceToTargetMap.empty()) {
@@ -63,10 +64,14 @@ public:
         else if (i.value() != -1)
           assert("invalid target-to-source map");
     }
+
+    assert(sharedBuffer.getMemrefType() == sourceBuffer.getType() &&
+           sharedBuffer.getMemrefType() == targetBuffer.getType() &&
+           "source or target argument type not align with buffer type");
   }
 
   /// Get the shared buffer.
-  hls::BufferLikeInterface getBuffer() const { return buffer; }
+  hls::BufferLikeInterface getBuffer() const { return sharedBuffer; }
 
   /// Check whether a node is source node.
   bool isSourceNode(NodeOp currentNode) const {
@@ -115,7 +120,9 @@ private:
 
   NodeOp sourceNode;
   NodeOp targetNode;
-  hls::BufferLikeInterface buffer;
+  hls::BufferLikeInterface sharedBuffer;
+  Value sourceBuffer;
+  Value targetBuffer;
   SmallVector<int64_t> sourceToTargetMap;
   SmallVector<int64_t> targetToSourceMap;
 };
