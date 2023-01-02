@@ -865,19 +865,19 @@ static void sinkSequentialLoops(MemRefDependenceGraph::Node *node) {
 }
 
 //  TODO: improve/complete this when we have target data.
-static unsigned getMemRefEltSizeInBytes(MemRefType memRefType) {
-  auto elementType = memRefType.getElementType();
+// static unsigned getMemRefEltSizeInBytes(MemRefType memRefType) {
+//   auto elementType = memRefType.getElementType();
 
-  unsigned sizeInBits;
-  if (elementType.isIntOrFloat()) {
-    sizeInBits = elementType.getIntOrFloatBitWidth();
-  } else {
-    auto vectorType = elementType.cast<VectorType>();
-    sizeInBits =
-        vectorType.getElementTypeBitWidth() * vectorType.getNumElements();
-  }
-  return llvm::divideCeil(sizeInBits, 8);
-}
+//   unsigned sizeInBits;
+//   if (elementType.isIntOrFloat()) {
+//     sizeInBits = elementType.getIntOrFloatBitWidth();
+//   } else {
+//     auto vectorType = elementType.cast<VectorType>();
+//     sizeInBits =
+//         vectorType.getElementTypeBitWidth() * vectorType.getNumElements();
+//   }
+//   return llvm::divideCeil(sizeInBits, 8);
+// }
 
 // Creates and returns a private (single-user) memref for fused loop rooted
 // at 'forOp', with (potentially reduced) memref size based on the
@@ -945,8 +945,8 @@ static Value createPrivateMemRef(AffineForOp forOp, Operation *srcStoreOpInst,
 
   // Create 'newMemRefType' using 'newShape' from MemRefRegion accessed
   // by 'srcStoreOpInst'.
-  uint64_t bufSize =
-      getMemRefEltSizeInBytes(oldMemRefType) * numElements.value();
+  // uint64_t bufSize =
+  //     getMemRefEltSizeInBytes(oldMemRefType) * numElements.value();
   // unsigned newMemSpace;
   // if (bufSize <= localBufSizeThreshold && fastMemorySpace.has_value()) {
   //   newMemSpace = fastMemorySpace.value();

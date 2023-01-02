@@ -45,53 +45,24 @@ static void updateSubFuncs(func::FuncOp func, Builder builder) {
 bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
                                    ArrayRef<hls::PartitionKind> kinds,
                                    bool updateFuncSignature) {
-  auto builder = Builder(array.getContext());
   auto arrayType = array.getType().dyn_cast<MemRefType>();
   if (!arrayType || !arrayType.hasStaticShape() ||
       (int64_t)factors.size() != arrayType.getRank() ||
       (int64_t)kinds.size() != arrayType.getRank())
     return false;
 
-  // Walk through each dimension of the current memory.
-  SmallVector<AffineExpr, 4> partitionIndices;
-  SmallVector<AffineExpr, 4> addressIndices;
-
-  for (int64_t dim = 0; dim < arrayType.getRank(); ++dim) {
-    auto kind = kinds[dim];
-    auto factor = factors[dim];
-
-    if (kind == PartitionKind::CYCLIC) {
-      partitionIndices.push_back(builder.getAffineDimExpr(dim) % factor);
-      addressIndices.push_back(builder.getAffineDimExpr(dim).floorDiv(factor));
-
-    } else if (kind == PartitionKind::BLOCK) {
-      auto blockFactor = (arrayType.getShape()[dim] + factor - 1) / factor;
-      partitionIndices.push_back(
-          builder.getAffineDimExpr(dim).floorDiv(blockFactor));
-      addressIndices.push_back(builder.getAffineDimExpr(dim) % blockFactor);
-
-    } else {
-      partitionIndices.push_back(builder.getAffineConstantExpr(0));
-      addressIndices.push_back(builder.getAffineDimExpr(dim));
-    }
-  }
-
-  // Construct new layout map.
-  partitionIndices.append(addressIndices.begin(), addressIndices.end());
-  auto layoutMap = AffineMap::get(arrayType.getRank(), 0, partitionIndices,
-                                  builder.getContext());
-
-  // Construct new array type.
-  auto newType =
-      MemRefType::get(arrayType.getShape(), arrayType.getElementType(),
-                      layoutMap, arrayType.getMemorySpace());
-
-  // Set new type.
-  array.setType(newType);
+  // Construct and set new array type.
+  auto layoutAttr = PartitionLayoutAttr::getWithActualFactors(
+      array.getContext(), kinds, SmallVector<int64_t>(factors),
+      arrayType.getShape());
+  array.setType(MemRefType::get(arrayType.getShape(),
+                                arrayType.getElementType(), layoutAttr,
+                                arrayType.getMemorySpace()));
 
   if (updateFuncSignature)
-    if (auto func =
-            dyn_cast<func::FuncOp>(array.getParentBlock()->getParentOp())) {
+    if (auto func = array.getParentRegion()->getParentOfType<func::FuncOp>()) {
+      auto builder = Builder(array.getContext());
+
       // Align function type with entry block argument types only if the array
       // is defined as an argument of the function.
       if (!array.getDefiningOp()) {
@@ -209,8 +180,6 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
     // Collect all target loop bands.
     AffineLoopBands targetBands;
     getLoopBands(func.front(), targetBands);
-
-    // Apply loop order optimization to each loop band.
     for (auto &band : targetBands)
       targetBlocks.push_back(band.back().getBody());
   }
@@ -220,28 +189,24 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
   // different blocks/functions the best partition fashions and factors are
   // different. To eventually determine a "best" array partition strategy,
   // tentatively we always pick the one with the largest partition factor as the
-  // final partition strategy. This "partitionsMap" is used to hold the current
+  // final partition strategy. This "layoutsMap" is used to hold the current
   // partition strategy of each memref.
-  using PartitionInfo = std::pair<PartitionKind, int64_t>;
-  DenseMap<Value, SmallVector<PartitionInfo, 4>> partitionsMap;
+  using PartitionLayout = std::pair<PartitionKind, int64_t>;
+  DenseMap<Value, SmallVector<PartitionLayout, 4>> layoutsMap;
 
   // Traverse all blocks that requires to be considered.
   for (auto block : targetBlocks) {
     MemAccessesMap accessesMap;
     getMemAccessesMap(*block, accessesMap, /*includeVectorTransfer=*/true);
 
-    for (auto pair : accessesMap) {
-      auto memref = pair.first;
+    for (auto [memref, loadStores] : accessesMap) {
       auto memrefType = memref.getType().cast<MemRefType>();
-      auto loadStores = pair.second;
-      auto &partitions = partitionsMap[memref];
+      auto &layouts = layoutsMap[memref];
 
-      // If the current partitionsMap is empty, initialize it with no partition
-      // and factor of 1.
-      if (partitions.empty()) {
-        for (int64_t dim = 0; dim < memrefType.getRank(); ++dim)
-          partitions.push_back(PartitionInfo(PartitionKind::NONE, 1));
-      }
+      // If the current layoutsMap is empty, initialize it with no partition.
+      if (layouts.empty())
+        layouts = SmallVector<PartitionLayout, 4>(
+            memrefType.getRank(), PartitionLayout(PartitionKind::NONE, 1));
 
       // Find the best partition solution for each dimensions of the memref.
       for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
@@ -302,7 +267,7 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
 
         // Determine array partition factor and kind.
         // TODO: take storage type into consideration.
-        unsigned factor = 1;
+        int64_t factor = 1;
         PartitionKind kind = PartitionKind::NONE;
         if (accessNum >= maxDistance) {
           // This means some elements are accessed more than once or exactly
@@ -324,28 +289,28 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
           kind = PartitionKind::BLOCK;
         }
 
-        // The rationale here is if the accessing partition index cannot be
-        // determined and partition factor is more than 3, a multiplexer will be
-        // generated and the memory access operation will be wrapped into a
-        // function call, which will cause dependency problems and make the
-        // latency and II even worse.
-        if (factor > partitions[dim].second) {
-          if (requireMux)
-            for (auto i = 3; i > 0; --i) {
+        // TODO: For now, we always pick the partition with the largest factor.
+        if (factor > layouts[dim].second) {
+          // The rationale here is if the accessing partition index cannot be
+          // determined and partition factor is more than 3, a multiplexer will
+          // be generated and the memory access operation will be wrapped into a
+          // function call, which will cause dependency problems and make the
+          // latency and II even worse.
+          if (requireMux) {
+            for (auto i = 3; i > 0; --i)
               if (factor % i == 0) {
-                partitions[dim] = PartitionInfo(kind, i);
+                layouts[dim] = PartitionLayout(kind, i);
                 break;
               }
-            }
-          else
-            partitions[dim] = PartitionInfo(kind, factor);
+          } else
+            layouts[dim] = PartitionLayout(kind, factor);
         }
       }
     }
   }
 
   // Apply partition to all sub-functions and traverse all function to update
-  // the "partitionsMap".
+  // the "layoutsMap".
   func.walk([&](func::CallOp op) {
     auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCalleeAttr());
     auto subFunc = dyn_cast<func::FuncOp>(callee);
@@ -354,59 +319,44 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
     // Apply array partition to the sub-function.
     applyAutoArrayPartition(subFunc);
 
-    auto subFuncType = subFunc.getFunctionType();
-    unsigned index = 0;
-    for (auto inputType : subFuncType.getInputs()) {
-      if (auto memrefType = inputType.dyn_cast<MemRefType>()) {
-        auto &partitions = partitionsMap[op.getOperand(index)];
-        auto layoutMap = memrefType.getLayout().getAffineMap();
+    for (auto [type, operand] :
+         llvm::zip(subFunc.getArgumentTypes(), op.getOperands()))
+      if (auto memrefType = type.dyn_cast<MemRefType>()) {
+        auto &layouts = layoutsMap[operand];
 
-        // If the current partitionsMap is empty, initialize it with no
-        // partition and factor of 1.
-        if (partitions.empty()) {
-          for (int64_t dim = 0; dim < memrefType.getRank(); ++dim)
-            partitions.push_back(PartitionInfo(PartitionKind::NONE, 1));
-        }
-
-        // Get the partition factor collected from sub-function.
-        SmallVector<int64_t, 8> factors;
-        getPartitionFactors(memrefType, &factors);
+        // If the current layoutsMap is empty, initialize it with no partition.
+        if (layouts.empty())
+          layouts = SmallVector<PartitionLayout, 4>(
+              memrefType.getRank(), PartitionLayout(PartitionKind::NONE, 1));
 
         // Traverse all dimension of the memref.
-        for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
-          auto factor = factors[dim];
+        if (auto attr = memrefType.getLayout().dyn_cast<PartitionLayoutAttr>())
+          for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
+            auto kind = attr.getKinds()[dim];
+            auto factor = attr.getFactors()[dim];
 
-          // If the factor from the sub-function is larger than the current
-          // factor, replace it.
-          if (factor > partitions[dim].second) {
-            if (layoutMap.getResult(dim).getKind() == AffineExprKind::FloorDiv)
-              partitions[dim] = PartitionInfo(PartitionKind::BLOCK, factor);
-            else
-              partitions[dim] = PartitionInfo(PartitionKind::CYCLIC, factor);
+            // If the factor from the sub-function is larger than the current
+            // factor, replace it.
+            if (factor > layouts[dim].second)
+              layouts[dim] = PartitionLayout(kind, factor);
           }
-        }
       }
-
-      ++index;
-    }
   });
 
   // Constuct and set new type to each partitioned MemRefType.
   auto builder = Builder(func);
-  for (auto pair : partitionsMap) {
-    auto memref = pair.first;
-    auto partitions = pair.second;
-
+  for (auto [memref, layouts] : layoutsMap) {
     SmallVector<hls::PartitionKind, 4> kinds;
     SmallVector<unsigned, 4> factors;
-    for (auto info : partitions) {
-      kinds.push_back(info.first);
-      factors.push_back(info.second);
+    for (auto [kind, factor] : layouts) {
+      kinds.push_back(kind);
+      factors.push_back(factor);
     }
 
-    if (llvm::any_of(factors, [](unsigned factor) { return factor != 1; }))
-      applyArrayPartition(memref, factors, kinds,
-                          /*updateFuncSignature=*/false);
+    if (llvm::any_of(kinds, [](PartitionKind kind) {
+          return kind != PartitionKind::NONE;
+        }))
+      applyArrayPartition(memref, factors, kinds, false);
   }
 
   // Align function type with entry block argument types.

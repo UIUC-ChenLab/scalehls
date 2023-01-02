@@ -1024,6 +1024,106 @@ void AffineSelectOp::setConditional(IntegerSet set, ValueRange operands) {
 }
 
 //===----------------------------------------------------------------------===//
+// PartitionLayoutAttr
+//===----------------------------------------------------------------------===//
+
+AffineMap PartitionLayoutAttr::getAffineMap() const {
+  auto b = Builder(getContext());
+  assert(getKinds().size() == getFactors().size() &&
+         "invalid partition layout");
+  auto rank = getKinds().size();
+
+  SmallVector<AffineExpr, 4> partitionIndices;
+  SmallVector<AffineExpr, 4> addressIndices;
+
+  // Compute the partition and address indices.
+  for (unsigned dim = 0; dim < rank; ++dim) {
+    auto kind = getKinds()[dim];
+    auto factor = getFactors()[dim];
+
+    if (kind == PartitionKind::NONE) {
+      partitionIndices.push_back(b.getAffineConstantExpr(0));
+      addressIndices.push_back(b.getAffineDimExpr(dim));
+
+    } else if (kind == PartitionKind::CYCLIC) {
+      partitionIndices.push_back(b.getAffineDimExpr(dim) % factor);
+      addressIndices.push_back(b.getAffineDimExpr(dim).floorDiv(factor));
+
+    } else if (kind == PartitionKind::BLOCK) {
+      // FIXME: For now, the representation of block partition factor is
+      // incorrect because the limitation of memref type.
+      partitionIndices.push_back(b.getAffineDimExpr(dim).floorDiv(factor));
+      addressIndices.push_back(b.getAffineDimExpr(dim) % factor);
+
+    } else {
+      partitionIndices.push_back(b.getAffineDimExpr(dim));
+      addressIndices.push_back(b.getAffineConstantExpr(0));
+    }
+  }
+
+  // Construct layout affine map.
+  partitionIndices.append(addressIndices);
+  return AffineMap::get(rank, 0, partitionIndices, getContext());
+}
+
+LogicalResult PartitionLayoutAttr::verifyLayout(
+    ArrayRef<int64_t> shape,
+    function_ref<InFlightDiagnostic()> emitError) const {
+  if (shape.size() != getKinds().size() || shape.size() != getFactors().size())
+    return emitError() << "number of memref dimensions must be equal to "
+                          "number of partition kinds and factors";
+
+  for (auto [size, kind, factor] : llvm::zip(shape, getKinds(), getFactors())) {
+    if ((kind == PartitionKind::CYCLIC && size % factor != 0) ||
+        (kind == PartitionKind::BLOCK && size % factor != 0))
+      return emitError() << "cyclic or block partition factor must be a "
+                            "divisor of memref dimension size";
+    if (kind == PartitionKind::NONE && factor != 1)
+      return emitError() << "none partition factor must be 1";
+    if (kind == PartitionKind::COMPLETE && factor != size)
+      return emitError() << "complete partition factor must be equal to "
+                            "memref dimension size";
+  }
+  return success();
+}
+
+LogicalResult
+PartitionLayoutAttr::verify(function_ref<InFlightDiagnostic()> emitError,
+                            ArrayRef<PartitionKind> kinds,
+                            ArrayRef<int64_t> factors) {
+  if (kinds.size() != factors.size())
+    return emitError() << "number of partition kinds and factors must be equal";
+  if (llvm::any_of(factors, [](int64_t factor) { return factor <= 0; }))
+    return emitError() << "partition factor must be positive";
+  return success();
+}
+
+SmallVector<int64_t>
+PartitionLayoutAttr::getActualFactors(ArrayRef<int64_t> shape) {
+  SmallVector<int64_t, 4> actualFactors;
+  for (auto [size, kind, factor] : llvm::zip(shape, getKinds(), getFactors())) {
+    if (kind == PartitionKind::BLOCK)
+      actualFactors.push_back((size + factor - 1) / factor);
+    else
+      actualFactors.push_back(factor);
+  }
+  return actualFactors;
+}
+
+PartitionLayoutAttr PartitionLayoutAttr::getWithActualFactors(
+    MLIRContext *context, ArrayRef<PartitionKind> kinds,
+    ArrayRef<int64_t> actualFactors, ArrayRef<int64_t> shape) {
+  SmallVector<int64_t, 4> factors;
+  for (auto [size, kind, factor] : llvm::zip(shape, kinds, actualFactors)) {
+    if (kind == PartitionKind::BLOCK)
+      factors.push_back((size + factor - 1) / factor);
+    else
+      factors.push_back(factor);
+  }
+  return get(context, kinds, actualFactors);
+}
+
+//===----------------------------------------------------------------------===//
 // HLS dialect utils
 //===----------------------------------------------------------------------===//
 
@@ -1156,159 +1256,6 @@ void hls::setRuntimeAttr(Operation *op) {
 }
 bool hls::hasRuntimeAttr(Operation *op) {
   return op->hasAttrOfType<UnitAttr>("runtime");
-}
-
-//===----------------------------------------------------------------------===//
-// MemoryKindAttr
-//===----------------------------------------------------------------------===//
-
-Attribute MemoryKindAttr::parse(AsmParser &p, Type type) {
-  StringRef kw;
-  if (p.parseLess() || p.parseKeyword(&kw) || p.parseGreater())
-    return Attribute();
-
-  auto kind = symbolizeMemoryKind(kw);
-  if (!kind.has_value())
-    return Attribute();
-
-  return MemoryKindAttr::get(p.getContext(), kind.value());
-}
-
-void MemoryKindAttr::print(AsmPrinter &p) const {
-  p << "<" << stringifyMemoryKind(getValue()) << ">";
-}
-
-//===----------------------------------------------------------------------===//
-// ResourceAttr
-//===----------------------------------------------------------------------===//
-
-Attribute ResourceAttr::parse(AsmParser &p, Type type) {
-  StringRef lutKw, dspKw, bramKw;
-  int64_t lut, dsp, bram;
-  if (p.parseLess() || p.parseKeyword(&lutKw) || p.parseEqual() ||
-      p.parseInteger(lut) || p.parseComma() || p.parseKeyword(&dspKw) ||
-      p.parseEqual() || p.parseInteger(dsp) || p.parseComma() ||
-      p.parseKeyword(&bramKw) || p.parseEqual() || p.parseInteger(bram) ||
-      p.parseGreater())
-    return Attribute();
-
-  if (lutKw != "lut" || dspKw != "dsp" || bramKw != "bram")
-    return Attribute();
-
-  return ResourceAttr::get(p.getContext(), lut, dsp, bram);
-}
-
-void ResourceAttr::print(AsmPrinter &p) const {
-  p << "<lut=" << getLut() << ", dsp=" << getDsp() << ", bram=" << getBram()
-    << ">";
-}
-
-//===----------------------------------------------------------------------===//
-// TimingAttr
-//===----------------------------------------------------------------------===//
-
-Attribute TimingAttr::parse(AsmParser &p, Type type) {
-  int64_t begin, end, latency, interval;
-  if (p.parseLess() || p.parseInteger(begin) || p.parseArrow() ||
-      p.parseInteger(end) || p.parseComma() || p.parseInteger(latency) ||
-      p.parseComma() || p.parseInteger(interval) || p.parseGreater())
-    return Attribute();
-
-  return TimingAttr::get(p.getContext(), begin, end, latency, interval);
-}
-
-void TimingAttr::print(AsmPrinter &p) const {
-  p << "<" << getBegin() << " -> " << getEnd() << ", " << getLatency() << ", "
-    << getInterval() << ">";
-}
-
-//===----------------------------------------------------------------------===//
-// LoopInfoAttr
-//===----------------------------------------------------------------------===//
-
-Attribute LoopInfoAttr::parse(AsmParser &p, Type type) {
-  StringRef flattenTripCountKw, iterLatencyKw, minIIKw;
-  int64_t flattenTripCount, iterLatency, minII;
-  if (p.parseLess() || p.parseKeyword(&flattenTripCountKw) || p.parseEqual() ||
-      p.parseInteger(flattenTripCount) || p.parseComma() ||
-      p.parseKeyword(&iterLatencyKw) || p.parseEqual() ||
-      p.parseInteger(iterLatency) || p.parseComma() ||
-      p.parseKeyword(&minIIKw) || p.parseEqual() || p.parseInteger(minII) ||
-      p.parseGreater())
-    return Attribute();
-
-  if (flattenTripCountKw != "flattenTripCount" ||
-      iterLatencyKw != "iterLatency" || minIIKw != "minII")
-    return Attribute();
-
-  return LoopInfoAttr::get(p.getContext(), flattenTripCount, iterLatency,
-                           minII);
-}
-
-void LoopInfoAttr::print(AsmPrinter &p) const {
-  p << "<flattenTripCount=" << getFlattenTripCount()
-    << ", iterLatency=" << getIterLatency() << ", minII=" << getMinII() << ">";
-}
-
-//===----------------------------------------------------------------------===//
-// LoopDirectiveAttr
-//===----------------------------------------------------------------------===//
-
-Attribute LoopDirectiveAttr::parse(AsmParser &p, Type type) {
-  StringRef pipelineKw, targetIIKw, dataflowKw, flattenKw;
-  StringRef pipeline, dataflow, flatten;
-  int64_t targetII;
-  if (p.parseLess() || p.parseKeyword(&pipelineKw) || p.parseEqual() ||
-      p.parseKeyword(&pipeline) || p.parseComma() ||
-      p.parseKeyword(&targetIIKw) || p.parseEqual() ||
-      p.parseInteger(targetII) || p.parseComma() ||
-      p.parseKeyword(&dataflowKw) || p.parseEqual() ||
-      p.parseKeyword(&dataflow) || p.parseComma() ||
-      p.parseKeyword(&flattenKw) || p.parseEqual() ||
-      p.parseKeyword(&flatten) || p.parseGreater())
-    return Attribute();
-
-  if (pipelineKw != "pipeline" || targetIIKw != "targetII" ||
-      dataflowKw != "dataflow" || flattenKw != "flatten")
-    return Attribute();
-
-  return LoopDirectiveAttr::get(p.getContext(), pipeline == "true", targetII,
-                                dataflow == "true", flatten == "true");
-}
-
-void LoopDirectiveAttr::print(AsmPrinter &p) const {
-  p << "<pipeline=" << getPipeline() << ", targetII=" << getTargetII()
-    << ", dataflow=" << getDataflow() << ", flatten=" << getFlatten() << ">";
-}
-
-//===----------------------------------------------------------------------===//
-// FuncDirectiveAttr
-//===----------------------------------------------------------------------===//
-
-Attribute FuncDirectiveAttr::parse(AsmParser &p, Type type) {
-  StringRef pipelineKw, targetIntervalKw, dataflowKw;
-  StringRef pipeline, dataflow;
-  int64_t targetInterval;
-  if (p.parseLess() || p.parseKeyword(&pipelineKw) || p.parseEqual() ||
-      p.parseKeyword(&pipeline) || p.parseComma() ||
-      p.parseKeyword(&targetIntervalKw) || p.parseEqual() ||
-      p.parseInteger(targetInterval) || p.parseComma() ||
-      p.parseKeyword(&dataflowKw) || p.parseEqual() ||
-      p.parseKeyword(&dataflow) || p.parseGreater())
-    return Attribute();
-
-  if (pipelineKw != "pipeline" || targetIntervalKw != "targetInterval" ||
-      dataflowKw != "dataflow")
-    return Attribute();
-
-  return FuncDirectiveAttr::get(p.getContext(), pipeline == "true",
-                                targetInterval, dataflow == "true");
-}
-
-void FuncDirectiveAttr::print(AsmPrinter &p) const {
-  p << "<pipeline=" << getPipeline()
-    << ", targetInterval=" << getTargetInterval()
-    << ", dataflow=" << getDataflow() << ">";
 }
 
 //===----------------------------------------------------------------------===//

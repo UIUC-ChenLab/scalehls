@@ -821,28 +821,16 @@ bool scalehls::isFullyPartitioned(MemRefType memrefType) {
 // them in "factors". Meanwhile, the overall partition number is calculated and
 // returned as well.
 int64_t scalehls::getPartitionFactors(MemRefType memrefType,
-                                      SmallVector<int64_t, 8> *factors) {
-  auto shape = memrefType.getShape();
-  auto layoutMap = memrefType.getLayout().getAffineMap();
+                                      SmallVectorImpl<int64_t> *factors) {
   int64_t accumFactor = 1;
-
-  for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
-    int64_t factor = 1;
-    auto expr = layoutMap.getResult(dim);
-
-    if (auto binaryExpr = expr.dyn_cast<AffineBinaryOpExpr>())
-      if (auto rhsExpr = binaryExpr.getRHS().dyn_cast<AffineConstantExpr>()) {
-        if (expr.getKind() == AffineExprKind::Mod)
-          factor = rhsExpr.getValue();
-        else if (expr.getKind() == AffineExprKind::FloorDiv)
-          factor = (shape[dim] + rhsExpr.getValue() - 1) / rhsExpr.getValue();
-      }
-
-    accumFactor *= factor;
-    if (factors != nullptr)
-      factors->push_back(factor);
-  }
-
+  if (auto attr = memrefType.getLayout().dyn_cast<PartitionLayoutAttr>())
+    for (auto factor : attr.getActualFactors(memrefType.getShape())) {
+      accumFactor *= factor;
+      if (factors)
+        factors->push_back(factor);
+    }
+  else if (factors)
+    factors->assign(memrefType.getRank(), 1);
   return accumFactor;
 }
 

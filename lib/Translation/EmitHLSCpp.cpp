@@ -1695,36 +1695,33 @@ void ModuleEmitter::emitLoopDirectives(Operation *loop) {
 void ModuleEmitter::emitArrayDirectives(Value memref) {
   bool emitPragmaFlag = false;
   auto type = memref.getType().cast<MemRefType>();
-  auto layoutMap = type.getLayout().getAffineMap();
 
   // Emit array_partition pragma(s).
-  SmallVector<int64_t, 8> factors;
-  getPartitionFactors(type, &factors);
+  if (auto attr = type.getLayout().dyn_cast<PartitionLayoutAttr>()) {
+    unsigned dim = 0;
+    for (auto [kind, factor] :
+         llvm::zip(attr.getKinds(), attr.getActualFactors(type.getShape()))) {
+      if (factor != 1) {
+        emitPragmaFlag = true;
 
-  for (int64_t dim = 0; dim < type.getRank(); ++dim) {
-    if (factors[dim] != 1) {
-      emitPragmaFlag = true;
+        // FIXME: How to handle external memories?
+        indent() << "#pragma HLS array_partition";
+        os << " variable=";
+        emitValue(memref);
 
-      // FIXME: How to handle external memories?
-      indent() << "#pragma HLS array_partition";
-      os << " variable=";
-      emitValue(memref);
+        // Emit partition type.
+        os << " " << stringifyPartitionKind(kind);
+        os << " factor=" << factor;
 
-      // Emit partition type.
-      if (layoutMap.getResult(dim).getKind() == AffineExprKind::FloorDiv)
-        os << " block";
-      else
-        os << " cyclic";
-
-      os << " factor=" << factors[dim];
-
-      // Vitis HLS has a wierd feature/bug that will automatically collapse the
-      // first dimension if its size is equal to one.
-      auto directiveDim = dim + 1;
-      if (emitVitisDirectives.getValue())
-        if (type.getShape().front() == 1)
-          directiveDim = dim;
-      os << " dim=" << directiveDim << "\n";
+        // Vitis HLS has a wierd feature/bug that will automatically collapse
+        // the first dimension if its size is equal to one.
+        auto directiveDim = dim + 1;
+        if (emitVitisDirectives.getValue())
+          if (type.getShape().front() == 1)
+            directiveDim = dim;
+        os << " dim=" << directiveDim << "\n";
+      }
+      ++dim;
     }
   }
 

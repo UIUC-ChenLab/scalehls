@@ -9,7 +9,8 @@
 
 include "scalehls/Dialect/HLS/HLSAttributes.td"
 
-class HLSType<string name> : TypeDef<HLSDialect, name>;
+class HLSType<string name, list<Trait> traits = []> :
+    TypeDef<HLSDialect, name, traits>;
 
 def StreamType : HLSType<"Stream"> {
   let summary = "An HLS stream type";

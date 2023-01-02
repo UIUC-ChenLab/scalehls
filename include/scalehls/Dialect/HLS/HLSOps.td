@@ -7,8 +7,8 @@
 #ifndef SCALEHLS_DIALECT_HLS_HLSOPS_TD
 #define SCALEHLS_DIALECT_HLS_HLSOPS_TD
 
-include "scalehls/Dialect/HLS/HLSTypes.td"
 include "scalehls/Dialect/HLS/HLSInterfaces.td"
+include "scalehls/Dialect/HLS/HLSTypes.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/BuiltinAttributeInterfaces.td"

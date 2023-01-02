@@ -147,7 +147,7 @@ Optional<std::pair<int64_t, int64_t>> getBoundOfAffineMap(AffineMap map,
 /// them in "factors". Meanwhile, the overall partition number is calculated and
 /// returned as well.
 int64_t getPartitionFactors(MemRefType memrefType,
-                            SmallVector<int64_t, 8> *factors = nullptr);
+                            SmallVectorImpl<int64_t> *factors = nullptr);
 
 bool isFullyPartitioned(MemRefType memrefType);
 

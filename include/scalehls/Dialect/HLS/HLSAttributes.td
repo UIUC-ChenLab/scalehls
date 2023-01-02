@@ -9,12 +9,14 @@
 
 include "scalehls/Dialect/HLS/HLSBase.td"
 include "mlir/IR/AttrTypeBase.td"
+include "mlir/IR/BuiltinAttributeInterfaces.td"
 include "mlir/IR/EnumAttr.td"
 
-class HLSAttr<string name> : AttrDef<HLSDialect, name>;
+class HLSAttr<string name, list<Trait> traits = []> :
+    AttrDef<HLSDialect, name, traits>;
 
 // Enum parameter for different AXI kinds.
-def AxiKind: I32EnumAttr<"AxiKind", "Kind of AXI Port", [
+def AxiKind: I32EnumAttr<"AxiKind", "Kind of AXI port", [
     I32EnumAttrCase<"MM", 0, "mm">,
     I32EnumAttrCase<"LITE", 1, "lite">,
     I32EnumAttrCase<"STREAM", 2, "stream">
@@ -25,7 +27,7 @@ def AxiKind: I32EnumAttr<"AxiKind", "Kind of AXI Port", [
 def AxiKindParam: EnumParameter<AxiKind>;
 
 // Enum parameter for different array partition kinds.
-def PartitionKind: I32EnumAttr<"PartitionKind", "Kind of Array Partition", [
+def PartitionKind: I32EnumAttr<"PartitionKind", "Kind of array partition", [
     I32EnumAttrCase<"NONE", 0, "none">,
     I32EnumAttrCase<"CYCLIC", 1, "cyclic">,
     I32EnumAttrCase<"BLOCK", 2, "block">,
@@ -55,75 +57,89 @@ def MemoryKind: I32EnumAttr<"MemoryKind", "Kind of memory", [
   let cppNamespace = "mlir::scalehls::hls";
   let genSpecializedAttr = 0;
 }
-def MemoryKindAttr: EnumAttr<HLSDialect, MemoryKind, "mem"> {
-  let assemblyFormat = ?;
-  let hasCustomAssemblyFormat = 1;
+def MemoryKindAttr: EnumAttr<HLSDialect, MemoryKind> {
+  let mnemonic = "mem";
+  let assemblyFormat = "`<` $value `>`";
+}
+
+def PartitionLayoutAttr : HLSAttr<"PartitionLayout",
+    [DeclareAttrInterfaceMethods<MemRefLayoutAttrInterface,
+                                 ["verifyLayout"]>]> {
+  let summary = "Layout of array partition";
+  let parameters = (ins
+    ArrayRefParameter<"hls::PartitionKind">:$kinds,
+    ArrayRefParameter<"int64_t">:$factors
+  );
+
+  let genVerifyDecl = 1;
+  let mnemonic = "layout";
+  let assemblyFormat = "`<` `[` $kinds `]` `,` `[` $factors `]` `>`";
+
+  let extraClassDeclaration = [{
+    SmallVector<int64_t> getActualFactors(ArrayRef<int64_t> shape);
+    static PartitionLayoutAttr getWithActualFactors(MLIRContext *context,
+        ArrayRef<PartitionKind> kinds, ArrayRef<int64_t> actualFactors,
+        ArrayRef<int64_t> shape);
+  }];
 }
 
 // HLS attributes.
 def Resource : HLSAttr<"Resource"> {
-  let summary = "Resource utilization information";
-  let description = [{
-    This attribute includes the utilization of several important on-chip
-    resources, such as LUT, DSP, BRAM, and URAM.
-  }];
-
-  let hasCustomAssemblyFormat = 1;
-  let mnemonic = "res";
+  let summary = "Resource utilization attributes";
   let parameters = (ins "int64_t":$lut, "int64_t":$dsp, "int64_t":$bram);
+
+  let mnemonic = "res";
+  let assemblyFormat = [{
+    `<` `lut` `=` $lut `,` `dsp` `=` $dsp `,` `bram` `=` $bram `>`
+  }];
 }
 
 def Timing : HLSAttr<"Timing"> {
-  let summary = "Timing information";
-  let description = [{
-    This attribute indicates the timing of operations, including scheduling
-    begin and end cycles, latency, and interval.
-  }];
-
-  let hasCustomAssemblyFormat = 1;
-  let mnemonic = "time";
+  let summary = "Timing attributes";
   let parameters = (ins "int64_t":$begin, "int64_t":$end, "int64_t":$latency,
                         "int64_t":$interval);
+
+  let mnemonic = "time";
+  let assemblyFormat = [{
+    `<` $begin `->` $end `,` `latency` `=` $latency `,` `interval` `=`
+    $interval `>`
+  }];
 }
 
 def LoopInfo : HLSAttr<"LoopInfo"> {
   let summary = "Loop information";
-  let description = [{
-    This attribute includes loop information used by estimator and optimizer,
-    including flattened trip count, iteration latency, and minimum initial
-    interval (II).
-  }];
-
-  let hasCustomAssemblyFormat = 1;
-  let mnemonic = "info";
   let parameters = (ins "int64_t":$flattenTripCount, "int64_t":$iterLatency,
                         "int64_t":$minII);
+
+  let mnemonic = "info";
+  let assemblyFormat = [{
+    `<` `flatten_trip_count` `=` $flattenTripCount `,` `iter_latency` `=`
+    $iterLatency `,` `min_ii` `=` $minII `>`
+  }];
 }
 
 def LoopDirective : HLSAttr<"LoopDirective"> {
   let summary = "Aggregation of loop directives";
-  let description = [{
-    This attribute includes all loop directives, including loop pipelining,
-    target initial interval (II), dataflow, and flattening.
-  }];
-
-  let hasCustomAssemblyFormat = 1;
-  let mnemonic = "loop";
   let parameters = (ins "bool":$pipeline, "int64_t":$targetII, "bool":$dataflow,
-                        "bool":$flatten);
+                    "bool":$flatten);
+  
+  let mnemonic = "loop";
+  let assemblyFormat = [{
+    `<` `pipeline` `=` $pipeline `,` `target_ii` `=` $targetII `,` `dataflow`
+    `=` $dataflow `,` `flatten` `=` $flatten `>`
+  }];
 }
 
 def FuncDirective : HLSAttr<"FuncDirective"> {
   let summary = "Aggregation of function directives";
-  let description = [{
-    This attribute includes all function directives, including function
-    pipelining, target interval, and dataflow.
-  }];
-
-  let hasCustomAssemblyFormat = 1;
-  let mnemonic = "func";
   let parameters = (ins "bool":$pipeline, "int64_t":$targetInterval,
                         "bool":$dataflow);
+
+  let mnemonic = "func";
+  let assemblyFormat = [{
+    `<` `pipeline` `=` $pipeline `,` `target_interval` `=` $targetInterval `,`
+    `dataflow` `=` $dataflow `>`
+  }];
 }
 
 #endif // SCALEHLS_DIALECT_HLS_HLSATTRIBUTES_TD

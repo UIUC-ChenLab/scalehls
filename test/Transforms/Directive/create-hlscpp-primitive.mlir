@@ -39,13 +39,13 @@ module {
                   %11 = arith.muli %8, %9 : vector<2xi8>
                   %12 = arith.addi %10, %11 : vector<2xi8>
                   vector.transfer_write %12, %arg2[%arg3, %6, %arg5, %arg6] : vector<2xi8>, memref<1x32x32x64xi8, #map2>
-                } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>}
-              } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>}
-            } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>}
-          } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>}
-        } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>}
-      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>}
-    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>}
+                } {loop_directive = #hls.loop<pipeline = true, target_ii = 1, dataflow = false, flatten = false>}
+              } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>}
+            } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>}
+          } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>}
+        } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>}
+      } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>}
+    } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>}
     return
   }
 }
