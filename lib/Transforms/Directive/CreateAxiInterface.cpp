@@ -74,10 +74,8 @@ struct CreateAxiInterface : public CreateAxiInterfaceBase<CreateAxiInterface> {
         auto axiName = "axi" + std::to_string(axiIdx++);
         auto axiKind =
             value.getType().isa<ShapedType>() ? AxiKind::MM : AxiKind::LITE;
-        auto axiType = AxiType::get(context, value.getType(),
-                                    AxiKindAttr::get(context, axiKind));
-        auto bundleType =
-            BundleType::get(context, AxiKindAttr::get(context, axiKind));
+        auto axiType = AxiType::get(context, value.getType(), axiKind);
+        auto bundleType = BundleType::get(context, axiKind);
 
         builder.setInsertionPointToEnd(mainBlock);
         ports.push_back(builder.create<AxiPackOp>(loc, axiType, value));

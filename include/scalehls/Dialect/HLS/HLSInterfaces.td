@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_DIALECT_HLS_INTERFACES_TD
-#define SCALEHLS_DIALECT_HLS_INTERFACES_TD
+#ifndef SCALEHLS_DIALECT_HLS_HLSINTERFACES_TD
+#define SCALEHLS_DIALECT_HLS_HLSINTERFACES_TD
 
 include "mlir/IR/OpBase.td"
 
@@ -56,4 +56,4 @@ def StageLikeInterface : OpInterface<"StageLikeInterface"> {
   ];
 }
 
-#endif // SCALEHLS_DIALECT_HLS_INTERFACES_TD
+#endif // SCALEHLS_DIALECT_HLS_HLSINTERFACES_TD

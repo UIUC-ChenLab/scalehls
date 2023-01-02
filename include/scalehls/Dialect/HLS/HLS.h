@@ -28,34 +28,22 @@ namespace hls {
 
 #include "scalehls/Dialect/HLS/HLSInterfaces.h.inc"
 
-enum class PartitionKind { CYCLIC, BLOCK, NONE };
 enum class OperandKind { INPUT, OUTPUT, PARAM };
-enum class MemoryKind {
-  LUTRAM_1P = 1,
-  LUTRAM_2P,
-  LUTRAM_S2P,
-  BRAM_1P,
-  BRAM_2P,
-  BRAM_S2P,
-  BRAM_T2P,
-  URAM_1P,
-  URAM_2P,
-  URAM_S2P,
-  URAM_T2P,
-  DRAM
-};
-
-bool isRam1P(MemoryKind kind);
-bool isRam2P(MemoryKind kind);
-bool isRamS2P(MemoryKind kind);
-bool isRamT2P(MemoryKind kind);
-bool isDram(MemoryKind kind);
 
 namespace StreamEffects {
 struct Instantiate : public MemoryEffects::Effect::Base<Instantiate> {};
 struct Push : public MemoryEffects::Effect::Base<Push> {};
 struct Pop : public MemoryEffects::Effect::Base<Pop> {};
 } // namespace StreamEffects
+
+/// Memory kind attribute utils.
+MemoryKind getMemoryKind(MemRefType type);
+bool isRam1P(MemRefType type);
+bool isRam2P(MemRefType type);
+bool isRamS2P(MemRefType type);
+bool isRamT2P(MemRefType type);
+bool isDram(MemRefType type);
+bool isUnknown(MemRefType type);
 
 /// Timing attribute utils.
 TimingAttr getTiming(Operation *op);

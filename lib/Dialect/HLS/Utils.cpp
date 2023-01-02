@@ -309,7 +309,7 @@ unsigned scalehls::getBufferDepth(Value memref) {
 
 bool scalehls::isExternalBuffer(Value memref) {
   if (auto type = memref.getType().dyn_cast<MemRefType>())
-    return isDram(MemoryKind(type.getMemorySpaceAsInt()));
+    return isDram(type);
   return false;
 }
 

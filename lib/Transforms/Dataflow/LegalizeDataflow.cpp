@@ -186,9 +186,10 @@ struct AllocateInternalBuffer : public OpRewritePattern<BufferOp> {
                                 PatternRewriter &rewriter) const override {
     if (isExternalBuffer(buffer) && llvm::hasSingleElement(buffer->getUsers()))
       if (auto node = dyn_cast<NodeOp>(*buffer->user_begin())) {
+        auto bufferType = buffer.getType();
         auto newType = MemRefType::get(
-            buffer.getType().getShape(), buffer.getType().getElementType(),
-            AffineMap(), (unsigned)MemoryKind::BRAM_T2P);
+            bufferType.getShape(), bufferType.getElementType(), AffineMap(),
+            MemoryKindAttr::get(buffer.getContext(), MemoryKind::BRAM_T2P));
         buffer.getMemref().setType(newType);
         updateSignatureRecursively<ScheduleOp>(node);
         return success();

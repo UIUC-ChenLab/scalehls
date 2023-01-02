@@ -4,7 +4,7 @@ add_mlir_dialect_library(MLIRHLS
   Utils.cpp
 
   DEPENDS
-  MLIRHLSIncGen
+  MLIRHLSOpsIncGen
   MLIRHLSEnumsIncGen
   MLIRHLSAttributesIncGen
   MLIRHLSInterfacesIncGen

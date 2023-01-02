@@ -4,11 +4,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_DIALECT_HLS_HLS_TD
-#define SCALEHLS_DIALECT_HLS_HLS_TD
+#ifndef SCALEHLS_DIALECT_HLS_HLSBASE_TD
+#define SCALEHLS_DIALECT_HLS_HLSBASE_TD
 
-include "mlir/IR/AttrTypeBase.td"
-include "mlir/IR/EnumAttr.td"
 include "mlir/IR/OpBase.td"
 
 def HLSDialect : Dialect {
@@ -24,15 +22,4 @@ def HLSDialect : Dialect {
   let cppNamespace = "::mlir::scalehls::hls";
 }
 
-class HLSType<string name> : TypeDef<HLSDialect, name>;
-
-class HLSAttr<string name> : AttrDef<HLSDialect, name>;
-
-class HLSOp<string mnemonic, list<Trait> traits = []> :
-    Op<HLSDialect, mnemonic, traits>;
-
-include "scalehls/Dialect/HLS/Attributes.td"
-include "scalehls/Dialect/HLS/Types.td"
-include "scalehls/Dialect/HLS/Ops.td"
-
-#endif // SCALEHLS_DIALECT_HLS_HLS_TD
+#endif // SCALEHLS_DIALECT_HLS_HLSBASE_TD

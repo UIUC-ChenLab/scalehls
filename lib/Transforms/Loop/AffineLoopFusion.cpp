@@ -947,14 +947,15 @@ static Value createPrivateMemRef(AffineForOp forOp, Operation *srcStoreOpInst,
   // by 'srcStoreOpInst'.
   uint64_t bufSize =
       getMemRefEltSizeInBytes(oldMemRefType) * numElements.value();
-  unsigned newMemSpace;
-  if (bufSize <= localBufSizeThreshold && fastMemorySpace.has_value()) {
-    newMemSpace = fastMemorySpace.value();
-  } else {
-    newMemSpace = oldMemRefType.getMemorySpaceAsInt();
-  }
+  // unsigned newMemSpace;
+  // if (bufSize <= localBufSizeThreshold && fastMemorySpace.has_value()) {
+  //   newMemSpace = fastMemorySpace.value();
+  // } else {
+  //   newMemSpace = oldMemRefType.getMemorySpaceAsInt();
+  // }
+  auto newMemSpace = oldMemRefType.getMemorySpace();
   auto newMemRefType = MemRefType::get(newShape, oldMemRefType.getElementType(),
-                                       {}, newMemSpace);
+                                       AffineMap(), newMemSpace);
 
   // Create new private memref for fused loop 'forOp'. 'newShape' is always
   // a constant shape.

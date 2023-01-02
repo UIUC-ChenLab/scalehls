@@ -22,145 +22,145 @@
 #set3 = affine_set<(d0)[s0] : (-d0 - s0 * 16 + 63 == 0)>
 #set4 = affine_set<(d0, d1, d2, d3) : (-d2 - d3 * 16 + 63 == 0, -d0 + 2 == 0, -d1 + 2 == 0)>
 module attributes {torch.debug_module_name = "ResNet"} {
-  func.func @forward_node1(%arg0: memref<10xi8, 7>, %arg1: memref<1000xi8, 12>, %arg2: index) attributes {inline} {
+  func.func @forward_node1(%arg0: memref<10xi8, #hls.mem<bram_t2p>>, %arg1: memref<1000xi8, #hls.mem<dram>>, %arg2: index) attributes {inline} {
     affine.for %arg3 = 0 to 10 {
-      %0 = affine.load %arg0[%arg3] : memref<10xi8, 7>
-      affine.store %0, %arg1[%arg3 + symbol(%arg2) * 10] : memref<1000xi8, 12>
-    } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+      %0 = affine.load %arg0[%arg3] : memref<10xi8, #hls.mem<bram_t2p>>
+      affine.store %0, %arg1[%arg3 + symbol(%arg2) * 10] : memref<1000xi8, #hls.mem<dram>>
+    } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
     return
   }
-  func.func @forward_node2(%arg0: memref<64xi8, 7>, %arg1: memref<10x16xi8, 7>, %arg2: memref<10xi8, 7>, %arg3: memref<10xi8, 7>, %arg4: index) attributes {inline} {
+  func.func @forward_node2(%arg0: memref<64xi8, #hls.mem<bram_t2p>>, %arg1: memref<10x16xi8, #hls.mem<bram_t2p>>, %arg2: memref<10xi8, #hls.mem<bram_t2p>>, %arg3: memref<10xi8, #hls.mem<bram_t2p>>, %arg4: index) attributes {inline} {
     %c-24_i8 = arith.constant -24 : i8
     affine.for %arg5 = 0 to 16 {
       affine.for %arg6 = 0 to 10 {
-        %0 = affine.load %arg2[%arg6] : memref<10xi8, 7>
-        %1 = affine.load %arg3[%arg6] : memref<10xi8, 7>
+        %0 = affine.load %arg2[%arg6] : memref<10xi8, #hls.mem<bram_t2p>>
+        %1 = affine.load %arg3[%arg6] : memref<10xi8, #hls.mem<bram_t2p>>
         %2 = hls.affine.select #set(%arg5) %0, %1 : i8
         %3 = hls.affine.select #set1(%arg5, %arg4) %c-24_i8, %2 : i8
-        %4 = affine.load %arg0[%arg5 + symbol(%arg4) * 16] : memref<64xi8, 7>
-        %5 = affine.load %arg1[%arg6, %arg5] : memref<10x16xi8, 7>
+        %4 = affine.load %arg0[%arg5 + symbol(%arg4) * 16] : memref<64xi8, #hls.mem<bram_t2p>>
+        %5 = affine.load %arg1[%arg6, %arg5] : memref<10x16xi8, #hls.mem<bram_t2p>>
         %6 = "hls.prim.mul"(%4, %5) : (i8, i8) -> i16
         %7 = "hls.prim.cast"(%3) : (i8) -> i32
         %8 = "hls.prim.cast"(%6) : (i16) -> i32
         %9 = arith.addi %7, %8 : i32
         %10 = "hls.prim.cast"(%9) : (i32) -> i8
-        affine.store %10, %arg3[%arg6] : memref<10xi8, 7>
-      } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel, point}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, point}
+        affine.store %10, %arg3[%arg6] : memref<10xi8, #hls.mem<bram_t2p>>
+      } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel, point}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, point}
     return
   }
-  func.func @forward_node3(%arg0: memref<1000x64xi8, 12>, %arg1: memref<10x16xi8, 7>, %arg2: index, %arg3: index) attributes {inline} {
+  func.func @forward_node3(%arg0: memref<1000x64xi8, #hls.mem<dram>>, %arg1: memref<10x16xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index) attributes {inline} {
     affine.for %arg4 = 0 to 10 {
       affine.for %arg5 = 0 to 16 {
-        %0 = affine.load %arg0[%arg4 + symbol(%arg2) * 10, %arg5 + symbol(%arg3) * 16] : memref<1000x64xi8, 12>
-        affine.store %0, %arg1[%arg4, %arg5] : memref<10x16xi8, 7>
-      } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+        %0 = affine.load %arg0[%arg4 + symbol(%arg2) * 10, %arg5 + symbol(%arg3) * 16] : memref<1000x64xi8, #hls.mem<dram>>
+        affine.store %0, %arg1[%arg4, %arg5] : memref<10x16xi8, #hls.mem<bram_t2p>>
+      } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     return
   }
-  func.func @forward_node4(%arg0: memref<1000xi8, 12>, %arg1: memref<10xi8, 7>, %arg2: index) attributes {inline} {
+  func.func @forward_node4(%arg0: memref<1000xi8, #hls.mem<dram>>, %arg1: memref<10xi8, #hls.mem<bram_t2p>>, %arg2: index) attributes {inline} {
     affine.for %arg3 = 0 to 10 {
-      %0 = affine.load %arg0[%arg3 + symbol(%arg2) * 10] : memref<1000xi8, 12>
-      affine.store %0, %arg1[%arg3] : memref<10xi8, 7>
-    } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+      %0 = affine.load %arg0[%arg3 + symbol(%arg2) * 10] : memref<1000xi8, #hls.mem<dram>>
+      affine.store %0, %arg1[%arg3] : memref<10xi8, #hls.mem<bram_t2p>>
+    } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
     return
   }
-  func.func @forward_node0(%arg0: memref<64xi8, 7>, %arg1: memref<1000x64xi8, 12>, %arg2: memref<1000xi8, 12>, %arg3: memref<1000xi8, 12>) {
+  func.func @forward_node0(%arg0: memref<64xi8, #hls.mem<bram_t2p>>, %arg1: memref<1000x64xi8, #hls.mem<dram>>, %arg2: memref<1000xi8, #hls.mem<dram>>, %arg3: memref<1000xi8, #hls.mem<dram>>) {
     affine.for %arg4 = 0 to 400 {
       %0 = affine.apply #map(%arg4)
       %1 = affine.apply #map1(%arg4)
-      %2 = hls.dataflow.buffer {depth = 1 : i32} : memref<10x16xi8, 7>
-      %3 = hls.dataflow.buffer {depth = 1 : i32} : memref<10xi8, 7>
-      func.call @forward_node4(%arg2, %3, %0) : (memref<1000xi8, 12>, memref<10xi8, 7>, index) -> ()
-      func.call @forward_node3(%arg1, %2, %0, %1) : (memref<1000x64xi8, 12>, memref<10x16xi8, 7>, index, index) -> ()
-      %4 = hls.dataflow.buffer {depth = 1 : i32} : memref<10xi8, 7>
-      func.call @forward_node2(%arg0, %2, %3, %4, %1) : (memref<64xi8, 7>, memref<10x16xi8, 7>, memref<10xi8, 7>, memref<10xi8, 7>, index) -> ()
-      func.call @forward_node1(%4, %arg3, %0) : (memref<10xi8, 7>, memref<1000xi8, 12>, index) -> ()
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=true, flatten=false>}
+      %2 = hls.dataflow.buffer {depth = 1 : i32} : memref<10x16xi8, #hls.mem<bram_t2p>>
+      %3 = hls.dataflow.buffer {depth = 1 : i32} : memref<10xi8, #hls.mem<bram_t2p>>
+      func.call @forward_node4(%arg2, %3, %0) : (memref<1000xi8, #hls.mem<dram>>, memref<10xi8, #hls.mem<bram_t2p>>, index) -> ()
+      func.call @forward_node3(%arg1, %2, %0, %1) : (memref<1000x64xi8, #hls.mem<dram>>, memref<10x16xi8, #hls.mem<bram_t2p>>, index, index) -> ()
+      %4 = hls.dataflow.buffer {depth = 1 : i32} : memref<10xi8, #hls.mem<bram_t2p>>
+      func.call @forward_node2(%arg0, %2, %3, %4, %1) : (memref<64xi8, #hls.mem<bram_t2p>>, memref<10x16xi8, #hls.mem<bram_t2p>>, memref<10xi8, #hls.mem<bram_t2p>>, memref<10xi8, #hls.mem<bram_t2p>>, index) -> ()
+      func.call @forward_node1(%4, %arg3, %0) : (memref<10xi8, #hls.mem<bram_t2p>>, memref<1000xi8, #hls.mem<dram>>, index) -> ()
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=true, flatten=false>}
     return
   }
-  func.func @forward_node6(%arg0: memref<16x14x14xi8, 7>, %arg1: memref<64xi8, 7>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+  func.func @forward_node6(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<64xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
     %c-24_i8 = arith.constant -24 : i8
     affine.for %arg5 = 0 to 14 {
       affine.for %arg6 = 0 to 14 {
         affine.for %arg7 = 0 to 16 {
-          %0 = affine.load %arg0[%arg7, %arg5, %arg6] : memref<16x14x14xi8, 7>
-          %1 = affine.load %arg1[%arg7 + symbol(%arg2) * 16] : memref<64xi8, 7>
+          %0 = affine.load %arg0[%arg7, %arg5, %arg6] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+          %1 = affine.load %arg1[%arg7 + symbol(%arg2) * 16] : memref<64xi8, #hls.mem<bram_t2p>>
           %2 = "hls.prim.cast"(%1) : (i8) -> i32
           %3 = "hls.prim.cast"(%0) : (i8) -> i32
           %4 = arith.addi %2, %3 : i32
           %5 = "hls.prim.cast"(%4) : (i32) -> i8
           %6 = arith.divui %5, %c-24_i8 : i8
           %7 = hls.affine.select #set2(%arg5, %arg6, %arg3, %arg4) %6, %5 : i8
-          affine.store %7, %arg1[%arg7 + symbol(%arg2) * 16] : memref<64xi8, 7>
-        } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel, point}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, point}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, point}
+          affine.store %7, %arg1[%arg7 + symbol(%arg2) * 16] : memref<64xi8, #hls.mem<bram_t2p>>
+        } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel, point}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, point}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, point}
     return
   }
-  func.func @forward_node7(%arg0: memref<64x28x28xi8, 12>, %arg1: memref<16x14x14xi8, 7>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+  func.func @forward_node7(%arg0: memref<64x28x28xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
     affine.for %arg5 = 0 to 16 {
       affine.for %arg6 = 0 to 14 {
         affine.for %arg7 = 0 to 14 {
-          %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, 12>
-          affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, 7>
-        } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+          %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.mem<dram>>
+          affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+        } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     return
   }
-  func.func @forward_node5(%arg0: !hls.stream<i1, 1>, %arg1: memref<64x28x28xi8, 12>, %arg2: memref<64xi8, 7>) {
+  func.func @forward_node5(%arg0: !hls.stream<i1, 1>, %arg1: memref<64x28x28xi8, #hls.mem<dram>>, %arg2: memref<64xi8, #hls.mem<bram_t2p>>) {
     hls.dataflow.stream_read %arg0 : (!hls.stream<i1, 1>) -> ()
     affine.for %arg3 = 0 to 16 {
       %0 = affine.apply #map2(%arg3)
       %1 = affine.apply #map3(%arg3)
       %2 = affine.apply #map4(%arg3)
-      %3 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, 7>
-      func.call @forward_node7(%arg1, %3, %0, %2, %1) : (memref<64x28x28xi8, 12>, memref<16x14x14xi8, 7>, index, index, index) -> ()
-      func.call @forward_node6(%3, %arg2, %0, %2, %1) : (memref<16x14x14xi8, 7>, memref<64xi8, 7>, index, index, index) -> ()
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=true, flatten=false>}
+      %3 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+      func.call @forward_node7(%arg1, %3, %0, %2, %1) : (memref<64x28x28xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
+      func.call @forward_node6(%3, %arg2, %0, %2, %1) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<64xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=true, flatten=false>}
     return
   }
-  func.func @forward_node9(%arg0: memref<16x14x14xi8, 7>, %arg1: memref<64x28x28xi8, 12>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+  func.func @forward_node9(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<64x28x28xi8, #hls.mem<dram>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
     affine.for %arg5 = 0 to 16 {
       affine.for %arg6 = 0 to 14 {
         affine.for %arg7 = 0 to 14 {
-          %0 = affine.load %arg0[%arg5, %arg6, %arg7] : memref<16x14x14xi8, 7>
-          affine.store %0, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, 12>
-        } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+          %0 = affine.load %arg0[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+          affine.store %0, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.mem<dram>>
+        } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     return
   }
-  func.func @forward_node10(%arg0: memref<16x14x14xi8, 7>, %arg1: memref<64x28x28xi8, 12>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+  func.func @forward_node10(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<64x28x28xi8, #hls.mem<dram>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
     affine.for %arg5 = 0 to 16 {
       affine.for %arg6 = 0 to 14 {
         affine.for %arg7 = 0 to 14 {
-          %0 = affine.load %arg0[%arg5, %arg6, %arg7] : memref<16x14x14xi8, 7>
-          affine.store %0, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, 12>
-        } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+          %0 = affine.load %arg0[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+          affine.store %0, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.mem<dram>>
+        } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     return
   }
-  func.func @forward_node11(%arg0: memref<16x14x14xi8, 7>, %arg1: memref<16x14x14xi8, 7>, %arg2: memref<16x16xi8, 7>, %arg3: memref<16x14x14xi8, 7>, %arg4: memref<16x14x14xi8, 7>, %arg5: memref<16x14x14xi8, 7>, %arg6: index) attributes {inline} {
+  func.func @forward_node11(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg3: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg4: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg5: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg6: index) attributes {inline} {
     %c-24_i8 = arith.constant -24 : i8
     affine.for %arg7 = 0 to 16 {
       affine.for %arg8 = 0 to 16 {
         affine.for %arg9 = 0 to 14 {
           affine.for %arg10 = 0 to 14 {
-            %0 = affine.load %arg1[%arg7, %arg9, %arg10] : memref<16x14x14xi8, 7>
-            %1 = affine.load %arg2[%arg8, %arg7] : memref<16x16xi8, 7>
-            %2 = affine.load %arg3[%arg8, %arg9, %arg10] : memref<16x14x14xi8, 7>
-            %3 = affine.load %arg5[%arg8, %arg9, %arg10] : memref<16x14x14xi8, 7>
+            %0 = affine.load %arg1[%arg7, %arg9, %arg10] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+            %1 = affine.load %arg2[%arg8, %arg7] : memref<16x16xi8, #hls.mem<bram_t2p>>
+            %2 = affine.load %arg3[%arg8, %arg9, %arg10] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+            %3 = affine.load %arg5[%arg8, %arg9, %arg10] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
             %4 = hls.affine.select #set(%arg7) %2, %3 : i8
             %5 = "hls.prim.mul"(%0, %1) : (i8, i8) -> i16
             %6 = "hls.prim.cast"(%4) : (i8) -> i32
             %7 = "hls.prim.cast"(%5) : (i16) -> i32
             %8 = arith.addi %6, %7 : i32
             %9 = "hls.prim.cast"(%8) : (i32) -> i8
-            affine.store %9, %arg5[%arg8, %arg9, %arg10] : memref<16x14x14xi8, 7>
-            %10 = affine.load %arg0[%arg8, %arg9, %arg10] : memref<16x14x14xi8, 7>
+            affine.store %9, %arg5[%arg8, %arg9, %arg10] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+            %10 = affine.load %arg0[%arg8, %arg9, %arg10] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
             %11 = "hls.prim.cast"(%10) : (i8) -> i32
             %12 = "hls.prim.cast"(%9) : (i8) -> i32
             %13 = arith.addi %11, %12 : i32
@@ -168,57 +168,57 @@ module attributes {torch.debug_module_name = "ResNet"} {
             %15 = arith.cmpi ugt, %14, %c-24_i8 : i8
             %16 = arith.select %15, %14, %c-24_i8 : i8
             affine.if #set3(%arg7)[%arg6] {
-              affine.store %16, %arg4[%arg8, %arg9, %arg10] : memref<16x14x14xi8, 7>
+              affine.store %16, %arg4[%arg8, %arg9, %arg10] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
             }
-          } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel, point}
-        } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel, point}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel, point}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, point}
+          } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel, point}
+        } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel, point}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel, point}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, point}
     return
   }
-  func.func @forward_node12(%arg0: memref<64x28x28xi8, 12>, %arg1: memref<16x14x14xi8, 7>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+  func.func @forward_node12(%arg0: memref<64x28x28xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
     affine.for %arg5 = 0 to 16 {
       affine.for %arg6 = 0 to 14 {
         affine.for %arg7 = 0 to 14 {
-          %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, 12>
-          affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, 7>
-        } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+          %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.mem<dram>>
+          affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+        } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     return
   }
-  func.func @forward_node13(%arg0: memref<64x28x28xi8, 12>, %arg1: memref<16x14x14xi8, 7>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+  func.func @forward_node13(%arg0: memref<64x28x28xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
     affine.for %arg5 = 0 to 16 {
       affine.for %arg6 = 0 to 14 {
         affine.for %arg7 = 0 to 14 {
-          %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, 12>
-          affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, 7>
-        } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+          %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.mem<dram>>
+          affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+        } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     return
   }
-  func.func @forward_node14(%arg0: memref<64x64xi8, 12>, %arg1: memref<16x16xi8, 7>, %arg2: index, %arg3: index) attributes {inline} {
+  func.func @forward_node14(%arg0: memref<64x64xi8, #hls.mem<dram>>, %arg1: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index) attributes {inline} {
     affine.for %arg4 = 0 to 16 {
       affine.for %arg5 = 0 to 16 {
-        %0 = affine.load %arg0[%arg4 + symbol(%arg2) * 16, %arg5 + symbol(%arg3) * 16] : memref<64x64xi8, 12>
-        affine.store %0, %arg1[%arg4, %arg5] : memref<16x16xi8, 7>
-      } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+        %0 = affine.load %arg0[%arg4 + symbol(%arg2) * 16, %arg5 + symbol(%arg3) * 16] : memref<64x64xi8, #hls.mem<dram>>
+        affine.store %0, %arg1[%arg4, %arg5] : memref<16x16xi8, #hls.mem<bram_t2p>>
+      } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     return
   }
-  func.func @forward_node15(%arg0: memref<64x56x56xi8, 12>, %arg1: memref<16x14x14xi8, 7>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+  func.func @forward_node15(%arg0: memref<64x56x56xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
     affine.for %arg5 = 0 to 16 {
       affine.for %arg6 = 0 to 14 {
         affine.for %arg7 = 0 to 14 {
-          %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 * 2 + symbol(%arg3) * 28, %arg7 * 2 + symbol(%arg4) * 28] : memref<64x56x56xi8, 12>
-          affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, 7>
-        } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+          %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 * 2 + symbol(%arg3) * 28, %arg7 * 2 + symbol(%arg4) * 28] : memref<64x56x56xi8, #hls.mem<dram>>
+          affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+        } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     return
   }
-  func.func @forward_node8(%arg0: !hls.stream<i1, 3>, %arg1: memref<64x56x56xi8, 12>, %arg2: memref<64x64xi8, 12>, %arg3: !hls.stream<i1, 1>, %arg4: memref<64x28x28xi8, 12>, %arg5: memref<64x28x28xi8, 12>, %arg6: !hls.stream<i1, 1>, %arg7: memref<64x28x28xi8, 12>, %arg8: memref<64x28x28xi8, 12>) {
+  func.func @forward_node8(%arg0: !hls.stream<i1, 3>, %arg1: memref<64x56x56xi8, #hls.mem<dram>>, %arg2: memref<64x64xi8, #hls.mem<dram>>, %arg3: !hls.stream<i1, 1>, %arg4: memref<64x28x28xi8, #hls.mem<dram>>, %arg5: memref<64x28x28xi8, #hls.mem<dram>>, %arg6: !hls.stream<i1, 1>, %arg7: memref<64x28x28xi8, #hls.mem<dram>>, %arg8: memref<64x28x28xi8, #hls.mem<dram>>) {
     %true = arith.constant true
     hls.dataflow.stream_read %arg3 : (!hls.stream<i1, 1>) -> ()
     hls.dataflow.stream_read %arg0 : (!hls.stream<i1, 3>) -> ()
@@ -227,136 +227,136 @@ module attributes {torch.debug_module_name = "ResNet"} {
       %1 = affine.apply #map6(%arg9)
       %2 = affine.apply #map7(%arg9)
       %3 = affine.apply #map8(%arg9)
-      %4 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, 7>
-      %5 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, 7>
-      %6 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, 7>
-      %7 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x16xi8, 7>
-      %8 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, 7>
-      func.call @forward_node15(%arg1, %8, %3, %1, %0) : (memref<64x56x56xi8, 12>, memref<16x14x14xi8, 7>, index, index, index) -> ()
-      func.call @forward_node14(%arg2, %7, %2, %3) : (memref<64x64xi8, 12>, memref<16x16xi8, 7>, index, index) -> ()
-      func.call @forward_node13(%arg5, %6, %2, %1, %0) : (memref<64x28x28xi8, 12>, memref<16x14x14xi8, 7>, index, index, index) -> ()
-      func.call @forward_node12(%arg4, %5, %2, %1, %0) : (memref<64x28x28xi8, 12>, memref<16x14x14xi8, 7>, index, index, index) -> ()
-      %9 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, 7>
-      func.call @forward_node11(%5, %8, %7, %6, %4, %9, %3) : (memref<16x14x14xi8, 7>, memref<16x14x14xi8, 7>, memref<16x16xi8, 7>, memref<16x14x14xi8, 7>, memref<16x14x14xi8, 7>, memref<16x14x14xi8, 7>, index) -> ()
-      func.call @forward_node10(%9, %arg8, %2, %1, %0) : (memref<16x14x14xi8, 7>, memref<64x28x28xi8, 12>, index, index, index) -> ()
-      func.call @forward_node9(%4, %arg7, %2, %1, %0) : (memref<16x14x14xi8, 7>, memref<64x28x28xi8, 12>, index, index, index) -> ()
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=true, flatten=false>}
+      %4 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+      %5 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+      %6 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+      %7 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x16xi8, #hls.mem<bram_t2p>>
+      %8 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+      func.call @forward_node15(%arg1, %8, %3, %1, %0) : (memref<64x56x56xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
+      func.call @forward_node14(%arg2, %7, %2, %3) : (memref<64x64xi8, #hls.mem<dram>>, memref<16x16xi8, #hls.mem<bram_t2p>>, index, index) -> ()
+      func.call @forward_node13(%arg5, %6, %2, %1, %0) : (memref<64x28x28xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
+      func.call @forward_node12(%arg4, %5, %2, %1, %0) : (memref<64x28x28xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
+      %9 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+      func.call @forward_node11(%5, %8, %7, %6, %4, %9, %3) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x16xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index) -> ()
+      func.call @forward_node10(%9, %arg8, %2, %1, %0) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<64x28x28xi8, #hls.mem<dram>>, index, index, index) -> ()
+      func.call @forward_node9(%4, %arg7, %2, %1, %0) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<64x28x28xi8, #hls.mem<dram>>, index, index, index) -> ()
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=true, flatten=false>}
     hls.dataflow.stream_write %arg6, %true : <i1, 1>, i1
     return
   }
-  func.func @forward_node17(%arg0: memref<16x14x14xi8, #map9, 7>, %arg1: memref<64x28x28xi8, #map9, 12>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+  func.func @forward_node17(%arg0: memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, %arg1: memref<64x28x28xi8, #map9, #hls.mem<dram>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
     affine.for %arg5 = 0 to 16 {
       affine.for %arg6 = 0 to 14 step 2 {
         affine.for %arg7 = 0 to 14 step 2 {
-          %0 = affine.load %arg0[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #map9, 7>
-          affine.store %0, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #map9, 12>
-          %1 = affine.load %arg0[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #map9, 7>
-          affine.store %1, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #map9, 12>
-          %2 = affine.load %arg0[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #map9, 7>
-          affine.store %2, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #map9, 12>
-          %3 = affine.load %arg0[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #map9, 7>
-          affine.store %3, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #map9, 12>
-        } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+          %0 = affine.load %arg0[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          affine.store %0, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+          %1 = affine.load %arg0[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          affine.store %1, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+          %2 = affine.load %arg0[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          affine.store %2, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+          %3 = affine.load %arg0[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          affine.store %3, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+        } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     return
   }
-  func.func @forward_node18(%arg0: memref<16x14x14xi8, #map9, 7>, %arg1: memref<16x16xi8, 7>, %arg2: memref<16x14x14xi8, #map9, 7>, %arg3: memref<16x14x14xi8, #map9, 7>) attributes {inline} {
+  func.func @forward_node18(%arg0: memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, %arg1: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg2: memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, %arg3: memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>) attributes {inline} {
     affine.for %arg4 = 0 to 16 {
       affine.for %arg5 = 0 to 16 {
         affine.for %arg6 = 0 to 14 step 2 {
           affine.for %arg7 = 0 to 14 step 2 {
-            %0 = affine.load %arg0[%arg4, %arg6, %arg7] : memref<16x14x14xi8, #map9, 7>
-            %1 = affine.load %arg1[%arg5, %arg4] : memref<16x16xi8, 7>
-            %2 = affine.load %arg2[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #map9, 7>
-            %3 = affine.load %arg3[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #map9, 7>
+            %0 = affine.load %arg0[%arg4, %arg6, %arg7] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %1 = affine.load %arg1[%arg5, %arg4] : memref<16x16xi8, #hls.mem<bram_t2p>>
+            %2 = affine.load %arg2[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %3 = affine.load %arg3[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
             %4 = hls.affine.select #set(%arg4) %2, %3 : i8
             %5 = "hls.prim.mul"(%0, %1) : (i8, i8) -> i16
             %6 = "hls.prim.cast"(%4) : (i8) -> i32
             %7 = "hls.prim.cast"(%5) : (i16) -> i32
             %8 = arith.addi %6, %7 : i32
             %9 = "hls.prim.cast"(%8) : (i32) -> i8
-            affine.store %9, %arg3[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #map9, 7>
-            %10 = affine.load %arg0[%arg4, %arg6, %arg7 + 1] : memref<16x14x14xi8, #map9, 7>
-            %11 = affine.load %arg2[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #map9, 7>
-            %12 = affine.load %arg3[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #map9, 7>
+            affine.store %9, %arg3[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %10 = affine.load %arg0[%arg4, %arg6, %arg7 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %11 = affine.load %arg2[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %12 = affine.load %arg3[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
             %13 = hls.affine.select #set(%arg4) %11, %12 : i8
             %14 = "hls.prim.mul"(%10, %1) : (i8, i8) -> i16
             %15 = "hls.prim.cast"(%13) : (i8) -> i32
             %16 = "hls.prim.cast"(%14) : (i16) -> i32
             %17 = arith.addi %15, %16 : i32
             %18 = "hls.prim.cast"(%17) : (i32) -> i8
-            affine.store %18, %arg3[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #map9, 7>
-            %19 = affine.load %arg0[%arg4, %arg6 + 1, %arg7] : memref<16x14x14xi8, #map9, 7>
-            %20 = affine.load %arg2[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #map9, 7>
-            %21 = affine.load %arg3[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #map9, 7>
+            affine.store %18, %arg3[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %19 = affine.load %arg0[%arg4, %arg6 + 1, %arg7] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %20 = affine.load %arg2[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %21 = affine.load %arg3[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
             %22 = hls.affine.select #set(%arg4) %20, %21 : i8
             %23 = "hls.prim.mul"(%19, %1) : (i8, i8) -> i16
             %24 = "hls.prim.cast"(%22) : (i8) -> i32
             %25 = "hls.prim.cast"(%23) : (i16) -> i32
             %26 = arith.addi %24, %25 : i32
             %27 = "hls.prim.cast"(%26) : (i32) -> i8
-            affine.store %27, %arg3[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #map9, 7>
-            %28 = affine.load %arg0[%arg4, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #map9, 7>
-            %29 = affine.load %arg2[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #map9, 7>
-            %30 = affine.load %arg3[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #map9, 7>
+            affine.store %27, %arg3[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %28 = affine.load %arg0[%arg4, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %29 = affine.load %arg2[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %30 = affine.load %arg3[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
             %31 = hls.affine.select #set(%arg4) %29, %30 : i8
             %32 = "hls.prim.mul"(%28, %1) : (i8, i8) -> i16
             %33 = "hls.prim.cast"(%31) : (i8) -> i32
             %34 = "hls.prim.cast"(%32) : (i16) -> i32
             %35 = arith.addi %33, %34 : i32
             %36 = "hls.prim.cast"(%35) : (i32) -> i8
-            affine.store %36, %arg3[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #map9, 7>
-          } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel, point}
-        } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel, point}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel, point}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, point}
+            affine.store %36, %arg3[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel, point}
+        } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel, point}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel, point}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, point}
     return
   }
-  func.func @forward_node19(%arg0: memref<64x28x28xi8, #map9, 12>, %arg1: memref<16x14x14xi8, #map9, 7>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+  func.func @forward_node19(%arg0: memref<64x28x28xi8, #map9, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
     affine.for %arg5 = 0 to 16 {
       affine.for %arg6 = 0 to 14 step 2 {
         affine.for %arg7 = 0 to 14 step 2 {
-          %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #map9, 12>
-          affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #map9, 7>
-          %1 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #map9, 12>
-          affine.store %1, %arg1[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #map9, 7>
-          %2 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #map9, 12>
-          affine.store %2, %arg1[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #map9, 7>
-          %3 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #map9, 12>
-          affine.store %3, %arg1[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #map9, 7>
-        } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+          %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+          affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          %1 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+          affine.store %1, %arg1[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          %2 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+          affine.store %2, %arg1[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          %3 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+          affine.store %3, %arg1[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+        } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     return
   }
-  func.func @forward_node20(%arg0: memref<64x64x3x3xi8, 12>, %arg1: memref<16x16xi8, 7>, %arg2: index, %arg3: index, %arg4: index, %arg5: index) attributes {inline} {
+  func.func @forward_node20(%arg0: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg1: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index, %arg5: index) attributes {inline} {
     affine.for %arg6 = 0 to 16 {
       affine.for %arg7 = 0 to 16 {
-        %0 = affine.load %arg0[%arg6 + symbol(%arg2) * 16, %arg7 + symbol(%arg3) * 16, symbol(%arg4), symbol(%arg5)] : memref<64x64x3x3xi8, 12>
-        affine.store %0, %arg1[%arg6, %arg7] : memref<16x16xi8, 7>
-      } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+        %0 = affine.load %arg0[%arg6 + symbol(%arg2) * 16, %arg7 + symbol(%arg3) * 16, symbol(%arg4), symbol(%arg5)] : memref<64x64x3x3xi8, #hls.mem<dram>>
+        affine.store %0, %arg1[%arg6, %arg7] : memref<16x16xi8, #hls.mem<bram_t2p>>
+      } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     return
   }
-  func.func @forward_node21(%arg0: memref<64x28x28xi8, #map9, 12>, %arg1: memref<16x14x14xi8, #map9, 7>, %arg2: index, %arg3: index, %arg4: index, %arg5: index, %arg6: index) attributes {inline} {
+  func.func @forward_node21(%arg0: memref<64x28x28xi8, #map9, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index, %arg5: index, %arg6: index) attributes {inline} {
     affine.for %arg7 = 0 to 16 {
       affine.for %arg8 = 0 to 14 step 2 {
         affine.for %arg9 = 0 to 14 step 2 {
-          %0 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 + symbol(%arg3) + symbol(%arg4) * 14 - 1, %arg9 + symbol(%arg5) + symbol(%arg6) * 14 - 1] : memref<64x28x28xi8, #map9, 12>
-          affine.store %0, %arg1[%arg7, %arg8, %arg9] : memref<16x14x14xi8, #map9, 7>
-          %1 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 + symbol(%arg3) + symbol(%arg4) * 14 - 1, %arg9 + symbol(%arg5) + symbol(%arg6) * 14] : memref<64x28x28xi8, #map9, 12>
-          affine.store %1, %arg1[%arg7, %arg8, %arg9 + 1] : memref<16x14x14xi8, #map9, 7>
-          %2 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 + symbol(%arg3) + symbol(%arg4) * 14, %arg9 + symbol(%arg5) + symbol(%arg6) * 14 - 1] : memref<64x28x28xi8, #map9, 12>
-          affine.store %2, %arg1[%arg7, %arg8 + 1, %arg9] : memref<16x14x14xi8, #map9, 7>
-          %3 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 + symbol(%arg3) + symbol(%arg4) * 14, %arg9 + symbol(%arg5) + symbol(%arg6) * 14] : memref<64x28x28xi8, #map9, 12>
-          affine.store %3, %arg1[%arg7, %arg8 + 1, %arg9 + 1] : memref<16x14x14xi8, #map9, 7>
-        } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+          %0 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 + symbol(%arg3) + symbol(%arg4) * 14 - 1, %arg9 + symbol(%arg5) + symbol(%arg6) * 14 - 1] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+          affine.store %0, %arg1[%arg7, %arg8, %arg9] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          %1 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 + symbol(%arg3) + symbol(%arg4) * 14 - 1, %arg9 + symbol(%arg5) + symbol(%arg6) * 14] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+          affine.store %1, %arg1[%arg7, %arg8, %arg9 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          %2 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 + symbol(%arg3) + symbol(%arg4) * 14, %arg9 + symbol(%arg5) + symbol(%arg6) * 14 - 1] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+          affine.store %2, %arg1[%arg7, %arg8 + 1, %arg9] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          %3 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 + symbol(%arg3) + symbol(%arg4) * 14, %arg9 + symbol(%arg5) + symbol(%arg6) * 14] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+          affine.store %3, %arg1[%arg7, %arg8 + 1, %arg9 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+        } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     return
   }
-  func.func @forward_node16(%arg0: memref<64x64x3x3xi8, 12>, %arg1: !hls.stream<i1, 1>, %arg2: memref<64x28x28xi8, #map9, 12>, %arg3: memref<64x28x28xi8, #map9, 12>, %arg4: !hls.stream<i1, 1>, %arg5: memref<64x28x28xi8, #map9, 12>) {
+  func.func @forward_node16(%arg0: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg1: !hls.stream<i1, 1>, %arg2: memref<64x28x28xi8, #map9, #hls.mem<dram>>, %arg3: memref<64x28x28xi8, #map9, #hls.mem<dram>>, %arg4: !hls.stream<i1, 1>, %arg5: memref<64x28x28xi8, #map9, #hls.mem<dram>>) {
     %true = arith.constant true
     hls.dataflow.stream_read %arg1 : (!hls.stream<i1, 1>) -> ()
     affine.for %arg6 = 0 to 576 {
@@ -366,46 +366,46 @@ module attributes {torch.debug_module_name = "ResNet"} {
       %3 = affine.apply #map10(%arg6)
       %4 = affine.apply #map11(%arg6)
       %5 = affine.apply #map12(%arg6)
-      %6 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, #map9, 7>
-      %7 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x16xi8, 7>
-      %8 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, #map9, 7>
-      func.call @forward_node21(%arg2, %8, %5, %4, %1, %3, %0) : (memref<64x28x28xi8, #map9, 12>, memref<16x14x14xi8, #map9, 7>, index, index, index, index, index) -> ()
-      func.call @forward_node20(%arg0, %7, %2, %5, %4, %3) : (memref<64x64x3x3xi8, 12>, memref<16x16xi8, 7>, index, index, index, index) -> ()
-      func.call @forward_node19(%arg3, %6, %2, %1, %0) : (memref<64x28x28xi8, #map9, 12>, memref<16x14x14xi8, #map9, 7>, index, index, index) -> ()
-      %9 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #map9, 7>
-      func.call @forward_node18(%8, %7, %6, %9) : (memref<16x14x14xi8, #map9, 7>, memref<16x16xi8, 7>, memref<16x14x14xi8, #map9, 7>, memref<16x14x14xi8, #map9, 7>) -> ()
-      func.call @forward_node17(%9, %arg5, %2, %1, %0) : (memref<16x14x14xi8, #map9, 7>, memref<64x28x28xi8, #map9, 12>, index, index, index) -> ()
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=true, flatten=false>}
+      %6 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+      %7 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x16xi8, #hls.mem<bram_t2p>>
+      %8 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+      func.call @forward_node21(%arg2, %8, %5, %4, %1, %3, %0) : (memref<64x28x28xi8, #map9, #hls.mem<dram>>, memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, index, index, index, index, index) -> ()
+      func.call @forward_node20(%arg0, %7, %2, %5, %4, %3) : (memref<64x64x3x3xi8, #hls.mem<dram>>, memref<16x16xi8, #hls.mem<bram_t2p>>, index, index, index, index) -> ()
+      func.call @forward_node19(%arg3, %6, %2, %1, %0) : (memref<64x28x28xi8, #map9, #hls.mem<dram>>, memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, index, index, index) -> ()
+      %9 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+      func.call @forward_node18(%8, %7, %6, %9) : (memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, memref<16x16xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>) -> ()
+      func.call @forward_node17(%9, %arg5, %2, %1, %0) : (memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, memref<64x28x28xi8, #map9, #hls.mem<dram>>, index, index, index) -> ()
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=true, flatten=false>}
     hls.dataflow.stream_write %arg4, %true : <i1, 1>, i1
     return
   }
-  func.func @forward_node23(%arg0: memref<16x14x14xi8, #map9, 7>, %arg1: memref<64x28x28xi8, #map9, 12>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+  func.func @forward_node23(%arg0: memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, %arg1: memref<64x28x28xi8, #map9, #hls.mem<dram>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
     affine.for %arg5 = 0 to 16 {
       affine.for %arg6 = 0 to 14 step 2 {
         affine.for %arg7 = 0 to 14 step 2 {
-          %0 = affine.load %arg0[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #map9, 7>
-          affine.store %0, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #map9, 12>
-          %1 = affine.load %arg0[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #map9, 7>
-          affine.store %1, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #map9, 12>
-          %2 = affine.load %arg0[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #map9, 7>
-          affine.store %2, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #map9, 12>
-          %3 = affine.load %arg0[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #map9, 7>
-          affine.store %3, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #map9, 12>
-        } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+          %0 = affine.load %arg0[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          affine.store %0, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+          %1 = affine.load %arg0[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          affine.store %1, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+          %2 = affine.load %arg0[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          affine.store %2, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+          %3 = affine.load %arg0[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          affine.store %3, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+        } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     return
   }
-  func.func @forward_node24(%arg0: memref<16x14x14xi8, #map9, 7>, %arg1: memref<16x16xi8, 7>, %arg2: memref<16x14x14xi8, #map9, 7>, %arg3: memref<16x14x14xi8, #map9, 7>, %arg4: index, %arg5: index, %arg6: index) attributes {inline} {
+  func.func @forward_node24(%arg0: memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, %arg1: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg2: memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, %arg3: memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, %arg4: index, %arg5: index, %arg6: index) attributes {inline} {
     %c-24_i8 = arith.constant -24 : i8
     affine.for %arg7 = 0 to 16 {
       affine.for %arg8 = 0 to 16 {
         affine.for %arg9 = 0 to 14 step 2 {
           affine.for %arg10 = 0 to 14 step 2 {
-            %0 = affine.load %arg0[%arg7, %arg9, %arg10] : memref<16x14x14xi8, #map9, 7>
-            %1 = affine.load %arg1[%arg8, %arg7] : memref<16x16xi8, 7>
-            %2 = affine.load %arg2[%arg8, %arg9, %arg10] : memref<16x14x14xi8, #map9, 7>
-            %3 = affine.load %arg3[%arg8, %arg9, %arg10] : memref<16x14x14xi8, #map9, 7>
+            %0 = affine.load %arg0[%arg7, %arg9, %arg10] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %1 = affine.load %arg1[%arg8, %arg7] : memref<16x16xi8, #hls.mem<bram_t2p>>
+            %2 = affine.load %arg2[%arg8, %arg9, %arg10] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %3 = affine.load %arg3[%arg8, %arg9, %arg10] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
             %4 = hls.affine.select #set(%arg7) %2, %3 : i8
             %5 = "hls.prim.mul"(%0, %1) : (i8, i8) -> i16
             %6 = "hls.prim.cast"(%4) : (i8) -> i32
@@ -415,10 +415,10 @@ module attributes {torch.debug_module_name = "ResNet"} {
             %10 = arith.cmpi ugt, %9, %c-24_i8 : i8
             %11 = arith.select %10, %9, %c-24_i8 : i8
             %12 = hls.affine.select #set4(%arg6, %arg4, %arg7, %arg5) %11, %9 : i8
-            affine.store %12, %arg3[%arg8, %arg9, %arg10] : memref<16x14x14xi8, #map9, 7>
-            %13 = affine.load %arg0[%arg7, %arg9, %arg10 + 1] : memref<16x14x14xi8, #map9, 7>
-            %14 = affine.load %arg2[%arg8, %arg9, %arg10 + 1] : memref<16x14x14xi8, #map9, 7>
-            %15 = affine.load %arg3[%arg8, %arg9, %arg10 + 1] : memref<16x14x14xi8, #map9, 7>
+            affine.store %12, %arg3[%arg8, %arg9, %arg10] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %13 = affine.load %arg0[%arg7, %arg9, %arg10 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %14 = affine.load %arg2[%arg8, %arg9, %arg10 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %15 = affine.load %arg3[%arg8, %arg9, %arg10 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
             %16 = hls.affine.select #set(%arg7) %14, %15 : i8
             %17 = "hls.prim.mul"(%13, %1) : (i8, i8) -> i16
             %18 = "hls.prim.cast"(%16) : (i8) -> i32
@@ -428,10 +428,10 @@ module attributes {torch.debug_module_name = "ResNet"} {
             %22 = arith.cmpi ugt, %21, %c-24_i8 : i8
             %23 = arith.select %22, %21, %c-24_i8 : i8
             %24 = hls.affine.select #set4(%arg6, %arg4, %arg7, %arg5) %23, %21 : i8
-            affine.store %24, %arg3[%arg8, %arg9, %arg10 + 1] : memref<16x14x14xi8, #map9, 7>
-            %25 = affine.load %arg0[%arg7, %arg9 + 1, %arg10] : memref<16x14x14xi8, #map9, 7>
-            %26 = affine.load %arg2[%arg8, %arg9 + 1, %arg10] : memref<16x14x14xi8, #map9, 7>
-            %27 = affine.load %arg3[%arg8, %arg9 + 1, %arg10] : memref<16x14x14xi8, #map9, 7>
+            affine.store %24, %arg3[%arg8, %arg9, %arg10 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %25 = affine.load %arg0[%arg7, %arg9 + 1, %arg10] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %26 = affine.load %arg2[%arg8, %arg9 + 1, %arg10] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %27 = affine.load %arg3[%arg8, %arg9 + 1, %arg10] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
             %28 = hls.affine.select #set(%arg7) %26, %27 : i8
             %29 = "hls.prim.mul"(%25, %1) : (i8, i8) -> i16
             %30 = "hls.prim.cast"(%28) : (i8) -> i32
@@ -441,10 +441,10 @@ module attributes {torch.debug_module_name = "ResNet"} {
             %34 = arith.cmpi ugt, %33, %c-24_i8 : i8
             %35 = arith.select %34, %33, %c-24_i8 : i8
             %36 = hls.affine.select #set4(%arg6, %arg4, %arg7, %arg5) %35, %33 : i8
-            affine.store %36, %arg3[%arg8, %arg9 + 1, %arg10] : memref<16x14x14xi8, #map9, 7>
-            %37 = affine.load %arg0[%arg7, %arg9 + 1, %arg10 + 1] : memref<16x14x14xi8, #map9, 7>
-            %38 = affine.load %arg2[%arg8, %arg9 + 1, %arg10 + 1] : memref<16x14x14xi8, #map9, 7>
-            %39 = affine.load %arg3[%arg8, %arg9 + 1, %arg10 + 1] : memref<16x14x14xi8, #map9, 7>
+            affine.store %36, %arg3[%arg8, %arg9 + 1, %arg10] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %37 = affine.load %arg0[%arg7, %arg9 + 1, %arg10 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %38 = affine.load %arg2[%arg8, %arg9 + 1, %arg10 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+            %39 = affine.load %arg3[%arg8, %arg9 + 1, %arg10 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
             %40 = hls.affine.select #set(%arg7) %38, %39 : i8
             %41 = "hls.prim.mul"(%37, %1) : (i8, i8) -> i16
             %42 = "hls.prim.cast"(%40) : (i8) -> i32
@@ -454,57 +454,57 @@ module attributes {torch.debug_module_name = "ResNet"} {
             %46 = arith.cmpi ugt, %45, %c-24_i8 : i8
             %47 = arith.select %46, %45, %c-24_i8 : i8
             %48 = hls.affine.select #set4(%arg6, %arg4, %arg7, %arg5) %47, %45 : i8
-            affine.store %48, %arg3[%arg8, %arg9 + 1, %arg10 + 1] : memref<16x14x14xi8, #map9, 7>
-          } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel, point}
-        } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel, point}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel, point}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, point}
+            affine.store %48, %arg3[%arg8, %arg9 + 1, %arg10 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel, point}
+        } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel, point}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel, point}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, point}
     return
   }
-  func.func @forward_node25(%arg0: memref<64x28x28xi8, #map9, 12>, %arg1: memref<16x14x14xi8, #map9, 7>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+  func.func @forward_node25(%arg0: memref<64x28x28xi8, #map9, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
     affine.for %arg5 = 0 to 16 {
       affine.for %arg6 = 0 to 14 step 2 {
         affine.for %arg7 = 0 to 14 step 2 {
-          %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #map9, 12>
-          affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #map9, 7>
-          %1 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #map9, 12>
-          affine.store %1, %arg1[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #map9, 7>
-          %2 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #map9, 12>
-          affine.store %2, %arg1[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #map9, 7>
-          %3 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #map9, 12>
-          affine.store %3, %arg1[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #map9, 7>
-        } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+          %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+          affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          %1 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+          affine.store %1, %arg1[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          %2 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+          affine.store %2, %arg1[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          %3 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #map9, #hls.mem<dram>>
+          affine.store %3, %arg1[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+        } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     return
   }
-  func.func @forward_node26(%arg0: memref<64x64x3x3xi8, 12>, %arg1: memref<16x16xi8, 7>, %arg2: index, %arg3: index, %arg4: index, %arg5: index) attributes {inline} {
+  func.func @forward_node26(%arg0: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg1: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index, %arg5: index) attributes {inline} {
     affine.for %arg6 = 0 to 16 {
       affine.for %arg7 = 0 to 16 {
-        %0 = affine.load %arg0[%arg6 + symbol(%arg2) * 16, %arg7 + symbol(%arg3) * 16, symbol(%arg4), symbol(%arg5)] : memref<64x64x3x3xi8, 12>
-        affine.store %0, %arg1[%arg6, %arg7] : memref<16x16xi8, 7>
-      } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+        %0 = affine.load %arg0[%arg6 + symbol(%arg2) * 16, %arg7 + symbol(%arg3) * 16, symbol(%arg4), symbol(%arg5)] : memref<64x64x3x3xi8, #hls.mem<dram>>
+        affine.store %0, %arg1[%arg6, %arg7] : memref<16x16xi8, #hls.mem<bram_t2p>>
+      } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     return
   }
-  func.func @forward_node27(%arg0: memref<64x56x56xi8, #map13, 12>, %arg1: memref<16x14x14xi8, #map9, 7>, %arg2: index, %arg3: index, %arg4: index, %arg5: index, %arg6: index) attributes {inline} {
+  func.func @forward_node27(%arg0: memref<64x56x56xi8, #map13, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index, %arg5: index, %arg6: index) attributes {inline} {
     affine.for %arg7 = 0 to 16 {
       affine.for %arg8 = 0 to 14 step 2 {
         affine.for %arg9 = 0 to 14 step 2 {
-          %0 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 * 2 + symbol(%arg3) + symbol(%arg4) * 28 - 1, %arg9 * 2 + symbol(%arg5) + symbol(%arg6) * 28 - 1] : memref<64x56x56xi8, #map13, 12>
-          affine.store %0, %arg1[%arg7, %arg8, %arg9] : memref<16x14x14xi8, #map9, 7>
-          %1 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 * 2 + symbol(%arg3) + symbol(%arg4) * 28 - 1, %arg9 * 2 + symbol(%arg5) + symbol(%arg6) * 28 + 1] : memref<64x56x56xi8, #map13, 12>
-          affine.store %1, %arg1[%arg7, %arg8, %arg9 + 1] : memref<16x14x14xi8, #map9, 7>
-          %2 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 * 2 + symbol(%arg3) + symbol(%arg4) * 28 + 1, %arg9 * 2 + symbol(%arg5) + symbol(%arg6) * 28 - 1] : memref<64x56x56xi8, #map13, 12>
-          affine.store %2, %arg1[%arg7, %arg8 + 1, %arg9] : memref<16x14x14xi8, #map9, 7>
-          %3 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 * 2 + symbol(%arg3) + symbol(%arg4) * 28 + 1, %arg9 * 2 + symbol(%arg5) + symbol(%arg6) * 28 + 1] : memref<64x56x56xi8, #map13, 12>
-          affine.store %3, %arg1[%arg7, %arg8 + 1, %arg9 + 1] : memref<16x14x14xi8, #map9, 7>
-        } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+          %0 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 * 2 + symbol(%arg3) + symbol(%arg4) * 28 - 1, %arg9 * 2 + symbol(%arg5) + symbol(%arg6) * 28 - 1] : memref<64x56x56xi8, #map13, #hls.mem<dram>>
+          affine.store %0, %arg1[%arg7, %arg8, %arg9] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          %1 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 * 2 + symbol(%arg3) + symbol(%arg4) * 28 - 1, %arg9 * 2 + symbol(%arg5) + symbol(%arg6) * 28 + 1] : memref<64x56x56xi8, #map13, #hls.mem<dram>>
+          affine.store %1, %arg1[%arg7, %arg8, %arg9 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          %2 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 * 2 + symbol(%arg3) + symbol(%arg4) * 28 + 1, %arg9 * 2 + symbol(%arg5) + symbol(%arg6) * 28 - 1] : memref<64x56x56xi8, #map13, #hls.mem<dram>>
+          affine.store %2, %arg1[%arg7, %arg8 + 1, %arg9] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+          %3 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 * 2 + symbol(%arg3) + symbol(%arg4) * 28 + 1, %arg9 * 2 + symbol(%arg5) + symbol(%arg6) * 28 + 1] : memref<64x56x56xi8, #map13, #hls.mem<dram>>
+          affine.store %3, %arg1[%arg7, %arg8 + 1, %arg9 + 1] : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+        } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     return
   }
-  func.func @forward_node22(%arg0: !hls.stream<i1, 1>, %arg1: memref<64x56x56xi8, #map13, 12>, %arg2: memref<64x64x3x3xi8, 12>, %arg3: memref<64x28x28xi8, #map9, 12>, %arg4: !hls.stream<i1, 1>, %arg5: memref<64x28x28xi8, #map9, 12>) {
+  func.func @forward_node22(%arg0: !hls.stream<i1, 1>, %arg1: memref<64x56x56xi8, #map13, #hls.mem<dram>>, %arg2: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg3: memref<64x28x28xi8, #map9, #hls.mem<dram>>, %arg4: !hls.stream<i1, 1>, %arg5: memref<64x28x28xi8, #map9, #hls.mem<dram>>) {
     %true = arith.constant true
     hls.dataflow.stream_read %arg0 : (!hls.stream<i1, 1>) -> ()
     affine.for %arg6 = 0 to 576 {
@@ -514,187 +514,187 @@ module attributes {torch.debug_module_name = "ResNet"} {
       %3 = affine.apply #map10(%arg6)
       %4 = affine.apply #map11(%arg6)
       %5 = affine.apply #map12(%arg6)
-      %6 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, #map9, 7>
-      %7 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x16xi8, 7>
-      %8 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #map9, 7>
-      func.call @forward_node27(%arg1, %8, %5, %4, %1, %3, %0) : (memref<64x56x56xi8, #map13, 12>, memref<16x14x14xi8, #map9, 7>, index, index, index, index, index) -> ()
-      func.call @forward_node26(%arg2, %7, %2, %5, %4, %3) : (memref<64x64x3x3xi8, 12>, memref<16x16xi8, 7>, index, index, index, index) -> ()
-      func.call @forward_node25(%arg3, %6, %2, %1, %0) : (memref<64x28x28xi8, #map9, 12>, memref<16x14x14xi8, #map9, 7>, index, index, index) -> ()
-      %9 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #map9, 7>
-      func.call @forward_node24(%8, %7, %6, %9, %3, %5, %4) : (memref<16x14x14xi8, #map9, 7>, memref<16x16xi8, 7>, memref<16x14x14xi8, #map9, 7>, memref<16x14x14xi8, #map9, 7>, index, index, index) -> ()
-      func.call @forward_node23(%9, %arg5, %2, %1, %0) : (memref<16x14x14xi8, #map9, 7>, memref<64x28x28xi8, #map9, 12>, index, index, index) -> ()
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=true, flatten=false>}
+      %6 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+      %7 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x16xi8, #hls.mem<bram_t2p>>
+      %8 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+      func.call @forward_node27(%arg1, %8, %5, %4, %1, %3, %0) : (memref<64x56x56xi8, #map13, #hls.mem<dram>>, memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, index, index, index, index, index) -> ()
+      func.call @forward_node26(%arg2, %7, %2, %5, %4, %3) : (memref<64x64x3x3xi8, #hls.mem<dram>>, memref<16x16xi8, #hls.mem<bram_t2p>>, index, index, index, index) -> ()
+      func.call @forward_node25(%arg3, %6, %2, %1, %0) : (memref<64x28x28xi8, #map9, #hls.mem<dram>>, memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, index, index, index) -> ()
+      %9 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>
+      func.call @forward_node24(%8, %7, %6, %9, %3, %5, %4) : (memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, memref<16x16xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, index, index, index) -> ()
+      func.call @forward_node23(%9, %arg5, %2, %1, %0) : (memref<16x14x14xi8, #map9, #hls.mem<bram_t2p>>, memref<64x28x28xi8, #map9, #hls.mem<dram>>, index, index, index) -> ()
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=true, flatten=false>}
     hls.dataflow.stream_write %arg4, %true : <i1, 1>, i1
     return
   }
-  func.func @forward_node28(%arg0: !hls.stream<i1, 1>, %arg1: memref<64x56x56xi8, 12>, %arg2: !hls.stream<i1, 3>, %arg3: memref<64x56x56xi8, 12>, %arg4: !hls.stream<i1, 1>, %arg5: memref<64x56x56xi8, 12>) {
+  func.func @forward_node28(%arg0: !hls.stream<i1, 1>, %arg1: memref<64x56x56xi8, #hls.mem<dram>>, %arg2: !hls.stream<i1, 3>, %arg3: memref<64x56x56xi8, #hls.mem<dram>>, %arg4: !hls.stream<i1, 1>, %arg5: memref<64x56x56xi8, #hls.mem<dram>>) {
     %true = arith.constant true
     hls.dataflow.stream_read %arg0 : (!hls.stream<i1, 1>) -> ()
     affine.for %arg6 = 0 to 64 {
       affine.for %arg7 = 0 to 56 {
         affine.for %arg8 = 0 to 56 {
-          %0 = affine.load %arg1[%arg6, %arg7, %arg8] : memref<64x56x56xi8, 12>
-          affine.store %0, %arg3[%arg6, %arg7, %arg8] : memref<64x56x56xi8, 12>
-        } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+          %0 = affine.load %arg1[%arg6, %arg7, %arg8] : memref<64x56x56xi8, #hls.mem<dram>>
+          affine.store %0, %arg3[%arg6, %arg7, %arg8] : memref<64x56x56xi8, #hls.mem<dram>>
+        } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     affine.for %arg6 = 0 to 64 {
       affine.for %arg7 = 0 to 56 {
         affine.for %arg8 = 0 to 56 {
-          %0 = affine.load %arg1[%arg6, %arg7, %arg8] : memref<64x56x56xi8, 12>
-          affine.store %0, %arg5[%arg6, %arg7, %arg8] : memref<64x56x56xi8, 12>
-        } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+          %0 = affine.load %arg1[%arg6, %arg7, %arg8] : memref<64x56x56xi8, #hls.mem<dram>>
+          affine.store %0, %arg5[%arg6, %arg7, %arg8] : memref<64x56x56xi8, #hls.mem<dram>>
+        } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     hls.dataflow.stream_write %arg2, %true : <i1, 3>, i1
     hls.dataflow.stream_write %arg4, %true : <i1, 1>, i1
     return
   }
-  func.func @forward_node30(%arg0: memref<16x14x14xi8, 7>, %arg1: memref<64x56x56xi8, 12>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+  func.func @forward_node30(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<64x56x56xi8, #hls.mem<dram>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
     affine.for %arg5 = 0 to 16 {
       affine.for %arg6 = 0 to 14 {
         affine.for %arg7 = 0 to 14 {
-          %0 = affine.load %arg0[%arg5, %arg6, %arg7] : memref<16x14x14xi8, 7>
-          affine.store %0, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x56x56xi8, 12>
-        } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+          %0 = affine.load %arg0[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+          affine.store %0, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x56x56xi8, #hls.mem<dram>>
+        } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     return
   }
-  func.func @forward_node31(%arg0: memref<16x14x14xi8, 7>, %arg1: memref<16x14x14xi8, 7>) attributes {inline} {
+  func.func @forward_node31(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>) attributes {inline} {
     %c-24_i8 = arith.constant -24 : i8
     affine.for %arg2 = 0 to 16 {
       affine.for %arg3 = 0 to 14 {
         affine.for %arg4 = 0 to 14 {
-          %0 = affine.load %arg0[%arg2, %arg3, %arg4] : memref<16x14x14xi8, 7>
+          %0 = affine.load %arg0[%arg2, %arg3, %arg4] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
           %1 = arith.cmpi ugt, %0, %c-24_i8 : i8
           %2 = arith.select %1, %0, %c-24_i8 : i8
-          affine.store %2, %arg1[%arg2, %arg3, %arg4] : memref<16x14x14xi8, 7>
-        } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel, point}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel, point}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel, point}
+          affine.store %2, %arg1[%arg2, %arg3, %arg4] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+        } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel, point}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel, point}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel, point}
     return
   }
-  func.func @forward_node32(%arg0: memref<64x56x56xi8, 12>, %arg1: memref<16x14x14xi8, 7>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+  func.func @forward_node32(%arg0: memref<64x56x56xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
     affine.for %arg5 = 0 to 16 {
       affine.for %arg6 = 0 to 14 {
         affine.for %arg7 = 0 to 14 {
-          %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x56x56xi8, 12>
-          affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, 7>
-        } {loop_directive = #hls.ld<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
-      } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+          %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x56x56xi8, #hls.mem<dram>>
+          affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+        } {loop_directive = #hls.loop<pipeline=true, targetII=1, dataflow=false, flatten=false>, parallel}
+      } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=false, flatten=true>, parallel}
     return
   }
-  func.func @forward_node29(%arg0: memref<64x56x56xi8, 12>, %arg1: !hls.stream<i1, 1>, %arg2: memref<64x56x56xi8, 12>) {
+  func.func @forward_node29(%arg0: memref<64x56x56xi8, #hls.mem<dram>>, %arg1: !hls.stream<i1, 1>, %arg2: memref<64x56x56xi8, #hls.mem<dram>>) {
     %true = arith.constant true
     affine.for %arg3 = 0 to 64 {
       %0 = affine.apply #map2(%arg3)
       %1 = affine.apply #map14(%arg3)
       %2 = affine.apply #map15(%arg3)
-      %3 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, 7>
-      func.call @forward_node32(%arg0, %3, %2, %1, %0) : (memref<64x56x56xi8, 12>, memref<16x14x14xi8, 7>, index, index, index) -> ()
-      %4 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, 7>
-      func.call @forward_node31(%3, %4) : (memref<16x14x14xi8, 7>, memref<16x14x14xi8, 7>) -> ()
-      func.call @forward_node30(%4, %arg2, %2, %1, %0) : (memref<16x14x14xi8, 7>, memref<64x56x56xi8, 12>, index, index, index) -> ()
-    } {loop_directive = #hls.ld<pipeline=false, targetII=1, dataflow=true, flatten=false>, parallel}
+      %3 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+      func.call @forward_node32(%arg0, %3, %2, %1, %0) : (memref<64x56x56xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
+      %4 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+      func.call @forward_node31(%3, %4) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>) -> ()
+      func.call @forward_node30(%4, %arg2, %2, %1, %0) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<64x56x56xi8, #hls.mem<dram>>, index, index, index) -> ()
+    } {loop_directive = #hls.loop<pipeline=false, targetII=1, dataflow=true, flatten=false>, parallel}
     hls.dataflow.stream_write %arg1, %true : <i1, 1>, i1
     return
   }
-  func.func @forward(%arg0: !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>, %arg1: !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>, %arg2: !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>, %arg3: !hls.axi<memref<1000x64xi8, 12>, 0 : i32>, %arg4: !hls.axi<memref<64x64xi8, 12>, 0 : i32>, %arg5: !hls.axi<memref<64x64x3x3xi8, 12>, 0 : i32>, %arg6: !hls.axi<memref<64x64x3x3xi8, 12>, 0 : i32>, %arg7: !hls.axi<memref<1000xi8, 12>, 0 : i32>, %arg8: !hls.axi<memref<1000xi8, 12>, 0 : i32>, %arg9: !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>, %arg10: !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>, %arg11: !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>, %arg12: !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>, %arg13: !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>, %arg14: !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>, %arg15: !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>, %arg16: !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>, %arg17: !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>, %arg18: !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>, %arg19: !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>, %arg20: !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>, %arg21: !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>, %arg22: !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>) attributes {func_directive = #hls.fd<pipeline=false, targetInterval=1, dataflow=true>, top_func} {
-    %0 = hls.axi.bundle "axi22" : <0 : i32>
-    %1 = hls.axi.port %0, %arg22 : <0 : i32>, (!hls.axi<memref<64x28x28xi8, 12>, 0 : i32>) -> memref<64x28x28xi8, 12>
-    %2 = hls.axi.bundle "axi21" : <0 : i32>
-    %3 = hls.axi.port %2, %arg21 : <0 : i32>, (!hls.axi<memref<64x28x28xi8, 12>, 0 : i32>) -> memref<64x28x28xi8, 12>
-    %4 = hls.axi.bundle "axi20" : <0 : i32>
-    %5 = hls.axi.port %4, %arg20 : <0 : i32>, (!hls.axi<memref<64x28x28xi8, 12>, 0 : i32>) -> memref<64x28x28xi8, 12>
-    %6 = hls.axi.bundle "axi19" : <0 : i32>
-    %7 = hls.axi.port %6, %arg19 : <0 : i32>, (!hls.axi<memref<64x28x28xi8, 12>, 0 : i32>) -> memref<64x28x28xi8, 12>
-    %8 = hls.axi.bundle "axi18" : <0 : i32>
-    %9 = hls.axi.port %8, %arg18 : <0 : i32>, (!hls.axi<memref<64x28x28xi8, 12>, 0 : i32>) -> memref<64x28x28xi8, #map9, 12>
-    %10 = hls.axi.bundle "axi17" : <0 : i32>
-    %11 = hls.axi.port %10, %arg17 : <0 : i32>, (!hls.axi<memref<64x28x28xi8, 12>, 0 : i32>) -> memref<64x28x28xi8, #map9, 12>
-    %12 = hls.axi.bundle "axi16" : <0 : i32>
-    %13 = hls.axi.port %12, %arg16 : <0 : i32>, (!hls.axi<memref<64x28x28xi8, 12>, 0 : i32>) -> memref<64x28x28xi8, 12>
-    %14 = hls.axi.bundle "axi15" : <0 : i32>
-    %15 = hls.axi.port %14, %arg15 : <0 : i32>, (!hls.axi<memref<64x28x28xi8, 12>, 0 : i32>) -> memref<64x28x28xi8, #map9, 12>
-    %16 = hls.axi.bundle "axi14" : <0 : i32>
-    %17 = hls.axi.port %16, %arg14 : <0 : i32>, (!hls.axi<memref<64x28x28xi8, 12>, 0 : i32>) -> memref<64x28x28xi8, #map9, 12>
-    %18 = hls.axi.bundle "axi13" : <0 : i32>
-    %19 = hls.axi.port %18, %arg13 : <0 : i32>, (!hls.axi<memref<64x28x28xi8, 12>, 0 : i32>) -> memref<64x28x28xi8, #map9, 12>
-    %20 = hls.axi.bundle "axi12" : <0 : i32>
-    %21 = hls.axi.port %20, %arg12 : <0 : i32>, (!hls.axi<memref<64x56x56xi8, 12>, 0 : i32>) -> memref<64x56x56xi8, 12>
-    %22 = hls.axi.bundle "axi11" : <0 : i32>
-    %23 = hls.axi.port %22, %arg11 : <0 : i32>, (!hls.axi<memref<64x56x56xi8, 12>, 0 : i32>) -> memref<64x56x56xi8, #map13, 12>
-    %24 = hls.axi.bundle "axi10" : <0 : i32>
-    %25 = hls.axi.port %24, %arg10 : <0 : i32>, (!hls.axi<memref<64x56x56xi8, 12>, 0 : i32>) -> memref<64x56x56xi8, 12>
-    %26 = hls.axi.bundle "axi9" : <0 : i32>
-    %27 = hls.axi.port %26, %arg9 : <0 : i32>, (!hls.axi<memref<64x56x56xi8, 12>, 0 : i32>) -> memref<64x56x56xi8, 12>
-    %28 = hls.axi.bundle "axi8" : <0 : i32>
-    %29 = hls.axi.port %28, %arg8 : <0 : i32>, (!hls.axi<memref<1000xi8, 12>, 0 : i32>) -> memref<1000xi8, 12>
-    %30 = hls.axi.bundle "axi7" : <0 : i32>
-    %31 = hls.axi.port %30, %arg7 : <0 : i32>, (!hls.axi<memref<1000xi8, 12>, 0 : i32>) -> memref<1000xi8, 12>
-    %32 = hls.axi.bundle "axi6" : <0 : i32>
-    %33 = hls.axi.port %32, %arg6 : <0 : i32>, (!hls.axi<memref<64x64x3x3xi8, 12>, 0 : i32>) -> memref<64x64x3x3xi8, 12>
-    %34 = hls.axi.bundle "axi5" : <0 : i32>
-    %35 = hls.axi.port %34, %arg5 : <0 : i32>, (!hls.axi<memref<64x64x3x3xi8, 12>, 0 : i32>) -> memref<64x64x3x3xi8, 12>
-    %36 = hls.axi.bundle "axi4" : <0 : i32>
-    %37 = hls.axi.port %36, %arg4 : <0 : i32>, (!hls.axi<memref<64x64xi8, 12>, 0 : i32>) -> memref<64x64xi8, 12>
-    %38 = hls.axi.bundle "axi3" : <0 : i32>
-    %39 = hls.axi.port %38, %arg3 : <0 : i32>, (!hls.axi<memref<1000x64xi8, 12>, 0 : i32>) -> memref<1000x64xi8, 12>
-    %40 = hls.axi.bundle "axi2" : <0 : i32>
-    %41 = hls.axi.port %40, %arg2 : <0 : i32>, (!hls.axi<memref<64x56x56xi8, 12>, 0 : i32>) -> memref<64x56x56xi8, 12>
-    %42 = hls.axi.bundle "axi1" : <0 : i32>
-    %43 = hls.axi.port %42, %arg1 : <0 : i32>, (!hls.axi<memref<64x56x56xi8, 12>, 0 : i32>) -> memref<64x56x56xi8, 12>
-    %44 = hls.axi.bundle "axi0" : <0 : i32>
-    %45 = hls.axi.port %44, %arg0 : <0 : i32>, (!hls.axi<memref<64x56x56xi8, 12>, 0 : i32>) -> memref<64x56x56xi8, 12>
+  func.func @forward(%arg0: !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>, %arg1: !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>, %arg2: !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>, %arg3: !hls.axi<memref<1000x64xi8, #hls.mem<dram>>, mm>, %arg4: !hls.axi<memref<64x64xi8, #hls.mem<dram>>, mm>, %arg5: !hls.axi<memref<64x64x3x3xi8, #hls.mem<dram>>, mm>, %arg6: !hls.axi<memref<64x64x3x3xi8, #hls.mem<dram>>, mm>, %arg7: !hls.axi<memref<1000xi8, #hls.mem<dram>>, mm>, %arg8: !hls.axi<memref<1000xi8, #hls.mem<dram>>, mm>, %arg9: !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>, %arg10: !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>, %arg11: !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>, %arg12: !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>, %arg13: !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>, %arg14: !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>, %arg15: !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>, %arg16: !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>, %arg17: !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>, %arg18: !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>, %arg19: !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>, %arg20: !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>, %arg21: !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>, %arg22: !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) attributes {func_directive = #hls.func<pipeline=false, targetInterval=1, dataflow=true>, top_func} {
+    %0 = hls.axi.bundle "axi22" : <mm>
+    %1 = hls.axi.port %0, %arg22 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #hls.mem<dram>>
+    %2 = hls.axi.bundle "axi21" : <mm>
+    %3 = hls.axi.port %2, %arg21 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #hls.mem<dram>>
+    %4 = hls.axi.bundle "axi20" : <mm>
+    %5 = hls.axi.port %4, %arg20 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #hls.mem<dram>>
+    %6 = hls.axi.bundle "axi19" : <mm>
+    %7 = hls.axi.port %6, %arg19 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #hls.mem<dram>>
+    %8 = hls.axi.bundle "axi18" : <mm>
+    %9 = hls.axi.port %8, %arg18 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #map9, #hls.mem<dram>>
+    %10 = hls.axi.bundle "axi17" : <mm>
+    %11 = hls.axi.port %10, %arg17 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #map9, #hls.mem<dram>>
+    %12 = hls.axi.bundle "axi16" : <mm>
+    %13 = hls.axi.port %12, %arg16 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #hls.mem<dram>>
+    %14 = hls.axi.bundle "axi15" : <mm>
+    %15 = hls.axi.port %14, %arg15 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #map9, #hls.mem<dram>>
+    %16 = hls.axi.bundle "axi14" : <mm>
+    %17 = hls.axi.port %16, %arg14 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #map9, #hls.mem<dram>>
+    %18 = hls.axi.bundle "axi13" : <mm>
+    %19 = hls.axi.port %18, %arg13 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #map9, #hls.mem<dram>>
+    %20 = hls.axi.bundle "axi12" : <mm>
+    %21 = hls.axi.port %20, %arg12 : <mm>, (!hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>) -> memref<64x56x56xi8, #hls.mem<dram>>
+    %22 = hls.axi.bundle "axi11" : <mm>
+    %23 = hls.axi.port %22, %arg11 : <mm>, (!hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>) -> memref<64x56x56xi8, #map13, #hls.mem<dram>>
+    %24 = hls.axi.bundle "axi10" : <mm>
+    %25 = hls.axi.port %24, %arg10 : <mm>, (!hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>) -> memref<64x56x56xi8, #hls.mem<dram>>
+    %26 = hls.axi.bundle "axi9" : <mm>
+    %27 = hls.axi.port %26, %arg9 : <mm>, (!hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>) -> memref<64x56x56xi8, #hls.mem<dram>>
+    %28 = hls.axi.bundle "axi8" : <mm>
+    %29 = hls.axi.port %28, %arg8 : <mm>, (!hls.axi<memref<1000xi8, #hls.mem<dram>>, mm>) -> memref<1000xi8, #hls.mem<dram>>
+    %30 = hls.axi.bundle "axi7" : <mm>
+    %31 = hls.axi.port %30, %arg7 : <mm>, (!hls.axi<memref<1000xi8, #hls.mem<dram>>, mm>) -> memref<1000xi8, #hls.mem<dram>>
+    %32 = hls.axi.bundle "axi6" : <mm>
+    %33 = hls.axi.port %32, %arg6 : <mm>, (!hls.axi<memref<64x64x3x3xi8, #hls.mem<dram>>, mm>) -> memref<64x64x3x3xi8, #hls.mem<dram>>
+    %34 = hls.axi.bundle "axi5" : <mm>
+    %35 = hls.axi.port %34, %arg5 : <mm>, (!hls.axi<memref<64x64x3x3xi8, #hls.mem<dram>>, mm>) -> memref<64x64x3x3xi8, #hls.mem<dram>>
+    %36 = hls.axi.bundle "axi4" : <mm>
+    %37 = hls.axi.port %36, %arg4 : <mm>, (!hls.axi<memref<64x64xi8, #hls.mem<dram>>, mm>) -> memref<64x64xi8, #hls.mem<dram>>
+    %38 = hls.axi.bundle "axi3" : <mm>
+    %39 = hls.axi.port %38, %arg3 : <mm>, (!hls.axi<memref<1000x64xi8, #hls.mem<dram>>, mm>) -> memref<1000x64xi8, #hls.mem<dram>>
+    %40 = hls.axi.bundle "axi2" : <mm>
+    %41 = hls.axi.port %40, %arg2 : <mm>, (!hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>) -> memref<64x56x56xi8, #hls.mem<dram>>
+    %42 = hls.axi.bundle "axi1" : <mm>
+    %43 = hls.axi.port %42, %arg1 : <mm>, (!hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>) -> memref<64x56x56xi8, #hls.mem<dram>>
+    %44 = hls.axi.bundle "axi0" : <mm>
+    %45 = hls.axi.port %44, %arg0 : <mm>, (!hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>) -> memref<64x56x56xi8, #hls.mem<dram>>
     %46 = hls.dataflow.stream {depth = 1 : i32} : <i1, 1>
-    call @forward_node29(%45, %46, %43) : (memref<64x56x56xi8, 12>, !hls.stream<i1, 1>, memref<64x56x56xi8, 12>) -> ()
+    call @forward_node29(%45, %46, %43) : (memref<64x56x56xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x56x56xi8, #hls.mem<dram>>) -> ()
     %47 = hls.dataflow.stream {depth = 3 : i32} : <i1, 3>
     %48 = hls.dataflow.stream {depth = 1 : i32} : <i1, 1>
-    call @forward_node28(%46, %41, %47, %25, %48, %21) : (!hls.stream<i1, 1>, memref<64x56x56xi8, 12>, !hls.stream<i1, 3>, memref<64x56x56xi8, 12>, !hls.stream<i1, 1>, memref<64x56x56xi8, 12>) -> ()
+    call @forward_node28(%46, %41, %47, %25, %48, %21) : (!hls.stream<i1, 1>, memref<64x56x56xi8, #hls.mem<dram>>, !hls.stream<i1, 3>, memref<64x56x56xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x56x56xi8, #hls.mem<dram>>) -> ()
     %49 = hls.dataflow.stream {depth = 1 : i32} : <i1, 1>
-    call @forward_node22(%48, %23, %33, %15, %49, %17) : (!hls.stream<i1, 1>, memref<64x56x56xi8, #map13, 12>, memref<64x64x3x3xi8, 12>, memref<64x28x28xi8, #map9, 12>, !hls.stream<i1, 1>, memref<64x28x28xi8, #map9, 12>) -> ()
+    call @forward_node22(%48, %23, %33, %15, %49, %17) : (!hls.stream<i1, 1>, memref<64x56x56xi8, #map13, #hls.mem<dram>>, memref<64x64x3x3xi8, #hls.mem<dram>>, memref<64x28x28xi8, #map9, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #map9, #hls.mem<dram>>) -> ()
     %50 = hls.dataflow.stream {depth = 1 : i32} : <i1, 1>
-    call @forward_node16(%35, %49, %19, %9, %50, %11) : (memref<64x64x3x3xi8, 12>, !hls.stream<i1, 1>, memref<64x28x28xi8, #map9, 12>, memref<64x28x28xi8, #map9, 12>, !hls.stream<i1, 1>, memref<64x28x28xi8, #map9, 12>) -> ()
+    call @forward_node16(%35, %49, %19, %9, %50, %11) : (memref<64x64x3x3xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #map9, #hls.mem<dram>>, memref<64x28x28xi8, #map9, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #map9, #hls.mem<dram>>) -> ()
     %51 = hls.dataflow.stream {depth = 1 : i32} : <i1, 1>
-    call @forward_node8(%47, %27, %37, %50, %13, %1, %51, %5, %3) : (!hls.stream<i1, 3>, memref<64x56x56xi8, 12>, memref<64x64xi8, 12>, !hls.stream<i1, 1>, memref<64x28x28xi8, 12>, memref<64x28x28xi8, 12>, !hls.stream<i1, 1>, memref<64x28x28xi8, 12>, memref<64x28x28xi8, 12>) -> ()
-    %52 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<64xi8, 7>
-    call @forward_node5(%51, %7, %52) : (!hls.stream<i1, 1>, memref<64x28x28xi8, 12>, memref<64xi8, 7>) -> ()
-    call @forward_node0(%52, %39, %31, %29) : (memref<64xi8, 7>, memref<1000x64xi8, 12>, memref<1000xi8, 12>, memref<1000xi8, 12>) -> ()
+    call @forward_node8(%47, %27, %37, %50, %13, %1, %51, %5, %3) : (!hls.stream<i1, 3>, memref<64x56x56xi8, #hls.mem<dram>>, memref<64x64xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.mem<dram>>, memref<64x28x28xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.mem<dram>>, memref<64x28x28xi8, #hls.mem<dram>>) -> ()
+    %52 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<64xi8, #hls.mem<bram_t2p>>
+    call @forward_node5(%51, %7, %52) : (!hls.stream<i1, 1>, memref<64x28x28xi8, #hls.mem<dram>>, memref<64xi8, #hls.mem<bram_t2p>>) -> ()
+    call @forward_node0(%52, %39, %31, %29) : (memref<64xi8, #hls.mem<bram_t2p>>, memref<1000x64xi8, #hls.mem<dram>>, memref<1000xi8, #hls.mem<dram>>, memref<1000xi8, #hls.mem<dram>>) -> ()
     return
   }
-  func.func @main(%arg0: memref<64x56x56xi8, 12>, %arg1: memref<1000x64xi8, 12>, %arg2: memref<64x64xi8, 12>, %arg3: memref<64x64x3x3xi8, 12>, %arg4: memref<64x64x3x3xi8, 12>, %arg5: memref<1000xi8, 12>) attributes {runtime} {
-    %0 = hls.dataflow.buffer {depth = 3 : i32} : memref<64x56x56xi8, 12>
-    %1 = hls.dataflow.buffer {depth = 1 : i32} : memref<64x56x56xi8, 12>
-    %2 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<64x28x28xi8, 12>
-    %3 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<64x28x28xi8, 12>
-    %4 = hls.dataflow.buffer {depth = 1 : i32} : memref<64x28x28xi8, 12>
-    %5 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<64x28x28xi8, 12>
-    %6 = hls.axi.pack %arg0 : (memref<64x56x56xi8, 12>) -> !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>
-    %7 = hls.axi.pack %arg0 : (memref<64x56x56xi8, 12>) -> !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>
-    %8 = hls.axi.pack %arg0 : (memref<64x56x56xi8, 12>) -> !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>
-    %9 = hls.axi.pack %arg1 : (memref<1000x64xi8, 12>) -> !hls.axi<memref<1000x64xi8, 12>, 0 : i32>
-    %10 = hls.axi.pack %arg2 : (memref<64x64xi8, 12>) -> !hls.axi<memref<64x64xi8, 12>, 0 : i32>
-    %11 = hls.axi.pack %arg3 : (memref<64x64x3x3xi8, 12>) -> !hls.axi<memref<64x64x3x3xi8, 12>, 0 : i32>
-    %12 = hls.axi.pack %arg4 : (memref<64x64x3x3xi8, 12>) -> !hls.axi<memref<64x64x3x3xi8, 12>, 0 : i32>
-    %13 = hls.axi.pack %arg5 : (memref<1000xi8, 12>) -> !hls.axi<memref<1000xi8, 12>, 0 : i32>
-    %14 = hls.axi.pack %arg5 : (memref<1000xi8, 12>) -> !hls.axi<memref<1000xi8, 12>, 0 : i32>
-    %15 = hls.axi.pack %0 : (memref<64x56x56xi8, 12>) -> !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>
-    %16 = hls.axi.pack %0 : (memref<64x56x56xi8, 12>) -> !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>
-    %17 = hls.axi.pack %1 : (memref<64x56x56xi8, 12>) -> !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>
-    %18 = hls.axi.pack %1 : (memref<64x56x56xi8, 12>) -> !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>
-    %19 = hls.axi.pack %2 : (memref<64x28x28xi8, 12>) -> !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>
-    %20 = hls.axi.pack %2 : (memref<64x28x28xi8, 12>) -> !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>
-    %21 = hls.axi.pack %2 : (memref<64x28x28xi8, 12>) -> !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>
-    %22 = hls.axi.pack %3 : (memref<64x28x28xi8, 12>) -> !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>
-    %23 = hls.axi.pack %3 : (memref<64x28x28xi8, 12>) -> !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>
-    %24 = hls.axi.pack %3 : (memref<64x28x28xi8, 12>) -> !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>
-    %25 = hls.axi.pack %4 : (memref<64x28x28xi8, 12>) -> !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>
-    %26 = hls.axi.pack %4 : (memref<64x28x28xi8, 12>) -> !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>
-    %27 = hls.axi.pack %5 : (memref<64x28x28xi8, 12>) -> !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>
-    %28 = hls.axi.pack %5 : (memref<64x28x28xi8, 12>) -> !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>
-    call @forward(%6, %7, %8, %9, %10, %11, %12, %13, %14, %15, %16, %17, %18, %19, %20, %21, %22, %23, %24, %25, %26, %27, %28) : (!hls.axi<memref<64x56x56xi8, 12>, 0 : i32>, !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>, !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>, !hls.axi<memref<1000x64xi8, 12>, 0 : i32>, !hls.axi<memref<64x64xi8, 12>, 0 : i32>, !hls.axi<memref<64x64x3x3xi8, 12>, 0 : i32>, !hls.axi<memref<64x64x3x3xi8, 12>, 0 : i32>, !hls.axi<memref<1000xi8, 12>, 0 : i32>, !hls.axi<memref<1000xi8, 12>, 0 : i32>, !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>, !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>, !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>, !hls.axi<memref<64x56x56xi8, 12>, 0 : i32>, !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>, !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>, !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>, !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>, !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>, !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>, !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>, !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>, !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>, !hls.axi<memref<64x28x28xi8, 12>, 0 : i32>) -> ()
+  func.func @main(%arg0: memref<64x56x56xi8, #hls.mem<dram>>, %arg1: memref<1000x64xi8, #hls.mem<dram>>, %arg2: memref<64x64xi8, #hls.mem<dram>>, %arg3: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg4: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg5: memref<1000xi8, #hls.mem<dram>>) attributes {runtime} {
+    %0 = hls.dataflow.buffer {depth = 3 : i32} : memref<64x56x56xi8, #hls.mem<dram>>
+    %1 = hls.dataflow.buffer {depth = 1 : i32} : memref<64x56x56xi8, #hls.mem<dram>>
+    %2 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<64x28x28xi8, #hls.mem<dram>>
+    %3 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<64x28x28xi8, #hls.mem<dram>>
+    %4 = hls.dataflow.buffer {depth = 1 : i32} : memref<64x28x28xi8, #hls.mem<dram>>
+    %5 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<64x28x28xi8, #hls.mem<dram>>
+    %6 = hls.axi.pack %arg0 : (memref<64x56x56xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>
+    %7 = hls.axi.pack %arg0 : (memref<64x56x56xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>
+    %8 = hls.axi.pack %arg0 : (memref<64x56x56xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>
+    %9 = hls.axi.pack %arg1 : (memref<1000x64xi8, #hls.mem<dram>>) -> !hls.axi<memref<1000x64xi8, #hls.mem<dram>>, mm>
+    %10 = hls.axi.pack %arg2 : (memref<64x64xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x64xi8, #hls.mem<dram>>, mm>
+    %11 = hls.axi.pack %arg3 : (memref<64x64x3x3xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x64x3x3xi8, #hls.mem<dram>>, mm>
+    %12 = hls.axi.pack %arg4 : (memref<64x64x3x3xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x64x3x3xi8, #hls.mem<dram>>, mm>
+    %13 = hls.axi.pack %arg5 : (memref<1000xi8, #hls.mem<dram>>) -> !hls.axi<memref<1000xi8, #hls.mem<dram>>, mm>
+    %14 = hls.axi.pack %arg5 : (memref<1000xi8, #hls.mem<dram>>) -> !hls.axi<memref<1000xi8, #hls.mem<dram>>, mm>
+    %15 = hls.axi.pack %0 : (memref<64x56x56xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>
+    %16 = hls.axi.pack %0 : (memref<64x56x56xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>
+    %17 = hls.axi.pack %1 : (memref<64x56x56xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>
+    %18 = hls.axi.pack %1 : (memref<64x56x56xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>
+    %19 = hls.axi.pack %2 : (memref<64x28x28xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>
+    %20 = hls.axi.pack %2 : (memref<64x28x28xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>
+    %21 = hls.axi.pack %2 : (memref<64x28x28xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>
+    %22 = hls.axi.pack %3 : (memref<64x28x28xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>
+    %23 = hls.axi.pack %3 : (memref<64x28x28xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>
+    %24 = hls.axi.pack %3 : (memref<64x28x28xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>
+    %25 = hls.axi.pack %4 : (memref<64x28x28xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>
+    %26 = hls.axi.pack %4 : (memref<64x28x28xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>
+    %27 = hls.axi.pack %5 : (memref<64x28x28xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>
+    %28 = hls.axi.pack %5 : (memref<64x28x28xi8, #hls.mem<dram>>) -> !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>
+    call @forward(%6, %7, %8, %9, %10, %11, %12, %13, %14, %15, %16, %17, %18, %19, %20, %21, %22, %23, %24, %25, %26, %27, %28) : (!hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<1000x64xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<64x64xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<64x64x3x3xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<64x64x3x3xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<1000xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<1000xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>, !hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> ()
     return
   }
 }

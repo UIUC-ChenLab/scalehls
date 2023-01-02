@@ -673,8 +673,7 @@ void ModuleEmitter::emitAxiPort(AxiPortOp op) {
     if (!isFullyPartitioned(memrefType)) {
       indent() << "#pragma HLS interface";
       // For now, we set the offset of all m_axi interfaces as slave.
-      auto kind = MemoryKind(memrefType.getMemorySpaceAsInt());
-      if (kind == MemoryKind::DRAM) {
+      if (isDram(memrefType)) {
         // FIXME: AXI cannot be directly enabled with the current model.
         // os << " m_axi offset=slave bundle=" << bundleName;
         os << " ap_memory";
@@ -686,7 +685,7 @@ void ModuleEmitter::emitAxiPort(AxiPortOp op) {
       os << "\n";
 
       // Emit DRAM variable as stable.
-      if (kind == MemoryKind::DRAM) {
+      if (isDram(memrefType)) {
         indent() << "#pragma HLS stable";
         os << " variable=";
         emitValue(op.getValue());
@@ -1731,7 +1730,7 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
 
   // Emit resource pragma when the array is not DRAM kind and is not fully
   // partitioned.
-  auto kind = MemoryKind(type.getMemorySpaceAsInt());
+  auto kind = getMemoryKind(type);
   if (kind != MemoryKind::DRAM && !isFullyPartitioned(type)) {
     emitPragmaFlag = true;
 

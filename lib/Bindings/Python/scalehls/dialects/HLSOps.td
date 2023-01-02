@@ -8,6 +8,6 @@
 #define BINDINGS_PYTHON_HLS_OPS_TD
 
 include "mlir/Bindings/Python/Attributes.td"
-include "scalehls/Dialect/HLS/HLS.td"
+include "scalehls/Dialect/HLS/HLSOps.td"
 
 #endif // BINDINGS_PYTHON_HLS_OPS_TD

@@ -105,7 +105,6 @@ void ScaleHLSEstimator::estimateLoadStoreTiming(Operation *op, int64_t begin) {
 
   SmallVector<int64_t, 8> factors;
   auto partitionNum = getPartitionFactors(memrefType, &factors);
-  auto storageType = MemoryKind(memrefType.getMemorySpaceAsInt());
   auto partitionIndices = getIntArrayAttrValue(op, "partition_indices");
 
   // Try to avoid memory port violation until a legal schedule is found. Since
@@ -123,15 +122,15 @@ void ScaleHLSEstimator::estimateLoadStoreTiming(Operation *op, int64_t begin) {
       for (unsigned p = 0; p < partitionNum; ++p) {
         MemPortInfo info;
 
-        if (isRam1P(storageType))
+        if (isRam1P(memrefType))
           info.rdwrPort = 1;
-        else if (isRam2P(storageType))
+        else if (isRam2P(memrefType))
           info.rdwrPort = 1, info.rdPort = 1;
-        else if (isRamT2P(storageType))
+        else if (isRamT2P(memrefType))
           info.rdwrPort = 2;
-        else if (isRamS2P(storageType))
+        else if (isRamS2P(memrefType))
           info.rdPort = 1, info.wrPort = 1;
-        else if (isDram(storageType))
+        else if (isDram(memrefType))
           info.rdPort = UINT_MAX, info.wrPort = UINT_MAX;
         else
           info.rdwrPort = 2;
@@ -237,10 +236,9 @@ int64_t ScaleHLSEstimator::getResMinII(int64_t begin, int64_t end,
     auto memref = pair.first;
     auto memrefType = memref.getType().cast<MemRefType>();
     auto partitionNum = getPartitionFactors(memrefType);
-    auto storageType = MemoryKind(memrefType.getMemorySpaceAsInt());
 
     // FIXME: Study how Vivado HLS handle AXI interfaces.
-    if (isDram(storageType))
+    if (isDram(memrefType))
       continue;
 
     auto accessNum = SmallVector<int64_t, 16>(partitionNum, 0);
@@ -255,9 +253,9 @@ int64_t ScaleHLSEstimator::getResMinII(int64_t begin, int64_t end,
 
           for (int64_t idx = 0; idx < partitionNum; ++idx) {
             auto &info = memPortInfos[idx];
-            if (isRam1P(storageType) && info.rdwrPort < 1)
+            if (isRam1P(memrefType) && info.rdwrPort < 1)
               ++accessNum[idx];
-            else if (isRamT2P(storageType) && info.rdwrPort < 2)
+            else if (isRamT2P(memrefType) && info.rdwrPort < 2)
               ++accessNum[idx];
             else if (info.rdPort < 1)
               ++accessNum[idx];
@@ -830,10 +828,9 @@ ResourceAttr ScaleHLSEstimator::calculateResource(Operation *funcOrLoop) {
       auto memrefType = op->getResult(0).getType().cast<MemRefType>();
       if (memrefType.getNumElements() > 1) {
         auto partitionNum = getPartitionFactors(memrefType);
-        auto storageType = MemoryKind(memrefType.getMemorySpaceAsInt());
 
         // TODO: Support URAM and interface BRAMs?
-        if (!isDram(storageType)) {
+        if (!isDram(memrefType)) {
           // Multiply bit width of type.
           // TODO: handle index types.
           int64_t memrefSize = memrefType.getElementTypeBitWidth() *

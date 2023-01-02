@@ -1027,22 +1027,40 @@ void AffineSelectOp::setConditional(IntegerSet set, ValueRange operands) {
 // HLS dialect utils
 //===----------------------------------------------------------------------===//
 
-bool hls::isRam1P(MemoryKind kind) {
+MemoryKind hls::getMemoryKind(MemRefType type) {
+  if (auto memorySpace = type.getMemorySpace())
+    if (auto kindAttr = memorySpace.dyn_cast<MemoryKindAttr>())
+      return kindAttr.getValue();
+  return MemoryKind::UNKNOWN;
+}
+
+bool hls::isRam1P(MemRefType type) {
+  auto kind = getMemoryKind(type);
   return kind == MemoryKind::LUTRAM_1P || kind == MemoryKind::BRAM_1P ||
          kind == MemoryKind::URAM_1P;
 }
-bool hls::isRam2P(MemoryKind kind) {
+bool hls::isRam2P(MemRefType type) {
+  auto kind = getMemoryKind(type);
   return kind == MemoryKind::LUTRAM_2P || kind == MemoryKind::BRAM_2P ||
          kind == MemoryKind::URAM_2P;
 }
-bool hls::isRamS2P(MemoryKind kind) {
+bool hls::isRamS2P(MemRefType type) {
+  auto kind = getMemoryKind(type);
   return kind == MemoryKind::LUTRAM_S2P || kind == MemoryKind::BRAM_S2P ||
          kind == MemoryKind::URAM_S2P;
 }
-bool hls::isRamT2P(MemoryKind kind) {
+bool hls::isRamT2P(MemRefType type) {
+  auto kind = getMemoryKind(type);
   return kind == MemoryKind::BRAM_T2P || kind == MemoryKind::URAM_T2P;
 }
-bool hls::isDram(MemoryKind kind) { return kind == MemoryKind::DRAM; }
+bool hls::isDram(MemRefType type) {
+  auto kind = getMemoryKind(type);
+  return kind == MemoryKind::DRAM;
+}
+bool hls::isUnknown(MemRefType type) {
+  auto kind = getMemoryKind(type);
+  return kind == MemoryKind::UNKNOWN;
+}
 
 /// Timing attribute utils.
 TimingAttr hls::getTiming(Operation *op) {
@@ -1138,6 +1156,26 @@ void hls::setRuntimeAttr(Operation *op) {
 }
 bool hls::hasRuntimeAttr(Operation *op) {
   return op->hasAttrOfType<UnitAttr>("runtime");
+}
+
+//===----------------------------------------------------------------------===//
+// MemoryKindAttr
+//===----------------------------------------------------------------------===//
+
+Attribute MemoryKindAttr::parse(AsmParser &p, Type type) {
+  StringRef kw;
+  if (p.parseLess() || p.parseKeyword(&kw) || p.parseGreater())
+    return Attribute();
+
+  auto kind = symbolizeMemoryKind(kw);
+  if (!kind.has_value())
+    return Attribute();
+
+  return MemoryKindAttr::get(p.getContext(), kind.value());
+}
+
+void MemoryKindAttr::print(AsmPrinter &p) const {
+  p << "<" << stringifyMemoryKind(getValue()) << ">";
 }
 
 //===----------------------------------------------------------------------===//

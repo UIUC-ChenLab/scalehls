@@ -4,14 +4,18 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_DIALECT_HLS_OPS_TD
-#define SCALEHLS_DIALECT_HLS_OPS_TD
+#ifndef SCALEHLS_DIALECT_HLS_HLSOPS_TD
+#define SCALEHLS_DIALECT_HLS_HLSOPS_TD
 
+include "scalehls/Dialect/HLS/HLSTypes.td"
+include "scalehls/Dialect/HLS/HLSInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/BuiltinAttributeInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
-include "scalehls/Dialect/HLS/Interfaces.td"
+
+class HLSOp<string mnemonic, list<Trait> traits = []> :
+    Op<HLSDialect, mnemonic, traits>;
 
 //===----------------------------------------------------------------------===//
 // Traits and Type Constraints
@@ -428,4 +432,4 @@ def AffineSelectOp : HLSOp<"affine.select", [NoMemoryEffect]> {
   }];
 }
 
-#endif // SCALEHLS_DIALECT_HLS_OPS_TD
+#endif // SCALEHLS_DIALECT_HLS_HLSOPS_TD

@@ -26,16 +26,16 @@ struct PlaceBuffer : public OpRewritePattern<func::FuncOp> {
     if (placeExternalBuffer || isConstBuffer)
       kind = type.getNumElements() >= threshold ? MemoryKind::DRAM
                                                 : MemoryKind::BRAM_T2P;
-    auto newType =
-        MemRefType::get(type.getShape(), type.getElementType(),
-                        type.getLayout().getAffineMap(), (unsigned)kind);
+    auto newType = MemRefType::get(
+        type.getShape(), type.getElementType(), type.getLayout().getAffineMap(),
+        MemoryKindAttr::get(type.getContext(), kind));
     return newType;
   }
 
   MemRefType getPlacedOnDramType(MemRefType type) const {
-    auto newType = MemRefType::get(type.getShape(), type.getElementType(),
-                                   type.getLayout().getAffineMap(),
-                                   (unsigned)MemoryKind::DRAM);
+    auto newType = MemRefType::get(
+        type.getShape(), type.getElementType(), type.getLayout().getAffineMap(),
+        MemoryKindAttr::get(type.getContext(), MemoryKind::DRAM));
     return newType;
   }
 

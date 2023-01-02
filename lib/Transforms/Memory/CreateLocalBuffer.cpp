@@ -40,9 +40,10 @@ struct CreateLocalBuffer
 
       // We strip the original layout map and memory kind when constructing the
       // local buffer's memref type.
+      auto subviewType = subview.getType();
       auto bufType = MemRefType::get(
-          subview.getType().getShape(), subview.getType().getElementType(),
-          AffineMap(), (unsigned)MemoryKind::BRAM_T2P);
+          subviewType.getShape(), subviewType.getElementType(), AffineMap(),
+          MemoryKindAttr::get(subview.getContext(), MemoryKind::BRAM_T2P));
 
       // Allocate an on-chip buffer and replace all its uses.
       auto loc = builder.getUnknownLoc();
