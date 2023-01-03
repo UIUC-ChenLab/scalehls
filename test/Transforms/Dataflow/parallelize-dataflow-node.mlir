@@ -98,28 +98,11 @@
 // CHECK:                       %9 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, 7>
 // CHECK:                       hls.dataflow.node(%arg26) -> (%9) [%arg27, %arg24, %arg25, %arg21, %arg23] {inputTaps = [0 : i32], level = 2 : i32} : (memref<64x56x56xi8, 12>) -> memref<16x14x14xi8, 7>[index, index, index, index, index] {
 // CHECK:                       ^bb0(%arg30: memref<64x56x56xi8, 12>, %arg31: memref<16x14x14xi8, 7>, %arg32: index, %arg33: index, %arg34: index, %arg35: index, %arg36: index):
-// CHECK:                         %c0 = arith.constant 0 : index
-// CHECK:                         %c0_0 = arith.constant 0 : index
 // CHECK:                         affine.for %arg37 = 0 to 16 {
-// CHECK:                           affine.for %arg38 = 0 to 14 step 2 {
-// CHECK:                             affine.for %arg39 = 0 to 14 step 2 {
-// CHECK:                               %11 = affine.apply #map(%arg38, %c0)
-// CHECK:                               %12 = affine.apply #map(%arg39, %c0_0)
-// CHECK:                               %13 = affine.load %arg30[%arg37 + symbol(%arg32) * 16, %11 * 2 + symbol(%arg33) + symbol(%arg34) * 28 - 1, %12 * 2 + symbol(%arg35) + symbol(%arg36) * 28 - 1] : memref<64x56x56xi8, 12>
-// CHECK:                               affine.store %13, %arg31[%arg37, %11, %12] : memref<16x14x14xi8, 7>
-// CHECK:                               %14 = affine.apply #map1(%c0_0)
-// CHECK:                               %15 = affine.apply #map(%arg39, %14)
-// CHECK:                               %16 = affine.load %arg30[%arg37 + symbol(%arg32) * 16, %11 * 2 + symbol(%arg33) + symbol(%arg34) * 28 - 1, %15 * 2 + symbol(%arg35) + symbol(%arg36) * 28 - 1] : memref<64x56x56xi8, 12>
-// CHECK:                               affine.store %16, %arg31[%arg37, %11, %15] : memref<16x14x14xi8, 7>
-// CHECK:                               %17 = affine.apply #map1(%c0)
-// CHECK:                               %18 = affine.apply #map(%arg38, %17)
-// CHECK:                               %19 = affine.apply #map(%arg39, %c0_0)
-// CHECK:                               %20 = affine.load %arg30[%arg37 + symbol(%arg32) * 16, %18 * 2 + symbol(%arg33) + symbol(%arg34) * 28 - 1, %19 * 2 + symbol(%arg35) + symbol(%arg36) * 28 - 1] : memref<64x56x56xi8, 12>
-// CHECK:                               affine.store %20, %arg31[%arg37, %18, %19] : memref<16x14x14xi8, 7>
-// CHECK:                               %21 = affine.apply #map1(%c0_0)
-// CHECK:                               %22 = affine.apply #map(%arg39, %21)
-// CHECK:                               %23 = affine.load %arg30[%arg37 + symbol(%arg32) * 16, %18 * 2 + symbol(%arg33) + symbol(%arg34) * 28 - 1, %22 * 2 + symbol(%arg35) + symbol(%arg36) * 28 - 1] : memref<64x56x56xi8, 12>
-// CHECK:                               affine.store %23, %arg31[%arg37, %18, %22] : memref<16x14x14xi8, 7>
+// CHECK:                           affine.for %arg38 = 0 to 14 {
+// CHECK:                             affine.for %arg39 = 0 to 14 {
+// CHECK:                               %11 = affine.load %arg30[%arg37 + symbol(%arg32) * 16, %arg38 * 2 + symbol(%arg33) + symbol(%arg34) * 28 - 1, %arg39 * 2 + symbol(%arg35) + symbol(%arg36) * 28 - 1] : memref<64x56x56xi8, 12>
+// CHECK:                               affine.store %11, %arg31[%arg37, %arg38, %arg39] : memref<16x14x14xi8, 7>
 // CHECK:                             } {parallel}
 // CHECK:                           } {parallel}
 // CHECK:                         } {parallel}
@@ -135,28 +118,11 @@
 // CHECK:                       }
 // CHECK:                       hls.dataflow.node(%arg22) -> (%7) [%arg29, %arg25, %arg23] {inputTaps = [0 : i32], level = 2 : i32} : (memref<64x28x28xi8, 12>) -> memref<16x14x14xi8, 7>[index, index, index] {
 // CHECK:                       ^bb0(%arg30: memref<64x28x28xi8, 12>, %arg31: memref<16x14x14xi8, 7>, %arg32: index, %arg33: index, %arg34: index):
-// CHECK:                         %c0 = arith.constant 0 : index
-// CHECK:                         %c0_0 = arith.constant 0 : index
 // CHECK:                         affine.for %arg35 = 0 to 16 {
-// CHECK:                           affine.for %arg36 = 0 to 14 step 2 {
-// CHECK:                             affine.for %arg37 = 0 to 14 step 2 {
-// CHECK:                               %11 = affine.apply #map(%arg36, %c0)
-// CHECK:                               %12 = affine.apply #map(%arg37, %c0_0)
-// CHECK:                               %13 = affine.load %arg30[%arg35 + symbol(%arg32) * 16, %11 + symbol(%arg33) * 14, %12 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
-// CHECK:                               affine.store %13, %arg31[%arg35, %11, %12] : memref<16x14x14xi8, 7>
-// CHECK:                               %14 = affine.apply #map1(%c0_0)
-// CHECK:                               %15 = affine.apply #map(%arg37, %14)
-// CHECK:                               %16 = affine.load %arg30[%arg35 + symbol(%arg32) * 16, %11 + symbol(%arg33) * 14, %15 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
-// CHECK:                               affine.store %16, %arg31[%arg35, %11, %15] : memref<16x14x14xi8, 7>
-// CHECK:                               %17 = affine.apply #map1(%c0)
-// CHECK:                               %18 = affine.apply #map(%arg36, %17)
-// CHECK:                               %19 = affine.apply #map(%arg37, %c0_0)
-// CHECK:                               %20 = affine.load %arg30[%arg35 + symbol(%arg32) * 16, %18 + symbol(%arg33) * 14, %19 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
-// CHECK:                               affine.store %20, %arg31[%arg35, %18, %19] : memref<16x14x14xi8, 7>
-// CHECK:                               %21 = affine.apply #map1(%c0_0)
-// CHECK:                               %22 = affine.apply #map(%arg37, %21)
-// CHECK:                               %23 = affine.load %arg30[%arg35 + symbol(%arg32) * 16, %18 + symbol(%arg33) * 14, %22 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
-// CHECK:                               affine.store %23, %arg31[%arg35, %18, %22] : memref<16x14x14xi8, 7>
+// CHECK:                           affine.for %arg36 = 0 to 14 {
+// CHECK:                             affine.for %arg37 = 0 to 14 {
+// CHECK:                               %11 = affine.load %arg30[%arg35 + symbol(%arg32) * 16, %arg36 + symbol(%arg33) * 14, %arg37 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
+// CHECK:                               affine.store %11, %arg31[%arg35, %arg36, %arg37] : memref<16x14x14xi8, 7>
 // CHECK:                             } {parallel}
 // CHECK:                           } {parallel}
 // CHECK:                         } {parallel}
@@ -231,28 +197,11 @@
 // CHECK:                       }
 // CHECK:                       hls.dataflow.node(%10) -> (%arg22) [%arg29, %arg25, %arg23] {inputTaps = [0 : i32], level = 0 : i32} : (memref<16x14x14xi8, 7>) -> memref<64x28x28xi8, 12>[index, index, index] {
 // CHECK:                       ^bb0(%arg30: memref<16x14x14xi8, 7>, %arg31: memref<64x28x28xi8, 12>, %arg32: index, %arg33: index, %arg34: index):
-// CHECK:                         %c0 = arith.constant 0 : index
-// CHECK:                         %c0_0 = arith.constant 0 : index
 // CHECK:                         affine.for %arg35 = 0 to 16 {
-// CHECK:                           affine.for %arg36 = 0 to 14 step 2 {
-// CHECK:                             affine.for %arg37 = 0 to 14 step 2 {
-// CHECK:                               %11 = affine.apply #map(%arg36, %c0)
-// CHECK:                               %12 = affine.apply #map(%arg37, %c0_0)
-// CHECK:                               %13 = affine.load %arg30[%arg35, %11, %12] : memref<16x14x14xi8, 7>
-// CHECK:                               affine.store %13, %arg31[%arg35 + symbol(%arg32) * 16, %11 + symbol(%arg33) * 14, %12 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
-// CHECK:                               %14 = affine.apply #map1(%c0_0)
-// CHECK:                               %15 = affine.apply #map(%arg37, %14)
-// CHECK:                               %16 = affine.load %arg30[%arg35, %11, %15] : memref<16x14x14xi8, 7>
-// CHECK:                               affine.store %16, %arg31[%arg35 + symbol(%arg32) * 16, %11 + symbol(%arg33) * 14, %15 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
-// CHECK:                               %17 = affine.apply #map1(%c0)
-// CHECK:                               %18 = affine.apply #map(%arg36, %17)
-// CHECK:                               %19 = affine.apply #map(%arg37, %c0_0)
-// CHECK:                               %20 = affine.load %arg30[%arg35, %18, %19] : memref<16x14x14xi8, 7>
-// CHECK:                               affine.store %20, %arg31[%arg35 + symbol(%arg32) * 16, %18 + symbol(%arg33) * 14, %19 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
-// CHECK:                               %21 = affine.apply #map1(%c0_0)
-// CHECK:                               %22 = affine.apply #map(%arg37, %21)
-// CHECK:                               %23 = affine.load %arg30[%arg35, %18, %22] : memref<16x14x14xi8, 7>
-// CHECK:                               affine.store %23, %arg31[%arg35 + symbol(%arg32) * 16, %18 + symbol(%arg33) * 14, %22 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
+// CHECK:                           affine.for %arg36 = 0 to 14 {
+// CHECK:                             affine.for %arg37 = 0 to 14 {
+// CHECK:                               %11 = affine.load %arg30[%arg35, %arg36, %arg37] : memref<16x14x14xi8, 7>
+// CHECK:                               affine.store %11, %arg31[%arg35 + symbol(%arg32) * 16, %arg36 + symbol(%arg33) * 14, %arg37 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
 // CHECK:                             } {parallel}
 // CHECK:                           } {parallel}
 // CHECK:                         } {parallel}
@@ -281,28 +230,11 @@
 // CHECK:                       %9 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, 7>
 // CHECK:                       hls.dataflow.node(%arg28) -> (%9) [%arg23, %arg22, %arg25, %arg24, %arg21] {inputTaps = [0 : i32], level = 2 : i32} : (memref<64x28x28xi8, 12>) -> memref<16x14x14xi8, 7>[index, index, index, index, index] {
 // CHECK:                       ^bb0(%arg30: memref<64x28x28xi8, 12>, %arg31: memref<16x14x14xi8, 7>, %arg32: index, %arg33: index, %arg34: index, %arg35: index, %arg36: index):
-// CHECK:                         %c0 = arith.constant 0 : index
-// CHECK:                         %c0_0 = arith.constant 0 : index
 // CHECK:                         affine.for %arg37 = 0 to 16 {
-// CHECK:                           affine.for %arg38 = 0 to 14 step 2 {
-// CHECK:                             affine.for %arg39 = 0 to 14 step 2 {
-// CHECK:                               %11 = affine.apply #map(%arg38, %c0)
-// CHECK:                               %12 = affine.apply #map(%arg39, %c0_0)
-// CHECK:                               %13 = affine.load %arg30[%arg37 + symbol(%arg32) * 16, %11 + symbol(%arg33) + symbol(%arg34) * 14 - 1, %12 + symbol(%arg35) + symbol(%arg36) * 14 - 1] : memref<64x28x28xi8, 12>
-// CHECK:                               affine.store %13, %arg31[%arg37, %11, %12] : memref<16x14x14xi8, 7>
-// CHECK:                               %14 = affine.apply #map1(%c0_0)
-// CHECK:                               %15 = affine.apply #map(%arg39, %14)
-// CHECK:                               %16 = affine.load %arg30[%arg37 + symbol(%arg32) * 16, %11 + symbol(%arg33) + symbol(%arg34) * 14 - 1, %15 + symbol(%arg35) + symbol(%arg36) * 14 - 1] : memref<64x28x28xi8, 12>
-// CHECK:                               affine.store %16, %arg31[%arg37, %11, %15] : memref<16x14x14xi8, 7>
-// CHECK:                               %17 = affine.apply #map1(%c0)
-// CHECK:                               %18 = affine.apply #map(%arg38, %17)
-// CHECK:                               %19 = affine.apply #map(%arg39, %c0_0)
-// CHECK:                               %20 = affine.load %arg30[%arg37 + symbol(%arg32) * 16, %18 + symbol(%arg33) + symbol(%arg34) * 14 - 1, %19 + symbol(%arg35) + symbol(%arg36) * 14 - 1] : memref<64x28x28xi8, 12>
-// CHECK:                               affine.store %20, %arg31[%arg37, %18, %19] : memref<16x14x14xi8, 7>
-// CHECK:                               %21 = affine.apply #map1(%c0_0)
-// CHECK:                               %22 = affine.apply #map(%arg39, %21)
-// CHECK:                               %23 = affine.load %arg30[%arg37 + symbol(%arg32) * 16, %18 + symbol(%arg33) + symbol(%arg34) * 14 - 1, %22 + symbol(%arg35) + symbol(%arg36) * 14 - 1] : memref<64x28x28xi8, 12>
-// CHECK:                               affine.store %23, %arg31[%arg37, %18, %22] : memref<16x14x14xi8, 7>
+// CHECK:                           affine.for %arg38 = 0 to 14 {
+// CHECK:                             affine.for %arg39 = 0 to 14 {
+// CHECK:                               %11 = affine.load %arg30[%arg37 + symbol(%arg32) * 16, %arg38 + symbol(%arg33) + symbol(%arg34) * 14 - 1, %arg39 + symbol(%arg35) + symbol(%arg36) * 14 - 1] : memref<64x28x28xi8, 12>
+// CHECK:                               affine.store %11, %arg31[%arg37, %arg38, %arg39] : memref<16x14x14xi8, 7>
 // CHECK:                             } {parallel}
 // CHECK:                           } {parallel}
 // CHECK:                         } {parallel}
@@ -318,28 +250,11 @@
 // CHECK:                       }
 // CHECK:                       hls.dataflow.node(%arg26) -> (%7) [%arg29, %arg25, %arg21] {inputTaps = [0 : i32], level = 2 : i32} : (memref<64x28x28xi8, 12>) -> memref<16x14x14xi8, 7>[index, index, index] {
 // CHECK:                       ^bb0(%arg30: memref<64x28x28xi8, 12>, %arg31: memref<16x14x14xi8, 7>, %arg32: index, %arg33: index, %arg34: index):
-// CHECK:                         %c0 = arith.constant 0 : index
-// CHECK:                         %c0_0 = arith.constant 0 : index
 // CHECK:                         affine.for %arg35 = 0 to 16 {
-// CHECK:                           affine.for %arg36 = 0 to 14 step 2 {
-// CHECK:                             affine.for %arg37 = 0 to 14 step 2 {
-// CHECK:                               %11 = affine.apply #map(%arg36, %c0)
-// CHECK:                               %12 = affine.apply #map(%arg37, %c0_0)
-// CHECK:                               %13 = affine.load %arg30[%arg35 + symbol(%arg32) * 16, %11 + symbol(%arg33) * 14, %12 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
-// CHECK:                               affine.store %13, %arg31[%arg35, %11, %12] : memref<16x14x14xi8, 7>
-// CHECK:                               %14 = affine.apply #map1(%c0_0)
-// CHECK:                               %15 = affine.apply #map(%arg37, %14)
-// CHECK:                               %16 = affine.load %arg30[%arg35 + symbol(%arg32) * 16, %11 + symbol(%arg33) * 14, %15 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
-// CHECK:                               affine.store %16, %arg31[%arg35, %11, %15] : memref<16x14x14xi8, 7>
-// CHECK:                               %17 = affine.apply #map1(%c0)
-// CHECK:                               %18 = affine.apply #map(%arg36, %17)
-// CHECK:                               %19 = affine.apply #map(%arg37, %c0_0)
-// CHECK:                               %20 = affine.load %arg30[%arg35 + symbol(%arg32) * 16, %18 + symbol(%arg33) * 14, %19 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
-// CHECK:                               affine.store %20, %arg31[%arg35, %18, %19] : memref<16x14x14xi8, 7>
-// CHECK:                               %21 = affine.apply #map1(%c0_0)
-// CHECK:                               %22 = affine.apply #map(%arg37, %21)
-// CHECK:                               %23 = affine.load %arg30[%arg35 + symbol(%arg32) * 16, %18 + symbol(%arg33) * 14, %22 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
-// CHECK:                               affine.store %23, %arg31[%arg35, %18, %22] : memref<16x14x14xi8, 7>
+// CHECK:                           affine.for %arg36 = 0 to 14 {
+// CHECK:                             affine.for %arg37 = 0 to 14 {
+// CHECK:                               %11 = affine.load %arg30[%arg35 + symbol(%arg32) * 16, %arg36 + symbol(%arg33) * 14, %arg37 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
+// CHECK:                               affine.store %11, %arg31[%arg35, %arg36, %arg37] : memref<16x14x14xi8, 7>
 // CHECK:                             } {parallel}
 // CHECK:                           } {parallel}
 // CHECK:                         } {parallel}
@@ -401,28 +316,11 @@
 // CHECK:                       }
 // CHECK:                       hls.dataflow.node(%10) -> (%arg26) [%arg29, %arg25, %arg21] {inputTaps = [0 : i32], level = 0 : i32} : (memref<16x14x14xi8, 7>) -> memref<64x28x28xi8, 12>[index, index, index] {
 // CHECK:                       ^bb0(%arg30: memref<16x14x14xi8, 7>, %arg31: memref<64x28x28xi8, 12>, %arg32: index, %arg33: index, %arg34: index):
-// CHECK:                         %c0 = arith.constant 0 : index
-// CHECK:                         %c0_0 = arith.constant 0 : index
 // CHECK:                         affine.for %arg35 = 0 to 16 {
-// CHECK:                           affine.for %arg36 = 0 to 14 step 2 {
-// CHECK:                             affine.for %arg37 = 0 to 14 step 2 {
-// CHECK:                               %11 = affine.apply #map(%arg36, %c0)
-// CHECK:                               %12 = affine.apply #map(%arg37, %c0_0)
-// CHECK:                               %13 = affine.load %arg30[%arg35, %11, %12] : memref<16x14x14xi8, 7>
-// CHECK:                               affine.store %13, %arg31[%arg35 + symbol(%arg32) * 16, %11 + symbol(%arg33) * 14, %12 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
-// CHECK:                               %14 = affine.apply #map1(%c0_0)
-// CHECK:                               %15 = affine.apply #map(%arg37, %14)
-// CHECK:                               %16 = affine.load %arg30[%arg35, %11, %15] : memref<16x14x14xi8, 7>
-// CHECK:                               affine.store %16, %arg31[%arg35 + symbol(%arg32) * 16, %11 + symbol(%arg33) * 14, %15 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
-// CHECK:                               %17 = affine.apply #map1(%c0)
-// CHECK:                               %18 = affine.apply #map(%arg36, %17)
-// CHECK:                               %19 = affine.apply #map(%arg37, %c0_0)
-// CHECK:                               %20 = affine.load %arg30[%arg35, %18, %19] : memref<16x14x14xi8, 7>
-// CHECK:                               affine.store %20, %arg31[%arg35 + symbol(%arg32) * 16, %18 + symbol(%arg33) * 14, %19 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
-// CHECK:                               %21 = affine.apply #map1(%c0_0)
-// CHECK:                               %22 = affine.apply #map(%arg37, %21)
-// CHECK:                               %23 = affine.load %arg30[%arg35, %18, %22] : memref<16x14x14xi8, 7>
-// CHECK:                               affine.store %23, %arg31[%arg35 + symbol(%arg32) * 16, %18 + symbol(%arg33) * 14, %22 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
+// CHECK:                           affine.for %arg36 = 0 to 14 {
+// CHECK:                             affine.for %arg37 = 0 to 14 {
+// CHECK:                               %11 = affine.load %arg30[%arg35, %arg36, %arg37] : memref<16x14x14xi8, 7>
+// CHECK:                               affine.store %11, %arg31[%arg35 + symbol(%arg32) * 16, %arg36 + symbol(%arg33) * 14, %arg37 + symbol(%arg34) * 14] : memref<64x28x28xi8, 12>
 // CHECK:                             } {parallel}
 // CHECK:                           } {parallel}
 // CHECK:                         } {parallel}

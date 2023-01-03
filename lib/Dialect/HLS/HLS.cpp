@@ -1123,6 +1123,47 @@ PartitionLayoutAttr PartitionLayoutAttr::getWithActualFactors(
 }
 
 //===----------------------------------------------------------------------===//
+// ExtBufferLayoutAttr
+//===----------------------------------------------------------------------===//
+
+AffineMap ExtBufferLayoutAttr::getAffineMap() const {
+  auto b = Builder(getContext());
+  auto exprs = SmallVector<AffineExpr>(getMap().getResults());
+
+  for (auto [expr, vectorSize] :
+       llvm::zip(llvm::drop_begin(exprs, exprs.size() - 2), getVectorShape()))
+    expr = expr.floorDiv(vectorSize);
+
+  for (auto vectorSize : llvm::enumerate(getVectorShape()))
+    exprs.push_back(b.getAffineDimExpr(vectorSize.index()) %
+                    vectorSize.value());
+  return AffineMap::get(getMap().getNumDims(), 0, exprs, getContext());
+}
+
+LogicalResult ExtBufferLayoutAttr::verifyLayout(
+    ArrayRef<int64_t> shape,
+    function_ref<InFlightDiagnostic()> emitError) const {
+  if (shape.size() != getVectorShape().size())
+    return emitError() << "number of memref dimensions must be equal to number "
+                          "of vector shape dimensions";
+
+  for (auto [size, vectorSize] : llvm::zip(shape, getVectorShape()))
+    if (size % vectorSize != 0)
+      return emitError() << "memref dimension size must be a multiple of "
+                            "vector shape dimension size";
+  return success();
+}
+
+LogicalResult
+ExtBufferLayoutAttr::verify(function_ref<InFlightDiagnostic()> emitError,
+                            AffineMap map, ArrayRef<int64_t> vectorShape) {
+  if (map.getNumDims() != vectorShape.size())
+    return emitError() << "number of dimensions in affine map must be equal to "
+                          "number of vector shape dimensions";
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
 // HLS resource and timing attributes
 //===----------------------------------------------------------------------===//
 

@@ -230,75 +230,75 @@
 // CHECK:     hls.dataflow.stream_write %arg6, %true : <i1, 1>, i1
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node17(%arg0: memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg1: memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+// CHECK:   func.func @forward_node17(%arg0: memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg1: memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
 // CHECK:     affine.for %arg5 = 0 to 16 {
 // CHECK:       affine.for %arg6 = 0 to 14 step 2 {
 // CHECK:         affine.for %arg7 = 0 to 14 step 2 {
-// CHECK:           %0 = affine.load %arg0[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           affine.store %0, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
-// CHECK:           %1 = affine.load %arg0[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           affine.store %1, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
-// CHECK:           %2 = affine.load %arg0[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           affine.store %2, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
-// CHECK:           %3 = affine.load %arg0[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           affine.store %3, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           %0 = affine.load %arg0[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           affine.store %0, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           %1 = affine.load %arg0[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           affine.store %1, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           %2 = affine.load %arg0[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           affine.store %2, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           %3 = affine.load %arg0[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           affine.store %3, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
 // CHECK:         } {loop_directive = #hls.loop<pipeline = true, target_ii = 1, dataflow = false, flatten = false>, parallel}
 // CHECK:       } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, parallel}
 // CHECK:     } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node18(%arg0: memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg1: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg2: memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg3: memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>) attributes {inline} {
+// CHECK:   func.func @forward_node18(%arg0: memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg1: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg2: memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg3: memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>) attributes {inline} {
 // CHECK:     affine.for %arg4 = 0 to 16 {
 // CHECK:       affine.for %arg5 = 0 to 16 {
 // CHECK:         affine.for %arg6 = 0 to 14 step 2 {
 // CHECK:           affine.for %arg7 = 0 to 14 step 2 {
-// CHECK:             %0 = affine.load %arg0[%arg4, %arg6, %arg7] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %0 = affine.load %arg0[%arg4, %arg6, %arg7] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
 // CHECK:             %1 = affine.load %arg1[%arg5, %arg4] : memref<16x16xi8, #hls.mem<bram_t2p>>
-// CHECK:             %2 = affine.load %arg2[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %3 = affine.load %arg3[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %2 = affine.load %arg2[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %3 = affine.load %arg3[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
 // CHECK:             %4 = hls.affine.select #set(%arg4) %2, %3 : i8
 // CHECK:             %5 = arith.muli %0, %1 : i8
 // CHECK:             %6 = arith.addi %4, %5 : i8
-// CHECK:             affine.store %6, %arg3[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %7 = affine.load %arg0[%arg4, %arg6, %arg7 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %8 = affine.load %arg2[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %9 = affine.load %arg3[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             affine.store %6, %arg3[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %7 = affine.load %arg0[%arg4, %arg6, %arg7 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %8 = affine.load %arg2[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %9 = affine.load %arg3[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
 // CHECK:             %10 = hls.affine.select #set(%arg4) %8, %9 : i8
 // CHECK:             %11 = arith.muli %7, %1 : i8
 // CHECK:             %12 = arith.addi %10, %11 : i8
-// CHECK:             affine.store %12, %arg3[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %13 = affine.load %arg0[%arg4, %arg6 + 1, %arg7] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %14 = affine.load %arg2[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %15 = affine.load %arg3[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             affine.store %12, %arg3[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %13 = affine.load %arg0[%arg4, %arg6 + 1, %arg7] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %14 = affine.load %arg2[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %15 = affine.load %arg3[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
 // CHECK:             %16 = hls.affine.select #set(%arg4) %14, %15 : i8
 // CHECK:             %17 = arith.muli %13, %1 : i8
 // CHECK:             %18 = arith.addi %16, %17 : i8
-// CHECK:             affine.store %18, %arg3[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %19 = affine.load %arg0[%arg4, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %20 = affine.load %arg2[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %21 = affine.load %arg3[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             affine.store %18, %arg3[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %19 = affine.load %arg0[%arg4, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %20 = affine.load %arg2[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %21 = affine.load %arg3[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
 // CHECK:             %22 = hls.affine.select #set(%arg4) %20, %21 : i8
 // CHECK:             %23 = arith.muli %19, %1 : i8
 // CHECK:             %24 = arith.addi %22, %23 : i8
-// CHECK:             affine.store %24, %arg3[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             affine.store %24, %arg3[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
 // CHECK:           } {loop_directive = #hls.loop<pipeline = true, target_ii = 1, dataflow = false, flatten = false>, parallel, point}
 // CHECK:         } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, parallel, point}
 // CHECK:       } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, parallel, point}
 // CHECK:     } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, point}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node19(%arg0: memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+// CHECK:   func.func @forward_node19(%arg0: memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
 // CHECK:     affine.for %arg5 = 0 to 16 {
 // CHECK:       affine.for %arg6 = 0 to 14 step 2 {
 // CHECK:         affine.for %arg7 = 0 to 14 step 2 {
-// CHECK:           %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
-// CHECK:           affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           %1 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
-// CHECK:           affine.store %1, %arg1[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           %2 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
-// CHECK:           affine.store %2, %arg1[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           %3 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
-// CHECK:           affine.store %3, %arg1[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           %1 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           affine.store %1, %arg1[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           %2 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           affine.store %2, %arg1[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           %3 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           affine.store %3, %arg1[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
 // CHECK:         } {loop_directive = #hls.loop<pipeline = true, target_ii = 1, dataflow = false, flatten = false>, parallel}
 // CHECK:       } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, parallel}
 // CHECK:     } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, parallel}
@@ -313,24 +313,24 @@
 // CHECK:     } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node21(%arg0: memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index, %arg5: index, %arg6: index) attributes {inline} {
+// CHECK:   func.func @forward_node21(%arg0: memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index, %arg5: index, %arg6: index) attributes {inline} {
 // CHECK:     affine.for %arg7 = 0 to 16 {
 // CHECK:       affine.for %arg8 = 0 to 14 step 2 {
 // CHECK:         affine.for %arg9 = 0 to 14 step 2 {
-// CHECK:           %0 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 + symbol(%arg3) + symbol(%arg4) * 14 - 1, %arg9 + symbol(%arg5) + symbol(%arg6) * 14 - 1] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
-// CHECK:           affine.store %0, %arg1[%arg7, %arg8, %arg9] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           %1 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 + symbol(%arg3) + symbol(%arg4) * 14 - 1, %arg9 + symbol(%arg5) + symbol(%arg6) * 14] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
-// CHECK:           affine.store %1, %arg1[%arg7, %arg8, %arg9 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           %2 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 + symbol(%arg3) + symbol(%arg4) * 14, %arg9 + symbol(%arg5) + symbol(%arg6) * 14 - 1] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
-// CHECK:           affine.store %2, %arg1[%arg7, %arg8 + 1, %arg9] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           %3 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 + symbol(%arg3) + symbol(%arg4) * 14, %arg9 + symbol(%arg5) + symbol(%arg6) * 14] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
-// CHECK:           affine.store %3, %arg1[%arg7, %arg8 + 1, %arg9 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           %0 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 + symbol(%arg3) + symbol(%arg4) * 14 - 1, %arg9 + symbol(%arg5) + symbol(%arg6) * 14 - 1] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           affine.store %0, %arg1[%arg7, %arg8, %arg9] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           %1 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 + symbol(%arg3) + symbol(%arg4) * 14 - 1, %arg9 + symbol(%arg5) + symbol(%arg6) * 14] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           affine.store %1, %arg1[%arg7, %arg8, %arg9 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           %2 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 + symbol(%arg3) + symbol(%arg4) * 14, %arg9 + symbol(%arg5) + symbol(%arg6) * 14 - 1] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           affine.store %2, %arg1[%arg7, %arg8 + 1, %arg9] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           %3 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 + symbol(%arg3) + symbol(%arg4) * 14, %arg9 + symbol(%arg5) + symbol(%arg6) * 14] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           affine.store %3, %arg1[%arg7, %arg8 + 1, %arg9 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
 // CHECK:         } {loop_directive = #hls.loop<pipeline = true, target_ii = 1, dataflow = false, flatten = false>, parallel}
 // CHECK:       } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, parallel}
 // CHECK:     } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node16(%arg0: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg1: !hls.stream<i1, 1>, %arg2: memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, %arg3: memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, %arg4: !hls.stream<i1, 1>, %arg5: memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>) {
+// CHECK:   func.func @forward_node16(%arg0: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg1: !hls.stream<i1, 1>, %arg2: memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, %arg3: memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, %arg4: !hls.stream<i1, 1>, %arg5: memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>) {
 // CHECK:     %true = arith.constant true
 // CHECK:     hls.dataflow.stream_read %arg1 : (!hls.stream<i1, 1>) -> ()
 // CHECK:     affine.for %arg6 = 0 to 576 {
@@ -340,101 +340,101 @@
 // CHECK:       %3 = affine.apply #map9(%arg6)
 // CHECK:       %4 = affine.apply #map10(%arg6)
 // CHECK:       %5 = affine.apply #map11(%arg6)
-// CHECK:       %6 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:       %6 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
 // CHECK:       %7 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x16xi8, #hls.mem<bram_t2p>>
-// CHECK:       %8 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:       func.call @forward_node21(%arg2, %8, %5, %4, %1, %3, %0) : (memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, index, index, index, index, index) -> ()
+// CHECK:       %8 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:       func.call @forward_node21(%arg2, %8, %5, %4, %1, %3, %0) : (memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, index, index, index, index, index) -> ()
 // CHECK:       func.call @forward_node20(%arg0, %7, %2, %5, %4, %3) : (memref<64x64x3x3xi8, #hls.mem<dram>>, memref<16x16xi8, #hls.mem<bram_t2p>>, index, index, index, index) -> ()
-// CHECK:       func.call @forward_node19(%arg3, %6, %2, %1, %0) : (memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, index, index, index) -> ()
-// CHECK:       %9 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:       func.call @forward_node18(%8, %7, %6, %9) : (memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, memref<16x16xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>) -> ()
-// CHECK:       func.call @forward_node17(%9, %arg5, %2, %1, %0) : (memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, index, index, index) -> ()
+// CHECK:       func.call @forward_node19(%arg3, %6, %2, %1, %0) : (memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, index, index, index) -> ()
+// CHECK:       %9 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:       func.call @forward_node18(%8, %7, %6, %9) : (memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, memref<16x16xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>) -> ()
+// CHECK:       func.call @forward_node17(%9, %arg5, %2, %1, %0) : (memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, index, index, index) -> ()
 // CHECK:     } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = true, flatten = false>}
 // CHECK:     hls.dataflow.stream_write %arg4, %true : <i1, 1>, i1
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node23(%arg0: memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg1: memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+// CHECK:   func.func @forward_node23(%arg0: memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg1: memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
 // CHECK:     affine.for %arg5 = 0 to 16 {
 // CHECK:       affine.for %arg6 = 0 to 14 step 2 {
 // CHECK:         affine.for %arg7 = 0 to 14 step 2 {
-// CHECK:           %0 = affine.load %arg0[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           affine.store %0, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
-// CHECK:           %1 = affine.load %arg0[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           affine.store %1, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
-// CHECK:           %2 = affine.load %arg0[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           affine.store %2, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
-// CHECK:           %3 = affine.load %arg0[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           affine.store %3, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           %0 = affine.load %arg0[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           affine.store %0, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           %1 = affine.load %arg0[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           affine.store %1, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           %2 = affine.load %arg0[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           affine.store %2, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           %3 = affine.load %arg0[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           affine.store %3, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
 // CHECK:         } {loop_directive = #hls.loop<pipeline = true, target_ii = 1, dataflow = false, flatten = false>, parallel}
 // CHECK:       } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, parallel}
 // CHECK:     } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node24(%arg0: memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg1: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg2: memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg3: memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg4: index, %arg5: index, %arg6: index) attributes {inline} {
+// CHECK:   func.func @forward_node24(%arg0: memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg1: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg2: memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg3: memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg4: index, %arg5: index, %arg6: index) attributes {inline} {
 // CHECK:     %c-24_i8 = arith.constant -24 : i8
 // CHECK:     affine.for %arg7 = 0 to 16 {
 // CHECK:       affine.for %arg8 = 0 to 16 {
 // CHECK:         affine.for %arg9 = 0 to 14 step 2 {
 // CHECK:           affine.for %arg10 = 0 to 14 step 2 {
-// CHECK:             %0 = affine.load %arg0[%arg7, %arg9, %arg10] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %0 = affine.load %arg0[%arg7, %arg9, %arg10] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
 // CHECK:             %1 = affine.load %arg1[%arg8, %arg7] : memref<16x16xi8, #hls.mem<bram_t2p>>
-// CHECK:             %2 = affine.load %arg2[%arg8, %arg9, %arg10] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %3 = affine.load %arg3[%arg8, %arg9, %arg10] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %2 = affine.load %arg2[%arg8, %arg9, %arg10] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %3 = affine.load %arg3[%arg8, %arg9, %arg10] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
 // CHECK:             %4 = hls.affine.select #set(%arg7) %2, %3 : i8
 // CHECK:             %5 = arith.muli %0, %1 : i8
 // CHECK:             %6 = arith.addi %4, %5 : i8
 // CHECK:             %7 = arith.cmpi ugt, %6, %c-24_i8 : i8
 // CHECK:             %8 = arith.select %7, %6, %c-24_i8 : i8
 // CHECK:             %9 = hls.affine.select #set4(%arg6, %arg4, %arg7, %arg5) %8, %6 : i8
-// CHECK:             affine.store %9, %arg3[%arg8, %arg9, %arg10] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %10 = affine.load %arg0[%arg7, %arg9, %arg10 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %11 = affine.load %arg2[%arg8, %arg9, %arg10 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %12 = affine.load %arg3[%arg8, %arg9, %arg10 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             affine.store %9, %arg3[%arg8, %arg9, %arg10] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %10 = affine.load %arg0[%arg7, %arg9, %arg10 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %11 = affine.load %arg2[%arg8, %arg9, %arg10 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %12 = affine.load %arg3[%arg8, %arg9, %arg10 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
 // CHECK:             %13 = hls.affine.select #set(%arg7) %11, %12 : i8
 // CHECK:             %14 = arith.muli %10, %1 : i8
 // CHECK:             %15 = arith.addi %13, %14 : i8
 // CHECK:             %16 = arith.cmpi ugt, %15, %c-24_i8 : i8
 // CHECK:             %17 = arith.select %16, %15, %c-24_i8 : i8
 // CHECK:             %18 = hls.affine.select #set4(%arg6, %arg4, %arg7, %arg5) %17, %15 : i8
-// CHECK:             affine.store %18, %arg3[%arg8, %arg9, %arg10 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %19 = affine.load %arg0[%arg7, %arg9 + 1, %arg10] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %20 = affine.load %arg2[%arg8, %arg9 + 1, %arg10] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %21 = affine.load %arg3[%arg8, %arg9 + 1, %arg10] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             affine.store %18, %arg3[%arg8, %arg9, %arg10 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %19 = affine.load %arg0[%arg7, %arg9 + 1, %arg10] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %20 = affine.load %arg2[%arg8, %arg9 + 1, %arg10] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %21 = affine.load %arg3[%arg8, %arg9 + 1, %arg10] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
 // CHECK:             %22 = hls.affine.select #set(%arg7) %20, %21 : i8
 // CHECK:             %23 = arith.muli %19, %1 : i8
 // CHECK:             %24 = arith.addi %22, %23 : i8
 // CHECK:             %25 = arith.cmpi ugt, %24, %c-24_i8 : i8
 // CHECK:             %26 = arith.select %25, %24, %c-24_i8 : i8
 // CHECK:             %27 = hls.affine.select #set4(%arg6, %arg4, %arg7, %arg5) %26, %24 : i8
-// CHECK:             affine.store %27, %arg3[%arg8, %arg9 + 1, %arg10] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %28 = affine.load %arg0[%arg7, %arg9 + 1, %arg10 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %29 = affine.load %arg2[%arg8, %arg9 + 1, %arg10 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:             %30 = affine.load %arg3[%arg8, %arg9 + 1, %arg10 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             affine.store %27, %arg3[%arg8, %arg9 + 1, %arg10] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %28 = affine.load %arg0[%arg7, %arg9 + 1, %arg10 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %29 = affine.load %arg2[%arg8, %arg9 + 1, %arg10 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             %30 = affine.load %arg3[%arg8, %arg9 + 1, %arg10 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
 // CHECK:             %31 = hls.affine.select #set(%arg7) %29, %30 : i8
 // CHECK:             %32 = arith.muli %28, %1 : i8
 // CHECK:             %33 = arith.addi %31, %32 : i8
 // CHECK:             %34 = arith.cmpi ugt, %33, %c-24_i8 : i8
 // CHECK:             %35 = arith.select %34, %33, %c-24_i8 : i8
 // CHECK:             %36 = hls.affine.select #set4(%arg6, %arg4, %arg7, %arg5) %35, %33 : i8
-// CHECK:             affine.store %36, %arg3[%arg8, %arg9 + 1, %arg10 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:             affine.store %36, %arg3[%arg8, %arg9 + 1, %arg10 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
 // CHECK:           } {loop_directive = #hls.loop<pipeline = true, target_ii = 1, dataflow = false, flatten = false>, parallel, point}
 // CHECK:         } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, parallel, point}
 // CHECK:       } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, parallel, point}
 // CHECK:     } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, point}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node25(%arg0: memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+// CHECK:   func.func @forward_node25(%arg0: memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
 // CHECK:     affine.for %arg5 = 0 to 16 {
 // CHECK:       affine.for %arg6 = 0 to 14 step 2 {
 // CHECK:         affine.for %arg7 = 0 to 14 step 2 {
-// CHECK:           %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
-// CHECK:           affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           %1 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
-// CHECK:           affine.store %1, %arg1[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           %2 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
-// CHECK:           affine.store %2, %arg1[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           %3 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
-// CHECK:           affine.store %3, %arg1[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           %1 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           affine.store %1, %arg1[%arg5, %arg6, %arg7 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           %2 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           affine.store %2, %arg1[%arg5, %arg6 + 1, %arg7] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           %3 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14 + 1, %arg7 + symbol(%arg4) * 14 + 1] : memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:           affine.store %3, %arg1[%arg5, %arg6 + 1, %arg7 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
 // CHECK:         } {loop_directive = #hls.loop<pipeline = true, target_ii = 1, dataflow = false, flatten = false>, parallel}
 // CHECK:       } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, parallel}
 // CHECK:     } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, parallel}
@@ -449,24 +449,24 @@
 // CHECK:     } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node27(%arg0: memref<64x56x56xi8, #hls.layout<[none, cyclic, cyclic], [1, 4, 4]>, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index, %arg5: index, %arg6: index) attributes {inline} {
+// CHECK:   func.func @forward_node27(%arg0: memref<64x56x56xi8, #hls.partition<[none, cyclic, cyclic], [1, 4, 4]>, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index, %arg5: index, %arg6: index) attributes {inline} {
 // CHECK:     affine.for %arg7 = 0 to 16 {
 // CHECK:       affine.for %arg8 = 0 to 14 step 2 {
 // CHECK:         affine.for %arg9 = 0 to 14 step 2 {
-// CHECK:           %0 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 * 2 + symbol(%arg3) + symbol(%arg4) * 28 - 1, %arg9 * 2 + symbol(%arg5) + symbol(%arg6) * 28 - 1] : memref<64x56x56xi8, #hls.layout<[none, cyclic, cyclic], [1, 4, 4]>, #hls.mem<dram>>
-// CHECK:           affine.store %0, %arg1[%arg7, %arg8, %arg9] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           %1 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 * 2 + symbol(%arg3) + symbol(%arg4) * 28 - 1, %arg9 * 2 + symbol(%arg5) + symbol(%arg6) * 28 + 1] : memref<64x56x56xi8, #hls.layout<[none, cyclic, cyclic], [1, 4, 4]>, #hls.mem<dram>>
-// CHECK:           affine.store %1, %arg1[%arg7, %arg8, %arg9 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           %2 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 * 2 + symbol(%arg3) + symbol(%arg4) * 28 + 1, %arg9 * 2 + symbol(%arg5) + symbol(%arg6) * 28 - 1] : memref<64x56x56xi8, #hls.layout<[none, cyclic, cyclic], [1, 4, 4]>, #hls.mem<dram>>
-// CHECK:           affine.store %2, %arg1[%arg7, %arg8 + 1, %arg9] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:           %3 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 * 2 + symbol(%arg3) + symbol(%arg4) * 28 + 1, %arg9 * 2 + symbol(%arg5) + symbol(%arg6) * 28 + 1] : memref<64x56x56xi8, #hls.layout<[none, cyclic, cyclic], [1, 4, 4]>, #hls.mem<dram>>
-// CHECK:           affine.store %3, %arg1[%arg7, %arg8 + 1, %arg9 + 1] : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           %0 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 * 2 + symbol(%arg3) + symbol(%arg4) * 28 - 1, %arg9 * 2 + symbol(%arg5) + symbol(%arg6) * 28 - 1] : memref<64x56x56xi8, #hls.partition<[none, cyclic, cyclic], [1, 4, 4]>, #hls.mem<dram>>
+// CHECK:           affine.store %0, %arg1[%arg7, %arg8, %arg9] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           %1 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 * 2 + symbol(%arg3) + symbol(%arg4) * 28 - 1, %arg9 * 2 + symbol(%arg5) + symbol(%arg6) * 28 + 1] : memref<64x56x56xi8, #hls.partition<[none, cyclic, cyclic], [1, 4, 4]>, #hls.mem<dram>>
+// CHECK:           affine.store %1, %arg1[%arg7, %arg8, %arg9 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           %2 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 * 2 + symbol(%arg3) + symbol(%arg4) * 28 + 1, %arg9 * 2 + symbol(%arg5) + symbol(%arg6) * 28 - 1] : memref<64x56x56xi8, #hls.partition<[none, cyclic, cyclic], [1, 4, 4]>, #hls.mem<dram>>
+// CHECK:           affine.store %2, %arg1[%arg7, %arg8 + 1, %arg9] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:           %3 = affine.load %arg0[%arg7 + symbol(%arg2) * 16, %arg8 * 2 + symbol(%arg3) + symbol(%arg4) * 28 + 1, %arg9 * 2 + symbol(%arg5) + symbol(%arg6) * 28 + 1] : memref<64x56x56xi8, #hls.partition<[none, cyclic, cyclic], [1, 4, 4]>, #hls.mem<dram>>
+// CHECK:           affine.store %3, %arg1[%arg7, %arg8 + 1, %arg9 + 1] : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
 // CHECK:         } {loop_directive = #hls.loop<pipeline = true, target_ii = 1, dataflow = false, flatten = false>, parallel}
 // CHECK:       } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, parallel}
 // CHECK:     } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = false, flatten = true>, parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node22(%arg0: !hls.stream<i1, 1>, %arg1: memref<64x56x56xi8, #hls.layout<[none, cyclic, cyclic], [1, 4, 4]>, #hls.mem<dram>>, %arg2: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg3: memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, %arg4: !hls.stream<i1, 1>, %arg5: memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>) {
+// CHECK:   func.func @forward_node22(%arg0: !hls.stream<i1, 1>, %arg1: memref<64x56x56xi8, #hls.partition<[none, cyclic, cyclic], [1, 4, 4]>, #hls.mem<dram>>, %arg2: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg3: memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, %arg4: !hls.stream<i1, 1>, %arg5: memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>) {
 // CHECK:     %true = arith.constant true
 // CHECK:     hls.dataflow.stream_read %arg0 : (!hls.stream<i1, 1>) -> ()
 // CHECK:     affine.for %arg6 = 0 to 576 {
@@ -476,15 +476,15 @@
 // CHECK:       %3 = affine.apply #map9(%arg6)
 // CHECK:       %4 = affine.apply #map10(%arg6)
 // CHECK:       %5 = affine.apply #map11(%arg6)
-// CHECK:       %6 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:       %6 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
 // CHECK:       %7 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x16xi8, #hls.mem<bram_t2p>>
-// CHECK:       %8 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:       func.call @forward_node27(%arg1, %8, %5, %4, %1, %3, %0) : (memref<64x56x56xi8, #hls.layout<[none, cyclic, cyclic], [1, 4, 4]>, #hls.mem<dram>>, memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, index, index, index, index, index) -> ()
+// CHECK:       %8 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:       func.call @forward_node27(%arg1, %8, %5, %4, %1, %3, %0) : (memref<64x56x56xi8, #hls.partition<[none, cyclic, cyclic], [1, 4, 4]>, #hls.mem<dram>>, memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, index, index, index, index, index) -> ()
 // CHECK:       func.call @forward_node26(%arg2, %7, %2, %5, %4, %3) : (memref<64x64x3x3xi8, #hls.mem<dram>>, memref<16x16xi8, #hls.mem<bram_t2p>>, index, index, index, index) -> ()
-// CHECK:       func.call @forward_node25(%arg3, %6, %2, %1, %0) : (memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, index, index, index) -> ()
-// CHECK:       %9 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
-// CHECK:       func.call @forward_node24(%8, %7, %6, %9, %3, %5, %4) : (memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, memref<16x16xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, index, index, index) -> ()
-// CHECK:       func.call @forward_node23(%9, %arg5, %2, %1, %0) : (memref<16x14x14xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, index, index, index) -> ()
+// CHECK:       func.call @forward_node25(%arg3, %6, %2, %1, %0) : (memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, index, index, index) -> ()
+// CHECK:       %9 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>
+// CHECK:       func.call @forward_node24(%8, %7, %6, %9, %3, %5, %4) : (memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, memref<16x16xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, index, index, index) -> ()
+// CHECK:       func.call @forward_node23(%9, %arg5, %2, %1, %0) : (memref<16x14x14xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<bram_t2p>>, memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, index, index, index) -> ()
 // CHECK:     } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = true, flatten = false>}
 // CHECK:     hls.dataflow.stream_write %arg4, %true : <i1, 1>, i1
 // CHECK:     return
@@ -573,21 +573,21 @@
 // CHECK:     %6 = hls.axi.bundle "axi19" : <mm>
 // CHECK:     %7 = hls.axi.port %6, %arg19 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #hls.mem<dram>>
 // CHECK:     %8 = hls.axi.bundle "axi18" : <mm>
-// CHECK:     %9 = hls.axi.port %8, %arg18 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:     %9 = hls.axi.port %8, %arg18 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
 // CHECK:     %10 = hls.axi.bundle "axi17" : <mm>
-// CHECK:     %11 = hls.axi.port %10, %arg17 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:     %11 = hls.axi.port %10, %arg17 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
 // CHECK:     %12 = hls.axi.bundle "axi16" : <mm>
 // CHECK:     %13 = hls.axi.port %12, %arg16 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #hls.mem<dram>>
 // CHECK:     %14 = hls.axi.bundle "axi15" : <mm>
-// CHECK:     %15 = hls.axi.port %14, %arg15 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:     %15 = hls.axi.port %14, %arg15 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
 // CHECK:     %16 = hls.axi.bundle "axi14" : <mm>
-// CHECK:     %17 = hls.axi.port %16, %arg14 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:     %17 = hls.axi.port %16, %arg14 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
 // CHECK:     %18 = hls.axi.bundle "axi13" : <mm>
-// CHECK:     %19 = hls.axi.port %18, %arg13 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
+// CHECK:     %19 = hls.axi.port %18, %arg13 : <mm>, (!hls.axi<memref<64x28x28xi8, #hls.mem<dram>>, mm>) -> memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>
 // CHECK:     %20 = hls.axi.bundle "axi12" : <mm>
 // CHECK:     %21 = hls.axi.port %20, %arg12 : <mm>, (!hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>) -> memref<64x56x56xi8, #hls.mem<dram>>
 // CHECK:     %22 = hls.axi.bundle "axi11" : <mm>
-// CHECK:     %23 = hls.axi.port %22, %arg11 : <mm>, (!hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>) -> memref<64x56x56xi8, #hls.layout<[none, cyclic, cyclic], [1, 4, 4]>, #hls.mem<dram>>
+// CHECK:     %23 = hls.axi.port %22, %arg11 : <mm>, (!hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>) -> memref<64x56x56xi8, #hls.partition<[none, cyclic, cyclic], [1, 4, 4]>, #hls.mem<dram>>
 // CHECK:     %24 = hls.axi.bundle "axi10" : <mm>
 // CHECK:     %25 = hls.axi.port %24, %arg10 : <mm>, (!hls.axi<memref<64x56x56xi8, #hls.mem<dram>>, mm>) -> memref<64x56x56xi8, #hls.mem<dram>>
 // CHECK:     %26 = hls.axi.bundle "axi9" : <mm>
@@ -616,9 +616,9 @@
 // CHECK:     %48 = hls.dataflow.stream {depth = 1 : i32} : <i1, 1>
 // CHECK:     call @forward_node28(%46, %41, %47, %25, %48, %21) : (!hls.stream<i1, 1>, memref<64x56x56xi8, #hls.mem<dram>>, !hls.stream<i1, 3>, memref<64x56x56xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x56x56xi8, #hls.mem<dram>>) -> ()
 // CHECK:     %49 = hls.dataflow.stream {depth = 1 : i32} : <i1, 1>
-// CHECK:     call @forward_node22(%48, %23, %33, %15, %49, %17) : (!hls.stream<i1, 1>, memref<64x56x56xi8, #hls.layout<[none, cyclic, cyclic], [1, 4, 4]>, #hls.mem<dram>>, memref<64x64x3x3xi8, #hls.mem<dram>>, memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>) -> ()
+// CHECK:     call @forward_node22(%48, %23, %33, %15, %49, %17) : (!hls.stream<i1, 1>, memref<64x56x56xi8, #hls.partition<[none, cyclic, cyclic], [1, 4, 4]>, #hls.mem<dram>>, memref<64x64x3x3xi8, #hls.mem<dram>>, memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>) -> ()
 // CHECK:     %50 = hls.dataflow.stream {depth = 1 : i32} : <i1, 1>
-// CHECK:     call @forward_node16(%35, %49, %19, %9, %50, %11) : (memref<64x64x3x3xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.layout<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>) -> ()
+// CHECK:     call @forward_node16(%35, %49, %19, %9, %50, %11) : (memref<64x64x3x3xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.partition<[none, cyclic, cyclic], [1, 2, 2]>, #hls.mem<dram>>) -> ()
 // CHECK:     %51 = hls.dataflow.stream {depth = 1 : i32} : <i1, 1>
 // CHECK:     call @forward_node8(%47, %27, %37, %50, %13, %1, %51, %5, %3) : (!hls.stream<i1, 3>, memref<64x56x56xi8, #hls.mem<dram>>, memref<64x64xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.mem<dram>>, memref<64x28x28xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.mem<dram>>, memref<64x28x28xi8, #hls.mem<dram>>) -> ()
 // CHECK:     %52 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<64xi8, #hls.mem<bram_t2p>>

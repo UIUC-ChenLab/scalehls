@@ -77,7 +77,7 @@ def PartitionLayoutAttr : HLSAttr<"PartitionLayout",
   );
 
   let genVerifyDecl = 1;
-  let mnemonic = "layout";
+  let mnemonic = "partition";
   let assemblyFormat = "`<` `[` $kinds `]` `,` `[` $factors `]` `>`";
 
   let extraClassDeclaration = [{
@@ -86,6 +86,31 @@ def PartitionLayoutAttr : HLSAttr<"PartitionLayout",
         ArrayRef<PartitionKind> kinds, ArrayRef<int64_t> actualFactors,
         ArrayRef<int64_t> shape);
   }];
+}
+
+def ExtBufferLayoutAttr : HLSAttr<"ExtBufferLayout",
+    [DeclareAttrInterfaceMethods<MemRefLayoutAttrInterface,
+                                 ["verifyLayout"]>]> {
+  let summary = "Layout of external buffer";
+  let parameters = (ins
+    "AffineMap":$map,
+    OptionalArrayRefParameter<"int64_t">:$vectorShape
+  );
+
+  let skipDefaultBuilders = 1;
+  let builders = [
+    AttrBuilderWithInferredContext<(ins "AffineMap":$map,
+                                        "ArrayRef<int64_t>":$vectorShape), [{
+      return $_get(map.getContext(), map, vectorShape);
+    }]>,
+    AttrBuilderWithInferredContext<(ins "AffineMap":$map), [{
+      return $_get(map.getContext(), map, SmallVector<int64_t>());
+    }]>
+  ];
+
+  let genVerifyDecl = 1;
+  let mnemonic = "layout";
+  let assemblyFormat = "`<` $map (`,` `[` $vectorShape^ `]`)? `>`";
 }
 
 //===----------------------------------------------------------------------===//
