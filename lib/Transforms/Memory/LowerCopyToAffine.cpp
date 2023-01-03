@@ -23,8 +23,8 @@ struct LowerCopy : public OpRewritePattern<memref::CopyOp> {
   LogicalResult matchAndRewrite(memref::CopyOp copy,
                                 PatternRewriter &rewriter) const override {
     // Check whether the copy op communicates with inputs or outputs.
-    auto isExternalCopy = isExternalBuffer(copy.getSource()) ||
-                          isExternalBuffer(copy.getTarget());
+    auto isExternalCopy =
+        isExtBuffer(copy.getSource()) || isExtBuffer(copy.getTarget());
 
     // Return failure if we don't need to lower external copies.
     if (internalCopyOnly && isExternalCopy)

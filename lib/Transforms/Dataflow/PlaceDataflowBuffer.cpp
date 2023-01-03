@@ -78,7 +78,7 @@ struct HoistDramBuffer
 
   LogicalResult matchAndRewrite(hls::BufferLikeInterface buffer,
                                 PatternRewriter &rewriter) const override {
-    if (!isExternalBuffer(buffer.getMemref()))
+    if (!isExtBuffer(buffer.getMemref()))
       return failure();
     // Alwasy move external buffer out of task.
     if (auto task = buffer->getParentOfType<TaskOp>()) {

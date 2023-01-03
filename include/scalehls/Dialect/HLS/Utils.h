@@ -23,6 +23,18 @@ using AffineLoopBands = std::vector<AffineLoopBand>;
 using FactorList = SmallVector<unsigned, 8>;
 
 //===----------------------------------------------------------------------===//
+// HLS attribute utils
+//===----------------------------------------------------------------------===//
+
+MemoryKind getMemoryKind(MemRefType type);
+bool isRam1P(MemRefType type);
+bool isRam2P(MemRefType type);
+bool isRamS2P(MemRefType type);
+bool isRamT2P(MemRefType type);
+bool isDram(MemRefType type);
+bool isUnknown(MemRefType type);
+
+//===----------------------------------------------------------------------===//
 // Dataflow utils
 //===----------------------------------------------------------------------===//
 
@@ -70,7 +82,7 @@ unsigned getBufferDepth(Value memref);
 Value findBuffer(Value memref);
 hls::BufferLikeInterface findBufferOp(Value memref);
 
-bool isExternalBuffer(Value memref);
+bool isExtBuffer(Value memref);
 
 /// Check whether the given use has read/write semantics.
 bool isRead(OpOperand &use);

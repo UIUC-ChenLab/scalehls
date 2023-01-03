@@ -189,10 +189,10 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
   // different blocks/functions the best partition fashions and factors are
   // different. To eventually determine a "best" array partition strategy,
   // tentatively we always pick the one with the largest partition factor as the
-  // final partition strategy. This "layoutsMap" is used to hold the current
+  // final partition strategy. This "partitionsMap" is used to hold the current
   // partition strategy of each memref.
-  using PartitionLayout = std::pair<PartitionKind, int64_t>;
-  DenseMap<Value, SmallVector<PartitionLayout, 4>> layoutsMap;
+  using Partition = std::pair<PartitionKind, int64_t>;
+  DenseMap<Value, SmallVector<Partition, 4>> partitionsMap;
 
   // Traverse all blocks that requires to be considered.
   for (auto block : targetBlocks) {
@@ -201,12 +201,12 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
 
     for (auto [memref, loadStores] : accessesMap) {
       auto memrefType = memref.getType().cast<MemRefType>();
-      auto &layouts = layoutsMap[memref];
+      auto &partitions = partitionsMap[memref];
 
-      // If the current layoutsMap is empty, initialize it with no partition.
-      if (layouts.empty())
-        layouts = SmallVector<PartitionLayout, 4>(
-            memrefType.getRank(), PartitionLayout(PartitionKind::NONE, 1));
+      // If the current partitionsMap is empty, initialize it with no partition.
+      if (partitions.empty())
+        partitions = SmallVector<Partition, 4>(
+            memrefType.getRank(), Partition(PartitionKind::NONE, 1));
 
       // Find the best partition solution for each dimensions of the memref.
       for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
@@ -290,7 +290,7 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
         }
 
         // TODO: For now, we always pick the partition with the largest factor.
-        if (factor > layouts[dim].second) {
+        if (factor > partitions[dim].second) {
           // The rationale here is if the accessing partition index cannot be
           // determined and partition factor is more than 3, a multiplexer will
           // be generated and the memory access operation will be wrapped into a
@@ -299,18 +299,18 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
           if (requireMux) {
             for (auto i = 3; i > 0; --i)
               if (factor % i == 0) {
-                layouts[dim] = PartitionLayout(kind, i);
+                partitions[dim] = Partition(kind, i);
                 break;
               }
           } else
-            layouts[dim] = PartitionLayout(kind, factor);
+            partitions[dim] = Partition(kind, factor);
         }
       }
     }
   }
 
   // Apply partition to all sub-functions and traverse all function to update
-  // the "layoutsMap".
+  // the "partitionsMap".
   func.walk([&](func::CallOp op) {
     auto callee = SymbolTable::lookupNearestSymbolFrom(op, op.getCalleeAttr());
     auto subFunc = dyn_cast<func::FuncOp>(callee);
@@ -322,12 +322,13 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
     for (auto [type, operand] :
          llvm::zip(subFunc.getArgumentTypes(), op.getOperands()))
       if (auto memrefType = type.dyn_cast<MemRefType>()) {
-        auto &layouts = layoutsMap[operand];
+        auto &partitions = partitionsMap[operand];
 
-        // If the current layoutsMap is empty, initialize it with no partition.
-        if (layouts.empty())
-          layouts = SmallVector<PartitionLayout, 4>(
-              memrefType.getRank(), PartitionLayout(PartitionKind::NONE, 1));
+        // If the current partitionsMap is empty, initialize it with no
+        // partition.
+        if (partitions.empty())
+          partitions = SmallVector<Partition, 4>(
+              memrefType.getRank(), Partition(PartitionKind::NONE, 1));
 
         // Traverse all dimension of the memref.
         if (auto attr = memrefType.getLayout().dyn_cast<PartitionLayoutAttr>())
@@ -337,18 +338,18 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
 
             // If the factor from the sub-function is larger than the current
             // factor, replace it.
-            if (factor > layouts[dim].second)
-              layouts[dim] = PartitionLayout(kind, factor);
+            if (factor > partitions[dim].second)
+              partitions[dim] = Partition(kind, factor);
           }
       }
   });
 
   // Constuct and set new type to each partitioned MemRefType.
   auto builder = Builder(func);
-  for (auto [memref, layouts] : layoutsMap) {
+  for (auto [memref, partitions] : partitionsMap) {
     SmallVector<hls::PartitionKind, 4> kinds;
     SmallVector<unsigned, 4> factors;
-    for (auto [kind, factor] : layouts) {
+    for (auto [kind, factor] : partitions) {
       kinds.push_back(kind);
       factors.push_back(factor);
     }

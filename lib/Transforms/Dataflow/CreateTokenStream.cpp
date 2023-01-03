@@ -26,10 +26,10 @@ struct CreateTokenStream : public CreateTokenStreamBase<CreateTokenStream> {
 
       SmallVector<Value> buffers;
       for (auto arg : schedule.getBody().getArguments())
-        if (isExternalBuffer(arg))
+        if (isExtBuffer(arg))
           buffers.push_back(arg);
       for (auto bufferOp : schedule.getOps<BufferOp>())
-        if (isExternalBuffer(bufferOp))
+        if (isExtBuffer(bufferOp))
           buffers.push_back(bufferOp);
 
       for (auto buffer : buffers) {

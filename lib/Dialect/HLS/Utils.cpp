@@ -20,6 +20,45 @@ using namespace scalehls;
 using namespace hls;
 
 //===----------------------------------------------------------------------===//
+// HLS dialect utils
+//===----------------------------------------------------------------------===//
+
+MemoryKind scalehls::getMemoryKind(MemRefType type) {
+  if (auto memorySpace = type.getMemorySpace())
+    if (auto kindAttr = memorySpace.dyn_cast<MemoryKindAttr>())
+      return kindAttr.getValue();
+  return MemoryKind::UNKNOWN;
+}
+
+bool scalehls::isRam1P(MemRefType type) {
+  auto kind = getMemoryKind(type);
+  return kind == MemoryKind::LUTRAM_1P || kind == MemoryKind::BRAM_1P ||
+         kind == MemoryKind::URAM_1P;
+}
+bool scalehls::isRam2P(MemRefType type) {
+  auto kind = getMemoryKind(type);
+  return kind == MemoryKind::LUTRAM_2P || kind == MemoryKind::BRAM_2P ||
+         kind == MemoryKind::URAM_2P;
+}
+bool scalehls::isRamS2P(MemRefType type) {
+  auto kind = getMemoryKind(type);
+  return kind == MemoryKind::LUTRAM_S2P || kind == MemoryKind::BRAM_S2P ||
+         kind == MemoryKind::URAM_S2P;
+}
+bool scalehls::isRamT2P(MemRefType type) {
+  auto kind = getMemoryKind(type);
+  return kind == MemoryKind::BRAM_T2P || kind == MemoryKind::URAM_T2P;
+}
+bool scalehls::isDram(MemRefType type) {
+  auto kind = getMemoryKind(type);
+  return kind == MemoryKind::DRAM;
+}
+bool scalehls::isUnknown(MemRefType type) {
+  auto kind = getMemoryKind(type);
+  return kind == MemoryKind::UNKNOWN;
+}
+
+//===----------------------------------------------------------------------===//
 // Dataflow utils
 //===----------------------------------------------------------------------===//
 
@@ -307,7 +346,7 @@ unsigned scalehls::getBufferDepth(Value memref) {
   return 1;
 }
 
-bool scalehls::isExternalBuffer(Value memref) {
+bool scalehls::isExtBuffer(Value memref) {
   if (auto type = memref.getType().dyn_cast<MemRefType>())
     return isDram(type);
   return false;
@@ -391,7 +430,7 @@ bool scalehls::hasEffectOnExternalBuffer(Operation *op) {
     SmallVector<MemoryEffects::EffectInstance> effects;
     effectOp.getEffects(effects);
     for (auto effect : effects)
-      if (isExternalBuffer(effect.getValue()))
+      if (isExtBuffer(effect.getValue()))
         return WalkResult::interrupt();
     return WalkResult::advance();
   });

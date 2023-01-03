@@ -417,7 +417,7 @@ LogicalResult NodeOp::verify() {
     for (auto output : getOutputs()) {
       // DRAM buffer is not considered - the dependencies associated with them
       // are handled later by tokens.
-      if (isExternalBuffer(output))
+      if (isExtBuffer(output))
         continue;
 
       if (getDependentConsumers(output, *this).size() > 1 ||
@@ -640,8 +640,7 @@ struct SinkInternalBuffer : public OpRewritePattern<BufferOp> {
 
   LogicalResult matchAndRewrite(BufferOp buffer,
                                 PatternRewriter &rewriter) const override {
-    if (!isExternalBuffer(buffer) &&
-        llvm::hasSingleElement(buffer->getUsers())) {
+    if (!isExtBuffer(buffer) && llvm::hasSingleElement(buffer->getUsers())) {
       auto user = *buffer->getUsers().begin();
 
       // Sink the buffer into the node or schedule user.
@@ -670,7 +669,7 @@ LogicalResult BufferOp::verify() {
     if (initValue.value().getType() != getType().getElementType())
       return emitOpError("initial value's type doesn't align with memref type");
 
-  if (isExternalBuffer(*this)) {
+  if (isExtBuffer(*this)) {
     if (auto node = dyn_cast<NodeOp>((*this)->getParentOp()))
       return emitOpError("external buffer should not be placed in node");
     if (auto schedule = dyn_cast<ScheduleOp>((*this)->getParentOp()))
@@ -1124,43 +1123,8 @@ PartitionLayoutAttr PartitionLayoutAttr::getWithActualFactors(
 }
 
 //===----------------------------------------------------------------------===//
-// HLS dialect utils
+// HLS resource and timing attributes
 //===----------------------------------------------------------------------===//
-
-MemoryKind hls::getMemoryKind(MemRefType type) {
-  if (auto memorySpace = type.getMemorySpace())
-    if (auto kindAttr = memorySpace.dyn_cast<MemoryKindAttr>())
-      return kindAttr.getValue();
-  return MemoryKind::UNKNOWN;
-}
-
-bool hls::isRam1P(MemRefType type) {
-  auto kind = getMemoryKind(type);
-  return kind == MemoryKind::LUTRAM_1P || kind == MemoryKind::BRAM_1P ||
-         kind == MemoryKind::URAM_1P;
-}
-bool hls::isRam2P(MemRefType type) {
-  auto kind = getMemoryKind(type);
-  return kind == MemoryKind::LUTRAM_2P || kind == MemoryKind::BRAM_2P ||
-         kind == MemoryKind::URAM_2P;
-}
-bool hls::isRamS2P(MemRefType type) {
-  auto kind = getMemoryKind(type);
-  return kind == MemoryKind::LUTRAM_S2P || kind == MemoryKind::BRAM_S2P ||
-         kind == MemoryKind::URAM_S2P;
-}
-bool hls::isRamT2P(MemRefType type) {
-  auto kind = getMemoryKind(type);
-  return kind == MemoryKind::BRAM_T2P || kind == MemoryKind::URAM_T2P;
-}
-bool hls::isDram(MemRefType type) {
-  auto kind = getMemoryKind(type);
-  return kind == MemoryKind::DRAM;
-}
-bool hls::isUnknown(MemRefType type) {
-  auto kind = getMemoryKind(type);
-  return kind == MemoryKind::UNKNOWN;
-}
 
 /// Timing attribute utils.
 TimingAttr hls::getTiming(Operation *op) {
@@ -1201,6 +1165,10 @@ void hls::setLoopInfo(Operation *op, int64_t flattenTripCount,
       LoopInfoAttr::get(op->getContext(), flattenTripCount, iterLatency, minII);
   setLoopInfo(op, loopInfo);
 }
+
+//===----------------------------------------------------------------------===//
+// HLS directive attributes
+//===----------------------------------------------------------------------===//
 
 /// Loop directives attribute utils.
 LoopDirectiveAttr hls::getLoopDirective(Operation *op) {

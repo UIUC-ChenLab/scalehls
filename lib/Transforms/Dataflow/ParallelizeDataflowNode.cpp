@@ -193,7 +193,7 @@ struct ParallelizeDataflowNode
             corrNode, nodeUnrollFactorsMap.lookup(corrNode));
 
         corrFactorsList.push_back(corrFactors);
-        if (isExternalBuffer(corr.getBuffer().getMemref())) {
+        if (isExtBuffer(corr.getBuffer().getMemref())) {
           // Make sure each factor is larger than the corresponding factor of
           // the external buffer correlatations.
           FactorList newFactors;

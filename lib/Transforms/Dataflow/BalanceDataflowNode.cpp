@@ -46,7 +46,7 @@ struct InsertCopyNode : public OpRewritePattern<NodeOp> {
       // implement the ping-pong buffer in DRAM that saves the memory interface
       // and logic resources.
       if (auto buffer = output.getDefiningOp<BufferOp>())
-        if (isExternalBuffer(output)) {
+        if (isExtBuffer(output)) {
           buffer.setDepthAttr(rewriter.getI32IntegerAttr(maxDiff));
           for (auto item : worklist) {
             auto consumer = item.second;

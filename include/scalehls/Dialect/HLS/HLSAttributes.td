@@ -15,7 +15,10 @@ include "mlir/IR/EnumAttr.td"
 class HLSAttr<string name, list<Trait> traits = []> :
     AttrDef<HLSDialect, name, traits>;
 
-// Enum parameter for different AXI kinds.
+//===----------------------------------------------------------------------===//
+// Enum attributes and parameters
+//===----------------------------------------------------------------------===//
+
 def AxiKind: I32EnumAttr<"AxiKind", "Kind of AXI port", [
     I32EnumAttrCase<"MM", 0, "mm">,
     I32EnumAttrCase<"LITE", 1, "lite">,
@@ -26,7 +29,6 @@ def AxiKind: I32EnumAttr<"AxiKind", "Kind of AXI port", [
 }
 def AxiKindParam: EnumParameter<AxiKind>;
 
-// Enum parameter for different array partition kinds.
 def PartitionKind: I32EnumAttr<"PartitionKind", "Kind of array partition", [
     I32EnumAttrCase<"NONE", 0, "none">,
     I32EnumAttrCase<"CYCLIC", 1, "cyclic">,
@@ -38,7 +40,6 @@ def PartitionKind: I32EnumAttr<"PartitionKind", "Kind of array partition", [
 }
 def PartitionKindParam: EnumParameter<PartitionKind>;
 
-// Enum attribute for different memory kinds.
 def MemoryKind: I32EnumAttr<"MemoryKind", "Kind of memory", [
     I32EnumAttrCase<"UNKNOWN", 0, "unknown">,  
     I32EnumAttrCase<"LUTRAM_1P", 1, "lutram_1p">,
@@ -62,6 +63,10 @@ def MemoryKindAttr: EnumAttr<HLSDialect, MemoryKind> {
   let assemblyFormat = "`<` $value `>`";
 }
 
+//===----------------------------------------------------------------------===//
+// Layout attributes
+//===----------------------------------------------------------------------===//
+
 def PartitionLayoutAttr : HLSAttr<"PartitionLayout",
     [DeclareAttrInterfaceMethods<MemRefLayoutAttrInterface,
                                  ["verifyLayout"]>]> {
@@ -83,7 +88,10 @@ def PartitionLayoutAttr : HLSAttr<"PartitionLayout",
   }];
 }
 
-// HLS attributes.
+//===----------------------------------------------------------------------===//
+// HLS resource and timing attributes
+//===----------------------------------------------------------------------===//
+
 def Resource : HLSAttr<"Resource"> {
   let summary = "Resource utilization attributes";
   let parameters = (ins "int64_t":$lut, "int64_t":$dsp, "int64_t":$bram);
@@ -117,6 +125,10 @@ def LoopInfo : HLSAttr<"LoopInfo"> {
     $iterLatency `,` `min_ii` `=` $minII `>`
   }];
 }
+
+//===----------------------------------------------------------------------===//
+// HLS directive attributes
+//===----------------------------------------------------------------------===//
 
 def LoopDirective : HLSAttr<"LoopDirective"> {
   let summary = "Aggregation of loop directives";

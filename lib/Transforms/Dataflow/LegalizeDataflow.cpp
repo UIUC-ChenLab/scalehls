@@ -88,7 +88,7 @@ static void collectBypassNodes(
 
       // DRAM buffer is not considered - the dependencies associated with them
       // are handled later by tokens.
-      if (isExternalBuffer(output))
+      if (isExtBuffer(output))
         continue;
 
       SmallVector<std::pair<unsigned, NodeOp>, 4> bypassNodes;
@@ -184,7 +184,7 @@ struct AllocateInternalBuffer : public OpRewritePattern<BufferOp> {
 
   LogicalResult matchAndRewrite(BufferOp buffer,
                                 PatternRewriter &rewriter) const override {
-    if (isExternalBuffer(buffer) && llvm::hasSingleElement(buffer->getUsers()))
+    if (isExtBuffer(buffer) && llvm::hasSingleElement(buffer->getUsers()))
       if (auto node = dyn_cast<NodeOp>(*buffer->user_begin())) {
         auto bufferType = buffer.getType();
         auto newType = MemRefType::get(

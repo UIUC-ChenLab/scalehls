@@ -24,7 +24,7 @@ struct InsertForkNode : public OpRewritePattern<NodeOp> {
     for (auto output : node.getOutputs()) {
       // DRAM buffer is not considered - the dependencies associated with them
       // are handled later by tokens.
-      if (isExternalBuffer(output))
+      if (isExtBuffer(output))
         continue;
 
       auto consumers = getDependentConsumers(output, node);

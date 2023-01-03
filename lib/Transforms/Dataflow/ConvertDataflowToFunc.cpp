@@ -31,8 +31,7 @@ struct SplitScheduleExternalBufferAccess : public OpRewritePattern<ScheduleOp> {
       auto uses = llvm::make_filter_range(arg.getUses(), [&](auto &use) {
         return isa<NodeOp>(use.getOwner());
       });
-      if (!isExternalBuffer(arg) || uses.empty() ||
-          llvm::hasSingleElement(uses))
+      if (!isExtBuffer(arg) || uses.empty() || llvm::hasSingleElement(uses))
         continue;
 
       // Add a new argument and new input for each additional uses.
@@ -78,8 +77,7 @@ struct SplitNodeExternalBufferAccess : public OpRewritePattern<NodeOp> {
       auto uses = llvm::make_filter_range(arg.getUses(), [&](auto &use) {
         return isa<ScheduleOp>(use.getOwner());
       });
-      if (!isExternalBuffer(arg) || uses.empty() ||
-          llvm::hasSingleElement(uses))
+      if (!isExtBuffer(arg) || uses.empty() || llvm::hasSingleElement(uses))
         continue;
 
       // Add a new argument and new input for each additional uses.
@@ -99,7 +97,7 @@ struct SplitNodeExternalBufferAccess : public OpRewritePattern<NodeOp> {
           llvm::make_filter_range(arg.value().getUses(), [&](auto &use) {
             return isa<ScheduleOp>(use.getOwner());
           });
-      if (!isExternalBuffer(arg.value()) || uses.empty() ||
+      if (!isExtBuffer(arg.value()) || uses.empty() ||
           llvm::hasSingleElement(uses))
         continue;
 

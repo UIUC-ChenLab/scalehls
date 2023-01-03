@@ -59,7 +59,7 @@ struct CreateAxiInterface : public CreateAxiInterfaceBase<CreateAxiInterface> {
     builder.setInsertionPointToEnd(mainBlock);
     for (auto &op : llvm::make_early_inc_range(func.front()))
       if (auto buffer = dyn_cast<hls::BufferLikeInterface>(op)) {
-        if (!isExternalBuffer(buffer.getMemref()))
+        if (!isExtBuffer(buffer.getMemref()))
           continue;
         buffer->remove();
         builder.insert(buffer);

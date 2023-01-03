@@ -36,14 +36,9 @@ struct Push : public MemoryEffects::Effect::Base<Push> {};
 struct Pop : public MemoryEffects::Effect::Base<Pop> {};
 } // namespace StreamEffects
 
-/// Memory kind attribute utils.
-MemoryKind getMemoryKind(MemRefType type);
-bool isRam1P(MemRefType type);
-bool isRam2P(MemRefType type);
-bool isRamS2P(MemRefType type);
-bool isRamT2P(MemRefType type);
-bool isDram(MemRefType type);
-bool isUnknown(MemRefType type);
+//===----------------------------------------------------------------------===//
+// HLS resource and timing attributes
+//===----------------------------------------------------------------------===//
 
 /// Timing attribute utils.
 TimingAttr getTiming(Operation *op);
@@ -61,6 +56,10 @@ LoopInfoAttr getLoopInfo(Operation *op);
 void setLoopInfo(Operation *op, LoopInfoAttr loopInfo);
 void setLoopInfo(Operation *op, int64_t flattenTripCount, int64_t iterLatency,
                  int64_t minII);
+
+//===----------------------------------------------------------------------===//
+// HLS directive attributes
+//===----------------------------------------------------------------------===//
 
 /// Loop directives attribute utils.
 LoopDirectiveAttr getLoopDirective(Operation *op);

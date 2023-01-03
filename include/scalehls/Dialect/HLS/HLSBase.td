@@ -14,7 +14,7 @@ def HLSDialect : Dialect {
   let summary = "An HLS out-of-tree MLIR dialect";
   let description = [{
     This dialect contains dedicated operations, types, and attributes designed
-    for representing HLS C++ specific structures and components in MLIR, while
+    for representing HLS-specific structures and components in MLIR, while
     enabling comprehensive optimization for both performance and area.
   }];
   let useDefaultTypePrinterParser = 1;

@@ -26,7 +26,7 @@ struct CreateLocalBuffer
     auto builder = OpBuilder(func);
 
     func.walk([&](memref::SubViewOp subview) {
-      if (externalBufferOnly && !isExternalBuffer(subview.getSource()))
+      if (externalBufferOnly && !isExtBuffer(subview.getSource()))
         return WalkResult::advance();
 
       if (registerOnly && subview.getType().getNumElements() != 1)

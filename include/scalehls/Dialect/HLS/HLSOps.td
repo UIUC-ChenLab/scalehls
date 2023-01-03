@@ -391,6 +391,10 @@ def PrimMulOp : HLSOp<"prim.mul", [NoMemoryEffect]> {
 def PrimCastOp : HLSOp<"prim.cast", [
       NoMemoryEffect, SameOperandsAndResultShape]> {
   let summary = "Cast primitive operation";
+  let description = [{
+    This operation is super exterimental and should be substituted by the new
+    type casting operations in arith dialect.
+  }];
 
   let arguments = (ins 
     AnyTypeOf<[I8, I16, I32,
