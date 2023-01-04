@@ -88,7 +88,7 @@ ComplexityAnalysis::calculateBlockComplexity(Block *block) const {
 }
 
 SmallVector<int64_t> getBufferIndexToLoopDepthMap(NodeOp node, Value buffer) {
-  if (cast<hls::StageLikeInterface>(node.getOperation()).hasHierarchy() ||
+  if (node.hasHierarchy() ||
       !llvm::hasSingleElement(node.getOps<AffineForOp>()))
     return SmallVector<int64_t>();
 

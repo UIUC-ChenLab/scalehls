@@ -100,6 +100,10 @@ def TaskOp : HLSOp<"dataflow.task", [
 
     /// Get the terminator yield op.
     YieldOp getYieldOp();
+
+    bool hasHierarchy() {
+      return cast<StageLikeInterface>(this->getOperation()).hasHierarchy();
+    }
   }];
 }
 
@@ -242,6 +246,10 @@ def NodeOp : HLSOp<"dataflow.node", [
     iterator_range<Block::args_iterator> getInputArgs();
     iterator_range<Block::args_iterator> getOutputArgs();
     iterator_range<Block::args_iterator> getParamArgs();
+
+    bool hasHierarchy() {
+      return cast<StageLikeInterface>(this->getOperation()).hasHierarchy();
+    }
   }];
 }
 

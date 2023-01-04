@@ -190,7 +190,7 @@ struct ConvertNodeToFunc : public OpRewritePattern<NodeOp> {
         rewriter.getFunctionType(node.getOperandTypes(), TypeRange()));
 
     // FIXME: A better method to judge whether to inline the node.
-    if (!cast<hls::StageLikeInterface>(node.getOperation()).hasHierarchy() &&
+    if (!node.hasHierarchy() &&
         llvm::hasSingleElement(node.getOps<AffineForOp>()))
       subFunc->setAttr("inline", rewriter.getUnitAttr());
 

@@ -275,7 +275,7 @@ getNestedUsersExcept(Value buffer, OperandKind kind, NodeOp except) {
 
     // If the current node doesn't have hierarchy, we add it to results if the
     // node kind is aligned.
-    if (!cast<hls::StageLikeInterface>(node.getOperation()).hasHierarchy()) {
+    if (!node.hasHierarchy()) {
       if (nodeKind == kind)
         nestedUsers.push_back({node, nodeBuffer});
       continue;
