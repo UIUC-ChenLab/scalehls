@@ -23,17 +23,17 @@ using namespace hls;
 void HLSDialect::initialize() {
   addTypes<
 #define GET_TYPEDEF_LIST
-#include "scalehls/Dialect/HLS/HLSTypes.cpp.inc"
+#include "scalehls/Dialect/HLS/HLSOpsTypes.cpp.inc"
       >();
 
   addAttributes<
 #define GET_ATTRDEF_LIST
-#include "scalehls/Dialect/HLS/HLSAttributes.cpp.inc"
+#include "scalehls/Dialect/HLS/HLSOpsAttributes.cpp.inc"
       >();
 
   addOperations<
 #define GET_OP_LIST
-#include "scalehls/Dialect/HLS/HLS.cpp.inc"
+#include "scalehls/Dialect/HLS/HLSOps.cpp.inc"
       >();
 }
 
@@ -702,8 +702,6 @@ LogicalResult ConstBufferOp::verify() {
   auto attrType = getValue().getType().cast<TensorType>();
   if (memrefType.getElementType() != attrType.getElementType())
     return emitOpError("element type mismatch");
-  if (!memrefType.hasStaticShape() || !attrType.hasStaticShape())
-    return emitOpError("has dynamic shape");
   if (memrefType.getShape() != attrType.getShape())
     return emitOpError("shape mismatch");
   return success();
@@ -714,6 +712,24 @@ void ConstBufferOp::getEffects(
         &effects) {
   effects.emplace_back(MemoryEffects::Allocate::get(), getMemref(),
                        SideEffects::DefaultResource::get());
+}
+
+//===----------------------------------------------------------------------===//
+// BufferVectorizeOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult BufferVectorizeOp::verify() {
+  if (getOutputVectorType().getElementType() != getInputType().getElementType())
+    return emitOpError("element type mismatch");
+
+  SmallVector<int64_t> collapsedOutputShape;
+  for (auto [outputSize, vectorSize] :
+       llvm::zip(getType().getShape(), getOutputVectorType().getShape()))
+    collapsedOutputShape.push_back(outputSize * vectorSize);
+
+  if (collapsedOutputShape != getInputType().getShape())
+    return emitOpError("shape mismatch");
+  return success();
 }
 
 //===----------------------------------------------------------------------===//
@@ -1207,6 +1223,24 @@ void hls::setLoopInfo(Operation *op, int64_t flattenTripCount,
   setLoopInfo(op, loopInfo);
 }
 
+/// Buffer information attribute utils.
+BufferInfoAttr hls::getBufferInfo(Operation *op) {
+  return op->getAttrOfType<BufferInfoAttr>("buffer_info");
+}
+void hls::setBufferInfo(Operation *op, BufferInfoAttr bufferInfo) {
+  op->setAttr("buffer_info", bufferInfo);
+}
+void hls::setBufferInfo(Operation *op, ArrayRef<int64_t> tileShape,
+                        ArrayRef<int64_t> vectorShape) {
+  auto bufferInfo =
+      BufferInfoAttr::get(op->getContext(), tileShape, vectorShape);
+  setBufferInfo(op, bufferInfo);
+}
+void hls::setBufferInfo(Operation *op, ArrayRef<int64_t> tileShape) {
+  auto bufferInfo = BufferInfoAttr::get(op->getContext(), tileShape);
+  setBufferInfo(op, bufferInfo);
+}
+
 //===----------------------------------------------------------------------===//
 // HLS directive attributes
 //===----------------------------------------------------------------------===//
@@ -1271,16 +1305,16 @@ bool hls::hasRuntimeAttr(Operation *op) {
 // Include tablegen classes
 //===----------------------------------------------------------------------===//
 
-#include "scalehls/Dialect/HLS/HLSDialect.cpp.inc"
-#include "scalehls/Dialect/HLS/HLSEnums.cpp.inc"
+#include "scalehls/Dialect/HLS/HLSOpsDialect.cpp.inc"
+#include "scalehls/Dialect/HLS/HLSOpsEnums.cpp.inc"
 
 #define GET_ATTRDEF_CLASSES
-#include "scalehls/Dialect/HLS/HLSAttributes.cpp.inc"
+#include "scalehls/Dialect/HLS/HLSOpsAttributes.cpp.inc"
 
 #define GET_TYPEDEF_CLASSES
-#include "scalehls/Dialect/HLS/HLSTypes.cpp.inc"
+#include "scalehls/Dialect/HLS/HLSOpsTypes.cpp.inc"
 
-#include "scalehls/Dialect/HLS/HLSInterfaces.cpp.inc"
+#include "scalehls/Dialect/HLS/HLSOpsInterfaces.cpp.inc"
 
 #define GET_OP_CLASSES
-#include "scalehls/Dialect/HLS/HLS.cpp.inc"
+#include "scalehls/Dialect/HLS/HLSOps.cpp.inc"

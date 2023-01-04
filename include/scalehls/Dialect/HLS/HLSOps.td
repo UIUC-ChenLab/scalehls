@@ -11,6 +11,7 @@ include "scalehls/Dialect/HLS/HLSInterfaces.td"
 include "scalehls/Dialect/HLS/HLSTypes.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
+include "mlir/Interfaces/ViewLikeInterface.td"
 include "mlir/IR/BuiltinAttributeInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 
@@ -43,8 +44,9 @@ class AxiOf<list<Type> allowedTypes> : Type<And<[
   "mlir::scalehls::hls::AxiType"
 >;
 
+def AnyBuffer : StaticShapeMemRefOf<[AnyType]>;
 def AnyStream : StreamOf<[AnyType]>;
-def AnyMemrefOrStream : Type<Or<[AnyMemRef.predicate, AnyStream.predicate]>,
+def AnyBufferOrStream : Type<Or<[AnyBuffer.predicate, AnyStream.predicate]>,
     "memref or stream values">;
 def AnyAxi : AxiOf<[AnyType]>;
 
@@ -178,8 +180,8 @@ def NodeOp : HLSOp<"dataflow.node", [
     the level of buffer or stream channel tap of each input.
   }];
 
-  let arguments = (ins Variadic<AnyMemrefOrStream>:$inputs,
-      Variadic<AnyMemrefOrStream>:$outputs, Variadic<AnyType>:$params,
+  let arguments = (ins Variadic<AnyBufferOrStream>:$inputs,
+      Variadic<AnyBufferOrStream>:$outputs, Variadic<AnyType>:$params,
       I32ArrayAttr:$inputTaps, OptionalAttr<I32Attr>:$level);
   let regions = (region SizedRegion<1>:$body);
 
@@ -250,7 +252,7 @@ def BufferOp : HLSOp<"dataflow.buffer", [
 
   let arguments = (ins I32Attr:$depth,
                        OptionalAttr<TypedAttrInterface>:$init_value);
-  let results = (outs AnyMemRef:$memref);
+  let results = (outs AnyBuffer:$memref);
   let assemblyFormat = "attr-dict `:` type($memref)";
 
   let hasVerifier = 1;
@@ -267,10 +269,30 @@ def ConstBufferOp : HLSOp<"dataflow.const_buffer", [
   let summary = "Represent a constant dataflow buffer";
 
   let arguments = (ins ElementsAttr:$value);
-  let results = (outs AnyMemRef:$memref);
+  let results = (outs AnyBuffer:$memref);
   let assemblyFormat = "attr-dict `:` type($memref)";
 
   let hasVerifier = 1;
+}
+
+def BufferVectorizeOp : HLSOp<"dataflow.buffer_vectorize",
+                              [ViewLikeOpInterface]> {
+  let summary = "Vectorize a buffer from scalar element to vector element";
+
+  let arguments = (ins AnyBuffer:$input);
+  let results = (outs StaticShapeMemRefOf<[AnyVector]>:$output);
+  let assemblyFormat = "$input attr-dict `:` type($input) `to` type($output)";
+
+  let hasVerifier = 1;
+  let extraClassDeclaration = [{
+    Value getViewSource() { return getInput(); }
+    MemRefType getInputType() {
+      return getInput().getType().cast<MemRefType>();
+    }
+    VectorType getOutputVectorType() {
+      return getType().getElementType().cast<VectorType>();
+    }
+  }];
 }
 
 def StreamOp : HLSOp<"dataflow.stream", [

@@ -13,20 +13,21 @@
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Interfaces/ControlFlowInterfaces.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
-#include "scalehls/Dialect/HLS/HLSDialect.h.inc"
-#include "scalehls/Dialect/HLS/HLSEnums.h.inc"
+#include "mlir/Interfaces/ViewLikeInterface.h"
+#include "scalehls/Dialect/HLS/HLSOpsDialect.h.inc"
+#include "scalehls/Dialect/HLS/HLSOpsEnums.h.inc"
 
 #define GET_TYPEDEF_CLASSES
-#include "scalehls/Dialect/HLS/HLSTypes.h.inc"
+#include "scalehls/Dialect/HLS/HLSOpsTypes.h.inc"
 
 #define GET_ATTRDEF_CLASSES
-#include "scalehls/Dialect/HLS/HLSAttributes.h.inc"
+#include "scalehls/Dialect/HLS/HLSOpsAttributes.h.inc"
 
 namespace mlir {
 namespace scalehls {
 namespace hls {
 
-#include "scalehls/Dialect/HLS/HLSInterfaces.h.inc"
+#include "scalehls/Dialect/HLS/HLSOpsInterfaces.h.inc"
 
 enum class OperandKind { INPUT, OUTPUT, PARAM };
 
@@ -56,6 +57,13 @@ LoopInfoAttr getLoopInfo(Operation *op);
 void setLoopInfo(Operation *op, LoopInfoAttr loopInfo);
 void setLoopInfo(Operation *op, int64_t flattenTripCount, int64_t iterLatency,
                  int64_t minII);
+
+/// Buffer information attribute utils.
+BufferInfoAttr getBufferInfo(Operation *op);
+void setBufferInfo(Operation *op, BufferInfoAttr bufferInfo);
+void setBufferInfo(Operation *op, ArrayRef<int64_t> tileShape,
+                   ArrayRef<int64_t> vectorShape);
+void setBufferInfo(Operation *op, ArrayRef<int64_t> tileShape);
 
 //===----------------------------------------------------------------------===//
 // HLS directive attributes
@@ -111,6 +119,6 @@ public:
 } // namespace mlir
 
 #define GET_OP_CLASSES
-#include "scalehls/Dialect/HLS/HLS.h.inc"
+#include "scalehls/Dialect/HLS/HLSOps.h.inc"
 
 #endif // SCALEHLS_DIALECT_HLS_HLS_H

@@ -92,10 +92,8 @@ def ExtBufferLayoutAttr : HLSAttr<"ExtBufferLayout",
     [DeclareAttrInterfaceMethods<MemRefLayoutAttrInterface,
                                  ["verifyLayout"]>]> {
   let summary = "Layout of external buffer";
-  let parameters = (ins
-    "AffineMap":$map,
-    OptionalArrayRefParameter<"int64_t">:$vectorShape
-  );
+  let parameters = (ins "AffineMap":$map,
+    OptionalArrayRefParameter<"int64_t">:$vectorShape);
 
   let skipDefaultBuilders = 1;
   let builders = [
@@ -148,6 +146,24 @@ def LoopInfo : HLSAttr<"LoopInfo"> {
   let assemblyFormat = [{
     `<` `flatten_trip_count` `=` $flattenTripCount `,` `iter_latency` `=`
     $iterLatency `,` `min_ii` `=` $minII `>`
+  }];
+}
+
+def BufferInfo : HLSAttr<"BufferInfo"> {
+  let summary = "Buffer information";
+  let parameters = (ins ArrayRefParameter<"int64_t">:$tileShape,
+      OptionalArrayRefParameter<"int64_t">:$vectorShape);
+
+  let builders = [
+    AttrBuilder<(ins "ArrayRef<int64_t>":$tileShape), [{
+      return $_get(context, tileShape, SmallVector<int64_t>());
+    }]>
+  ];
+
+  let mnemonic = "buffer";
+  let assemblyFormat = [{
+    `<` `tile` `=` `[` $tileShape `]` (`,` `vector` `=`
+    `[`$vectorShape^ `]`)? `>`
   }];
 }
 

@@ -24,7 +24,8 @@ struct CreateMemrefSubview
 };
 } // namespace
 
-static void createSubviewBeforeLoopBand(AffineLoopBand band) {
+static void createSubviewBeforeLoopBand(AffineLoopBand band,
+                                        bool tileLayout = false) {
   assert(!band.empty() && "loop band must not be empty");
   auto b = OpBuilder(band.front());
   auto loc = b.getUnknownLoc();
@@ -71,6 +72,7 @@ static void createSubviewBeforeLoopBand(AffineLoopBand band) {
     SmallVector<OpFoldResult, 4> bufOffsets;
     SmallVector<OpFoldResult, 4> bufSizes;
     SmallVector<OpFoldResult, 4> bufStrides;
+    bool hasStaticOffset = false;
 
     // Traverse the memory access index of each dimension to construct the
     // sizes, offsets, and strids of the memref subview. Also, construct the
@@ -84,6 +86,10 @@ static void createSubviewBeforeLoopBand(AffineLoopBand band) {
       SimpleAffineExprFlattener flattener(numDims, numSymbols);
       flattener.walkPostOrder(expr);
       auto flattenedExpr = flattener.operandExprStack.back();
+
+      // The last coefficient is the constant offset.
+      if (flattenedExpr.back() != 0)
+        hasStaticOffset = true;
 
       // Construct the size-expr and offset-expr. For the dims and symbols, as
       // long as an id is found in "pointDims", it is added to the size-expr.
@@ -174,6 +180,31 @@ static void createSubviewBeforeLoopBand(AffineLoopBand band) {
     auto accessMap =
         AffineMap::get(numDims, numSymbols, accessExprs, map.getContext());
     op->setAttr("map", AffineMapAttr::get(accessMap));
+
+    // If necessary, update the memref type by creating a BufferLayoutOp.
+    if (tileLayout) {
+      // TODO: Currently we don't support to tile layout with static offset.
+      if (hasStaticOffset)
+        return WalkResult::advance();
+
+      SmallVector<int64_t> tileShape;
+      for (auto [size, stride] : llvm::zip(bufSizes, bufStrides)) {
+        assert(size.is<Attribute>() && "expected attribute");
+        assert(stride.is<Attribute>() && "expected attribute");
+        tileShape.push_back(
+            size.get<Attribute>().cast<IntegerAttr>().getInt() *
+            stride.get<Attribute>().cast<IntegerAttr>().getInt());
+      }
+
+      auto buffer = findBuffer(memref);
+      if (auto bufferOp = buffer.getDefiningOp<hls::BufferLikeInterface>())
+        setBufferInfo(bufferOp, tileShape);
+      else if (auto bufferArg = buffer.dyn_cast<BlockArgument>())
+        if (auto func =
+                bufferArg.getParentRegion()->getParentOfType<func::FuncOp>())
+          func.setArgAttr(bufferArg.getArgNumber(), "hls.buffer_info",
+                          BufferInfoAttr::get(b.getContext(), tileShape));
+    }
     return WalkResult::advance();
   });
 }
@@ -196,7 +227,7 @@ void CreateMemrefSubview::runOnOperation() {
       if (!getTileAndPointLoopBand(band, tileBand, pointBand) ||
           pointBand.empty())
         continue;
-      createSubviewBeforeLoopBand(pointBand);
+      createSubviewBeforeLoopBand(pointBand, /*tileLayout=*/true);
     } else if (createSubviewMode == CreateSubviewMode::Reduction) {
       AffineLoopBand parallelBand;
       AffineLoopBand reductionBand;
