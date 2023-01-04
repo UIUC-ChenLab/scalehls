@@ -58,6 +58,20 @@ static LogicalResult collapseMemref(Value memref) {
                                  newResults, map.getContext());
     user->setAttr("map", AffineMapAttr::get(newMap));
   }
+
+  // Update buffer info.
+  if (auto bufferInfo = getBufferInfo(memref)) {
+    SmallVector<int64_t> newTileShape;
+    SmallVector<int64_t> newVectorShape;
+
+    for (auto dim : remainDims) {
+      newTileShape.push_back(bufferInfo.getTileShape()[dim]);
+      if (!bufferInfo.getVectorShape().empty())
+        newVectorShape.push_back(bufferInfo.getVectorShape()[dim]);
+    }
+
+    setBufferInfo(memref, newTileShape, newVectorShape);
+  }
   return success();
 }
 
