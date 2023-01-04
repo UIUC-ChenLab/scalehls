@@ -65,6 +65,12 @@ void setBufferInfo(Operation *op, ArrayRef<int64_t> tileShape,
                    ArrayRef<int64_t> vectorShape);
 void setBufferInfo(Operation *op, ArrayRef<int64_t> tileShape);
 
+BufferInfoAttr getBufferInfo(Value memref);
+void setBufferInfo(Value memref, BufferInfoAttr bufferInfo);
+void setBufferInfo(Value memref, ArrayRef<int64_t> tileShape,
+                   ArrayRef<int64_t> vectorShape);
+void setBufferInfo(Value memref, ArrayRef<int64_t> tileShape);
+
 //===----------------------------------------------------------------------===//
 // HLS directive attributes
 //===----------------------------------------------------------------------===//

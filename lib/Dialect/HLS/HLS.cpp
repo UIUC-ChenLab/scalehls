@@ -1241,6 +1241,40 @@ void hls::setBufferInfo(Operation *op, ArrayRef<int64_t> tileShape) {
   setBufferInfo(op, bufferInfo);
 }
 
+BufferInfoAttr hls::getBufferInfo(Value memref) {
+  if (auto buffer = findBuffer(memref)) {
+    if (auto bufferArg = buffer.dyn_cast<BlockArgument>()) {
+      if (auto func =
+              dyn_cast<func::FuncOp>(bufferArg.getOwner()->getParentOp()))
+        return func.getArgAttrOfType<BufferInfoAttr>(bufferArg.getArgNumber(),
+                                                     "hls.buffer_info");
+    } else if (auto bufferOp = buffer.getDefiningOp<hls::BufferLikeInterface>())
+      return getBufferInfo(bufferOp);
+  }
+  return BufferInfoAttr();
+}
+void hls::setBufferInfo(Value memref, BufferInfoAttr bufferInfo) {
+  if (auto buffer = findBuffer(memref)) {
+    if (auto bufferArg = buffer.dyn_cast<BlockArgument>()) {
+      if (auto func =
+              dyn_cast<func::FuncOp>(bufferArg.getOwner()->getParentOp()))
+        func.setArgAttr(bufferArg.getArgNumber(), "hls.buffer_info",
+                        bufferInfo);
+    } else if (auto bufferOp = buffer.getDefiningOp<hls::BufferLikeInterface>())
+      setBufferInfo(bufferOp, bufferInfo);
+  }
+}
+void hls::setBufferInfo(Value memref, ArrayRef<int64_t> tileShape,
+                        ArrayRef<int64_t> vectorShape) {
+  auto bufferInfo =
+      BufferInfoAttr::get(memref.getContext(), tileShape, vectorShape);
+  setBufferInfo(memref, bufferInfo);
+}
+void hls::setBufferInfo(Value memref, ArrayRef<int64_t> tileShape) {
+  auto bufferInfo = BufferInfoAttr::get(memref.getContext(), tileShape);
+  setBufferInfo(memref, bufferInfo);
+}
+
 //===----------------------------------------------------------------------===//
 // HLS directive attributes
 //===----------------------------------------------------------------------===//

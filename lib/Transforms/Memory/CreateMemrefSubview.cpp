@@ -72,7 +72,9 @@ static void createSubviewBeforeLoopBand(AffineLoopBand band,
     SmallVector<OpFoldResult, 4> bufOffsets;
     SmallVector<OpFoldResult, 4> bufSizes;
     SmallVector<OpFoldResult, 4> bufStrides;
+
     bool hasStaticOffset = false;
+    SmallVector<int64_t> tileShape;
 
     // Traverse the memory access index of each dimension to construct the
     // sizes, offsets, and strids of the memref subview. Also, construct the
@@ -156,6 +158,9 @@ static void createSubviewBeforeLoopBand(AffineLoopBand band,
         return WalkResult::advance();
       bufSizes.push_back(b.getI64IntegerAttr(bounds.value().second + 1));
 
+      // Record the tile shape.
+      tileShape.push_back(divisor * (bounds.value().second + 1));
+
       // Now we can construct the affine apply for the offset of the current
       // memory dimension.
       AffineValueMap offsetMap(AffineMap::get(numDims, numSymbols, offsetExpr),
@@ -182,28 +187,11 @@ static void createSubviewBeforeLoopBand(AffineLoopBand band,
     op->setAttr("map", AffineMapAttr::get(accessMap));
 
     // If necessary, update the memref type by creating a BufferLayoutOp.
+    // TODO: Currently we don't support to tile layout with static offset.
     if (tileLayout) {
-      // TODO: Currently we don't support to tile layout with static offset.
       if (hasStaticOffset)
         return WalkResult::advance();
-
-      SmallVector<int64_t> tileShape;
-      for (auto [size, stride] : llvm::zip(bufSizes, bufStrides)) {
-        assert(size.is<Attribute>() && "expected attribute");
-        assert(stride.is<Attribute>() && "expected attribute");
-        tileShape.push_back(
-            size.get<Attribute>().cast<IntegerAttr>().getInt() *
-            stride.get<Attribute>().cast<IntegerAttr>().getInt());
-      }
-
-      auto buffer = findBuffer(memref);
-      if (auto bufferOp = buffer.getDefiningOp<hls::BufferLikeInterface>())
-        setBufferInfo(bufferOp, tileShape);
-      else if (auto bufferArg = buffer.dyn_cast<BlockArgument>())
-        if (auto func =
-                bufferArg.getParentRegion()->getParentOfType<func::FuncOp>())
-          func.setArgAttr(bufferArg.getArgNumber(), "hls.buffer_info",
-                          BufferInfoAttr::get(b.getContext(), tileShape));
+      setBufferInfo(memref, tileShape);
     }
     return WalkResult::advance();
   });

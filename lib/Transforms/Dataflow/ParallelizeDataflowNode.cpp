@@ -7,6 +7,7 @@
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
 #include "mlir/Dialect/Affine/LoopUtils.h"
 #include "mlir/Dialect/Affine/Utils.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Dialect/HLS/Analysis.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -35,6 +36,37 @@ static bool applyLoopVectorization(AffineLoopBand &band,
   vectorizeAffineLoops(band.front()->getParentOp(), loopSet, sizes, {});
   return true;
 }
+
+namespace {
+struct GenerateBufferInfo
+    : public OpInterfaceRewritePattern<VectorTransferOpInterface> {
+  using OpInterfaceRewritePattern<
+      VectorTransferOpInterface>::OpInterfaceRewritePattern;
+
+  LogicalResult matchAndRewrite(VectorTransferOpInterface transferOp,
+                                PatternRewriter &rewriter) const override {
+    auto vectorType = transferOp.getVectorType();
+    // TODO: For now, we demand the vector rank to be the same as memref rank.
+    if (vectorType.getRank() != transferOp.getShapedType().getRank())
+      return failure();
+
+    // TODO: Fow now, we demand the memref to have tiled layout.
+    if (auto bufferInfo = getBufferInfo(transferOp.source())) {
+      if (!bufferInfo.getVectorShape().empty()) {
+        if (vectorType.getShape() != bufferInfo.getVectorShape())
+          return transferOp->emitOpError("incompatible vector shape");
+        else
+          return failure();
+      }
+
+      setBufferInfo(transferOp.source(), bufferInfo.getTileShape(),
+                    vectorType.getShape());
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
 
 namespace {
 struct ParallelizeDataflowNode
@@ -267,12 +299,18 @@ struct ParallelizeDataflowNode
 
   void runOnOperation() override {
     auto func = getOperation();
+    auto context = func.getContext();
     getNodeParallelFactorMap(func);
     if (correlationAware)
       applyCorrelationAwareUnroll(func);
-    else
+    else {
       for (auto p : nodeParallelFactorMap)
         applyNaiveLoopUnroll(p.first, p.second);
+    }
+
+    mlir::RewritePatternSet patterns(context);
+    patterns.add<GenerateBufferInfo>(context);
+    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 
 private:
