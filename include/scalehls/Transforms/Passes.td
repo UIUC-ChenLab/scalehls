@@ -352,6 +352,15 @@ def AffineStoreForward : Pass<"scalehls-affine-store-forward", "func::FuncOp"> {
   let constructor = "mlir::scalehls::createAffineStoreForwardPass()";
 }
 
+def BufferVectorize : Pass<"scalehls-buffer-vectorize", "func::FuncOp"> {
+  let summary = "Vectorize buffers";
+  let description = [{
+    This pass convert buffers with scalar element to vector element. Meanwhile,
+    this pass convert transfer load/store to vector load/store.
+  }];
+  let constructor = "mlir::scalehls::createBufferVectorizePass()";
+}
+
 def CollapseMemrefUnitDims :
       Pass<"scalehls-collapse-memref-unit-dims", "func::FuncOp"> {
   let summary = "Collapse memref's unit dimensions";

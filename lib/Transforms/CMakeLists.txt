@@ -32,6 +32,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Loop/RemoveVariableBound.cpp
 
   Memory/AffineStoreForward.cpp
+  Memory/BufferVectorize.cpp
   Memory/CollapseMemrefUnitDims.cpp
   Memory/CreateLocalBuffer.cpp
   Memory/CreateMemrefSubview.cpp
