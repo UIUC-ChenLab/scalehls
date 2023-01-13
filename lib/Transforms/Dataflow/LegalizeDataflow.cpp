@@ -165,39 +165,26 @@ struct FuseBypassPath : public OpRewritePattern<ScheduleOp> {
 };
 } // namespace
 
-template <typename RecursiveOpType, typename OpType>
-static void updateSignatureRecursively(OpType node) {
-  llvm::SmallDenseSet<RecursiveOpType> schedules;
-  for (auto t : llvm::zip(node.getOperands(), node.getBody().getArguments())) {
-    std::get<1>(t).setType(std::get<0>(t).getType());
-    for (auto user : std::get<1>(t).getUsers())
-      if (auto schedule = dyn_cast<RecursiveOpType>(user))
-        schedules.insert(schedule);
-  }
-  for (auto schedule : schedules)
-    updateSignatureRecursively<OpType>(schedule);
-}
+// namespace {
+// struct AllocateInternalBuffer : public OpRewritePattern<BufferOp> {
+//   using OpRewritePattern<BufferOp>::OpRewritePattern;
 
-namespace {
-struct AllocateInternalBuffer : public OpRewritePattern<BufferOp> {
-  using OpRewritePattern<BufferOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(BufferOp buffer,
-                                PatternRewriter &rewriter) const override {
-    if (isExtBuffer(buffer) && llvm::hasSingleElement(buffer->getUsers()))
-      if (auto node = dyn_cast<NodeOp>(*buffer->user_begin())) {
-        auto bufferType = buffer.getType();
-        auto newType = MemRefType::get(
-            bufferType.getShape(), bufferType.getElementType(), AffineMap(),
-            MemoryKindAttr::get(buffer.getContext(), MemoryKind::BRAM_T2P));
-        buffer.getMemref().setType(newType);
-        updateSignatureRecursively<ScheduleOp>(node);
-        return success();
-      }
-    return failure();
-  }
-};
-} // namespace
+//   LogicalResult matchAndRewrite(BufferOp buffer,
+//                                 PatternRewriter &rewriter) const override {
+//     if (isExtBuffer(buffer) && llvm::hasSingleElement(buffer->getUsers()))
+//       if (auto node = dyn_cast<NodeOp>(*buffer->user_begin())) {
+//         auto bufferType = buffer.getType();
+//         auto newType = MemRefType::get(
+//             bufferType.getShape(), bufferType.getElementType(), AffineMap(),
+//             MemoryKindAttr::get(buffer.getContext(), MemoryKind::BRAM_T2P));
+//         buffer.getMemref().setType(newType);
+//         node.updateSignatureRecursively();
+//         return success();
+//       }
+//     return failure();
+//   }
+// };
+// } // namespace
 
 namespace {
 struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {

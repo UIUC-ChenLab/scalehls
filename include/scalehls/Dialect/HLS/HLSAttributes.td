@@ -93,7 +93,7 @@ def ExtBufferLayoutAttr : HLSAttr<"ExtBufferLayout",
                                  ["verifyLayout"]>]> {
   let summary = "Layout of external buffer";
   let parameters = (ins "AffineMap":$map,
-    OptionalArrayRefParameter<"int64_t">:$vectorShape);
+    ArrayRefParameter<"int64_t">:$vectorShape);
 
   let skipDefaultBuilders = 1;
   let builders = [
@@ -102,13 +102,14 @@ def ExtBufferLayoutAttr : HLSAttr<"ExtBufferLayout",
       return $_get(map.getContext(), map, vectorShape);
     }]>,
     AttrBuilderWithInferredContext<(ins "AffineMap":$map), [{
-      return $_get(map.getContext(), map, SmallVector<int64_t>());
+      return $_get(map.getContext(), map,
+                   SmallVector<int64_t>(map.getNumDims(), 1));
     }]>
   ];
 
   let genVerifyDecl = 1;
   let mnemonic = "layout";
-  let assemblyFormat = "`<` $map (`,` `[` $vectorShape^ `]`)? `>`";
+  let assemblyFormat = "`<` $map `,` `[` $vectorShape `]` `>`";
 }
 
 //===----------------------------------------------------------------------===//
@@ -152,18 +153,24 @@ def LoopInfo : HLSAttr<"LoopInfo"> {
 def BufferInfo : HLSAttr<"BufferInfo"> {
   let summary = "Buffer information";
   let parameters = (ins ArrayRefParameter<"int64_t">:$tileShape,
-      OptionalArrayRefParameter<"int64_t">:$vectorShape);
+      ArrayRefParameter<"int64_t">:$vectorShape);
 
   let builders = [
     AttrBuilder<(ins "ArrayRef<int64_t>":$tileShape), [{
-      return $_get(context, tileShape, SmallVector<int64_t>());
+      return $_get(context, tileShape,
+                   SmallVector<int64_t>(tileShape.size(), 1));
     }]>
   ];
 
   let mnemonic = "buffer";
   let assemblyFormat = [{
-    `<` `tile` `=` `[` $tileShape `]` (`,` `vector` `=`
-    `[`$vectorShape^ `]`)? `>`
+    `<` `tile` `=` `[` $tileShape `]` `,` `vector` `=` `[` $vectorShape `]` `>`
+  }];
+
+  let extraClassDeclaration = [{
+    bool isVectorized() {
+      return llvm::any_of(getVectorShape(), [](int64_t v) { return v > 1; });
+    }
   }];
 }
 

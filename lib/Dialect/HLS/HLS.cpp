@@ -316,6 +316,14 @@ bool ScheduleOp::isDependenceFree() {
   return isa<func::FuncOp>((*this)->getParentOp());
 }
 
+/// Update the signature of the schedule op recursively.
+void ScheduleOp::updateSignatureRecursively() {
+  for (auto [operand, arg] : llvm::zip(getOperands(), getBody().getArguments()))
+    arg.setType(operand.getType());
+  for (auto node : getOps<NodeOp>())
+    node.updateSignatureRecursively();
+}
+
 //===----------------------------------------------------------------------===//
 // NodeOp
 //===----------------------------------------------------------------------===//
@@ -531,6 +539,20 @@ SmallVector<Operation *> NodeOp::getLiveinUsers(Value livein) {
   return {users.begin(), users.end()};
 }
 
+/// Update the signature of the node op recursively.
+void NodeOp::updateSignatureRecursively() {
+  llvm::SmallDenseSet<ScheduleOp> schedules;
+  for (auto [operand, arg] :
+       llvm::zip(getOperands(), getBody().getArguments())) {
+    arg.setType(operand.getType());
+    for (auto user : arg.getUsers())
+      if (auto schedule = dyn_cast<ScheduleOp>(user))
+        schedules.insert(schedule);
+  }
+  for (auto schedule : schedules)
+    schedule.updateSignatureRecursively();
+}
+
 //===----------------------------------------------------------------------===//
 // BufferOp and ConstBufferOp
 //===----------------------------------------------------------------------===//
@@ -715,24 +737,6 @@ void ConstBufferOp::getEffects(
 }
 
 //===----------------------------------------------------------------------===//
-// BufferVectorizeOp
-//===----------------------------------------------------------------------===//
-
-LogicalResult BufferVectorizeOp::verify() {
-  if (getOutputVectorType().getElementType() != getInputType().getElementType())
-    return emitOpError("element type mismatch");
-
-  SmallVector<int64_t> collapsedOutputShape;
-  for (auto [outputSize, vectorSize] :
-       llvm::zip(getType().getShape(), getOutputVectorType().getShape()))
-    collapsedOutputShape.push_back(outputSize * vectorSize);
-
-  if (collapsedOutputShape != getInputType().getShape())
-    return emitOpError("shape mismatch");
-  return success();
-}
-
-//===----------------------------------------------------------------------===//
 // StreamOp, StreamReadOp, and StreamWriteOp
 //===----------------------------------------------------------------------===//
 
@@ -777,6 +781,40 @@ LogicalResult StreamWriteOp::verify() {
 //   effects.emplace_back(MemoryEffects::Write::get(), getChannel(),
 //                        SideEffects::DefaultResource::get());
 // }
+
+//===----------------------------------------------------------------------===//
+// BufferVectorizeOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult BufferVectorizeOp::verify() {
+  auto inputLayout = getInputType().getLayout().dyn_cast<ExtBufferLayoutAttr>();
+  if (!inputLayout)
+    return emitOpError("input must have external buffer layout");
+
+  if (auto vectorType = getOutputVectorType()) {
+    if (vectorType.getElementType() != getInputType().getElementType())
+      return emitOpError("element type mismatch");
+
+    unsigned numElements = 1;
+    for (auto dim : inputLayout.getVectorShape())
+      numElements *= dim;
+    if (numElements != vectorType.getNumElements())
+      return emitOpError("number of elements mismatch");
+
+    SmallVector<int64_t> collapsedOutputShape;
+    for (auto [outputSize, vectorSize] :
+         llvm::zip(getType().getShape(), inputLayout.getVectorShape()))
+      collapsedOutputShape.push_back(outputSize * vectorSize);
+
+    if (collapsedOutputShape != getInputType().getShape())
+      return emitOpError("vector shape mismatch");
+
+  } else if (getType().getShape() != getInputType().getShape() ||
+             getType().getElementType() != getInputType().getElementType())
+    return emitOpError("shape or scalar type mismatch");
+
+  return success();
+}
 
 //===----------------------------------------------------------------------===//
 // AxiBundleOp, AxiPortOp, and AxiPackOp

@@ -43,7 +43,7 @@ struct CreateAxiInterface : public CreateAxiInterfaceBase<CreateAxiInterface> {
     func.front().eraseArguments([](BlockArgument arg) { return true; });
 
     // Move each buffers allocated in the top function to the runtime function.
-    // Collect all values that will be converted to AXI.
+    // Collect all targeted buffers that will be converted to AXI.
     SmallVector<Value, 32> targets;
     SmallVector<Value, 32> ports;
     for (auto arg : mainBlock->getArguments()) {

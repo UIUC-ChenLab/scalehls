@@ -66,8 +66,7 @@ static LogicalResult collapseMemref(Value memref) {
 
     for (auto dim : remainDims) {
       newTileShape.push_back(bufferInfo.getTileShape()[dim]);
-      if (!bufferInfo.getVectorShape().empty())
-        newVectorShape.push_back(bufferInfo.getVectorShape()[dim]);
+      newVectorShape.push_back(bufferInfo.getVectorShape()[dim]);
     }
 
     setBufferInfo(memref, newTileShape, newVectorShape);

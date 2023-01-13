@@ -167,6 +167,9 @@ def ScheduleOp : HLSOp<"dataflow.schedule", [
   let extraClassDeclaration = [{
     /// FIXME: Check whether the schedule is dependence free.
     bool isDependenceFree();
+
+    /// Update the signature of the schedule op recursively.
+    void updateSignatureRecursively();
   }];
 }
 
@@ -250,6 +253,9 @@ def NodeOp : HLSOp<"dataflow.node", [
     bool hasHierarchy() {
       return cast<StageLikeInterface>(this->getOperation()).hasHierarchy();
     }
+
+    /// Update the signature of the node op recursively.
+    void updateSignatureRecursively();
   }];
 }
 
@@ -281,26 +287,6 @@ def ConstBufferOp : HLSOp<"dataflow.const_buffer", [
   let assemblyFormat = "attr-dict `:` type($memref)";
 
   let hasVerifier = 1;
-}
-
-def BufferVectorizeOp : HLSOp<"dataflow.buffer_vectorize",
-                              [ViewLikeOpInterface]> {
-  let summary = "Vectorize a buffer from scalar element to vector element";
-
-  let arguments = (ins AnyBuffer:$input);
-  let results = (outs StaticShapeMemRefOf<[AnyVector]>:$output);
-  let assemblyFormat = "$input attr-dict `:` type($input) `to` type($output)";
-
-  let hasVerifier = 1;
-  let extraClassDeclaration = [{
-    Value getViewSource() { return getInput(); }
-    MemRefType getInputType() {
-      return getInput().getType().cast<MemRefType>();
-    }
-    VectorType getOutputVectorType() {
-      return getType().getElementType().cast<VectorType>();
-    }
-  }];
 }
 
 def StreamOp : HLSOp<"dataflow.stream", [
@@ -352,6 +338,44 @@ def StreamWriteOp : HLSOp<"dataflow.stream_write", []> {
 //===----------------------------------------------------------------------===//
 // AXI-related Operations
 //===----------------------------------------------------------------------===//
+
+def BufferVectorizeOp : HLSOp<"buffer_vectorize", [ViewLikeOpInterface]> {
+  let summary = "Vectorize a buffer from scalar element to vector element";
+
+  let arguments = (ins AnyBuffer:$input);
+  let results = (outs StaticShapeMemRefOf<[AnyVector]>:$output);
+  let assemblyFormat = "$input attr-dict `:` type($input) `to` type($output)";
+
+  let hasVerifier = 1;
+  let extraClassDeclaration = [{
+    Value getViewSource() { return getInput(); }
+    MemRefType getInputType() {
+      return getInput().getType().cast<MemRefType>();
+    }
+    VectorType getOutputVectorType() {
+      return getType().getElementType().cast<VectorType>();
+    }
+  }];
+}
+
+def BufferDevectorizeOp : HLSOp<"buffer_devectorize", [ViewLikeOpInterface]> {
+  let summary = "Devectorize a buffer from vector element to scalar element";
+
+  let arguments = (ins StaticShapeMemRefOf<[AnyVector]>:$input);
+  let results = (outs AnyBuffer:$output);
+  let assemblyFormat = "$input attr-dict `:` type($input) `to` type($output)";
+
+  let hasVerifier = 1;
+  let extraClassDeclaration = [{
+    Value getViewSource() { return getInput(); }
+    MemRefType getInputType() {
+      return getInput().getType().cast<MemRefType>();
+    }
+    VectorType getInputVectorType() {
+      return getInputType().getElementType().cast<VectorType>();
+    }
+  }];
+}
 
 def AxiBundleOp : HLSOp<"axi.bundle", [NoMemoryEffect,
     HasParent<"func::FuncOp">]> {

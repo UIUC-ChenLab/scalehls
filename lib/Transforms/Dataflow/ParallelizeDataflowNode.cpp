@@ -50,9 +50,8 @@ struct GenerateBufferInfo
     if (vectorType.getRank() != transferOp.getShapedType().getRank())
       return failure();
 
-    // TODO: Fow now, we demand the memref to have tiled layout.
     if (auto bufferInfo = getBufferInfo(transferOp.source())) {
-      if (!bufferInfo.getVectorShape().empty()) {
+      if (bufferInfo.isVectorized()) {
         if (vectorType.getShape() != bufferInfo.getVectorShape())
           return transferOp->emitOpError("incompatible vector shape");
         else
@@ -60,6 +59,11 @@ struct GenerateBufferInfo
       }
 
       setBufferInfo(transferOp.source(), bufferInfo.getTileShape(),
+                    vectorType.getShape());
+      return success();
+    } else {
+      setBufferInfo(transferOp.source(),
+                    SmallVector<int64_t>(vectorType.getRank(), 1),
                     vectorType.getShape());
       return success();
     }

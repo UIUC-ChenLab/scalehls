@@ -551,7 +551,7 @@
 #set3 = affine_set<(d0, d1, d2, d3) : (-d0 - d2 * 14 + 27 == 0, -d1 - d3 * 14 + 27 == 0)>
 #set4 = affine_set<(d0, d1) : (d0 + d1 * 16 == 0)>
 module attributes {torch.debug_module_name = "ResNet"} {
-  func.func @forward(%arg0: memref<64x56x56xi8, #hls.mem<dram>> {hls.buffer_info = #hls.buffer<tile = [16, 28, 28]>}, %arg1: memref<1000x64xi8, #hls.mem<dram>> {hls.buffer_info = #hls.buffer<tile = [10, 16]>}, %arg2: memref<64x64xi8, #hls.mem<dram>> {hls.buffer_info = #hls.buffer<tile = [16, 16]>}, %arg3: memref<64x64x3x3xi8, #hls.mem<dram>> {hls.buffer_info = #hls.buffer<tile = [16, 16, 1, 1]>}, %arg4: memref<64x64x3x3xi8, #hls.mem<dram>> {hls.buffer_info = #hls.buffer<tile = [16, 16, 1, 1]>}, %arg5: memref<1000xi8, #hls.mem<dram>> {hls.buffer_info = #hls.buffer<tile = [10]>}) attributes {top_func} {
+  func.func @forward(%arg0: memref<64x56x56xi8, #hls.mem<dram>> {hls.buffer_info = #hls.buffer<tile = [16, 28, 28], vector = [1, 1, 1]>}, %arg1: memref<1000x64xi8, #hls.mem<dram>> {hls.buffer_info = #hls.buffer<tile = [10, 16], vector = [1, 1]>}, %arg2: memref<64x64xi8, #hls.mem<dram>> {hls.buffer_info = #hls.buffer<tile = [16, 16], vector = [1, 1]>}, %arg3: memref<64x64x3x3xi8, #hls.mem<dram>> {hls.buffer_info = #hls.buffer<tile = [16, 16, 1, 1], vector = [1, 1, 1, 1]>}, %arg4: memref<64x64x3x3xi8, #hls.mem<dram>> {hls.buffer_info = #hls.buffer<tile = [16, 16, 1, 1], vector = [1, 1, 1, 1]>}, %arg5: memref<1000xi8, #hls.mem<dram>> {hls.buffer_info = #hls.buffer<tile = [10], vector = [1]>}) attributes {top_func} {
     hls.dataflow.schedule(%arg2, %arg5, %arg3, %arg1, %arg0, %arg4) : memref<64x64xi8, #hls.mem<dram>>, memref<1000xi8, #hls.mem<dram>>, memref<64x64x3x3xi8, #hls.mem<dram>>, memref<1000x64xi8, #hls.mem<dram>>, memref<64x56x56xi8, #hls.mem<dram>>, memref<64x64x3x3xi8, #hls.mem<dram>> {
     ^bb0(%arg6: memref<64x64xi8, #hls.mem<dram>>, %arg7: memref<1000xi8, #hls.mem<dram>>, %arg8: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg9: memref<1000x64xi8, #hls.mem<dram>>, %arg10: memref<64x56x56xi8, #hls.mem<dram>>, %arg11: memref<64x64x3x3xi8, #hls.mem<dram>>):
       hls.dataflow.node() -> (%arg10) {inputTaps = [], level = 6 : i32} : () -> memref<64x56x56xi8, #hls.mem<dram>> {
@@ -625,7 +625,7 @@ module attributes {torch.debug_module_name = "ResNet"} {
           } {parallel}
         } {parallel}
       }
-      %2 = hls.dataflow.buffer {buffer_info = #hls.buffer<tile = [16, 14, 14]>, depth = 1 : i32, init_value = -24 : i8} : memref<64x28x28xi8, #hls.mem<dram>>
+      %2 = hls.dataflow.buffer {buffer_info = #hls.buffer<tile = [16, 14, 14], vector = [1, 1, 1]>, depth = 1 : i32, init_value = -24 : i8} : memref<64x28x28xi8, #hls.mem<dram>>
       hls.dataflow.node(%1, %arg11) -> (%2) {inputTaps = [0 : i32, 0 : i32], level = 4 : i32} : (memref<64x56x56xi8, #hls.mem<dram>>, memref<64x64x3x3xi8, #hls.mem<dram>>) -> memref<64x28x28xi8, #hls.mem<dram>> {
       ^bb0(%arg12: memref<64x56x56xi8, #hls.mem<dram>>, %arg13: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg14: memref<64x28x28xi8, #hls.mem<dram>>):
         affine.for %arg15 = 0 to 4 {
@@ -713,7 +713,7 @@ module attributes {torch.debug_module_name = "ResNet"} {
           }
         }
       }
-      %3 = hls.dataflow.buffer {buffer_info = #hls.buffer<tile = [16, 14, 14]>, depth = 1 : i32, init_value = -24 : i8} : memref<64x28x28xi8, #hls.mem<dram>>
+      %3 = hls.dataflow.buffer {buffer_info = #hls.buffer<tile = [16, 14, 14], vector = [1, 1, 1]>, depth = 1 : i32, init_value = -24 : i8} : memref<64x28x28xi8, #hls.mem<dram>>
       hls.dataflow.node(%arg8, %2) -> (%3) {inputTaps = [0 : i32, 0 : i32], level = 3 : i32} : (memref<64x64x3x3xi8, #hls.mem<dram>>, memref<64x28x28xi8, #hls.mem<dram>>) -> memref<64x28x28xi8, #hls.mem<dram>> {
       ^bb0(%arg12: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg13: memref<64x28x28xi8, #hls.mem<dram>>, %arg14: memref<64x28x28xi8, #hls.mem<dram>>):
         affine.for %arg15 = 0 to 4 {
@@ -797,8 +797,8 @@ module attributes {torch.debug_module_name = "ResNet"} {
           }
         }
       }
-      %4 = hls.dataflow.buffer {buffer_info = #hls.buffer<tile = [16, 14, 14]>, depth = 1 : i32} : memref<64x28x28xi8, #hls.mem<dram>>
-      %5 = hls.dataflow.buffer {buffer_info = #hls.buffer<tile = [16, 14, 14]>, depth = 1 : i32, init_value = -24 : i8} : memref<64x28x28xi8, #hls.mem<dram>>
+      %4 = hls.dataflow.buffer {buffer_info = #hls.buffer<tile = [16, 14, 14], vector = [1, 1, 1]>, depth = 1 : i32} : memref<64x28x28xi8, #hls.mem<dram>>
+      %5 = hls.dataflow.buffer {buffer_info = #hls.buffer<tile = [16, 14, 14], vector = [1, 1, 1]>, depth = 1 : i32, init_value = -24 : i8} : memref<64x28x28xi8, #hls.mem<dram>>
       hls.dataflow.node(%0, %arg6, %3) -> (%4, %5) {inputTaps = [2 : i32, 0 : i32, 0 : i32], level = 2 : i32} : (memref<64x56x56xi8, #hls.mem<dram>>, memref<64x64xi8, #hls.mem<dram>>, memref<64x28x28xi8, #hls.mem<dram>>) -> (memref<64x28x28xi8, #hls.mem<dram>>, memref<64x28x28xi8, #hls.mem<dram>>) {
       ^bb0(%arg12: memref<64x56x56xi8, #hls.mem<dram>>, %arg13: memref<64x64xi8, #hls.mem<dram>>, %arg14: memref<64x28x28xi8, #hls.mem<dram>>, %arg15: memref<64x28x28xi8, #hls.mem<dram>>, %arg16: memref<64x28x28xi8, #hls.mem<dram>>):
         affine.for %arg17 = 0 to 4 {
@@ -910,7 +910,7 @@ module attributes {torch.debug_module_name = "ResNet"} {
           } {parallel}
         }
       }
-      %6 = hls.dataflow.buffer {buffer_info = #hls.buffer<tile = [16]>, depth = 1 : i32, init_value = -24 : i8} : memref<64xi8, #hls.mem<bram_t2p>>
+      %6 = hls.dataflow.buffer {buffer_info = #hls.buffer<tile = [16], vector = [1]>, depth = 1 : i32, init_value = -24 : i8} : memref<64xi8, #hls.mem<bram_t2p>>
       hls.dataflow.node(%4) -> (%6) {inputTaps = [0 : i32], level = 1 : i32} : (memref<64x28x28xi8, #hls.mem<dram>>) -> memref<64xi8, #hls.mem<bram_t2p>> {
       ^bb0(%arg12: memref<64x28x28xi8, #hls.mem<dram>>, %arg13: memref<64xi8, #hls.mem<bram_t2p>>):
         affine.for %arg14 = 0 to 2 {
