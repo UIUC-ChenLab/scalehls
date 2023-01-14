@@ -38,7 +38,7 @@ static bool applyLoopVectorization(AffineLoopBand &band,
 }
 
 namespace {
-struct GenerateBufferInfo
+struct GenerateBufferLayout
     : public OpInterfaceRewritePattern<VectorTransferOpInterface> {
   using OpInterfaceRewritePattern<
       VectorTransferOpInterface>::OpInterfaceRewritePattern;
@@ -50,24 +50,26 @@ struct GenerateBufferInfo
     if (vectorType.getRank() != transferOp.getShapedType().getRank())
       return failure();
 
-    if (auto bufferInfo = getBufferInfo(transferOp.source())) {
-      if (bufferInfo.isVectorized()) {
-        if (vectorType.getShape() != bufferInfo.getVectorShape())
+    // The default tile shape is as same as the memref shape.
+    auto tileShape = transferOp.getShapedType().getShape();
+
+    // If the source has a tile layout, use it as the tile shape.
+    if (auto layout = getTileLayout(transferOp.source())) {
+      // If the layout is already vectorized, check if it's vector shape is
+      // compatible with the existing one. If not, it means that different
+      // transfer ops are using different vector shapes, which is not allowed.
+      if (layout.isVectorized()) {
+        if (vectorType.getShape() != layout.getVectorShape())
           return transferOp->emitOpError("incompatible vector shape");
         else
           return failure();
       }
-
-      setBufferInfo(transferOp.source(), bufferInfo.getTileShape(),
-                    vectorType.getShape());
-      return success();
-    } else {
-      setBufferInfo(transferOp.source(),
-                    SmallVector<int64_t>(vectorType.getRank(), 1),
-                    vectorType.getShape());
-      return success();
+      tileShape = layout.getTileShape();
     }
-    return failure();
+
+    // Set the tile layout the calculated tile shape and vector shape.
+    setTileLayout(transferOp.source(), tileShape, vectorType.getShape());
+    return success();
   }
 };
 } // namespace
@@ -313,7 +315,7 @@ struct ParallelizeDataflowNode
     }
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<GenerateBufferInfo>(context);
+    patterns.add<GenerateBufferLayout>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 

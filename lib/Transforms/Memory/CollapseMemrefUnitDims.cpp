@@ -59,17 +59,16 @@ static LogicalResult collapseMemref(Value memref) {
     user->setAttr("map", AffineMapAttr::get(newMap));
   }
 
-  // Update buffer info.
-  if (auto bufferInfo = getBufferInfo(memref)) {
+  // Update tile layout - remove the collapsed dimensions.
+  if (auto layout = getTileLayout(memref)) {
     SmallVector<int64_t> newTileShape;
     SmallVector<int64_t> newVectorShape;
 
     for (auto dim : remainDims) {
-      newTileShape.push_back(bufferInfo.getTileShape()[dim]);
-      newVectorShape.push_back(bufferInfo.getVectorShape()[dim]);
+      newTileShape.push_back(layout.getTileShape()[dim]);
+      newVectorShape.push_back(layout.getVectorShape()[dim]);
     }
-
-    setBufferInfo(memref, newTileShape, newVectorShape);
+    setTileLayout(memref, newTileShape, newVectorShape);
   }
   return success();
 }

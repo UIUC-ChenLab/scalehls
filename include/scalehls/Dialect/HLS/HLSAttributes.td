@@ -81,42 +81,58 @@ def PartitionLayoutAttr : HLSAttr<"PartitionLayout",
   let assemblyFormat = "`<` `[` $kinds `]` `,` `[` $factors `]` `>`";
 
   let extraClassDeclaration = [{
+    /// The affine map of "block" partition needs array shape to be inferenced.
+    /// For example, if the partition factor is [2] and the shape of the array
+    /// is [16], the affine map should be (d0) -> (d0 / 8, d0 % 8), where 8 is
+    /// equal to 16 / 2. However, as the shape information is not known at the
+    /// time of attribute construction, we can only encode factor [8] in the
+    /// attribute instead of the actual factor [2]. This method returns the
+    /// actual partition factor with the given array shape.
     SmallVector<int64_t> getActualFactors(ArrayRef<int64_t> shape);
+
+    /// This method construct a PartitionLayoutAttr with the given partition
+    /// kinds, actual partition factors, and array shape.
     static PartitionLayoutAttr getWithActualFactors(MLIRContext *context,
         ArrayRef<PartitionKind> kinds, ArrayRef<int64_t> actualFactors,
         ArrayRef<int64_t> shape);
   }];
 }
 
-def ExtBufferLayoutAttr : HLSAttr<"ExtBufferLayout",
+def TileLayoutAttr : HLSAttr<"TileLayout",
     [DeclareAttrInterfaceMethods<MemRefLayoutAttrInterface,
                                  ["verifyLayout"]>]> {
-  let summary = "Layout of external buffer";
-  let parameters = (ins "AffineMap":$map,
-    ArrayRefParameter<"int64_t">:$vectorShape);
+  let summary = "Layout of tiled buffer";
+  let parameters = (ins
+    ArrayRefParameter<"int64_t">:$tileShape,
+    ArrayRefParameter<"int64_t">:$vectorShape
+  );
 
-  let skipDefaultBuilders = 1;
+  let genVerifyDecl = 1;
+  let mnemonic = "tile";
+  let assemblyFormat = "`<` `[` $tileShape `]` `,` `[` $vectorShape `]` `>`";
+
   let builders = [
-    AttrBuilderWithInferredContext<(ins "AffineMap":$map,
-                                        "ArrayRef<int64_t>":$vectorShape), [{
-      return $_get(map.getContext(), map, vectorShape);
-    }]>,
-    AttrBuilderWithInferredContext<(ins "AffineMap":$map), [{
-      return $_get(map.getContext(), map,
-                   SmallVector<int64_t>(map.getNumDims(), 1));
+    AttrBuilder<(ins "ArrayRef<int64_t>":$tileShape), [{
+      return $_get(context, tileShape,
+                   SmallVector<int64_t>(tileShape.size(), 1));
     }]>
   ];
 
-  let genVerifyDecl = 1;
-  let mnemonic = "layout";
-  let assemblyFormat = "`<` $map `,` `[` $vectorShape `]` `>`";
+  let extraClassDeclaration = [{
+    bool isTiled() {
+      return llvm::any_of(getTileShape(), [](int64_t v) { return v > 1; });
+    }
+    bool isVectorized() {
+      return llvm::any_of(getVectorShape(), [](int64_t v) { return v > 1; });
+    }
+  }];
 }
 
 //===----------------------------------------------------------------------===//
 // HLS resource and timing attributes
 //===----------------------------------------------------------------------===//
 
-def Resource : HLSAttr<"Resource"> {
+def ResourceAttr : HLSAttr<"Resource"> {
   let summary = "Resource utilization attributes";
   let parameters = (ins "int64_t":$lut, "int64_t":$dsp, "int64_t":$bram);
 
@@ -126,7 +142,7 @@ def Resource : HLSAttr<"Resource"> {
   }];
 }
 
-def Timing : HLSAttr<"Timing"> {
+def TimingAttr : HLSAttr<"Timing"> {
   let summary = "Timing attributes";
   let parameters = (ins "int64_t":$begin, "int64_t":$end, "int64_t":$latency,
                         "int64_t":$interval);
@@ -138,7 +154,7 @@ def Timing : HLSAttr<"Timing"> {
   }];
 }
 
-def LoopInfo : HLSAttr<"LoopInfo"> {
+def LoopInfoAttr : HLSAttr<"LoopInfo"> {
   let summary = "Loop information";
   let parameters = (ins "int64_t":$flattenTripCount, "int64_t":$iterLatency,
                         "int64_t":$minII);
@@ -150,35 +166,11 @@ def LoopInfo : HLSAttr<"LoopInfo"> {
   }];
 }
 
-def BufferInfo : HLSAttr<"BufferInfo"> {
-  let summary = "Buffer information";
-  let parameters = (ins ArrayRefParameter<"int64_t">:$tileShape,
-      ArrayRefParameter<"int64_t">:$vectorShape);
-
-  let builders = [
-    AttrBuilder<(ins "ArrayRef<int64_t>":$tileShape), [{
-      return $_get(context, tileShape,
-                   SmallVector<int64_t>(tileShape.size(), 1));
-    }]>
-  ];
-
-  let mnemonic = "buffer";
-  let assemblyFormat = [{
-    `<` `tile` `=` `[` $tileShape `]` `,` `vector` `=` `[` $vectorShape `]` `>`
-  }];
-
-  let extraClassDeclaration = [{
-    bool isVectorized() {
-      return llvm::any_of(getVectorShape(), [](int64_t v) { return v > 1; });
-    }
-  }];
-}
-
 //===----------------------------------------------------------------------===//
 // HLS directive attributes
 //===----------------------------------------------------------------------===//
 
-def LoopDirective : HLSAttr<"LoopDirective"> {
+def LoopDirectiveAttr : HLSAttr<"LoopDirective"> {
   let summary = "Aggregation of loop directives";
   let parameters = (ins "bool":$pipeline, "int64_t":$targetII, "bool":$dataflow,
                     "bool":$flatten);
@@ -190,7 +182,7 @@ def LoopDirective : HLSAttr<"LoopDirective"> {
   }];
 }
 
-def FuncDirective : HLSAttr<"FuncDirective"> {
+def FuncDirectiveAttr : HLSAttr<"FuncDirective"> {
   let summary = "Aggregation of function directives";
   let parameters = (ins "bool":$pipeline, "int64_t":$targetInterval,
                         "bool":$dataflow);

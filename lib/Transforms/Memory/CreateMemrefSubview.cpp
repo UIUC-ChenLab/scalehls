@@ -186,12 +186,12 @@ static void createSubviewBeforeLoopBand(AffineLoopBand band,
         AffineMap::get(numDims, numSymbols, accessExprs, map.getContext());
     op->setAttr("map", AffineMapAttr::get(accessMap));
 
-    // If necessary, update the memref type by creating a BufferLayoutOp.
-    // TODO: Currently we don't support to tile layout with static offset.
+    // If necessary, annotate the memref with tile layout attribute.
+    // TODO: For now, we only support tile layout without static offset.
     if (tileLayout) {
       if (hasStaticOffset)
         return WalkResult::advance();
-      setBufferInfo(memref, tileShape);
+      setTileLayout(memref, tileShape);
     }
     return WalkResult::advance();
   });

@@ -13,24 +13,13 @@ using namespace scalehls;
 using namespace hls;
 
 LogicalResult vectorizeMemref(Value memref) {
-  auto bufferInfo = getBufferInfo(memref);
-  if (!isExtBuffer(memref) || !bufferInfo)
+  auto layout = getTileLayout(memref);
+  if (!isExtBuffer(memref) || !layout)
     return failure();
 
   auto ctx = memref.getContext();
   auto b = OpBuilder(ctx);
   auto type = memref.getType().cast<MemRefType>();
-
-  // Calculate the buffer layout.
-  SmallVector<AffineExpr> exprs;
-  for (auto tileSize : llvm::enumerate(bufferInfo.getTileShape()))
-    exprs.push_back(
-        b.getAffineDimExpr(tileSize.index()).floorDiv(tileSize.value()));
-  for (auto tileSize : llvm::enumerate(bufferInfo.getTileShape()))
-    exprs.push_back(b.getAffineDimExpr(tileSize.index()) % tileSize.value());
-
-  auto map = AffineMap::get(type.getRank(), 0, exprs, ctx);
-  auto layout = ExtBufferLayoutAttr::get(map, bufferInfo.getVectorShape());
 
   // Apply the buffer layout.
   memref.setType(MemRefType::get(type.getShape(), type.getElementType(), layout,
@@ -39,14 +28,13 @@ LogicalResult vectorizeMemref(Value memref) {
   // Calculate the new memref type after vectorization.
   auto newShape = SmallVector<int64_t>(type.getShape());
   auto vectorLength = 1;
-  for (auto [size, vectorSize] :
-       llvm::zip(newShape, bufferInfo.getVectorShape())) {
+  for (auto [size, vectorSize] : llvm::zip(newShape, layout.getVectorShape())) {
     size /= vectorSize;
     vectorLength *= vectorSize;
   }
 
   auto newElementType = type.getElementType();
-  if (bufferInfo.isVectorized())
+  if (layout.isVectorized())
     newElementType = VectorType::get({vectorLength}, type.getElementType());
   auto newType = MemRefType::get(newShape, newElementType, AffineMap(),
                                  type.getMemorySpace());
@@ -63,7 +51,7 @@ LogicalResult vectorizeMemref(Value memref) {
 }
 
 namespace {
-struct MaterializeBufferInfo : public OpRewritePattern<func::FuncOp> {
+struct Materializelayout : public OpRewritePattern<func::FuncOp> {
   using OpRewritePattern<func::FuncOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(func::FuncOp func,
@@ -148,7 +136,7 @@ struct BufferVectorize : public BufferVectorizeBase<BufferVectorize> {
     auto context = func.getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<MaterializeBufferInfo>(context);
+    patterns.add<Materializelayout>(context);
     (void)applyOpPatternsAndFold(func, std::move(patterns));
 
     patterns.clear();

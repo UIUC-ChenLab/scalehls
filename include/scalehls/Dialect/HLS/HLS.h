@@ -29,13 +29,31 @@ namespace hls {
 
 #include "scalehls/Dialect/HLS/HLSOpsInterfaces.h.inc"
 
+/// Kind of dataflow.node operands.
 enum class OperandKind { INPUT, OUTPUT, PARAM };
 
+/// Memory effects for dataflow.stream operations.
 namespace StreamEffects {
 struct Instantiate : public MemoryEffects::Effect::Base<Instantiate> {};
 struct Push : public MemoryEffects::Effect::Base<Push> {};
 struct Pop : public MemoryEffects::Effect::Base<Pop> {};
 } // namespace StreamEffects
+
+//===----------------------------------------------------------------------===//
+// Tile layout attribute utils.
+//===----------------------------------------------------------------------===//
+
+TileLayoutAttr getTileLayout(Operation *op);
+void setTileLayout(Operation *op, TileLayoutAttr tileLayout);
+void setTileLayout(Operation *op, ArrayRef<int64_t> tileShape,
+                   ArrayRef<int64_t> vectorShape);
+void setTileLayout(Operation *op, ArrayRef<int64_t> tileShape);
+
+TileLayoutAttr getTileLayout(Value memref);
+void setTileLayout(Value memref, TileLayoutAttr tileLayout);
+void setTileLayout(Value memref, ArrayRef<int64_t> tileShape,
+                   ArrayRef<int64_t> vectorShape);
+void setTileLayout(Value memref, ArrayRef<int64_t> tileShape);
 
 //===----------------------------------------------------------------------===//
 // HLS resource and timing attributes
@@ -57,19 +75,6 @@ LoopInfoAttr getLoopInfo(Operation *op);
 void setLoopInfo(Operation *op, LoopInfoAttr loopInfo);
 void setLoopInfo(Operation *op, int64_t flattenTripCount, int64_t iterLatency,
                  int64_t minII);
-
-/// Buffer information attribute utils.
-BufferInfoAttr getBufferInfo(Operation *op);
-void setBufferInfo(Operation *op, BufferInfoAttr bufferInfo);
-void setBufferInfo(Operation *op, ArrayRef<int64_t> tileShape,
-                   ArrayRef<int64_t> vectorShape);
-void setBufferInfo(Operation *op, ArrayRef<int64_t> tileShape);
-
-BufferInfoAttr getBufferInfo(Value memref);
-void setBufferInfo(Value memref, BufferInfoAttr bufferInfo);
-void setBufferInfo(Value memref, ArrayRef<int64_t> tileShape,
-                   ArrayRef<int64_t> vectorShape);
-void setBufferInfo(Value memref, ArrayRef<int64_t> tileShape);
 
 //===----------------------------------------------------------------------===//
 // HLS directive attributes

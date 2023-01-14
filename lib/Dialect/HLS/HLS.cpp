@@ -549,6 +549,7 @@ void NodeOp::updateSignatureRecursively() {
       if (auto schedule = dyn_cast<ScheduleOp>(user))
         schedules.insert(schedule);
   }
+  // TODO: How to traverse all schedule ops?
   for (auto schedule : schedules)
     schedule.updateSignatureRecursively();
 }
@@ -783,11 +784,11 @@ LogicalResult StreamWriteOp::verify() {
 // }
 
 //===----------------------------------------------------------------------===//
-// BufferVectorizeOp
+// BufferVectorizeOp and BufferDevectorizeOp
 //===----------------------------------------------------------------------===//
 
 LogicalResult BufferVectorizeOp::verify() {
-  auto inputLayout = getInputType().getLayout().dyn_cast<ExtBufferLayoutAttr>();
+  auto inputLayout = getInputType().getLayout().dyn_cast<TileLayoutAttr>();
   if (!inputLayout)
     return emitOpError("input must have external buffer layout");
 
@@ -815,6 +816,8 @@ LogicalResult BufferVectorizeOp::verify() {
 
   return success();
 }
+
+LogicalResult BufferDevectorizeOp::verify() { return success(); }
 
 //===----------------------------------------------------------------------===//
 // AxiBundleOp, AxiPortOp, and AxiPackOp
@@ -1103,8 +1106,6 @@ AffineMap PartitionLayoutAttr::getAffineMap() const {
       addressIndices.push_back(b.getAffineDimExpr(dim).floorDiv(factor));
 
     } else if (kind == PartitionKind::BLOCK) {
-      // FIXME: For now, the representation of block partition factor is
-      // incorrect because the limitation of memref type.
       partitionIndices.push_back(b.getAffineDimExpr(dim).floorDiv(factor));
       addressIndices.push_back(b.getAffineDimExpr(dim) % factor);
 
@@ -1151,6 +1152,13 @@ PartitionLayoutAttr::verify(function_ref<InFlightDiagnostic()> emitError,
   return success();
 }
 
+/// The affine map of "block" partition needs array shape to be inferenced. For
+/// example, if the partition factor is [2] and the shape of the array is [16],
+/// the affine map should be (d0) -> (d0 / 8, d0 % 8), where 8 is equal to 16
+/// / 2. However, as the shape information is not known at the time of attribute
+/// construction, we can only encode factor [8] in the attribute instead of the
+/// actual factor [2]. This method returns the actual partition factor with the
+/// given array shape.
 SmallVector<int64_t>
 PartitionLayoutAttr::getActualFactors(ArrayRef<int64_t> shape) {
   SmallVector<int64_t, 4> actualFactors;
@@ -1163,6 +1171,8 @@ PartitionLayoutAttr::getActualFactors(ArrayRef<int64_t> shape) {
   return actualFactors;
 }
 
+/// This method construct a PartitionLayoutAttr with the given partition kinds,
+/// actual partition factors, and array shape.
 PartitionLayoutAttr PartitionLayoutAttr::getWithActualFactors(
     MLIRContext *context, ArrayRef<PartitionKind> kinds,
     ArrayRef<int64_t> actualFactors, ArrayRef<int64_t> shape) {
@@ -1177,44 +1187,111 @@ PartitionLayoutAttr PartitionLayoutAttr::getWithActualFactors(
 }
 
 //===----------------------------------------------------------------------===//
-// ExtBufferLayoutAttr
+// TileLayoutAttr
 //===----------------------------------------------------------------------===//
 
-AffineMap ExtBufferLayoutAttr::getAffineMap() const {
+AffineMap TileLayoutAttr::getAffineMap() const {
   auto b = Builder(getContext());
-  auto exprs = SmallVector<AffineExpr>(getMap().getResults());
 
-  for (auto [expr, vectorSize] :
-       llvm::zip(llvm::drop_begin(exprs, exprs.size() - 2), getVectorShape()))
-    expr = expr.floorDiv(vectorSize);
+  SmallVector<AffineExpr> exprs;
+  for (auto tileSize : llvm::enumerate(getTileShape()))
+    exprs.push_back(
+        b.getAffineDimExpr(tileSize.index()).floorDiv(tileSize.value()));
+
+  for (auto [tileSize, vectorSize] :
+       llvm::zip(llvm::enumerate(getTileShape()), getVectorShape()))
+    exprs.push_back((b.getAffineDimExpr(tileSize.index()) % tileSize.value())
+                        .floorDiv(vectorSize));
 
   for (auto vectorSize : llvm::enumerate(getVectorShape()))
     exprs.push_back(b.getAffineDimExpr(vectorSize.index()) %
                     vectorSize.value());
-  return AffineMap::get(getMap().getNumDims(), 0, exprs, getContext());
+
+  // The verifier should have made sure that the number of memref dimensions is
+  // equal to the number of tile shape dimensions.
+  return AffineMap::get(getTileShape().size(), 0, exprs, getContext());
 }
 
-LogicalResult ExtBufferLayoutAttr::verifyLayout(
+LogicalResult TileLayoutAttr::verifyLayout(
     ArrayRef<int64_t> shape,
     function_ref<InFlightDiagnostic()> emitError) const {
-  if (shape.size() != getVectorShape().size())
+  if (shape.size() != getTileShape().size())
     return emitError() << "number of memref dimensions must be equal to number "
                           "of vector shape dimensions";
-
-  for (auto [size, vectorSize] : llvm::zip(shape, getVectorShape()))
-    if (size % vectorSize != 0)
+  for (auto [size, tileSize] : llvm::zip(shape, getTileShape()))
+    if (size % tileSize != 0)
       return emitError() << "memref dimension size must be a multiple of "
                             "vector shape dimension size";
   return success();
 }
 
 LogicalResult
-ExtBufferLayoutAttr::verify(function_ref<InFlightDiagnostic()> emitError,
-                            AffineMap map, ArrayRef<int64_t> vectorShape) {
-  if (map.getNumDims() != vectorShape.size())
+TileLayoutAttr::verify(function_ref<InFlightDiagnostic()> emitError,
+                       ArrayRef<int64_t> tileShape,
+                       ArrayRef<int64_t> vectorShape) {
+  if (tileShape.size() != vectorShape.size())
     return emitError() << "number of dimensions in affine map must be equal to "
                           "number of vector shape dimensions";
+  for (auto [tileSize, vectorSize] : llvm::zip(tileShape, vectorShape))
+    if (tileSize % vectorSize != 0)
+      return emitError() << "tile shape dimension size must be a multiple of "
+                            "vector shape dimension size";
   return success();
+}
+
+//===----------------------------------------------------------------------===//
+// Tile layout attribute utils.
+//===----------------------------------------------------------------------===//
+
+TileLayoutAttr hls::getTileLayout(Operation *op) {
+  return op->getAttrOfType<TileLayoutAttr>("tile_layout");
+}
+void hls::setTileLayout(Operation *op, TileLayoutAttr tileLayout) {
+  op->setAttr("tile_layout", tileLayout);
+}
+void hls::setTileLayout(Operation *op, ArrayRef<int64_t> tileShape,
+                        ArrayRef<int64_t> vectorShape) {
+  auto tileLayout =
+      TileLayoutAttr::get(op->getContext(), tileShape, vectorShape);
+  setTileLayout(op, tileLayout);
+}
+void hls::setTileLayout(Operation *op, ArrayRef<int64_t> tileShape) {
+  auto tileLayout = TileLayoutAttr::get(op->getContext(), tileShape);
+  setTileLayout(op, tileLayout);
+}
+
+TileLayoutAttr hls::getTileLayout(Value memref) {
+  if (auto buffer = findBuffer(memref)) {
+    if (auto bufferArg = buffer.dyn_cast<BlockArgument>()) {
+      if (auto func =
+              dyn_cast<func::FuncOp>(bufferArg.getOwner()->getParentOp()))
+        return func.getArgAttrOfType<TileLayoutAttr>(bufferArg.getArgNumber(),
+                                                     "hls.tile_layout");
+    } else if (auto bufferOp = buffer.getDefiningOp<hls::BufferLikeInterface>())
+      return getTileLayout(bufferOp);
+  }
+  return TileLayoutAttr();
+}
+void hls::setTileLayout(Value memref, TileLayoutAttr tileLayout) {
+  if (auto buffer = findBuffer(memref)) {
+    if (auto bufferArg = buffer.dyn_cast<BlockArgument>()) {
+      if (auto func =
+              dyn_cast<func::FuncOp>(bufferArg.getOwner()->getParentOp()))
+        func.setArgAttr(bufferArg.getArgNumber(), "hls.tile_layout",
+                        tileLayout);
+    } else if (auto bufferOp = buffer.getDefiningOp<hls::BufferLikeInterface>())
+      setTileLayout(bufferOp, tileLayout);
+  }
+}
+void hls::setTileLayout(Value memref, ArrayRef<int64_t> tileShape,
+                        ArrayRef<int64_t> vectorShape) {
+  auto tileLayout =
+      TileLayoutAttr::get(memref.getContext(), tileShape, vectorShape);
+  setTileLayout(memref, tileLayout);
+}
+void hls::setTileLayout(Value memref, ArrayRef<int64_t> tileShape) {
+  auto tileLayout = TileLayoutAttr::get(memref.getContext(), tileShape);
+  setTileLayout(memref, tileLayout);
 }
 
 //===----------------------------------------------------------------------===//
@@ -1259,58 +1336,6 @@ void hls::setLoopInfo(Operation *op, int64_t flattenTripCount,
   auto loopInfo =
       LoopInfoAttr::get(op->getContext(), flattenTripCount, iterLatency, minII);
   setLoopInfo(op, loopInfo);
-}
-
-/// Buffer information attribute utils.
-BufferInfoAttr hls::getBufferInfo(Operation *op) {
-  return op->getAttrOfType<BufferInfoAttr>("buffer_info");
-}
-void hls::setBufferInfo(Operation *op, BufferInfoAttr bufferInfo) {
-  op->setAttr("buffer_info", bufferInfo);
-}
-void hls::setBufferInfo(Operation *op, ArrayRef<int64_t> tileShape,
-                        ArrayRef<int64_t> vectorShape) {
-  auto bufferInfo =
-      BufferInfoAttr::get(op->getContext(), tileShape, vectorShape);
-  setBufferInfo(op, bufferInfo);
-}
-void hls::setBufferInfo(Operation *op, ArrayRef<int64_t> tileShape) {
-  auto bufferInfo = BufferInfoAttr::get(op->getContext(), tileShape);
-  setBufferInfo(op, bufferInfo);
-}
-
-BufferInfoAttr hls::getBufferInfo(Value memref) {
-  if (auto buffer = findBuffer(memref)) {
-    if (auto bufferArg = buffer.dyn_cast<BlockArgument>()) {
-      if (auto func =
-              dyn_cast<func::FuncOp>(bufferArg.getOwner()->getParentOp()))
-        return func.getArgAttrOfType<BufferInfoAttr>(bufferArg.getArgNumber(),
-                                                     "hls.buffer_info");
-    } else if (auto bufferOp = buffer.getDefiningOp<hls::BufferLikeInterface>())
-      return getBufferInfo(bufferOp);
-  }
-  return BufferInfoAttr();
-}
-void hls::setBufferInfo(Value memref, BufferInfoAttr bufferInfo) {
-  if (auto buffer = findBuffer(memref)) {
-    if (auto bufferArg = buffer.dyn_cast<BlockArgument>()) {
-      if (auto func =
-              dyn_cast<func::FuncOp>(bufferArg.getOwner()->getParentOp()))
-        func.setArgAttr(bufferArg.getArgNumber(), "hls.buffer_info",
-                        bufferInfo);
-    } else if (auto bufferOp = buffer.getDefiningOp<hls::BufferLikeInterface>())
-      setBufferInfo(bufferOp, bufferInfo);
-  }
-}
-void hls::setBufferInfo(Value memref, ArrayRef<int64_t> tileShape,
-                        ArrayRef<int64_t> vectorShape) {
-  auto bufferInfo =
-      BufferInfoAttr::get(memref.getContext(), tileShape, vectorShape);
-  setBufferInfo(memref, bufferInfo);
-}
-void hls::setBufferInfo(Value memref, ArrayRef<int64_t> tileShape) {
-  auto bufferInfo = BufferInfoAttr::get(memref.getContext(), tileShape);
-  setBufferInfo(memref, bufferInfo);
 }
 
 //===----------------------------------------------------------------------===//
