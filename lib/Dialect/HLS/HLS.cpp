@@ -787,37 +787,55 @@ LogicalResult StreamWriteOp::verify() {
 // BufferVectorizeOp and BufferDevectorizeOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult BufferVectorizeOp::verify() {
-  auto inputLayout = getInputType().getLayout().dyn_cast<TileLayoutAttr>();
-  if (!inputLayout)
-    return emitOpError("input must have external buffer layout");
+LogicalResult
+verifyVectorizationTypes(function_ref<InFlightDiagnostic()> emitError,
+                         MemRefType type, MemRefType vectorizedType) {
+  auto vectorType = vectorizedType.getElementType().dyn_cast<VectorType>();
+  if (!vectorType || vectorType.getElementType() != type.getElementType())
+    return emitError() << "vectorized type must have vector elements with the "
+                          "same data type";
 
-  if (auto vectorType = getOutputVectorType()) {
-    if (vectorType.getElementType() != getInputType().getElementType())
-      return emitOpError("element type mismatch");
+  auto layout = type.getLayout().dyn_cast<TileLayoutAttr>();
+  auto vectorizedLayout = vectorizedType.getLayout().dyn_cast<TileLayoutAttr>();
+  if (!layout || !vectorizedLayout)
+    return emitError() << "input and output types must have tile layout";
 
-    unsigned numElements = 1;
-    for (auto dim : inputLayout.getVectorShape())
-      numElements *= dim;
-    if (numElements != vectorType.getNumElements())
-      return emitOpError("number of elements mismatch");
+  for (auto [tileSize, vectorSize, vectorizedTileSize] :
+       llvm::zip(layout.getTileShape(), layout.getVectorShape(),
+                 vectorizedLayout.getTileShape()))
+    if (tileSize != vectorSize * vectorizedTileSize)
+      return emitError() << "tile layout mismatch";
 
-    SmallVector<int64_t> collapsedOutputShape;
-    for (auto [outputSize, vectorSize] :
-         llvm::zip(getType().getShape(), inputLayout.getVectorShape()))
-      collapsedOutputShape.push_back(outputSize * vectorSize);
+  for (auto [size, vectorizedSize, vectorSize] : llvm::zip(
+           type.getShape(), vectorizedType.getShape(), layout.getVectorShape()))
+    if (size != vectorizedSize * vectorSize)
+      return emitError() << "vector shape mismatch";
 
-    if (collapsedOutputShape != getInputType().getShape())
-      return emitOpError("vector shape mismatch");
-
-  } else if (getType().getShape() != getInputType().getShape() ||
-             getType().getElementType() != getInputType().getElementType())
-    return emitOpError("shape or scalar type mismatch");
+  unsigned vectorNumElements = 1;
+  for (auto dim : layout.getVectorShape())
+    vectorNumElements *= dim;
+  if (vectorNumElements != vectorType.getNumElements())
+    return emitError() << "number of elements mismatch";
 
   return success();
 }
 
-LogicalResult BufferDevectorizeOp::verify() { return success(); }
+LogicalResult BufferVectorizeOp::verify() {
+  return verifyVectorizationTypes([&]() { return emitOpError(); },
+                                  getInputType(), getType());
+}
+
+LogicalResult BufferDevectorizeOp::verify() {
+  return verifyVectorizationTypes([&]() { return emitOpError(); }, getType(),
+                                  getInputType());
+}
+
+OpFoldResult BufferVectorizeOp::fold(ArrayRef<Attribute>) {
+  if (auto devectorize = getInput().getDefiningOp<BufferDevectorizeOp>())
+    if (devectorize.getInputType() == getType())
+      return devectorize.getInput();
+  return {};
+}
 
 //===----------------------------------------------------------------------===//
 // AxiBundleOp, AxiPortOp, and AxiPackOp

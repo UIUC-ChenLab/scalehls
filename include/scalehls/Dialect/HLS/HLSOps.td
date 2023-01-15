@@ -339,13 +339,15 @@ def StreamWriteOp : HLSOp<"dataflow.stream_write", []> {
 // AXI-related Operations
 //===----------------------------------------------------------------------===//
 
-def BufferVectorizeOp : HLSOp<"buffer_vectorize", [ViewLikeOpInterface]> {
+def BufferVectorizeOp : HLSOp<"buffer_vectorize", [ViewLikeOpInterface,
+      NoMemoryEffect]> {
   let summary = "Vectorize a buffer from scalar element to vector element";
 
   let arguments = (ins AnyBuffer:$input);
   let results = (outs StaticShapeMemRefOf<[AnyVector]>:$output);
   let assemblyFormat = "$input attr-dict `:` type($input) `to` type($output)";
 
+  let hasFolder = 1;
   let hasVerifier = 1;
   let extraClassDeclaration = [{
     Value getViewSource() { return getInput(); }
@@ -358,7 +360,8 @@ def BufferVectorizeOp : HLSOp<"buffer_vectorize", [ViewLikeOpInterface]> {
   }];
 }
 
-def BufferDevectorizeOp : HLSOp<"buffer_devectorize", [ViewLikeOpInterface]> {
+def BufferDevectorizeOp : HLSOp<"buffer_devectorize", [ViewLikeOpInterface,
+      NoMemoryEffect]> {
   let summary = "Devectorize a buffer from vector element to scalar element";
 
   let arguments = (ins StaticShapeMemRefOf<[AnyVector]>:$input);

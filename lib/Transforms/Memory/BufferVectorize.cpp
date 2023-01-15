@@ -12,46 +12,62 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
-LogicalResult vectorizeMemref(Value memref) {
+/// Get the vectorized type of the given memref. Specifically, the vectorized
+/// memref type always has 1-D vector elements.
+static MemRefType getVectorizedType(MemRefType type) {
+  auto layout = type.getLayout().dyn_cast<TileLayoutAttr>();
+  if (!layout || !layout.isVectorized() ||
+      type.getElementType().dyn_cast<VectorType>())
+    return MemRefType();
+
+  // Calculate the shape of the new memref with vector elements.
+  auto newShape = SmallVector<int64_t>(type.getShape());
+  auto newTileShape = SmallVector<int64_t>(layout.getTileShape());
+  auto vectorNumElements = 1;
+  for (auto [size, tileSize, vectorSize] :
+       llvm::zip(newShape, newTileShape, layout.getVectorShape())) {
+    size /= vectorSize;
+    tileSize /= vectorSize;
+    vectorNumElements *= vectorSize;
+  }
+
+  // Construct the new memref type.
+  return MemRefType::get(
+      newShape, VectorType::get({vectorNumElements}, type.getElementType()),
+      TileLayoutAttr::get(type.getContext(), newTileShape),
+      type.getMemorySpace());
+}
+
+static LogicalResult vectorizeMemref(Value memref) {
   auto layout = getTileLayout(memref);
   if (!isExtBuffer(memref) || !layout)
     return failure();
 
-  auto ctx = memref.getContext();
-  auto b = OpBuilder(ctx);
+  // Apply new memref type with buffer layout.
   auto type = memref.getType().cast<MemRefType>();
-
-  // Apply the buffer layout.
-  memref.setType(MemRefType::get(type.getShape(), type.getElementType(), layout,
-                                 type.getMemorySpace()));
-
-  // Calculate the new memref type after vectorization.
-  auto newShape = SmallVector<int64_t>(type.getShape());
-  auto vectorLength = 1;
-  for (auto [size, vectorSize] : llvm::zip(newShape, layout.getVectorShape())) {
-    size /= vectorSize;
-    vectorLength *= vectorSize;
-  }
-
-  auto newElementType = type.getElementType();
-  if (layout.isVectorized())
-    newElementType = VectorType::get({vectorLength}, type.getElementType());
-  auto newType = MemRefType::get(newShape, newElementType, AffineMap(),
+  auto newType = MemRefType::get(type.getShape(), type.getElementType(), layout,
                                  type.getMemorySpace());
   memref.setType(newType);
 
-  // Insert devectorize op after the memref for adapting to its uses.
-  b.setInsertionPointAfterValue(memref);
-  auto newMemref =
-      b.create<BufferDevectorizeOp>(memref.getLoc(), newType, memref);
-  memref.replaceUsesWithIf(
-      newMemref, [&](OpOperand &use) { return use.getOwner() != newMemref; });
-
+  // Create vectorization and devectorization ops if the necessary.
+  auto builder = OpBuilder(memref.getContext());
+  if (auto vectorizedType = getVectorizedType(newType)) {
+    builder.setInsertionPointAfterValue(memref);
+    auto vectorizedMemref = builder.create<BufferVectorizeOp>(
+        memref.getLoc(), vectorizedType, memref);
+    auto devectorizedMemref = builder.create<BufferDevectorizeOp>(
+        memref.getLoc(), newType, vectorizedMemref);
+    memref.replaceUsesWithIf(devectorizedMemref, [&](OpOperand &use) {
+      return use.getOwner() != vectorizedMemref;
+    });
+  }
   return success();
 }
 
 namespace {
-struct Materializelayout : public OpRewritePattern<func::FuncOp> {
+/// Encode TileLayoutAttr into the type of the memref. Then, propagate the type
+/// changes to the schedules and nodes recursively.
+struct MaterializeTileLayout : public OpRewritePattern<func::FuncOp> {
   using OpRewritePattern<func::FuncOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(func::FuncOp func,
@@ -60,13 +76,12 @@ struct Materializelayout : public OpRewritePattern<func::FuncOp> {
     for (auto arg : func.getArguments())
       if (succeeded(vectorizeMemref(arg))) {
         hasChanged = true;
-        func.removeArgAttr(arg.getArgNumber(), "hls.buffer_info");
+        func.removeArgAttr(arg.getArgNumber(), "hls.tile_layout");
       }
-
     func.walk([&](hls::BufferLikeInterface buffer) {
       if (succeeded(vectorizeMemref(buffer.getMemref()))) {
         hasChanged = true;
-        buffer->removeAttr("buffer_info");
+        buffer->removeAttr("tile_layout");
       }
     });
 
@@ -86,44 +101,153 @@ struct Materializelayout : public OpRewritePattern<func::FuncOp> {
 } // namespace
 
 namespace {
-struct LowerTransferRead : public OpRewritePattern<vector::TransferReadOp> {
+struct VectorizeNode : public OpRewritePattern<NodeOp> {
+  using OpRewritePattern<NodeOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(NodeOp node,
+                                PatternRewriter &rewriter) const override {
+    bool hasChanged = false;
+    for (auto [operand, arg] :
+         llvm::zip(node->getOpOperands(), node.getBody().getArguments()))
+      if (auto type = arg.getType().dyn_cast<MemRefType>())
+        if (auto vectorizedType = getVectorizedType(type)) {
+          arg.setType(vectorizedType);
+
+          rewriter.setInsertionPoint(node);
+          auto vectorOperand = rewriter.create<BufferVectorizeOp>(
+              operand.get().getLoc(), vectorizedType, operand.get());
+          operand.set(vectorOperand);
+
+          rewriter.setInsertionPointToStart(&node.getBody().front());
+          auto devectorArg =
+              rewriter.create<BufferDevectorizeOp>(arg.getLoc(), type, arg);
+          arg.replaceUsesWithIf(devectorArg, [&](OpOperand &use) {
+            return use.getOwner() != devectorArg;
+          });
+          hasChanged = true;
+        }
+    return success(hasChanged);
+  }
+};
+} // namespace
+
+namespace {
+struct VectorizeSchedule : public OpRewritePattern<ScheduleOp> {
+  using OpRewritePattern<ScheduleOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ScheduleOp schedule,
+                                PatternRewriter &rewriter) const override {
+    bool hasChanged = false;
+    for (auto [operand, arg] : llvm::zip(schedule->getOpOperands(),
+                                         schedule.getBody().getArguments()))
+      if (auto type = arg.getType().dyn_cast<MemRefType>())
+        if (auto vectorizedType = getVectorizedType(type)) {
+          arg.setType(vectorizedType);
+
+          rewriter.setInsertionPoint(schedule);
+          auto vectorOperand = rewriter.create<BufferVectorizeOp>(
+              operand.get().getLoc(), vectorizedType, operand.get());
+          operand.set(vectorOperand);
+
+          rewriter.setInsertionPointToStart(&schedule.getBody().front());
+          auto devectorArg =
+              rewriter.create<BufferDevectorizeOp>(arg.getLoc(), type, arg);
+          arg.replaceUsesWithIf(devectorArg, [&](OpOperand &use) {
+            return use.getOwner() != devectorArg;
+          });
+          hasChanged = true;
+        }
+    return success(hasChanged);
+  }
+};
+} // namespace
+
+// Calculate the vectorized indices given the original indices and vector shape.
+// Assume the vector shape if [v0, v1], the original indice [d0, d1] should be
+// converted to [d0 / v0, d1 / v1].
+static LogicalResult
+getVectorizedIndices(Location loc, ArrayRef<Value> indices,
+                     ArrayRef<int64_t> vectorShape, PatternRewriter &rewriter,
+                     SmallVectorImpl<Value> &vectorizedIndices) {
+  vectorizedIndices.clear();
+  for (auto [index, vectorSize] : llvm::zip(indices, vectorShape)) {
+    if (isValidSymbol(index)) {
+      auto expr = rewriter.getAffineSymbolExpr(0).floorDiv(vectorSize);
+      vectorizedIndices.push_back(rewriter.create<AffineApplyOp>(
+          loc, AffineMap::get(0, 1, expr), index));
+    } else if (isValidDim(index)) {
+      auto expr = rewriter.getAffineDimExpr(0).floorDiv(vectorSize);
+      vectorizedIndices.push_back(rewriter.create<AffineApplyOp>(
+          loc, AffineMap::get(1, 0, expr), index));
+    } else
+      return failure();
+  }
+  return success();
+}
+
+namespace {
+struct VectorizeRead : public OpRewritePattern<vector::TransferReadOp> {
   using OpRewritePattern<vector::TransferReadOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(vector::TransferReadOp read,
                                 PatternRewriter &rewriter) const override {
-    auto vectorType =
-        read.getShapedType().getElementType().dyn_cast<VectorType>();
-    if (!vectorType ||
-        vectorType.getNumElements() != read.getVectorType().getNumElements())
-      return failure();
+    if (auto type = read.getShapedType().dyn_cast<MemRefType>())
+      if (auto vectorizedType = getVectorizedType(type)) {
+        auto layout = type.getLayout().cast<TileLayoutAttr>();
+        rewriter.setInsertionPoint(read);
 
-    if (isExtBuffer(read.getSource())) {
-      read.getResult().setType(vectorType);
-      rewriter.replaceOpWithNewOp<vector::LoadOp>(
-          read, vectorType, read.getSource(), read.getIndices());
-      return success();
-    }
+        // Calculate the new indices. Assume the vector shape if [v0, v1], the
+        // original indice [d0, d1] should be converted to [d0 / v0, d1 / v1].
+        SmallVector<Value, 4> vectorIndices;
+        if (failed(getVectorizedIndices(
+                read.getLoc(), SmallVector<Value>(read.getIndices()),
+                layout.getVectorShape(), rewriter, vectorIndices)))
+          return failure();
+
+        // Because the generated vector type always has 1-D shape, we need to
+        // explicitly cast the load result back to the resulting shape of
+        // transfer read.
+        auto vectorBuffer = rewriter.create<BufferVectorizeOp>(
+            read.getLoc(), vectorizedType, read.getSource());
+        auto vectorLoad = rewriter.create<AffineLoadOp>(
+            read.getLoc(), vectorBuffer, vectorIndices);
+        rewriter.replaceOpWithNewOp<vector::ShapeCastOp>(
+            read, read.getVectorType(), vectorLoad);
+        return success();
+      }
     return failure();
   }
 };
 } // namespace
 
 namespace {
-struct LowerTransferWrite : public OpRewritePattern<vector::TransferWriteOp> {
+struct VectorizeWrite : public OpRewritePattern<vector::TransferWriteOp> {
   using OpRewritePattern<vector::TransferWriteOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(vector::TransferWriteOp write,
                                 PatternRewriter &rewriter) const override {
-    auto vectorType =
-        write.getShapedType().getElementType().dyn_cast<VectorType>();
-    if (!vectorType || vectorType != write.getVectorType())
-      return failure();
+    if (auto type = write.getShapedType().dyn_cast<MemRefType>())
+      if (auto vectorizedType = getVectorizedType(type)) {
+        auto layout = type.getLayout().cast<TileLayoutAttr>();
+        rewriter.setInsertionPoint(write);
 
-    if (isExtBuffer(write.getSource())) {
-      rewriter.replaceOpWithNewOp<vector::StoreOp>(
-          write, write.getVector(), write.getSource(), write.getIndices());
-      return success();
-    }
+        SmallVector<Value, 4> vectorIndices;
+        if (failed(getVectorizedIndices(
+                write.getLoc(), SmallVector<Value>(write.getIndices()),
+                layout.getVectorShape(), rewriter, vectorIndices)))
+          return failure();
+
+        // Because the generated vector type always has 1-D shape, we need to
+        // explicitly cast the input value of transfer write to the 1-D vector
+        // shape.
+        auto vectorBuffer = rewriter.create<BufferVectorizeOp>(
+            write.getLoc(), vectorizedType, write.getSource());
+        auto vectorToStore = rewriter.create<vector::ShapeCastOp>(
+            write.getLoc(), vectorizedType.getElementType(), write.getVector());
+        rewriter.replaceOpWithNewOp<AffineStoreOp>(write, vectorToStore,
+                                                   vectorBuffer, vectorIndices);
+        return success();
+      }
     return failure();
   }
 };
@@ -136,12 +260,14 @@ struct BufferVectorize : public BufferVectorizeBase<BufferVectorize> {
     auto context = func.getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<Materializelayout>(context);
+    patterns.add<MaterializeTileLayout>(context);
     (void)applyOpPatternsAndFold(func, std::move(patterns));
 
     patterns.clear();
-    patterns.add<LowerTransferRead>(context);
-    patterns.add<LowerTransferWrite>(context);
+    patterns.add<VectorizeNode>(context);
+    patterns.add<VectorizeSchedule>(context);
+    patterns.add<VectorizeRead>(context);
+    patterns.add<VectorizeWrite>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
