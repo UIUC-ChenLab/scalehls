@@ -493,4 +493,11 @@ def AffineSelectOp : HLSOp<"affine.select", [NoMemoryEffect]> {
   }];
 }
 
+def VectorInitOp : HLSOp<"vector.init", [NoMemoryEffect]> {
+  let summary = "Initialize a vector";
+
+  let results = (outs AnyVector:$output);
+  let assemblyFormat = "attr-dict `:` type($output)";
+}
+
 #endif // SCALEHLS_DIALECT_HLS_HLSOPS_TD

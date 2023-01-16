@@ -185,36 +185,95 @@ getVectorizedIndices(Location loc, ArrayRef<Value> indices,
   return success();
 }
 
+/// Calculate the scalar indices given the original indices and vector shape.
+/// Assume the vector shape if [v0, v1] and overall index is x, the original
+/// indice [d0, d1] should be converted to [d0 + x / v1 % v0, d1 + x % v1].
+static LogicalResult getScalarIndices(Location loc, ArrayRef<Value> indices,
+                                      ArrayRef<int64_t> vectorShape,
+                                      int64_t overallIndex,
+                                      PatternRewriter &rewriter,
+                                      SmallVectorImpl<Value> &scalarIndices) {
+  scalarIndices.clear();
+  for (auto [index, vectorSize] : llvm::zip(indices, vectorShape)) {
+    if (isValidSymbol(index)) {
+      auto expr = rewriter.getAffineSymbolExpr(0) + (overallIndex % vectorSize);
+      scalarIndices.push_back(rewriter.create<AffineApplyOp>(
+          loc, AffineMap::get(0, 1, expr), index));
+    } else if (isValidDim(index)) {
+      auto expr = rewriter.getAffineDimExpr(0) + (overallIndex % vectorSize);
+      scalarIndices.push_back(rewriter.create<AffineApplyOp>(
+          loc, AffineMap::get(1, 0, expr), index));
+    } else
+      return failure();
+    overallIndex /= vectorSize;
+  }
+  return success();
+}
+
 namespace {
 struct VectorizeRead : public OpRewritePattern<vector::TransferReadOp> {
   using OpRewritePattern<vector::TransferReadOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(vector::TransferReadOp read,
                                 PatternRewriter &rewriter) const override {
-    if (auto type = read.getShapedType().dyn_cast<MemRefType>())
-      if (auto vectorizedType = getVectorizedType(type)) {
-        auto layout = type.getLayout().cast<TileLayoutAttr>();
+    if (auto type = read.getShapedType().dyn_cast<MemRefType>()) {
+      if (isExtBuffer(read.getSource())) {
+        // For external buffers, we convert the transfer_read op to an affine
+        // load op that loads a vector from a vectorized buffer.
+        if (auto vectorizedType = getVectorizedType(type)) {
+          rewriter.setInsertionPoint(read);
+
+          // Calculate the new indices of affine load.
+          SmallVector<Value, 4> vectorIndices;
+          if (failed(getVectorizedIndices(
+                  read.getLoc(), SmallVector<Value>(read.getIndices()),
+                  read.getVectorType().getShape(), rewriter, vectorIndices)))
+            return failure();
+
+          // Because the generated vector type always has 1-D shape, we need to
+          // explicitly cast the load result back to the resulting shape of
+          // transfer read.
+          auto vectorBuffer = rewriter.create<BufferVectorizeOp>(
+              read.getLoc(), vectorizedType, read.getSource());
+          auto vectorLoad = rewriter.create<AffineLoadOp>(
+              read.getLoc(), vectorBuffer, vectorIndices);
+          rewriter.replaceOpWithNewOp<vector::ShapeCastOp>(
+              read, read.getVectorType(), vectorLoad);
+          return success();
+        }
+      } else {
+        // For internal buffers, we convert the transfer_read op to multiple
+        // scalar loads and construct a vector from them.
         rewriter.setInsertionPoint(read);
+        auto vectorType = read.getVectorType();
+        auto newVectorType = VectorType::get(vectorType.getNumElements(),
+                                             vectorType.getElementType());
+        auto newVector =
+            rewriter.create<VectorInitOp>(read.getLoc(), newVectorType)
+                .getResult();
 
-        // Calculate the new indices. Assume the vector shape if [v0, v1], the
-        // original indice [d0, d1] should be converted to [d0 / v0, d1 / v1].
-        SmallVector<Value, 4> vectorIndices;
-        if (failed(getVectorizedIndices(
-                read.getLoc(), SmallVector<Value>(read.getIndices()),
-                layout.getVectorShape(), rewriter, vectorIndices)))
-          return failure();
+        // Construct a scalar affine load and vector insertion for each element
+        // of the vector.
+        for (int64_t i = 0; i < vectorType.getNumElements(); ++i) {
+          SmallVector<Value, 4> scalarIndices;
+          if (failed(getScalarIndices(
+                  read.getLoc(), SmallVector<Value>(read.getIndices()),
+                  vectorType.getShape(), i, rewriter, scalarIndices)))
+            return failure();
 
-        // Because the generated vector type always has 1-D shape, we need to
-        // explicitly cast the load result back to the resulting shape of
-        // transfer read.
-        auto vectorBuffer = rewriter.create<BufferVectorizeOp>(
-            read.getLoc(), vectorizedType, read.getSource());
-        auto vectorLoad = rewriter.create<AffineLoadOp>(
-            read.getLoc(), vectorBuffer, vectorIndices);
-        rewriter.replaceOpWithNewOp<vector::ShapeCastOp>(
-            read, read.getVectorType(), vectorLoad);
+          auto scalarLoad = rewriter.create<AffineLoadOp>(
+              read.getLoc(), read.getSource(), scalarIndices);
+          newVector = rewriter.create<vector::InsertOp>(
+              read.getLoc(), scalarLoad, newVector,
+              rewriter.getI64ArrayAttr({i}));
+        }
+
+        // Replace the transfer_read op with the newly generated vector.
+        rewriter.replaceOpWithNewOp<vector::ShapeCastOp>(read, vectorType,
+                                                         newVector);
         return success();
       }
+    }
     return failure();
   }
 };
@@ -226,28 +285,59 @@ struct VectorizeWrite : public OpRewritePattern<vector::TransferWriteOp> {
 
   LogicalResult matchAndRewrite(vector::TransferWriteOp write,
                                 PatternRewriter &rewriter) const override {
-    if (auto type = write.getShapedType().dyn_cast<MemRefType>())
-      if (auto vectorizedType = getVectorizedType(type)) {
-        auto layout = type.getLayout().cast<TileLayoutAttr>();
+    if (auto type = write.getShapedType().dyn_cast<MemRefType>()) {
+      if (isExtBuffer(write.getSource())) {
+        // For external buffers, we convert the transfer_write op to an affine
+        // store op that stores a vector into a vectorized buffer.
+        if (auto vectorizedType = getVectorizedType(type)) {
+          auto layout = type.getLayout().cast<TileLayoutAttr>();
+          rewriter.setInsertionPoint(write);
+
+          // Calculate the new indices of affine store.
+          SmallVector<Value, 4> vectorIndices;
+          if (failed(getVectorizedIndices(
+                  write.getLoc(), SmallVector<Value>(write.getIndices()),
+                  layout.getVectorShape(), rewriter, vectorIndices)))
+            return failure();
+
+          // Because the generated vector type always has 1-D shape, we need to
+          // explicitly cast the input value of transfer write to the 1-D vector
+          // shape.
+          auto vectorBuffer = rewriter.create<BufferVectorizeOp>(
+              write.getLoc(), vectorizedType, write.getSource());
+          auto vectorToStore = rewriter.create<vector::ShapeCastOp>(
+              write.getLoc(), vectorizedType.getElementType(),
+              write.getVector());
+          rewriter.replaceOpWithNewOp<AffineStoreOp>(
+              write, vectorToStore, vectorBuffer, vectorIndices);
+          return success();
+        }
+      } else {
+        // For internal buffers, we convert the transfer_write op to multiple
+        // vector extract ops and scalar stores.
         rewriter.setInsertionPoint(write);
+        auto vectorType = write.getVectorType();
+        auto newVectorType = VectorType::get(vectorType.getNumElements(),
+                                             vectorType.getElementType());
+        auto newVector = rewriter.create<vector::ShapeCastOp>(
+            write.getLoc(), newVectorType, write.getVector());
 
-        SmallVector<Value, 4> vectorIndices;
-        if (failed(getVectorizedIndices(
-                write.getLoc(), SmallVector<Value>(write.getIndices()),
-                layout.getVectorShape(), rewriter, vectorIndices)))
-          return failure();
+        for (int64_t i = 0; i < vectorType.getNumElements(); ++i) {
+          SmallVector<Value, 4> scalarIndices;
+          if (failed(getScalarIndices(
+                  write.getLoc(), SmallVector<Value>(write.getIndices()),
+                  vectorType.getShape(), i, rewriter, scalarIndices)))
+            return failure();
 
-        // Because the generated vector type always has 1-D shape, we need to
-        // explicitly cast the input value of transfer write to the 1-D vector
-        // shape.
-        auto vectorBuffer = rewriter.create<BufferVectorizeOp>(
-            write.getLoc(), vectorizedType, write.getSource());
-        auto vectorToStore = rewriter.create<vector::ShapeCastOp>(
-            write.getLoc(), vectorizedType.getElementType(), write.getVector());
-        rewriter.replaceOpWithNewOp<AffineStoreOp>(write, vectorToStore,
-                                                   vectorBuffer, vectorIndices);
+          auto scalar = rewriter.create<vector::ExtractOp>(
+              write.getLoc(), newVector, rewriter.getI64ArrayAttr({i}));
+          rewriter.create<AffineStoreOp>(write.getLoc(), scalar,
+                                         write.getSource(), scalarIndices);
+        }
+        rewriter.eraseOp(write);
         return success();
       }
+    }
     return failure();
   }
 };
