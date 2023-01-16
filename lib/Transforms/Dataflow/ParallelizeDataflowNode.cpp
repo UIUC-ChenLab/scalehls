@@ -176,7 +176,8 @@ struct ParallelizeDataflowNode
       auto factors = FactorList(band.size(), 1);
       SmallVector<FactorList> constrFactors;
       if (failed(getEvenlyDistributedFactors(unrollFactor, factors, band,
-                                             constrFactors)))
+                                             constrFactors,
+                                             /*powerOf2Constr=*/true)))
         factors = getDistributedFactors(unrollFactor, band);
       applyLoopUnrollJam(band, factors);
     }
@@ -219,7 +220,7 @@ struct ParallelizeDataflowNode
       // traversed. Additionally, collect the node and factors of external
       // buffer correlations for later use.
       SmallVector<FactorList> corrFactorsList;
-      SmallVector<std::pair<NodeOp, FactorList>> externalNodeAndFactorsList;
+      SmallVector<std::pair<NodeOp, FactorList>> candidatesToRevisit;
       for (auto corr : corrList) {
         auto corrNode = corr.getCorrelatedNode(node);
         if (!nodeUnrollFactorsMap.count(corrNode))
@@ -227,18 +228,24 @@ struct ParallelizeDataflowNode
 
         // Permute the unroll factors of correlated node with the permutation
         // map recorded in the correlation.
-        auto corrFactors = corr.permuteFactors(
+        auto [corrFactors, roundedFlag] = corr.permuteAndScaleFactors(
             corrNode, nodeUnrollFactorsMap.lookup(corrNode));
-
         corrFactorsList.push_back(corrFactors);
+
+        // Rounded parallel factors means that when the correlated node is
+        // parallelized, the strided memory access pattern of the current node
+        // was not awared. Therefore, we need to revisit the correlated node.
+        if (roundedFlag)
+          worklist.push_back({corrNode, 0});
+
+        // Make sure each factor is larger than the corresponding factor of
+        // the external buffer correlatations.
         if (isExtBuffer(corr.getBuffer().getMemref())) {
-          // Make sure each factor is larger than the corresponding factor of
-          // the external buffer correlatations.
           FactorList newFactors;
-          for (auto t : llvm::zip(factors, corrFactors))
-            newFactors.push_back(std::max(std::get<0>(t), std::get<1>(t)));
+          for (auto [factor, corrFactor] : llvm::zip(factors, corrFactors))
+            newFactors.push_back(std::max(factor, corrFactor));
           factors = newFactors;
-          externalNodeAndFactorsList.push_back({corrNode, corrFactors});
+          candidatesToRevisit.push_back({corrNode, corrFactors});
         }
 
         LLVM_DEBUG(
@@ -262,16 +269,18 @@ struct ParallelizeDataflowNode
 
       // Distribute factor based on the constraints and record in the map.
       if (failed(getEvenlyDistributedFactors(parallelFactor, factors, band,
-                                             corrFactorsList)))
+                                             corrFactorsList,
+                                             /*powerOf2Constr=*/true)))
         factors = getDistributedFactors(parallelFactor, band);
       nodeUnrollFactorsMap[node] = factors;
 
       // If the final factors are not equal to the factors of any external
-      // buffer correlated node, we need to recalculate the node as they must be
-      // identical eventually.
-      for (auto externalNodeAndFactors : externalNodeAndFactorsList)
-        if (factors != externalNodeAndFactors.second)
-          worklist.push_back({externalNodeAndFactors.first, 0});
+      // buffer correlated node, we need to recalculate the correlated node as
+      // the factors must be identical eventually. Otherwise, we will not be
+      // able to reason the suitable external buffer layout.
+      for (auto [corrNode, corrFactors] : candidatesToRevisit)
+        if (factors != corrFactors)
+          worklist.push_back({corrNode, 0});
 
       LLVM_DEBUG(
           // clang-format off

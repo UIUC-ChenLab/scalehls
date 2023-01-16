@@ -120,7 +120,8 @@ getDistributedFactors(unsigned factor,
 LogicalResult
 getEvenlyDistributedFactors(unsigned maxFactor, FactorList &factors,
                             const SmallVectorImpl<mlir::AffineForOp> &band,
-                            const SmallVectorImpl<FactorList> &constrFactors);
+                            const SmallVectorImpl<FactorList> &constrFactors,
+                            bool powerOf2Constr = false);
 
 /// Return a pair which indicates whether the if statement is always true or
 /// false, respectively. The returned result is one-hot.

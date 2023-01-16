@@ -473,7 +473,27 @@ FactorList scalehls::getDistributedFactors(
 LogicalResult scalehls::getEvenlyDistributedFactors(
     unsigned maxFactor, FactorList &factors,
     const SmallVectorImpl<mlir::AffineForOp> &band,
-    const SmallVectorImpl<FactorList> &constrFactors) {
+    const SmallVectorImpl<FactorList> &constrFactorsList, bool powerOf2Constr) {
+
+  // auto emitFactors = [&](const FactorList &factors) {
+  //   llvm::errs() << "factors: ";
+  //   for (auto factor : factors)
+  //     llvm::errs() << factor << " ";
+  //   llvm::errs() << "\n";
+  // };
+
+  // llvm::errs() << "\n==========\n";
+
+  // llvm::errs() << "Init ";
+  // emitFactors(factors);
+
+  // for (auto &constrFactors : constrFactorsList) {
+  //   llvm::errs() << "Constr ";
+  //   emitFactors(constrFactors);
+  // }
+
+  // llvm::errs() << band.front() << "\n";
+
   // Traverse each loop in the given loop band.
   SmallVector<FactorList> constrs;
   SmallVector<bool> reductionFlags;
@@ -489,10 +509,10 @@ LogicalResult scalehls::getEvenlyDistributedFactors(
     // Collect the constraints at each loop level. Basically, this transposes
     // the two-dimension argument "constrFactorsList".
     FactorList constr;
-    for (auto &factors : constrFactors) {
-      assert(tripCount.value() % factors[loop.index()] == 0 &&
+    for (auto &constrFactors : constrFactorsList) {
+      assert(tripCount.value() % constrFactors[loop.index()] == 0 &&
              "contraint factor isn't divisor of corresponding trip count");
-      constr.push_back(factors[loop.index()]);
+      constr.push_back(constrFactors[loop.index()]);
     }
     constrs.push_back(constr);
 
@@ -506,14 +526,37 @@ LogicalResult scalehls::getEvenlyDistributedFactors(
     auto tripCount = tripCounts[loopDepth];
     auto constr = constrs[loopDepth];
 
-    assert(factor <= tripCount && "current factor larger than trip count");
-    if (factor < tripCount || factor == 1)
-      factor++;
+    // The constraints include: 1) factor must be a divisor of trip count; 2)
+    // factor must be a divisor or divisible by all constraints. If applicable,
+    // factor must be a power of 2.
+    auto factorMeetConstr = [&]() {
+      auto result =
+          tripCount % factor == 0 && llvm::all_of(constr, [&](unsigned v) {
+            return v % factor == 0 || factor % v == 0;
+          });
+      if (powerOf2Constr)
+        result &= llvm::isPowerOf2_64(factor);
+      return result;
+    };
+    assert(factorMeetConstr() && "initial factor doesn't meet constraints");
 
-    while (tripCount % factor != 0 || llvm::any_of(constr, [&](unsigned v) {
-             return v % factor != 0 && factor % v != 0;
-           }))
-      factor++;
+    auto initFactor = factor;
+    if (factor < tripCount) {
+      if (powerOf2Constr)
+        factor *= 2;
+      else
+        factor++;
+    }
+
+    while (!factorMeetConstr() && factor < tripCount) {
+      // If we have the power of 2 constraint, then there's no chance to get a
+      // higher factor than the initial one.
+      if (powerOf2Constr) {
+        factor = initFactor;
+        break;
+      } else
+        factor++;
+    }
   };
 
   // A helper to calculate the overall factors of the given factors.
@@ -584,6 +627,9 @@ LogicalResult scalehls::getEvenlyDistributedFactors(
     auto depth = std::get<3>(candidates.front());
     increaseFactor(factors[depth], depth);
   }
+
+  // llvm::errs() << "Final ";
+  // emitFactors(factors);
   return success();
 }
 

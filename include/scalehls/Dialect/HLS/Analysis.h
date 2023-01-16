@@ -34,11 +34,15 @@ class Correlation {
 public:
   Correlation(NodeOp sourceNode, NodeOp targetNode,
               hls::BufferLikeInterface sharedBuffer, Value sourceBuffer,
-              Value targetBuffer, SmallVector<int64_t> sourceToTargetMap,
+              Value targetBuffer, SmallVector<float> sourceScaleFactors,
+              SmallVector<float> targetScaleFactors,
+              SmallVector<int64_t> sourceToTargetMap,
               SmallVector<int64_t> targetToSourceMap)
       : sourceNode(sourceNode), targetNode(targetNode),
         sharedBuffer(sharedBuffer), sourceBuffer(sourceBuffer),
-        targetBuffer(targetBuffer), sourceToTargetMap(sourceToTargetMap),
+        targetBuffer(targetBuffer), sourceScaleFactors(sourceScaleFactors),
+        targetScaleFactors(targetScaleFactors),
+        sourceToTargetMap(sourceToTargetMap),
         targetToSourceMap(targetToSourceMap) {
     // Make sure the source-to-target and target-to-source map is valid.
     if (!sourceToTargetMap.empty()) {
@@ -64,6 +68,11 @@ public:
         else if (i.value() != -1)
           assert("invalid target-to-source map");
     }
+
+    assert(getNodeLoopBand(sourceNode).size() == sourceScaleFactors.size() &&
+           "invalid source strides size");
+    assert(getNodeLoopBand(targetNode).size() == targetScaleFactors.size() &&
+           "invalid target strides size");
 
     assert(sharedBuffer.getMemrefType() == sourceBuffer.getType() &&
            sharedBuffer.getMemrefType() == targetBuffer.getType() &&
@@ -92,12 +101,37 @@ public:
       return targetToSourceMap;
   }
 
-  // Permute factors of the current node to the correlated node.
-  FactorList permuteFactors(NodeOp currentNode, const FactorList &factors) {
+  SmallVector<float> getScaleFactors(NodeOp currentNode) const {
+    if (isSourceNode(currentNode))
+      return sourceScaleFactors;
+    else
+      return targetScaleFactors;
+  }
+
+  // Permute factors of the current node to the correlated node. If any of the
+  // scaled factors is less than 1 and rounded to 1, return true.
+  std::pair<FactorList, bool>
+  permuteAndScaleFactors(NodeOp currentNode, const FactorList &factors) {
     assert(factors.size() == getNodeLoopBand(currentNode).size() &&
            "invalid permutation factors");
     auto correlateMap = getCorrelateMap(currentNode);
-    return permuteFactorsWithMap(factors, correlateMap);
+    auto permutedFactors = permuteFactorsWithMap(factors, correlateMap);
+
+    auto scaleFactors = getScaleFactors(getCorrelatedNode(currentNode));
+    FactorList scaledFactors;
+    bool roundedFlag = false;
+    for (auto [factor, scaleFactor] :
+         llvm::zip(permutedFactors, scaleFactors)) {
+      auto scaledFactor = factor * scaleFactor;
+      if (scaledFactor < 1.0) {
+        scaledFactor = 1.0;
+        roundedFlag = true;
+      }
+      assert(scaledFactor == (unsigned)scaledFactor &&
+             "scaled factor is not integer");
+      scaledFactors.push_back(scaledFactor);
+    }
+    return {scaledFactors, roundedFlag};
   }
 
 private:
@@ -123,6 +157,8 @@ private:
   hls::BufferLikeInterface sharedBuffer;
   Value sourceBuffer;
   Value targetBuffer;
+  SmallVector<float> sourceScaleFactors;
+  SmallVector<float> targetScaleFactors;
   SmallVector<int64_t> sourceToTargetMap;
   SmallVector<int64_t> targetToSourceMap;
 };

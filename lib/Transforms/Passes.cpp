@@ -283,6 +283,7 @@ void scalehls::registerScaleFlowPyTorchPipeline() {
         pm.addPass(scalehls::createSimplifyAffineIfPass());
         pm.addPass(scalehls::createAffineStoreForwardPass());
         pm.addPass(scalehls::createReduceInitialIntervalPass());
+        pm.addPass(scalehls::createBufferVectorizePass());
         pm.addPass(mlir::createCanonicalizerPass());
 
         if (opts.debugPoint == 12)

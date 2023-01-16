@@ -287,7 +287,8 @@ LogicalResult ScheduleOp::verify() {
 
   if (getIsLegal())
     for (auto &op : getOps())
-      if (!isa<NodeOp, BufferOp, ConstBufferOp, StreamOp>(op)) {
+      if (!isa<NodeOp, BufferOp, ConstBufferOp, StreamOp, BufferVectorizeOp,
+               BufferDevectorizeOp>(op)) {
         auto diag = emitOpError("legal schedule has illegal ops:\n");
         diag.attachNote(op.getLoc())
             .append("see current op: ")

@@ -87,10 +87,11 @@ ComplexityAnalysis::calculateBlockComplexity(Block *block) const {
   return complexity;
 }
 
-SmallVector<int64_t> getBufferIndexToLoopDepthMap(NodeOp node, Value buffer) {
+static std::pair<SmallVector<int64_t>, SmallVector<int64_t>>
+getBufferIndexDepthsAndStrides(NodeOp node, Value buffer) {
   if (node.hasHierarchy() ||
       !llvm::hasSingleElement(node.getOps<AffineForOp>()))
-    return SmallVector<int64_t>();
+    return {};
 
   auto band = getNodeLoopBand(node);
   auto index = llvm::find(node.getOperands(), buffer) - node.operand_begin();
@@ -132,11 +133,12 @@ SmallVector<int64_t> getBufferIndexToLoopDepthMap(NodeOp node, Value buffer) {
   });
 
   if (result.wasInterrupted())
-    return SmallVector<int64_t>();
+    return {};
 
   // Traverse each buffer dimension to determine the loop iv that is associated
   // with the index of the corresponding dimension.
   SmallVector<int64_t> depths;
+  SmallVector<int64_t> strides;
   for (auto expr : bufferMap.getResults()) {
     // Get the flattened form of the expr, which is a sum of products in an
     // order of [dims, symbols, locals, constant].
@@ -144,9 +146,10 @@ SmallVector<int64_t> getBufferIndexToLoopDepthMap(NodeOp node, Value buffer) {
     if (failed(getFlattenedAffineExpr(expr, bufferMap.getNumDims(),
                                       bufferMap.getNumSymbols(),
                                       &flattenedExpr)))
-      return SmallVector<int64_t>();
+      return {};
 
     int64_t loopDepth = -1;
+    int64_t loopStride = -1;
     for (unsigned i = 0, e = bufferMap.getNumDims(); i < e; ++i) {
       auto loop = getForInductionVarOwner(bufferOperands[i]);
       if (flattenedExpr[i] == 0 || !loop)
@@ -155,31 +158,42 @@ SmallVector<int64_t> getBufferIndexToLoopDepthMap(NodeOp node, Value buffer) {
       unsigned depth = llvm::find(band, loop) - band.begin();
       if (depth != band.size()) {
         // TODO: Support buffer index to involve multiple loop ivs.
-        if (loopDepth != -1)
-          return SmallVector<int64_t>();
+        if (loopDepth != -1 || loopStride != -1)
+          return {};
         loopDepth = depth;
+        loopStride = flattenedExpr[i];
       }
     }
     depths.push_back(loopDepth);
+    strides.push_back(loopStride);
   }
-  return depths;
+  return {depths, strides};
 }
 
-SmallVector<int64_t> getPermuteMap(NodeOp node, SmallVector<int64_t> lhsDepths,
-                                   SmallVector<int64_t> rhsDepths) {
+static std::pair<SmallVector<int64_t>, SmallVector<float>>
+getPermuteMapAndScaleFactors(NodeOp node, SmallVector<int64_t> lhsDepths,
+                             SmallVector<int64_t> rhsDepths,
+                             SmallVector<int64_t> lhsStrides,
+                             SmallVector<int64_t> rhsStrides) {
   assert(lhsDepths.size() == rhsDepths.size() && "incorrect number of depths");
+  assert(lhsStrides.size() == rhsStrides.size() &&
+         "incorrect number of strides");
   SmallVector<int64_t> permuteMap;
+  SmallVector<float> scaleFactors;
 
   for (int64_t i = 0, e = getNodeLoopBand(node).size(); i < e; i++) {
     unsigned index = llvm::find(rhsDepths, i) - rhsDepths.begin();
     if (index != rhsDepths.size())
-      if (lhsDepths[index] != -1) {
+      if (lhsDepths[index] != -1 && lhsStrides[index] != -1 &&
+          rhsStrides[index] != -1) {
         permuteMap.push_back(lhsDepths[index]);
+        scaleFactors.push_back(lhsStrides[index] / (float)rhsStrides[index]);
         continue;
       }
     permuteMap.push_back(-1);
+    scaleFactors.push_back(1.0);
   }
-  return permuteMap;
+  return {permuteMap, scaleFactors};
 }
 
 CorrelationAnalysis::CorrelationAnalysis(func::FuncOp func) {
@@ -190,27 +204,30 @@ CorrelationAnalysis::CorrelationAnalysis(func::FuncOp func) {
     for (auto producerPair : getNestedProducers(buffer)) {
       auto producer = producerPair.first;
       auto producerBuffer = producerPair.second;
-      auto sourceDepths =
-          getBufferIndexToLoopDepthMap(producer, producerBuffer);
+      auto [sourceDepths, sourceStrides] =
+          getBufferIndexDepthsAndStrides(producer, producerBuffer);
       if (sourceDepths.empty())
         continue;
 
       for (auto consumerPair : getNestedConsumersExcept(buffer, producer)) {
         auto consumer = consumerPair.first;
         auto consumerBuffer = consumerPair.second;
-        auto targetDepths =
-            getBufferIndexToLoopDepthMap(consumer, consumerBuffer);
+        auto [targetDepths, targetStrides] =
+            getBufferIndexDepthsAndStrides(consumer, consumerBuffer);
         if (targetDepths.empty())
           continue;
 
-        auto sourceToTargetMap =
-            getPermuteMap(consumer, sourceDepths, targetDepths);
-        auto targetToSourceMap =
-            getPermuteMap(producer, targetDepths, sourceDepths);
+        auto [sourceToTargetMap, targetScaleFactors] =
+            getPermuteMapAndScaleFactors(consumer, sourceDepths, targetDepths,
+                                         sourceStrides, targetStrides);
+        auto [targetToSourceMap, sourceScaleFactors] =
+            getPermuteMapAndScaleFactors(producer, targetDepths, sourceDepths,
+                                         targetStrides, sourceStrides);
 
         auto corr =
             Correlation(producer, consumer, bufferOp, producerBuffer,
-                        consumerBuffer, sourceToTargetMap, targetToSourceMap);
+                        consumerBuffer, sourceScaleFactors, targetScaleFactors,
+                        sourceToTargetMap, targetToSourceMap);
         LLVM_DEBUG(
             // clang-format off
             llvm::dbgs() << "\n--------- Correlation ----------\n";
