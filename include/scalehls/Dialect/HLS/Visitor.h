@@ -26,7 +26,7 @@ public:
             // HLS dialect operations.
             BufferOp, ConstBufferOp, StreamOp, StreamReadOp, StreamWriteOp,
             AxiBundleOp, AxiPortOp, AxiPackOp, PrimMulOp, PrimCastOp,
-            hls::AffineSelectOp,
+            hls::AffineSelectOp, hls::VectorInitOp,
 
             // Function operations.
             func::CallOp, func::ReturnOp,
@@ -41,8 +41,8 @@ public:
             AffineVectorLoadOp, AffineVectorStoreOp, AffineYieldOp,
 
             // Vector statements.
-            vector::TransferReadOp, vector::TransferWriteOp,
-            vector::BroadcastOp,
+            vector::InsertOp, vector::ExtractOp, vector::TransferReadOp,
+            vector::TransferWriteOp, vector::BroadcastOp,
 
             // Memref statements.
             memref::AllocOp, memref::AllocaOp, memref::LoadOp, memref::StoreOp,
@@ -107,6 +107,7 @@ public:
   HANDLE(PrimMulOp);
   HANDLE(PrimCastOp);
   HANDLE(hls::AffineSelectOp);
+  HANDLE(hls::VectorInitOp);
 
   // Control flow operations.
   HANDLE(func::CallOp);
@@ -134,6 +135,8 @@ public:
   HANDLE(AffineYieldOp);
 
   // Vector statements.
+  HANDLE(vector::InsertOp);
+  HANDLE(vector::ExtractOp);
   HANDLE(vector::TransferReadOp);
   HANDLE(vector::TransferWriteOp);
   HANDLE(vector::BroadcastOp);

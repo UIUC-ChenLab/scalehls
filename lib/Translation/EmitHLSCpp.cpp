@@ -26,52 +26,46 @@ static llvm::cl::opt<bool> enforceFalseDependency("enforce-false-dependency",
 // Utils
 //===----------------------------------------------------------------------===//
 
-static SmallString<16> getTypeName(Value val) {
-  // Handle memref, tensor, and vector types.
-  auto valType = val.getType();
-  if (auto arrayType = valType.dyn_cast<ShapedType>())
-    valType = arrayType.getElementType();
-  else if (auto streamType = valType.dyn_cast<StreamType>())
-    valType = streamType.getElementType();
-  else if (auto axiType = valType.dyn_cast<AxiType>()) {
-    valType = axiType.getElementType();
-    if (auto arrayType = valType.dyn_cast<ShapedType>())
-      valType = arrayType.getElementType();
+Type peelAxiType(Type type) {
+  if (auto axiType = type.dyn_cast<AxiType>())
+    return axiType.getElementType();
+  return type;
+}
+
+static std::string getDataTypeName(Type type) {
+  auto valType = peelAxiType(type);
+
+  // Handle aggregated types, including memref, vector, and stream.
+  if (auto arrayType = valType.dyn_cast<MemRefType>())
+    return getDataTypeName(arrayType.getElementType());
+  else if (auto streamType = valType.dyn_cast<StreamType>()) {
+    std::string streamName = "hls::stream<";
+    streamName += getDataTypeName(streamType.getElementType());
+    streamName += ">";
+    return streamName;
+  } else if (auto vectorType = valType.dyn_cast<VectorType>()) {
+    std::string vectorName = "hls::vector<";
+    vectorName += getDataTypeName(vectorType.getElementType());
+    vectorName += ", " + std::to_string(vectorType.getNumElements()) + ">";
+    return vectorName;
   }
 
-  // Handle float types.
+  // Handle scalar types, including float and integer.
   if (valType.isa<Float32Type>())
-    return SmallString<16>("float");
+    return "float";
   else if (valType.isa<Float64Type>())
-    return SmallString<16>("double");
-
-  // Handle integer types.
+    return "double";
   else if (valType.isa<IndexType>())
-    return SmallString<16>("int");
+    return "int";
   else if (auto intType = valType.dyn_cast<IntegerType>()) {
     if (intType.getWidth() == 1)
-      return SmallString<16>("bool");
-    else {
-      std::string signedness = "";
-      if (intType.getSignedness() == IntegerType::SignednessSemantics::Unsigned)
-        signedness = "u";
-
-      // switch (intType.getWidth()) {
-      // case 8:
-      // case 16:
-      // case 32:
-      // case 64:
-      //   return SmallString<16>(signedness + "int" +
-      //                          std::to_string(intType.getWidth()) + "_t");
-      // default:
-      return SmallString<16>("ap_" + signedness + "int<" +
-                             std::to_string(intType.getWidth()) + ">");
-      // }
-    }
-  } else
-    val.getDefiningOp()->emitError("has unsupported type.");
-
-  return SmallString<16>();
+      return "bool";
+    std::string intName = "ap_";
+    intName += intType.isUnsigned() ? "u" : "";
+    intName += "int<" + std::to_string(intType.getWidth()) + ">";
+    return intName;
+  }
+  return "unknown_type";
 }
 
 //===----------------------------------------------------------------------===//
@@ -269,6 +263,9 @@ public:
   void emitAffineYield(AffineYieldOp op);
 
   /// Vector-related statement emitters.
+  void emitVectorInit(hls::VectorInitOp op);
+  void emitInsert(vector::InsertOp op);
+  void emitExtract(vector::ExtractOp op);
   void emitTransferRead(vector::TransferReadOp op);
   void emitTransferWrite(vector::TransferWriteOp op);
   void emitBroadcast(vector::BroadcastOp);
@@ -458,6 +455,11 @@ public:
   bool visitOp(AffineYieldOp op) { return emitter.emitAffineYield(op), true; }
 
   /// Vector statements.
+  bool visitOp(hls::VectorInitOp op) {
+    return emitter.emitVectorInit(op), true;
+  }
+  bool visitOp(vector::InsertOp op) { return emitter.emitInsert(op), true; };
+  bool visitOp(vector::ExtractOp op) { return emitter.emitExtract(op), true; };
   bool visitOp(vector::TransferReadOp op) {
     return emitter.emitTransferRead(op), true;
   };
@@ -781,7 +783,7 @@ void ModuleEmitter::emitCall(func::CallOp op) {
   for (auto result : op.getResults()) {
     if (!isDeclared(result)) {
       indent();
-      if (result.getType().isa<ShapedType>())
+      if (result.getType().isa<MemRefType>())
         emitArrayDecl(result);
       else
         emitValue(result);
@@ -855,7 +857,7 @@ void ModuleEmitter::emitScfIf(scf::IfOp op) {
   for (auto result : op.getResults()) {
     if (!isDeclared(result)) {
       indent();
-      if (result.getType().isa<ShapedType>())
+      if (result.getType().isa<MemRefType>())
         emitArrayDecl(result);
       else
         emitValue(result);
@@ -968,7 +970,7 @@ void ModuleEmitter::emitAffineIf(AffineIfOp op) {
   for (auto result : op.getResults()) {
     if (!isDeclared(result)) {
       indent();
-      if (result.getType().isa<ShapedType>())
+      if (result.getType().isa<MemRefType>())
         emitArrayDecl(result);
       else
         emitValue(result);
@@ -1016,7 +1018,7 @@ void ModuleEmitter::emitAffineParallel(AffineParallelOp op) {
   for (auto result : op.getResults()) {
     if (!isDeclared(result)) {
       indent();
-      if (result.getType().isa<ShapedType>())
+      if (result.getType().isa<MemRefType>())
         emitArrayDecl(result);
       else
         emitValue(result);
@@ -1288,6 +1290,32 @@ getTransferCondition(TransferOpType op,
 }
 
 /// Vector-related statement emitters.
+void ModuleEmitter::emitVectorInit(hls::VectorInitOp op) {
+  indent();
+  emitValue(op.getResult());
+  os << ";";
+  emitInfoAndNewLine(op);
+}
+
+void ModuleEmitter::emitInsert(vector::InsertOp op) {
+  addAlias(op.getDest(), op.getResult());
+  indent();
+  emitValue(op.getDest());
+  os << "[" << op.getPosition()[0].cast<IntegerAttr>().getInt() << "] = ";
+  emitValue(op.getSource());
+  os << ";";
+  emitInfoAndNewLine(op);
+}
+
+void ModuleEmitter::emitExtract(vector::ExtractOp op) {
+  indent();
+  emitValue(op.getResult());
+  os << " = ";
+  emitValue(op.getVector());
+  os << "[" << op.getPosition()[0].cast<IntegerAttr>().getInt() << "];";
+  emitInfoAndNewLine(op);
+}
+
 void ModuleEmitter::emitTransferRead(vector::TransferReadOp op) {
   auto rank = emitNestedLoopHeader(op.getVector());
   auto indices = getTransferIndices(op);
@@ -1421,8 +1449,8 @@ void ModuleEmitter::emitMemCpy(memref::CopyOp op) {
   os << ", ";
 
   auto type = op.getTarget().getType().cast<MemRefType>();
-  os << type.getNumElements() << " * sizeof(" << getTypeName(op.getTarget())
-     << "));";
+  os << type.getNumElements() << " * sizeof("
+     << getDataTypeName(op.getTarget().getType()) << "));";
   emitInfoAndNewLine(op);
   os << "\n";
 }
@@ -1432,7 +1460,7 @@ template <typename OpType> void ModuleEmitter::emitReshape(OpType op) {
   assert(!isDeclared(array) && "has been declared before.");
 
   auto arrayType = array.getType().template cast<ShapedType>();
-  indent() << getTypeName(array) << " (*";
+  indent() << getTypeName(arrayType) << " (*";
 
   // Add the new value to nameTable and emit its name.
   os << addName(array, false);
@@ -1441,7 +1469,7 @@ template <typename OpType> void ModuleEmitter::emitReshape(OpType op) {
   for (auto &shape : llvm::drop_begin(arrayType.getShape(), 1))
     os << "[" << shape << "]";
 
-  os << " = (" << getTypeName(array) << "(*)";
+  os << " = (" << getTypeName(arrayType) << "(*)";
   for (auto &shape : llvm::drop_begin(arrayType.getShape(), 1))
     os << "[" << shape << "]";
   os << ") ";
@@ -1522,7 +1550,7 @@ template <typename OpType> void ModuleEmitter::emitConstant(OpType op) {
     emitArrayDecl(op.getResult());
     os << " = {";
     auto type =
-        op.getResult().getType().template cast<ShapedType>().getElementType();
+        op.getResult().getType().template cast<MemRefType>().getElementType();
 
     unsigned elementIdx = 0;
     for (auto element : denseAttr.template getValues<Attribute>()) {
@@ -1552,11 +1580,8 @@ void ModuleEmitter::emitValue(Value val, unsigned rank, bool isPtr,
     return;
   }
 
-  if (val.getType().isa<StreamType>())
-    os << "hls::stream<" << getTypeName(val) << "> ";
-  else
-    os << getTypeName(val) << " ";
-
+  // Emit the type of the value.
+  os << getDataTypeName(val.getType()) << " ";
   if (isRef)
     os << "&";
 
@@ -1568,10 +1593,7 @@ void ModuleEmitter::emitValue(Value val, unsigned rank, bool isPtr,
 
 void ModuleEmitter::emitArrayDecl(Value array) {
   assert(!isDeclared(array) && "has been declared before.");
-
-  auto arrayType = array.getType().dyn_cast<ShapedType>();
-  if (auto axiType = array.getType().dyn_cast<AxiType>())
-    arrayType = axiType.getElementType();
+  auto arrayType = peelAxiType(array.getType()).dyn_cast<MemRefType>();
 
   if (arrayType.hasStaticShape()) {
     emitValue(array);
@@ -1584,7 +1606,7 @@ void ModuleEmitter::emitArrayDecl(Value array) {
 unsigned ModuleEmitter::emitNestedLoopHeader(Value val) {
   unsigned rank = 0;
 
-  if (auto type = val.getType().dyn_cast<ShapedType>()) {
+  if (auto type = val.getType().dyn_cast<MemRefType>()) {
     if (!type.hasStaticShape()) {
       emitError(val.getDefiningOp(), "is unranked or has dynamic shape.");
       return 0;
@@ -1824,9 +1846,9 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
       // Axi ports are handled separately.
       if (port.getType().isa<AxiType>())
         continue;
-      // ShapedType and StreamType must have been converted to AXI ports for the
+      // MemRefType and StreamType must have been converted to AXI ports for the
       // top function.
-      if (port.getType().isa<ShapedType, StreamType>())
+      if (port.getType().isa<MemRefType, StreamType>())
         emitError(func, "unsupported port type");
 
       // For scalar types, we always emit them as AXI-Lite ports.
@@ -1890,11 +1912,9 @@ void ModuleEmitter::emitFunction(func::FuncOp func) {
   unsigned argIdx = 0;
   for (auto &arg : func.getArguments()) {
     indent();
-    auto type = arg.getType();
-    if (auto axiType = arg.getType().dyn_cast<AxiType>())
-      type = axiType.getElementType();
+    auto type = peelAxiType(arg.getType());
 
-    if (type.isa<ShapedType>())
+    if (type.isa<MemRefType>())
       emitArrayDecl(arg);
     else if (type.isa<StreamType>())
       emitValue(arg, /*rank=*/0, /*isPtr=*/false, /*isRef=*/true);
@@ -1913,7 +1933,7 @@ void ModuleEmitter::emitFunction(func::FuncOp func) {
     indent();
     // TODO: a known bug, cannot return a value twice, e.g. return %0, %0 :
     // index, index. However, typically this should not happen.
-    if (result.getType().isa<ShapedType>())
+    if (result.getType().isa<MemRefType>())
       emitArrayDecl(result);
     else
       // In Vivado HLS, pointer indicates the value is an output.
@@ -1952,6 +1972,7 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 #include <ap_int.h>
 #include <hls_math.h>
 #include <hls_stream.h>
+#include <hls_vector.h>
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
