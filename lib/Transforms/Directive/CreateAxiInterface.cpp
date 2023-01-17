@@ -37,61 +37,109 @@ struct CreateAxiInterface : public CreateAxiInterfaceBase<CreateAxiInterface> {
         builder.create<func::FuncOp>(loc, "main", func.getFunctionType());
     setRuntimeAttr(mainFunc);
     auto mainBlock = mainFunc.addEntryBlock();
+    builder.setInsertionPointToEnd(mainBlock);
 
-    for (auto t : llvm::zip(func.getArguments(), mainBlock->getArguments()))
-      std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
+    // Move all the arguments of the top function to the main function.
+    for (auto [funcArg, mainArg] :
+         llvm::zip(func.getArguments(), mainBlock->getArguments()))
+      funcArg.replaceAllUsesWith(mainArg);
     func.front().eraseArguments([](BlockArgument arg) { return true; });
 
-    // Move each buffers allocated in the top function to the runtime function.
-    // Collect all targeted buffers that will be converted to AXI.
-    SmallVector<Value, 32> targets;
-    SmallVector<Value, 32> ports;
-    for (auto arg : mainBlock->getArguments()) {
-      if (arg.getType().isa<MemRefType, StreamType>())
-        targets.push_back(arg);
-      else {
-        ports.push_back(arg);
-        auto newArg = func.front().addArgument(arg.getType(), arg.getLoc());
-        arg.replaceAllUsesWith(newArg);
+    // A helper to handle vectorized buffers.
+    auto getSelfOrVectorizedBuffer = [&](Value buffer) {
+      if (llvm::any_of(buffer.getUses(), [](OpOperand &use) {
+            return isa<BufferVectorizeOp>(use.getOwner());
+          })) {
+        if (!buffer.hasOneUse()) {
+          emitError(buffer.getLoc(), "buffer can only be vectorized once");
+          return signalPassFailure(), Value();
+        }
+        auto vectorize = cast<BufferVectorizeOp>(*buffer.user_begin());
+        vectorize->remove();
+        builder.insert(vectorize);
+        return vectorize.getResult();
+      }
+      return buffer;
+    };
+
+    // Move buffer arguments of the top function to the main function. Collect
+    // all buffers to be converted to AXI interfaces into "buffers". At the same
+    // time, we also directly collect all scalar arguments into "funcPorts".
+    SmallVector<Value, 32> buffers;
+    SmallVector<Value, 32> funcPorts;
+    for (auto arg : mainBlock->getArguments())
+      if (arg.getType().isa<MemRefType, StreamType>()) {
+        buffers.push_back(getSelfOrVectorizedBuffer(arg));
+      } else if (arg.getType().isa<ShapedType>()) {
+        emitError(arg.getLoc(), "unsupported argument type");
+        return signalPassFailure();
+      } else {
+        funcPorts.push_back(arg);
+        arg.replaceAllUsesWith(
+            func.front().addArgument(arg.getType(), arg.getLoc()));
+      }
+
+    // Move buffers allocated in the top function to the main function. Collect
+    // all buffers to be converted to AXI interfaces into "buffers".
+    for (auto buffer :
+         llvm::make_early_inc_range(func.getOps<hls::BufferLikeInterface>())) {
+      if (!isExtBuffer(buffer.getMemref()))
+        continue;
+      buffer->remove();
+      builder.insert(buffer);
+      buffers.push_back(getSelfOrVectorizedBuffer(buffer.getMemref()));
+    }
+
+    // A helper to get AXI bundle type from a buffer.
+    auto getBundleType = [&](Value buffer) {
+      if (auto memrefType = buffer.getType().dyn_cast<MemRefType>())
+        return BundleType::get(context, memrefType.getElementType(),
+                               AxiKind::MM);
+      if (auto streamType = buffer.getType().dyn_cast<StreamType>())
+        return BundleType::get(context, streamType.getElementType(),
+                               AxiKind::STREAM);
+      llvm_unreachable("invalid buffer type");
+    };
+
+    // We always bundle buffers with the same element type into a single AXI
+    // port. Therefore, we first construct a "bundleMap" to hold the mapping
+    // from a bundle type to the AXI bundle operation.
+    builder.setInsertionPointToStart(&func.front());
+    auto insertPoint = builder.saveInsertionPoint();
+    llvm::SmallDenseMap<Type, AxiBundleOp> bundleMap;
+    unsigned bundleIndex = 0;
+    for (auto buffer : buffers) {
+      auto bundleType = getBundleType(buffer);
+
+      if (!bundleMap.count(bundleType)) {
+        auto bundle = builder.create<AxiBundleOp>(
+            loc, bundleType, "axi_" + std::to_string(bundleIndex++));
+        bundleMap[bundleType] = bundle;
+        builder.setInsertionPointAfter(bundle);
+        insertPoint = builder.saveInsertionPoint();
       }
     }
 
-    builder.setInsertionPointToEnd(mainBlock);
-    for (auto &op : llvm::make_early_inc_range(func.front()))
-      if (auto buffer = dyn_cast<hls::BufferLikeInterface>(op)) {
-        if (!isExtBuffer(buffer.getMemref()))
-          continue;
-        buffer->remove();
-        builder.insert(buffer);
-        targets.push_back(buffer.getMemref());
-      }
-
-    // Add new AXI ports to the top function.
-    unsigned axiIdx = 0;
-    for (auto value : targets) {
-      for (auto &use : llvm::make_early_inc_range(value.getUses())) {
-
-        auto axiName = "axi" + std::to_string(axiIdx++);
-        auto axiKind =
-            value.getType().isa<ShapedType>() ? AxiKind::MM : AxiKind::LITE;
-        auto axiType = AxiType::get(context, value.getType(), axiKind);
-        auto bundleType = BundleType::get(context, axiKind);
+    // Convert collected buffers to AXI ports and collect them in "funcPorts".
+    // Note that we create a separate AXI port for each buffer use to avoid
+    // potential conflicts.
+    for (auto buffer : buffers)
+      for (auto &use : llvm::make_early_inc_range(buffer.getUses())) {
+        builder.restoreInsertionPoint(insertPoint);
+        auto axiType = AxiType::get(context, buffer.getType());
+        auto axiPort = builder.create<AxiPortOp>(
+            loc, buffer.getType(), bundleMap.lookup(getBundleType(buffer)),
+            func.front().addArgument(axiType, buffer.getLoc()));
+        use.set(axiPort);
 
         builder.setInsertionPointToEnd(mainBlock);
-        ports.push_back(builder.create<AxiPackOp>(loc, axiType, value));
-        auto axiArg = func.front().addArgument(axiType, value.getLoc());
-
-        builder.setInsertionPointToStart(&func.front());
-        auto bundle = builder.create<AxiBundleOp>(loc, bundleType, axiName);
-        use.set(
-            builder.create<AxiPortOp>(loc, value.getType(), bundle, axiArg));
+        funcPorts.push_back(builder.create<AxiPackOp>(loc, axiType, buffer));
       }
-    }
 
     // Update the top function and call.
     builder.setInsertionPointToEnd(mainBlock);
     auto call = builder.create<func::CallOp>(func.getLoc(), func.getName(),
-                                             func.getResultTypes(), ports);
+                                             func.getResultTypes(), funcPorts);
     func.setType(call.getCalleeType());
     builder.create<func::ReturnOp>(loc, call.getResults());
   }

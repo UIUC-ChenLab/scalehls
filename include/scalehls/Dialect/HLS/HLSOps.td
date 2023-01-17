@@ -393,23 +393,39 @@ def AxiPortOp : HLSOp<"axi.port", [NoMemoryEffect, HasParent<"func::FuncOp">]> {
   let summary = "Represent an axi port";
 
   let arguments = (ins BundleType:$bundle, AnyAxi:$axi);
-  let results = (outs AnyType:$value);
+  let results = (outs AnyType:$element);
   let assemblyFormat = [{
     $bundle `,` $axi attr-dict `:` type($bundle) `,`
-    functional-type($axi, $value)
+    functional-type($axi, $element)
   }];
 
   let hasVerifier = 1;
+  let extraClassDeclaration = [{
+    AxiType getAxiType() {
+      return getAxi().getType().cast<AxiType>();
+    }
+    BundleType getBundleType() {
+      return getBundle().getType().cast<BundleType>();
+    }
+    StringRef getBundleName() {
+      return getBundle().getDefiningOp<AxiBundleOp>().getName();
+    }
+  }];
 }
 
 def AxiPackOp : HLSOp<"axi.pack", [NoMemoryEffect, HasParent<"func::FuncOp">]> {
   let summary = "Pack a memref or scalar into an axi type";
 
-  let arguments = (ins AnyType:$value);
+  let arguments = (ins AnyType:$element);
   let results = (outs AnyAxi:$axi);
-  let assemblyFormat = "$value attr-dict `:` functional-type($value, $axi)";
+  let assemblyFormat = "$element attr-dict `:` functional-type($element, $axi)";
 
   let hasVerifier = 1;
+  let extraClassDeclaration = [{
+    AxiType getAxiType() {
+      return getAxi().getType().cast<AxiType>();
+    }
+  }];
 }
 
 //===----------------------------------------------------------------------===//

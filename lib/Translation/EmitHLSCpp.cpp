@@ -663,48 +663,35 @@ void ModuleEmitter::emitStreamWrite(StreamWriteOp op) {
 }
 
 void ModuleEmitter::emitAxiPort(AxiPortOp op) {
-  addAlias(op.getAxi(), op.getValue());
-  auto bundleName = op.getBundle().getDefiningOp<AxiBundleOp>().getName();
+  addAlias(op.getAxi(), op.getElement());
 
-  // Array ports and scalar ports are handled separately. Here, we only
-  // handle MemRef types since we assume the IR has be fully bufferized.
-  if (auto memrefType = op.getType().dyn_cast<MemRefType>()) {
-    // Only emit interface pragma when the array is not fully partitioned.
-    if (!isFullyPartitioned(memrefType)) {
-      indent() << "#pragma HLS interface";
-      // For now, we set the offset of all m_axi interfaces as slave.
-      if (isDram(memrefType)) {
-        // FIXME: AXI cannot be directly enabled with the current model.
-        // os << " m_axi offset=slave bundle=" << bundleName;
-        os << " ap_memory";
-      } else
-        os << " bram";
+  // if (op.getType().isa<MemRefType, StreamType>()) {
+  indent() << "#pragma HLS interface";
 
-      os << " port=";
-      emitValue(op.getValue());
-      os << "\n";
+  if (op.getBundleType().getKind() == AxiKind::MM)
+    os << " m_axi offset=slave";
+  else if (op.getBundleType().getKind() == AxiKind::STREAM)
+    os << " axis";
+  else
+    llvm_unreachable("AXI element type must be a memref or stream");
 
-      // Emit DRAM variable as stable.
-      if (isDram(memrefType)) {
-        indent() << "#pragma HLS stable";
-        os << " variable=";
-        emitValue(op.getValue());
-        os << "\n";
-      }
-      emitArrayDirectives(op.getValue());
-    }
-  } else {
-    indent() << "#pragma HLS interface s_axilite";
-    os << " port=";
+  os << " port=";
+  emitValue(op.getElement());
+  os << " bundle=" << op.getBundleName();
+  os << "\n";
 
-    // TODO: This is a temporary solution.
-    auto name = getName(op.getValue());
-    if (name.front() == "*"[0])
-      name.erase(name.begin());
-    os << name;
-    os << " bundle=" << bundleName << "\n";
-  }
+  // emitArrayDirectives(op.getElement());
+  // } else {
+  //   indent() << "#pragma HLS interface s_axilite";
+  //   os << " port=";
 
+  //   // TODO: This is a temporary solution.
+  //   auto name = getName(op.getElement());
+  //   if (name.front() == "*"[0])
+  //     name.erase(name.begin());
+  //   os << name;
+  //   os << " bundle=" << op.getBundleName() << "\n";
+  // }
   // An empty line.
   os << "\n";
 }
@@ -1833,14 +1820,22 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
   // Only top function should emit interface pragmas.
   if (hasTopFuncAttr(func)) {
     indent() << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
-    for (auto &port : portList)
-      if (!port.getType().isa<ShapedType, StreamType, AxiType>()) {
-        auto name = getName(port);
-        if (name.front() == "*"[0])
-          name.erase(name.begin());
-        indent() << "#pragma HLS interface s_axilite port=" << name
-                 << " bundle=ctrl\n";
-      }
+    for (auto &port : portList) {
+      // Axi ports are handled separately.
+      if (port.getType().isa<AxiType>())
+        continue;
+      // ShapedType and StreamType must have been converted to AXI ports for the
+      // top function.
+      if (port.getType().isa<ShapedType, StreamType>())
+        emitError(func, "unsupported port type");
+
+      // For scalar types, we always emit them as AXI-Lite ports.
+      auto name = getName(port);
+      if (name.front() == "*"[0])
+        name.erase(name.begin());
+      indent() << "#pragma HLS interface s_axilite port=" << name
+               << " bundle=ctrl\n";
+    }
   }
 
   if (func->getAttr("inline"))
@@ -1850,21 +1845,17 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
     if (port.getType().isa<MemRefType>())
       emitArrayDirectives(port);
 
-  auto funcDirect = getFuncDirective(func);
-  if (!funcDirect)
-    return;
-
-  if (funcDirect.getPipeline()) {
-    indent() << "#pragma HLS pipeline II=" << funcDirect.getTargetInterval()
-             << "\n";
-
-    // An empty line.
-    os << "\n";
-  } else if (funcDirect.getDataflow()) {
-    indent() << "#pragma HLS dataflow\n";
-
-    // An empty line.
-    os << "\n";
+  if (auto funcDirect = getFuncDirective(func)) {
+    if (funcDirect.getPipeline()) {
+      indent() << "#pragma HLS pipeline II=" << funcDirect.getTargetInterval()
+               << "\n";
+      // An empty line.
+      os << "\n";
+    } else if (funcDirect.getDataflow()) {
+      indent() << "#pragma HLS dataflow\n";
+      // An empty line.
+      os << "\n";
+    }
   }
 }
 
@@ -1899,16 +1890,15 @@ void ModuleEmitter::emitFunction(func::FuncOp func) {
   unsigned argIdx = 0;
   for (auto &arg : func.getArguments()) {
     indent();
-    if (arg.getType().isa<ShapedType>())
+    auto type = arg.getType();
+    if (auto axiType = arg.getType().dyn_cast<AxiType>())
+      type = axiType.getElementType();
+
+    if (type.isa<ShapedType>())
       emitArrayDecl(arg);
-    else if (arg.getType().isa<StreamType>())
+    else if (type.isa<StreamType>())
       emitValue(arg, /*rank=*/0, /*isPtr=*/false, /*isRef=*/true);
-    else if (auto axiType = arg.getType().dyn_cast<AxiType>()) {
-      if (axiType.getElementType().isa<ShapedType>())
-        emitArrayDecl(arg);
-      else
-        emitValue(arg);
-    } else
+    else
       emitValue(arg);
 
     portList.push_back(arg);
@@ -1943,7 +1933,6 @@ void ModuleEmitter::emitFunction(func::FuncOp func) {
   emitBlock(func.front());
   reduceIndent();
   os << "}\n";
-
   // An empty line.
   os << "\n";
 }

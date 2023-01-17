@@ -28,17 +28,21 @@ def AxiType : HLSType<"Axi"> {
   let summary = "An HLS AXI interface type";
   let mnemonic = "axi";
 
-  let parameters = (ins "mlir::Type":$elementType,
-                        AxiKindParam:$kind);
-  let assemblyFormat = "`<` qualified($elementType) `,` $kind `>`";
+  let parameters = (ins "mlir::Type":$elementType);
+  let assemblyFormat = "`<` qualified($elementType) `>`";
+
+  let genVerifyDecl = 1;
+  let extraClassDeclaration = [{
+    Type getDataType();
+  }];
 }
 
 def BundleType : HLSType<"Bundle"> {
   let summary = "An HLS AXI bundle type";
   let mnemonic = "bundle";
 
-  let parameters = (ins AxiKindParam:$kind);
-  let assemblyFormat = "`<` $kind `>`";
+  let parameters = (ins "mlir::Type":$dataType, AxiKindParam:$kind);
+  let assemblyFormat = "`<` qualified($dataType) `,` $kind `>`";
 }
 
 #endif // SCALEHLS_DIALECT_HLS_HLSTYPES_TD

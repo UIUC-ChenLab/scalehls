@@ -842,27 +842,53 @@ OpFoldResult BufferVectorizeOp::fold(ArrayRef<Attribute>) {
 // AxiBundleOp, AxiPortOp, and AxiPackOp
 //===----------------------------------------------------------------------===//
 
+LogicalResult AxiType::verify(function_ref<InFlightDiagnostic()> emitError,
+                              Type elementType) {
+  // TODO: Support AxiLite type for scalar values.
+  if (!elementType.isa<MemRefType, StreamType>())
+    return emitError() << "AXI element type must be a memref or stream";
+  return success();
+}
+
+Type AxiType::getDataType() {
+  if (auto memrefType = getElementType().dyn_cast<MemRefType>())
+    return memrefType.getElementType();
+  else if (auto streamType = getElementType().dyn_cast<StreamType>())
+    return streamType.getElementType();
+  else
+    llvm_unreachable("AXI element type must be a memref or stream");
+  return Type();
+}
+
 LogicalResult AxiPortOp::verify() {
   if (!getAxi().isa<BlockArgument>())
     return emitOpError("axi must be block arguments");
 
-  auto axiType =
-      getAxi().getType().cast<AxiType>().getElementType().cast<MemRefType>();
-  auto valueType = getValue().getType().cast<MemRefType>();
-  if (axiType.getElementType() != valueType.getElementType() ||
-      axiType.getShape() != valueType.getShape())
-    return emitOpError("axi type doesn't align with value type");
+  if (getAxiType().getElementType() != getElement().getType())
+    return emitOpError("axi type doesn't align with element type");
 
-  if (getAxi().getType().cast<AxiType>().getKind() !=
-      getBundle().getType().cast<BundleType>().getKind())
-    return emitOpError("axi kind doesn't align with bundle kind");
-  return success();
+  if (getAxiType().getDataType() != getBundleType().getDataType())
+    return emitOpError("axi type doesn't align with bundle type");
+
+  return TypeSwitch<Type, LogicalResult>(getAxiType().getElementType())
+      .Case<MemRefType>([&](auto type) -> LogicalResult {
+        if (getBundleType().getKind() != AxiKind::MM)
+          return emitOpError("memref type must be mapped to AXI-MM");
+        return success();
+      })
+      .Case<StreamType>([&](auto type) -> LogicalResult {
+        if (getBundleType().getKind() != AxiKind::STREAM)
+          return emitOpError("stream type must be mapped to AXI-STREAM");
+        return success();
+      })
+      .Default([&](auto type) -> LogicalResult {
+        llvm_unreachable("AXI element type must be a memref or stream");
+      });
 }
 
 LogicalResult AxiPackOp::verify() {
-  if (getAxi().getType().cast<AxiType>().getElementType() !=
-      getValue().getType())
-    return emitOpError("axi type doesn't align with value type");
+  if (getAxiType().getElementType() != getElement().getType())
+    return emitOpError("axi type doesn't align with element type");
   return success();
 }
 
