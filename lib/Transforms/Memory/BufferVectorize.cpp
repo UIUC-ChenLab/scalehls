@@ -211,7 +211,7 @@ static LogicalResult getScalarIndices(Location loc, ArrayRef<Value> indices,
 }
 
 namespace {
-struct VectorizeRead : public OpRewritePattern<vector::TransferReadOp> {
+struct VectorizeTransferRead : public OpRewritePattern<vector::TransferReadOp> {
   using OpRewritePattern<vector::TransferReadOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(vector::TransferReadOp read,
@@ -280,7 +280,8 @@ struct VectorizeRead : public OpRewritePattern<vector::TransferReadOp> {
 } // namespace
 
 namespace {
-struct VectorizeWrite : public OpRewritePattern<vector::TransferWriteOp> {
+struct VectorizeTransferWrite
+    : public OpRewritePattern<vector::TransferWriteOp> {
   using OpRewritePattern<vector::TransferWriteOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(vector::TransferWriteOp write,
@@ -344,6 +345,54 @@ struct VectorizeWrite : public OpRewritePattern<vector::TransferWriteOp> {
 } // namespace
 
 namespace {
+struct VectorizeLoad : public OpRewritePattern<AffineLoadOp> {
+  using OpRewritePattern<AffineLoadOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(AffineLoadOp load,
+                                PatternRewriter &rewriter) const override {
+    auto type = load.getMemRefType();
+    if (auto vectorizedType = getVectorizedType(type)) {
+      auto layout = type.getLayout().cast<TileLayoutAttr>();
+      rewriter.setInsertionPoint(load);
+
+      // Calculate the new indices of affine load.
+      SmallVector<AffineExpr, 4> vectorExprs;
+      for (auto [expr, vectorSize] :
+           llvm::zip(load.getAffineMap().getResults(), layout.getVectorShape()))
+        vectorExprs.push_back(expr.floorDiv(vectorSize));
+      auto vectorMap = AffineMap::get(load.getAffineMap().getNumDims(),
+                                      load.getAffineMap().getNumSymbols(),
+                                      vectorExprs, rewriter.getContext());
+
+      // We need to extract the scalar from the loaded vector's first element.
+      auto vectorBuffer = rewriter.create<BufferVectorizeOp>(
+          load.getLoc(), vectorizedType, load.getMemRef());
+      auto vectorLoad = rewriter.create<AffineLoadOp>(
+          load.getLoc(), vectorBuffer, vectorMap, load.getMapOperands());
+      rewriter.replaceOpWithNewOp<vector::ExtractOp>(
+          load, vectorLoad, rewriter.getI64ArrayAttr({0}));
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
+struct VectorizeStore : public OpRewritePattern<AffineStoreOp> {
+  using OpRewritePattern<AffineStoreOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(AffineStoreOp store,
+                                PatternRewriter &rewriter) const override {
+    auto type = store.getMemRefType();
+    if (auto vectorizedType = getVectorizedType(type))
+      store.emitOpError("masked vector store has not been supported");
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
 struct BufferVectorize : public BufferVectorizeBase<BufferVectorize> {
   void runOnOperation() override {
     auto func = getOperation();
@@ -356,8 +405,10 @@ struct BufferVectorize : public BufferVectorizeBase<BufferVectorize> {
     patterns.clear();
     patterns.add<VectorizeNode>(context);
     patterns.add<VectorizeSchedule>(context);
-    patterns.add<VectorizeRead>(context);
-    patterns.add<VectorizeWrite>(context);
+    patterns.add<VectorizeTransferRead>(context);
+    patterns.add<VectorizeTransferWrite>(context);
+    patterns.add<VectorizeLoad>(context);
+    patterns.add<VectorizeStore>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
