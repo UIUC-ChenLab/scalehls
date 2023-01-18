@@ -101,34 +101,20 @@ struct CreateAxiInterface : public CreateAxiInterfaceBase<CreateAxiInterface> {
       llvm_unreachable("invalid buffer type");
     };
 
-    // We always bundle buffers with the same element type into a single AXI
-    // port. Therefore, we first construct a "bundleMap" to hold the mapping
-    // from a bundle type to the AXI bundle operation.
-    builder.setInsertionPointToStart(&func.front());
-    auto insertPoint = builder.saveInsertionPoint();
-    llvm::SmallDenseMap<Type, AxiBundleOp> bundleMap;
-    unsigned bundleIndex = 0;
-    for (auto buffer : buffers) {
-      auto bundleType = getBundleType(buffer);
-
-      if (!bundleMap.count(bundleType)) {
-        auto bundle = builder.create<AxiBundleOp>(
-            loc, bundleType, "axi_" + std::to_string(bundleIndex++));
-        bundleMap[bundleType] = bundle;
-        builder.setInsertionPointAfter(bundle);
-        insertPoint = builder.saveInsertionPoint();
-      }
-    }
-
     // Convert collected buffers to AXI ports and collect them in "funcPorts".
     // Note that we create a separate AXI port for each buffer use to avoid
     // potential conflicts.
+    unsigned bundleIndex = 0;
     for (auto buffer : buffers)
       for (auto &use : llvm::make_early_inc_range(buffer.getUses())) {
-        builder.restoreInsertionPoint(insertPoint);
+        builder.setInsertionPointToStart(&func.front());
+        auto bundleType = getBundleType(buffer);
+        auto bundle = builder.create<AxiBundleOp>(
+            loc, bundleType, "axi_" + std::to_string(bundleIndex++));
+
         auto axiType = AxiType::get(context, buffer.getType());
         auto axiPort = builder.create<AxiPortOp>(
-            loc, buffer.getType(), bundleMap.lookup(getBundleType(buffer)),
+            loc, buffer.getType(), bundle,
             func.front().addArgument(axiType, buffer.getLoc()));
         use.set(axiPort);
 
