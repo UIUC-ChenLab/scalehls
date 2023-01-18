@@ -266,6 +266,7 @@ public:
   void emitVectorInit(hls::VectorInitOp op);
   void emitInsert(vector::InsertOp op);
   void emitExtract(vector::ExtractOp op);
+  void emitExtractElement(vector::ExtractElementOp op);
   void emitTransferRead(vector::TransferReadOp op);
   void emitTransferWrite(vector::TransferWriteOp op);
   void emitBroadcast(vector::BroadcastOp);
@@ -460,6 +461,9 @@ public:
   }
   bool visitOp(vector::InsertOp op) { return emitter.emitInsert(op), true; };
   bool visitOp(vector::ExtractOp op) { return emitter.emitExtract(op), true; };
+  bool visitOp(vector::ExtractElementOp op) {
+    return emitter.emitExtractElement(op), true;
+  };
   bool visitOp(vector::TransferReadOp op) {
     return emitter.emitTransferRead(op), true;
   };
@@ -1313,6 +1317,17 @@ void ModuleEmitter::emitExtract(vector::ExtractOp op) {
   os << " = ";
   emitValue(op.getVector());
   os << "[" << op.getPosition()[0].cast<IntegerAttr>().getInt() << "];";
+  emitInfoAndNewLine(op);
+}
+
+void ModuleEmitter::emitExtractElement(vector::ExtractElementOp op) {
+  indent();
+  emitValue(op.getResult());
+  os << " = ";
+  emitValue(op.getVector());
+  os << "[";
+  emitValue(op.getPosition());
+  os << "];";
   emitInfoAndNewLine(op);
 }
 

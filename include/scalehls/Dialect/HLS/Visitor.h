@@ -41,8 +41,9 @@ public:
             AffineVectorLoadOp, AffineVectorStoreOp, AffineYieldOp,
 
             // Vector statements.
-            vector::InsertOp, vector::ExtractOp, vector::TransferReadOp,
-            vector::TransferWriteOp, vector::BroadcastOp,
+            vector::InsertOp, vector::ExtractOp, vector::ExtractElementOp,
+            vector::TransferReadOp, vector::TransferWriteOp,
+            vector::BroadcastOp,
 
             // Memref statements.
             memref::AllocOp, memref::AllocaOp, memref::LoadOp, memref::StoreOp,
@@ -137,6 +138,7 @@ public:
   // Vector statements.
   HANDLE(vector::InsertOp);
   HANDLE(vector::ExtractOp);
+  HANDLE(vector::ExtractElementOp);
   HANDLE(vector::TransferReadOp);
   HANDLE(vector::TransferWriteOp);
   HANDLE(vector::BroadcastOp);
