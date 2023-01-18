@@ -58,16 +58,20 @@ struct ForwardFuseOp : public OpRewritePattern<OpType> {
     auto DT = DominanceInfo();
 
     // Find all task users.
-    SmallVector<TaskOp, 4> taskUsers;
+    SmallVector<Operation *, 4> taskUsers;
     for (auto user : op->getUsers())
       if (auto task = dyn_cast<TaskOp>(user->getParentOp()))
         taskUsers.push_back(task);
+      else
+        taskUsers.push_back(user);
     if (taskUsers.empty())
       return failure();
 
     // We always select the dominating task as the target to fuse.
-    // FIXME: Check there's no intervening ops in between.
     llvm::sort(taskUsers, [&](auto a, auto b) { return DT.dominates(a, b); });
+    if (!isa<TaskOp>(taskUsers.front()))
+      return failure();
+
     fuseOpsIntoTask({op, taskUsers.front()}, rewriter, /*insertToLastOp=*/true);
     return success();
   }
@@ -87,7 +91,7 @@ struct BackwardFuseOp : public OpRewritePattern<OpType> {
     auto DT = DominanceInfo();
 
     // Find all task defining ops.
-    SmallVector<TaskOp, 4> taskDefOps;
+    SmallVector<Operation *, 4> taskDefOps;
     for (auto operand : op->getOperands())
       if (auto task = operand.template getDefiningOp<TaskOp>())
         taskDefOps.push_back(task);
@@ -95,9 +99,18 @@ struct BackwardFuseOp : public OpRewritePattern<OpType> {
       return failure();
 
     // We always select the dominated task as the target to fuse.
-    // FIXME: Check there's no intervening ops in between.
     llvm::sort(taskDefOps, [&](auto a, auto b) { return DT.dominates(a, b); });
-    fuseOpsIntoTask({taskDefOps.back(), op}, rewriter, /*insertToLastOp=*/true);
+    auto targetTask = taskDefOps.back();
+
+    // We need the current op to be the first user of the targeted task.
+    SmallVector<Operation *, 4> targetTaskUsers(targetTask->user_begin(),
+                                                targetTask->user_end());
+    llvm::sort(targetTaskUsers,
+               [&](auto a, auto b) { return DT.dominates(a, b); });
+    if (targetTaskUsers.front() != op)
+      return failure();
+
+    fuseOpsIntoTask({targetTask, op}, rewriter, /*insertToLastOp=*/true);
     return success();
   }
 };
