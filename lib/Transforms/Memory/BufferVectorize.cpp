@@ -353,24 +353,60 @@ struct VectorizeLoad : public OpRewritePattern<AffineLoadOp> {
     auto type = load.getMemRefType();
     if (auto vectorizedType = getVectorizedType(type)) {
       auto layout = type.getLayout().cast<TileLayoutAttr>();
-      rewriter.setInsertionPoint(load);
+      auto numDims = load.getAffineMap().getNumDims();
+      auto numSyms = load.getAffineMap().getNumSymbols();
 
-      // Calculate the new indices of affine load.
+      // Get the expressions for calculating the indices of vector load.
       SmallVector<AffineExpr, 4> vectorExprs;
       for (auto [expr, vectorSize] :
            llvm::zip(load.getAffineMap().getResults(), layout.getVectorShape()))
         vectorExprs.push_back(expr.floorDiv(vectorSize));
-      auto vectorMap = AffineMap::get(load.getAffineMap().getNumDims(),
-                                      load.getAffineMap().getNumSymbols(),
-                                      vectorExprs, rewriter.getContext());
 
-      // We need to extract the scalar from the loaded vector's first element.
+      // Get the expressions for calculating the offsets of the vector extract.
+      AffineExpr offsetExpr = rewriter.getAffineConstantExpr(0);
+      unsigned accumSize = 1;
+      for (auto [expr, vectorSize] : llvm::reverse(llvm::zip(
+               load.getAffineMap().getResults(), layout.getVectorShape()))) {
+        SmallVector<int64_t> flatExpr;
+        if (failed(getFlattenedAffineExpr(expr, numDims, numSyms, &flatExpr)))
+          return failure();
+        auto offset = rewriter.getAffineConstantExpr(0);
+
+        for (auto coeff : llvm::enumerate(llvm::make_range(
+                 flatExpr.begin(), flatExpr.begin() + numDims)))
+          if (coeff.value() % vectorSize != 0)
+            offset = offset + rewriter.getAffineDimExpr(coeff.index()) *
+                                  coeff.value() % vectorSize;
+
+        for (auto coeff : llvm::enumerate(
+                 llvm::make_range(flatExpr.begin() + numDims,
+                                  flatExpr.begin() + numDims + numSyms)))
+          if (coeff.value() % vectorSize != 0)
+            offset = offset + rewriter.getAffineSymbolExpr(coeff.index()) *
+                                  coeff.value() % vectorSize;
+
+        offsetExpr = offsetExpr + offset * accumSize;
+        accumSize *= vectorSize;
+      }
+
+      // Generate a vectorized buffer and a vector load.
+      rewriter.setInsertionPoint(load);
+      auto vectorMap =
+          AffineMap::get(numDims, numSyms, vectorExprs, rewriter.getContext());
       auto vectorBuffer = rewriter.create<BufferVectorizeOp>(
           load.getLoc(), vectorizedType, load.getMemRef());
       auto vectorLoad = rewriter.create<AffineLoadOp>(
           load.getLoc(), vectorBuffer, vectorMap, load.getMapOperands());
-      rewriter.replaceOpWithNewOp<vector::ExtractOp>(
-          load, vectorLoad, rewriter.getI64ArrayAttr({0}));
+
+      // Extract the original output from the loaded vector.
+      auto offsetMap =
+          AffineMap::get(numDims, numSyms, offsetExpr, rewriter.getContext());
+
+      auto offsetApply = rewriter.create<AffineApplyOp>(
+          load.getLoc(), offsetMap, load.getMapOperands());
+
+      rewriter.replaceOpWithNewOp<vector::ExtractElementOp>(load, vectorLoad,
+                                                            offsetApply);
       return success();
     }
     return failure();
