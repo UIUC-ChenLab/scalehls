@@ -46,6 +46,33 @@ struct OutlineRootOp : public OpRewritePattern<OpType> {
 } // namespace
 
 namespace {
+struct OutlineYieldOp : public OpRewritePattern<YieldOp> {
+  using OpRewritePattern<YieldOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(YieldOp op,
+                                PatternRewriter &rewriter) const override {
+    if (op->template getParentOfType<TaskOp>())
+      return failure();
+    if (llvm::all_of(op->getOperands(), [](auto operand) {
+          return operand.template getDefiningOp<TaskOp>();
+        }))
+      return failure();
+
+    rewriter.setInsertionPoint(op);
+    auto task = rewriter.create<TaskOp>(op->getLoc(), op->getOperandTypes());
+    auto taskBlock = rewriter.createBlock(&task.getBody());
+    rewriter.setInsertionPointToStart(taskBlock);
+    rewriter.clone(*op);
+
+    for (auto [operand, result] :
+         llvm::zip(op->getOpOperands(), task.getResults()))
+      operand.set(result);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 /// This pattern will forward fuse ops with the specified type.
 template <typename OpType>
 struct ForwardFuseOp : public OpRewritePattern<OpType> {
@@ -106,7 +133,7 @@ struct BackwardFuseOp : public OpRewritePattern<OpType> {
     SmallVector<Operation *, 4> targetTaskUsers(targetTask->user_begin(),
                                                 targetTask->user_end());
     llvm::sort(targetTaskUsers,
-               [&](auto a, auto b) { return DT.dominates(a, b); });
+               [&](auto a, auto b) { return crossRegionDominates(a, b); });
     if (targetTaskUsers.front() != op)
       return failure();
 
@@ -209,6 +236,7 @@ struct CreateDataflowFromLinalg
 
     patterns.clear();
     patterns.add<OutlineRootOp<linalg::GenericOp>>(context);
+    patterns.add<OutlineYieldOp>(context);
     populateForwardBackwardFusePatterns(patterns);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
