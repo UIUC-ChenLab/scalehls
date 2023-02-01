@@ -1678,6 +1678,8 @@ public:
               Value newMemRef = createPrivateMemRef(
                   dstAffineForOp, storesForMemref[0], bestDstLoopDepth,
                   fastMemorySpace, localBufSizeThreshold);
+              if (newMemRef == memrefToStoresPair.first)
+                continue;
               if (newMemRef.getDefiningOp()) {
                 // Create new node in dependence graph for 'newMemRef' alloc op.
                 unsigned newMemRefNodeId =
