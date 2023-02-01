@@ -206,6 +206,20 @@ populateForwardBackwardFusePatterns(mlir::RewritePatternSet &patterns) {
   patterns.add<ForwardFuseOp<tensor::ExtractSliceOp>>(context);
 }
 
+template <typename OpType>
+static void localizeOpToUses(func::FuncOp func, OpBuilder &builder) {
+  SmallVector<Operation *, 16> ops;
+  func.walk([&](OpType op) { ops.push_back(op); });
+  for (auto op : ops) {
+    for (auto &use : llvm::make_early_inc_range(op->getUses())) {
+      builder.setInsertionPoint(use.getOwner());
+      auto cloneOp = cast<OpType>(builder.clone(*op));
+      use.set(cloneOp->getResult(0));
+    }
+    op->erase();
+  }
+}
+
 namespace {
 struct CreateDataflowFromLinalg
     : public CreateDataflowFromLinalgBase<CreateDataflowFromLinalg> {
@@ -216,17 +230,11 @@ struct CreateDataflowFromLinalg
 
     dispatchBlock(&func.front());
 
-    // Collect all empty tensors in the function and localize them to uses.
-    SmallVector<Operation *, 16> empties;
-    func.walk([&](tensor::EmptyOp op) { empties.push_back(op); });
-    for (auto empty : empties) {
-      for (auto &use : llvm::make_early_inc_range(empty->getUses())) {
-        builder.setInsertionPoint(use.getOwner());
-        auto cloneEmpty = cast<tensor::EmptyOp>(builder.clone(*empty));
-        use.set(cloneEmpty.getResult());
-      }
-      empty->erase();
-    }
+    // Collect all fill tensor ops in the function and localize them to uses.
+    localizeOpToUses<linalg::FillOp>(func, builder);
+    localizeOpToUses<tensor::EmptyOp>(func, builder);
+    localizeOpToUses<tensor::ExpandShapeOp>(func, builder);
+    localizeOpToUses<tensor::CollapseShapeOp>(func, builder);
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<OutlineRootInterface<linalg::ConvolutionOpInterface>>(context);
