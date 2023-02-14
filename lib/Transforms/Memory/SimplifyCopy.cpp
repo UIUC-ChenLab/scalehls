@@ -82,6 +82,16 @@ struct SimplifyBufferCopy : public OpRewritePattern<memref::CopyOp> {
 
     LLVM_DEBUG(llvm::dbgs() << "At least one buffer is replaceable\n";);
 
+    // We don't allow the target to be viewed again.
+    // if (llvm::any_of(
+    //         target.getUsers(),
+    //         [](Operation *user) { return isa<ViewLikeOpInterface>(user); })
+    //         &&
+    //     llvm::any_of(source.getUsers(), [](Operation *user) {
+    //       return isa<ViewLikeOpInterface>(user);
+    //     }))
+    //   return failure();
+
     // Collect all users of the source and target buffer.
     SmallVector<Operation *> sourceUsers;
     SmallVector<Operation *> targetUsers;

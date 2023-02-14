@@ -143,6 +143,63 @@ struct MulIRaisePattern : public OpRewritePattern<arith::MulIOp> {
 };
 } // namespace
 
+static AffineMap removeModFromMap(AffineMap map, OperandRange indices) {
+  SmallVector<AffineExpr> newExprs;
+  for (auto expr : map.getResults()) {
+    if (auto mod = expr.dyn_cast<AffineBinaryOpExpr>())
+      if (mod.getKind() == AffineExprKind::Mod)
+        if (auto lhs = mod.getLHS().dyn_cast<AffineDimExpr>())
+          if (auto rhs = mod.getRHS().dyn_cast<AffineConstantExpr>())
+            if (auto loop = getForInductionVarOwner(indices[lhs.getPosition()]))
+              if (loop.hasConstantBounds() &&
+                  loop.getConstantLowerBound() == 0 &&
+                  loop.getConstantUpperBound() == rhs.getValue()) {
+                newExprs.push_back(lhs);
+                continue;
+              }
+    newExprs.push_back(expr);
+  }
+  return AffineMap::get(map.getNumDims(), map.getNumSymbols(), newExprs,
+                        map.getContext());
+}
+
+namespace {
+struct AffineReadModRemovePattern
+    : public OpInterfaceRewritePattern<mlir::AffineReadOpInterface> {
+  using OpInterfaceRewritePattern<
+      mlir::AffineReadOpInterface>::OpInterfaceRewritePattern;
+
+  LogicalResult matchAndRewrite(mlir::AffineReadOpInterface read,
+                                PatternRewriter &rewriter) const override {
+    auto newMap = removeModFromMap(read.getAffineMap(), read.getMapOperands());
+    if (newMap != read.getAffineMap()) {
+      read->setAttr("map", AffineMapAttr::get(newMap));
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
+struct AffineWriteModRemovePattern
+    : public OpInterfaceRewritePattern<mlir::AffineWriteOpInterface> {
+  using OpInterfaceRewritePattern<
+      mlir::AffineWriteOpInterface>::OpInterfaceRewritePattern;
+
+  LogicalResult matchAndRewrite(mlir::AffineWriteOpInterface write,
+                                PatternRewriter &rewriter) const override {
+    auto newMap =
+        removeModFromMap(write.getAffineMap(), write.getMapOperands());
+    if (newMap != write.getAffineMap()) {
+      write->setAttr("map", AffineMapAttr::get(newMap));
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
 bool scalehls::applyFuncPreprocess(func::FuncOp func, bool isTopFunc) {
   // auto builder = OpBuilder(func);
   auto context = func.getContext();
@@ -184,6 +241,8 @@ bool scalehls::applyFuncPreprocess(func::FuncOp func, bool isTopFunc) {
   patterns.add<MulIRaisePattern>(context);
   patterns.add<AffineStoreUndefFoldPattern>(context);
   patterns.add<AllocaDemotePattern>(context);
+  patterns.add<AffineReadModRemovePattern>(context);
+  patterns.add<AffineWriteModRemovePattern>(context);
   scalehls::populateBufferConversionPatterns(patterns);
   vector::populateVectorTransferLoweringPatterns(patterns);
   (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
