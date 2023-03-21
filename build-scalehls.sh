@@ -27,7 +27,7 @@ git submodule sync
 git submodule update --init --recursive
 
 echo ""
-echo ">>> Unified MLIR, Clang, and ScaleHLS build..."
+echo ">>> Unified MLIR and ScaleHLS build..."
 echo ""
 
 # Got to the build directory.
@@ -38,8 +38,8 @@ cd build
 # Configure CMake.
 if [ ! -f "CMakeCache.txt" ]; then
   cmake -G "${CMAKE_GENERATOR}" \
-    ../polygeist/llvm-project/llvm \
-    -DLLVM_ENABLE_PROJECTS="mlir;clang" \
+    ../llvm-project/llvm \
+    -DLLVM_ENABLE_PROJECTS="mlir" \
     -DLLVM_EXTERNAL_PROJECTS="scalehls" \
     -DLLVM_EXTERNAL_SCALEHLS_SOURCE_DIR="${SCALEHLS_DIR}" \
     -DLLVM_TARGETS_TO_BUILD="host" \
@@ -58,37 +58,6 @@ if [ "${CMAKE_GENERATOR}" == "Ninja" ]; then
   ninja
 else 
   make -j "$(nproc)"
-fi
-
-echo ""
-echo ">>> Polygeist build..."
-echo ""
-
-# Got to the build directory.
-cd "${SCALEHLS_DIR}/polygeist"
-mkdir -p build
-cd build
-
-# Configure CMake.
-if [ ! -f "CMakeCache.txt" ]; then
-  cmake -G "${CMAKE_GENERATOR}" \
-    .. \
-    -DMLIR_DIR="${SCALEHLS_DIR}/build/lib/cmake/mlir" \
-    -DCLANG_DIR="${SCALEHLS_DIR}/build/lib/cmake/clang" \
-    -DLLVM_ENABLE_ASSERTIONS=ON \
-    -DCMAKE_BUILD_TYPE=DEBUG \
-    -DLLVM_USE_LINKER=lld \
-    -DCMAKE_C_COMPILER=clang \
-    -DCMAKE_CXX_COMPILER=clang++
-fi
-
-# Run building.
-if [ "${CMAKE_GENERATOR}" == "Ninja" ]; then
-  ninja
-  ninja check-cgeist
-else
-  make -j "$(nproc)"
-  make -j "$(nproc)" check-cgeist
 fi
 
 echo ""
