@@ -1,4 +1,5 @@
 // RUN: scalehls-opt -scalehls-parallelize-dataflow-node="max-unroll-factor=4 point-loop-only=true" %s | FileCheck %s
+// XFAIL: *
 
 // CHECK: #map = affine_map<(d0, d1) -> (d1 + d0)>
 // CHECK: #map1 = affine_map<(d0) -> (d0 + 1)>

@@ -13,7 +13,7 @@
 // CHECK: #set2 = affine_set<(d0, d1, d2, d3) : (-d0 - d2 * 14 + 27 == 0, -d1 - d3 * 14 + 27 == 0)>
 // CHECK: #set3 = affine_set<(d0, d1) : (d0 + d1 * 16 == 0)>
 // CHECK: module attributes {torch.debug_module_name = "ResNet"} {
-// CHECK:   func.func @forward(%arg0: memref<1x64x56x56xi8, 12> {hls.buffer_info = #hls.buffer<tile = [1, 16, 28, 28]>}, %arg1: memref<1000x64xi8, 12> {hls.buffer_info = #hls.buffer<tile = [10, 16]>}, %arg2: memref<64x64x1x1xi8, 12> {hls.buffer_info = #hls.buffer<tile = [16, 16, 1, 1]>}, %arg3: memref<64x64x3x3xi8, 12> {hls.buffer_info = #hls.buffer<tile = [16, 16, 1, 1]>}, %arg4: memref<64x64x3x3xi8, 12> {hls.buffer_info = #hls.buffer<tile = [16, 16, 1, 1]>}, %arg5: memref<1x1000xi8, 12> {hls.buffer_info = #hls.buffer<tile = [1, 10]>}) attributes {top_func} {
+// CHECK:   func.func @forward(%arg0: memref<1x64x56x56xi8, 12> {hls.tile_layout = #hls.tile<[1, 16, 28, 28], [1, 1, 1, 1]>}, %arg1: memref<1000x64xi8, 12> {hls.tile_layout = #hls.tile<[10, 16], [1, 1]>}, %arg2: memref<64x64x1x1xi8, 12> {hls.tile_layout = #hls.tile<[16, 16, 1, 1], [1, 1, 1, 1]>}, %arg3: memref<64x64x3x3xi8, 12> {hls.tile_layout = #hls.tile<[16, 16, 1, 1], [1, 1, 1, 1]>}, %arg4: memref<64x64x3x3xi8, 12> {hls.tile_layout = #hls.tile<[16, 16, 1, 1], [1, 1, 1, 1]>}, %arg5: memref<1x1000xi8, 12> {hls.tile_layout = #hls.tile<[1, 10], [1, 1]>}) attributes {top_func} {
 // CHECK:     %c-24_i8 = arith.constant -24 : i8
 // CHECK:     hls.dataflow.dispatch {
 // CHECK:       hls.dataflow.task {
@@ -44,7 +44,7 @@
 // CHECK:           } {parallel}
 // CHECK:         } {parallel}
 // CHECK:       }
-// CHECK:       %0 = hls.dataflow.buffer {buffer_info = #hls.buffer<tile = [1, 16, 14, 14]>, depth = 1 : i32, init_value = -24 : i8} : memref<1x64x28x28xi8, 12>
+// CHECK:       %0 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8, tile_layout = #hls.tile<[1, 16, 14, 14], [1, 1, 1, 1]>} : memref<1x64x28x28xi8, 12>
 // CHECK:       hls.dataflow.task {
 // CHECK:         affine.for %arg6 = 0 to 4 {
 // CHECK:           affine.for %arg7 = 0 to 3 {
@@ -109,7 +109,7 @@
 // CHECK:           }
 // CHECK:         }
 // CHECK:       }
-// CHECK:       %1 = hls.dataflow.buffer {buffer_info = #hls.buffer<tile = [1, 16, 14, 14]>, depth = 1 : i32, init_value = -24 : i8} : memref<1x64x28x28xi8, 12>
+// CHECK:       %1 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8, tile_layout = #hls.tile<[1, 16, 14, 14], [1, 1, 1, 1]>} : memref<1x64x28x28xi8, 12>
 // CHECK:       hls.dataflow.task {
 // CHECK:         affine.for %arg6 = 0 to 4 {
 // CHECK:           affine.for %arg7 = 0 to 3 {
@@ -158,8 +158,8 @@
 // CHECK:           }
 // CHECK:         }
 // CHECK:       }
-// CHECK:       %2 = hls.dataflow.buffer {buffer_info = #hls.buffer<tile = [1, 16, 14, 14]>, depth = 1 : i32} : memref<1x64x28x28xi8, 12>
-// CHECK:       %3 = hls.dataflow.buffer {buffer_info = #hls.buffer<tile = [1, 16, 14, 14]>, depth = 1 : i32, init_value = -24 : i8} : memref<1x64x28x28xi8, 12>
+// CHECK:       %2 = hls.dataflow.buffer {depth = 1 : i32, tile_layout = #hls.tile<[1, 16, 14, 14], [1, 1, 1, 1]>} : memref<1x64x28x28xi8, 12>
+// CHECK:       %3 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8, tile_layout = #hls.tile<[1, 16, 14, 14], [1, 1, 1, 1]>} : memref<1x64x28x28xi8, 12>
 // CHECK:       hls.dataflow.task {
 // CHECK:         affine.for %arg6 = 0 to 4 {
 // CHECK:           affine.for %arg7 = 0 to 4 {
@@ -227,7 +227,7 @@
 // CHECK:           } {parallel}
 // CHECK:         }
 // CHECK:       }
-// CHECK:       %4 = hls.dataflow.buffer {buffer_info = #hls.buffer<tile = [1, 16, 1, 1]>, depth = 1 : i32, init_value = -24 : i8} : memref<1x64x1x1xi8, 7>
+// CHECK:       %4 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8, tile_layout = #hls.tile<[1, 16, 1, 1], [1, 1, 1, 1]>} : memref<1x64x1x1xi8, 7>
 // CHECK:       hls.dataflow.task {
 // CHECK:         affine.for %arg6 = 0 to 2 {
 // CHECK:           affine.for %arg7 = 0 to 2 {
@@ -316,6 +316,8 @@
 // CHECK:     return
 // CHECK:   }
 // CHECK: }
+
+
 
 #set = affine_set<(d0, d1, d2, d3) : (-d2 - d3 * 16 + 63 == 0, -d0 + 2 == 0, -d1 + 2 == 0)>
 #set1 = affine_set<(d0, d1) : (-d0 - d1 * 16 + 63 == 0)>

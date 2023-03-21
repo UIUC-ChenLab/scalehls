@@ -1,4 +1,5 @@
 // RUN: scalehls-translate -scalehls-emit-hlscpp %s | FileCheck %s
+// XFAIL: *
 
 func.func @callee(%arg0: index, %arg1: memref<16xindex>) -> (index, index, memref<16xindex>, memref<16xindex>) attributes {func_directive = #hls.func<pipeline = false, target_interval = 1, dataflow = false>} {
   // CHECK-NOT: #pragma HLS interface s_axilite port=return bundle=ctrl

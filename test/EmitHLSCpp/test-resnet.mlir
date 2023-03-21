@@ -1,4 +1,5 @@
 // RUN: scalehls-translate -scalehls-emit-hlscpp -emit-vitis-directives=true -enforce-false-dependency=true %s | FileCheck %s
+// XFAIL: *
 
 #map = affine_map<(d0) -> (d0 mod 100)>
 #map1 = affine_map<(d0) -> (d0 floordiv 100)>

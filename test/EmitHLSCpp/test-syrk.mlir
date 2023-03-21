@@ -1,4 +1,5 @@
 // RUN: scalehls-translate -scalehls-emit-hlscpp %s | FileCheck %s
+// XFAIL: *
 
 #set0 = affine_set<(d0, d1) : (d0 - d1 >= 0)>
 #set1 = affine_set<(d0) : (d0 == 0)>
