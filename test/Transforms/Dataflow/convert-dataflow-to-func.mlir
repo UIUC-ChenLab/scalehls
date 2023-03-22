@@ -13,14 +13,14 @@
 // CHECK: #set3 = affine_set<(d0)[s0] : (-d0 - s0 * 16 + 63 == 0)>
 // CHECK: #set4 = affine_set<(d0, d1, d2, d3) : (-d2 - d3 * 16 + 63 == 0, -d0 + 2 == 0, -d1 + 2 == 0)>
 // CHECK: module attributes {torch.debug_module_name = "ResNet"} {
-// CHECK:   func.func @forward_node1(%arg0: memref<10xi8, #hls.mem<bram_t2p>>, %arg1: memref<1000xi8, #hls.mem<dram>>, %arg2: index) attributes {inline} {
+// CHECK:   func.func @forward_node0(%arg0: memref<10xi8, #hls.mem<bram_t2p>>, %arg1: memref<1000xi8, #hls.mem<dram>>, %arg2: index) attributes {inline} {
 // CHECK:     affine.for %arg3 = 0 to 10 {
 // CHECK:       %0 = affine.load %arg0[%arg3] : memref<10xi8, #hls.mem<bram_t2p>>
 // CHECK:       affine.store %0, %arg1[%arg3 + symbol(%arg2) * 10] : memref<1000xi8, #hls.mem<dram>>
 // CHECK:     } {parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node2(%arg0: memref<64xi8, #hls.mem<bram_t2p>>, %arg1: memref<10x16xi8, #hls.mem<bram_t2p>>, %arg2: memref<10xi8, #hls.mem<bram_t2p>>, %arg3: memref<10xi8, #hls.mem<bram_t2p>>, %arg4: index) attributes {inline} {
+// CHECK:   func.func @forward_node1(%arg0: memref<64xi8, #hls.mem<bram_t2p>>, %arg1: memref<10x16xi8, #hls.mem<bram_t2p>>, %arg2: memref<10xi8, #hls.mem<bram_t2p>>, %arg3: memref<10xi8, #hls.mem<bram_t2p>>, %arg4: index) attributes {inline} {
 // CHECK:     %c-24_i8 = arith.constant -24 : i8
 // CHECK:     affine.for %arg5 = 0 to 16 {
 // CHECK:       affine.for %arg6 = 0 to 10 {
@@ -37,7 +37,7 @@
 // CHECK:     } {point}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node3(%arg0: memref<1000x64xi8, #hls.mem<dram>>, %arg1: memref<10x16xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index) attributes {inline} {
+// CHECK:   func.func @forward_node2(%arg0: memref<1000x64xi8, #hls.mem<dram>>, %arg1: memref<10x16xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index) attributes {inline} {
 // CHECK:     affine.for %arg4 = 0 to 10 {
 // CHECK:       affine.for %arg5 = 0 to 16 {
 // CHECK:         %0 = affine.load %arg0[%arg4 + symbol(%arg2) * 10, %arg5 + symbol(%arg3) * 16] : memref<1000x64xi8, #hls.mem<dram>>
@@ -46,14 +46,14 @@
 // CHECK:     } {parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node4(%arg0: memref<1000xi8, #hls.mem<dram>>, %arg1: memref<10xi8, #hls.mem<bram_t2p>>, %arg2: index) attributes {inline} {
+// CHECK:   func.func @forward_node3(%arg0: memref<1000xi8, #hls.mem<dram>>, %arg1: memref<10xi8, #hls.mem<bram_t2p>>, %arg2: index) attributes {inline} {
 // CHECK:     affine.for %arg3 = 0 to 10 {
 // CHECK:       %0 = affine.load %arg0[%arg3 + symbol(%arg2) * 10] : memref<1000xi8, #hls.mem<dram>>
 // CHECK:       affine.store %0, %arg1[%arg3] : memref<10xi8, #hls.mem<bram_t2p>>
 // CHECK:     } {parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node0(%arg0: memref<64xi8, #hls.mem<bram_t2p>>, %arg1: memref<1000x64xi8, #hls.mem<dram>>, %arg2: memref<1000xi8, #hls.mem<dram>>, %arg3: memref<1000xi8, #hls.mem<dram>>) {
+// CHECK:   func.func @forward_node4(%arg0: memref<64xi8, #hls.mem<bram_t2p>>, %arg1: memref<1000x64xi8, #hls.mem<dram>>, %arg2: memref<1000xi8, #hls.mem<dram>>, %arg3: memref<1000xi8, #hls.mem<dram>>) attributes {inline} {
 // CHECK:     %0 = affine.apply #map()
 // CHECK:     %1 = affine.apply #map1()
 // CHECK:     %2 = affine.apply #map2(%0)[%1]
@@ -62,15 +62,15 @@
 // CHECK:       %4 = affine.apply #map4(%arg4)[%1]
 // CHECK:       %5 = hls.dataflow.buffer {depth = 1 : i32} : memref<10x16xi8, #hls.mem<bram_t2p>>
 // CHECK:       %6 = hls.dataflow.buffer {depth = 1 : i32} : memref<10xi8, #hls.mem<bram_t2p>>
-// CHECK:       func.call @forward_node4(%arg2, %6, %3) : (memref<1000xi8, #hls.mem<dram>>, memref<10xi8, #hls.mem<bram_t2p>>, index) -> ()
-// CHECK:       func.call @forward_node3(%arg1, %5, %3, %4) : (memref<1000x64xi8, #hls.mem<dram>>, memref<10x16xi8, #hls.mem<bram_t2p>>, index, index) -> ()
+// CHECK:       func.call @forward_node3(%arg2, %6, %3) : (memref<1000xi8, #hls.mem<dram>>, memref<10xi8, #hls.mem<bram_t2p>>, index) -> ()
+// CHECK:       func.call @forward_node2(%arg1, %5, %3, %4) : (memref<1000x64xi8, #hls.mem<dram>>, memref<10x16xi8, #hls.mem<bram_t2p>>, index, index) -> ()
 // CHECK:       %7 = hls.dataflow.buffer {depth = 1 : i32} : memref<10xi8, #hls.mem<bram_t2p>>
-// CHECK:       func.call @forward_node2(%arg0, %5, %6, %7, %4) : (memref<64xi8, #hls.mem<bram_t2p>>, memref<10x16xi8, #hls.mem<bram_t2p>>, memref<10xi8, #hls.mem<bram_t2p>>, memref<10xi8, #hls.mem<bram_t2p>>, index) -> ()
-// CHECK:       func.call @forward_node1(%7, %arg3, %3) : (memref<10xi8, #hls.mem<bram_t2p>>, memref<1000xi8, #hls.mem<dram>>, index) -> ()
+// CHECK:       func.call @forward_node1(%arg0, %5, %6, %7, %4) : (memref<64xi8, #hls.mem<bram_t2p>>, memref<10x16xi8, #hls.mem<bram_t2p>>, memref<10xi8, #hls.mem<bram_t2p>>, memref<10xi8, #hls.mem<bram_t2p>>, index) -> ()
+// CHECK:       func.call @forward_node0(%7, %arg3, %3) : (memref<10xi8, #hls.mem<bram_t2p>>, memref<1000xi8, #hls.mem<dram>>, index) -> ()
 // CHECK:     } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = true, flatten = false>}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node6(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<64xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+// CHECK:   func.func @forward_node5(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<64xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
 // CHECK:     %c-24_i8 = arith.constant -24 : i8
 // CHECK:     affine.for %arg5 = 0 to 14 {
 // CHECK:       affine.for %arg6 = 0 to 14 {
@@ -86,7 +86,7 @@
 // CHECK:     } {point}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node7(%arg0: memref<64x28x28xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+// CHECK:   func.func @forward_node6(%arg0: memref<64x28x28xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
 // CHECK:     affine.for %arg5 = 0 to 16 {
 // CHECK:       affine.for %arg6 = 0 to 14 {
 // CHECK:         affine.for %arg7 = 0 to 14 {
@@ -97,7 +97,7 @@
 // CHECK:     } {parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node5(%arg0: !hls.stream<i1, 1>, %arg1: memref<64x28x28xi8, #hls.mem<dram>>, %arg2: memref<64xi8, #hls.mem<bram_t2p>>) {
+// CHECK:   func.func @forward_node7(%arg0: !hls.stream<i1, 1>, %arg1: memref<64x28x28xi8, #hls.mem<dram>>, %arg2: memref<64xi8, #hls.mem<bram_t2p>>) attributes {inline} {
 // CHECK:     hls.dataflow.stream_read %arg0 : (!hls.stream<i1, 1>) -> ()
 // CHECK:     %0 = affine.apply #map5()
 // CHECK:     %1 = affine.apply #map5()
@@ -110,9 +110,20 @@
 // CHECK:       %7 = affine.apply #map3(%6)[%1]
 // CHECK:       %8 = affine.apply #map4(%6)[%1]
 // CHECK:       %9 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
-// CHECK:       func.call @forward_node7(%arg1, %9, %5, %8, %7) : (memref<64x28x28xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
-// CHECK:       func.call @forward_node6(%9, %arg2, %5, %8, %7) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<64xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
+// CHECK:       func.call @forward_node6(%arg1, %9, %5, %8, %7) : (memref<64x28x28xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
+// CHECK:       func.call @forward_node5(%9, %arg2, %5, %8, %7) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<64xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
 // CHECK:     } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = true, flatten = false>}
+// CHECK:     return
+// CHECK:   }
+// CHECK:   func.func @forward_node8(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<64x28x28xi8, #hls.mem<dram>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+// CHECK:     affine.for %arg5 = 0 to 16 {
+// CHECK:       affine.for %arg6 = 0 to 14 {
+// CHECK:         affine.for %arg7 = 0 to 14 {
+// CHECK:           %0 = affine.load %arg0[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+// CHECK:           affine.store %0, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.mem<dram>>
+// CHECK:         } {parallel}
+// CHECK:       } {parallel}
+// CHECK:     } {parallel}
 // CHECK:     return
 // CHECK:   }
 // CHECK:   func.func @forward_node9(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<64x28x28xi8, #hls.mem<dram>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
@@ -126,18 +137,7 @@
 // CHECK:     } {parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node10(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<64x28x28xi8, #hls.mem<dram>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
-// CHECK:     affine.for %arg5 = 0 to 16 {
-// CHECK:       affine.for %arg6 = 0 to 14 {
-// CHECK:         affine.for %arg7 = 0 to 14 {
-// CHECK:           %0 = affine.load %arg0[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
-// CHECK:           affine.store %0, %arg1[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.mem<dram>>
-// CHECK:         } {parallel}
-// CHECK:       } {parallel}
-// CHECK:     } {parallel}
-// CHECK:     return
-// CHECK:   }
-// CHECK:   func.func @forward_node11(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg3: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg4: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg5: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg6: index) attributes {inline} {
+// CHECK:   func.func @forward_node10(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg3: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg4: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg5: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg6: index) attributes {inline} {
 // CHECK:     %c-24_i8 = arith.constant -24 : i8
 // CHECK:     affine.for %arg7 = 0 to 16 {
 // CHECK:       affine.for %arg8 = 0 to 16 {
@@ -164,6 +164,17 @@
 // CHECK:     } {point}
 // CHECK:     return
 // CHECK:   }
+// CHECK:   func.func @forward_node11(%arg0: memref<64x28x28xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+// CHECK:     affine.for %arg5 = 0 to 16 {
+// CHECK:       affine.for %arg6 = 0 to 14 {
+// CHECK:         affine.for %arg7 = 0 to 14 {
+// CHECK:           %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.mem<dram>>
+// CHECK:           affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
+// CHECK:         } {parallel}
+// CHECK:       } {parallel}
+// CHECK:     } {parallel}
+// CHECK:     return
+// CHECK:   }
 // CHECK:   func.func @forward_node12(%arg0: memref<64x28x28xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
 // CHECK:     affine.for %arg5 = 0 to 16 {
 // CHECK:       affine.for %arg6 = 0 to 14 {
@@ -175,18 +186,7 @@
 // CHECK:     } {parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node13(%arg0: memref<64x28x28xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
-// CHECK:     affine.for %arg5 = 0 to 16 {
-// CHECK:       affine.for %arg6 = 0 to 14 {
-// CHECK:         affine.for %arg7 = 0 to 14 {
-// CHECK:           %0 = affine.load %arg0[%arg5 + symbol(%arg2) * 16, %arg6 + symbol(%arg3) * 14, %arg7 + symbol(%arg4) * 14] : memref<64x28x28xi8, #hls.mem<dram>>
-// CHECK:           affine.store %0, %arg1[%arg5, %arg6, %arg7] : memref<16x14x14xi8, #hls.mem<bram_t2p>>
-// CHECK:         } {parallel}
-// CHECK:       } {parallel}
-// CHECK:     } {parallel}
-// CHECK:     return
-// CHECK:   }
-// CHECK:   func.func @forward_node14(%arg0: memref<64x64xi8, #hls.mem<dram>>, %arg1: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index) attributes {inline} {
+// CHECK:   func.func @forward_node13(%arg0: memref<64x64xi8, #hls.mem<dram>>, %arg1: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index) attributes {inline} {
 // CHECK:     affine.for %arg4 = 0 to 16 {
 // CHECK:       affine.for %arg5 = 0 to 16 {
 // CHECK:         %0 = affine.load %arg0[%arg4 + symbol(%arg2) * 16, %arg5 + symbol(%arg3) * 16] : memref<64x64xi8, #hls.mem<dram>>
@@ -195,7 +195,7 @@
 // CHECK:     } {parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node15(%arg0: memref<64x56x56xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+// CHECK:   func.func @forward_node14(%arg0: memref<64x56x56xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
 // CHECK:     affine.for %arg5 = 0 to 16 {
 // CHECK:       affine.for %arg6 = 0 to 14 {
 // CHECK:         affine.for %arg7 = 0 to 14 {
@@ -206,7 +206,7 @@
 // CHECK:     } {parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node8(%arg0: !hls.stream<i1, 3>, %arg1: memref<64x56x56xi8, #hls.mem<dram>>, %arg2: memref<64x64xi8, #hls.mem<dram>>, %arg3: !hls.stream<i1, 1>, %arg4: memref<64x28x28xi8, #hls.mem<dram>>, %arg5: memref<64x28x28xi8, #hls.mem<dram>>, %arg6: !hls.stream<i1, 1>, %arg7: memref<64x28x28xi8, #hls.mem<dram>>, %arg8: memref<64x28x28xi8, #hls.mem<dram>>) {
+// CHECK:   func.func @forward_node15(%arg0: !hls.stream<i1, 3>, %arg1: memref<64x56x56xi8, #hls.mem<dram>>, %arg2: memref<64x64xi8, #hls.mem<dram>>, %arg3: !hls.stream<i1, 1>, %arg4: memref<64x28x28xi8, #hls.mem<dram>>, %arg5: memref<64x28x28xi8, #hls.mem<dram>>, %arg6: !hls.stream<i1, 1>, %arg7: memref<64x28x28xi8, #hls.mem<dram>>, %arg8: memref<64x28x28xi8, #hls.mem<dram>>) attributes {inline} {
 // CHECK:     %true = arith.constant true
 // CHECK:     hls.dataflow.stream_read %arg3 : (!hls.stream<i1, 1>) -> ()
 // CHECK:     hls.dataflow.stream_read %arg0 : (!hls.stream<i1, 3>) -> ()
@@ -229,19 +229,19 @@
 // CHECK:       %15 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
 // CHECK:       %16 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x16xi8, #hls.mem<bram_t2p>>
 // CHECK:       %17 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
-// CHECK:       func.call @forward_node15(%arg1, %17, %12, %9, %7) : (memref<64x56x56xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
-// CHECK:       func.call @forward_node14(%arg2, %16, %11, %12) : (memref<64x64xi8, #hls.mem<dram>>, memref<16x16xi8, #hls.mem<bram_t2p>>, index, index) -> ()
-// CHECK:       func.call @forward_node13(%arg5, %15, %11, %9, %7) : (memref<64x28x28xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
-// CHECK:       func.call @forward_node12(%arg4, %14, %11, %9, %7) : (memref<64x28x28xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
+// CHECK:       func.call @forward_node14(%arg1, %17, %12, %9, %7) : (memref<64x56x56xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
+// CHECK:       func.call @forward_node13(%arg2, %16, %11, %12) : (memref<64x64xi8, #hls.mem<dram>>, memref<16x16xi8, #hls.mem<bram_t2p>>, index, index) -> ()
+// CHECK:       func.call @forward_node12(%arg5, %15, %11, %9, %7) : (memref<64x28x28xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
+// CHECK:       func.call @forward_node11(%arg4, %14, %11, %9, %7) : (memref<64x28x28xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
 // CHECK:       %18 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
-// CHECK:       func.call @forward_node11(%14, %17, %16, %15, %13, %18, %12) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x16xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index) -> ()
-// CHECK:       func.call @forward_node10(%18, %arg8, %11, %9, %7) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<64x28x28xi8, #hls.mem<dram>>, index, index, index) -> ()
-// CHECK:       func.call @forward_node9(%13, %arg7, %11, %9, %7) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<64x28x28xi8, #hls.mem<dram>>, index, index, index) -> ()
+// CHECK:       func.call @forward_node10(%14, %17, %16, %15, %13, %18, %12) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x16xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index) -> ()
+// CHECK:       func.call @forward_node9(%18, %arg8, %11, %9, %7) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<64x28x28xi8, #hls.mem<dram>>, index, index, index) -> ()
+// CHECK:       func.call @forward_node8(%13, %arg7, %11, %9, %7) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<64x28x28xi8, #hls.mem<dram>>, index, index, index) -> ()
 // CHECK:     } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = true, flatten = false>}
 // CHECK:     hls.dataflow.stream_write %arg6, %true : <i1, 1>, i1
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node17(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<64x28x28xi8, #hls.mem<dram>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+// CHECK:   func.func @forward_node16(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<64x28x28xi8, #hls.mem<dram>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
 // CHECK:     affine.for %arg5 = 0 to 16 {
 // CHECK:       affine.for %arg6 = 0 to 14 step 2 {
 // CHECK:         affine.for %arg7 = 0 to 14 step 2 {
@@ -258,7 +258,7 @@
 // CHECK:     } {parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node18(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg2: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg3: memref<16x14x14xi8, #hls.mem<bram_t2p>>) attributes {inline} {
+// CHECK:   func.func @forward_node17(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg2: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg3: memref<16x14x14xi8, #hls.mem<bram_t2p>>) attributes {inline} {
 // CHECK:     affine.for %arg4 = 0 to 16 {
 // CHECK:       affine.for %arg5 = 0 to 16 {
 // CHECK:         affine.for %arg6 = 0 to 14 step 2 {
@@ -298,7 +298,7 @@
 // CHECK:     } {point}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node19(%arg0: memref<64x28x28xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+// CHECK:   func.func @forward_node18(%arg0: memref<64x28x28xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
 // CHECK:     affine.for %arg5 = 0 to 16 {
 // CHECK:       affine.for %arg6 = 0 to 14 step 2 {
 // CHECK:         affine.for %arg7 = 0 to 14 step 2 {
@@ -315,7 +315,7 @@
 // CHECK:     } {parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node20(%arg0: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg1: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index, %arg5: index) attributes {inline} {
+// CHECK:   func.func @forward_node19(%arg0: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg1: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index, %arg5: index) attributes {inline} {
 // CHECK:     affine.for %arg6 = 0 to 16 {
 // CHECK:       affine.for %arg7 = 0 to 16 {
 // CHECK:         %0 = affine.load %arg0[%arg6 + symbol(%arg2) * 16, %arg7 + symbol(%arg3) * 16, symbol(%arg4), symbol(%arg5)] : memref<64x64x3x3xi8, #hls.mem<dram>>
@@ -324,7 +324,7 @@
 // CHECK:     } {parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node21(%arg0: memref<64x28x28xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index, %arg5: index, %arg6: index) attributes {inline} {
+// CHECK:   func.func @forward_node20(%arg0: memref<64x28x28xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index, %arg5: index, %arg6: index) attributes {inline} {
 // CHECK:     affine.for %arg7 = 0 to 16 {
 // CHECK:       affine.for %arg8 = 0 to 14 step 2 {
 // CHECK:         affine.for %arg9 = 0 to 14 step 2 {
@@ -341,7 +341,7 @@
 // CHECK:     } {parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node16(%arg0: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg1: !hls.stream<i1, 1>, %arg2: memref<64x28x28xi8, #hls.mem<dram>>, %arg3: memref<64x28x28xi8, #hls.mem<dram>>, %arg4: !hls.stream<i1, 1>, %arg5: memref<64x28x28xi8, #hls.mem<dram>>) {
+// CHECK:   func.func @forward_node21(%arg0: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg1: !hls.stream<i1, 1>, %arg2: memref<64x28x28xi8, #hls.mem<dram>>, %arg3: memref<64x28x28xi8, #hls.mem<dram>>, %arg4: !hls.stream<i1, 1>, %arg5: memref<64x28x28xi8, #hls.mem<dram>>) attributes {inline} {
 // CHECK:     %true = arith.constant true
 // CHECK:     hls.dataflow.stream_read %arg1 : (!hls.stream<i1, 1>) -> ()
 // CHECK:     %0 = affine.apply #map()
@@ -369,17 +369,17 @@
 // CHECK:       %21 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
 // CHECK:       %22 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x16xi8, #hls.mem<bram_t2p>>
 // CHECK:       %23 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
-// CHECK:       func.call @forward_node21(%arg2, %23, %20, %19, %13, %17, %11) : (memref<64x28x28xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index, index, index) -> ()
-// CHECK:       func.call @forward_node20(%arg0, %22, %15, %20, %19, %17) : (memref<64x64x3x3xi8, #hls.mem<dram>>, memref<16x16xi8, #hls.mem<bram_t2p>>, index, index, index, index) -> ()
-// CHECK:       func.call @forward_node19(%arg3, %21, %15, %13, %11) : (memref<64x28x28xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
+// CHECK:       func.call @forward_node20(%arg2, %23, %20, %19, %13, %17, %11) : (memref<64x28x28xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index, index, index) -> ()
+// CHECK:       func.call @forward_node19(%arg0, %22, %15, %20, %19, %17) : (memref<64x64x3x3xi8, #hls.mem<dram>>, memref<16x16xi8, #hls.mem<bram_t2p>>, index, index, index, index) -> ()
+// CHECK:       func.call @forward_node18(%arg3, %21, %15, %13, %11) : (memref<64x28x28xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
 // CHECK:       %24 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
-// CHECK:       func.call @forward_node18(%23, %22, %21, %24) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x16xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>) -> ()
-// CHECK:       func.call @forward_node17(%24, %arg5, %15, %13, %11) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<64x28x28xi8, #hls.mem<dram>>, index, index, index) -> ()
+// CHECK:       func.call @forward_node17(%23, %22, %21, %24) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x16xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>) -> ()
+// CHECK:       func.call @forward_node16(%24, %arg5, %15, %13, %11) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<64x28x28xi8, #hls.mem<dram>>, index, index, index) -> ()
 // CHECK:     } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = true, flatten = false>}
 // CHECK:     hls.dataflow.stream_write %arg4, %true : <i1, 1>, i1
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node23(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<64x28x28xi8, #hls.mem<dram>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+// CHECK:   func.func @forward_node22(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<64x28x28xi8, #hls.mem<dram>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
 // CHECK:     affine.for %arg5 = 0 to 16 {
 // CHECK:       affine.for %arg6 = 0 to 14 step 2 {
 // CHECK:         affine.for %arg7 = 0 to 14 step 2 {
@@ -396,7 +396,7 @@
 // CHECK:     } {parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node24(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg2: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg3: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg4: index, %arg5: index, %arg6: index) attributes {inline} {
+// CHECK:   func.func @forward_node23(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg2: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg3: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg4: index, %arg5: index, %arg6: index) attributes {inline} {
 // CHECK:     %c-24_i8 = arith.constant -24 : i8
 // CHECK:     affine.for %arg7 = 0 to 16 {
 // CHECK:       affine.for %arg8 = 0 to 16 {
@@ -449,7 +449,7 @@
 // CHECK:     } {point}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node25(%arg0: memref<64x28x28xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+// CHECK:   func.func @forward_node24(%arg0: memref<64x28x28xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
 // CHECK:     affine.for %arg5 = 0 to 16 {
 // CHECK:       affine.for %arg6 = 0 to 14 step 2 {
 // CHECK:         affine.for %arg7 = 0 to 14 step 2 {
@@ -466,7 +466,7 @@
 // CHECK:     } {parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node26(%arg0: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg1: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index, %arg5: index) attributes {inline} {
+// CHECK:   func.func @forward_node25(%arg0: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg1: memref<16x16xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index, %arg5: index) attributes {inline} {
 // CHECK:     affine.for %arg6 = 0 to 16 {
 // CHECK:       affine.for %arg7 = 0 to 16 {
 // CHECK:         %0 = affine.load %arg0[%arg6 + symbol(%arg2) * 16, %arg7 + symbol(%arg3) * 16, symbol(%arg4), symbol(%arg5)] : memref<64x64x3x3xi8, #hls.mem<dram>>
@@ -475,7 +475,7 @@
 // CHECK:     } {parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node27(%arg0: memref<64x56x56xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index, %arg5: index, %arg6: index) attributes {inline} {
+// CHECK:   func.func @forward_node26(%arg0: memref<64x56x56xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index, %arg5: index, %arg6: index) attributes {inline} {
 // CHECK:     affine.for %arg7 = 0 to 16 {
 // CHECK:       affine.for %arg8 = 0 to 14 step 2 {
 // CHECK:         affine.for %arg9 = 0 to 14 step 2 {
@@ -492,7 +492,7 @@
 // CHECK:     } {parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node22(%arg0: !hls.stream<i1, 1>, %arg1: memref<64x56x56xi8, #hls.mem<dram>>, %arg2: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg3: memref<64x28x28xi8, #hls.mem<dram>>, %arg4: !hls.stream<i1, 1>, %arg5: memref<64x28x28xi8, #hls.mem<dram>>) {
+// CHECK:   func.func @forward_node27(%arg0: !hls.stream<i1, 1>, %arg1: memref<64x56x56xi8, #hls.mem<dram>>, %arg2: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg3: memref<64x28x28xi8, #hls.mem<dram>>, %arg4: !hls.stream<i1, 1>, %arg5: memref<64x28x28xi8, #hls.mem<dram>>) attributes {inline} {
 // CHECK:     %true = arith.constant true
 // CHECK:     hls.dataflow.stream_read %arg0 : (!hls.stream<i1, 1>) -> ()
 // CHECK:     %0 = affine.apply #map()
@@ -520,12 +520,12 @@
 // CHECK:       %21 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
 // CHECK:       %22 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x16xi8, #hls.mem<bram_t2p>>
 // CHECK:       %23 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
-// CHECK:       func.call @forward_node27(%arg1, %23, %20, %19, %13, %17, %11) : (memref<64x56x56xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index, index, index) -> ()
-// CHECK:       func.call @forward_node26(%arg2, %22, %15, %20, %19, %17) : (memref<64x64x3x3xi8, #hls.mem<dram>>, memref<16x16xi8, #hls.mem<bram_t2p>>, index, index, index, index) -> ()
-// CHECK:       func.call @forward_node25(%arg3, %21, %15, %13, %11) : (memref<64x28x28xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
+// CHECK:       func.call @forward_node26(%arg1, %23, %20, %19, %13, %17, %11) : (memref<64x56x56xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index, index, index) -> ()
+// CHECK:       func.call @forward_node25(%arg2, %22, %15, %20, %19, %17) : (memref<64x64x3x3xi8, #hls.mem<dram>>, memref<16x16xi8, #hls.mem<bram_t2p>>, index, index, index, index) -> ()
+// CHECK:       func.call @forward_node24(%arg3, %21, %15, %13, %11) : (memref<64x28x28xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
 // CHECK:       %24 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
-// CHECK:       func.call @forward_node24(%23, %22, %21, %24, %17, %20, %19) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x16xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
-// CHECK:       func.call @forward_node23(%24, %arg5, %15, %13, %11) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<64x28x28xi8, #hls.mem<dram>>, index, index, index) -> ()
+// CHECK:       func.call @forward_node23(%23, %22, %21, %24, %17, %20, %19) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x16xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
+// CHECK:       func.call @forward_node22(%24, %arg5, %15, %13, %11) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<64x28x28xi8, #hls.mem<dram>>, index, index, index) -> ()
 // CHECK:     } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = true, flatten = false>}
 // CHECK:     hls.dataflow.stream_write %arg4, %true : <i1, 1>, i1
 // CHECK:     return
@@ -553,7 +553,7 @@
 // CHECK:     hls.dataflow.stream_write %arg4, %true : <i1, 1>, i1
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node30(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<64x56x56xi8, #hls.mem<dram>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+// CHECK:   func.func @forward_node29(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<64x56x56xi8, #hls.mem<dram>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
 // CHECK:     affine.for %arg5 = 0 to 16 {
 // CHECK:       affine.for %arg6 = 0 to 14 {
 // CHECK:         affine.for %arg7 = 0 to 14 {
@@ -564,7 +564,7 @@
 // CHECK:     } {parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node31(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>) attributes {inline} {
+// CHECK:   func.func @forward_node30(%arg0: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>) attributes {inline} {
 // CHECK:     %c-24_i8 = arith.constant -24 : i8
 // CHECK:     affine.for %arg2 = 0 to 16 {
 // CHECK:       affine.for %arg3 = 0 to 14 {
@@ -578,7 +578,7 @@
 // CHECK:     } {parallel, point}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node32(%arg0: memref<64x56x56xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
+// CHECK:   func.func @forward_node31(%arg0: memref<64x56x56xi8, #hls.mem<dram>>, %arg1: memref<16x14x14xi8, #hls.mem<bram_t2p>>, %arg2: index, %arg3: index, %arg4: index) attributes {inline} {
 // CHECK:     affine.for %arg5 = 0 to 16 {
 // CHECK:       affine.for %arg6 = 0 to 14 {
 // CHECK:         affine.for %arg7 = 0 to 14 {
@@ -589,7 +589,7 @@
 // CHECK:     } {parallel}
 // CHECK:     return
 // CHECK:   }
-// CHECK:   func.func @forward_node29(%arg0: memref<64x56x56xi8, #hls.mem<dram>>, %arg1: !hls.stream<i1, 1>, %arg2: memref<64x56x56xi8, #hls.mem<dram>>) {
+// CHECK:   func.func @forward_node32(%arg0: memref<64x56x56xi8, #hls.mem<dram>>, %arg1: !hls.stream<i1, 1>, %arg2: memref<64x56x56xi8, #hls.mem<dram>>) attributes {inline} {
 // CHECK:     %true = arith.constant true
 // CHECK:     %0 = affine.apply #map()
 // CHECK:     %1 = affine.apply #map()
@@ -602,17 +602,17 @@
 // CHECK:       %7 = affine.apply #map3(%6)[%1]
 // CHECK:       %8 = affine.apply #map4(%6)[%1]
 // CHECK:       %9 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
-// CHECK:       func.call @forward_node32(%arg0, %9, %8, %7, %5) : (memref<64x56x56xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
+// CHECK:       func.call @forward_node31(%arg0, %9, %8, %7, %5) : (memref<64x56x56xi8, #hls.mem<dram>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>, index, index, index) -> ()
 // CHECK:       %10 = hls.dataflow.buffer {depth = 1 : i32} : memref<16x14x14xi8, #hls.mem<bram_t2p>>
-// CHECK:       func.call @forward_node31(%9, %10) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>) -> ()
-// CHECK:       func.call @forward_node30(%10, %arg2, %8, %7, %5) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<64x56x56xi8, #hls.mem<dram>>, index, index, index) -> ()
+// CHECK:       func.call @forward_node30(%9, %10) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<16x14x14xi8, #hls.mem<bram_t2p>>) -> ()
+// CHECK:       func.call @forward_node29(%10, %arg2, %8, %7, %5) : (memref<16x14x14xi8, #hls.mem<bram_t2p>>, memref<64x56x56xi8, #hls.mem<dram>>, index, index, index) -> ()
 // CHECK:     } {loop_directive = #hls.loop<pipeline = false, target_ii = 1, dataflow = true, flatten = false>, parallel}
 // CHECK:     hls.dataflow.stream_write %arg1, %true : <i1, 1>, i1
 // CHECK:     return
 // CHECK:   }
 // CHECK:   func.func @forward(%arg0: memref<64x56x56xi8, #hls.mem<dram>>, %arg1: memref<1000x64xi8, #hls.mem<dram>>, %arg2: memref<64x64xi8, #hls.mem<dram>>, %arg3: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg4: memref<64x64x3x3xi8, #hls.mem<dram>>, %arg5: memref<1000xi8, #hls.mem<dram>>) attributes {func_directive = #hls.func<pipeline = false, target_interval = 1, dataflow = true>, top_func} {
 // CHECK:     %0 = hls.dataflow.stream {depth = 1 : i32} : <i1, 1>
-// CHECK:     call @forward_node29(%arg0, %0, %arg0) : (memref<64x56x56xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x56x56xi8, #hls.mem<dram>>) -> ()
+// CHECK:     call @forward_node32(%arg0, %0, %arg0) : (memref<64x56x56xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x56x56xi8, #hls.mem<dram>>) -> ()
 // CHECK:     %1 = hls.dataflow.buffer {depth = 3 : i32} : memref<64x56x56xi8, #hls.mem<dram>>
 // CHECK:     %2 = hls.dataflow.stream {depth = 3 : i32} : <i1, 3>
 // CHECK:     %3 = hls.dataflow.buffer {depth = 1 : i32} : memref<64x56x56xi8, #hls.mem<dram>>
@@ -620,17 +620,17 @@
 // CHECK:     call @forward_node28(%0, %arg0, %2, %1, %4, %3) : (!hls.stream<i1, 1>, memref<64x56x56xi8, #hls.mem<dram>>, !hls.stream<i1, 3>, memref<64x56x56xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x56x56xi8, #hls.mem<dram>>) -> ()
 // CHECK:     %5 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<64x28x28xi8, #hls.mem<dram>>
 // CHECK:     %6 = hls.dataflow.stream {depth = 1 : i32} : <i1, 1>
-// CHECK:     call @forward_node22(%4, %3, %arg4, %5, %6, %5) : (!hls.stream<i1, 1>, memref<64x56x56xi8, #hls.mem<dram>>, memref<64x64x3x3xi8, #hls.mem<dram>>, memref<64x28x28xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.mem<dram>>) -> ()
+// CHECK:     call @forward_node27(%4, %3, %arg4, %5, %6, %5) : (!hls.stream<i1, 1>, memref<64x56x56xi8, #hls.mem<dram>>, memref<64x64x3x3xi8, #hls.mem<dram>>, memref<64x28x28xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.mem<dram>>) -> ()
 // CHECK:     %7 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<64x28x28xi8, #hls.mem<dram>>
 // CHECK:     %8 = hls.dataflow.stream {depth = 1 : i32} : <i1, 1>
-// CHECK:     call @forward_node16(%arg3, %6, %5, %7, %8, %7) : (memref<64x64x3x3xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.mem<dram>>, memref<64x28x28xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.mem<dram>>) -> ()
+// CHECK:     call @forward_node21(%arg3, %6, %5, %7, %8, %7) : (memref<64x64x3x3xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.mem<dram>>, memref<64x28x28xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.mem<dram>>) -> ()
 // CHECK:     %9 = hls.dataflow.buffer {depth = 1 : i32} : memref<64x28x28xi8, #hls.mem<dram>>
 // CHECK:     %10 = hls.dataflow.stream {depth = 1 : i32} : <i1, 1>
 // CHECK:     %11 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<64x28x28xi8, #hls.mem<dram>>
-// CHECK:     call @forward_node8(%2, %1, %arg2, %8, %7, %11, %10, %9, %11) : (!hls.stream<i1, 3>, memref<64x56x56xi8, #hls.mem<dram>>, memref<64x64xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.mem<dram>>, memref<64x28x28xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.mem<dram>>, memref<64x28x28xi8, #hls.mem<dram>>) -> ()
+// CHECK:     call @forward_node15(%2, %1, %arg2, %8, %7, %11, %10, %9, %11) : (!hls.stream<i1, 3>, memref<64x56x56xi8, #hls.mem<dram>>, memref<64x64xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.mem<dram>>, memref<64x28x28xi8, #hls.mem<dram>>, !hls.stream<i1, 1>, memref<64x28x28xi8, #hls.mem<dram>>, memref<64x28x28xi8, #hls.mem<dram>>) -> ()
 // CHECK:     %12 = hls.dataflow.buffer {depth = 1 : i32, init_value = -24 : i8} : memref<64xi8, #hls.mem<bram_t2p>>
-// CHECK:     call @forward_node5(%10, %9, %12) : (!hls.stream<i1, 1>, memref<64x28x28xi8, #hls.mem<dram>>, memref<64xi8, #hls.mem<bram_t2p>>) -> ()
-// CHECK:     call @forward_node0(%12, %arg1, %arg5, %arg5) : (memref<64xi8, #hls.mem<bram_t2p>>, memref<1000x64xi8, #hls.mem<dram>>, memref<1000xi8, #hls.mem<dram>>, memref<1000xi8, #hls.mem<dram>>) -> ()
+// CHECK:     call @forward_node7(%10, %9, %12) : (!hls.stream<i1, 1>, memref<64x28x28xi8, #hls.mem<dram>>, memref<64xi8, #hls.mem<bram_t2p>>) -> ()
+// CHECK:     call @forward_node4(%12, %arg1, %arg5, %arg5) : (memref<64xi8, #hls.mem<bram_t2p>>, memref<1000x64xi8, #hls.mem<dram>>, memref<1000xi8, #hls.mem<dram>>, memref<1000xi8, #hls.mem<dram>>) -> ()
 // CHECK:     return
 // CHECK:   }
 // CHECK: }

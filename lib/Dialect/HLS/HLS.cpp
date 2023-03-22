@@ -992,7 +992,7 @@ struct AlwaysTrueOrFalseSelect : public OpRewritePattern<AffineSelectOp> {
 
       // Add induction variable constraints.
       for (auto arg : args)
-        if (isForInductionVar(arg))
+        if (isAffineForInductionVar(arg))
           (void)constrs.addAffineForOpDomain(getForInductionVarOwner(arg));
 
       // Always false if there's no known solution for the constraints.

@@ -50,27 +50,33 @@
 // CHECK:                     %8 = affine.apply #map1(%arg11)
 // CHECK:                     affine.for %arg12 = 0 to 16 {
 // CHECK:                       %9 = affine.apply #map2(%5, %arg12)
-// CHECK:                       affine.for %arg13 = 0 to 16 {
-// CHECK:                         %10 = affine.apply #map2(%6, %arg13)
-// CHECK:                         affine.for %arg14 = 0 to 14 {
-// CHECK:                           %11 = affine.apply #map2(%7, %arg14)
-// CHECK:                           affine.for %arg15 = 0 to 14 {
-// CHECK:                             %12 = affine.apply #map2(%8, %arg15)
-// CHECK:                             %13 = affine.load %arg0[0, %9, %11 * 2 + %arg7 - 1, %12 * 2 + %arg8 - 1] : memref<1x64x56x56xi8, 12>
-// CHECK:                             %14 = affine.load %arg4[%10, %9, %arg7, %arg8] : memref<64x64x3x3xi8, 12>
-// CHECK:                             %15 = affine.load %0[0, %10, %11, %12] : memref<1x64x28x28xi8, 12>
-// CHECK:                             %16 = arith.muli %13, %14 : i8
-// CHECK:                             %17 = arith.addi %15, %16 : i8
-// CHECK:                             affine.store %17, %0[0, %10, %11, %12] : memref<1x64x28x28xi8, 12>
-// CHECK:                             %18 = affine.load %0[0, %10, %11, %12] : memref<1x64x28x28xi8, 12>
-// CHECK:                             %19 = arith.cmpi ugt, %18, %c-24_i8 : i8
-// CHECK:                             %20 = arith.select %19, %18, %c-24_i8 : i8
-// CHECK:                             affine.if #set(%9, %arg7, %arg8) {
-// CHECK:                               affine.store %20, %0[0, %10, %11, %12] : memref<1x64x28x28xi8, 12>
-// CHECK:                             }
+// CHECK:                       affine.for %arg13 = 0 to 1 {
+// CHECK:                         %10 = affine.apply #map2(%arg7, %arg13)
+// CHECK:                         affine.for %arg14 = 0 to 1 {
+// CHECK:                           %11 = affine.apply #map2(%arg8, %arg14)
+// CHECK:                           affine.for %arg15 = 0 to 16 {
+// CHECK:                             %12 = affine.apply #map2(%6, %arg15)
+// CHECK:                             affine.for %arg16 = 0 to 14 {
+// CHECK:                               %13 = affine.apply #map2(%7, %arg16)
+// CHECK:                               affine.for %arg17 = 0 to 14 {
+// CHECK:                                 %14 = affine.apply #map2(%8, %arg17)
+// CHECK:                                 %15 = affine.load %arg0[0, %9, %13 * 2 + %10 - 1, %14 * 2 + %11 - 1] : memref<1x64x56x56xi8, 12>
+// CHECK:                                 %16 = affine.load %arg4[%12, %9, %10, %11] : memref<64x64x3x3xi8, 12>
+// CHECK:                                 %17 = affine.load %0[0, %12, %13, %14] : memref<1x64x28x28xi8, 12>
+// CHECK:                                 %18 = arith.muli %15, %16 : i8
+// CHECK:                                 %19 = arith.addi %17, %18 : i8
+// CHECK:                                 affine.store %19, %0[0, %12, %13, %14] : memref<1x64x28x28xi8, 12>
+// CHECK:                                 %20 = affine.load %0[0, %12, %13, %14] : memref<1x64x28x28xi8, 12>
+// CHECK:                                 %21 = arith.cmpi ugt, %20, %c-24_i8 : i8
+// CHECK:                                 %22 = arith.select %21, %20, %c-24_i8 : i8
+// CHECK:                                 affine.if #set(%9, %10, %11) {
+// CHECK:                                   affine.store %22, %0[0, %12, %13, %14] : memref<1x64x28x28xi8, 12>
+// CHECK:                                 }
+// CHECK:                               } {parallel, point}
+// CHECK:                             } {parallel, point}
 // CHECK:                           } {parallel, point}
-// CHECK:                         } {parallel, point}
-// CHECK:                       } {parallel, point}
+// CHECK:                         } {point}
+// CHECK:                       } {point}
 // CHECK:                     } {point}
 // CHECK:                   } {parallel}
 // CHECK:                 } {parallel}
@@ -93,21 +99,27 @@
 // CHECK:                     %8 = affine.apply #map1(%arg11)
 // CHECK:                     affine.for %arg12 = 0 to 16 {
 // CHECK:                       %9 = affine.apply #map2(%5, %arg12)
-// CHECK:                       affine.for %arg13 = 0 to 16 {
-// CHECK:                         %10 = affine.apply #map2(%6, %arg13)
-// CHECK:                         affine.for %arg14 = 0 to 14 {
-// CHECK:                           %11 = affine.apply #map2(%7, %arg14)
-// CHECK:                           affine.for %arg15 = 0 to 14 {
-// CHECK:                             %12 = affine.apply #map2(%8, %arg15)
-// CHECK:                             %13 = affine.load %0[0, %9, %11 + %arg7 - 1, %12 + %arg8 - 1] : memref<1x64x28x28xi8, 12>
-// CHECK:                             %14 = affine.load %arg3[%10, %9, %arg7, %arg8] : memref<64x64x3x3xi8, 12>
-// CHECK:                             %15 = affine.load %1[0, %10, %11, %12] : memref<1x64x28x28xi8, 12>
-// CHECK:                             %16 = arith.muli %13, %14 : i8
-// CHECK:                             %17 = arith.addi %15, %16 : i8
-// CHECK:                             affine.store %17, %1[0, %10, %11, %12] : memref<1x64x28x28xi8, 12>
+// CHECK:                       affine.for %arg13 = 0 to 1 {
+// CHECK:                         %10 = affine.apply #map2(%arg7, %arg13)
+// CHECK:                         affine.for %arg14 = 0 to 1 {
+// CHECK:                           %11 = affine.apply #map2(%arg8, %arg14)
+// CHECK:                           affine.for %arg15 = 0 to 16 {
+// CHECK:                             %12 = affine.apply #map2(%6, %arg15)
+// CHECK:                             affine.for %arg16 = 0 to 14 {
+// CHECK:                               %13 = affine.apply #map2(%7, %arg16)
+// CHECK:                               affine.for %arg17 = 0 to 14 {
+// CHECK:                                 %14 = affine.apply #map2(%8, %arg17)
+// CHECK:                                 %15 = affine.load %0[0, %9, %13 + %10 - 1, %14 + %11 - 1] : memref<1x64x28x28xi8, 12>
+// CHECK:                                 %16 = affine.load %arg3[%12, %9, %10, %11] : memref<64x64x3x3xi8, 12>
+// CHECK:                                 %17 = affine.load %1[0, %12, %13, %14] : memref<1x64x28x28xi8, 12>
+// CHECK:                                 %18 = arith.muli %15, %16 : i8
+// CHECK:                                 %19 = arith.addi %17, %18 : i8
+// CHECK:                                 affine.store %19, %1[0, %12, %13, %14] : memref<1x64x28x28xi8, 12>
+// CHECK:                               } {parallel, point}
+// CHECK:                             } {parallel, point}
 // CHECK:                           } {parallel, point}
-// CHECK:                         } {parallel, point}
-// CHECK:                       } {parallel, point}
+// CHECK:                         } {point}
+// CHECK:                       } {point}
 // CHECK:                     } {point}
 // CHECK:                   } {parallel}
 // CHECK:                 } {parallel}

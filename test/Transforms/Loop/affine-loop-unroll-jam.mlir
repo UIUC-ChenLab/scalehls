@@ -7,39 +7,43 @@
 // CHECK: module {
 // CHECK:   func.func @test_syrk(%arg0: f32, %arg1: f32, %arg2: memref<16x16xf32>, %arg3: memref<16x16xf32>) {
 // CHECK:     %c0 = arith.constant 0 : index
+// CHECK:     %c0_0 = arith.constant 0 : index
+// CHECK:     %c0_1 = arith.constant 0 : index
 // CHECK:     affine.for %arg4 = 0 to 16 {
 // CHECK:       affine.for %arg5 = 0 to 16 {
 // CHECK:         affine.for %arg6 = 0 to 16 step 2 {
-// CHECK:           %0 = affine.apply #map(%arg6, %c0)
-// CHECK:           affine.if #set(%arg5, %0) {
-// CHECK:             %3 = affine.load %arg3[%arg5, %0] : memref<16x16xf32>
-// CHECK:             %4 = arith.mulf %arg1, %3 : f32
-// CHECK:             affine.if #set1(%arg4) {
-// CHECK:               affine.store %4, %arg3[%arg5, %0] : memref<16x16xf32>
+// CHECK:           %0 = affine.apply #map(%arg4, %c0)
+// CHECK:           %1 = affine.apply #map(%arg5, %c0_0)
+// CHECK:           %2 = affine.apply #map(%arg6, %c0_1)
+// CHECK:           affine.if #set(%1, %2) {
+// CHECK:             %5 = affine.load %arg3[%1, %2] : memref<16x16xf32>
+// CHECK:             %6 = arith.mulf %arg1, %5 : f32
+// CHECK:             affine.if #set1(%0) {
+// CHECK:               affine.store %6, %arg3[%1, %2] : memref<16x16xf32>
 // CHECK:             }
-// CHECK:             %5 = affine.load %arg2[%arg5, %arg4] : memref<16x16xf32>
-// CHECK:             %6 = affine.load %arg2[%0, %arg4] : memref<16x16xf32>
-// CHECK:             %7 = affine.load %arg3[%arg5, %0] : memref<16x16xf32>
-// CHECK:             %8 = arith.mulf %arg0, %5 : f32
-// CHECK:             %9 = arith.mulf %8, %6 : f32
-// CHECK:             %10 = arith.addf %9, %7 : f32
-// CHECK:             affine.store %10, %arg3[%arg5, %0] : memref<16x16xf32>
+// CHECK:             %7 = affine.load %arg2[%1, %0] : memref<16x16xf32>
+// CHECK:             %8 = affine.load %arg2[%2, %0] : memref<16x16xf32>
+// CHECK:             %9 = affine.load %arg3[%1, %2] : memref<16x16xf32>
+// CHECK:             %10 = arith.mulf %arg0, %7 : f32
+// CHECK:             %11 = arith.mulf %10, %8 : f32
+// CHECK:             %12 = arith.addf %11, %9 : f32
+// CHECK:             affine.store %12, %arg3[%1, %2] : memref<16x16xf32>
 // CHECK:           }
-// CHECK:           %1 = affine.apply #map1(%c0)
-// CHECK:           %2 = affine.apply #map(%arg6, %1)
-// CHECK:           affine.if #set(%arg5, %2) {
-// CHECK:             %3 = affine.load %arg3[%arg5, %2] : memref<16x16xf32>
-// CHECK:             %4 = arith.mulf %arg1, %3 : f32
-// CHECK:             affine.if #set1(%arg4) {
-// CHECK:               affine.store %4, %arg3[%arg5, %2] : memref<16x16xf32>
+// CHECK:           %3 = affine.apply #map1(%c0_1)
+// CHECK:           %4 = affine.apply #map(%arg6, %3)
+// CHECK:           affine.if #set(%1, %4) {
+// CHECK:             %5 = affine.load %arg3[%1, %4] : memref<16x16xf32>
+// CHECK:             %6 = arith.mulf %arg1, %5 : f32
+// CHECK:             affine.if #set1(%0) {
+// CHECK:               affine.store %6, %arg3[%1, %4] : memref<16x16xf32>
 // CHECK:             }
-// CHECK:             %5 = affine.load %arg2[%arg5, %arg4] : memref<16x16xf32>
-// CHECK:             %6 = affine.load %arg2[%2, %arg4] : memref<16x16xf32>
-// CHECK:             %7 = affine.load %arg3[%arg5, %2] : memref<16x16xf32>
-// CHECK:             %8 = arith.mulf %arg0, %5 : f32
-// CHECK:             %9 = arith.mulf %8, %6 : f32
-// CHECK:             %10 = arith.addf %9, %7 : f32
-// CHECK:             affine.store %10, %arg3[%arg5, %2] : memref<16x16xf32>
+// CHECK:             %7 = affine.load %arg2[%1, %0] : memref<16x16xf32>
+// CHECK:             %8 = affine.load %arg2[%4, %0] : memref<16x16xf32>
+// CHECK:             %9 = affine.load %arg3[%1, %4] : memref<16x16xf32>
+// CHECK:             %10 = arith.mulf %arg0, %7 : f32
+// CHECK:             %11 = arith.mulf %10, %8 : f32
+// CHECK:             %12 = arith.addf %11, %9 : f32
+// CHECK:             affine.store %12, %arg3[%1, %4] : memref<16x16xf32>
 // CHECK:           }
 // CHECK:         }
 // CHECK:       }

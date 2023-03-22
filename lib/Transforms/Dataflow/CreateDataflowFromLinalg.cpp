@@ -113,12 +113,12 @@ struct ForwardFuseGenericOp : public OpRewritePattern<linalg::GenericOp> {
     bool matched = false;
     auto body = op.getBody();
 
-    if (op.getNumOutputs() == 1 &&
+    if (op.getOutputs().size() == 1 &&
         llvm::hasSingleElement(body->getOperations())) {
       auto output = body->getTerminator()->getOperand(0);
 
       // Copy from input to output.
-      if (op.getNumInputs() == 1 && output == body->getArgument(0))
+      if (op.getInputs().size() == 1 && output == body->getArgument(0))
         matched = true;
 
       // Copy from constant to output.

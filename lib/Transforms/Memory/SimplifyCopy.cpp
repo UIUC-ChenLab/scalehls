@@ -22,8 +22,8 @@ struct SplitElementwiseGenericOp : public OpRewritePattern<linalg::GenericOp> {
 
   LogicalResult matchAndRewrite(linalg::GenericOp op,
                                 PatternRewriter &rewriter) const override {
-    if (isElementwiseGenericOp(op) && op.getNumInputs() == 1 &&
-        op.getNumOutputs() == 1) {
+    if (isElementwiseGenericOp(op) && op.getInputs().size() == 1 &&
+        op.getOutputs().size() == 1) {
       auto &input = op->getOpOperand(0);
       auto &output = op->getOpOperand(1);
       if (input.get() == output.get())

@@ -114,7 +114,7 @@ def YieldOp : HLSOp<"dataflow.yield", [NoMemoryEffect, ReturnLike, Terminator,
   let arguments = (ins Variadic<AnyType>:$results);
   let assemblyFormat = "$results attr-dict `:` type($results)";
 
-  let builders = [OpBuilder<(ins), "build($_builder, $_state, llvm::None);">];
+  let builders = [OpBuilder<(ins), "build($_builder, $_state, std::nullopt);">];
 }
 
 def ToStreamOp : HLSOp<"dataflow.to_stream", [NoMemoryEffect]> {

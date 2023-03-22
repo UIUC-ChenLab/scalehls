@@ -87,7 +87,7 @@ struct BufferMultiProducer : public OpRewritePattern<ScheduleOp> {
             // loop induction variables and meanwhile the load has identity
             // memory access map.
             AffineLoopBand band;
-            getLoopIVs(*read, &band);
+            getAffineForIVs(*read, &band);
 
             llvm::SmallDenseSet<Value> depInductionVars;
             for (auto loop : band)

@@ -20,34 +20,41 @@ struct PlaceBuffer : public OpRewritePattern<func::FuncOp> {
       : OpRewritePattern<func::FuncOp>(context), threshold(threshold),
         placeExternalBuffer(placeExternalBuffer) {}
 
-  // TODO: For now, we use a heuristic to determine the buffer location.
-  MemRefType getPlacedType(MemRefType type, bool isConstBuffer) const {
-    auto kind = MemoryKind::BRAM_T2P;
-    if (placeExternalBuffer || isConstBuffer)
-      kind = type.getNumElements() >= threshold ? MemoryKind::DRAM
-                                                : MemoryKind::BRAM_T2P;
-    auto newType = MemRefType::get(
-        type.getShape(), type.getElementType(), type.getLayout().getAffineMap(),
-        MemoryKindAttr::get(type.getContext(), kind));
-    return newType;
-  }
-
-  MemRefType getPlacedOnDramType(MemRefType type) const {
-    auto newType = MemRefType::get(
-        type.getShape(), type.getElementType(), type.getLayout().getAffineMap(),
-        MemoryKindAttr::get(type.getContext(), MemoryKind::DRAM));
-    return newType;
-  }
-
   LogicalResult matchAndRewrite(func::FuncOp func,
                                 PatternRewriter &rewriter) const override {
+    bool hasChanged = false;
+
     for (auto arg : func.getArguments())
-      if (auto type = arg.getType().dyn_cast<MemRefType>())
-        arg.setType(getPlacedOnDramType(type));
+      if (auto type = arg.getType().dyn_cast<MemRefType>()) {
+        if (auto attr = type.getMemorySpace())
+          if (attr.isa<MemoryKindAttr>())
+            continue;
+
+        auto newType = MemRefType::get(
+            type.getShape(), type.getElementType(),
+            type.getLayout().getAffineMap(),
+            MemoryKindAttr::get(type.getContext(), MemoryKind::DRAM));
+        arg.setType(newType);
+        hasChanged = true;
+      }
 
     func.walk([&](hls::BufferLikeInterface buffer) {
-      buffer.getMemref().setType(getPlacedType(
-          buffer.getMemrefType(), isa<ConstBufferOp>(buffer.getOperation())));
+      auto type = buffer.getMemref().getType().cast<MemRefType>();
+      if (auto attr = type.getMemorySpace())
+        if (attr.isa<MemoryKindAttr>())
+          return WalkResult::advance();
+
+      auto kind = MemoryKind::BRAM_T2P;
+      if (placeExternalBuffer || isa<ConstBufferOp>(buffer.getOperation()))
+        kind = type.getNumElements() >= threshold ? MemoryKind::DRAM
+                                                  : MemoryKind::BRAM_T2P;
+      auto newType =
+          MemRefType::get(type.getShape(), type.getElementType(),
+                          type.getLayout().getAffineMap(),
+                          MemoryKindAttr::get(type.getContext(), kind));
+      buffer.getMemref().setType(newType);
+      hasChanged = true;
+      return WalkResult::advance();
     });
 
     func.walk([](YieldOp yield) {
@@ -59,7 +66,7 @@ struct PlaceBuffer : public OpRewritePattern<func::FuncOp> {
     func.setType(rewriter.getFunctionType(
         func.front().getArgumentTypes(),
         func.front().getTerminator()->getOperandTypes()));
-    return success();
+    return success(hasChanged);
   }
 
 private:
@@ -104,9 +111,13 @@ struct PlaceDataflowBuffer
     auto func = getOperation();
     auto context = func.getContext();
 
+    llvm::outs() << "1\n";
+
     mlir::RewritePatternSet patterns(context);
     patterns.add<PlaceBuffer>(context, threshold, placeExternalBuffer);
     (void)applyOpPatternsAndFold(func, std::move(patterns));
+
+    llvm::outs() << "2\n";
 
     patterns.clear();
     patterns.add<HoistDramBuffer>(context);

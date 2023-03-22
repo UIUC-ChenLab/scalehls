@@ -45,7 +45,7 @@ void ScaleHLSEstimator::getPartitionIndices(Operation *op) {
   for (auto operand : accessMap.getOperands()) {
     if (operandIdx < accessMap.getNumDims()) {
       int64_t step = 1;
-      if (isForInductionVar(operand))
+      if (isAffineForInductionVar(operand))
         step = getForInductionVarOwner(operand).getStep();
 
       dimReplacements.push_back(step * builder.getAffineDimExpr(operandIdx));
@@ -308,7 +308,7 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, func::FuncOp func,
 int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
                                        MemAccessesMap &map) {
   AffineLoopBand band;
-  getLoopIVs(forOp.front(), &band);
+  getAffineForIVs(forOp.front(), &band);
 
   // Find all loop levels whose dependency need to be checked.
   SmallVector<unsigned, 8> loopDepths;

@@ -657,7 +657,7 @@ std::pair<bool, bool> scalehls::ifAlwaysTrueOrFalse(mlir::AffineIfOp ifOp) {
   FlatAffineValueConstraints constrs;
   constrs.addAffineIfOpDomain(ifOp);
   for (auto operand : operands)
-    if (isForInductionVar(operand)) {
+    if (isAffineForInductionVar(operand)) {
       auto iv = getForInductionVarOwner(operand);
       if (failed(constrs.addAffineForOpDomain(iv)))
         continue;
@@ -814,8 +814,8 @@ scalehls::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
 unsigned scalehls::getCommonSurroundingLoops(Operation *A, Operation *B,
                                              AffineLoopBand *band) {
   SmallVector<AffineForOp, 4> loopsA, loopsB;
-  getLoopIVs(*A, &loopsA);
-  getLoopIVs(*B, &loopsB);
+  getAffineForIVs(*A, &loopsA);
+  getAffineForIVs(*B, &loopsB);
 
   unsigned minNumLoops = std::min(loopsA.size(), loopsB.size());
   unsigned numCommonLoops = 0;
@@ -847,7 +847,7 @@ scalehls::getBoundOfAffineMap(AffineMap map, ValueRange operands) {
   for (auto operand : operands) {
     // Only if the affine map operands are induction variable, the calculation
     // is possible.
-    if (!isForInductionVar(operand))
+    if (!isAffineForInductionVar(operand))
       return Optional<std::pair<int64_t, int64_t>>();
 
     // Only if the owner for op of the induction variable has constant bound,

@@ -436,7 +436,7 @@ public:
     for (Block::iterator it = std::next(Block::iterator(srcNodeInst));
          it != Block::iterator(dstNodeInst); ++it) {
       Operation *op = &(*it);
-      if (srcDepInsts.count(op) > 0 && firstSrcDepPos == None)
+      if (srcDepInsts.count(op) > 0 && firstSrcDepPos == std::nullopt)
         firstSrcDepPos = pos;
       if (dstDepInsts.count(op) > 0)
         lastDstDepPos = pos;
@@ -824,7 +824,7 @@ bool MemRefDependenceGraph::init(hls::StageLikeInterface f) {
     for (auto value : opInst->getResults()) {
       for (auto *user : value.getUsers()) {
         SmallVector<AffineForOp, 4> loops;
-        getLoopIVs(*user, &loops);
+        getAffineForIVs(*user, &loops);
         if (loops.empty())
           continue;
         assert(forToNodeMap.count(loops[0].getOperation()) > 0);
@@ -1116,7 +1116,7 @@ static bool isFusionProfitable(Operation *srcOpInst, Operation *srcStoreOpInst,
 
   // Compute cost of sliced and unsliced src loop nest.
   SmallVector<AffineForOp, 4> srcLoopIVs;
-  getLoopIVs(*srcOpInst, &srcLoopIVs);
+  getAffineForIVs(*srcOpInst, &srcLoopIVs);
 
   // Walk src loop nest and collect stats.
   LoopNestStats srcLoopNestStats;
@@ -1776,7 +1776,7 @@ public:
       dstNode->getLoadOpsForMemref(memref, &dstLoadOpInsts);
 
       AffineLoopBand dstLoopIVs;
-      getLoopIVs(*dstLoadOpInsts[0], &dstLoopIVs);
+      getAffineForIVs(*dstLoadOpInsts[0], &dstLoopIVs);
       unsigned dstLoopDepthTest = dstLoopIVs.size();
       auto sibAffineForOp = cast<AffineForOp>(sibNode->op);
 
@@ -1890,7 +1890,7 @@ public:
         if (auto loadOp = dyn_cast<AffineReadOpInterface>(user)) {
           // Gather loops surrounding 'use'.
           SmallVector<AffineForOp, 4> loops;
-          getLoopIVs(*user, &loops);
+          getAffineForIVs(*user, &loops);
           // Skip 'use' if it is not within a loop nest.
           if (loops.empty())
             continue;

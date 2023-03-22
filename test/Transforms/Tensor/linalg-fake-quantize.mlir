@@ -1,5 +1,9 @@
 // RUN: scalehls-opt -scalehls-linalg-fake-quantize %s | FileCheck %s
 
+// CHECK: #map = affine_map<(d0, d1, d2, d3) -> (0, d1, d2, d3)>
+// CHECK: #map1 = affine_map<(d0, d1, d2, d3) -> (d0, d1, d2, d3)>
+// CHECK: #map2 = affine_map<(d0, d1) -> (d0, d1)>
+// CHECK: #map3 = affine_map<(d0, d1) -> (d1, d0)>
 // CHECK: module attributes {torch.debug_module_name = "ResNet"} {
 // CHECK:   func.func @forward(%arg0: tensor<1x64x56x56xi8>, %arg1: tensor<1000x64xi8>, %arg2: tensor<64x64x1x1xi8>, %arg3: tensor<64x64x3x3xi8>, %arg4: tensor<64x64x3x3xi8>) -> tensor<1x1000xi8> {
 // CHECK:     [[CST_0:%.*]] = arith.constant
@@ -33,7 +37,7 @@
 // CHECK:     %9 = linalg.conv_2d_nchw_fchw {dilations = dense<1> : vector<2xi64>, strides = dense<2> : vector<2xi64>} ins(%1, %arg2 : tensor<1x64x56x56xi8>, tensor<64x64x1x1xi8>) outs(%8 : tensor<1x64x28x28xi8>) -> tensor<1x64x28x28xi8>
 // CHECK:     %10 = linalg.generic {indexing_maps = [#map, #map, #map1], iterator_types = ["parallel", "parallel", "parallel", "parallel"]} ins(%7, %9 : tensor<1x64x28x28xi8>, tensor<1x64x28x28xi8>) outs(%2 : tensor<1x64x28x28xi8>) {
 // CHECK:     ^bb0(%in: i8, %in_1: i8, %out: i8):
-// CHECK:       %22 = arith.addi %in, %in_1 : i8
+// CHECK:       %22 = arith.addi %in, %in_1 {fastmath = #arith.fastmath<none>} : i8
 // CHECK:       linalg.yield %22 : i8
 // CHECK:     } -> tensor<1x64x28x28xi8>
 // CHECK:     %11 = linalg.generic {indexing_maps = [#map, #map1], iterator_types = ["parallel", "parallel", "parallel", "parallel"]} ins(%10 : tensor<1x64x28x28xi8>) outs(%2 : tensor<1x64x28x28xi8>) {
@@ -48,7 +52,7 @@
 // CHECK:     %15 = linalg.pooling_nchw_sum {dilations = dense<1> : vector<2xi64>, strides = dense<1> : vector<2xi64>} ins(%11, %14 : tensor<1x64x28x28xi8>, tensor<28x28xi8>) outs(%13 : tensor<1x64x1x1xi8>) -> tensor<1x64x1x1xi8>
 // CHECK:     %16 = linalg.generic {indexing_maps = [#map1, #map1], iterator_types = ["parallel", "parallel", "parallel", "parallel"]} ins(%15 : tensor<1x64x1x1xi8>) outs(%12 : tensor<1x64x1x1xi8>) {
 // CHECK:     ^bb0(%in: i8, %out: i8):
-// CHECK:       %22 = arith.divui %in, [[CST_0]] : i8
+// CHECK:       %22 = arith.divui %in, [[CST_0]] {fastmath = #arith.fastmath<none>} : i8
 // CHECK:       linalg.yield %22 : i8
 // CHECK:     } -> tensor<1x64x1x1xi8>
 // CHECK:     %collapsed = tensor.collapse_shape %16
