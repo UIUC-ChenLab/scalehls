@@ -84,8 +84,9 @@ DispatchOp scalehls::dispatchBlock(Block *block) {
 
   OpBuilder builder(block, block->begin());
   ValueRange returnValues(block->getTerminator()->getOperands());
+  TypeRange returnTypes(block->getTerminator()->getOperandTypes());
   auto loc = builder.getUnknownLoc();
-  auto dispatch = builder.create<DispatchOp>(loc, returnValues);
+  auto dispatch = builder.create<DispatchOp>(loc, returnTypes);
 
   auto &dispatchBlock = dispatch.getBody().emplaceBlock();
   builder.setInsertionPointToEnd(&dispatchBlock);
@@ -112,11 +113,16 @@ TaskOp scalehls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
   // Collect output values. This is not sufficient and may lead to empty-used
   // outputs, which will be removed during canonicalization.
   llvm::SetVector<Value> outputValues;
-  for (auto op : ops)
-    for (auto result : op->getResults())
+  llvm::SetVector<Type> outputTypes;
+  for (auto op : ops) {
+    for (auto result : op->getResults()) {
       if (llvm::any_of(result.getUsers(),
-                       [&](Operation *user) { return !opsSet.count(user); }))
+                       [&](Operation *user) { return !opsSet.count(user); })) {
         outputValues.insert(result);
+        outputTypes.insert(result.getType());
+      }
+    }
+  }
 
   // Create new graph task with all inputs and outputs.
   auto loc = rewriter.getUnknownLoc();
@@ -124,8 +130,7 @@ TaskOp scalehls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
     rewriter.setInsertionPoint(ops.front());
   else
     rewriter.setInsertionPoint(ops.back());
-  auto task =
-      rewriter.create<TaskOp>(loc, ValueRange(outputValues.getArrayRef()));
+  auto task = rewriter.create<TaskOp>(loc, outputTypes.getArrayRef());
   auto taskBlock = rewriter.createBlock(&task.getBody());
 
   // Move each targeted op into the new graph task.
@@ -159,26 +164,36 @@ NodeOp scalehls::fuseNodeOps(ArrayRef<NodeOp> nodes,
 
   // Collect inputs, outputs, and params of the new node.
   llvm::SetVector<Value> inputs;
+  llvm::SmallVector<Type> inputTypes;
   llvm::SmallVector<unsigned, 8> inputTaps;
   llvm::SmallVector<Location, 8> inputLocs;
   llvm::SetVector<Value> outputs;
+  llvm::SmallVector<Type> outputTypes;
   llvm::SmallVector<Location, 8> outputLocs;
   llvm::SetVector<Value> params;
+  llvm::SmallVector<Type> paramTypes;
   llvm::SmallVector<Location, 8> paramLocs;
 
   for (auto node : nodes) {
-    for (auto output : node.getOutputs())
-      if (outputs.insert(output))
+    for (auto output : node.getOutputs()) {
+      if (outputs.insert(output)) {
+        outputTypes.push_back(output.getType());
         outputLocs.push_back(output.getLoc());
-    for (auto param : node.getParams())
-      if (params.insert(param))
+      }
+    }
+    for (auto param : node.getParams()) {
+      if (params.insert(param)) {
+        paramTypes.push_back(param.getType());
         paramLocs.push_back(param.getLoc());
+      }
+    }
   }
   for (auto node : nodes)
     for (auto input : llvm::enumerate(node.getInputs())) {
       if (outputs.count(input.value()))
         continue;
       if (inputs.insert(input.value())) {
+        inputTypes.push_back(input.value().getType());
         inputLocs.push_back(input.value().getLoc());
         inputTaps.push_back(node.getInputTap(input.index()));
       }
@@ -190,9 +205,9 @@ NodeOp scalehls::fuseNodeOps(ArrayRef<NodeOp> nodes,
       rewriter.getUnknownLoc(), inputs.getArrayRef(), outputs.getArrayRef(),
       params.getArrayRef(), inputTaps);
   auto block = rewriter.createBlock(&newNode.getBody());
-  block->addArguments(ValueRange(inputs.getArrayRef()), inputLocs);
-  block->addArguments(ValueRange(outputs.getArrayRef()), outputLocs);
-  block->addArguments(ValueRange(params.getArrayRef()), paramLocs);
+  block->addArguments(inputTypes, inputLocs);
+  block->addArguments(outputTypes, outputLocs);
+  block->addArguments(paramTypes, paramLocs);
 
   // Inline all nodes into the new node.
   for (auto node : nodes) {
@@ -644,7 +659,9 @@ std::pair<bool, bool> scalehls::ifAlwaysTrueOrFalse(mlir::AffineIfOp ifOp) {
   while (llvm::any_of(operands, [](Value v) {
     return isa_and_nonnull<AffineApplyOp>(v.getDefiningOp());
   })) {
-    composeSetAndOperands(set, operands);
+    auto map = AffineMap::get(set.getNumDims(), set.getNumSymbols(),
+                              set.getConstraints(), set.getContext());
+    fullyComposeAffineMapAndOperands(&map, &operands);
   }
 
   // Replace the original integer set and operands with the composed integer
@@ -1191,4 +1208,13 @@ bool PtrLikeMemRefAccess::operator==(const PtrLikeMemRefAccess &rhs) const {
   AffineValueMap::difference(accessMap, rhs.accessMap, &diff);
   return llvm::all_of(diff.getAffineMap().getResults(),
                       [](AffineExpr e) { return e == 0; });
+}
+
+void scalehls::printDimAndSymbolList(Operation::operand_iterator begin,
+                                     Operation::operand_iterator end,
+                                     unsigned numDims, OpAsmPrinter &printer) {
+  OperandRange operands(begin, end);
+  printer << '(' << operands.take_front(numDims) << ')';
+  if (operands.size() > numDims)
+    printer << '[' << operands.drop_front(numDims) << ']';
 }

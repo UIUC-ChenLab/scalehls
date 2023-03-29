@@ -57,7 +57,7 @@ struct CreateAxiInterface : public CreateAxiInterfaceBase<CreateAxiInterface> {
         auto vectorize = cast<BufferVectorizeOp>(*buffer.user_begin());
         vectorize->remove();
         builder.insert(vectorize);
-        return vectorize.getResult();
+        return cast<Value>(vectorize.getResult());
       }
       return buffer;
     };

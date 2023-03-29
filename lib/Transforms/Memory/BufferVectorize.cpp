@@ -436,7 +436,7 @@ struct BufferVectorize : public BufferVectorizeBase<BufferVectorize> {
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<MaterializeTileLayout>(context);
-    (void)applyOpPatternsAndFold(func, std::move(patterns));
+    (void)applyOpPatternsAndFold(func.getOperation(), std::move(patterns));
 
     patterns.clear();
     patterns.add<VectorizeNode>(context);
@@ -445,7 +445,8 @@ struct BufferVectorize : public BufferVectorizeBase<BufferVectorize> {
     patterns.add<VectorizeTransferWrite>(context);
     patterns.add<VectorizeLoad>(context);
     patterns.add<VectorizeStore>(context);
-    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+    (void)applyPatternsAndFoldGreedily(func.getOperation(),
+                                       std::move(patterns));
   }
 };
 } // namespace

@@ -28,6 +28,7 @@ struct LowerDispatchToSchedule : public OpRewritePattern<DispatchOp> {
     };
 
     SmallVector<Value, 8> inputs;
+    SmallVector<Type, 8> inputTypes;
     SmallVector<Location, 8> inputLocs;
 
     auto liveins = Liveness(dispatch).getLiveIn(&dispatch.getBody().front());
@@ -35,6 +36,7 @@ struct LowerDispatchToSchedule : public OpRewritePattern<DispatchOp> {
       if (dispatch.getBody().isAncestor(livein.getParentRegion()))
         continue;
       inputs.push_back(livein);
+      inputTypes.push_back(livein.getType());
       inputLocs.push_back(livein.getLoc());
     }
 
@@ -43,7 +45,8 @@ struct LowerDispatchToSchedule : public OpRewritePattern<DispatchOp> {
         rewriter.create<ScheduleOp>(rewriter.getUnknownLoc(), inputs);
     auto scheduleBlock = rewriter.createBlock(&schedule.getBody());
 
-    auto inputArgs = scheduleBlock->addArguments(ValueRange(inputs), inputLocs);
+    auto inputArgs =
+        scheduleBlock->addArguments(TypeRange(inputTypes), inputLocs);
     for (auto t : llvm::zip(inputs, inputArgs))
       std::get<0>(t).replaceUsesWithIf(std::get<1>(t), isInDispatch);
 
@@ -72,10 +75,13 @@ struct LowerTaskToNode : public OpRewritePattern<TaskOp> {
     };
 
     SmallVector<Value, 8> inputs;
+    SmallVector<Type, 8> inputTypes;
     SmallVector<Location, 8> inputLocs;
     SmallVector<Value, 8> outputs;
+    SmallVector<Type, 8> outputTypes;
     SmallVector<Location, 8> outputLocs;
     SmallVector<Value, 8> params;
+    SmallVector<Type, 8> paramTypes;
     SmallVector<Location, 8> paramLocs;
 
     auto liveins = Liveness(task).getLiveIn(&task.getBody().front());
@@ -87,13 +93,16 @@ struct LowerTaskToNode : public OpRewritePattern<TaskOp> {
         auto uses = llvm::make_filter_range(livein.getUses(), isInTask);
         if (llvm::any_of(uses, [](OpOperand &use) { return isWritten(use); })) {
           outputs.push_back(livein);
+          outputTypes.push_back(livein.getType());
           outputLocs.push_back(livein.getLoc());
         } else {
           inputs.push_back(livein);
+          inputTypes.push_back(livein.getType());
           inputLocs.push_back(livein.getLoc());
         }
       } else {
         params.push_back(livein);
+        paramTypes.push_back(livein.getType());
         paramLocs.push_back(livein.getLoc());
       }
     }
@@ -103,16 +112,16 @@ struct LowerTaskToNode : public OpRewritePattern<TaskOp> {
                                         outputs, params);
     auto nodeBlock = rewriter.createBlock(&node.getBody());
 
-    auto inputArgs = nodeBlock->addArguments(ValueRange(inputs), inputLocs);
+    auto inputArgs = nodeBlock->addArguments(TypeRange(inputTypes), inputLocs);
     for (auto t : llvm::zip(inputs, inputArgs))
       std::get<0>(t).replaceUsesWithIf(std::get<1>(t), isInTask);
 
     auto outputArgs =
-        node.getBody().addArguments(ValueRange(outputs), outputLocs);
+        node.getBody().addArguments(TypeRange(outputTypes), outputLocs);
     for (auto t : llvm::zip(outputs, outputArgs))
       std::get<0>(t).replaceUsesWithIf(std::get<1>(t), isInTask);
 
-    auto paramArgs = nodeBlock->addArguments(ValueRange(params), paramLocs);
+    auto paramArgs = nodeBlock->addArguments(TypeRange(paramTypes), paramLocs);
     for (auto t : llvm::zip(params, paramArgs))
       std::get<0>(t).replaceUsesWithIf(std::get<1>(t), isInTask);
 

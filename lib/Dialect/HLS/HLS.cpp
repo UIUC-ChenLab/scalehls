@@ -53,12 +53,15 @@ struct SimplifyDispatchOrTaskOutputs : public OpRewritePattern<OpType> {
 
     // Identify output values that are used.
     SmallVector<Value, 4> usedOutputs;
+    SmallVector<Type, 4> usedOutputTypes;
     SmallVector<Value, 4> usedResults;
     for (auto result : op.getResults())
       if (result.use_empty()) {
         hasUnusedPort = true;
       } else {
-        usedOutputs.push_back(yield.getOperand(result.getResultNumber()));
+        auto out = yield.getOperand(result.getResultNumber());
+        usedOutputs.push_back(out);
+        usedOutputTypes.push_back(out.getType());
         usedResults.push_back(result);
       }
 
@@ -68,8 +71,8 @@ struct SimplifyDispatchOrTaskOutputs : public OpRewritePattern<OpType> {
       rewriter.replaceOpWithNewOp<YieldOp>(yield, usedOutputs);
 
       rewriter.setInsertionPoint(op);
-      auto newTask =
-          rewriter.create<OpType>(op.getLoc(), ValueRange(usedOutputs));
+      auto newTask = rewriter.create<OpType>(
+          op.getLoc(), TypeRange(usedOutputTypes), ValueRange(usedOutputs));
       rewriter.inlineRegionBefore(op.getBody(), newTask.getBody(),
                                   newTask.getBody().end());
       for (auto t : llvm::zip(usedResults, newTask.getResults()))
@@ -186,7 +189,7 @@ LogicalResult ToStreamOp::verify() {
   return success();
 }
 
-OpFoldResult ToStreamOp::fold(ArrayRef<Attribute>) {
+OpFoldResult ToStreamOp::fold(FoldAdaptor adaptor) {
   if (auto toValue = getValue().getDefiningOp<ToValueOp>())
     if (toValue.getStream().getType() == getType())
       return toValue.getStream();
@@ -200,7 +203,7 @@ LogicalResult ToValueOp::verify() {
   return success();
 }
 
-OpFoldResult ToValueOp::fold(ArrayRef<Attribute>) {
+OpFoldResult ToValueOp::fold(FoldAdaptor adaptor) {
   if (auto toStream = getStream().getDefiningOp<ToStreamOp>())
     if (toStream.getValue().getType() == getType())
       return toStream.getValue();
@@ -831,7 +834,7 @@ LogicalResult BufferDevectorizeOp::verify() {
                                   getInputType());
 }
 
-OpFoldResult BufferVectorizeOp::fold(ArrayRef<Attribute>) {
+OpFoldResult BufferVectorizeOp::fold(FoldAdaptor adaptor) {
   if (auto devectorize = getInput().getDefiningOp<BufferDevectorizeOp>())
     if (devectorize.getInputType() == getType())
       return devectorize.getInput();
@@ -1017,10 +1020,12 @@ void AffineSelectOp::getCanonicalizationPatterns(RewritePatternSet &results,
 }
 
 /// Canonicalize an affine if op's conditional (integer set + operands).
-OpFoldResult AffineSelectOp::fold(ArrayRef<Attribute>) {
+OpFoldResult AffineSelectOp::fold(FoldAdaptor adaptor) {
   auto set = getIntegerSet();
   SmallVector<Value, 4> operands(getArgs());
-  composeSetAndOperands(set, operands);
+  auto map = AffineMap::get(set.getNumDims(), set.getNumSymbols(),
+                            set.getConstraints(), set.getContext());
+  fullyComposeAffineMapAndOperands(&map, &operands);
   canonicalizeSetAndOperands(&set, &operands);
   return {};
 }
@@ -1206,7 +1211,7 @@ PartitionLayoutAttr::verify(function_ref<InFlightDiagnostic()> emitError,
 /// given array shape.
 SmallVector<int64_t>
 PartitionLayoutAttr::getActualFactors(ArrayRef<int64_t> shape) {
-  SmallVector<int64_t, 4> actualFactors;
+  SmallVector<int64_t, 6> actualFactors;
   for (auto [size, kind, factor] : llvm::zip(shape, getKinds(), getFactors())) {
     if (kind == PartitionKind::BLOCK)
       actualFactors.push_back((size + factor - 1) / factor);

@@ -8,4 +8,8 @@ add_mlir_dialect_library(MLIRHLS
   MLIRHLSEnumsIncGen
   MLIRHLSAttributesIncGen
   MLIRHLSInterfacesIncGen
+
+  LINK_LIBS PUBLIC
+  MLIRAffineAnalysis
+  MLIRAnalysis
   )
