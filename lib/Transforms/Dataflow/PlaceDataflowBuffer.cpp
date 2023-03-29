@@ -111,13 +111,9 @@ struct PlaceDataflowBuffer
     auto func = getOperation();
     auto context = func.getContext();
 
-    llvm::outs() << "1\n";
-
     mlir::RewritePatternSet patterns(context);
     patterns.add<PlaceBuffer>(context, threshold, placeExternalBuffer);
-    (void)applyOpPatternsAndFold(func, std::move(patterns));
-
-    llvm::outs() << "2\n";
+    (void)applyOpPatternsAndFold(func.getOperation(), std::move(patterns));
 
     patterns.clear();
     patterns.add<HoistDramBuffer>(context);

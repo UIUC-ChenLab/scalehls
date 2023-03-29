@@ -424,6 +424,15 @@ using ReverseOpIteratorsMap =
 using OpIteratorsMap =
     DenseMap<PtrLikeMemRefAccess, SmallVector<Operation **, 16>>;
 
+//===----------------------------------------------------------------------===//
+// Printing
+//===----------------------------------------------------------------------===//
+
+/// Prints dimension and symbol list.
+void printDimAndSymbolList(Operation::operand_iterator begin,
+                           Operation::operand_iterator end, unsigned numDims,
+                           OpAsmPrinter &printer);
+
 } // namespace scalehls
 } // namespace mlir
 

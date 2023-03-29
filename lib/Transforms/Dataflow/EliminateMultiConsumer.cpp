@@ -34,6 +34,7 @@ struct InsertForkNode : public OpRewritePattern<NodeOp> {
       hasChanged = true;
       rewriter.setInsertionPointAfter(node);
       SmallVector<Value> buffers;
+      SmallVector<Type> bufferTypes;
       SmallVector<Location> bufferLocs;
 
       // Insert a buffer for each consumer.
@@ -42,6 +43,7 @@ struct InsertForkNode : public OpRewritePattern<NodeOp> {
         output.replaceUsesWithIf(
             buffer, [&](OpOperand &use) { return use.getOwner() == consumer; });
         buffers.push_back(buffer);
+        bufferTypes.push_back(buffer.getType());
         bufferLocs.push_back(loc);
       }
 
@@ -49,7 +51,7 @@ struct InsertForkNode : public OpRewritePattern<NodeOp> {
       auto fork = rewriter.create<NodeOp>(loc, output, buffers);
       auto block = rewriter.createBlock(&fork.getBody());
       auto outputArg = block->addArgument(output.getType(), output.getLoc());
-      auto bufferArgs = block->addArguments(ValueRange(buffers), bufferLocs);
+      auto bufferArgs = block->addArguments(bufferTypes, bufferLocs);
 
       // Create explicit copy from the original output to the buffers.
       rewriter.setInsertionPointToStart(block);

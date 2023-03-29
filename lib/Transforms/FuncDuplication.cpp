@@ -25,6 +25,7 @@ struct SubViewSinkPattern : public OpRewritePattern<func::CallOp> {
     assert(func && "function definition not found");
 
     SmallVector<Value, 16> newInputs;
+    SmallVector<Type, 16> newInputTypes;
     bool hasChanged = false;
     for (auto operand : call->getOperands()) {
       if (auto subview = operand.getDefiningOp<memref::SubViewOp>()) {
@@ -46,13 +47,17 @@ struct SubViewSinkPattern : public OpRewritePattern<func::CallOp> {
         }
 
         newInputs.append(subview.operand_begin(), subview.operand_end());
+        newInputTypes.append(subview.getOperandTypes().begin(),
+                             subview.getOperandTypes().end());
         hasChanged = true;
-      } else
+      } else {
         newInputs.push_back(operand);
+        newInputTypes.push_back(operand.getType());
+      }
     }
 
     if (hasChanged) {
-      func.setType(rewriter.getFunctionType(ValueRange(newInputs),
+      func.setType(rewriter.getFunctionType(TypeRange(newInputTypes),
                                             func.getResultTypes()));
       rewriter.setInsertionPoint(call);
       rewriter.replaceOpWithNewOp<func::CallOp>(call, func, newInputs);

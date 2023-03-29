@@ -117,7 +117,7 @@ struct CollapseMemrefUnitDims
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<CollapseFuncMemref>(context);
-    (void)applyOpPatternsAndFold(func, std::move(patterns));
+    (void)applyOpPatternsAndFold(func.getOperation(), std::move(patterns));
   }
 };
 } // namespace
