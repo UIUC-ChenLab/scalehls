@@ -49,7 +49,7 @@ bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
                                    ArrayRef<hls::PartitionKind> kinds,
                                    bool updateFuncSignature) {
   auto arrayType = array.getType().dyn_cast<MemRefType>();
-  if (!arrayType || !arrayType.hasStaticShape() ||
+  if (!arrayType || isExtBuffer(array) || !arrayType.hasStaticShape() ||
       (int64_t)factors.size() != arrayType.getRank() ||
       (int64_t)kinds.size() != arrayType.getRank())
     return false;
