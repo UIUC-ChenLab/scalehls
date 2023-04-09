@@ -68,6 +68,65 @@ static std::string getDataTypeName(Type type) {
   return "unknown_type";
 }
 
+static std::string getStorageTypeAndImpl(MemoryKind kind, std::string typeStr,
+                                         std::string implStr) {
+  switch (kind) {
+  case MemoryKind::LUTRAM_1P:
+    return typeStr + "=ram_1p " + implStr + "=lutram";
+  case MemoryKind::LUTRAM_2P:
+    return typeStr + "=ram_2p " + implStr + "=lutram";
+  case MemoryKind::LUTRAM_S2P:
+    return typeStr + "=ram_s2p " + implStr + "=lutram";
+  case MemoryKind::BRAM_1P:
+    return typeStr + "=ram_1p " + implStr + "=bram";
+  case MemoryKind::BRAM_2P:
+    return typeStr + "=ram_2p " + implStr + "=bram";
+  case MemoryKind::BRAM_S2P:
+    return typeStr + "=ram_s2p " + implStr + "=bram";
+  case MemoryKind::BRAM_T2P:
+    return typeStr + "=ram_t2p " + implStr + "=bram";
+  case MemoryKind::URAM_1P:
+    return typeStr + "=ram_1p " + implStr + "=uram";
+  case MemoryKind::URAM_2P:
+    return typeStr + "=ram_2p " + implStr + "=uram";
+  case MemoryKind::URAM_S2P:
+    return typeStr + "=ram_s2p " + implStr + "=uram";
+  case MemoryKind::URAM_T2P:
+    return typeStr + "=ram_t2p " + implStr + "=uram";
+  default:
+    return typeStr + "=ram_t2p " + implStr + "=bram";
+  }
+}
+
+static std::string getVivadoStorageTypeAndImpl(MemoryKind kind) {
+  switch (kind) {
+  case MemoryKind::LUTRAM_1P:
+    return "ram_1p_lutram";
+  case MemoryKind::LUTRAM_2P:
+    return "ram_2p_lutram";
+  case MemoryKind::LUTRAM_S2P:
+    return "ram_s2p_lutram";
+  case MemoryKind::BRAM_1P:
+    return "ram_1p_bram";
+  case MemoryKind::BRAM_2P:
+    return "ram_2p_bram";
+  case MemoryKind::BRAM_S2P:
+    return "ram_s2p_bram";
+  case MemoryKind::BRAM_T2P:
+    return "ram_t2p_bram";
+  case MemoryKind::URAM_1P:
+    return "ram_1p_uram";
+  case MemoryKind::URAM_2P:
+    return "ram_2p_uram";
+  case MemoryKind::URAM_S2P:
+    return "ram_s2p_uram";
+  case MemoryKind::URAM_T2P:
+    return "ram_t2p_uram";
+  default:
+    return "ram_t2p_bram";
+  }
+}
+
 //===----------------------------------------------------------------------===//
 // Some Base Classes
 //===----------------------------------------------------------------------===//
@@ -306,7 +365,7 @@ private:
   /// MLIR component and HLS C++ pragma emitters.
   void emitBlock(Block &block);
   void emitLoopDirectives(Operation *op);
-  void emitArrayDirectives(Value memref);
+  void emitArrayDirectives(Value memref, bool isInterface = false);
   void emitFunctionDirectives(func::FuncOp func, ArrayRef<Value> portList);
   void emitFunction(func::FuncOp func);
 };
@@ -674,9 +733,15 @@ void ModuleEmitter::emitAxiPort(AxiPortOp op) {
   // if (op.getType().isa<MemRefType, StreamType>()) {
   indent() << "#pragma HLS interface";
 
-  if (op.getBundleType().getKind() == AxiKind::MM)
-    os << " m_axi offset=slave";
-  else if (op.getBundleType().getKind() == AxiKind::STREAM)
+  if (op.getBundleType().getKind() == AxiKind::MM) {
+    if (isExtBuffer(op.getElement()))
+      os << " m_axi offset=slave";
+    else {
+      os << " bram ";
+      auto kind = getMemoryKind(op.getElement().getType().cast<MemRefType>());
+      os << getStorageTypeAndImpl(kind, "storage_type", "storage_impl");
+    }
+  } else if (op.getBundleType().getKind() == AxiKind::STREAM)
     os << " axis";
   else
     llvm_unreachable("AXI element type must be a memref or stream");
@@ -686,7 +751,8 @@ void ModuleEmitter::emitAxiPort(AxiPortOp op) {
   os << " bundle=" << op.getBundleName();
   os << "\n";
 
-  // emitArrayDirectives(op.getElement());
+  if (op.getElement().getType().isa<MemRefType>())
+    emitArrayDirectives(op.getElement(), true);
   // } else {
   //   indent() << "#pragma HLS interface s_axilite";
   //   os << " port=";
@@ -1716,7 +1782,7 @@ void ModuleEmitter::emitLoopDirectives(Operation *loop) {
     indent() << "#pragma HLS dataflow\n";
 }
 
-void ModuleEmitter::emitArrayDirectives(Value memref) {
+void ModuleEmitter::emitArrayDirectives(Value memref, bool isInterface) {
   bool emitPragmaFlag = false;
   auto type = memref.getType().cast<MemRefType>();
 
@@ -1751,100 +1817,25 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
 
   // Emit resource pragma when the array is not DRAM kind and is not fully
   // partitioned.
-  auto kind = getMemoryKind(type);
-  if (kind != MemoryKind::DRAM && !isFullyPartitioned(type)) {
-    emitPragmaFlag = true;
+  if (!isInterface) {
+    auto kind = getMemoryKind(type);
+    if (kind != MemoryKind::DRAM && !isFullyPartitioned(type)) {
+      emitPragmaFlag = true;
 
-    if (emitVitisDirectives.getValue()) {
-      indent() << "#pragma HLS bind_storage";
-      os << " variable=";
-      emitValue(memref);
-
-      switch (kind) {
-      case MemoryKind::LUTRAM_1P:
-        os << " type=ram_1p impl=lutram";
-        break;
-      case MemoryKind::LUTRAM_2P:
-        os << " type=ram_2p impl=lutram";
-        break;
-      case MemoryKind::LUTRAM_S2P:
-        os << " type=ram_s2p impl=lutram";
-        break;
-      case MemoryKind::BRAM_1P:
-        os << " type=ram_1p impl=bram";
-        break;
-      case MemoryKind::BRAM_2P:
-        os << " type=ram_2p impl=bram";
-        break;
-      case MemoryKind::BRAM_S2P:
-        os << " type=ram_s2p impl=bram";
-        break;
-      case MemoryKind::BRAM_T2P:
-        os << " type=ram_t2p impl=bram";
-        break;
-      case MemoryKind::URAM_1P:
-        os << " type=ram_1p impl=uram";
-        break;
-      case MemoryKind::URAM_2P:
-        os << " type=ram_2p impl=uram";
-        break;
-      case MemoryKind::URAM_S2P:
-        os << " type=ram_s2p impl=uram";
-        break;
-      case MemoryKind::URAM_T2P:
-        os << " type=ram_t2p impl=uram";
-        break;
-      default:
-        os << " type=ram_t2p impl=bram";
-        break;
+      if (emitVitisDirectives.getValue()) {
+        indent() << "#pragma HLS bind_storage";
+        os << " variable=";
+        emitValue(memref);
+        os << " " << getStorageTypeAndImpl(kind, "type", "impl");
+      } else {
+        indent() << "#pragma HLS resource";
+        os << " variable=";
+        emitValue(memref);
+        os << " core=" << getVivadoStorageTypeAndImpl(kind);
       }
-    } else {
-      indent() << "#pragma HLS resource";
-      os << " variable=";
-      emitValue(memref);
-
-      os << " core=";
-      switch (kind) {
-      case MemoryKind::LUTRAM_1P:
-        os << "ram_1p_lutram";
-        break;
-      case MemoryKind::LUTRAM_2P:
-        os << "ram_2p_lutram";
-        break;
-      case MemoryKind::LUTRAM_S2P:
-        os << "ram_s2p_lutram";
-        break;
-      case MemoryKind::BRAM_1P:
-        os << "ram_1p_bram";
-        break;
-      case MemoryKind::BRAM_2P:
-        os << "ram_2p_bram";
-        break;
-      case MemoryKind::BRAM_S2P:
-        os << "ram_s2p_bram";
-        break;
-      case MemoryKind::BRAM_T2P:
-        os << "ram_t2p_bram";
-        break;
-      case MemoryKind::URAM_1P:
-        os << "ram_1p_uram";
-        break;
-      case MemoryKind::URAM_2P:
-        os << "ram_2p_uram";
-        break;
-      case MemoryKind::URAM_S2P:
-        os << "ram_s2p_uram";
-        break;
-      case MemoryKind::URAM_T2P:
-        os << "ram_t2p_uram";
-        break;
-      default:
-        os << "ram_t2p_bram";
-        break;
-      }
+      // Emit a new line.
+      os << "\n";
     }
-    // Emit a new line.
-    os << "\n";
   }
 
   // Emit an empty line.
@@ -1880,7 +1871,7 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
 
   for (auto &port : portList)
     if (port.getType().isa<MemRefType>())
-      emitArrayDirectives(port);
+      emitArrayDirectives(port, true);
 
   if (auto funcDirect = getFuncDirective(func)) {
     if (funcDirect.getPipeline()) {
