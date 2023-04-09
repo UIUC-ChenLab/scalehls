@@ -6,6 +6,9 @@
 
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
+#include "llvm/Support/Debug.h"
+
+#define DEBUG_TYPE "array-partition"
 
 using namespace mlir;
 using namespace scalehls;
@@ -46,10 +49,18 @@ bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
                                    ArrayRef<hls::PartitionKind> kinds,
                                    bool updateFuncSignature) {
   auto arrayType = array.getType().dyn_cast<MemRefType>();
-  if (!arrayType || isDram(arrayType) || !arrayType.hasStaticShape() ||
+  if (!arrayType || !arrayType.hasStaticShape() ||
       (int64_t)factors.size() != arrayType.getRank() ||
       (int64_t)kinds.size() != arrayType.getRank())
     return false;
+
+  LLVM_DEBUG(llvm::dbgs() << "\nApply array partition to " << array << " at "
+                          << array.getLoc(););
+  LLVM_DEBUG(llvm::dbgs() << "\nfactors: ";);
+  LLVM_DEBUG(for (auto factor : factors) llvm::dbgs() << factor << ", ";);
+  LLVM_DEBUG(llvm::dbgs() << "\nkinds: ";);
+  LLVM_DEBUG(for (auto kind : kinds) llvm::dbgs() << kind << ", ";);
+  LLVM_DEBUG(llvm::dbgs() << "\n";);
 
   // Construct and set new array type.
   auto layoutAttr = PartitionLayoutAttr::getWithActualFactors(
@@ -164,6 +175,24 @@ getDimAccessMaps(Operation *op, AffineValueMap valueMap, int64_t dim) {
   return maps;
 }
 
+SmallVector<int64_t> createPermutationMap(ArrayRef<Value> vec1,
+                                          ArrayRef<Value> vec2) {
+  if (llvm::SmallDenseSet<Value>(vec1.begin(), vec1.end()) !=
+      llvm::SmallDenseSet<Value>(vec2.begin(), vec2.end()))
+    return {};
+
+  SmallVector<int64_t> permutation_map(vec1.size());
+  llvm::SmallDenseMap<Value, int> index_map;
+
+  for (size_t i = 0; i < vec1.size(); ++i) {
+    index_map[vec1[i]] = i;
+  }
+  for (size_t i = 0; i < vec2.size(); ++i) {
+    permutation_map[i] = index_map[vec2[i]];
+  }
+  return permutation_map;
+}
+
 /// Find the suitable array partition factors and kinds for all arrays in the
 /// targeted function.
 bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
@@ -208,10 +237,16 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
         partitions = SmallVector<Partition, 4>(
             memrefType.getRank(), Partition(PartitionKind::NONE, 1));
 
-      // Find the best partition solution for each dimensions of the memref.
+      LLVM_DEBUG(llvm::dbgs()
+                     << "\n----------\nArray partition for " << memref;);
+
+      // Find the best partition solution for each dimensions of the
+      // memref.
       for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
         // Collect all array access indices of the current dimension.
         SmallVector<AffineValueMap, 4> indices;
+
+        LLVM_DEBUG(llvm::dbgs() << "\n\nDimension " << dim << "";);
 
         for (auto accessOp : loadStores) {
           auto valueMap = getAffineValueMap(accessOp);
@@ -228,8 +263,11 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
             if (find_if(indices, [&](auto index) {
                   return index.getAffineMap() == dimValueMap.getAffineMap() &&
                          index.getOperands() == dimValueMap.getOperands();
-                }) == indices.end())
+                }) == indices.end()) {
               indices.push_back(dimValueMap);
+              LLVM_DEBUG(llvm::dbgs()
+                             << "\nIndex: " << dimValueMap.getResult(0););
+            }
           }
         }
         auto accessNum = indices.size();
@@ -241,16 +279,52 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
 
         for (unsigned i = 0; i < accessNum; ++i) {
           for (unsigned j = i + 1; j < accessNum; ++j) {
-            if (indices[i].getOperands() != indices[j].getOperands()) {
-              requireMux = true;
-              continue;
+            auto lhsIndex = indices[i];
+            auto rhsIndex = indices[j];
+            auto lhsExpr = lhsIndex.getResult(0);
+            auto rhsExpr = rhsIndex.getResult(0);
+
+            if (lhsIndex.getOperands() != rhsIndex.getOperands()) {
+              // Here, we try to find a permutation map to make the two index
+              // identical.
+              auto possiblePermutation = createPermutationMap(
+                  lhsIndex.getOperands(), rhsIndex.getOperands());
+
+              if (possiblePermutation.empty()) {
+                // If no permutation map is found, we need to use a mux to
+                // select value from the partitioned array. Meanwhile, we cannot
+                // calculate the distance in this case, so continue.
+                requireMux = true;
+                continue;
+              } else {
+                // If a permutation map is found, we need to apply it to the
+                // rhsExpr.
+                SmallVector<AffineExpr, 4> dimReplacements;
+                SmallVector<AffineExpr, 4> symReplacements;
+                for (auto i : possiblePermutation) {
+                  if (i < rhsIndex.getNumDims())
+                    dimReplacements.push_back(
+                        getAffineDimExpr(i, func.getContext()));
+                  else
+                    symReplacements.push_back(getAffineSymbolExpr(
+                        i - rhsIndex.getNumDims(), func.getContext()));
+                }
+                rhsExpr = rhsExpr.replaceDimsAndSymbols(dimReplacements,
+                                                        symReplacements);
+              }
             }
 
-            auto expr = indices[j].getResult(0) - indices[i].getResult(0);
-            auto newExpr = simplifyAffineExpr(expr, indices[i].getNumDims(),
-                                              indices[i].getNumSymbols());
+            LLVM_DEBUG(llvm::dbgs() << "\nDistance: "
+                                    << "(" << lhsExpr << ")"
+                                    << " - "
+                                    << "(" << rhsExpr << ")";);
+            auto newExpr =
+                simplifyAffineExpr(rhsExpr - lhsExpr, lhsIndex.getNumDims(),
+                                   lhsIndex.getNumSymbols());
 
             if (auto constDistance = newExpr.dyn_cast<AffineConstantExpr>()) {
+              LLVM_DEBUG(llvm::dbgs() << " = " << constDistance.getValue(););
+
               unsigned distance = std::abs(constDistance.getValue());
               maxDistance = std::max(maxDistance, distance);
               maxCommonDivisor = std::gcd(distance, maxCommonDivisor);
@@ -289,8 +363,13 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
           kind = PartitionKind::BLOCK;
         }
 
+        LLVM_DEBUG(llvm::dbgs() << "\nStretegy: "
+                                << " factor=" << factor << " kind=" << kind;);
+
         // TODO: For now, we always pick the partition with the largest factor.
         if (factor > partitions[dim].second) {
+          LLVM_DEBUG(llvm::dbgs() << " (update)";);
+
           // The rationale here is if the accessing partition index cannot be
           // determined and partition factor is more than 3, a multiplexer will
           // be generated and the memory access operation will be wrapped into a
@@ -306,6 +385,10 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
             partitions[dim] = Partition(kind, factor);
         }
       }
+
+      LLVM_DEBUG(llvm::dbgs() << "\n\nAccesses: ";);
+      for (auto op : loadStores)
+        LLVM_DEBUG(llvm::dbgs() << "\n" << *op;);
     }
   }
 
@@ -320,7 +403,7 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
     applyAutoArrayPartition(subFunc);
 
     for (auto [type, operand] :
-         llvm::zip(subFunc.getArgumentTypes(), op.getOperands()))
+         llvm::zip(subFunc.getArgumentTypes(), op.getOperands())) {
       if (auto memrefType = type.dyn_cast<MemRefType>()) {
         auto &partitions = partitionsMap[operand];
 
@@ -341,7 +424,9 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
             if (factor > partitions[dim].second)
               partitions[dim] = Partition(kind, factor);
           }
-      }
+      } else
+        operand.setType(type);
+    }
   });
 
   // Constuct and set new type to each partitioned MemRefType.
@@ -358,6 +443,14 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
           return kind != PartitionKind::NONE;
         }))
       applyArrayPartition(memref, factors, kinds, false);
+
+    if (auto axiPort = memref.getDefiningOp<AxiPortOp>()) {
+      auto axiType = AxiType::get(memref.getContext(), memref.getType());
+      LLVM_DEBUG(llvm::dbgs() << "\nUpdate AxiPort type: " << *axiPort
+                              << ", Type: " << axiType << "\n";);
+      axiPort.getAxi().setType(axiType);
+      LLVM_DEBUG(llvm::dbgs() << "Updated op: " << *axiPort << "\n";);
+    }
   }
 
   // Align function type with entry block argument types.
@@ -367,7 +460,6 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
 
   // Update the types of all sub-functions.
   updateSubFuncs(func, builder);
-
   return true;
 }
 
