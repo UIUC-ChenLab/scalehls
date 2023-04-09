@@ -26,13 +26,18 @@ static bool applyLoopVectorization(AffineLoopBand &band,
     return true;
 
   // We require all loops to be parallel loop.
-  for (auto loop : band)
-    if (!(hasParallelAttr(loop) || isLoopParallel(loop)))
+  for (auto [loop, size] : llvm::zip(band, vectorFactors))
+    if (size != 1 && !(hasParallelAttr(loop) || isLoopParallel(loop)))
       return false;
+
+  LLVM_DEBUG(llvm::dbgs() << "Loop vectorization ";);
+  LLVM_DEBUG(llvm::dbgs() << "vector factors: ";);
+  LLVM_DEBUG(for (auto factor : vectorFactors) llvm::dbgs() << factor << " ";);
 
   // Apply loop vectorization.
   auto loopSet = llvm::DenseSet<Operation *>(band.begin(), band.end());
-  auto sizes = SmallVector<int64_t>(vectorFactors.begin(), vectorFactors.end());
+  auto sizes =
+      SmallVector<int64_t>(vectorFactors.rbegin(), vectorFactors.rend());
   vectorizeAffineLoops(band.front()->getParentOp(), loopSet, sizes, {});
   return true;
 }
