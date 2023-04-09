@@ -20,23 +20,32 @@ struct PlaceBuffer : public OpRewritePattern<func::FuncOp> {
       : OpRewritePattern<func::FuncOp>(context), threshold(threshold),
         placeExternalBuffer(placeExternalBuffer) {}
 
+  // TODO: For now, we use a heuristic to determine the buffer location.
+  MemRefType getPlacedType(MemRefType type, bool isConstBuffer) const {
+    auto kind = MemoryKind::BRAM_T2P;
+    if (placeExternalBuffer)
+      kind = type.getNumElements() >= threshold ? MemoryKind::DRAM
+                                                : MemoryKind::BRAM_T2P;
+    auto newType = MemRefType::get(
+        type.getShape(), type.getElementType(), type.getLayout().getAffineMap(),
+        MemoryKindAttr::get(type.getContext(), kind));
+    return newType;
+  }
+
+  MemRefType getPlacedOnDramType(MemRefType type) const {
+    auto newType = MemRefType::get(
+        type.getShape(), type.getElementType(), type.getLayout().getAffineMap(),
+        MemoryKindAttr::get(type.getContext(), MemoryKind::DRAM));
+    return newType;
+  }
+
   LogicalResult matchAndRewrite(func::FuncOp func,
                                 PatternRewriter &rewriter) const override {
     bool hasChanged = false;
 
     for (auto arg : func.getArguments())
-      if (auto type = arg.getType().dyn_cast<MemRefType>()) {
-        if (auto attr = type.getMemorySpace())
-          if (attr.isa<MemoryKindAttr>())
-            continue;
-
-        auto newType = MemRefType::get(
-            type.getShape(), type.getElementType(),
-            type.getLayout().getAffineMap(),
-            MemoryKindAttr::get(type.getContext(), MemoryKind::DRAM));
-        arg.setType(newType);
-        hasChanged = true;
-      }
+      if (auto type = arg.getType().dyn_cast<MemRefType>())
+        arg.setType(getPlacedType(type, false));
 
     func.walk([&](hls::BufferLikeInterface buffer) {
       auto type = buffer.getMemref().getType().cast<MemRefType>();
