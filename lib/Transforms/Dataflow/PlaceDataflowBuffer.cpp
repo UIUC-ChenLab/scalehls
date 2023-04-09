@@ -23,7 +23,7 @@ struct PlaceBuffer : public OpRewritePattern<func::FuncOp> {
   // TODO: For now, we use a heuristic to determine the buffer location.
   MemRefType getPlacedType(MemRefType type, bool isConstBuffer) const {
     auto kind = MemoryKind::BRAM_T2P;
-    if (placeExternalBuffer || isConstBuffer)
+    if (placeExternalBuffer)
       kind = type.getNumElements() >= threshold ? MemoryKind::DRAM
                                                 : MemoryKind::BRAM_T2P;
     auto newType = MemRefType::get(
@@ -43,7 +43,7 @@ struct PlaceBuffer : public OpRewritePattern<func::FuncOp> {
                                 PatternRewriter &rewriter) const override {
     for (auto arg : func.getArguments())
       if (auto type = arg.getType().dyn_cast<MemRefType>())
-        arg.setType(getPlacedOnDramType(type));
+        arg.setType(getPlacedType(type, false));
 
     func.walk([&](hls::BufferLikeInterface buffer) {
       buffer.getMemref().setType(getPlacedType(
