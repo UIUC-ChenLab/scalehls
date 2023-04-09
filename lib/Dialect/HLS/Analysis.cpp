@@ -148,24 +148,30 @@ getBufferIndexDepthsAndStrides(NodeOp node, Value buffer) {
                                       &flattenedExpr)))
       return {};
 
-    int64_t loopDepth = -1;
-    int64_t loopStride = -1;
+    SmallVector<std::tuple<int64_t, int64_t, bool, int64_t>> candidates;
     for (unsigned i = 0, e = bufferMap.getNumDims(); i < e; ++i) {
       auto loop = getForInductionVarOwner(bufferOperands[i]);
       if (flattenedExpr[i] == 0 || !loop)
         continue;
 
       unsigned depth = llvm::find(band, loop) - band.begin();
-      if (depth != band.size()) {
-        // TODO: Support buffer index to involve multiple loop ivs.
-        if (loopDepth != -1 || loopStride != -1)
-          return {};
-        loopDepth = depth;
-        loopStride = flattenedExpr[i];
-      }
+      if (depth != band.size())
+        candidates.push_back(std::tuple(depth, flattenedExpr[i],
+                                        isLoopParallel(loop),
+                                        getAverageTripCount(loop).value_or(1)));
     }
-    depths.push_back(loopDepth);
-    strides.push_back(loopStride);
+    // TODO: Better support buffer index to resolve multiple loop ivs.
+    // For now, we just pick the loop iv of parallel loop with the largest loop
+    // trip count.
+    llvm::sort(
+        candidates, [](const std::tuple<int64_t, int64_t, bool, int64_t> &lhs,
+                       const std::tuple<int64_t, int64_t, bool, int64_t> &rhs) {
+          return std::get<2>(lhs) > std::get<2>(rhs) || // parallel loop first
+                 (std::get<2>(lhs) == std::get<2>(rhs) &&
+                  std::get<3>(lhs) > std::get<3>(rhs));
+        });
+    depths.push_back(std::get<0>(candidates.front()));
+    strides.push_back(std::get<1>(candidates.front()));
   }
   return {depths, strides};
 }
