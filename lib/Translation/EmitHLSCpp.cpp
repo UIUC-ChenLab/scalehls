@@ -21,6 +21,8 @@ static llvm::cl::opt<bool> emitVitisDirectives("emit-vitis-directives",
                                                llvm::cl::init(false));
 static llvm::cl::opt<bool> enforceFalseDependency("enforce-false-dependency",
                                                   llvm::cl::init(false));
+static llvm::cl::opt<int64_t> limitDspNumber("limit-dsp-number",
+                                             llvm::cl::init(240));
 
 //===----------------------------------------------------------------------===//
 // Utils
@@ -368,6 +370,8 @@ private:
   void emitArrayDirectives(Value memref, bool isInterface = false);
   void emitFunctionDirectives(func::FuncOp func, ArrayRef<Value> portList);
   void emitFunction(func::FuncOp func);
+
+  unsigned numDSPs = 0;
 };
 } // namespace
 
@@ -797,13 +801,23 @@ void ModuleEmitter::emitPrimMul(PrimMulOp op) {
     auto rank = emitNestedLoopHeader(op.getC());
     indent();
     emitValue(op.getC(), rank);
-    os << " = (ap_int<16>)";
+    os << " = (ap_int<8>)";
     emitValue(op.getA(), rank);
-    os << " * (ap_int<16>)";
+    os << " * (ap_int<8>)";
     emitValue(op.getB(), rank);
     os << ";";
     emitInfoAndNewLine(op);
     emitNestedLoopFooter(rank);
+
+    indent();
+    os << "#pragma HLS bind_op op=mul variable=";
+    emitValue(op.getC(), rank);
+    if (numDSPs < limitDspNumber) {
+      numDSPs++;
+      os << " impl=dsp";
+    } else
+      os << " impl=fabric";
+    os << "\n";
   }
 }
 
