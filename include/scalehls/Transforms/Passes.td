@@ -453,6 +453,11 @@ def ArrayPartition : Pass<"scalehls-array-partition", "ModuleOp"> {
     layout of the corresponding memref.
   }];
   let constructor = "mlir::scalehls::createArrayPartitionPass()";
+
+  let options = [
+    Option<"threshold", "threshold", "unsigned", /*default=*/"128",
+           "Positive number: the threshold of using LUTRAM">
+  ];
 }
 
 def CreateHLSPrimitive : Pass<"scalehls-create-hls-primitive", "func::FuncOp"> {

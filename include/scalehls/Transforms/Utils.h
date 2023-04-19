@@ -50,11 +50,12 @@ bool applyFullyLoopUnrolling(Block &block, unsigned maxIterNum = 10);
 /// Apply the specified array partition factors and kinds.
 bool applyArrayPartition(Value array, ArrayRef<unsigned> factors,
                          ArrayRef<hls::PartitionKind> kinds,
-                         bool updateFuncSignature = true);
+                         bool updateFuncSignature = true,
+                         unsigned threhold = 128);
 
 /// Find the suitable array partition factors and kinds for all arrays in the
 /// targeted function.
-bool applyAutoArrayPartition(func::FuncOp func);
+bool applyAutoArrayPartition(func::FuncOp func, unsigned threhold = 128);
 
 bool applyFuncPreprocess(func::FuncOp func, bool topFunc);
 
