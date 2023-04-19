@@ -887,8 +887,8 @@ LogicalResult AxiPortOp::verify() {
 }
 
 LogicalResult AxiPackOp::verify() {
-  if (getAxiType().getElementType() != getElement().getType())
-    return emitOpError("axi type doesn't align with element type");
+  // if (getAxiType().getElementType() != getElement().getType())
+  //   return emitOpError("axi type doesn't align with element type");
   return success();
 }
 

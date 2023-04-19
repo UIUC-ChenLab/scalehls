@@ -50,63 +50,67 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band,
 
   // A map of dependency distances indexed by the loop in the band.
   SmallVector<AffineForOp, 8> targetLoops;
-  llvm::SmallDenseMap<Operation *, unsigned, 8> distanceMap;
+  for (auto loop : band)
+    if (!isLoopParallel(loop))
+      targetLoops.push_back(loop);
 
-  //  Only the loops in the loop band will be checked.
-  unsigned startDepth = commonLoopDepth - bandDepth + 1;
-  for (unsigned depth = startDepth; depth < commonLoopDepth + 1; ++depth) {
-    auto loop = band[depth - startDepth];
-    unsigned minDistance = UINT_MAX;
+  // llvm::SmallDenseMap<Operation *, unsigned, 8> distanceMap;
 
-    // Traverse all memories in the loop block and find all dependencies
-    // associated to each memory.
-    for (auto pair : loadStoresMap) {
-      auto loadStores = pair.second;
+  // //  Only the loops in the loop band will be checked.
+  // unsigned startDepth = commonLoopDepth - bandDepth + 1;
+  // for (unsigned depth = startDepth; depth < commonLoopDepth + 1; ++depth) {
+  //   auto loop = band[depth - startDepth];
+  //   unsigned minDistance = UINT_MAX;
 
-      int64_t dstIndex = 1;
-      for (auto dstOp : loadStores) {
-        for (auto srcOp : llvm::drop_begin(loadStores, dstIndex)) {
-          MemRefAccess dstAccess(dstOp);
-          MemRefAccess srcAccess(srcOp);
+  //   // Traverse all memories in the loop block and find all dependencies
+  //   // associated to each memory.
+  //   for (auto pair : loadStoresMap) {
+  //     auto loadStores = pair.second;
 
-          FlatAffineValueConstraints depConstrs;
-          SmallVector<DependenceComponent, 2> depComps;
+  //     int64_t dstIndex = 1;
+  //     for (auto dstOp : loadStores) {
+  //       for (auto srcOp : llvm::drop_begin(loadStores, dstIndex)) {
+  //         MemRefAccess dstAccess(dstOp);
+  //         MemRefAccess srcAccess(srcOp);
 
-          DependenceResult result = checkMemrefAccessDependence(
-              srcAccess, dstAccess, depth, &depConstrs, &depComps);
+  //         FlatAffineValueConstraints depConstrs;
+  //         SmallVector<DependenceComponent, 2> depComps;
 
-          if (hasDependence(result)) {
-            auto depComp = depComps[depth - 1];
-            assert(loop == depComp.op && "unexpected dependency");
+  //         DependenceResult result = checkMemrefAccessDependence(
+  //             srcAccess, dstAccess, depth, &depConstrs, &depComps);
 
-            // Only positive distance will be recorded.
-            if (depComp.ub.value() > 0) {
-              unsigned distance = std::max(depComp.lb.value(), (int64_t)1);
-              minDistance = std::min(minDistance, distance);
-            }
-          }
-        }
-        ++dstIndex;
-      }
-    }
+  //         if (hasDependence(result)) {
+  //           auto depComp = depComps[depth - 1];
+  //           assert(loop == depComp.op && "unexpected dependency");
 
-    // Collect all candidate loops into an ordered vector. Loop with the
-    // smallest distance will appear in the front.
-    if (minDistance < UINT_MAX) {
-      distanceMap[loop] = minDistance;
+  //           // Only positive distance will be recorded.
+  //           if (depComp.ub.value() > 0) {
+  //             unsigned distance = std::max(depComp.lb.value(), (int64_t)1);
+  //             minDistance = std::min(minDistance, distance);
+  //           }
+  //         }
+  //       }
+  //       ++dstIndex;
+  //     }
+  //   }
 
-      for (auto it = targetLoops.begin(); it <= targetLoops.end(); ++it)
-        if (it == targetLoops.end()) {
-          targetLoops.push_back(loop);
-          break;
-        } else if (minDistance < distanceMap[*it]) {
-          targetLoops.insert(it, loop);
-          break;
-        }
-    }
-  }
+  //   // Collect all candidate loops into an ordered vector. Loop with the
+  //   // smallest distance will appear in the front.
+  //   if (minDistance < UINT_MAX) {
+  //     distanceMap[loop] = minDistance;
 
-  distanceMap.clear();
+  //     for (auto it = targetLoops.begin(); it <= targetLoops.end(); ++it)
+  //       if (it == targetLoops.end()) {
+  //         targetLoops.push_back(loop);
+  //         break;
+  //       } else if (minDistance < distanceMap[*it]) {
+  //         targetLoops.insert(it, loop);
+  //         break;
+  //       }
+  //   }
+  // }
+
+  // distanceMap.clear();
 
   // Permute the target loops one by one.
   // TODO: a more comprehensive permution strategy search.
