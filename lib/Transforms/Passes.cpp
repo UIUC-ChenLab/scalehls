@@ -226,7 +226,8 @@ void scalehls::registerScaleFlowPyTorchPipeline() {
         pm.addPass(bufferization::createBufferLoopHoistingPass());
         pm.addPass(scalehls::createAffineLoopPerfectionPass());
         pm.addPass(scalehls::createAffineLoopOrderOptPass());
-        pm.addPass(scalehls::createAffineLoopTilePass(opts.loopTileSize));
+        if (opts.loopTileSize != 1)
+          pm.addPass(scalehls::createAffineLoopTilePass(opts.loopTileSize));
         pm.addPass(mlir::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
 

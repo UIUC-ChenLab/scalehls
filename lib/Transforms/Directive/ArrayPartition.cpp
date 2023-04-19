@@ -47,7 +47,8 @@ static void updateSubFuncs(func::FuncOp func, Builder builder) {
 /// Apply the specified array partition factors and kinds.
 bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
                                    ArrayRef<hls::PartitionKind> kinds,
-                                   bool updateFuncSignature) {
+                                   bool updateFuncSignature,
+                                   unsigned threshold) {
   auto arrayType = array.getType().dyn_cast<MemRefType>();
   if (!arrayType || isExtBuffer(array) || !arrayType.hasStaticShape() ||
       (int64_t)factors.size() != arrayType.getRank() ||
@@ -62,13 +63,24 @@ bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
   LLVM_DEBUG(for (auto kind : kinds) llvm::dbgs() << kind << ", ";);
   LLVM_DEBUG(llvm::dbgs() << "\n";);
 
+  // Calculate the actual depth of the partitioned array.
+  unsigned actualDepth = 1;
+  for (auto [factor, dimSize] : llvm::zip(factors, arrayType.getShape())) {
+    if (dimSize % factor != 0)
+      return false;
+    if (factor != 0)
+      actualDepth *= dimSize / factor;
+  }
+
   // Construct and set new array type.
   auto layoutAttr = PartitionLayoutAttr::getWithActualFactors(
       array.getContext(), kinds, SmallVector<int64_t>(factors),
       arrayType.getShape());
-  array.setType(MemRefType::get(arrayType.getShape(),
-                                arrayType.getElementType(), layoutAttr,
-                                arrayType.getMemorySpace()));
+  auto kindAttr = arrayType.getMemorySpace().cast<MemoryKindAttr>();
+  if (actualDepth < threshold)
+    kindAttr = MemoryKindAttr::get(array.getContext(), MemoryKind::LUTRAM_2P);
+  array.setType(MemRefType::get(
+      arrayType.getShape(), arrayType.getElementType(), layoutAttr, kindAttr));
 
   if (updateFuncSignature)
     if (auto func = array.getParentRegion()->getParentOfType<func::FuncOp>()) {
@@ -195,7 +207,7 @@ SmallVector<int64_t> createPermutationMap(ArrayRef<Value> vec1,
 
 /// Find the suitable array partition factors and kinds for all arrays in the
 /// targeted function.
-bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
+bool scalehls::applyAutoArrayPartition(func::FuncOp func, unsigned threshold) {
   // Check whether the input function is pipelined.
   bool funcPipeline = false;
   if (auto attr = getFuncDirective(func))
@@ -400,7 +412,7 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
     assert(subFunc && "callable is not a function operation");
 
     // Apply array partition to the sub-function.
-    applyAutoArrayPartition(subFunc);
+    applyAutoArrayPartition(subFunc, threshold);
 
     for (auto [type, operand] :
          llvm::zip(subFunc.getArgumentTypes(), op.getOperands())) {
@@ -442,7 +454,7 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
     if (llvm::any_of(kinds, [](PartitionKind kind) {
           return kind != PartitionKind::NONE;
         }))
-      applyArrayPartition(memref, factors, kinds, false);
+      applyArrayPartition(memref, factors, kinds, false, threshold);
 
     if (auto axiPort = memref.getDefiningOp<AxiPortOp>()) {
       auto axiType = AxiType::get(memref.getContext(), memref.getType());
@@ -465,6 +477,9 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func) {
 
 namespace {
 struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
+  ArrayPartition() = default;
+  explicit ArrayPartition(unsigned argThreshold) { threshold = argThreshold; }
+
   void runOnOperation() override {
     auto module = getOperation();
 
@@ -483,11 +498,11 @@ struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
       emitError(module.getLoc(), "fail to find the top function");
       return signalPassFailure();
     }
-    applyAutoArrayPartition(topFunc);
+    applyAutoArrayPartition(topFunc, threshold);
   }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createArrayPartitionPass() {
-  return std::make_unique<ArrayPartition>();
+std::unique_ptr<Pass> scalehls::createArrayPartitionPass(unsigned threshold) {
+  return std::make_unique<ArrayPartition>(threshold);
 }

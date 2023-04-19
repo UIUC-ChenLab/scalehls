@@ -105,7 +105,7 @@ std::unique_ptr<Pass> createSimplifyAffineIfPass();
 std::unique_ptr<Pass> createSimplifyCopyPass();
 
 /// Directive-related passes.
-std::unique_ptr<Pass> createArrayPartitionPass();
+std::unique_ptr<Pass> createArrayPartitionPass(unsigned threshold = 1024);
 std::unique_ptr<Pass>
 createCreateAxiInterfacePass(std::string hlsTopFunc = "forward");
 std::unique_ptr<Pass> createCreateHLSPrimitivePass();
