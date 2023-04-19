@@ -127,9 +127,9 @@ struct ParallelizeDataflowNode
           node.emitOpError("failed to get node complexity");
           return WalkResult::interrupt();
         }
-        auto nodeUnrollFactor = std::max(
-            (unsigned long)1, scheduleUnrollFactor * nodeComplexity.value() /
-                                  scheduleComplexity.value());
+        auto nodeUnrollFactor = 1 + scheduleUnrollFactor *
+                                        nodeComplexity.value() /
+                                        scheduleComplexity.value();
         nodeParallelFactorMap.insert({node, nodeUnrollFactor});
 
         LLVM_DEBUG(
@@ -305,10 +305,10 @@ struct ParallelizeDataflowNode
     // correlation-aware unroll factors.
     for (auto p : nodeUnrollFactorsMap) {
       auto band = getNodeLoopBand(p.first);
-      if (hasEffectOnExternalBuffer(band.front()))
-        applyLoopVectorization(band, p.second);
-      else
-        applyLoopUnrollJam(band, p.second);
+      // if (hasEffectOnExternalBuffer(band.front()))
+      //   applyLoopVectorization(band, p.second);
+      // else
+      applyLoopUnrollJam(band, p.second);
     }
 
     // Apply naive unroll to other loops.
