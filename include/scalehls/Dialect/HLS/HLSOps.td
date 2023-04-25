@@ -56,7 +56,7 @@ def AnyAxi : AxiOf<[AnyType]>;
 
 def DispatchOp : HLSOp<"dataflow.dispatch", [RecursiveMemoryEffects,
       SingleBlockImplicitTerminator<"YieldOp">,
-      ParentOneOf<["func::FuncOp", "AffineForOp"]>]> {
+      ParentOneOf<["func::FuncOp", "affine::AffineForOp"]>]> {
   let summary = "Represent a dataflow dispatch";
   let description = [{
     Dispatch op has a transparent region that contains a list of task ops to be
@@ -146,7 +146,7 @@ def ToValueOp : HLSOp<"dataflow.to_value", [NoMemoryEffect]> {
 def ScheduleOp : HLSOp<"dataflow.schedule", [
       DeclareOpInterfaceMethods<MemoryEffectsOpInterface>, IsolatedFromAbove,
       AffineScope, SingleBlock, NoTerminator,
-      ParentOneOf<["func::FuncOp", "AffineForOp"]>]> {
+      ParentOneOf<["func::FuncOp", "affine::AffineForOp"]>]> {
   let summary = "Represent a dataflow schedule";
   let description = [{
     Schedule op has an isolated region to contain a list of dataflow node ops to

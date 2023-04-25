@@ -223,48 +223,6 @@ def TosaSimplifyGraph : Pass<"scalehls-tosa-simplify-graph", "func::FuncOp"> {
 // Loop-related Passes
 //===----------------------------------------------------------------------===//
 
-def AffineLoopFusion : Pass<"scalehls-affine-loop-fusion", "func::FuncOp"> {
-  let summary = "Fuse affine loop nests";
-  let description = [{
-    This pass performs fusion of loop nests using a slicing-based approach. It
-    combines two fusion strategies: producer-consumer fusion and sibling fusion.
-    Producer-consumer fusion is aimed at fusing pairs of loops where the first
-    one writes to a memref that the second reads. Sibling fusion targets pairs
-    of loops that share no dependences between them but that load from the same
-    memref. The fused loop nests, when possible, are rewritten to access
-    significantly smaller local buffers instead of the original memref's, and
-    the latter are often either completely optimized away or contracted. This
-    transformation leads to enhanced locality and lower memory footprint through
-    the elimination or contraction of temporaries/intermediate memref's. These
-    benefits are sometimes achieved at the expense of redundant computation
-    through a cost model that evaluates available choices such as the depth at
-    which a source slice should be materialized in the designation slice.
-  }];
-  let constructor = "mlir::scalehls::createAffineLoopFusionPass()";
-
-  let options = [
-    Option<"computeToleranceThreshold", "fusion-compute-tolerance", "double",
-           /*default=*/"0.30f", "Fractional increase in additional computation "
-                                "tolerated while fusing">,
-    Option<"fastMemorySpace", "fusion-fast-mem-space", "unsigned",
-           /*default=*/"0",
-           "Faster memory space number to promote fusion buffers to">,
-    Option<"localBufSizeThreshold", "fusion-local-buf-threshold", "uint64_t",
-           /*default=*/"0", "Threshold size (KiB) for promoting local buffers "
-                            "to fast memory space">,
-    Option<"maximalFusion", "fusion-maximal", "bool", /*default=*/"false",
-           "Enables maximal loop fusion">,
-    Option<"affineFusionMode", "mode", "enum AffineFusionMode",
-           "AffineFusionMode::Greedy", "fusion mode to attempt",
-           "llvm::cl::values(clEnumValN(AffineFusionMode::Greedy,"
-           " \"greedy\", \"Perform greedy fusion\"), "
-           "clEnumValN( AffineFusionMode::ProducerConsumer, "
-           "\"producer\", \"Perform only producer-consumer fusion\"), "
-           "clEnumValN( AffineFusionMode::Sibling, "
-           "\"sibling\", \"Perform only sibling fusion\"))">,
-    ];
-}
-
 def AffineLoopOrderOpt :
       Pass<"scalehls-affine-loop-order-opt", "func::FuncOp"> {
   let summary = "Optimize the order of affine loop nests";

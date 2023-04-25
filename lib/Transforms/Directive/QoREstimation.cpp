@@ -652,7 +652,7 @@ TimingAttr ScaleHLSEstimator::estimateBlock(Block &block, int64_t begin) {
     // Loop shouldn't overlap with any other scheduled operations. The rationale
     // here is in Vivado HLS, a loop will always be blocked by other operations
     // before it, even if no actual dependency exists between them.
-    if (isa<mlir::AffineForOp>(op))
+    if (isa<AffineForOp>(op))
       opBegin = max(opBegin, blockEnd);
 
     // Check memory dependencies of the operation and update schedule level.

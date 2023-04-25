@@ -79,7 +79,7 @@ AffineLoopBand scalehls::getNodeLoopBand(NodeOp currentNode) {
 /// Wrap the operations in the block with dispatch op.
 DispatchOp scalehls::dispatchBlock(Block *block) {
   if (!block->getOps<DispatchOp>().empty() ||
-      !isa<func::FuncOp, mlir::AffineForOp>(block->getParentOp()))
+      !isa<func::FuncOp, AffineForOp>(block->getParentOp()))
     return DispatchOp();
 
   OpBuilder builder(block, block->begin());
@@ -439,8 +439,9 @@ bool scalehls::hasEffectOnExternalBuffer(Operation *op) {
 
 /// Distribute the given factor from the innermost loop of the given loop band,
 /// so that we can apply vectorize, unroll and jam, etc.
-FactorList scalehls::getDistributedFactors(
-    unsigned factor, const SmallVectorImpl<mlir::AffineForOp> &band) {
+FactorList
+scalehls::getDistributedFactors(unsigned factor,
+                                const SmallVectorImpl<AffineForOp> &band) {
   FactorList factors;
   unsigned remainFactor = factor;
 
@@ -472,7 +473,7 @@ FactorList scalehls::getDistributedFactors(
 /// This method can fail due to non-constant loop trip counts.
 LogicalResult scalehls::getEvenlyDistributedFactors(
     unsigned maxFactor, FactorList &factors,
-    const SmallVectorImpl<mlir::AffineForOp> &band,
+    const SmallVectorImpl<AffineForOp> &band,
     const SmallVectorImpl<FactorList> &constrFactorsList, bool powerOf2Constr) {
 
   // auto emitFactors = [&](const FactorList &factors) {
@@ -635,7 +636,7 @@ LogicalResult scalehls::getEvenlyDistributedFactors(
 
 /// Return a pair which indicates whether the if statement is always true or
 /// false, respectively. The returned result is one-hot.
-std::pair<bool, bool> scalehls::ifAlwaysTrueOrFalse(mlir::AffineIfOp ifOp) {
+std::pair<bool, bool> scalehls::ifAlwaysTrueOrFalse(AffineIfOp ifOp) {
   auto set = ifOp.getIntegerSet();
   auto operands = SmallVector<Value, 4>(ifOp.getOperands().begin(),
                                         ifOp.getOperands().end());

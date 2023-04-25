@@ -98,7 +98,7 @@ struct LowerAffine : public LowerAffineBase<LowerAffine> {
     patterns.add<LowerAffineFor>(context, /*benefit=*/1);
 
     ConversionTarget target(*context);
-    target.addIllegalDialect<mlir::AffineDialect>();
+    target.addIllegalDialect<affine::AffineDialect>();
     target.addLegalDialect<arith::ArithDialect, memref::MemRefDialect,
                            scf::SCFDialect, vector::VectorDialect>();
     if (failed(applyPartialConversion(func, target, std::move(patterns))))

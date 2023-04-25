@@ -186,7 +186,7 @@ LogicalResult ToStreamOp::verify() {
   return success();
 }
 
-OpFoldResult ToStreamOp::fold(ArrayRef<Attribute>) {
+OpFoldResult ToStreamOp::fold(FoldAdaptor adaptor) {
   if (auto toValue = getValue().getDefiningOp<ToValueOp>())
     if (toValue.getStream().getType() == getType())
       return toValue.getStream();
@@ -200,7 +200,7 @@ LogicalResult ToValueOp::verify() {
   return success();
 }
 
-OpFoldResult ToValueOp::fold(ArrayRef<Attribute>) {
+OpFoldResult ToValueOp::fold(FoldAdaptor adaptor) {
   if (auto toStream = getStream().getDefiningOp<ToStreamOp>())
     if (toStream.getValue().getType() == getType())
       return toStream.getValue();
@@ -312,7 +312,7 @@ void ScheduleOp::getEffects(
 
 /// FIXME: Check whether the schedule is dependence free.
 bool ScheduleOp::isDependenceFree() {
-  if (auto loop = dyn_cast<mlir::AffineForOp>((*this)->getParentOp()))
+  if (auto loop = dyn_cast<AffineForOp>((*this)->getParentOp()))
     return hasParallelAttr(loop);
   return isa<func::FuncOp>((*this)->getParentOp());
 }
@@ -566,9 +566,8 @@ struct FlattenReadOnlyBuffer : public OpRewritePattern<BufferOp> {
   LogicalResult matchAndRewrite(BufferOp buffer,
                                 PatternRewriter &rewriter) const override {
     if (buffer.getInitValue() &&
-        llvm::all_of(buffer->getUsers(), [](Operation *user) {
-          return isa<mlir::AffineLoadOp>(user);
-        })) {
+        llvm::all_of(buffer->getUsers(),
+                     [](Operation *user) { return isa<AffineLoadOp>(user); })) {
       auto initValue = buffer.getInitValue().value();
       auto constant =
           rewriter.create<arith::ConstantOp>(buffer.getLoc(), initValue);
@@ -831,7 +830,7 @@ LogicalResult BufferDevectorizeOp::verify() {
                                   getInputType());
 }
 
-OpFoldResult BufferVectorizeOp::fold(ArrayRef<Attribute>) {
+OpFoldResult BufferVectorizeOp::fold(FoldAdaptor adaptor) {
   if (auto devectorize = getInput().getDefiningOp<BufferDevectorizeOp>())
     if (devectorize.getInputType() == getType())
       return devectorize.getInput();
@@ -1017,7 +1016,7 @@ void AffineSelectOp::getCanonicalizationPatterns(RewritePatternSet &results,
 }
 
 /// Canonicalize an affine if op's conditional (integer set + operands).
-OpFoldResult AffineSelectOp::fold(ArrayRef<Attribute>) {
+OpFoldResult AffineSelectOp::fold(FoldAdaptor adaptor) {
   auto set = getIntegerSet();
   SmallVector<Value, 4> operands(getArgs());
   composeSetAndOperands(set, operands);

@@ -59,7 +59,7 @@ ComplexityAnalysis::calculateBlockComplexity(Block *block) const {
         return Optional<unsigned long>();
       complexity += scheduleComplexity.value();
 
-    } else if (auto loop = dyn_cast<mlir::AffineForOp>(op)) {
+    } else if (auto loop = dyn_cast<AffineForOp>(op)) {
       auto loopComplexity = calculateBlockComplexity(loop.getBody());
       auto loopTripCount = getAverageTripCount(loop);
       if (!loopComplexity.has_value() || !loopTripCount.has_value())
@@ -67,7 +67,7 @@ ComplexityAnalysis::calculateBlockComplexity(Block *block) const {
       complexity += loopTripCount.value() *
                     std::max((unsigned long)1, loopComplexity.value());
 
-    } else if (auto ifOp = dyn_cast<mlir::AffineIfOp>(op)) {
+    } else if (auto ifOp = dyn_cast<AffineIfOp>(op)) {
       auto thenComplexity = calculateBlockComplexity(ifOp.getThenBlock());
       if (!thenComplexity.has_value())
         return Optional<unsigned long>();
@@ -105,11 +105,11 @@ getBufferIndexDepthsAndStrides(NodeOp node, Value buffer) {
     Value memref;
     auto map = AffineMap::get(buffer.getContext());
     SmallVector<Value> operands;
-    if (auto read = dyn_cast<mlir::AffineReadOpInterface>(op)) {
+    if (auto read = dyn_cast<AffineReadOpInterface>(op)) {
       memref = read.getMemRef();
       map = read.getAffineMap();
       operands = read.getMapOperands();
-    } else if (auto write = dyn_cast<mlir::AffineWriteOpInterface>(op)) {
+    } else if (auto write = dyn_cast<AffineWriteOpInterface>(op)) {
       memref = write.getMemRef();
       map = write.getAffineMap();
       operands = write.getMapOperands();

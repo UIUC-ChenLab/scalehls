@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
+#include "mlir/Dialect/Vector/Transforms/LoweringPatterns.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
@@ -52,11 +53,10 @@ struct MemrefStoreRaisePattern : public OpRewritePattern<memref::StoreOp> {
 } // namespace
 
 namespace {
-struct AffineStoreUndefFoldPattern
-    : public OpRewritePattern<mlir::AffineStoreOp> {
-  using OpRewritePattern<mlir::AffineStoreOp>::OpRewritePattern;
+struct AffineStoreUndefFoldPattern : public OpRewritePattern<AffineStoreOp> {
+  using OpRewritePattern<AffineStoreOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(mlir::AffineStoreOp store,
+  LogicalResult matchAndRewrite(AffineStoreOp store,
                                 PatternRewriter &rewriter) const override {
     if (store.getValueToStore().getDefiningOp<LLVM::UndefOp>()) {
       store.emitWarning("undef memory store is folded");
@@ -92,7 +92,7 @@ struct AddIRaisePattern : public OpRewritePattern<arith::AddIOp> {
     r.setInsertionPoint(add);
 
     if (isValidDim(add.getLhs()) && isValidDim(add.getRhs())) {
-      r.replaceOpWithNewOp<mlir::AffineApplyOp>(
+      r.replaceOpWithNewOp<AffineApplyOp>(
           add, r.getAffineDimExpr(0) + r.getAffineDimExpr(1),
           ValueRange({add.getLhs(), add.getRhs()}));
       return success();
@@ -100,14 +100,14 @@ struct AddIRaisePattern : public OpRewritePattern<arith::AddIOp> {
 
     if (auto rhs = add.getRhs().getDefiningOp<arith::ConstantIndexOp>();
         isValidDim(add.getLhs())) {
-      r.replaceOpWithNewOp<mlir::AffineApplyOp>(
+      r.replaceOpWithNewOp<AffineApplyOp>(
           add, r.getAffineDimExpr(0) + rhs.value(), add.getLhs());
       return success();
     }
 
     if (auto lhs = add.getLhs().getDefiningOp<arith::ConstantIndexOp>();
         isValidDim(add.getRhs())) {
-      r.replaceOpWithNewOp<mlir::AffineApplyOp>(
+      r.replaceOpWithNewOp<AffineApplyOp>(
           add, lhs.value() + r.getAffineDimExpr(0), add.getRhs());
       return success();
     }
@@ -127,14 +127,14 @@ struct MulIRaisePattern : public OpRewritePattern<arith::MulIOp> {
 
     if (auto rhs = mul.getRhs().getDefiningOp<arith::ConstantIndexOp>();
         isValidDim(mul.getLhs())) {
-      r.replaceOpWithNewOp<mlir::AffineApplyOp>(
+      r.replaceOpWithNewOp<AffineApplyOp>(
           mul, r.getAffineDimExpr(0) * rhs.value(), mul.getLhs());
       return success();
     }
 
     if (auto lhs = mul.getLhs().getDefiningOp<arith::ConstantIndexOp>();
         isValidDim(mul.getRhs())) {
-      r.replaceOpWithNewOp<mlir::AffineApplyOp>(
+      r.replaceOpWithNewOp<AffineApplyOp>(
           mul, lhs.value() * r.getAffineDimExpr(0), mul.getRhs());
       return success();
     }

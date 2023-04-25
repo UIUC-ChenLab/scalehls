@@ -36,11 +36,11 @@ static void createSubviewBeforeLoopBand(AffineLoopBand band,
     SmallVector<Value, 4> operands;
     AffineMap map;
     Value memref;
-    if (auto loadOp = dyn_cast<mlir::AffineReadOpInterface>(op)) {
+    if (auto loadOp = dyn_cast<AffineReadOpInterface>(op)) {
       operands = SmallVector<Value, 4>(loadOp.getMapOperands());
       map = loadOp.getAffineMap();
       memref = loadOp.getMemRef();
-    } else if (auto storeOp = dyn_cast<mlir::AffineWriteOpInterface>(op)) {
+    } else if (auto storeOp = dyn_cast<AffineWriteOpInterface>(op)) {
       operands = SmallVector<Value, 4>(storeOp.getMapOperands());
       map = storeOp.getAffineMap();
       memref = storeOp.getMemRef();

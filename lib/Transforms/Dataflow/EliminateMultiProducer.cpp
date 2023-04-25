@@ -81,7 +81,7 @@ struct BufferMultiProducer : public OpRewritePattern<ScheduleOp> {
         auto readUses = llvm::make_filter_range(
             newBufferArg.getUses(), [](OpOperand &use) { return isRead(use); });
         if (llvm::hasSingleElement(readUses))
-          if (auto read = dyn_cast<mlir::AffineReadOpInterface>(
+          if (auto read = dyn_cast<AffineReadOpInterface>(
                   readUses.begin()->getOwner())) {
             // We need to make sure all the indices of the affine load are known
             // loop induction variables and meanwhile the load has identity
@@ -130,7 +130,7 @@ struct BufferMultiProducer : public OpRewritePattern<ScheduleOp> {
               }
 
               rewriter.setInsertionPoint(read);
-              auto value = rewriter.create<mlir::AffineLoadOp>(
+              auto value = rewriter.create<AffineLoadOp>(
                   read.getLoc(), bufferArg, read.getMapOperands());
 
               if (!ifExprs.empty()) {
@@ -140,8 +140,8 @@ struct BufferMultiProducer : public OpRewritePattern<ScheduleOp> {
                 rewriter.setInsertionPointToStart(ifOp.getThenBlock());
               }
 
-              rewriter.create<mlir::AffineStoreOp>(
-                  read.getLoc(), value, newBufferArg, read.getMapOperands());
+              rewriter.create<AffineStoreOp>(read.getLoc(), value, newBufferArg,
+                                             read.getMapOperands());
               continue;
             }
           }

@@ -17,6 +17,7 @@ namespace mlir {
 namespace scalehls {
 
 using namespace hls;
+using namespace affine;
 
 using AffineLoopBand = SmallVector<AffineForOp, 6>;
 using AffineLoopBands = std::vector<AffineLoopBand>;
@@ -110,22 +111,21 @@ bool hasEffectOnExternalBuffer(Operation *op);
 
 /// Distribute the given factor from the innermost loop of the given loop band,
 /// so that we can apply vectorize, unroll and jam, etc.
-FactorList
-getDistributedFactors(unsigned factor,
-                      const SmallVectorImpl<mlir::AffineForOp> &band);
+FactorList getDistributedFactors(unsigned factor,
+                                 const SmallVectorImpl<AffineForOp> &band);
 
 /// Distribute the given factor evenly on all loop levels. The generated factors
 /// are garanteed to be divisors of the factors in given "costrFactorsList".
 /// This method can fail due to non-constant loop bounds.
 LogicalResult
 getEvenlyDistributedFactors(unsigned maxFactor, FactorList &factors,
-                            const SmallVectorImpl<mlir::AffineForOp> &band,
+                            const SmallVectorImpl<AffineForOp> &band,
                             const SmallVectorImpl<FactorList> &constrFactors,
                             bool powerOf2Constr = false);
 
 /// Return a pair which indicates whether the if statement is always true or
 /// false, respectively. The returned result is one-hot.
-std::pair<bool, bool> ifAlwaysTrueOrFalse(mlir::AffineIfOp ifOp);
+std::pair<bool, bool> ifAlwaysTrueOrFalse(AffineIfOp ifOp);
 
 /// Check whether the two given if statements have the same condition.
 bool checkSameIfStatement(AffineIfOp lhsOp, AffineIfOp rhsOp);

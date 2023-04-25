@@ -124,7 +124,8 @@ struct PlaceDataflowBuffer
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<PlaceBuffer>(context, threshold, placeExternalBuffer);
-    (void)applyOpPatternsAndFold(func, std::move(patterns));
+    (void)applyOpPatternsAndFold(SmallVector<Operation *>({func}),
+                                 std::move(patterns));
 
     llvm::outs() << "2\n";
 

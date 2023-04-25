@@ -36,7 +36,7 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
     mlir::linalg::LinalgDialect,
     mlir::memref::MemRefDialect,
     mlir::bufferization::BufferizationDialect,
-    mlir::AffineDialect,
+    mlir::affine::AffineDialect,
     mlir::math::MathDialect,
     mlir::arith::ArithDialect,
     mlir::vector::VectorDialect,

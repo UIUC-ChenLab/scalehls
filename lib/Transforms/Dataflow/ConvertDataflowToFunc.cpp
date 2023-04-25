@@ -157,8 +157,7 @@ struct InlineSchedule : public OpRewritePattern<ScheduleOp> {
       if (auto func = dyn_cast<func::FuncOp>(schedule->getParentOp()))
         setFuncDirective(func, /*pipeline=*/false, /*targetInterval=*/1,
                          /*dataflow=*/true);
-      else if (auto loop =
-                   dyn_cast<mlir::AffineForOp>(schedule->getParentOp())) {
+      else if (auto loop = dyn_cast<AffineForOp>(schedule->getParentOp())) {
         // If the schedule is located inside of a loop nest, try to coalesce
         // them into a flattened loop.
         AffineLoopBand band;

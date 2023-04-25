@@ -41,7 +41,7 @@ struct RaiseAffineToCopy : public RaiseAffineToCopyBase<RaiseAffineToCopy> {
 
       // Make sure the all loops in the band have constant trip count.
       llvm::SmallDenseMap<Value, unsigned, 4> shapeMap;
-      if (llvm::any_of(band, [&](mlir::AffineForOp loop) {
+      if (llvm::any_of(band, [&](AffineForOp loop) {
             auto maybeTripCount = getConstantTripCount(loop);
             if (!maybeTripCount.has_value())
               return true;

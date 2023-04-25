@@ -122,11 +122,11 @@ static AffineValueMap getAffineValueMap(Operation *op) {
   // Get affine map from AffineLoad/Store.
   AffineMap map;
   SmallVector<Value, 4> operands;
-  if (auto loadOp = dyn_cast<mlir::AffineReadOpInterface>(op)) {
+  if (auto loadOp = dyn_cast<AffineReadOpInterface>(op)) {
     operands = loadOp.getMapOperands();
     map = loadOp.getAffineMap();
 
-  } else if (auto storeOp = dyn_cast<mlir::AffineWriteOpInterface>(op)) {
+  } else if (auto storeOp = dyn_cast<AffineWriteOpInterface>(op)) {
     operands = storeOp.getMapOperands();
     map = storeOp.getAffineMap();
 

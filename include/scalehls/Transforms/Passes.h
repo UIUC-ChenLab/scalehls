@@ -74,10 +74,6 @@ std::unique_ptr<Pass> createTosaFakeQuantizePass();
 std::unique_ptr<Pass> createTosaSimplifyGraphPass();
 
 /// Loop-related passes.
-std::unique_ptr<Pass> createAffineLoopFusionPass(
-    double computeToleranceThreshold = 0.3, unsigned fastMemorySpace = 0,
-    uint64_t localBufSizeThreshold = 0, bool maximalFusion = false,
-    enum AffineFusionMode fusionMode = AffineFusionMode::Greedy);
 std::unique_ptr<Pass> createAffineLoopOrderOptPass();
 std::unique_ptr<Pass> createAffineLoopPerfectionPass();
 std::unique_ptr<Pass> createAffineLoopTilePass(unsigned loopTileSize = 1);

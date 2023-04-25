@@ -87,7 +87,8 @@ struct LinalgFakeQuantize : public LinalgFakeQuantizeBase<LinalgFakeQuantize> {
   }
 
   template <typename ValueType>
-  DenseIntElementsAttr generateRandomValues(Type quanType, unsigned size) {
+  DenseIntElementsAttr generateRandomValues(ShapedType quanType,
+                                            unsigned size) {
     unsigned maxValue = std::pow(2, quanBits.getValue());
     SmallVector<ValueType, 64> values;
     for (unsigned i = 0; i < size; ++i)
@@ -130,20 +131,21 @@ struct LinalgFakeQuantize : public LinalgFakeQuantizeBase<LinalgFakeQuantize> {
           // that the tensor has floating-point elements.
           if (constant.getValue().getType().isa<RankedTensorType>()) {
             auto denseAttr = constant.getValue().cast<DenseElementsAttr>();
+            auto type = quanType.cast<ShapedType>();
             DenseIntElementsAttr attr;
 
             switch (quanBits.getValue()) {
             case 8:
-              attr = generateRandomValues<int8_t>(quanType, denseAttr.size());
+              attr = generateRandomValues<int8_t>(type, denseAttr.size());
               break;
             case 16:
-              attr = generateRandomValues<int16_t>(quanType, denseAttr.size());
+              attr = generateRandomValues<int16_t>(type, denseAttr.size());
               break;
             case 32:
-              attr = generateRandomValues<int32_t>(quanType, denseAttr.size());
+              attr = generateRandomValues<int32_t>(type, denseAttr.size());
               break;
             case 64:
-              attr = generateRandomValues<int64_t>(quanType, denseAttr.size());
+              attr = generateRandomValues<int64_t>(type, denseAttr.size());
               break;
             default:
               return WalkResult::interrupt();

@@ -52,12 +52,13 @@ struct CreateAxiInterface : public CreateAxiInterfaceBase<CreateAxiInterface> {
           })) {
         if (!buffer.hasOneUse()) {
           emitError(buffer.getLoc(), "buffer can only be vectorized once");
-          return signalPassFailure(), Value();
+          signalPassFailure();
+          return Value();
         }
         auto vectorize = cast<BufferVectorizeOp>(*buffer.user_begin());
         vectorize->remove();
         builder.insert(vectorize);
-        return vectorize.getResult();
+        return vectorize.getResult().cast<Value>();
       }
       return buffer;
     };

@@ -61,7 +61,8 @@ struct RewriteElmwUnary : public OpRewritePattern<OpType> {
       return failure();
 
     elmw->getOpOperand(0).set(transpose.getInput1());
-    elmw.getOutput().setType(transpose.getInput1().getType());
+    elmw.getOutput().setType(
+        transpose.getInput1().getType().template cast<TensorType>());
 
     rewriter.setInsertionPointAfter(elmw);
     auto cloneTranspose = cast<tosa::TransposeOp>(rewriter.clone(*transpose));
@@ -93,7 +94,8 @@ struct RewriteElmwBinary : public OpRewritePattern<OpType> {
 
     elmw->getOpOperand(0).set(input1Transpose.getInput1());
     elmw->getOpOperand(1).set(input2Transpose.getInput1());
-    elmw.getOutput().setType(input1Transpose.getInput1().getType());
+    elmw.getOutput().setType(
+        input1Transpose.getInput1().getType().template cast<TensorType>());
 
     rewriter.setInsertionPointAfter(elmw);
     auto cloneTranspose =

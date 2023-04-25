@@ -157,7 +157,7 @@ struct ParallelizeDataflowNode
     AffineLoopBands bands;
     node.walk([&](AffineForOp loop) {
       if (loop->getParentOfType<NodeOp>() == node &&
-          loop.getOps<mlir::AffineForOp>().empty() &&
+          loop.getOps<AffineForOp>().empty() &&
           loop.getOps<ScheduleOp>().empty()) {
         AffineLoopBand band;
         getLoopBandFromInnermost(loop, band);

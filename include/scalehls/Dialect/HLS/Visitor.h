@@ -36,9 +36,11 @@ public:
             scf::ReduceReturnOp, scf::YieldOp,
 
             // Affine statements.
-            AffineForOp, AffineIfOp, AffineParallelOp, AffineApplyOp,
-            AffineMaxOp, AffineMinOp, AffineLoadOp, AffineStoreOp,
-            AffineVectorLoadOp, AffineVectorStoreOp, AffineYieldOp,
+            affine::AffineForOp, affine::AffineIfOp, affine::AffineParallelOp,
+            affine::AffineApplyOp, affine::AffineMaxOp, affine::AffineMinOp,
+            affine::AffineLoadOp, affine::AffineStoreOp,
+            affine::AffineVectorLoadOp, affine::AffineVectorStoreOp,
+            affine::AffineYieldOp,
 
             // Vector statements.
             vector::InsertOp, vector::ExtractOp, vector::ExtractElementOp,
@@ -123,17 +125,17 @@ public:
   HANDLE(scf::YieldOp);
 
   // Affine statements.
-  HANDLE(AffineForOp);
-  HANDLE(AffineIfOp);
-  HANDLE(AffineParallelOp);
-  HANDLE(AffineApplyOp);
-  HANDLE(AffineMaxOp);
-  HANDLE(AffineMinOp);
-  HANDLE(AffineLoadOp);
-  HANDLE(AffineStoreOp);
-  HANDLE(AffineVectorLoadOp);
-  HANDLE(AffineVectorStoreOp);
-  HANDLE(AffineYieldOp);
+  HANDLE(affine::AffineForOp);
+  HANDLE(affine::AffineIfOp);
+  HANDLE(affine::AffineParallelOp);
+  HANDLE(affine::AffineApplyOp);
+  HANDLE(affine::AffineMaxOp);
+  HANDLE(affine::AffineMinOp);
+  HANDLE(affine::AffineLoadOp);
+  HANDLE(affine::AffineStoreOp);
+  HANDLE(affine::AffineVectorLoadOp);
+  HANDLE(affine::AffineVectorStoreOp);
+  HANDLE(affine::AffineYieldOp);
 
   // Vector statements.
   HANDLE(vector::InsertOp);

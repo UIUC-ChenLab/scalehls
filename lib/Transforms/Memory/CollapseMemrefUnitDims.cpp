@@ -46,9 +46,9 @@ static LogicalResult collapseMemref(Value memref) {
   // Update buffer users.
   for (auto user : memref.getUsers()) {
     AffineMap map;
-    if (auto read = dyn_cast<mlir::AffineReadOpInterface>(user))
+    if (auto read = dyn_cast<AffineReadOpInterface>(user))
       map = read.getAffineMap();
-    else if (auto write = dyn_cast<mlir::AffineWriteOpInterface>(user))
+    else if (auto write = dyn_cast<AffineWriteOpInterface>(user))
       map = write.getAffineMap();
 
     SmallVector<AffineExpr> newResults;
@@ -117,7 +117,8 @@ struct CollapseMemrefUnitDims
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<CollapseFuncMemref>(context);
-    (void)applyOpPatternsAndFold(func, std::move(patterns));
+    (void)applyOpPatternsAndFold(SmallVector<Operation *>({func}),
+                                 std::move(patterns));
   }
 };
 } // namespace
