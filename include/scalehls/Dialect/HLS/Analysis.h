@@ -7,7 +7,7 @@
 #ifndef SCALEHLS_DIALECT_HLS_ANALYSIS_H
 #define SCALEHLS_DIALECT_HLS_ANALYSIS_H
 
-#include "scalehls/Dialect/HLS/HLS.h"
+#include "scalehls/Dialect/HLS/IR/HLS.h"
 #include "scalehls/Dialect/HLS/Utils.h"
 
 namespace mlir {

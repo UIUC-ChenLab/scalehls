@@ -6,7 +6,7 @@
 
 #include "scalehls-c/HLS.h"
 #include "mlir/CAPI/Registration.h"
-#include "scalehls/Dialect/HLS/HLS.h"
+#include "scalehls/Dialect/HLS/IR/HLS.h"
 
 using namespace mlir;
 using namespace scalehls;

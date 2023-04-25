@@ -7,7 +7,7 @@
 #ifndef SCALEHLS_DIALECT_HLS_HLSTYPES_TD
 #define SCALEHLS_DIALECT_HLS_HLSTYPES_TD
 
-include "scalehls/Dialect/HLS/HLSAttributes.td"
+include "scalehls/Dialect/HLS/IR/HLSAttributes.td"
 
 class HLSType<string name, list<Trait> traits = []> :
     TypeDef<HLSDialect, name, traits>;

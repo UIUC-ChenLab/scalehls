@@ -14,20 +14,20 @@
 #include "mlir/Interfaces/ControlFlowInterfaces.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "mlir/Interfaces/ViewLikeInterface.h"
-#include "scalehls/Dialect/HLS/HLSOpsDialect.h.inc"
-#include "scalehls/Dialect/HLS/HLSOpsEnums.h.inc"
+#include "scalehls/Dialect/HLS/IR/HLSOpsDialect.h.inc"
+#include "scalehls/Dialect/HLS/IR/HLSOpsEnums.h.inc"
 
 #define GET_TYPEDEF_CLASSES
-#include "scalehls/Dialect/HLS/HLSOpsTypes.h.inc"
+#include "scalehls/Dialect/HLS/IR/HLSOpsTypes.h.inc"
 
 #define GET_ATTRDEF_CLASSES
-#include "scalehls/Dialect/HLS/HLSOpsAttributes.h.inc"
+#include "scalehls/Dialect/HLS/IR/HLSOpsAttributes.h.inc"
 
 namespace mlir {
 namespace scalehls {
 namespace hls {
 
-#include "scalehls/Dialect/HLS/HLSOpsInterfaces.h.inc"
+#include "scalehls/Dialect/HLS/IR/HLSOpsInterfaces.h.inc"
 
 /// Kind of dataflow.node operands.
 enum class OperandKind { INPUT, OUTPUT, PARAM };
@@ -130,6 +130,6 @@ public:
 } // namespace mlir
 
 #define GET_OP_CLASSES
-#include "scalehls/Dialect/HLS/HLSOps.h.inc"
+#include "scalehls/Dialect/HLS/IR/HLSOps.h.inc"
 
 #endif // SCALEHLS_DIALECT_HLS_HLS_H

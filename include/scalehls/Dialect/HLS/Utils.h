@@ -11,7 +11,7 @@
 #include "mlir/Dialect/Affine/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
-#include "scalehls/Dialect/HLS/HLS.h"
+#include "scalehls/Dialect/HLS/IR/HLS.h"
 
 namespace mlir {
 namespace scalehls {

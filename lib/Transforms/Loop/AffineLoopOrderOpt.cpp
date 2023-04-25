@@ -45,8 +45,8 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band,
   // and calculate the number of common surrouding loops for later uses.
   MemAccessesMap loadStoresMap;
   getMemAccessesMap(loopBlock, loadStoresMap);
-  auto commonLoopDepth = getNumCommonSurroundingLoops(
-      *loopBlock.begin(), *std::next(loopBlock.begin()));
+  // auto commonLoopDepth = getNumCommonSurroundingLoops(
+  //     *loopBlock.begin(), *std::next(loopBlock.begin()));
 
   // A map of dependency distances indexed by the loop in the band.
   SmallVector<AffineForOp, 8> targetLoops;
