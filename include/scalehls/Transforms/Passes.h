@@ -67,6 +67,7 @@ createScheduleDataflowNodePass(bool ignoreViolations = false);
 std::unique_ptr<Pass> createStreamDataflowTaskPass();
 
 /// Tensor-related passes.
+std::unique_ptr<Pass> createLinalgTileAndFusePass();
 std::unique_ptr<Pass> createConvertTensorToLinalgPass();
 std::unique_ptr<Pass> createLinalgAnalyzeModelPass();
 std::unique_ptr<Pass> createLinalgFakeQuantizePass();

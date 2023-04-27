@@ -184,6 +184,11 @@ def StreamDataflowTask : Pass<"scalehls-stream-dataflow-task", "func::FuncOp"> {
 // Tensor-related Passes
 //===----------------------------------------------------------------------===//
 
+def LinalgTileAndFuse : Pass<"scalehls-linalg-tile-and-fuse", "func::FuncOp"> {
+  let summary = "Tile and fuse linalg structured operations";
+  let constructor = "mlir::scalehls::createLinalgTileAndFusePass()";
+}
+
 def ConvertTensorToLinalg :
       Pass<"scalehls-convert-tensor-to-linalg", "func::FuncOp"> {
   let summary = "Lower tosa::ReshapeOp and tensor::PadOp";

@@ -516,4 +516,10 @@ def VectorInitOp : HLSOp<"vector.init", [NoMemoryEffect]> {
   let assemblyFormat = "attr-dict `:` type($output)";
 }
 
+def TileParameter : HLSOp<"tile_parameter", [NoMemoryEffect]> {
+  let summary = "Return a tile parameter";
+
+  let results = (outs I64:$param);
+}
+
 #endif // SCALEHLS_DIALECT_HLS_HLSOPS_TD
