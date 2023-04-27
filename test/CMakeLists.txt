@@ -11,7 +11,6 @@ configure_lit_site_cfg(
 
 set(SCALEHLS_TEST_DEPENDS
   FileCheck count not
-  pyscalehls
   scalehls-opt
   scalehls-translate
   )

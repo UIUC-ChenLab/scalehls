@@ -121,113 +121,28 @@ private:
 // Numpy array retrieval utils
 //===----------------------------------------------------------------------===//
 
-static void getVectorFromUnsignedNpArray(PyObject *object,
-                                         SmallVectorImpl<unsigned> &vector) {
-  _import_array();
-  if (!PyArray_Check(object))
-    throw SetPyError(PyExc_ValueError, "expect numpy array");
-  auto array = reinterpret_cast<PyArrayObject *>(object);
-  if (PyArray_TYPE(array) != NPY_INT64 || PyArray_NDIM(array) != 1)
-    throw SetPyError(PyExc_ValueError, "expect single-dimensional int64 array");
+// static void getVectorFromUnsignedNpArray(PyObject *object,
+//                                          SmallVectorImpl<unsigned> &vector) {
+//   _import_array();
+//   if (!PyArray_Check(object))
+//     throw SetPyError(PyExc_ValueError, "expect numpy array");
+//   auto array = reinterpret_cast<PyArrayObject *>(object);
+//   if (PyArray_TYPE(array) != NPY_INT64 || PyArray_NDIM(array) != 1)
+//     throw SetPyError(PyExc_ValueError, "expect single-dimensional int64
+//     array");
 
-  auto dataBegin = reinterpret_cast<int64_t *>(PyArray_DATA(array));
-  auto dataEnd = dataBegin + PyArray_DIM(array, 0);
+//   auto dataBegin = reinterpret_cast<int64_t *>(PyArray_DATA(array));
+//   auto dataEnd = dataBegin + PyArray_DIM(array, 0);
 
-  vector.clear();
-  for (auto i = dataBegin; i != dataEnd; ++i) {
-    auto value = *i;
-    if (value < 0)
-      throw SetPyError(PyExc_ValueError, "expect non-negative array element");
-    vector.push_back((unsigned)value);
-  }
-}
-
-//===----------------------------------------------------------------------===//
-// Loop transform APIs
-//===----------------------------------------------------------------------===//
-
-static bool loopPerfectization(PyAffineLoopBand band) {
-  py::gil_scoped_release();
-  return applyAffineLoopPerfection(band.get());
-}
-
-static bool loopOrderOpt(PyAffineLoopBand band) {
-  py::gil_scoped_release();
-  return applyAffineLoopOrderOpt(band.get());
-}
-
-static bool loopPermutation(PyAffineLoopBand band, py::object permMapObject) {
-  py::gil_scoped_release();
-  SmallVector<unsigned, 8> permMap;
-  getVectorFromUnsignedNpArray(permMapObject.ptr(), permMap);
-  return applyAffineLoopOrderOpt(band.get(), permMap);
-}
-
-/// Loop variable bound elimination.
-static bool loopVarBoundRemoval(PyAffineLoopBand band) {
-  py::gil_scoped_release();
-  return applyRemoveVariableBound(band.get());
-}
-
-static bool loopTiling(PyAffineLoopBand band, py::object factorsObject) {
-  py::gil_scoped_release();
-  llvm::SmallVector<unsigned, 8> factors;
-  getVectorFromUnsignedNpArray(factorsObject.ptr(), factors);
-  return applyLoopTiling(band.get(), factors);
-}
-
-static bool loopPipelining(PyAffineLoopBand band, int64_t pipelineLoc,
-                           int64_t targetII) {
-  py::gil_scoped_release();
-  if (pipelineLoc < 0 || pipelineLoc >= (int64_t)band.depth() || targetII < 1)
-    throw SetPyError(PyExc_ValueError, "invalid location or targeted II");
-  return applyLoopPipelining(band.get(), pipelineLoc, targetII);
-}
-
-//===----------------------------------------------------------------------===//
-// Function transform APIs
-//===----------------------------------------------------------------------===//
-
-static bool funcPreprocess(MlirOperation op, bool topFunc) {
-  py::gil_scoped_release();
-  auto func = dyn_cast<func::FuncOp>(unwrap(op));
-  if (!func)
-    throw SetPyError(PyExc_ValueError, "targeted operation not a function");
-  return applyFuncPreprocess(func, topFunc);
-}
-
-static bool memoryOpts(MlirOperation op) {
-  py::gil_scoped_release();
-  auto func = dyn_cast<func::FuncOp>(unwrap(op));
-  if (!func)
-    throw SetPyError(PyExc_ValueError, "targeted operation not a function");
-  return applyMemoryOpts(func);
-}
-
-static bool autoArrayPartition(MlirOperation op) {
-  py::gil_scoped_release();
-  auto func = dyn_cast<func::FuncOp>(unwrap(op));
-  if (!func)
-    throw SetPyError(PyExc_ValueError, "targeted operation not a function");
-  return applyAutoArrayPartition(func);
-}
-
-//===----------------------------------------------------------------------===//
-// Array transform APIs
-//===----------------------------------------------------------------------===//
-
-/// TODO: Support to apply different partition kind to different dimension.
-static bool arrayPartition(MlirValue array, py::object factorsObject,
-                           std::string kind) {
-  py::gil_scoped_release();
-  llvm::SmallVector<unsigned, 4> factors;
-  getVectorFromUnsignedNpArray(factorsObject.ptr(), factors);
-  llvm::SmallVector<hls::PartitionKind, 4> kinds(
-      factors.size(), kind == "cyclic"  ? hls::PartitionKind::CYCLIC
-                      : kind == "block" ? hls::PartitionKind::BLOCK
-                                        : hls::PartitionKind::NONE);
-  return applyArrayPartition(unwrap(array), factors, kinds);
-}
+//   vector.clear();
+//   for (auto i = dataBegin; i != dataEnd; ++i) {
+//     auto value = *i;
+//     if (value < 0)
+//       throw SetPyError(PyExc_ValueError, "expect non-negative array
+//       element");
+//     vector.push_back((unsigned)value);
+//   }
+// }
 
 //===----------------------------------------------------------------------===//
 // Emission APIs
@@ -258,22 +173,6 @@ PYBIND11_MODULE(_scalehls, m) {
     mlirDialectHandleRegisterDialect(hls, context);
     mlirDialectHandleLoadDialect(hls, context);
   });
-
-  // Loop transform APIs.
-  m.def("loop_perfectization", &loopPerfectization);
-  m.def("loop_order_opt", &loopOrderOpt);
-  m.def("loop_permutation", &loopPermutation);
-  m.def("loop_var_bound_removal", &loopVarBoundRemoval);
-  m.def("loop_tiling", &loopTiling);
-  m.def("loop_pipelining", &loopPipelining);
-
-  // Function transform APIs.
-  m.def("func_preprocess", &funcPreprocess);
-  m.def("memory_opts", &memoryOpts);
-  m.def("auto_array_partition", &autoArrayPartition);
-
-  // Array transform APIs.
-  m.def("array_partition", &arrayPartition);
 
   // Emission APIs.
   m.def("emit_hlscpp", &emitHlsCpp);
