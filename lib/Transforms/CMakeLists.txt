@@ -1,4 +1,5 @@
 add_mlir_library(MLIRScaleHLSTransforms
+  ComprehensiveBufferize.cpp
   Passes.cpp
   Utils.cpp
 

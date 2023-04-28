@@ -23,6 +23,13 @@
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "scalehls/Dialect/HLS/IR/HLS.h"
 
+#include "mlir/Dialect/Arith/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/Bufferization/Transforms/FuncBufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/Linalg/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/SCF/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/Tensor/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/Vector/Transforms/BufferizableOpInterfaceImpl.h"
+
 namespace mlir {
 namespace scalehls {
 
@@ -47,6 +54,14 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
     mlir::ml_program::MLProgramDialect
   >();
   // clang-format on
+
+  arith::registerBufferizableOpInterfaceExternalModels(registry);
+  linalg::registerBufferizableOpInterfaceExternalModels(registry);
+  scf::registerBufferizableOpInterfaceExternalModels(registry);
+  bufferization::func_ext::registerBufferizableOpInterfaceExternalModels(
+      registry);
+  tensor::registerBufferizableOpInterfaceExternalModels(registry);
+  vector::registerBufferizableOpInterfaceExternalModels(registry);
 }
 
 } // namespace scalehls
