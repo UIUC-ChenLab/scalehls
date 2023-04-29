@@ -13,6 +13,7 @@ target_link_libraries(scalehls-opt
   ${conversion_libs}
   MLIROptLib
 
+  MLIRScaleHLSConversions
   MLIRHLS
   MLIRScaleHLSTransforms
 

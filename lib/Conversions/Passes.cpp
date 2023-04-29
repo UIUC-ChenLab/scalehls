@@ -4,11 +4,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "scalehls/Dialect/HLS/Analysis/Analysis.h"
-#include "llvm/Support/Debug.h"
-
-#define DEBUG_TYPE "dataflow-analysis"
+#include "scalehls/Conversions/Passes.h"
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hls;
+
+namespace {
+#define GEN_PASS_REGISTRATION
+#include "scalehls/Conversions/Passes.h.inc"
+} // namespace
+
+void scalehls::registerConversionsPasses() { registerPasses(); }

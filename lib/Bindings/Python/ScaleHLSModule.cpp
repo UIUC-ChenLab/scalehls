@@ -14,7 +14,7 @@
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
 #include "scalehls-c/EmitHLSCpp.h"
 #include "scalehls-c/HLS.h"
-#include "scalehls/Transforms/Utils.h"
+#include "scalehls/Dialect/HLS/Utils/Utils.h"
 
 #include "llvm-c/ErrorHandling.h"
 #include "llvm/ADT/SmallVector.h"
