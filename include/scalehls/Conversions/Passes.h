@@ -23,9 +23,9 @@ namespace scalehls {
 
 void registerConversionsPasses();
 
-std::unique_ptr<Pass> createConvertLinalgToFDF();
-std::unique_ptr<Pass> createConvertFDFToSDF();
-std::unique_ptr<Pass> createConvertSDFToFunc();
+std::unique_ptr<Pass> createConvertLinalgToFDFPass();
+std::unique_ptr<Pass> createConvertFDFToSDFPass();
+std::unique_ptr<Pass> createConvertSDFToFuncPass();
 
 #define GEN_PASS_CLASSES
 #include "scalehls/Conversions/Passes.h.inc"

@@ -1,4 +1,7 @@
 add_mlir_library(MLIRScaleHLSConversions
+  ConvertFDFToSDF.cpp
+  ConvertLinalgToFDF.cpp
+  ConvertSDFToFunc.cpp
   Passes.cpp
 
   DEPENDS
