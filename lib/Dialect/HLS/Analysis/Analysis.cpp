@@ -4,7 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "scalehls/Dialect/HLS/Analysis.h"
+#include "scalehls/Dialect/HLS/Analysis/Analysis.h"
 #include "scalehls/Transforms/Utils.h"
 #include "llvm/Support/Debug.h"
 

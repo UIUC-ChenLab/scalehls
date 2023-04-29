@@ -4,18 +4,16 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_DIALECT_HLS_ANALYSIS_H
-#define SCALEHLS_DIALECT_HLS_ANALYSIS_H
+#ifndef SCALEHLS_DIALECT_HLS_ANALYSIS_ANALYSIS_H
+#define SCALEHLS_DIALECT_HLS_ANALYSIS_ANALYSIS_H
 
 #include "scalehls/Dialect/HLS/IR/HLS.h"
-#include "scalehls/Dialect/HLS/Utils.h"
+#include "scalehls/Dialect/HLS/Utils/Utils.h"
 
 namespace mlir {
 namespace scalehls {
-
-using namespace hls;
-
+namespace hls {} // namespace hls
 } // namespace scalehls
 } // namespace mlir
 
-#endif // SCALEHLS_DIALECT_HLS_ANALYSIS_H
+#endif // SCALEHLS_DIALECT_HLS_ANALYSIS_ANALYSIS_H

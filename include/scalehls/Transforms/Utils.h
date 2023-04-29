@@ -7,7 +7,7 @@
 #ifndef SCALEHLS_TRANSFORMS_UTILS_H
 #define SCALEHLS_TRANSFORMS_UTILS_H
 
-#include "scalehls/Dialect/HLS/Utils.h"
+#include "scalehls/Dialect/HLS/Utils/Utils.h"
 
 namespace mlir {
 namespace scalehls {

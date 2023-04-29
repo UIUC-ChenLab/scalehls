@@ -4,7 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "scalehls/Dialect/HLS/Utils.h"
+#include "scalehls/Dialect/HLS/Utils/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;

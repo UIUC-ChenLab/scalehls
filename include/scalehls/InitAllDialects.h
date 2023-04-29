@@ -29,11 +29,12 @@
 #include "mlir/Dialect/SCF/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/Tensor/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/Vector/Transforms/BufferizableOpInterfaceImpl.h"
+#include "scalehls/Dialect/HLS/Transforms/BufferizableOpInterfaceImpl.h"
 
 namespace mlir {
 namespace scalehls {
 
-// Add all the ScaleHLS dialects to the provided registry.
+// Add all required dialects to the provided registry.
 inline void registerAllDialects(mlir::DialectRegistry &registry) {
   // clang-format off
   registry.insert<
@@ -54,7 +55,11 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
     mlir::ml_program::MLProgramDialect
   >();
   // clang-format on
+}
 
+// Add all required external models to the provided registry.
+inline void
+registerAllInterfaceExternalModels(mlir::DialectRegistry &registry) {
   arith::registerBufferizableOpInterfaceExternalModels(registry);
   linalg::registerBufferizableOpInterfaceExternalModels(registry);
   scf::registerBufferizableOpInterfaceExternalModels(registry);
@@ -62,6 +67,7 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
       registry);
   tensor::registerBufferizableOpInterfaceExternalModels(registry);
   vector::registerBufferizableOpInterfaceExternalModels(registry);
+  hls::registerBufferizableOpInterfaceExternalModels(registry);
 }
 
 } // namespace scalehls

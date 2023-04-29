@@ -4,7 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "scalehls/Dialect/HLS/Utils.h"
+#include "scalehls/Dialect/HLS/Utils/Utils.h"
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/Utils.h"

@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_SUPPORT_UTILS_H
-#define SCALEHLS_SUPPORT_UTILS_H
+#ifndef SCALEHLS_DIALECT_HLS_UTILS_UTILS_H
+#define SCALEHLS_DIALECT_HLS_UTILS_UTILS_H
 
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/Utils.h"
@@ -453,4 +453,4 @@ template <> struct DenseMapInfo<mlir::scalehls::PtrLikeMemRefAccess> {
 
 } // namespace llvm
 
-#endif // SCALEHLS_SUPPORT_UTILS_H
+#endif // SCALEHLS_DIALECT_HLS_UTILS_UTILS_H

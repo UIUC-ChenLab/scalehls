@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_DIALECT_HLS_VISITOR_H
-#define SCALEHLS_DIALECT_HLS_VISITOR_H
+#ifndef SCALEHLS_DIALECT_HLS_UTILS_VISITOR_H
+#define SCALEHLS_DIALECT_HLS_UTILS_VISITOR_H
 
 #include "scalehls/InitAllDialects.h"
 #include "llvm/ADT/TypeSwitch.h"
@@ -218,4 +218,4 @@ public:
 } // namespace scalehls
 } // namespace mlir
 
-#endif // SCALEHLS_DIALECT_HLS_VISITOR_H
+#endif // SCALEHLS_DIALECT_HLS_UTILS_VISITOR_H

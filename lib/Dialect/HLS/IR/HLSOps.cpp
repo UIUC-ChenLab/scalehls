@@ -6,7 +6,7 @@
 
 #include "mlir/Analysis/Liveness.h"
 #include "mlir/IR/IntegerSet.h"
-#include "scalehls/Dialect/HLS/Utils.h"
+#include "scalehls/Dialect/HLS/Utils/Utils.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 using namespace mlir;

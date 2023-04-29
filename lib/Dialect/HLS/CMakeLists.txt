@@ -1,9 +1,10 @@
 add_mlir_dialect_library(MLIRHLS
-  HLS.cpp
-  HLSAttributes.cpp
-  HLSOps.cpp
-  Analysis.cpp
-  Utils.cpp
+  Analysis/Analysis.cpp
+  IR/HLS.cpp
+  IR/HLSAttributes.cpp
+  IR/HLSOps.cpp
+  Transforms/BufferizableOpInterfaceImpl.cpp
+  Utils/Utils.cpp
 
   DEPENDS
   MLIRHLSOpsIncGen
