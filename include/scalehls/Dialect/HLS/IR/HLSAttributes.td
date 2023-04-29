@@ -7,7 +7,7 @@
 #ifndef SCALEHLS_DIALECT_HLS_HLSATTRIBUTES_TD
 #define SCALEHLS_DIALECT_HLS_HLSATTRIBUTES_TD
 
-include "scalehls/Dialect/HLS/IR/HLSBase.td"
+include "scalehls/Dialect/HLS/IR/HLSDialect.td"
 include "mlir/IR/AttrTypeBase.td"
 include "mlir/IR/BuiltinAttributeInterfaces.td"
 include "mlir/IR/EnumAttr.td"

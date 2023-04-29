@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_DIALECT_HLS_HLSBASE_TD
-#define SCALEHLS_DIALECT_HLS_HLSBASE_TD
+#ifndef SCALEHLS_DIALECT_HLS_HLSDIALECT_TD
+#define SCALEHLS_DIALECT_HLS_HLSDIALECT_TD
 
 include "mlir/IR/OpBase.td"
 
@@ -22,4 +22,4 @@ def HLSDialect : Dialect {
   let cppNamespace = "::mlir::scalehls::hls";
 }
 
-#endif // SCALEHLS_DIALECT_HLS_HLSBASE_TD
+#endif // SCALEHLS_DIALECT_HLS_HLSDIALECT_TD

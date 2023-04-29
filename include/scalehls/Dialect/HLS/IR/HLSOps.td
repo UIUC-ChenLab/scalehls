@@ -51,10 +51,10 @@ def AnyBufferOrStream : Type<Or<[AnyBuffer.predicate, AnyStream.predicate]>,
 def AnyAxi : AxiOf<[AnyType]>;
 
 //===----------------------------------------------------------------------===//
-// High Dataflow Operations
+// Functional Dataflow (FDF) Operations
 //===----------------------------------------------------------------------===//
 
-def DispatchOp : HLSOp<"dataflow.dispatch", [RecursiveMemoryEffects,
+def DispatchOp : HLSOp<"fdf.dispatch", [RecursiveMemoryEffects,
       SingleBlockImplicitTerminator<"YieldOp">,
       ParentOneOf<["func::FuncOp", "affine::AffineForOp"]>]> {
   let summary = "Represent a dataflow dispatch";
@@ -77,7 +77,7 @@ def DispatchOp : HLSOp<"dataflow.dispatch", [RecursiveMemoryEffects,
   }];
 }
 
-def TaskOp : HLSOp<"dataflow.task", [
+def TaskOp : HLSOp<"fdf.task", [
       DeclareOpInterfaceMethods<StageLikeInterface>, RecursiveMemoryEffects,
       SingleBlockImplicitTerminator<"YieldOp">, HasParent<"DispatchOp">]> {
   let summary = "Represent a dataflow task";
@@ -107,7 +107,7 @@ def TaskOp : HLSOp<"dataflow.task", [
   }];
 }
 
-def YieldOp : HLSOp<"dataflow.yield", [NoMemoryEffect, ReturnLike, Terminator,
+def YieldOp : HLSOp<"fdf.yield", [NoMemoryEffect, ReturnLike, Terminator,
       ParentOneOf<["DispatchOp", "TaskOp"]>]> {
   let summary = "Terminate and yield results of a dispatch or task op";
 
@@ -117,33 +117,11 @@ def YieldOp : HLSOp<"dataflow.yield", [NoMemoryEffect, ReturnLike, Terminator,
   let builders = [OpBuilder<(ins), "build($_builder, $_state, std::nullopt);">];
 }
 
-def ToStreamOp : HLSOp<"dataflow.to_stream", [NoMemoryEffect]> {
-  let summary = "Convert a scalar value to a stream channel";
-
-  let arguments = (ins AnyType:$value);
-  let results = (outs AnyStream:$stream);
-  let assemblyFormat = "$value attr-dict `:` functional-type($value, $stream)";
-
-  let hasVerifier = 1;
-  let hasFolder = 1;
-}
-
-def ToValueOp : HLSOp<"dataflow.to_value", [NoMemoryEffect]> {
-  let summary = "Convert a stream to a scalar value";
-
-  let arguments = (ins AnyStream:$stream);
-  let results = (outs AnyType:$value);
-  let assemblyFormat = "$stream attr-dict `:` functional-type($stream, $value)";
-
-  let hasVerifier = 1;
-  let hasFolder = 1;
-}
-
 //===----------------------------------------------------------------------===//
-// Low Dataflow Operations
+// Structural Dataflow (SDF) Operations
 //===----------------------------------------------------------------------===//
 
-def ScheduleOp : HLSOp<"dataflow.schedule", [
+def ScheduleOp : HLSOp<"sdf.schedule", [
       DeclareOpInterfaceMethods<MemoryEffectsOpInterface>, IsolatedFromAbove,
       AffineScope, SingleBlock, NoTerminator,
       ParentOneOf<["func::FuncOp", "affine::AffineForOp"]>]> {
@@ -173,7 +151,7 @@ def ScheduleOp : HLSOp<"dataflow.schedule", [
   }];
 }
 
-def NodeOp : HLSOp<"dataflow.node", [
+def NodeOp : HLSOp<"sdf.node", [
       DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
       DeclareOpInterfaceMethods<StageLikeInterface>, IsolatedFromAbove,
       AffineScope, SingleBlock, NoTerminator, AttrSizedOperandSegments,
@@ -259,7 +237,7 @@ def NodeOp : HLSOp<"dataflow.node", [
   }];
 }
 
-def BufferOp : HLSOp<"dataflow.buffer", [
+def BufferOp : HLSOp<"sdf.buffer", [
       DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
       DeclareOpInterfaceMethods<BufferLikeInterface>]> {
   let summary = "Represent a dataflow buffer";
@@ -277,7 +255,7 @@ def BufferOp : HLSOp<"dataflow.buffer", [
   ];
 }
 
-def ConstBufferOp : HLSOp<"dataflow.const_buffer", [
+def ConstBufferOp : HLSOp<"sdf.const_buffer", [
       DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
       DeclareOpInterfaceMethods<BufferLikeInterface>]> {
   let summary = "Represent a constant dataflow buffer";
@@ -289,7 +267,7 @@ def ConstBufferOp : HLSOp<"dataflow.const_buffer", [
   let hasVerifier = 1;
 }
 
-def StreamOp : HLSOp<"dataflow.stream", [
+def StreamOp : HLSOp<"sdf.stream", [
       DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Declare a stream channel";
 
@@ -304,7 +282,7 @@ def StreamOp : HLSOp<"dataflow.stream", [
   ];
 }
 
-def StreamReadOp : HLSOp<"dataflow.stream_read", []> {
+def StreamReadOp : HLSOp<"sdf.stream_read", []> {
   let summary = "Read a stream channel";
   let description = [{
     Read/pop a value from a stream channel. The absence of the result indicates
@@ -320,7 +298,7 @@ def StreamReadOp : HLSOp<"dataflow.stream_read", []> {
   let hasVerifier = 1;
 }
 
-def StreamWriteOp : HLSOp<"dataflow.stream_write", []> {
+def StreamWriteOp : HLSOp<"sdf.stream_write", []> {
   let summary = "Write a stream channel";
   let description = [{
     Write/push a value to a stream channel. Each stream channel can only be
