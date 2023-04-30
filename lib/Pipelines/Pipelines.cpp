@@ -28,12 +28,20 @@ using namespace scalehls;
 static void addComprehensiveBufferizePasses(OpPassManager &pm) {
   pm.addPass(scalehls::createComprehensiveBufferizePass());
   pm.addPass(memref::createResolveShapedTypeResultDimsPass());
-  pm.addNestedPass<func::FuncOp>(createCanonicalizerPass());
-  pm.addNestedPass<func::FuncOp>(createCSEPass());
+  pm.addPass(mlir::createCanonicalizerPass());
+  pm.addPass(mlir::createCSEPass());
   // There are redundant memcpy (with linalg.generic form) ops created, which
   // can be deleted by canonicalizer. We have to run it again because the
   // memrefs are unified in CSE pass, so we can truely remove redundant memcpy.
-  pm.addNestedPass<func::FuncOp>(createCanonicalizerPass());
+  pm.addPass(mlir::createCanonicalizerPass());
+}
+
+static void addLowerLinalgToAffinePasses(OpPassManager &pm) {
+  pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
+  pm.addPass(memref::createFoldMemRefAliasOpsPass());
+  pm.addPass(affine::createAffineLoopNormalizePass());
+  pm.addPass(affine::createSimplifyAffineStructuresPass());
+  pm.addPass(mlir::createCanonicalizerPass());
 }
 
 namespace {
@@ -64,6 +72,7 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         // Func-level transformation.
         pm.addPass(scalehls::createConvertSDFToFuncPass());
         pm.addPass(scalehls::createOutlineTopFuncPass());
+        addLowerLinalgToAffinePasses(pm);
       });
 }
 

@@ -1868,8 +1868,27 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
         continue;
       // MemRefType and StreamType must have been converted to AXI ports for the
       // top function.
-      if (port.getType().isa<MemRefType, StreamType>())
-        emitError(func, "unsupported port type");
+      if (port.getType().isa<MemRefType, StreamType>()) {
+        indent() << "#pragma HLS interface";
+
+        if (port.getType().isa<MemRefType>()) {
+          os << " m_axi offset=slave";
+          // else {
+          //   os << " bram ";
+          //   auto kind = getMemoryKind(port.getType().cast<MemRefType>());
+          //   os << getStorageTypeAndImpl(kind, "storage_type",
+          //   "storage_impl");
+          // }
+        } else
+          os << " axis";
+
+        os << " port=";
+        emitValue(port);
+        os << "\n";
+
+        if (port.getType().isa<MemRefType>())
+          emitArrayDirectives(port, true);
+      }
 
       // For scalar types, we always emit them as AXI-Lite ports.
       auto name = getName(port);
