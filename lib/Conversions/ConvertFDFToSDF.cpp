@@ -154,7 +154,7 @@ struct ConvertFDFToSDF : public ConvertFDFToSDFBase<ConvertFDFToSDF> {
     mlir::RewritePatternSet patterns(context);
     patterns.add<LowerDispatchToSchedule>(context);
     patterns.add<LowerTaskToNode>(context);
-    populateBufferConversionPatterns(patterns);
+    // populateBufferConversionPatterns(patterns);
     if (failed(applyPartialConversion(func, target, std::move(patterns))))
       return signalPassFailure();
   }

@@ -8,6 +8,8 @@
 #define SCALEHLS_INITALLPASSES_H
 
 #include "mlir/InitAllPasses.h"
+#include "scalehls/Conversions/Passes.h"
+#include "scalehls/Pipelines/Pipelines.h"
 #include "scalehls/Transforms/Passes.h"
 
 namespace mlir {
@@ -15,6 +17,8 @@ namespace scalehls {
 
 // Add all the ScaleHLS passes.
 inline void registerAllPasses() {
+  scalehls::registerPipelines();
+  scalehls::registerConversionsPasses();
   scalehls::registerTransformsPasses();
   mlir::registerAllPasses();
 }

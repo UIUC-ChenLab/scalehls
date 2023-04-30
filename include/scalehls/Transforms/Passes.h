@@ -24,7 +24,6 @@ namespace scalehls {
 
 using namespace bufferization;
 
-void registerScaleHLSPyTorchPipeline();
 void registerTransformsPasses();
 
 std::unique_ptr<Pass> createComprehensiveBufferizePass(

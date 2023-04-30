@@ -66,7 +66,7 @@ def DispatchOp : HLSOp<"fdf.dispatch", [RecursiveMemoryEffects,
 
   let results = (outs Variadic<AnyType>:$results);
   let regions = (region SizedRegion<1>:$body);
-  let assemblyFormat = "attr-dict-with-keyword ( `:` type($results)^ )? $body";
+  let assemblyFormat = "attr-dict-with-keyword (`:` type($results)^)? $body";
 
   let hasVerifier = 1;
   let hasCanonicalizer = 1;
@@ -89,7 +89,7 @@ def TaskOp : HLSOp<"fdf.task", [
 
   let results = (outs Variadic<AnyType>:$results);
   let regions = (region SizedRegion<1>:$body);
-  let assemblyFormat = "attr-dict-with-keyword ( `:` type($results)^ )? $body";
+  let assemblyFormat = "attr-dict-with-keyword (`:` type($results)^)? $body";
 
   let hasVerifier = 1;
   let hasCanonicalizer = 1;
@@ -115,6 +115,22 @@ def YieldOp : HLSOp<"fdf.yield", [NoMemoryEffect, ReturnLike, Terminator,
   let assemblyFormat = "$results attr-dict `:` type($results)";
 
   let builders = [OpBuilder<(ins), "build($_builder, $_state, std::nullopt);">];
+}
+
+def AllocTensorOp : HLSOp<"fdf.alloc_tensor", [NoMemoryEffect]> {
+  let summary = "Allocate a tensor";
+
+  let arguments = (ins Optional<AnyType>:$init_value);
+  let results = (outs AnyRankedTensor:$result);
+  let assemblyFormat = [{
+    ($init_value^)? attr-dict (`:` type($init_value)^ `->` ):(`:`)? type($result)
+  }];
+
+  let hasVerifier = 1;
+  let builders = [
+    OpBuilder<(ins "mlir::Type":$result),
+        "build($_builder, $_state, result, nullptr);">
+  ];
 }
 
 //===----------------------------------------------------------------------===//

@@ -152,6 +152,18 @@ SmallVector<Operation *> TaskOp::getLiveinUsers(Value livein) {
 }
 
 //===----------------------------------------------------------------------===//
+// AllocTensorOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult AllocTensorOp::verify() {
+  if (auto initValue = getInitValue())
+    if (initValue.getType() != getType().getElementType() &&
+        initValue.getType() != getType())
+      return emitOpError("initial value's type doesn't align with tensor type");
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
 // ScheduleOp
 //===----------------------------------------------------------------------===//
 
