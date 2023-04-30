@@ -317,14 +317,14 @@ void hls::setFuncDirective(Operation *op, bool pipeline, int64_t targetInterval,
 
 /// Top and runtime function attribute utils.
 void hls::setTopFuncAttr(Operation *op) {
-  op->setAttr("top_func", UnitAttr::get(op->getContext()));
+  op->setAttr("__top_func__", UnitAttr::get(op->getContext()));
 }
 bool hls::hasTopFuncAttr(Operation *op) {
-  return op->hasAttrOfType<UnitAttr>("top_func");
+  return op->hasAttrOfType<UnitAttr>("__top_func__");
 }
 void hls::setRuntimeAttr(Operation *op) {
-  op->setAttr("runtime", UnitAttr::get(op->getContext()));
+  op->setAttr("__runtime__", UnitAttr::get(op->getContext()));
 }
 bool hls::hasRuntimeAttr(Operation *op) {
-  return op->hasAttrOfType<UnitAttr>("runtime");
+  return op->hasAttrOfType<UnitAttr>("__runtime__");
 }

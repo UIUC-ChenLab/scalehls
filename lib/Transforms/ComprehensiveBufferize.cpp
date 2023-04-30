@@ -54,10 +54,6 @@ static FailureOr<Value> defaultAllocationFn(OpBuilder &builder, Location loc,
   MemRefType type = allocationType;
   return builder.create<hls::BufferOp>(loc, type).getResult();
 }
-static LogicalResult defaultDeallocationFn(OpBuilder &builder, Location loc,
-                                           Value allocation) {
-  return success();
-}
 static LogicalResult defaultMemCpyFn(OpBuilder &builder, Location loc,
                                      Value from, Value to) {
   Operation *copyOp = createLinalgCopyOp(builder, loc, from, to);
@@ -112,17 +108,13 @@ struct ComprehensiveBufferize
   explicit ComprehensiveBufferize(
       std::optional<BufferizationOptions::AllocationFn> allocationFn =
           std::nullopt,
-      std::optional<BufferizationOptions::DeallocationFn> deallocationFn =
-          std::nullopt,
       std::optional<BufferizationOptions::MemCpyFn> memCpyFn = std::nullopt)
-      : allocationFn(allocationFn), deallocationFn(deallocationFn),
-        memCpyFn(memCpyFn) {}
+      : allocationFn(allocationFn), memCpyFn(memCpyFn) {}
 
   void runOnOperation() override {
     ModuleOp moduleOp = getOperation();
     OneShotBufferizationOptions options = getBufferizationOptions();
     options.allocationFn = allocationFn;
-    options.deallocationFn = deallocationFn;
     options.memCpyFn = memCpyFn;
     options.allowReturnAllocs = true;
     options.bufferizeFunctionBoundaries = true;
@@ -140,21 +132,16 @@ struct ComprehensiveBufferize
 
 private:
   const std::optional<BufferizationOptions::AllocationFn> allocationFn;
-  const std::optional<BufferizationOptions::DeallocationFn> deallocationFn;
   const std::optional<BufferizationOptions::MemCpyFn> memCpyFn;
 };
 } // namespace
 
 std::unique_ptr<Pass> scalehls::createComprehensiveBufferizePass(
     std::optional<BufferizationOptions::AllocationFn> allocationFn,
-    std::optional<BufferizationOptions::DeallocationFn> deallocationFn,
     std::optional<BufferizationOptions::MemCpyFn> memCpyFn) {
   if (!allocationFn)
     allocationFn = defaultAllocationFn;
-  if (!deallocationFn)
-    deallocationFn = defaultDeallocationFn;
   if (!memCpyFn)
     memCpyFn = defaultMemCpyFn;
-  return std::make_unique<ComprehensiveBufferize>(allocationFn, deallocationFn,
-                                                  memCpyFn);
+  return std::make_unique<ComprehensiveBufferize>(allocationFn, memCpyFn);
 }

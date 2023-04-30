@@ -53,9 +53,18 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
 
         // FDF-level transformation.
         pm.addPass(scalehls::createConvertLinalgToFDFPass());
+        addComprehensiveBufferizePasses(pm);
+        pm.addPass(bufferization::createBufferResultsToOutParamsPass());
         pm.addPass(hls::createEliminateBufferYieldPass());
         pm.addPass(mlir::createCanonicalizerPass());
-        addComprehensiveBufferizePasses(pm);
+
+        // SDF-level transformation.
+        pm.addPass(scalehls::createConvertFDFToSDFPass());
+        pm.addPass(mlir::createCanonicalizerPass());
+
+        // Func-level transformation.
+        pm.addPass(scalehls::createConvertSDFToFuncPass());
+        pm.addPass(scalehls::createOutlineTopFuncPass());
       });
 }
 

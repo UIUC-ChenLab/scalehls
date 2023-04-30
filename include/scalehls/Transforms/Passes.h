@@ -29,9 +29,10 @@ void registerTransformsPasses();
 std::unique_ptr<Pass> createComprehensiveBufferizePass(
     std::optional<BufferizationOptions::AllocationFn> allocationFn =
         std::nullopt,
-    std::optional<BufferizationOptions::DeallocationFn> deallocationFn =
-        std::nullopt,
     std::optional<BufferizationOptions::MemCpyFn> memCpyFn = std::nullopt);
+std::unique_ptr<Pass>
+createOutlineTopFuncPass(std::string topFunc = "forward",
+                         std::string runtimeFunc = "runtime");
 
 #define GEN_PASS_CLASSES
 #include "scalehls/Transforms/Passes.h.inc"
