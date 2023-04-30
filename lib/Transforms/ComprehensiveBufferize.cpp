@@ -52,11 +52,10 @@ static FailureOr<Value> defaultAllocationFn(OpBuilder &builder, Location loc,
                                             ValueRange dynamicSizes,
                                             unsigned int alignment) {
   MemRefType type = allocationType;
-  return builder.create<memref::AllocOp>(loc, type, dynamicSizes).getResult();
+  return builder.create<hls::BufferOp>(loc, type).getResult();
 }
 static LogicalResult defaultDeallocationFn(OpBuilder &builder, Location loc,
                                            Value allocation) {
-  builder.create<memref::DeallocOp>(loc, allocation);
   return success();
 }
 static LogicalResult defaultMemCpyFn(OpBuilder &builder, Location loc,

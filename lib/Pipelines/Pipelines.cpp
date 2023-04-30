@@ -24,7 +24,7 @@ using namespace mlir;
 using namespace bufferization;
 using namespace scalehls;
 
-void addComprehensiveBufferizePasses(
+static void addComprehensiveBufferizePasses(
     OpPassManager &pm,
     std::optional<BufferizationOptions::AllocationFn> allocationFn =
         std::nullopt,
@@ -56,7 +56,7 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         pm.addPass(bufferization::createEmptyTensorEliminationPass());
         pm.addPass(mlir::createConvertTensorToLinalgPass());
         pm.addPass(scalehls::createConvertLinalgToFDFPass());
-        // addComprehensiveBufferizePasses(pm);
+        addComprehensiveBufferizePasses(pm);
       });
 }
 

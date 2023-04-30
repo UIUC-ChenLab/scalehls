@@ -148,24 +148,22 @@ struct AllocTensorOpInterface
         bufferization::getBufferType(allocTensor.getResult(), options);
     if (failed(allocType))
       return failure();
-    FailureOr<Value> alloc = options.createAlloc(
+    FailureOr<Value> buffer = options.createAlloc(
         rewriter, allocTensor.getLoc(), allocType->cast<MemRefType>(), {});
-    if (failed(alloc))
+    if (failed(buffer))
       return failure();
 
-    // Should the buffer be deallocated?
-    bool dealloc = shouldDeallocateOpResult(
-        allocTensor.getResult().cast<OpResult>(), options);
+    // Handle initial value.
+    if (auto initValue = allocTensor.getInitValue()) {
+      auto initValueOp = initValue.getDefiningOp<arith::ConstantOp>();
+      auto bufferOp = buffer->getDefiningOp<BufferOp>();
+      if (!initValueOp || !bufferOp)
+        return failure();
+      bufferOp.setInitValueAttr(initValueOp.getValue());
+    }
 
     // Replace op.
-    replaceOpWithBufferizedValues(rewriter, allocTensor, *alloc);
-
-    // Create buffer deallocation (if requested).
-    if (dealloc) {
-      rewriter.setInsertionPoint(rewriter.getInsertionBlock()->getTerminator());
-      if (failed(options.createDealloc(rewriter, allocTensor.getLoc(), *alloc)))
-        return failure();
-    }
+    replaceOpWithBufferizedValues(rewriter, allocTensor, *buffer);
     return success();
   }
 
