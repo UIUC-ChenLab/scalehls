@@ -18,21 +18,15 @@
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
 #include "scalehls/Conversions/Passes.h"
+#include "scalehls/Dialect/HLS/Transforms/Passes.h"
 #include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
 using namespace bufferization;
 using namespace scalehls;
 
-static void addComprehensiveBufferizePasses(
-    OpPassManager &pm,
-    std::optional<BufferizationOptions::AllocationFn> allocationFn =
-        std::nullopt,
-    std::optional<BufferizationOptions::DeallocationFn> deallocationFn =
-        std::nullopt,
-    std::optional<BufferizationOptions::MemCpyFn> memCpyFn = std::nullopt) {
-  pm.addPass(
-      createComprehensiveBufferizePass(allocationFn, deallocationFn, memCpyFn));
+static void addComprehensiveBufferizePasses(OpPassManager &pm) {
+  pm.addPass(scalehls::createComprehensiveBufferizePass());
   pm.addPass(memref::createResolveShapedTypeResultDimsPass());
   pm.addNestedPass<func::FuncOp>(createCanonicalizerPass());
   pm.addNestedPass<func::FuncOp>(createCSEPass());
@@ -52,10 +46,15 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
       "scalehls-pytorch-pipeline",
       "Compile from Torch-MLIR (Linalg) to HLS C++",
       [](OpPassManager &pm, const ScaleHLSPyTorchPipelineOptions &opts) {
+        // Linalg-level transformation.
+        pm.addPass(mlir::createConvertTensorToLinalgPass());
         pm.addPass(mlir::createLinalgElementwiseOpFusionPass());
         pm.addPass(bufferization::createEmptyTensorEliminationPass());
-        pm.addPass(mlir::createConvertTensorToLinalgPass());
+
+        // FDF-level transformation.
         pm.addPass(scalehls::createConvertLinalgToFDFPass());
+        pm.addPass(hls::createEliminateBufferYieldPass());
+        pm.addPass(mlir::createCanonicalizerPass());
         addComprehensiveBufferizePasses(pm);
       });
 }

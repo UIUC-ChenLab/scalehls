@@ -19,13 +19,19 @@ struct EliminateYieldedBuffer : public OpRewritePattern<OpType> {
   LogicalResult matchAndRewrite(OpType op,
                                 PatternRewriter &rewriter) const override {
     bool hasChanged = false;
-    for (auto &buffer : op.getYieldOp()->getOpOperands())
-      if (buffer.get().getType().template isa<MemRefType>() &&
-          buffer.get().getParentRegion()->isProperAncestor(&op.getBody())) {
-        rewriter.replaceAllUsesWith(op.getResult(buffer.getOperandNumber()),
-                                    buffer.get());
-        hasChanged = true;
-      }
+    for (auto [yieldedValue, opResult] :
+         llvm::zip(op.getYieldOp().getOperands(), op.getResults())) {
+      auto buffer = yieldedValue.template getDefiningOp<BufferOp>();
+      if (!buffer)
+        continue;
+
+      // It's always safe to move the buffer to higher level hierarchy.
+      if (op->isAncestor(buffer))
+        buffer->moveBefore(op);
+
+      rewriter.replaceAllUsesWith(opResult, buffer);
+      hasChanged = true;
+    }
     return success(hasChanged);
   }
 };
