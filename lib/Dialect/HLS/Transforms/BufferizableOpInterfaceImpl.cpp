@@ -5,18 +5,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Dialect/HLS/Transforms/BufferizableOpInterfaceImpl.h"
-#include "scalehls/Dialect/HLS/IR/HLS.h"
-
 #include "mlir/Dialect/Bufferization/IR/BufferizableOpInterface.h"
-#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
-#include "mlir/Dialect/Bufferization/Transforms/OneShotAnalysis.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/SCF/IR/SCF.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
-#include "mlir/Dialect/Utils/StaticValueUtils.h"
-#include "mlir/IR/Dialect.h"
-#include "mlir/IR/Operation.h"
-#include "mlir/IR/PatternMatch.h"
+#include "scalehls/Dialect/HLS/IR/HLS.h"
 
 using namespace mlir;
 using namespace bufferization;
@@ -63,14 +53,30 @@ struct DispatchOrTaskOpInterface
     // Create new dispatch/task op.
     rewriter.setInsertionPoint(task);
     auto newTask = rewriter.create<OpType>(task.getLoc(), newTypes);
-
-    // Move over dispatch/task blocks.
     rewriter.inlineRegionBefore(task.getBody(), newTask.getBody(),
                                 newTask.getBody().end());
 
     // Replace dispatch/task op results.
     replaceOpWithBufferizedValues(rewriter, op, newTask->getResults());
     return success();
+  }
+
+  FailureOr<BaseMemRefType>
+  getBufferType(Operation *op, Value value, const BufferizationOptions &options,
+                const DenseMap<Value, BaseMemRefType> &fixedTypes) const {
+    assert(value.getDefiningOp() == op && "invalid value");
+    auto yieldedValue = cast<OpType>(op).getYieldOp().getOperand(
+        value.cast<OpResult>().getResultNumber());
+
+    if (auto bufferType =
+            yieldedValue.getType().template dyn_cast<BaseMemRefType>())
+      return bufferType;
+
+    auto maybeBufferType =
+        bufferization::getBufferType(yieldedValue, options, fixedTypes);
+    if (failed(maybeBufferType))
+      return failure();
+    return *maybeBufferType;
   }
 };
 
@@ -90,7 +96,7 @@ struct YieldOpInterface
 
   AliasingOpResultList getAliasingOpResults(Operation *op, OpOperand &opOperand,
                                             const AnalysisState &state) const {
-    if (isa<DispatchOp>(op->getParentOp()))
+    if (isa<DispatchOp, TaskOp>(op->getParentOp()))
       return {{op->getParentOp()->getResult(opOperand.getOperandNumber()),
                BufferRelation::Equivalent}};
     return {};
@@ -122,11 +128,86 @@ struct YieldOpInterface
   }
 };
 
+/// Bufferization of fdf.alloc_tensor operation.
+struct AllocTensorOpInterface
+    : public BufferizableOpInterface::ExternalModel<AllocTensorOpInterface,
+                                                    AllocTensorOp> {
+  LogicalResult bufferize(Operation *op, RewriterBase &rewriter,
+                          const BufferizationOptions &options) const {
+    OpBuilder::InsertionGuard g(rewriter);
+    auto allocTensor = cast<AllocTensorOp>(op);
+
+    // Nothing to do for dead AllocTensorOps.
+    if (allocTensor->getUses().empty()) {
+      rewriter.eraseOp(allocTensor);
+      return success();
+    }
+
+    // Create memory allocation.
+    auto allocType =
+        bufferization::getBufferType(allocTensor.getResult(), options);
+    if (failed(allocType))
+      return failure();
+    FailureOr<Value> alloc = options.createAlloc(
+        rewriter, allocTensor.getLoc(), allocType->cast<MemRefType>(), {});
+    if (failed(alloc))
+      return failure();
+
+    // Should the buffer be deallocated?
+    bool dealloc = shouldDeallocateOpResult(
+        allocTensor.getResult().cast<OpResult>(), options);
+
+    // Replace op.
+    replaceOpWithBufferizedValues(rewriter, allocTensor, *alloc);
+
+    // Create buffer deallocation (if requested).
+    if (dealloc) {
+      rewriter.setInsertionPoint(rewriter.getInsertionBlock()->getTerminator());
+      if (failed(options.createDealloc(rewriter, allocTensor.getLoc(), *alloc)))
+        return failure();
+    }
+    return success();
+  }
+
+  bool resultBufferizesToMemoryWrite(Operation *op, OpResult opResult,
+                                     const AnalysisState &state) const {
+    return false;
+  }
+
+  bool bufferizesToAllocation(Operation *op, OpResult opResult) const {
+    return true;
+  }
+
+  AliasingOpResultList getAliasingOpResults(Operation *op, OpOperand &opOperand,
+                                            const AnalysisState &state) const {
+    // This is a new allocation. It does not alias with any other buffer.
+    return {};
+  }
+
+  FailureOr<BaseMemRefType>
+  getBufferType(Operation *op, Value value, const BufferizationOptions &options,
+                const DenseMap<Value, BaseMemRefType> &fixedTypes) const {
+    auto allocTensor = cast<AllocTensorOp>(op);
+    assert(value == allocTensor.getResult() && "invalid value");
+
+    // Compute memory space of this allocation.
+    Attribute memorySpace;
+    if (options.defaultMemorySpace.has_value())
+      memorySpace = *options.defaultMemorySpace;
+    else
+      return allocTensor.emitError("could not infer memory space");
+
+    return getMemRefTypeWithStaticIdentityLayout(allocTensor.getType(),
+                                                 memorySpace);
+  }
+};
+
 void mlir::scalehls::hls::registerBufferizableOpInterfaceExternalModels(
     DialectRegistry &registry) {
   registry.addExtension(+[](MLIRContext *ctx, HLSDialect *dialect) {
     DispatchOp::attachInterface<DispatchOrTaskOpInterface<DispatchOp>>(*ctx);
     TaskOp::attachInterface<DispatchOrTaskOpInterface<TaskOp>>(*ctx);
     YieldOp::attachInterface<YieldOpInterface>(*ctx);
+    AllocTensorOp::attachInterface<AllocTensorOpInterface>(*ctx);
   });
 }

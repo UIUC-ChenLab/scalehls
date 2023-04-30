@@ -123,7 +123,7 @@ def AllocTensorOp : HLSOp<"fdf.alloc_tensor", [NoMemoryEffect]> {
   let arguments = (ins Optional<AnyType>:$init_value);
   let results = (outs AnyRankedTensor:$result);
   let assemblyFormat = [{
-    ($init_value^)? attr-dict (`:` type($init_value)^ `->` ):(`:`)? type($result)
+    ($init_value^)? attr-dict `:` `(` type($init_value) `)` `->` type($result)
   }];
 
   let hasVerifier = 1;

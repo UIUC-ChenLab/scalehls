@@ -39,9 +39,7 @@ static Operation *createLinalgCopyOp(OpBuilder &b, Location loc, Value from,
   SmallVector<utils::IteratorType> iteratorTypes(memrefTypeTo.getRank(),
                                                  utils::IteratorType::parallel);
   return b.create<linalg::GenericOp>(
-      loc, /*inputs=*/from, /*outputs=*/to,
-      /*indexingMaps=*/llvm::ArrayRef({id, id}),
-      /*iteratorTypes=*/iteratorTypes,
+      loc, from, to, llvm::ArrayRef({id, id}), iteratorTypes,
       [](OpBuilder &b, Location loc, ValueRange args) {
         b.create<linalg::YieldOp>(loc, args.front());
       },
@@ -127,6 +125,8 @@ struct ComprehensiveBufferize
     options.allocationFn = allocationFn;
     options.deallocationFn = deallocationFn;
     options.memCpyFn = memCpyFn;
+    options.allowReturnAllocs = true;
+    options.bufferizeFunctionBoundaries = true;
 
     if (failed(runScaleHLSOneShotBufferize(moduleOp, options)))
       return signalPassFailure();

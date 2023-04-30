@@ -55,11 +55,25 @@ struct OutlineLinalgInterface
 } // namespace
 
 namespace {
+/// This pattern will outline ops into a separate task.
+template <typename OpType> struct OutlineOp : public OpRewritePattern<OpType> {
+  using OpRewritePattern<OpType>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(OpType op,
+                                PatternRewriter &rewriter) const override {
+    if (op->template getParentOfType<TaskOp>())
+      return failure();
+    fuseOpsIntoTask({op}, rewriter);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 struct ConvertLinalgToFDF : public ConvertLinalgToFDFBase<ConvertLinalgToFDF> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
-    auto builder = OpBuilder(context);
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<ConvertTensorEmptyOp>(context);
@@ -70,6 +84,16 @@ struct ConvertLinalgToFDF : public ConvertLinalgToFDFBase<ConvertLinalgToFDF> {
 
     patterns.clear();
     patterns.add<OutlineLinalgInterface>(context);
+    patterns.add<OutlineOp<tensor::ReshapeOp>>(context);
+    patterns.add<OutlineOp<tensor::ExpandShapeOp>>(context);
+    patterns.add<OutlineOp<tensor::CollapseShapeOp>>(context);
+    patterns.add<OutlineOp<tensor::InsertSliceOp>>(context);
+    patterns.add<OutlineOp<tensor::ExtractSliceOp>>(context);
+    patterns.add<OutlineOp<tensor::InsertOp>>(context);
+    patterns.add<OutlineOp<tensor::ExtractOp>>(context);
+    patterns.add<OutlineOp<tensor::PackOp>>(context);
+    patterns.add<OutlineOp<tensor::UnPackOp>>(context);
+    patterns.add<OutlineOp<tensor::PadOp>>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };
