@@ -13,10 +13,12 @@ target_link_libraries(scalehls-opt
   ${conversion_libs}
   MLIROptLib
 
-  MLIRHLS
+  MLIRHLSDialect
+  MLIRHLSAnalysis
+  MLIRHLSTransforms
+  MLIRHLSUtils
+
   MLIRScaleHLSPipelines
   MLIRScaleHLSTransforms
   MLIRScaleHLSConversions
-
-  # Threads::Threads
   )

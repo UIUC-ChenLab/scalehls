@@ -15,7 +15,7 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-struct LowerDispatchToSchedule : public OpRewritePattern<DispatchOp> {
+struct ConvertDispatchToSchedule : public OpRewritePattern<DispatchOp> {
   using OpRewritePattern<DispatchOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(DispatchOp dispatch,
@@ -59,7 +59,7 @@ struct LowerDispatchToSchedule : public OpRewritePattern<DispatchOp> {
 } // namespace
 
 namespace {
-struct LowerTaskToNode : public OpRewritePattern<TaskOp> {
+struct ConvertTaskToNode : public OpRewritePattern<TaskOp> {
   using OpRewritePattern<TaskOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(TaskOp task,
@@ -128,6 +128,23 @@ struct LowerTaskToNode : public OpRewritePattern<TaskOp> {
 } // namespace
 
 namespace {
+struct ConvertConstantToConstBuffer
+    : public OpRewritePattern<bufferization::ToMemrefOp> {
+  using OpRewritePattern<bufferization::ToMemrefOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(bufferization::ToMemrefOp op,
+                                PatternRewriter &rewriter) const override {
+    if (auto constant = op.getTensor().getDefiningOp<arith::ConstantOp>()) {
+      rewriter.replaceOpWithNewOp<ConstBufferOp>(
+          op, op.getType(), constant.getValue().cast<ElementsAttr>());
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
 struct ConvertFDFToSDF : public ConvertFDFToSDFBase<ConvertFDFToSDF> {
   void runOnOperation() override {
     auto func = getOperation();
@@ -146,15 +163,16 @@ struct ConvertFDFToSDF : public ConvertFDFToSDFBase<ConvertFDFToSDF> {
       constant->erase();
     }
 
+    // Convert dispatch, task, and to_memref operations.
     ConversionTarget target(*context);
-    target.addIllegalOp<DispatchOp, TaskOp, YieldOp, memref::GetGlobalOp,
-                        memref::AllocOp, memref::AllocaOp>();
-    target.addLegalOp<ScheduleOp, NodeOp, ConstBufferOp, BufferOp>();
+    target
+        .addIllegalOp<DispatchOp, TaskOp, YieldOp, bufferization::ToMemrefOp>();
+    target.addLegalOp<ScheduleOp, NodeOp, ConstBufferOp>();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<LowerDispatchToSchedule>(context);
-    patterns.add<LowerTaskToNode>(context);
-    // populateBufferConversionPatterns(patterns);
+    patterns.add<ConvertDispatchToSchedule>(context);
+    patterns.add<ConvertTaskToNode>(context);
+    patterns.add<ConvertConstantToConstBuffer>(context);
     if (failed(applyPartialConversion(func, target, std::move(patterns))))
       return signalPassFailure();
   }

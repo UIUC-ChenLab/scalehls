@@ -8,5 +8,5 @@ add_mlir_library(MLIRScaleHLSConversions
   MLIRScaleHLSConversionsIncGen
 
   LINK_LIBS PUBLIC
-  MLIRHLS
+  MLIRHLSDialect
   )

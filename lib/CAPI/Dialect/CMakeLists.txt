@@ -6,5 +6,5 @@ add_mlir_public_c_api_library(MLIRScaleHLSCAPIHLS
 
   LINK_LIBS PUBLIC
   MLIRCAPIIR
-  MLIRHLS
+  MLIRHLSDialect
   )
