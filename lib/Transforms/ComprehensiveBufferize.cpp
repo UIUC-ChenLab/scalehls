@@ -54,6 +54,7 @@ static FailureOr<Value> defaultAllocationFn(OpBuilder &builder, Location loc,
   MemRefType type = allocationType;
   return builder.create<hls::BufferOp>(loc, type).getResult();
 }
+
 static LogicalResult defaultMemCpyFn(OpBuilder &builder, Location loc,
                                      Value from, Value to) {
   Operation *copyOp = createLinalgCopyOp(builder, loc, from, to);
@@ -62,6 +63,7 @@ static LogicalResult defaultMemCpyFn(OpBuilder &builder, Location loc,
 
 static OneShotBufferizationOptions getBufferizationOptions() {
   OneShotBufferizationOptions options;
+  options.setFunctionBoundaryTypeConversion(LayoutMapOption::IdentityLayoutMap);
 
   // bufferization.to_memref is used to bufferize constants in IREE. IREE has
   // it's own logic to handle constants. We'd like to leave the arith.constant
@@ -73,17 +75,9 @@ static OneShotBufferizationOptions getBufferizationOptions() {
   // memref type can be inferred from the context.
   options.unknownTypeConverterFn = [](Value value, Attribute memorySpace,
                                       const BufferizationOptions &options) {
-    auto tensorType = value.getType().cast<TensorType>();
-
-    // Special rule for ConstantOps: These always lower to some memref with a
-    // static identity layout.
-    if (value.getDefiningOp<arith::ConstantOp>())
-      return bufferization::getMemRefTypeWithStaticIdentityLayout(tensorType,
-                                                                  memorySpace);
-
-    // Default case: Fully dynamic layout map for best compatibility.
-    return bufferization::getMemRefTypeWithFullyDynamicLayout(tensorType,
-                                                              memorySpace);
+    // We always lower to memref with a static identity layout.
+    return bufferization::getMemRefTypeWithStaticIdentityLayout(
+        value.getType().cast<TensorType>(), memorySpace);
   };
 
   return options;

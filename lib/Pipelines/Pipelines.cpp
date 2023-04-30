@@ -54,7 +54,6 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         // FDF-level transformation.
         pm.addPass(scalehls::createConvertLinalgToFDFPass());
         addComprehensiveBufferizePasses(pm);
-        pm.addPass(bufferization::createBufferResultsToOutParamsPass());
         pm.addPass(hls::createEliminateBufferYieldPass());
         pm.addPass(mlir::createCanonicalizerPass());
 

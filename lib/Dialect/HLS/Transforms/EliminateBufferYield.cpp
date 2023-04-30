@@ -13,7 +13,7 @@ using namespace hls;
 
 namespace {
 template <typename OpType>
-struct EliminateYieldedBuffer : public OpRewritePattern<OpType> {
+struct EliminateBufferYieldPattern : public OpRewritePattern<OpType> {
   using OpRewritePattern<OpType>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(OpType op,
@@ -45,8 +45,8 @@ struct EliminateBufferYield
     auto context = func.getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<EliminateYieldedBuffer<DispatchOp>>(context);
-    patterns.add<EliminateYieldedBuffer<TaskOp>>(context);
+    patterns.add<EliminateBufferYieldPattern<DispatchOp>>(context);
+    patterns.add<EliminateBufferYieldPattern<TaskOp>>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };

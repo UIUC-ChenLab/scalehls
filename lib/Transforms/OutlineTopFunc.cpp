@@ -31,49 +31,59 @@ struct OutlineTopFunc : public OutlineTopFuncBase<OutlineTopFunc> {
       return signalPassFailure();
     }
     setTopFuncAttr(top);
+    auto topReturn = top.back().getTerminator();
 
     // Create the runtime function.
     builder.setInsertionPointAfter(top);
     auto runtime =
         builder.create<func::FuncOp>(loc, runtimeFunc, top.getFunctionType());
     setRuntimeAttr(runtime);
-    auto runtimeBlock = runtime.addEntryBlock();
-    builder.setInsertionPointToEnd(runtimeBlock);
+    builder.setInsertionPointToEnd(runtime.addEntryBlock());
+    auto runtimeReturn = builder.clone(*topReturn);
 
-    // Move all the arguments of the top function to the runtime function.
-    for (auto [topArg, runtimeArg] :
-         llvm::zip(top.getArguments(), runtimeBlock->getArguments()))
-      topArg.replaceAllUsesWith(runtimeArg);
-    top.front().eraseArguments(0, top.getNumArguments());
+    // Record the new inputs of the top function.
+    SmallVector<Value, 32> topInputs(runtime.getArguments());
 
-    // Create top function ports for each runtime argument.
-    SmallVector<Value, 32> topPorts;
-    for (auto arg : runtimeBlock->getArguments()) {
-      topPorts.push_back(arg);
-      arg.replaceAllUsesWith(
-          top.front().addArgument(arg.getType(), arg.getLoc()));
+    // A helper to demote a buffer to the runtime function.
+    auto demoteBuffer = [&](hls::BufferLikeInterface buffer) {
+      buffer->moveBefore(runtimeReturn);
+      topInputs.push_back(buffer.getMemref());
+      buffer.getMemref().replaceAllUsesExcept(
+          top.front().addArgument(buffer.getMemrefType(), buffer.getLoc()),
+          runtimeReturn);
+    };
+
+    // If a buffer is returned by the top function, it should always be demoted
+    // and then erased from the returning values.
+    BitVector eraseIndices;
+    for (auto returnedValue : topReturn->getOperands()) {
+      if (auto buffer =
+              returnedValue.getDefiningOp<hls::BufferLikeInterface>()) {
+        demoteBuffer(buffer);
+        eraseIndices.push_back(true);
+      } else
+        eraseIndices.push_back(false);
     }
+    topReturn->eraseOperands(eraseIndices);
 
-    // Move buffers instantiated in the top function to the runtime function.
-    // Create top function ports for each moved buffer.
-    // TODO: Determine the movement based on memoryspace.
-    builder.setInsertionPointToEnd(runtimeBlock);
+    // For now, we demote a buffer if it exceeds a threshold.
     for (auto buffer :
-         llvm::make_early_inc_range(top.getOps<hls::BufferLikeInterface>())) {
-      if (buffer.getMemrefType().getNumElements() <= 1024)
-        continue;
-      buffer->remove();
-      builder.insert(buffer);
-      topPorts.push_back(buffer.getMemref());
-      buffer.getMemref().replaceAllUsesWith(
-          top.front().addArgument(buffer.getMemrefType(), buffer.getLoc()));
-    }
+         llvm::make_early_inc_range(top.getOps<hls::BufferLikeInterface>()))
+      if (buffer.getMemrefType().getNumElements() > 1024)
+        demoteBuffer(buffer);
 
     // Update the top function and call.
-    auto call = builder.create<func::CallOp>(top.getLoc(), top.getName(),
-                                             top.getResultTypes(), topPorts);
+    builder.setInsertionPoint(runtimeReturn);
+    auto call = builder.create<func::CallOp>(
+        top.getLoc(), top.getName(), topReturn->getOperandTypes(), topInputs);
     top.setType(call.getCalleeType());
-    builder.create<func::ReturnOp>(loc, call.getResults());
+
+    for (auto [returnedValue, callResult] :
+         llvm::zip(topReturn->getOperands(), call.getResults())) {
+      returnedValue.replaceUsesWithIf(callResult, [&](OpOperand &operand) {
+        return operand.getOwner() == runtimeReturn;
+      });
+    }
   }
 };
 } // namespace
