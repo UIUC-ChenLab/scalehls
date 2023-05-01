@@ -352,14 +352,48 @@ def ParamOp : HLSOp<"dse.param", [NoMemoryEffect,
     type($result)
   }];
 
-  // let hasVerifier = 1;
-  // let builders = [
-  //   OpBuilder<(ins "mlir::Type":$channel),
-  //       "build($_builder, $_state, channel, 1);">
-  // ];
+  let hasVerifier = 1;
+  let builders = [
+    // Parameter builder constrained by candidates.
+    OpBuilder<(ins "mlir::Type":$result, "mlir::ArrayAttr":$candidates,
+        "ParamKind":$kind, "mlir::StringAttr":$symName), [{
+          build($_builder, $_state, result, {}, nullptr, nullptr, candidates,
+            ParamKindAttr::get($_builder.getContext(), kind), nullptr, symName);
+        }]>,
 
-  // let extraClassDeclaration = [{
-  // }];
+    // Parameter builder constrained by affine lower and upper bounds.
+    OpBuilder<(ins "mlir::Type":$result, "mlir::ValueRange":$args,
+        "mlir::AffineMap":$lowerBound, "mlir::AffineMap":$upperBound,
+        "ParamKind":$kind, "mlir::StringAttr":$symName), [{
+          build($_builder, $_state, result, args,
+            mlir::AffineMapAttr::get(lowerBound),
+            mlir::AffineMapAttr::get(upperBound), nullptr,
+            ParamKindAttr::get($_builder.getContext(), kind), nullptr, symName);
+        }]>,
+
+    // Parameter builder without constraints.
+    OpBuilder<(ins "mlir::Type":$result, "ParamKind":$kind,
+        "mlir::StringAttr":$symName), [{
+          build($_builder, $_state, result, nullptr, kind, symName);
+        }]>
+  ];
+
+  let extraClassDeclaration = [{
+    /// Assign a value to the parameter.
+    void assignValue(Attribute value) { setValueAttr(value); }
+    void assignValue(unsigned value) {
+      assignValue(Builder(getContext()).getIndexAttr(value));
+    }
+    void assignValue(MemoryKind value) {
+      assignValue(MemoryKindAttr::get(getContext(), value));
+    }
+    void assignValue(std::string value) {
+      assignValue(StringAttr::get(getContext(), value));
+    }
+
+    /// Get all constraints of the parameter.
+    SmallVector<Operation *> getConstraints();
+  }];
 }
 
 def RequireOp : HLSOp<"dse.require", [NoMemoryEffect, IsolatedFromAbove,
@@ -374,9 +408,11 @@ def RequireOp : HLSOp<"dse.require", [NoMemoryEffect, IsolatedFromAbove,
   let regions = (region SizedRegion<1>:$body);
   let assemblyFormat = "attr-dict-with-keyword $body";
 
-  // let hasVerifier = 1;
-  // let extraClassDeclaration = [{
-  // }];
+  let hasVerifier = 1;
+  let extraClassDeclaration = [{
+    /// Get the terminator condition op.
+    ConditionOp getConditionOp();
+  }];
 }
 
 def GetParamOp : HLSOp<"dse.get_param", [NoMemoryEffect,
@@ -392,9 +428,11 @@ def GetParamOp : HLSOp<"dse.get_param", [NoMemoryEffect,
   let results = (outs AnyType:$result);
   let assemblyFormat = "$param attr-dict `:` type($result)";
 
-  // let hasVerifier = 1;
-  // let extraClassDeclaration = [{
-  // }];
+  let hasVerifier = 1;
+  let extraClassDeclaration = [{
+    /// Get the parent require op.
+    RequireOp getRequireOp();
+  }];
 }
 
 def ConditionOp : HLSOp<"dse.condition", [NoMemoryEffect, Terminator,
@@ -407,19 +445,30 @@ def ConditionOp : HLSOp<"dse.condition", [NoMemoryEffect, Terminator,
     canonicalization in some cases, so is preferred.
   }];
 
-  let arguments = (ins Optional<AnyType>:$condition, Variadic<Index>:$args);
+  let arguments = (ins Optional<I1>:$condition, Variadic<Index>:$args);
+  let builders = [
+    /// Condition builder with a boolean value.
+    OpBuilder<(ins "mlir::Value":$condition), 
+        "build($_builder, $_state, condition, {});">,
+
+    /// Condition builder with integer set.
+    OpBuilder<(ins "IntegerSet":$set, "ValueRange":$args)>
+  ];
 
   // let hasCustomAssemblyFormat = 1;
-  // let hasVerifier = 1;
-  // let extraClassDeclaration = [{
-  //   static StringRef getConditionAttrStrName() { return "condition"; }
+  let hasVerifier = 1;
+  let extraClassDeclaration = [{
+    /// Get the parent require op.
+    RequireOp getRequireOp();
+    
+    static StringRef getConditionAttrStrName() { return "condition"; }
 
-  //   IntegerSet getIntegerSet();
-  //   void setIntegerSet(IntegerSet newSet);
+    IntegerSet getIntegerSet();
+    void setIntegerSet(IntegerSet newSet);
 
-  //   /// Sets the integer set with its operands.
-  //   void setConditional(IntegerSet set, ValueRange operands);
-  // }];
+    /// Sets the integer set with its operands.
+    void setConditional(IntegerSet set, ValueRange operands);
+  }];
 }
 
 //===----------------------------------------------------------------------===//
