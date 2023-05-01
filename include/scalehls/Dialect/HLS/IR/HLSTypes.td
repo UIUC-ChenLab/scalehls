@@ -12,6 +12,22 @@ include "scalehls/Dialect/HLS/IR/HLSAttributes.td"
 class HLSType<string name, list<Trait> traits = []> :
     TypeDef<HLSDialect, name, traits>;
 
+def MemoryKindType : HLSType<"MemoryKind"> {
+  let summary = "A memory kind type";
+  let mnemonic = "mem";
+
+  let parameters = (ins MemoryKindParam:$kind);
+  let assemblyFormat = "`<` $kind `>`";
+}
+
+def IPIdentifierType : HLSType<"IPIdentifier"> {
+  let summary = "An IP identifier type";
+  let mnemonic = "ip";
+
+  let parameters = (ins IPLibraryParam:$library, IPNameParam:$name);
+  let assemblyFormat = "`<` $library `_` $name `>`";
+}
+
 def StreamType : HLSType<"Stream"> {
   let summary = "An HLS stream type";
   let description = [{

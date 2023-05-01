@@ -16,19 +16,8 @@ class HLSAttr<string name, list<Trait> traits = []> :
     AttrDef<HLSDialect, name, traits>;
 
 //===----------------------------------------------------------------------===//
-// SDF enum attributes
+// SDF/FDF Attributes
 //===----------------------------------------------------------------------===//
-
-def PartitionKind: I32EnumAttr<"PartitionKind", "Kind of array partition", [
-    I32EnumAttrCase<"NONE", 0, "none">,
-    I32EnumAttrCase<"CYCLIC", 1, "cyclic">,
-    I32EnumAttrCase<"BLOCK", 2, "block">,
-    I32EnumAttrCase<"COMPLETE", 3, "complete">
-]> {
-  let cppNamespace = "mlir::scalehls::hls";
-  let genSpecializedAttr = 0;
-}
-def PartitionKindParam: EnumParameter<PartitionKind>;
 
 def MemoryKind: I32EnumAttr<"MemoryKind", "Kind of memory", [
     I32EnumAttrCase<"UNKNOWN", 0, "unknown">,  
@@ -43,8 +32,7 @@ def MemoryKind: I32EnumAttr<"MemoryKind", "Kind of memory", [
     I32EnumAttrCase<"URAM_2P", 9, "uram_2p">,
     I32EnumAttrCase<"URAM_S2P", 10, "uram_s2p">,
     I32EnumAttrCase<"URAM_T2P", 11, "uram_t2p">,
-    I32EnumAttrCase<"DRAM", 12, "dram">
-]> {
+    I32EnumAttrCase<"DRAM", 12, "dram">]> {
   let cppNamespace = "mlir::scalehls::hls";
   let genSpecializedAttr = 0;
 }
@@ -52,9 +40,35 @@ def MemoryKindAttr: EnumAttr<HLSDialect, MemoryKind> {
   let mnemonic = "mem";
   let assemblyFormat = "`<` $value `>`";
 }
+def MemoryKindParam: EnumParameter<MemoryKind>;
+
+def PartitionKind: I32EnumAttr<"PartitionKind", "Kind of array partition", [
+    I32EnumAttrCase<"NONE", 0, "none">,
+    I32EnumAttrCase<"CYCLIC", 1, "cyclic">,
+    I32EnumAttrCase<"BLOCK", 2, "block">,
+    I32EnumAttrCase<"COMPLETE", 3, "complete">]> {
+  let cppNamespace = "mlir::scalehls::hls";
+  let genSpecializedAttr = 0;
+}
+def PartitionKindParam: EnumParameter<PartitionKind>;
 
 //===----------------------------------------------------------------------===//
-// UBUF layout attributes
+// UIP Attributes
+//===----------------------------------------------------------------------===//
+
+def IPLibraryParam: StringRefParameter<"Library of an IP">;
+def IPNameParam: StringRefParameter<"Name of an IP">;
+
+def IPIdentifierAttr : HLSAttr<"IPIdentifier"> {
+  let summary = "Identifier of an IP";
+  let parameters = (ins IPLibraryParam:$library, IPNameParam:$name);
+  
+  let mnemonic = "ip";
+  let assemblyFormat = "`<` $library `_` $name `>`";
+}
+
+//===----------------------------------------------------------------------===//
+// UBUF Attributes
 //===----------------------------------------------------------------------===//
 
 def PartitionLayoutAttr : HLSAttr<"PartitionLayout",
@@ -119,15 +133,14 @@ def TileLayoutAttr : HLSAttr<"TileLayout",
 }
 
 //===----------------------------------------------------------------------===//
-// DSE enum attributes
+// DSE Attributes
 //===----------------------------------------------------------------------===//
 
 def ParamKind: I32EnumAttr<"ParamKind", "Kind of param", [
     I32EnumAttrCase<"TILE_FACTOR", 0, "tile_factor">,  
     I32EnumAttrCase<"PARALLEL_FACTOR", 1, "parallel_factor">,
-    I32EnumAttrCase<"MEMORYSPACE", 2, "memoryspace">,
-    I32EnumAttrCase<"IP_NAME", 3, "ip_name">
-]> {
+    I32EnumAttrCase<"IP_IDENTIFIER", 3, "ip_identifier">,
+    I32EnumAttrCase<"MEMORY_KIND", 2, "memory_kind">]> {
   let cppNamespace = "mlir::scalehls::hls";
   let genSpecializedAttr = 0;
 }
