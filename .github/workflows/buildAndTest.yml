@@ -13,26 +13,26 @@ jobs:
       - name: Clang Format
         uses: DoozyX/clang-format-lint-action@v0.13
         with:
-          exclude: './polygeist ./samples ./test'
+          exclude: './llvm-project ./samples ./test'
           clangFormatVersion: 11
           style: llvm
 
       - name: Get LLVM Hash
         id: get-llvm-hash
-        run: echo "::set-output name=hash::$(git -C ./polygeist rev-parse @:./llvm-project)"
+        run: echo "::set-output name=hash::$(git rev-parse @:./llvm-project)"
 
       - name: Cache LLVM
         id: cache-llvm
         uses: actions/cache@v2
         with:
-          path: polygeist/llvm-project/build
+          path: llvm-project/build
           key: ${{ runner.os }}-llvm-${{ steps.get-llvm-hash.outputs.hash }}
 
       - name: Rebuild LLVM
         if: steps.cache-llvm.outputs.cache-hit != 'true'
         run: |
-          mkdir -p polygeist/llvm-project/build
-          cd polygeist/llvm-project/build
+          mkdir -p llvm-project/build
+          cd llvm-project/build
           cmake ../llvm \
             -DLLVM_ENABLE_PROJECTS="mlir" \
             -DLLVM_TARGETS_TO_BUILD="host" \
@@ -47,8 +47,8 @@ jobs:
           mkdir -p build
           cd build
           cmake .. \
-            -DMLIR_DIR="$PWD/../polygeist/llvm-project/build/lib/cmake/mlir" \
-            -DLLVM_DIR="$PWD/../polygeist/llvm-project/build/lib/cmake/llvm" \
+            -DMLIR_DIR="$PWD/../llvm-project/build/lib/cmake/mlir" \
+            -DLLVM_DIR="$PWD/../llvm-project/build/lib/cmake/llvm" \
             -DLLVM_ENABLE_ASSERTIONS=ON \
             -DCMAKE_BUILD_TYPE=DEBUG \
             -DLLVM_USE_LINKER=lld \
