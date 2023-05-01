@@ -16,18 +16,8 @@ class HLSAttr<string name, list<Trait> traits = []> :
     AttrDef<HLSDialect, name, traits>;
 
 //===----------------------------------------------------------------------===//
-// Enum attributes and parameters
+// SDF enum attributes
 //===----------------------------------------------------------------------===//
-
-def AxiKind: I32EnumAttr<"AxiKind", "Kind of AXI port", [
-    I32EnumAttrCase<"MM", 0, "mm">,
-    I32EnumAttrCase<"LITE", 1, "lite">,
-    I32EnumAttrCase<"STREAM", 2, "stream">
-]> {
-  let cppNamespace = "mlir::scalehls::hls";
-  let genSpecializedAttr = 0;
-}
-def AxiKindParam: EnumParameter<AxiKind>;
 
 def PartitionKind: I32EnumAttr<"PartitionKind", "Kind of array partition", [
     I32EnumAttrCase<"NONE", 0, "none">,
@@ -64,7 +54,7 @@ def MemoryKindAttr: EnumAttr<HLSDialect, MemoryKind> {
 }
 
 //===----------------------------------------------------------------------===//
-// Layout attributes
+// UBUF layout attributes
 //===----------------------------------------------------------------------===//
 
 def PartitionLayoutAttr : HLSAttr<"PartitionLayout",
@@ -126,6 +116,24 @@ def TileLayoutAttr : HLSAttr<"TileLayout",
       return llvm::any_of(getVectorShape(), [](int64_t v) { return v > 1; });
     }
   }];
+}
+
+//===----------------------------------------------------------------------===//
+// DSE enum attributes
+//===----------------------------------------------------------------------===//
+
+def ParamKind: I32EnumAttr<"ParamKind", "Kind of param", [
+    I32EnumAttrCase<"TILE_FACTOR", 0, "tile_factor">,  
+    I32EnumAttrCase<"PARALLEL_FACTOR", 1, "parallel_factor">,
+    I32EnumAttrCase<"MEMORYSPACE", 2, "memoryspace">,
+    I32EnumAttrCase<"IP_NAME", 3, "ip_name">
+]> {
+  let cppNamespace = "mlir::scalehls::hls";
+  let genSpecializedAttr = 0;
+}
+def ParamKindAttr: EnumAttr<HLSDialect, ParamKind> {
+  let mnemonic = "param";
+  let assemblyFormat = "`<` $value `>`";
 }
 
 //===----------------------------------------------------------------------===//
