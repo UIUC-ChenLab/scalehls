@@ -56,27 +56,6 @@ void setTileLayout(Value memref, ArrayRef<int64_t> tileShape,
 void setTileLayout(Value memref, ArrayRef<int64_t> tileShape);
 
 //===----------------------------------------------------------------------===//
-// HLS resource and timing attributes
-//===----------------------------------------------------------------------===//
-
-/// Timing attribute utils.
-TimingAttr getTiming(Operation *op);
-void setTiming(Operation *op, TimingAttr timing);
-void setTiming(Operation *op, int64_t begin, int64_t end, int64_t latency,
-               int64_t interval);
-
-/// Resource attribute utils.
-ResourceAttr getResource(Operation *op);
-void setResource(Operation *op, ResourceAttr resource);
-void setResource(Operation *op, int64_t lut, int64_t dsp, int64_t bram);
-
-/// Loop information attribute utils.
-LoopInfoAttr getLoopInfo(Operation *op);
-void setLoopInfo(Operation *op, LoopInfoAttr loopInfo);
-void setLoopInfo(Operation *op, int64_t flattenTripCount, int64_t iterLatency,
-                 int64_t minII);
-
-//===----------------------------------------------------------------------===//
 // HLS directive attributes
 //===----------------------------------------------------------------------===//
 
@@ -108,25 +87,6 @@ class NodeOp;
 
 } // namespace hls
 } // namespace scalehls
-} // namespace mlir
-
-namespace mlir {
-namespace OpTrait {
-
-using namespace scalehls::hls;
-
-template <typename ConcreteType>
-class DataflowBufferLike : public TraitBase<ConcreteType, DataflowBufferLike> {
-public:
-  static LogicalResult verifyTrait(Operation *op) {
-    if (op->getNumResults() != 1 ||
-        !op->getResult(0).getType().isa<StreamType, MemRefType>())
-      return failure();
-    return success();
-  }
-};
-
-} // namespace OpTrait
 } // namespace mlir
 
 #define GET_OP_CLASSES

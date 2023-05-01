@@ -226,59 +226,15 @@ void hls::setTileLayout(Value memref, ArrayRef<int64_t> tileShape) {
 }
 
 //===----------------------------------------------------------------------===//
-// HLS resource and timing attributes
-//===----------------------------------------------------------------------===//
-
-/// Timing attribute utils.
-TimingAttr hls::getTiming(Operation *op) {
-  return op->getAttrOfType<TimingAttr>("timing");
-}
-void hls::setTiming(Operation *op, TimingAttr timing) {
-  assert(timing.getBegin() <= timing.getEnd() && "invalid timing attribute");
-  op->setAttr("timing", timing);
-}
-void hls::setTiming(Operation *op, int64_t begin, int64_t end, int64_t latency,
-                    int64_t minII) {
-  auto timing = TimingAttr::get(op->getContext(), begin, end, latency, minII);
-  setTiming(op, timing);
-}
-
-/// Resource attribute utils.
-ResourceAttr hls::getResource(Operation *op) {
-  return op->getAttrOfType<ResourceAttr>("resource");
-}
-void hls::setResource(Operation *op, ResourceAttr resource) {
-  op->setAttr("resource", resource);
-}
-void hls::setResource(Operation *op, int64_t lut, int64_t dsp, int64_t bram) {
-  auto resource = ResourceAttr::get(op->getContext(), lut, dsp, bram);
-  setResource(op, resource);
-}
-
-/// Loop information attribute utils.
-LoopInfoAttr hls::getLoopInfo(Operation *op) {
-  return op->getAttrOfType<LoopInfoAttr>("loop_info");
-}
-void hls::setLoopInfo(Operation *op, LoopInfoAttr loopInfo) {
-  op->setAttr("loop_info", loopInfo);
-}
-void hls::setLoopInfo(Operation *op, int64_t flattenTripCount,
-                      int64_t iterLatency, int64_t minII) {
-  auto loopInfo =
-      LoopInfoAttr::get(op->getContext(), flattenTripCount, iterLatency, minII);
-  setLoopInfo(op, loopInfo);
-}
-
-//===----------------------------------------------------------------------===//
 // HLS directive attributes
 //===----------------------------------------------------------------------===//
 
 /// Loop directives attribute utils.
 LoopDirectiveAttr hls::getLoopDirective(Operation *op) {
-  return op->getAttrOfType<LoopDirectiveAttr>("loop_directive");
+  return op->getAttrOfType<LoopDirectiveAttr>("__loop__");
 }
 void hls::setLoopDirective(Operation *op, LoopDirectiveAttr loopDirective) {
-  op->setAttr("loop_directive", loopDirective);
+  op->setAttr("__loop__", loopDirective);
 }
 void hls::setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
                            bool dataflow, bool flatten) {
@@ -289,24 +245,24 @@ void hls::setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
 
 /// Parrallel and point loop attribute utils.
 void hls::setParallelAttr(Operation *op) {
-  op->setAttr("parallel", UnitAttr::get(op->getContext()));
+  op->setAttr("__parallel__", UnitAttr::get(op->getContext()));
 }
 bool hls::hasParallelAttr(Operation *op) {
-  return op->hasAttrOfType<UnitAttr>("parallel");
+  return op->hasAttrOfType<UnitAttr>("__parallel__");
 }
 void hls::setPointAttr(Operation *op) {
-  op->setAttr("point", UnitAttr::get(op->getContext()));
+  op->setAttr("__point__", UnitAttr::get(op->getContext()));
 }
 bool hls::hasPointAttr(Operation *op) {
-  return op->hasAttrOfType<UnitAttr>("point");
+  return op->hasAttrOfType<UnitAttr>("__point__");
 }
 
 /// Function directives attribute utils.
 FuncDirectiveAttr hls::getFuncDirective(Operation *op) {
-  return op->getAttrOfType<FuncDirectiveAttr>("func_directive");
+  return op->getAttrOfType<FuncDirectiveAttr>("__func__");
 }
 void hls::setFuncDirective(Operation *op, FuncDirectiveAttr funcDirective) {
-  op->setAttr("func_directive", funcDirective);
+  op->setAttr("__func__", funcDirective);
 }
 void hls::setFuncDirective(Operation *op, bool pipeline, int64_t targetInterval,
                            bool dataflow) {
@@ -317,10 +273,10 @@ void hls::setFuncDirective(Operation *op, bool pipeline, int64_t targetInterval,
 
 /// Top and runtime function attribute utils.
 void hls::setTopFuncAttr(Operation *op) {
-  op->setAttr("__top_func__", UnitAttr::get(op->getContext()));
+  op->setAttr("__top__", UnitAttr::get(op->getContext()));
 }
 bool hls::hasTopFuncAttr(Operation *op) {
-  return op->hasAttrOfType<UnitAttr>("__top_func__");
+  return op->hasAttrOfType<UnitAttr>("__top__");
 }
 void hls::setRuntimeAttr(Operation *op) {
   op->setAttr("__runtime__", UnitAttr::get(op->getContext()));

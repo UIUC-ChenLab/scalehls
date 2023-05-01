@@ -25,8 +25,7 @@ public:
         .template Case<
             // HLS dialect operations.
             BufferOp, ConstBufferOp, StreamOp, StreamReadOp, StreamWriteOp,
-            AxiBundleOp, AxiPortOp, AxiPackOp, PrimMulOp, PrimCastOp,
-            hls::AffineSelectOp, hls::VectorInitOp,
+            hls::AffineSelectOp,
 
             // Function operations.
             func::CallOp, func::ReturnOp,
@@ -104,13 +103,7 @@ public:
   HANDLE(StreamOp);
   HANDLE(StreamReadOp);
   HANDLE(StreamWriteOp);
-  HANDLE(AxiBundleOp);
-  HANDLE(AxiPortOp);
-  HANDLE(AxiPackOp);
-  HANDLE(PrimMulOp);
-  HANDLE(PrimCastOp);
-  HANDLE(hls::AffineSelectOp);
-  HANDLE(hls::VectorInitOp);
+  HANDLE(AffineSelectOp);
 
   // Control flow operations.
   HANDLE(func::CallOp);

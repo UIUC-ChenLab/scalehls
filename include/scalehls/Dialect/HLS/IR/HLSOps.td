@@ -18,12 +18,6 @@ include "mlir/IR/SymbolInterfaces.td"
 class HLSOp<string mnemonic, list<Trait> traits = []> :
     Op<HLSDialect, mnemonic, traits>;
 
-//===----------------------------------------------------------------------===//
-// Traits and Type Constraints
-//===----------------------------------------------------------------------===//
-
-def DataflowBufferLike : NativeOpTrait<"DataflowBufferLike">;
-
 class StreamOf<list<Type> allowedTypes> : Type<And<[
     CPred<"$_self.isa<mlir::scalehls::hls::StreamType>()">,
     Concat<"[](mlir::Type elementType) { return ",
@@ -34,21 +28,10 @@ class StreamOf<list<Type> allowedTypes> : Type<And<[
   "mlir::scalehls::hls::StreamType"
 >;
 
-class AxiOf<list<Type> allowedTypes> : Type<And<[
-    CPred<"$_self.isa<mlir::scalehls::hls::AxiType>()">,
-    Concat<"[](mlir::Type elementType) { return ",
-      SubstLeaves<"$_self", "elementType", AnyTypeOf<allowedTypes>.predicate>,
-      "; }($_self.cast<mlir::scalehls::hls::AxiType>().getElementType())">
-  ]>,
-  "axi of " # AnyTypeOf<allowedTypes>.summary # " values",
-  "mlir::scalehls::hls::AxiType"
->;
-
 def AnyBuffer : StaticShapeMemRefOf<[AnyType]>;
 def AnyStream : StreamOf<[AnyType]>;
 def AnyBufferOrStream : Type<Or<[AnyBuffer.predicate, AnyStream.predicate]>,
     "memref or stream values">;
-def AnyAxi : AxiOf<[AnyType]>;
 
 //===----------------------------------------------------------------------===//
 // Functional Dataflow (FDF) Operations
@@ -78,7 +61,7 @@ def DispatchOp : HLSOp<"fdf.dispatch", [RecursiveMemoryEffects,
 }
 
 def TaskOp : HLSOp<"fdf.task", [
-      DeclareOpInterfaceMethods<StageLikeInterface>, RecursiveMemoryEffects,
+      DeclareOpInterfaceMethods<ContainerLikeInterface>, RecursiveMemoryEffects,
       SingleBlockImplicitTerminator<"YieldOp">, HasParent<"DispatchOp">]> {
   let summary = "Represent a dataflow task";
   let description = [{
@@ -102,7 +85,7 @@ def TaskOp : HLSOp<"fdf.task", [
     YieldOp getYieldOp();
 
     bool hasHierarchy() {
-      return cast<StageLikeInterface>(this->getOperation()).hasHierarchy();
+      return cast<ContainerLikeInterface>(this->getOperation()).hasHierarchy();
     }
   }];
 }
@@ -169,7 +152,7 @@ def ScheduleOp : HLSOp<"sdf.schedule", [
 
 def NodeOp : HLSOp<"sdf.node", [
       DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
-      DeclareOpInterfaceMethods<StageLikeInterface>, IsolatedFromAbove,
+      DeclareOpInterfaceMethods<ContainerLikeInterface>, IsolatedFromAbove,
       AffineScope, SingleBlock, NoTerminator, AttrSizedOperandSegments,
       HasParent<"ScheduleOp">]> {
   let summary = "Represent a dataflow node";
@@ -245,13 +228,17 @@ def NodeOp : HLSOp<"sdf.node", [
     iterator_range<Block::args_iterator> getParamArgs();
 
     bool hasHierarchy() {
-      return cast<StageLikeInterface>(this->getOperation()).hasHierarchy();
+      return cast<ContainerLikeInterface>(this->getOperation()).hasHierarchy();
     }
 
     /// Update the signature of the node op recursively.
     void updateSignatureRecursively();
   }];
 }
+
+//===----------------------------------------------------------------------===//
+// Unified Buffer (UBUF) Operations
+//===----------------------------------------------------------------------===//
 
 def BufferOp : HLSOp<"sdf.buffer", [
       DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
@@ -330,7 +317,15 @@ def StreamWriteOp : HLSOp<"sdf.stream_write", []> {
 }
 
 //===----------------------------------------------------------------------===//
-// AXI-related Operations
+// Unified IP (UIP) Operations
+//===----------------------------------------------------------------------===//
+
+//===----------------------------------------------------------------------===//
+// Parameter Operations
+//===----------------------------------------------------------------------===//
+
+//===----------------------------------------------------------------------===//
+// Vectorization-related Operations
 //===----------------------------------------------------------------------===//
 
 def BufferVectorizeOp : HLSOp<"buffer_vectorize", [ViewLikeOpInterface,
@@ -374,106 +369,9 @@ def BufferDevectorizeOp : HLSOp<"buffer_devectorize", [ViewLikeOpInterface,
   }];
 }
 
-def AxiBundleOp : HLSOp<"axi.bundle", [NoMemoryEffect,
-    HasParent<"func::FuncOp">]> {
-  let summary = "Represent an bundle of axi ports";
-
-  let arguments = (ins StrAttr:$name);
-  let results = (outs BundleType:$bundle);
-  let assemblyFormat = "$name attr-dict `:` type($bundle)";
-}
-
-def AxiPortOp : HLSOp<"axi.port", [NoMemoryEffect, HasParent<"func::FuncOp">]> {
-  let summary = "Represent an axi port";
-
-  let arguments = (ins BundleType:$bundle, AnyAxi:$axi);
-  let results = (outs AnyType:$element);
-  let assemblyFormat = [{
-    $bundle `,` $axi attr-dict `:` type($bundle) `,`
-    functional-type($axi, $element)
-  }];
-
-  let hasVerifier = 1;
-  let extraClassDeclaration = [{
-    AxiType getAxiType() {
-      return getAxi().getType().cast<AxiType>();
-    }
-    BundleType getBundleType() {
-      return getBundle().getType().cast<BundleType>();
-    }
-    StringRef getBundleName() {
-      return getBundle().getDefiningOp<AxiBundleOp>().getName();
-    }
-  }];
-}
-
-def AxiPackOp : HLSOp<"axi.pack", [NoMemoryEffect, HasParent<"func::FuncOp">]> {
-  let summary = "Pack a memref or scalar into an axi type";
-
-  let arguments = (ins AnyType:$element);
-  let results = (outs AnyAxi:$axi);
-  let assemblyFormat = "$element attr-dict `:` functional-type($element, $axi)";
-
-  let hasVerifier = 1;
-  let extraClassDeclaration = [{
-    AxiType getAxiType() {
-      return getAxi().getType().cast<AxiType>();
-    }
-  }];
-}
-
 //===----------------------------------------------------------------------===//
-// Primitive Operations
+// Extended Operations
 //===----------------------------------------------------------------------===//
-
-def PrimMulOp : HLSOp<"prim.mul", [NoMemoryEffect]> {
-  let summary = "Multiplication primitive operation";
-  let description = [{
-    This primitive performs C = A * B, where A and B are 8-bits integers, while
-    C is 16-bits integer. If C/A/B is vector, the length of vector must be two.
-    There are 4 different cases on this:
-
-    1) vec(C) = vec(A) * vec(B)
-    2) vec(C) = vec(A) * B
-    3) vec(C) = A * vec(B)
-    4) C = A * B
-
-    Note that case 2/3 could use the double pumping technique such that we can
-    packing the two multiplications into one DSP instance. Please refer to
-    "Xilinx WP486: Deep Learning with INT8 Optimization on Xilinx Devices" for
-    more information.
-  }];
-
-  let arguments = (ins AnyTypeOf<[I8, VectorOfLengthAndType<[2], [I8]>]>:$A,
-                       AnyTypeOf<[I8, VectorOfLengthAndType<[2], [I8]>]>:$B);
-  let results = (outs AnyTypeOf<[I16, VectorOfLengthAndType<[2], [I16]>]>:$C);
-
-  let hasVerifier = 1;
-  let extraClassDeclaration = [{
-    /// Check whether is a packed multiplication.
-    bool isPackMul();
-  }];
-}
-
-def PrimCastOp : HLSOp<"prim.cast", [
-      NoMemoryEffect, SameOperandsAndResultShape]> {
-  let summary = "Cast primitive operation";
-  let description = [{
-    This operation is super exterimental and should be substituted by the new
-    type casting operations in arith dialect.
-  }];
-
-  let arguments = (ins 
-    AnyTypeOf<[I8, I16, I32,
-               VectorOfLengthAndType<[2], [I8, I16, I32]>]>:$input
-  );
-  let results = (outs
-    AnyTypeOf<[I8, I16, I32,
-               VectorOfLengthAndType<[2], [I8, I16, I32]>]>:$output
-  );
-
-  let hasCanonicalizer = 1;
-}
 
 def AffineSelectOp : HLSOp<"affine.select", [NoMemoryEffect]> {
   let summary = "if-then-else operation";
@@ -501,19 +399,6 @@ def AffineSelectOp : HLSOp<"affine.select", [NoMemoryEffect]> {
     /// Sets the integer set with its operands.
     void setConditional(IntegerSet set, ValueRange operands);
   }];
-}
-
-def VectorInitOp : HLSOp<"vector.init", [NoMemoryEffect]> {
-  let summary = "Initialize a vector";
-
-  let results = (outs AnyVector:$output);
-  let assemblyFormat = "attr-dict `:` type($output)";
-}
-
-def TileParameter : HLSOp<"tile_parameter", [NoMemoryEffect]> {
-  let summary = "Return a tile parameter";
-
-  let results = (outs I64:$param);
 }
 
 #endif // SCALEHLS_DIALECT_HLS_HLSOPS_TD

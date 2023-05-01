@@ -129,44 +129,6 @@ def TileLayoutAttr : HLSAttr<"TileLayout",
 }
 
 //===----------------------------------------------------------------------===//
-// HLS resource and timing attributes
-//===----------------------------------------------------------------------===//
-
-def ResourceAttr : HLSAttr<"Resource"> {
-  let summary = "Resource utilization attributes";
-  let parameters = (ins "int64_t":$lut, "int64_t":$dsp, "int64_t":$bram);
-
-  let mnemonic = "res";
-  let assemblyFormat = [{
-    `<` `lut` `=` $lut `,` `dsp` `=` $dsp `,` `bram` `=` $bram `>`
-  }];
-}
-
-def TimingAttr : HLSAttr<"Timing"> {
-  let summary = "Timing attributes";
-  let parameters = (ins "int64_t":$begin, "int64_t":$end, "int64_t":$latency,
-                        "int64_t":$interval);
-
-  let mnemonic = "time";
-  let assemblyFormat = [{
-    `<` $begin `->` $end `,` `latency` `=` $latency `,` `interval` `=`
-    $interval `>`
-  }];
-}
-
-def LoopInfoAttr : HLSAttr<"LoopInfo"> {
-  let summary = "Loop information";
-  let parameters = (ins "int64_t":$flattenTripCount, "int64_t":$iterLatency,
-                        "int64_t":$minII);
-
-  let mnemonic = "info";
-  let assemblyFormat = [{
-    `<` `flatten_trip_count` `=` $flattenTripCount `,` `iter_latency` `=`
-    $iterLatency `,` `min_ii` `=` $minII `>`
-  }];
-}
-
-//===----------------------------------------------------------------------===//
 // HLS directive attributes
 //===----------------------------------------------------------------------===//
 

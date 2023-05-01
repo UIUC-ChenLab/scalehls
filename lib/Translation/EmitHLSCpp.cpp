@@ -28,24 +28,16 @@ static llvm::cl::opt<int64_t> limitDspNumber("limit-dsp-number",
 // Utils
 //===----------------------------------------------------------------------===//
 
-Type peelAxiType(Type type) {
-  if (auto axiType = type.dyn_cast<AxiType>())
-    return axiType.getElementType();
-  return type;
-}
-
 static std::string getDataTypeName(Type type) {
-  auto valType = peelAxiType(type);
-
   // Handle aggregated types, including memref, vector, and stream.
-  if (auto arrayType = valType.dyn_cast<MemRefType>())
+  if (auto arrayType = type.dyn_cast<MemRefType>())
     return getDataTypeName(arrayType.getElementType());
-  else if (auto streamType = valType.dyn_cast<StreamType>()) {
+  else if (auto streamType = type.dyn_cast<StreamType>()) {
     std::string streamName = "hls::stream<";
     streamName += getDataTypeName(streamType.getElementType());
     streamName += ">";
     return streamName;
-  } else if (auto vectorType = valType.dyn_cast<VectorType>()) {
+  } else if (auto vectorType = type.dyn_cast<VectorType>()) {
     std::string vectorName = "hls::vector<";
     vectorName += getDataTypeName(vectorType.getElementType());
     vectorName += ", " + std::to_string(vectorType.getNumElements()) + ">";
@@ -53,13 +45,13 @@ static std::string getDataTypeName(Type type) {
   }
 
   // Handle scalar types, including float and integer.
-  if (valType.isa<Float32Type>())
+  if (type.isa<Float32Type>())
     return "float";
-  else if (valType.isa<Float64Type>())
+  else if (type.isa<Float64Type>())
     return "double";
-  else if (valType.isa<IndexType>())
+  else if (type.isa<IndexType>())
     return "int";
-  else if (auto intType = valType.dyn_cast<IntegerType>()) {
+  else if (auto intType = type.dyn_cast<IntegerType>()) {
     if (intType.getWidth() == 1)
       return "bool";
     std::string intName = "ap_";
@@ -299,10 +291,8 @@ public:
   void emitStreamChannel(StreamOp op);
   void emitStreamRead(StreamReadOp op);
   void emitStreamWrite(StreamWriteOp op);
-  void emitAxiPort(AxiPortOp op);
-  void emitPrimMul(PrimMulOp op);
   template <typename AssignOpType> void emitAssign(AssignOpType op);
-  void emitAffineSelect(hls::AffineSelectOp op);
+  void emitAffineSelect(AffineSelectOp op);
 
   /// Control flow operation emitters.
   void emitCall(func::CallOp op);
@@ -324,7 +314,6 @@ public:
   void emitAffineYield(AffineYieldOp op);
 
   /// Vector-related statement emitters.
-  void emitVectorInit(hls::VectorInitOp op);
   void emitInsert(vector::InsertOp op);
   void emitExtract(vector::ExtractOp op);
   void emitExtractElement(vector::ExtractElementOp op);
@@ -370,8 +359,6 @@ private:
   void emitArrayDirectives(Value memref, bool isInterface = false);
   void emitFunctionDirectives(func::FuncOp func, ArrayRef<Value> portList);
   void emitFunction(func::FuncOp func);
-
-  unsigned numDSPs = 0;
 };
 } // namespace
 
@@ -478,14 +465,7 @@ public:
   bool visitOp(StreamOp op) { return emitter.emitStreamChannel(op), true; }
   bool visitOp(StreamReadOp op) { return emitter.emitStreamRead(op), true; }
   bool visitOp(StreamWriteOp op) { return emitter.emitStreamWrite(op), true; }
-  bool visitOp(AxiBundleOp op) { return true; }
-  bool visitOp(AxiPortOp op) { return emitter.emitAxiPort(op), true; }
-  bool visitOp(AxiPackOp op) { return false; }
-  bool visitOp(PrimMulOp op) { return emitter.emitPrimMul(op), true; }
-  bool visitOp(PrimCastOp op) { return emitter.emitAssign(op), true; }
-  bool visitOp(hls::AffineSelectOp op) {
-    return emitter.emitAffineSelect(op), true;
-  }
+  bool visitOp(AffineSelectOp op) { return emitter.emitAffineSelect(op), true; }
 
   /// Function operations.
   bool visitOp(func::CallOp op) { return emitter.emitCall(op), true; }
@@ -519,9 +499,6 @@ public:
   bool visitOp(AffineYieldOp op) { return emitter.emitAffineYield(op), true; }
 
   /// Vector statements.
-  bool visitOp(hls::VectorInitOp op) {
-    return emitter.emitVectorInit(op), true;
-  }
   bool visitOp(vector::InsertOp op) { return emitter.emitInsert(op), true; };
   bool visitOp(vector::ExtractOp op) { return emitter.emitExtract(op), true; };
   bool visitOp(vector::ExtractElementOp op) {
@@ -729,96 +706,6 @@ void ModuleEmitter::emitStreamWrite(StreamWriteOp op) {
   emitValue(op.getValue());
   os << ");";
   emitInfoAndNewLine(op);
-}
-
-void ModuleEmitter::emitAxiPort(AxiPortOp op) {
-  addAlias(op.getAxi(), op.getElement());
-
-  // if (op.getType().isa<MemRefType, StreamType>()) {
-  indent() << "#pragma HLS interface";
-
-  if (op.getBundleType().getKind() == AxiKind::MM) {
-    if (isExtBuffer(op.getElement()))
-      os << " m_axi offset=slave";
-    else {
-      os << " bram ";
-      auto kind = getMemoryKind(op.getElement().getType().cast<MemRefType>());
-      os << getStorageTypeAndImpl(kind, "storage_type", "storage_impl");
-    }
-  } else if (op.getBundleType().getKind() == AxiKind::STREAM)
-    os << " axis";
-  else
-    llvm_unreachable("AXI element type must be a memref or stream");
-
-  os << " port=";
-  emitValue(op.getElement());
-  os << " bundle=" << op.getBundleName();
-  os << "\n";
-
-  if (op.getElement().getType().isa<MemRefType>())
-    emitArrayDirectives(op.getElement(), true);
-  // } else {
-  //   indent() << "#pragma HLS interface s_axilite";
-  //   os << " port=";
-
-  //   // TODO: This is a temporary solution.
-  //   auto name = getName(op.getElement());
-  //   if (name.front() == "*"[0])
-  //     name.erase(name.begin());
-  //   os << name;
-  //   os << " bundle=" << op.getBundleName() << "\n";
-  // }
-  // An empty line.
-  os << "\n";
-}
-
-void ModuleEmitter::emitPrimMul(PrimMulOp op) {
-  if (op.isPackMul()) {
-    // Declare the result C array.
-    if (!isDeclared(op.getC())) {
-      indent();
-      emitArrayDecl(op.getC());
-      os << ";\n";
-
-      indent() << "#pragma HLS array_partition variable=";
-      emitValue(op.getC());
-      os << " complete dim=0\n";
-    }
-
-    auto AIsVector = op.getA().getType().isa<VectorType>();
-    indent() << "pack_mul(";
-    emitValue(AIsVector ? op.getA() : op.getB());
-    os << ", ";
-    emitValue(AIsVector ? op.getB() : op.getA());
-    os << ", ";
-    emitValue(op.getC());
-    os << ");";
-    emitInfoAndNewLine(op);
-
-  } else {
-    // To ensure DSP is utilized, the two operands are casted to 16-bits integer
-    // before the multiplication.
-    auto rank = emitNestedLoopHeader(op.getC());
-    indent();
-    emitValue(op.getC(), rank);
-    os << " = (ap_int<8>)";
-    emitValue(op.getA(), rank);
-    os << " * (ap_int<8>)";
-    emitValue(op.getB(), rank);
-    os << ";";
-    emitInfoAndNewLine(op);
-    emitNestedLoopFooter(rank);
-
-    indent();
-    os << "#pragma HLS bind_op op=mul variable=";
-    emitValue(op.getC(), rank);
-    if (numDSPs < limitDspNumber) {
-      numDSPs++;
-      os << " impl=dsp";
-    } else
-      os << " impl=fabric";
-    os << "\n";
-  }
 }
 
 template <typename AssignOpType>
@@ -1374,13 +1261,6 @@ getTransferCondition(TransferOpType op,
 }
 
 /// Vector-related statement emitters.
-void ModuleEmitter::emitVectorInit(hls::VectorInitOp op) {
-  indent();
-  emitValue(op.getResult());
-  os << ";";
-  emitInfoAndNewLine(op);
-}
-
 void ModuleEmitter::emitInsert(vector::InsertOp op) {
   addAlias(op.getDest(), op.getResult());
   indent();
@@ -1688,7 +1568,7 @@ void ModuleEmitter::emitValue(Value val, unsigned rank, bool isPtr,
 
 void ModuleEmitter::emitArrayDecl(Value array) {
   assert(!isDeclared(array) && "has been declared before.");
-  auto arrayType = peelAxiType(array.getType()).dyn_cast<MemRefType>();
+  auto arrayType = array.getType().dyn_cast<MemRefType>();
 
   if (arrayType.hasStaticShape()) {
     emitValue(array);
@@ -1753,16 +1633,6 @@ void ModuleEmitter::emitInfoAndNewLine(Operation *op) {
   // Print line number.
   if (auto loc = op->getLoc().dyn_cast<FileLineColLoc>())
     os << " L" << loc.getLine();
-
-  // Print schedule information.
-  if (auto timing = getTiming(op))
-    os << ", [" << timing.getBegin() << "," << timing.getEnd() << ")";
-
-  // Print loop information.
-  if (auto loopInfo = getLoopInfo(op))
-    os << ", iterCycle=" << loopInfo.getIterLatency()
-       << ", II=" << loopInfo.getMinII();
-
   os << "\n";
 }
 
@@ -1863,9 +1733,6 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
   if (hasTopFuncAttr(func)) {
     indent() << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
     for (auto &port : portList) {
-      // Axi ports are handled separately.
-      if (port.getType().isa<AxiType>())
-        continue;
       // MemRefType and StreamType must have been converted to AXI ports for the
       // top function.
       if (port.getType().isa<MemRefType, StreamType>()) {
@@ -1927,19 +1794,6 @@ void ModuleEmitter::emitFunction(func::FuncOp func) {
   if (hasTopFuncAttr(func))
     os << "/// This is top function.\n";
 
-  if (auto timing = getTiming(func)) {
-    os << "/// Latency=" << timing.getLatency();
-    os << ", interval=" << timing.getInterval();
-    os << "\n";
-  }
-
-  if (auto resource = getResource(func)) {
-    os << "/// DSP=" << resource.getDsp();
-    os << ", BRAM=" << resource.getBram();
-    // os << ", LUT=" << resource.getLut();
-    os << "\n";
-  }
-
   // Emit function signature.
   os << "void " << func.getName() << "(\n";
   addIndent();
@@ -1951,11 +1805,9 @@ void ModuleEmitter::emitFunction(func::FuncOp func) {
   unsigned argIdx = 0;
   for (auto &arg : func.getArguments()) {
     indent();
-    auto type = peelAxiType(arg.getType());
-
-    if (type.isa<MemRefType>())
+    if (arg.getType().isa<MemRefType>())
       emitArrayDecl(arg);
-    else if (type.isa<StreamType>())
+    else if (arg.getType().isa<StreamType>())
       emitValue(arg, /*rank=*/0, /*isPtr=*/false, /*isRef=*/true);
     else
       emitValue(arg);
@@ -2017,21 +1869,6 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 #include <string.h>
 
 using namespace std;
-
-)XXX";
-
-  // Emit the multiplication primitive if required.
-  if (module.walk([](PrimMulOp op) {
-        return op.isPackMul() ? WalkResult::interrupt() : WalkResult::advance();
-      }) == WalkResult::interrupt())
-    os << R"XXX(
-void pack_mul(int8_t A[2], int8_t B, int16_t C[2]) {
-  #pragma HLS inline
-  ap_int<27> packA = (ap_int<27>)A[0] + (ap_int<27>)A[1] << 18;
-  ap_int<45> packC = packA * (ap_int<18>)B;
-  C[0] = packC.range(15, 0);
-  C[1] = packC.range(33, 18);
-}
 
 )XXX";
 

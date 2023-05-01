@@ -30,9 +30,10 @@ def BufferLikeInterface : OpInterface<"BufferLikeInterface"> {
   ];
 }
 
-def StageLikeInterface : OpInterface<"StageLikeInterface"> {
+def ContainerLikeInterface : OpInterface<"ContainerLikeInterface"> {
   let description = [{
-    This interface is used to represent dataflow stage.
+    This interface is used to represent containers, including dispatch, task,
+    schedule, and node.
   }];
 
   let methods = [    
@@ -40,7 +41,7 @@ def StageLikeInterface : OpInterface<"StageLikeInterface"> {
       "mlir::Region &", "getBody", (ins), "return $_op.getBody();">,
     InterfaceMethod<"Check whether the stage has hierarchy",
       "bool", "hasHierarchy", (ins), [{
-        return $_op.walk([&](StageLikeInterface stage) {
+        return $_op.walk([&](ContainerLikeInterface stage) {
           if (stage != $_op)
             return WalkResult::interrupt();
           return WalkResult::advance();

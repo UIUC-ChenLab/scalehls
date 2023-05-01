@@ -24,25 +24,4 @@ def StreamType : HLSType<"Stream"> {
   let assemblyFormat = "`<` qualified($elementType) `,` $depth `>`";
 }
 
-def AxiType : HLSType<"Axi"> {
-  let summary = "An HLS AXI interface type";
-  let mnemonic = "axi";
-
-  let parameters = (ins "mlir::Type":$elementType);
-  let assemblyFormat = "`<` qualified($elementType) `>`";
-
-  let genVerifyDecl = 1;
-  let extraClassDeclaration = [{
-    Type getDataType();
-  }];
-}
-
-def BundleType : HLSType<"Bundle"> {
-  let summary = "An HLS AXI bundle type";
-  let mnemonic = "bundle";
-
-  let parameters = (ins "mlir::Type":$dataType, AxiKindParam:$kind);
-  let assemblyFormat = "`<` qualified($dataType) `,` $kind `>`";
-}
-
 #endif // SCALEHLS_DIALECT_HLS_HLSTYPES_TD
