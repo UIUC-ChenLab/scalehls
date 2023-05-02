@@ -105,11 +105,6 @@ struct ConvertSDFToFunc : public ConvertSDFToFuncBase<ConvertSDFToFunc> {
       patterns.add<ConvertNodeToFunc>(context, func.getName(), nodeIdx);
       (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
     }
-
-    // Remove memref global operations.
-    for (auto global :
-         llvm::make_early_inc_range(module.getOps<memref::GlobalOp>()))
-      global.erase();
   }
 };
 } // namespace

@@ -37,9 +37,12 @@ struct SpecializeParamToConstant : public OpRewritePattern<ParamOp> {
       }
     }
     if (constValue) {
-      for (auto getParam : op.getGetParamOps())
+      for (auto getParam : op.getGetParamOps()) {
+        rewriter.setInsertionPoint(getParam);
         rewriter.replaceOpWithNewOp<ConstParamOp>(getParam, op.getType(),
                                                   op.getKind(), constValue);
+      }
+      rewriter.setInsertionPoint(op);
       rewriter.replaceOpWithNewOp<ConstParamOp>(op, op.getType(), op.getKind(),
                                                 constValue);
       return success();
@@ -70,7 +73,7 @@ LogicalResult ParamOp::verify() { return success(); }
 
 SmallVector<GetParamOp, 8> ParamOp::getGetParamOps() {
   SmallVector<GetParamOp, 8> users;
-  if (auto uses = getSymbolUses(*this))
+  if (auto uses = getSymbolUses((*this)->getParentOfType<ModuleOp>()))
     for (auto &use : uses.value()) {
       auto getParam = dyn_cast<GetParamOp>(use.getUser());
       assert(getParam && "param can only be used by get_param");
@@ -105,13 +108,11 @@ ConditionOp RequireOp::getConditionOp() {
 LogicalResult GetParamOp::verify() { return success(); }
 
 LogicalResult GetParamOp::verifySymbolUses(mlir::SymbolTableCollection &table) {
-  auto param = table.lookupNearestSymbolFrom<ParamOp>(*this, getParamAttr());
+  auto param = table.lookupNearestSymbolFrom<ParamOp>(
+      (*this)->getParentOfType<ModuleOp>(), getParamAttr());
+  if (!param)
+    return (*this)->emitOpError("unknown param ") << getParamAttr();
   return success(param);
-}
-
-/// Get the parent require op.
-RequireOp GetParamOp::getRequireOp() {
-  return (*this)->getParentOfType<RequireOp>();
 }
 
 //===----------------------------------------------------------------------===//

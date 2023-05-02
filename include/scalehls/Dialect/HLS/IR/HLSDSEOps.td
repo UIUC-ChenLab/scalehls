@@ -11,17 +11,37 @@
 // Design Space Exploration (DSE) Operations
 //===----------------------------------------------------------------------===//
 
-def ParamOp : HLSOp<"dse.param", [NoMemoryEffect,
-      DeclareOpInterfaceMethods<Symbol>]> {
+def SpaceOp : HLSOp<"dse.space", [IsolatedFromAbove, NoTerminator, SymbolTable,
+      Symbol, ParentOneOf<["mlir::ModuleOp", "SpaceOp"]>]> {
+  let summary = "Declare a design space";
+  let description = [{
+    SpaceOp declares a design space. The design space is a collection of
+    parameters and constraints. The parameters are declared with ParamOp and
+    the constraints are declared with RequireOp. The design space can be nested
+    to form a hierarchy of design spaces.
+  }];
+
+  let arguments = (ins Variadic<AnyType>:$args, SymbolNameAttr:$sym_name);
+  let regions = (region SizedRegion<1>:$body);
+  let assemblyFormat = [{
+    $sym_name `(` $args `)` attr-dict-with-keyword (`:` type($args)^)? $body
+  }];
+
+  let builders = [
+    OpBuilder<(ins "std::string":$symName),
+          "build($_builder, $_state, {}, $_builder.getStringAttr(symName));">
+  ];
+
+}
+
+def ParamOp : HLSOp<"dse.param", [Symbol, HasParent<"SpaceOp">]> {
   let summary = "Declare a design space parameter";
   let description = [{
-    ParamOp declares a design space parameter. The parameter can be used in
-    other operations to represent a design space variable. The parameter can
-    optionally have a default value, whose presence indicates that this
-    operation can be treated as a constant. The parameter can either constrained
-    by a range of values defined with affine lower and upper boundes or a list
-    of candidates. The parameter has a symbolic name that can be used to refer
-    to through GetParamOp for constructing additional constraints.
+    ParamOp declares a design space parameter. The parameter can either be
+    constrained by a range of values defined with affine lower and upper boundes
+    or a list of candidates. The parameter has a symbolic name that can be used
+    to refer to by GetParamOp in the payload IR. The parameter can optionally
+    have a tentative value.
   }];
 
   let arguments = (ins Variadic<Index>:$args, OptionalAttr<IndexAttr>:$step,
@@ -61,9 +81,8 @@ def ParamOp : HLSOp<"dse.param", [NoMemoryEffect,
 
     // Parameter builder without constraints.
     OpBuilder<(ins "mlir::Type":$result, "ParamKind":$kind,
-        "std::string":$symName), [{
-          build($_builder, $_state, result, nullptr, kind, symName);
-        }]>
+        "std::string":$symName),
+        "build($_builder, $_state, result, nullptr, kind, symName);">
   ];
 
   let hasVerifier = 1;
@@ -103,7 +122,32 @@ def ParamOp : HLSOp<"dse.param", [NoMemoryEffect,
     }
 
     SmallVector<GetParamOp, 8> getGetParamOps();
+    SpaceOp getSpaceOps();
   }];
+}
+
+def GetParamOp : HLSOp<"dse.get_param", [NoMemoryEffect,
+      DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+  let summary = "Get the value of a design space parameter";
+  let description = [{
+    GetParamOp gets the value of a design space parameter. The parameter is
+    identified by its symbolic name.
+  }];
+
+  let arguments = (ins SymbolRefAttr:$param);
+  let results = (outs AnyType:$result);
+  let assemblyFormat = "$param attr-dict `:` type($result)";
+
+  let hasVerifier = 1;
+  let builders = [
+    OpBuilder<(ins "mlir::Type":$result, "std::string":$spaceName,
+        "std::string":$paramName), [{
+          auto rootAttr = $_builder.getStringAttr(spaceName);
+          auto leafAttr = $_builder.getStringAttr(paramName);
+          build($_builder, $_state, result, mlir::SymbolRefAttr::get(
+              rootAttr, {mlir::FlatSymbolRefAttr::get(leafAttr)}));
+        }]>
+  ];
 }
 
 def ConstParamOp : HLSOp<"dse.const_param", [NoMemoryEffect, ConstantLike]> {
@@ -115,7 +159,7 @@ def ConstParamOp : HLSOp<"dse.const_param", [NoMemoryEffect, ConstantLike]> {
     OpBuilder<(ins "mlir::Type":$result, "ParamKind":$kind, "unsigned":$value),
         [{
           build($_builder, $_state, result, kind,
-              $_builder.getIndexAttr(value));
+            $_builder.getIndexAttr(value));
         }]>,
     OpBuilder<(ins "mlir::Type":$result, "ParamKind":$kind,
         "MemoryKind":$mem_kind), [{
@@ -134,8 +178,8 @@ def ConstParamOp : HLSOp<"dse.const_param", [NoMemoryEffect, ConstantLike]> {
   let hasVerifier = 1;
 }
 
-def RequireOp : HLSOp<"dse.require", [NoMemoryEffect, IsolatedFromAbove,
-      SingleBlockImplicitTerminator<"RequireOp">, HasParent<"ModuleOp">]> {
+def RequireOp : HLSOp<"dse.require", [NoMemoryEffect,
+      SingleBlockImplicitTerminator<"RequireOp">, HasParent<"SpaceOp">]> {
   let summary = "Declare a design space constraint";
   let description = [{
     RequireOp declares a design space constraint. The constraint is represented
@@ -150,26 +194,6 @@ def RequireOp : HLSOp<"dse.require", [NoMemoryEffect, IsolatedFromAbove,
   let extraClassDeclaration = [{
     /// Get the terminator condition op.
     ConditionOp getConditionOp();
-  }];
-}
-
-def GetParamOp : HLSOp<"dse.get_param", [NoMemoryEffect,
-      DeclareOpInterfaceMethods<SymbolUserOpInterface>,
-      HasParent<"RequireOp">]> {
-  let summary = "Get the value of a design space parameter";
-  let description = [{
-    GetParamOp gets the value of a design space parameter. The parameter is
-    identified by its symbolic name.
-  }];
-
-  let arguments = (ins FlatSymbolRefAttr:$param);
-  let results = (outs AnyType:$result);
-  let assemblyFormat = "$param attr-dict `:` type($result)";
-
-  let hasVerifier = 1;
-  let extraClassDeclaration = [{
-    /// Get the parent require op.
-    RequireOp getRequireOp();
   }];
 }
 

@@ -48,6 +48,10 @@ AffineLoopBand getNodeLoopBand(NodeOp currentNode);
 /// Wrap the operations in the block with dispatch op.
 DispatchOp dispatchBlock(Block *block);
 
+/// Find an existing space op for the given module. If there is no space op,
+/// create a new one.
+llvm::Optional<SpaceOp> getOrCreateGlobalSpaceOp(ModuleOp module);
+
 /// Fuse the given operations into a new task. The new task will be created
 /// before "insertToOp" and each operation will be in the original order. This
 /// method always succeeds even if the resulting IR is invalid.

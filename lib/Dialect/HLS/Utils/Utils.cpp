@@ -99,6 +99,21 @@ DispatchOp scalehls::dispatchBlock(Block *block) {
   return dispatch;
 }
 
+/// Find an existing space op for the given function. If there is no space op,
+/// create a new one.
+llvm::Optional<SpaceOp> scalehls::getOrCreateGlobalSpaceOp(ModuleOp module) {
+  auto spaceOps = module.getOps<SpaceOp>();
+  if (spaceOps.empty()) {
+    OpBuilder builder(module.getBody(), module.getBody()->begin());
+    auto newSpace = builder.create<SpaceOp>(builder.getUnknownLoc(), "global");
+    builder.createBlock(&newSpace.getBody());
+    return newSpace;
+  } else if (llvm::hasSingleElement(spaceOps))
+    return *spaceOps.begin();
+  else
+    return nullptr;
+}
+
 /// Fuse the given operations into a new task. The new task will be created
 /// before the first operation or last operation and each operation will be
 /// inserted in order. This method always succeeds even if the resulting IR is
