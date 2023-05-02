@@ -15,15 +15,16 @@ def ComprehensiveBufferize :
   let constructor = "mlir::scalehls::createComprehensiveBufferizePass()";
 }
 
-def OutlineTopFunc : Pass<"scalehls-outline-top-func", "mlir::ModuleOp"> {
+def GenerateRuntimeFunc :
+    Pass<"scalehls-generate-runtime-func", "mlir::ModuleOp"> {
   let summary = "Outline the top function for HLS";
-  let constructor = "mlir::scalehls::createOutlineTopFuncPass()";
+  let constructor = "mlir::scalehls::createGenerateRuntimeFuncPass()";
   
   let options = [
     Option<"topFunc", "top-func", "std::string", /*default=*/"\"forward\"",
            "Name of the top function for HLS">,
     Option<"runtimeFunc", "runtime-func", "std::string",
-           /*default=*/"\"runtime\"", "Name of the runtime API function.">
+           /*default=*/"\"runtime\"", "Name of the runtime function.">
   ];
 }
 

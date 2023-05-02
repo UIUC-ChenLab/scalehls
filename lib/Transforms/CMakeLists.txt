@@ -1,6 +1,6 @@
 add_mlir_library(MLIRScaleHLSTransforms
   ComprehensiveBufferize.cpp
-  OutlineTopFunc.cpp
+  GenerateRuntimeFunc.cpp
   Passes.cpp
 
   DEPENDS

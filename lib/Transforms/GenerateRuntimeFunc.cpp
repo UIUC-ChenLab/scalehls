@@ -12,9 +12,10 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-struct OutlineTopFunc : public OutlineTopFuncBase<OutlineTopFunc> {
-  OutlineTopFunc() = default;
-  OutlineTopFunc(std::string optTopFunc, std::string optRuntimeFunc) {
+struct GenerateRuntimeFunc
+    : public GenerateRuntimeFuncBase<GenerateRuntimeFunc> {
+  GenerateRuntimeFunc() = default;
+  GenerateRuntimeFunc(std::string optTopFunc, std::string optRuntimeFunc) {
     topFunc = optTopFunc;
     runtimeFunc = optRuntimeFunc;
   }
@@ -89,7 +90,7 @@ struct OutlineTopFunc : public OutlineTopFuncBase<OutlineTopFunc> {
 } // namespace
 
 std::unique_ptr<Pass>
-scalehls::createOutlineTopFuncPass(std::string optTopFunc,
-                                   std::string optRuntimeFunc) {
-  return std::make_unique<OutlineTopFunc>(optTopFunc, optRuntimeFunc);
+scalehls::createGenerateRuntimeFuncPass(std::string optTopFunc,
+                                        std::string optRuntimeFunc) {
+  return std::make_unique<GenerateRuntimeFunc>(optTopFunc, optRuntimeFunc);
 }
