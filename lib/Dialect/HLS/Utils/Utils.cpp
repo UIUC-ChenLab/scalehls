@@ -105,7 +105,9 @@ DispatchOp scalehls::dispatchBlock(Block *block) {
 /// invalid.
 TaskOp scalehls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
                                  PatternRewriter &rewriter,
-                                 bool insertToLastOp) {
+                                 Operation *insertToOp,
+                                 ArrayRef<Value> tileFactors,
+                                 ArrayRef<Value> parallelFactors) {
   assert(!ops.empty() && "must fuse at least one op");
   llvm::SmallDenseSet<Operation *, 4> opsSet(ops.begin(), ops.end());
 
@@ -120,12 +122,13 @@ TaskOp scalehls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
 
   // Create new graph task with all inputs and outputs.
   auto loc = rewriter.getUnknownLoc();
-  if (!insertToLastOp)
+  if (!insertToOp)
     rewriter.setInsertionPoint(ops.front());
   else
-    rewriter.setInsertionPoint(ops.back());
+    rewriter.setInsertionPoint(insertToOp);
   auto task =
-      rewriter.create<TaskOp>(loc, ValueRange(outputValues.getArrayRef()));
+      rewriter.create<TaskOp>(loc, ValueRange(outputValues.getArrayRef()),
+                              tileFactors, parallelFactors);
   auto taskBlock = rewriter.createBlock(&task.getBody());
 
   // Move each targeted op into the new graph task.

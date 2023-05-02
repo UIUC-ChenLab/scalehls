@@ -52,7 +52,12 @@ def TaskOp : HLSOp<"fdf.task", [
 
   let builders = [
     OpBuilder<(ins "mlir::TypeRange":$results),
-        "build($_builder, $_state, results, {}, {}, nullptr);">
+        "build($_builder, $_state, results, {}, {}, nullptr);">,
+    OpBuilder<(ins "mlir::TypeRange":$results, "mlir::ValueRange":$tileFactors,
+        "mlir::ValueRange":$parallelFactors), [{
+          build($_builder, $_state, results, tileFactors, parallelFactors,
+          nullptr);
+        }]>
   ];
 
   let assemblyFormat = [{

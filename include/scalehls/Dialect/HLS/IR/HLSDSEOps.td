@@ -34,9 +34,9 @@ def ParamOp : HLSOp<"dse.param", [NoMemoryEffect,
   let results = (outs AnyType:$result);
 
   let assemblyFormat = [{
-    $sym_name $kind (`<` $value^ `>`)? `,` (`candidates` $candidates^)?
-    (`(` $args^ `)` `from` $lower_bound `to` $upper_bound)? attr-dict `:`
-    type($result)
+    $kind $sym_name (`candidates` $candidates^)?
+    (`range` `(` $args `)` `from` $lower_bound^ `to` $upper_bound)?
+    (`<` $value^ `>`)? attr-dict `:` type($result)
   }];
 
   let hasVerifier = 1;

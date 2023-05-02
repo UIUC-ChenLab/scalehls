@@ -42,15 +42,50 @@ namespace {
 /// This pattern will outline ops into a separate task.
 struct OutlineLinalgInterface
     : public OpInterfaceRewritePattern<linalg::LinalgOp> {
-  using OpInterfaceRewritePattern<linalg::LinalgOp>::OpInterfaceRewritePattern;
+  OutlineLinalgInterface(MLIRContext *context, StringRef prefix,
+                         unsigned &taskIdx)
+      : OpInterfaceRewritePattern<linalg::LinalgOp>(context), prefix(prefix),
+        taskIdx(taskIdx) {}
 
   LogicalResult matchAndRewrite(linalg::LinalgOp op,
                                 PatternRewriter &rewriter) const override {
     if (op->getParentOfType<TaskOp>())
       return failure();
-    fuseOpsIntoTask({op}, rewriter);
+    if (op.hasDynamicShape())
+      return op.emitOpError("cannot handle dynamic shape yet");
+
+    // Generate tile and parallel factors of the task.
+    rewriter.setInsertionPoint(op);
+    auto paramName = prefix.str() + std::to_string(taskIdx++);
+
+    SmallVector<Value, 8> tileFactors;
+    SmallVector<Value, 8> parallelFactors;
+    auto staticShape = op.getStaticShape();
+    for (auto size : llvm::enumerate(op.computeStaticLoopSizes())) {
+      auto tileFactor = rewriter.create<ParamOp>(
+          op.getLoc(), rewriter.getIndexType(), ValueRange({}),
+          rewriter.getConstantAffineMap(0),
+          rewriter.getConstantAffineMap(size.value()), ParamKind::TILE_FACTOR,
+          rewriter.getStringAttr(paramName + "_tile" +
+                                 std::to_string(size.index())));
+      tileFactors.push_back(tileFactor);
+
+      auto parallelFactor = rewriter.create<ParamOp>(
+          op.getLoc(), rewriter.getIndexType(), tileFactor.getResult(),
+          rewriter.getConstantAffineMap(0), rewriter.getDimIdentityMap(),
+          ParamKind::PARALLEL_FACTOR,
+          rewriter.getStringAttr(paramName + "_parallel" +
+                                 std::to_string(size.index())));
+      parallelFactors.push_back(parallelFactor);
+    }
+
+    fuseOpsIntoTask({op}, rewriter, op, tileFactors, parallelFactors);
     return success();
   }
+
+private:
+  StringRef prefix;
+  unsigned &taskIdx;
 };
 } // namespace
 
@@ -82,8 +117,9 @@ struct ConvertLinalgToFDF : public ConvertLinalgToFDFBase<ConvertLinalgToFDF> {
 
     dispatchBlock(&func.front());
 
+    unsigned taskIdx = 0;
     patterns.clear();
-    patterns.add<OutlineLinalgInterface>(context);
+    patterns.add<OutlineLinalgInterface>(context, "task", taskIdx);
     patterns.add<OutlineOp<tensor::ReshapeOp>>(context);
     patterns.add<OutlineOp<tensor::ExpandShapeOp>>(context);
     patterns.add<OutlineOp<tensor::CollapseShapeOp>>(context);
