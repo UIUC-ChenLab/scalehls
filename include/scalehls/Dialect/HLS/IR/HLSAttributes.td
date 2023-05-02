@@ -67,6 +67,28 @@ def IPIdentifierAttr : HLSAttr<"IPIdentifier"> {
   let assemblyFormat = "`<` $library `_` $name `>`";
 }
 
+def ValueParamKind: I32EnumAttr<"ValueParamKind", "Kind of a value parameter", [
+    I32EnumAttrCase<"STATIC", 0, "static">,
+    I32EnumAttrCase<"DYNAMIC", 1, "dynamic">]> {
+  let cppNamespace = "mlir::scalehls::hls";
+  let genSpecializedAttr = 0;
+}
+def ValueParamKindAttr: EnumAttr<HLSDialect, ValueParamKind> {
+  let mnemonic = "value_param";
+  let assemblyFormat = "`<` $value `>`";
+}
+
+def PortDirection: I32EnumAttr<"PortDirection", "Direction of a port", [
+    I32EnumAttrCase<"INPUT", 0, "input">,
+    I32EnumAttrCase<"OUTPUT", 1, "output">]> {
+  let cppNamespace = "mlir::scalehls::hls";
+  let genSpecializedAttr = 0;
+}
+def PortDirectionAttr: EnumAttr<HLSDialect, PortDirection> {
+  let mnemonic = "direction";
+  let assemblyFormat = "`<` $value `>`";
+}
+
 //===----------------------------------------------------------------------===//
 // UBUF Attributes
 //===----------------------------------------------------------------------===//
@@ -139,8 +161,9 @@ def TileLayoutAttr : HLSAttr<"TileLayout",
 def ParamKind: I32EnumAttr<"ParamKind", "Kind of param", [
     I32EnumAttrCase<"TILE_FACTOR", 0, "tile_factor">,  
     I32EnumAttrCase<"PARALLEL_FACTOR", 1, "parallel_factor">,
+    I32EnumAttrCase<"IP_FACTOR", 2, "ip_factor">,
     I32EnumAttrCase<"IP_IDENTIFIER", 3, "ip_identifier">,
-    I32EnumAttrCase<"MEMORY_KIND", 2, "memory_kind">]> {
+    I32EnumAttrCase<"MEMORY_KIND", 4, "memory_kind">]> {
   let cppNamespace = "mlir::scalehls::hls";
   let genSpecializedAttr = 0;
 }

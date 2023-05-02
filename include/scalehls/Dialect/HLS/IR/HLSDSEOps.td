@@ -47,14 +47,13 @@ def ParamOp : HLSOp<"dse.param", [Symbol, HasParent<"SpaceOp">]> {
   let arguments = (ins Variadic<Index>:$args, OptionalAttr<IndexAttr>:$step,
       OptionalAttr<AffineMapAttr>:$bounds, OptionalAttr<ArrayAttr>:$candidates,
       ParamKindAttr:$kind, OptionalAttr<AnyAttr>:$value,
-      OptionalAttr<SymbolNameAttr>:$sym_name
+      SymbolNameAttr:$sym_name
   );
   let results = (outs AnyType:$result);
 
   let assemblyFormat = [{
     $sym_name $kind (`candidates` $candidates^)?
-    (`range` `(` $args `)` $bounds `step` $step^)? attr-dict `:`
-    type($result)
+    (`range` `(` $args `)` $bounds `step` $step^)? attr-dict `:` type($result)
   }];
 
   let builders = [
@@ -122,7 +121,7 @@ def ParamOp : HLSOp<"dse.param", [Symbol, HasParent<"SpaceOp">]> {
     }
 
     SmallVector<GetParamOp, 8> getGetParamOps();
-    SpaceOp getSpaceOps();
+    SpaceOp getSpaceOp();
   }];
 }
 
