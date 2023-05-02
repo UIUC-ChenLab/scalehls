@@ -14,9 +14,11 @@ include(AddMLIRPython)
 
 declare_mlir_python_sources(ScaleHLSBindingsPythonExtension)
 
+set(PYTHON_SOURCE_DIR "${SCALEHLS_SOURCE_DIR}/lib/Bindings/Python")
 declare_mlir_python_extension(ScaleHLSBindingsPythonExtension.Core
   MODULE_NAME _scalehls
   ADD_TO_PARENT ScaleHLSBindingsPythonExtension
+  ROOT_DIR "${PYTHON_SOURCE_DIR}"
   SOURCES
     ScaleHLSModule.cpp
   EMBED_CAPI_LINK_LIBS

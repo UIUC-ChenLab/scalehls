@@ -1,4 +1,3 @@
-add_subdirectory(Bindings)
 add_subdirectory(CAPI)
 add_subdirectory(Conversions)
 add_subdirectory(Dialect)
