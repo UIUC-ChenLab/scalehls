@@ -18,54 +18,78 @@ def ParamOp : HLSOp<"dse.param", [NoMemoryEffect,
     ParamOp declares a design space parameter. The parameter can be used in
     other operations to represent a design space variable. The parameter can
     optionally have a default value, whose presence indicates that this
-    operation can be considered as a constant. The parameter can either
-    constrained by a range of values defined with affine lower and upper boundes
-    or a list of candidates. The parameter has a symbolic name that can be used
-    to refer to through GetParamOp for constructing additional constraints.
+    operation can be treated as a constant. The parameter can either constrained
+    by a range of values defined with affine lower and upper boundes or a list
+    of candidates. The parameter has a symbolic name that can be used to refer
+    to through GetParamOp for constructing additional constraints.
   }];
 
-  let arguments = (ins Variadic<Index>:$args,
-      OptionalAttr<AffineMapAttr>:$lower_bound,
-      OptionalAttr<AffineMapAttr>:$upper_bound,
-      OptionalAttr<ArrayAttr>:$candidates,
+  let arguments = (ins Variadic<Index>:$args, OptionalAttr<IndexAttr>:$step,
+      OptionalAttr<AffineMapAttr>:$bounds, OptionalAttr<ArrayAttr>:$candidates,
       ParamKindAttr:$kind, OptionalAttr<AnyAttr>:$value,
       OptionalAttr<SymbolNameAttr>:$sym_name
   );
   let results = (outs AnyType:$result);
 
   let assemblyFormat = [{
-    $kind $sym_name (`candidates` $candidates^)?
-    (`range` `(` $args `)` `from` $lower_bound^ `to` $upper_bound)?
-    (`<` $value^ `>`)? attr-dict `:` type($result)
+    $sym_name $kind (`candidates` $candidates^)?
+    (`range` `(` $args `)` $bounds `step` $step^)? attr-dict `:`
+    type($result)
   }];
 
-  let hasVerifier = 1;
   let builders = [
     // Parameter builder constrained by candidates.
     OpBuilder<(ins "mlir::Type":$result, "mlir::ArrayAttr":$candidates,
-        "ParamKind":$kind, "mlir::StringAttr":$symName), [{
+        "ParamKind":$kind, "std::string":$symName), [{
           build($_builder, $_state, result, {}, nullptr, nullptr, candidates,
-            ParamKindAttr::get($_builder.getContext(), kind), nullptr, symName);
+              ParamKindAttr::get($_builder.getContext(), kind), nullptr,
+              $_builder.getStringAttr(symName));
         }]>,
 
     // Parameter builder constrained by affine lower and upper bounds.
     OpBuilder<(ins "mlir::Type":$result, "mlir::ValueRange":$args,
-        "mlir::AffineMap":$lowerBound, "mlir::AffineMap":$upperBound,
-        "ParamKind":$kind, "mlir::StringAttr":$symName), [{
-          build($_builder, $_state, result, args,
-            mlir::AffineMapAttr::get(lowerBound),
-            mlir::AffineMapAttr::get(upperBound), nullptr,
-            ParamKindAttr::get($_builder.getContext(), kind), nullptr, symName);
+        "unsigned":$step, "mlir::AffineMap":$bounds, "ParamKind":$kind,
+        "std::string":$symName), [{
+          build($_builder, $_state, result, args, $_builder.getIndexAttr(step),
+              mlir::AffineMapAttr::get(bounds), nullptr,
+              ParamKindAttr::get($_builder.getContext(), kind), nullptr,
+              $_builder.getStringAttr(symName));
         }]>,
+    OpBuilder<(ins "mlir::Type":$result, "mlir::ValueRange":$args,
+        "mlir::AffineMap":$bounds, "ParamKind":$kind, "std::string":$symName),
+        "build($_builder, $_state, result, args, 1, bounds, kind, symName);">,
 
     // Parameter builder without constraints.
     OpBuilder<(ins "mlir::Type":$result, "ParamKind":$kind,
-        "mlir::StringAttr":$symName), [{
+        "std::string":$symName), [{
           build($_builder, $_state, result, nullptr, kind, symName);
         }]>
   ];
 
+  let hasVerifier = 1;
+  let hasCanonicalizer = 1;
+  let hasFolder = 1;
+
   let extraClassDeclaration = [{
+    /// Check the parameter's constraint type.
+    bool isRangeConstrained() {
+      return getBounds().has_value() && getStep().has_value();
+    }
+    bool isCandidateConstrained() { return getCandidates().has_value(); }
+    bool isUnconstrained() {
+      return !isRangeConstrained() && !isCandidateConstrained();
+    }
+
+    /// Get the upper or lower bound expression.
+    mlir::AffineExpr getLowerBound() {
+      assert(isRangeConstrained() && "parameter is not range constrained");
+      return getBounds().value().getResult(0);
+    }
+    mlir::AffineExpr getUpperBound() {
+      assert(isRangeConstrained() && "parameter is not range constrained");
+      return getBounds().value().getResult(1);
+    }
+
     /// Assign a value to the parameter.
     void assignValue(Attribute value) { setValueAttr(value); }
     void assignValue(unsigned value) {
@@ -78,9 +102,36 @@ def ParamOp : HLSOp<"dse.param", [NoMemoryEffect,
       assignValue(IPIdentifierAttr::get(getContext(), library, name));
     }
 
-    /// Get all constraints of the parameter.
-    SmallVector<Operation *> getConstraints();
+    SmallVector<GetParamOp, 8> getGetParamOps();
   }];
+}
+
+def ConstParamOp : HLSOp<"dse.const_param", [NoMemoryEffect, ConstantLike]> {
+  let summary = "Declare a design space constant parameter";
+
+  let arguments = (ins ParamKindAttr:$kind, AnyAttr:$value);
+  let results = (outs AnyType:$result);
+  let builders = [
+    OpBuilder<(ins "mlir::Type":$result, "ParamKind":$kind, "unsigned":$value),
+        [{
+          build($_builder, $_state, result, kind,
+              $_builder.getIndexAttr(value));
+        }]>,
+    OpBuilder<(ins "mlir::Type":$result, "ParamKind":$kind,
+        "MemoryKind":$mem_kind), [{
+          build($_builder, $_state, result, kind,
+              MemoryKindAttr::get($_builder.getContext(), mem_kind));
+        }]>,
+    OpBuilder<(ins "mlir::Type":$result, "ParamKind":$kind,
+        "std::string":$library, "std::string":$name), [{
+          build($_builder, $_state, result, kind,
+              IPIdentifierAttr::get($_builder.getContext(), library, name));
+        }]>
+  ];
+
+  let assemblyFormat = "$kind attr-dict `:` type($result)";
+  let hasFolder = 1;
+  let hasVerifier = 1;
 }
 
 def RequireOp : HLSOp<"dse.require", [NoMemoryEffect, IsolatedFromAbove,

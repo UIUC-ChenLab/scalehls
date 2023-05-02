@@ -62,20 +62,22 @@ struct OutlineLinalgInterface
     SmallVector<Value, 8> parallelFactors;
     auto staticShape = op.getStaticShape();
     for (auto size : llvm::enumerate(op.computeStaticLoopSizes())) {
+      auto tileBounds = {rewriter.getAffineConstantExpr(0),
+                         rewriter.getAffineConstantExpr(size.value())};
       auto tileFactor = rewriter.create<ParamOp>(
           op.getLoc(), rewriter.getIndexType(), ValueRange({}),
-          rewriter.getConstantAffineMap(0),
-          rewriter.getConstantAffineMap(size.value()), ParamKind::TILE_FACTOR,
-          rewriter.getStringAttr(paramName + "_tile" +
-                                 std::to_string(size.index())));
+          AffineMap::get(0, 0, tileBounds, rewriter.getContext()),
+          ParamKind::TILE_FACTOR,
+          paramName + "_tile" + std::to_string(size.index()));
       tileFactors.push_back(tileFactor);
 
+      auto parallelBounds = {rewriter.getAffineConstantExpr(0),
+                             rewriter.getAffineDimExpr(0)};
       auto parallelFactor = rewriter.create<ParamOp>(
           op.getLoc(), rewriter.getIndexType(), tileFactor.getResult(),
-          rewriter.getConstantAffineMap(0), rewriter.getDimIdentityMap(),
+          AffineMap::get(1, 0, parallelBounds, rewriter.getContext()),
           ParamKind::PARALLEL_FACTOR,
-          rewriter.getStringAttr(paramName + "_parallel" +
-                                 std::to_string(size.index())));
+          paramName + "_parallel" + std::to_string(size.index()));
       parallelFactors.push_back(parallelFactor);
     }
 

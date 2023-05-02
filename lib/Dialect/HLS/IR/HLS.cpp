@@ -114,6 +114,7 @@ OpFoldResult AffineSelectOp::fold(FoldAdaptor adaptor) {
   SmallVector<Value, 4> operands(getArgs());
   composeSetAndOperands(set, operands);
   canonicalizeSetAndOperands(&set, &operands);
+  setConditional(set, operands);
   return {};
 }
 
