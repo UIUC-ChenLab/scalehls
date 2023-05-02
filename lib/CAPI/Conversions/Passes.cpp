@@ -5,6 +5,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Conversions/Passes.h"
+#include "mlir/CAPI/Pass.h"
+#include "mlir/Pass/Pass.h"
+#include "scalehls-c/Conversions.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -14,4 +17,12 @@ namespace {
 #include "scalehls/Conversions/Passes.h.inc"
 } // namespace
 
-void scalehls::registerScaleHLSConversionsPasses() { registerPasses(); }
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "scalehls/Conversions/Passes.capi.cpp.inc"
+
+#ifdef __cplusplus
+}
+#endif

@@ -10,7 +10,7 @@
 namespace mlir {
 namespace scalehls {
 
-void registerPipelines();
+void registerScaleHLSPipelines();
 void registerScaleHLSPyTorchPipeline();
 
 } // namespace scalehls

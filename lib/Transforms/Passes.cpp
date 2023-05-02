@@ -14,4 +14,4 @@ namespace {
 #include "scalehls/Transforms/Passes.h.inc"
 } // namespace
 
-void scalehls::registerTransformsPasses() { registerPasses(); }
+void scalehls::registerScaleHLSTransformsPasses() { registerPasses(); }

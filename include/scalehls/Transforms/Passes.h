@@ -24,7 +24,7 @@ namespace scalehls {
 
 using namespace bufferization;
 
-void registerTransformsPasses();
+void registerScaleHLSTransformsPasses();
 
 std::unique_ptr<Pass> createComprehensiveBufferizePass(
     std::optional<BufferizationOptions::AllocationFn> allocationFn =

@@ -23,7 +23,7 @@ namespace mlir {
 namespace scalehls {
 namespace hls {
 
-void registerHLSPasses();
+void registerScaleHLSHLSTransformsPasses();
 
 std::unique_ptr<Pass> createEliminateBufferYieldPass();
 

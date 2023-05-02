@@ -16,6 +16,6 @@ target_link_libraries(scalehls-translate
   ${dialect_libs}
   ${translation_libs}
 
-  MLIRHLSDialect
+  MLIRScaleHLSHLSDialect
   MLIRScaleHLSEmitHLSCpp
   )

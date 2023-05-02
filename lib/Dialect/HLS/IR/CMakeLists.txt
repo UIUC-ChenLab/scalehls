@@ -1,4 +1,4 @@
-add_mlir_dialect_library(MLIRHLSDialect
+add_mlir_dialect_library(MLIRScaleHLSHLSDialect
   HLS.cpp
   HLSAttributes.cpp
   HLSDSEOps.cpp
@@ -9,7 +9,7 @@ add_mlir_dialect_library(MLIRHLSDialect
 
   DEPENDS
   MLIRHLSOpsIncGen
-  MLIRHLSEnumsIncGen
-  MLIRHLSAttributesIncGen
-  MLIRHLSInterfacesIncGen
+  MLIRScaleHLSHLSEnumsIncGen
+  MLIRScaleHLSHLSAttributesIncGen
+  MLIRScaleHLSHLSInterfacesIncGen
   )

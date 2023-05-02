@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_C_DIALECT_HLS_H
-#define SCALEHLS_C_DIALECT_HLS_H
+#ifndef SCALEHLS_C_DIALECT_HLS_HLS_H
+#define SCALEHLS_C_DIALECT_HLS_HLS_H
 
 #include "mlir-c/RegisterEverything.h"
 
@@ -19,4 +19,4 @@ MLIR_DECLARE_CAPI_DIALECT_REGISTRATION(HLS, hls);
 }
 #endif
 
-#endif // SCALEHLS_C_DIALECT_HLS_H
+#endif // SCALEHLS_C_DIALECT_HLS_HLS_H

@@ -76,4 +76,6 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
       });
 }
 
-void scalehls::registerPipelines() { registerScaleHLSPyTorchPipeline(); }
+void scalehls::registerScaleHLSPipelines() {
+  registerScaleHLSPyTorchPipeline();
+}

@@ -13,10 +13,10 @@ target_link_libraries(scalehls-opt
   ${conversion_libs}
   MLIROptLib
 
-  MLIRHLSDialect
-  MLIRHLSAnalysis
-  MLIRHLSTransforms
-  MLIRHLSUtils
+  MLIRScaleHLSHLSDialect
+  MLIRScaleHLSHLSAnalysis
+  MLIRScaleHLSHLSTransforms
+  MLIRScaleHLSHLSUtils
 
   MLIRScaleHLSPipelines
   MLIRScaleHLSTransforms

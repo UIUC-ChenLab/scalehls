@@ -1,3 +1,3 @@
-add_mlir_dialect_library(MLIRHLSAnalysis
+add_mlir_dialect_library(MLIRScaleHLSHLSAnalysis
   Analysis.cpp
   )

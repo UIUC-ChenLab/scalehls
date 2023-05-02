@@ -4,7 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "scalehls-c/HLS.h"
+#include "scalehls-c/Dialect/HLS/HLS.h"
 #include "mlir/CAPI/Registration.h"
 #include "scalehls/Dialect/HLS/IR/HLS.h"
 

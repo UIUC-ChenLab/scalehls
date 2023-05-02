@@ -22,7 +22,9 @@ declare_mlir_python_extension(ScaleHLSBindingsPythonExtension.Core
   SOURCES
     ScaleHLSModule.cpp
   EMBED_CAPI_LINK_LIBS
-    MLIRScaleHLSCAPIHLS
+    MLIRScaleHLSCAPIHLSDialect
+    MLIRScaleHLSCAPIConversions
+    MLIRScaleHLSCAPITransforms
     MLIRScaleHLSCAPIEmitHLSCpp
     MLIRCAPITransforms
   PRIVATE_LINK_LIBS
@@ -30,7 +32,9 @@ declare_mlir_python_extension(ScaleHLSBindingsPythonExtension.Core
     ${conversion_libs}
     ${translation_libs}
     LLVMSupport
+    MLIRScaleHLSHLSDialect
     MLIRScaleHLSTransforms
+    MLIRScaleHLSConversions
 )
 
 ################################################################################

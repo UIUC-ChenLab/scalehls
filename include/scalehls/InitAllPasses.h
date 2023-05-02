@@ -18,12 +18,12 @@ namespace scalehls {
 
 // Add all the ScaleHLS passes.
 inline void registerAllPasses() {
-  scalehls::registerPipelines();
-  scalehls::registerConversionsPasses();
-  scalehls::registerTransformsPasses();
   mlir::registerAllPasses();
 
-  hls::registerHLSPasses();
+  scalehls::registerScaleHLSPipelines();
+  scalehls::registerScaleHLSConversionsPasses();
+  scalehls::registerScaleHLSTransformsPasses();
+  hls::registerScaleHLSHLSTransformsPasses();
 }
 
 } // namespace scalehls

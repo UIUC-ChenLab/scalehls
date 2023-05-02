@@ -74,6 +74,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
 
 include_directories(${LLVM_INCLUDE_DIRS})
 include_directories(${MLIR_INCLUDE_DIRS})
+include_directories(${MLIR_MAIN_SRC_DIR}/lib/Bindings/Python)
 include_directories(${SCALEHLS_MAIN_INCLUDE_DIR})
 include_directories(${SCALEHLS_INCLUDE_DIR})
 link_directories(${LLVM_BUILD_LIBRARY_DIR})

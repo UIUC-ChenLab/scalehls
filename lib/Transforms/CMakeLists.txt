@@ -7,5 +7,5 @@ add_mlir_library(MLIRScaleHLSTransforms
   MLIRScaleHLSTransformsIncGen
 
   LINK_LIBS PUBLIC
-  MLIRHLSDialect
+  MLIRScaleHLSHLSDialect
   )

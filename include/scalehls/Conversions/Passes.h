@@ -21,7 +21,7 @@ class FuncOp;
 namespace mlir {
 namespace scalehls {
 
-void registerConversionsPasses();
+void registerScaleHLSConversionsPasses();
 
 std::unique_ptr<Pass> createConvertLinalgToFDFPass();
 std::unique_ptr<Pass> createConvertFDFToSDFPass();

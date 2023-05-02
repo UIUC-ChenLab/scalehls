@@ -6,12 +6,15 @@
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 
+#include "IRModule.h"
 #include "mlir-c/Bindings/Python/Interop.h"
-#include "mlir/../../lib/Bindings/Python/IRModule.h"
 #include "mlir/Bindings/Python/PybindAdaptors.h"
 #include "mlir/CAPI/IR.h"
+#include "scalehls-c/Conversions.h"
+#include "scalehls-c/Dialect/HLS/HLS.h"
+#include "scalehls-c/Dialect/HLS/Passes.h"
 #include "scalehls-c/EmitHLSCpp.h"
-#include "scalehls-c/HLS.h"
+#include "scalehls-c/Transforms.h"
 #include "scalehls/Dialect/HLS/IR/HLS.h"
 #include "llvm-c/ErrorHandling.h"
 #include "llvm/Support/Signals.h"
@@ -67,4 +70,8 @@ PYBIND11_MODULE(_scalehls, m) {
   });
 
   m.def("emit_hlscpp", &emitHlsCpp);
+
+  mlirRegisterScaleHLSHLSTransformsPasses();
+  mlirRegisterScaleHLSConversionsPasses();
+  mlirRegisterScaleHLSTransformsPasses();
 }
