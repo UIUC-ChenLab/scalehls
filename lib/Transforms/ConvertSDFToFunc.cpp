@@ -7,9 +7,9 @@
 #include "mlir/Dialect/Affine/LoopUtils.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "scalehls/Analysis/Utils.h"
 #include "scalehls/Dialect/HLS/Utils/Utils.h"
 #include "scalehls/Transforms/Passes.h"
+#include "scalehls/Utils/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;

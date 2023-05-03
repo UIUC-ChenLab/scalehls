@@ -9,9 +9,9 @@
 #include "mlir/IR/AffineExprVisitor.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/Tools/mlir-translate/Translation.h"
-#include "scalehls/Analysis/Utils.h"
 #include "scalehls/Dialect/HLS/Utils/Utils.h"
 #include "scalehls/Dialect/HLS/Utils/Visitor.h"
+#include "scalehls/Utils/Utils.h"
 #include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/Support/raw_ostream.h"
 

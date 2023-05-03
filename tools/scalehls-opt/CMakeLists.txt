@@ -18,6 +18,6 @@ target_link_libraries(scalehls-opt
   MLIRScaleHLSHLSTransforms
   MLIRScaleHLSHLSUtils
 
-  MLIRScaleHLSAnalysis
+  MLIRScaleHLSUtils
   MLIRScaleHLSTransforms
   )
