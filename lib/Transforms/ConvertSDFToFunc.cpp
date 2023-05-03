@@ -7,12 +7,14 @@
 #include "mlir/Dialect/Affine/LoopUtils.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "scalehls/Conversions/Passes.h"
+#include "scalehls/Analysis/Utils.h"
 #include "scalehls/Dialect/HLS/Utils/Utils.h"
+#include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
+using namespace affine;
 
 namespace {
 struct InlineSchedule : public OpRewritePattern<ScheduleOp> {

@@ -6,8 +6,8 @@
 
 #include "mlir/IR/Dominance.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "scalehls/Conversions/Passes.h"
 #include "scalehls/Dialect/HLS/Utils/Utils.h"
+#include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -19,7 +19,7 @@ struct ConvertTensorEmptyOp : public OpRewritePattern<tensor::EmptyOp> {
   using OpRewritePattern<tensor::EmptyOp>::OpRewritePattern;
   LogicalResult matchAndRewrite(tensor::EmptyOp op,
                                 PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<AllocTensorOp>(op, op.getType());
+    rewriter.replaceOpWithNewOp<hls::AllocTensorOp>(op, op.getType());
     return success();
   }
 };
@@ -32,7 +32,8 @@ struct ConvertLinalgFillOp : public OpRewritePattern<linalg::FillOp> {
   using OpRewritePattern<linalg::FillOp>::OpRewritePattern;
   LogicalResult matchAndRewrite(linalg::FillOp op,
                                 PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<AllocTensorOp>(op, op.getType(0), op.value());
+    rewriter.replaceOpWithNewOp<hls::AllocTensorOp>(op, op.getType(0),
+                                                    op.value());
     return success();
   }
 };

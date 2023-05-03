@@ -4,6 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "scalehls/Analysis/Utils.h"
 #include "scalehls/Dialect/HLS/Utils/Utils.h"
 #include "scalehls/Transforms/Passes.h"
 

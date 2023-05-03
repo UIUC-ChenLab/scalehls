@@ -7,8 +7,8 @@
 #include "mlir/Analysis/Liveness.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "scalehls/Conversions/Passes.h"
 #include "scalehls/Dialect/HLS/Utils/Utils.h"
+#include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
 using namespace scalehls;

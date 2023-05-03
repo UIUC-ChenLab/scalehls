@@ -9,6 +9,7 @@
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
+using namespace affine;
 
 //===----------------------------------------------------------------------===//
 // ScheduleOp

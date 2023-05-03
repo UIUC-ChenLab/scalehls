@@ -12,8 +12,7 @@
 
 namespace mlir {
 namespace scalehls {
-
-using namespace hls;
+namespace hls {
 
 /// This class is a visitor for SSACFG operation nodes.
 template <typename ConcreteType, typename ResultType, typename... ExtraArgs>
@@ -208,6 +207,8 @@ public:
   HANDLE(arith::FPToSIOp);
 #undef HANDLE
 };
+
+} // namespace hls
 } // namespace scalehls
 } // namespace mlir
 

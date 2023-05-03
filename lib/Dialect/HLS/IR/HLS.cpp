@@ -4,6 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Dialect/Affine/Analysis/Utils.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/IntegerSet.h"
 #include "scalehls/Dialect/HLS/Utils/Utils.h"
@@ -12,6 +13,7 @@
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
+using namespace affine;
 
 //===----------------------------------------------------------------------===//
 // HLS dialect

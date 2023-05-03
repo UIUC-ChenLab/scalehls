@@ -8,10 +8,9 @@
 #define SCALEHLS_INITALLPASSES_H
 
 #include "mlir/InitAllPasses.h"
-#include "scalehls/Conversions/Passes.h"
 #include "scalehls/Dialect/HLS/Transforms/Passes.h"
-#include "scalehls/Pipelines/Pipelines.h"
 #include "scalehls/Transforms/Passes.h"
+#include "scalehls/Transforms/Pipelines.h"
 
 namespace mlir {
 namespace scalehls {
@@ -20,10 +19,9 @@ namespace scalehls {
 inline void registerAllPasses() {
   mlir::registerAllPasses();
 
-  scalehls::registerScaleHLSPipelines();
-  scalehls::registerScaleHLSConversionsPasses();
-  scalehls::registerScaleHLSTransformsPasses();
   hls::registerScaleHLSHLSTransformsPasses();
+  scalehls::registerScaleHLSTransformsPasses();
+  scalehls::registerScaleHLSPipelines();
 }
 
 } // namespace scalehls

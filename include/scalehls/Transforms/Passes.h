@@ -22,9 +22,19 @@ class FuncOp;
 namespace mlir {
 namespace scalehls {
 
-using namespace bufferization;
+//===----------------------------------------------------------------------===//
+// Conversion Passes
+//===----------------------------------------------------------------------===//
 
-void registerScaleHLSTransformsPasses();
+std::unique_ptr<Pass> createConvertLinalgToFDFPass();
+std::unique_ptr<Pass> createConvertFDFToSDFPass();
+std::unique_ptr<Pass> createConvertSDFToFuncPass();
+
+//===----------------------------------------------------------------------===//
+// Transform Passes
+//===----------------------------------------------------------------------===//
+
+using namespace bufferization;
 
 std::unique_ptr<Pass> createComprehensiveBufferizePass(
     std::optional<BufferizationOptions::AllocationFn> allocationFn =
@@ -33,6 +43,8 @@ std::unique_ptr<Pass> createComprehensiveBufferizePass(
 std::unique_ptr<Pass>
 createGenerateRuntimeFuncPass(std::string topFunc = "forward",
                               std::string runtimeFunc = "runtime");
+
+void registerScaleHLSTransformsPasses();
 
 #define GEN_PASS_CLASSES
 #include "scalehls/Transforms/Passes.h.inc"

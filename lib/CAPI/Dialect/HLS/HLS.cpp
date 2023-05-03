@@ -10,5 +10,6 @@
 
 using namespace mlir;
 using namespace scalehls;
+using namespace hls;
 
 MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(HLS, hls, hls::HLSDialect)

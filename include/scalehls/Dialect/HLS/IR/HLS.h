@@ -40,52 +40,6 @@ struct Push : public MemoryEffects::Effect::Base<Push> {};
 struct Pop : public MemoryEffects::Effect::Base<Pop> {};
 } // namespace StreamEffects
 
-//===----------------------------------------------------------------------===//
-// Tile layout attribute utils.
-//===----------------------------------------------------------------------===//
-
-TileLayoutAttr getTileLayout(Operation *op);
-void setTileLayout(Operation *op, TileLayoutAttr tileLayout);
-void setTileLayout(Operation *op, ArrayRef<int64_t> tileShape,
-                   ArrayRef<int64_t> vectorShape);
-void setTileLayout(Operation *op, ArrayRef<int64_t> tileShape);
-
-TileLayoutAttr getTileLayout(Value memref);
-void setTileLayout(Value memref, TileLayoutAttr tileLayout);
-void setTileLayout(Value memref, ArrayRef<int64_t> tileShape,
-                   ArrayRef<int64_t> vectorShape);
-void setTileLayout(Value memref, ArrayRef<int64_t> tileShape);
-
-//===----------------------------------------------------------------------===//
-// HLS directive attributes
-//===----------------------------------------------------------------------===//
-
-/// Loop directives attribute utils.
-LoopDirectiveAttr getLoopDirective(Operation *op);
-void setLoopDirective(Operation *op, LoopDirectiveAttr loopDirective);
-void setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
-                      bool dataflow, bool flatten);
-
-/// Parrallel and point loop attribute utils.
-bool hasParallelAttr(Operation *op);
-void setParallelAttr(Operation *op);
-bool hasPointAttr(Operation *op);
-void setPointAttr(Operation *op);
-
-/// Function directives attribute utils.
-FuncDirectiveAttr getFuncDirective(Operation *op);
-void setFuncDirective(Operation *op, FuncDirectiveAttr FuncDirective);
-void setFuncDirective(Operation *op, bool pipeline, int64_t targetInterval,
-                      bool dataflow);
-
-/// Top and runtime function attribute utils.
-bool hasTopFuncAttr(Operation *op);
-void setTopFuncAttr(Operation *op);
-bool hasRuntimeAttr(Operation *op);
-void setRuntimeAttr(Operation *op);
-
-class NodeOp;
-
 } // namespace hls
 } // namespace scalehls
 } // namespace mlir

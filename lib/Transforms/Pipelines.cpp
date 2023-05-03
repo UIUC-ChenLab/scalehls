@@ -4,7 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "scalehls/Pipelines/Pipelines.h"
+#include "scalehls/Transforms/Pipelines.h"
 #include "mlir/Conversion/Passes.h"
 #include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/Dialect/Arith/Transforms/Passes.h"
@@ -17,7 +17,6 @@
 #include "mlir/Dialect/Tensor/Transforms/Passes.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
-#include "scalehls/Conversions/Passes.h"
 #include "scalehls/Dialect/HLS/Transforms/Passes.h"
 #include "scalehls/Transforms/Passes.h"
 

@@ -1,6 +1,5 @@
+add_subdirectory(Analysis)
 add_subdirectory(CAPI)
-add_subdirectory(Conversions)
 add_subdirectory(Dialect)
-add_subdirectory(Pipelines)
 add_subdirectory(Transforms)
 add_subdirectory(Translation)

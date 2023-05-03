@@ -9,6 +9,7 @@
 #include "mlir/IR/AffineExprVisitor.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/Tools/mlir-translate/Translation.h"
+#include "scalehls/Analysis/Utils.h"
 #include "scalehls/Dialect/HLS/Utils/Utils.h"
 #include "scalehls/Dialect/HLS/Utils/Visitor.h"
 #include "llvm/ADT/PostOrderIterator.h"
@@ -16,6 +17,7 @@
 
 using namespace mlir;
 using namespace scalehls;
+using namespace hls;
 
 static llvm::cl::opt<bool> emitVitisDirectives("emit-vitis-directives",
                                                llvm::cl::init(false));
@@ -303,15 +305,15 @@ public:
   void emitScfYield(scf::YieldOp op);
 
   /// Affine statement emitters.
-  void emitAffineFor(AffineForOp op);
-  void emitAffineIf(AffineIfOp op);
-  void emitAffineParallel(AffineParallelOp op);
-  void emitAffineApply(AffineApplyOp op);
+  void emitAffineFor(affine::AffineForOp op);
+  void emitAffineIf(affine::AffineIfOp op);
+  void emitAffineParallel(affine::AffineParallelOp op);
+  void emitAffineApply(affine::AffineApplyOp op);
   template <typename OpType>
   void emitAffineMaxMin(OpType op, const char *syntax);
-  void emitAffineLoad(AffineLoadOp op);
-  void emitAffineStore(AffineStoreOp op);
-  void emitAffineYield(AffineYieldOp op);
+  void emitAffineLoad(affine::AffineLoadOp op);
+  void emitAffineStore(affine::AffineStoreOp op);
+  void emitAffineYield(affine::AffineYieldOp op);
 
   /// Vector-related statement emitters.
   void emitInsert(vector::InsertOp op);
@@ -480,23 +482,33 @@ public:
   bool visitOp(scf::YieldOp op) { return emitter.emitScfYield(op), true; };
 
   /// Affine statements.
-  bool visitOp(AffineForOp op) { return emitter.emitAffineFor(op), true; }
-  bool visitOp(AffineIfOp op) { return emitter.emitAffineIf(op), true; }
-  bool visitOp(AffineParallelOp op) {
+  bool visitOp(affine::AffineForOp op) {
+    return emitter.emitAffineFor(op), true;
+  }
+  bool visitOp(affine::AffineIfOp op) { return emitter.emitAffineIf(op), true; }
+  bool visitOp(affine::AffineParallelOp op) {
     return emitter.emitAffineParallel(op), true;
   }
-  bool visitOp(AffineApplyOp op) { return emitter.emitAffineApply(op), true; }
-  bool visitOp(AffineMaxOp op) {
+  bool visitOp(affine::AffineApplyOp op) {
+    return emitter.emitAffineApply(op), true;
+  }
+  bool visitOp(affine::AffineMaxOp op) {
     return emitter.emitAffineMaxMin(op, "max"), true;
   }
-  bool visitOp(AffineMinOp op) {
+  bool visitOp(affine::AffineMinOp op) {
     return emitter.emitAffineMaxMin(op, "min"), true;
   }
-  bool visitOp(AffineLoadOp op) { return emitter.emitAffineLoad(op), true; }
-  bool visitOp(AffineStoreOp op) { return emitter.emitAffineStore(op), true; }
-  bool visitOp(AffineVectorLoadOp op) { return false; }
-  bool visitOp(AffineVectorStoreOp op) { return false; }
-  bool visitOp(AffineYieldOp op) { return emitter.emitAffineYield(op), true; }
+  bool visitOp(affine::AffineLoadOp op) {
+    return emitter.emitAffineLoad(op), true;
+  }
+  bool visitOp(affine::AffineStoreOp op) {
+    return emitter.emitAffineStore(op), true;
+  }
+  bool visitOp(affine::AffineVectorLoadOp op) { return false; }
+  bool visitOp(affine::AffineVectorStoreOp op) { return false; }
+  bool visitOp(affine::AffineYieldOp op) {
+    return emitter.emitAffineYield(op), true;
+  }
 
   /// Vector statements.
   bool visitOp(vector::InsertOp op) { return emitter.emitInsert(op), true; };
@@ -877,7 +889,7 @@ void ModuleEmitter::emitScfYield(scf::YieldOp op) {
 }
 
 /// Affine statement emitters.
-void ModuleEmitter::emitAffineFor(AffineForOp op) {
+void ModuleEmitter::emitAffineFor(affine::AffineForOp op) {
   indent() << "for (";
   auto iterVar = op.getInductionVar();
 
@@ -935,7 +947,7 @@ void ModuleEmitter::emitAffineFor(AffineForOp op) {
   indent() << "}\n";
 }
 
-void ModuleEmitter::emitAffineIf(AffineIfOp op) {
+void ModuleEmitter::emitAffineIf(affine::AffineIfOp op) {
   // Declare all values returned by AffineYieldOp. They will be further
   // handled by the AffineYieldOp emitter.
   for (auto result : op.getResults()) {
@@ -983,7 +995,7 @@ void ModuleEmitter::emitAffineIf(AffineIfOp op) {
   indent() << "}\n";
 }
 
-void ModuleEmitter::emitAffineParallel(AffineParallelOp op) {
+void ModuleEmitter::emitAffineParallel(affine::AffineParallelOp op) {
   // Declare all values returned by AffineParallelOp. They will be further
   // handled by the AffineYieldOp emitter.
   for (auto result : op.getResults()) {
@@ -1037,7 +1049,7 @@ void ModuleEmitter::emitAffineParallel(AffineParallelOp op) {
   }
 }
 
-void ModuleEmitter::emitAffineApply(AffineApplyOp op) {
+void ModuleEmitter::emitAffineApply(affine::AffineApplyOp op) {
   indent();
   emitValue(op.getResult());
   os << " = ";
@@ -1068,7 +1080,7 @@ void ModuleEmitter::emitAffineMaxMin(OpType op, const char *syntax) {
   emitInfoAndNewLine(op);
 }
 
-void ModuleEmitter::emitAffineLoad(AffineLoadOp op) {
+void ModuleEmitter::emitAffineLoad(affine::AffineLoadOp op) {
   indent();
   emitValue(op.getResult());
   os << " = ";
@@ -1085,7 +1097,7 @@ void ModuleEmitter::emitAffineLoad(AffineLoadOp op) {
   emitInfoAndNewLine(op);
 }
 
-void ModuleEmitter::emitAffineStore(AffineStoreOp op) {
+void ModuleEmitter::emitAffineStore(affine::AffineStoreOp op) {
   indent();
   emitValue(op.getMemRef());
   auto affineMap = op.getAffineMap();
@@ -1106,13 +1118,13 @@ void ModuleEmitter::emitAffineStore(AffineStoreOp op) {
 // in the generated C++. However, values which will be returned by affine
 // yield operation should not be declared again. How to "bind" the pair of
 // values inside/outside of AffineIf region needs to be considered.
-void ModuleEmitter::emitAffineYield(AffineYieldOp op) {
+void ModuleEmitter::emitAffineYield(affine::AffineYieldOp op) {
   if (op.getNumOperands() == 0)
     return;
 
   // For now, only AffineParallel and AffineIf operations will use
   // AffineYield to return generated values.
-  if (auto parentOp = dyn_cast<AffineIfOp>(op->getParentOp())) {
+  if (auto parentOp = dyn_cast<affine::AffineIfOp>(op->getParentOp())) {
     unsigned resultIdx = 0;
     for (auto result : parentOp.getResults()) {
       unsigned rank = emitNestedLoopHeader(result);
@@ -1124,7 +1136,8 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp op) {
       emitInfoAndNewLine(op);
       emitNestedLoopFooter(rank);
     }
-  } else if (auto parentOp = dyn_cast<AffineParallelOp>(op->getParentOp())) {
+  } else if (auto parentOp =
+                 dyn_cast<affine::AffineParallelOp>(op->getParentOp())) {
     indent() << "if (";
     unsigned ivIdx = 0;
     for (auto iv : parentOp.getBody()->getArguments()) {
