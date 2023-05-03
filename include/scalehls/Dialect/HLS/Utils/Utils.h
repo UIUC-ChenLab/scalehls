@@ -39,6 +39,9 @@ bool isUnknown(MemRefType type);
 // Dataflow utils
 //===----------------------------------------------------------------------===//
 
+void constantizeParamOp(ParamOp param, PatternRewriter &rewriter,
+                        Attribute constValue);
+
 /// Get the root affine loop contained by the node.
 AffineForOp getNodeRootLoop(NodeOp currentNode);
 

@@ -23,6 +23,18 @@ using namespace hls;
 // HLS dialect utils
 //===----------------------------------------------------------------------===//
 
+void scalehls::constantizeParamOp(ParamOp param, PatternRewriter &rewriter,
+                                  Attribute constValue) {
+  for (auto getParam : param.getGetParamOps()) {
+    rewriter.setInsertionPoint(getParam);
+    rewriter.replaceOpWithNewOp<ConstParamOp>(getParam, param.getType(),
+                                              param.getKind(), constValue);
+  }
+  rewriter.setInsertionPoint(param);
+  rewriter.replaceOpWithNewOp<ConstParamOp>(param, param.getType(),
+                                            param.getKind(), constValue);
+}
+
 MemoryKind scalehls::getMemoryKind(MemRefType type) {
   if (auto memorySpace = type.getMemorySpace())
     if (auto kindAttr = memorySpace.dyn_cast<MemoryKindAttr>())

@@ -16,7 +16,7 @@ using namespace hls;
 //===----------------------------------------------------------------------===//
 
 namespace {
-struct SpecializeParamToConstant : public OpRewritePattern<ParamOp> {
+struct ConstantizeParamOpPattern : public OpRewritePattern<ParamOp> {
   using OpRewritePattern<ParamOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(ParamOp op,
@@ -26,7 +26,7 @@ struct SpecializeParamToConstant : public OpRewritePattern<ParamOp> {
       if (op.getCandidates().value().size() == 1)
         constValue = op.getCandidates().value()[0];
 
-    } else if (op.isRangeConstrained()) {
+    } else if (op.isRangeConstrained())
       if (auto constLb = op.getLowerBound().dyn_cast<AffineConstantExpr>()) {
         auto ub = op.getUpperBound();
         auto diff = simplifyAffineExpr(ub - constLb, op.getNumOperands(), 0);
@@ -35,18 +35,9 @@ struct SpecializeParamToConstant : public OpRewritePattern<ParamOp> {
             constValue =
                 Builder(op.getContext()).getIndexAttr(constLb.getValue());
       }
-    }
-    if (constValue) {
-      for (auto getParam : op.getGetParamOps()) {
-        rewriter.setInsertionPoint(getParam);
-        rewriter.replaceOpWithNewOp<ConstParamOp>(getParam, op.getType(),
-                                                  op.getKind(), constValue);
-      }
-      rewriter.setInsertionPoint(op);
-      rewriter.replaceOpWithNewOp<ConstParamOp>(op, op.getType(), op.getKind(),
-                                                constValue);
-      return success();
-    }
+
+    if (constValue)
+      return constantizeParamOp(op, rewriter, constValue), success();
     return failure();
   }
 };
@@ -54,7 +45,7 @@ struct SpecializeParamToConstant : public OpRewritePattern<ParamOp> {
 
 void ParamOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                           MLIRContext *context) {
-  results.add<SpecializeParamToConstant>(context);
+  results.add<ConstantizeParamOpPattern>(context);
 }
 
 OpFoldResult ParamOp::fold(FoldAdaptor adaptor) {
