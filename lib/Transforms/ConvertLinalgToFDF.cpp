@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/IR/Dominance.h"
+#include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Dialect/HLS/Utils/Utils.h"
 #include "scalehls/Transforms/Passes.h"
@@ -40,74 +41,28 @@ struct ConvertLinalgFillOp : public OpRewritePattern<linalg::FillOp> {
 } // namespace
 
 namespace {
-/// This pattern will outline ops into a separate task.
-struct OutlineLinalgInterface
-    : public OpInterfaceRewritePattern<linalg::LinalgOp> {
-  OutlineLinalgInterface(MLIRContext *context, Block *spaceBlock,
-                         StringRef spaceName, unsigned &taskIdx)
-      : OpInterfaceRewritePattern<linalg::LinalgOp>(context),
-        spaceBlock(spaceBlock), spaceName(spaceName), taskIdx(taskIdx) {}
+// TODO: For now, we also dispatch most tensor ops into separate tasks. We
+// should come up with a better way to handle them.
+struct DispatchFuncOp : public OpRewritePattern<func::FuncOp> {
+  using OpRewritePattern<func::FuncOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(linalg::LinalgOp op,
+  LogicalResult matchAndRewrite(func::FuncOp func,
                                 PatternRewriter &rewriter) const override {
-    if (op->getParentOfType<TaskOp>())
+    auto dispatch = dispatchBlock(&func.front(), rewriter);
+    if (!dispatch)
       return failure();
-    if (op.hasDynamicShape())
-      return op.emitOpError("cannot handle dynamic shape yet");
-    auto loc = rewriter.getUnknownLoc();
 
-    // Generate tile and parallel factors of the task.
-    auto paramPrefix = "task" + std::to_string(taskIdx++);
-    SmallVector<Value, 8> tileFactors;
-    SmallVector<Value, 8> parallelFactors;
-    auto staticShape = op.getStaticShape();
-    for (auto size : llvm::enumerate(op.computeStaticLoopSizes())) {
-      rewriter.setInsertionPointToEnd(spaceBlock);
-
-      auto tileName = paramPrefix + "_tile" + std::to_string(size.index());
-      auto tileBounds = {rewriter.getAffineConstantExpr(0),
-                         rewriter.getAffineConstantExpr(size.value())};
-      auto tileParam = rewriter.create<ParamOp>(
-          loc, rewriter.getIndexType(), ValueRange({}),
-          AffineMap::get(0, 0, tileBounds, rewriter.getContext()),
-          ParamKind::TILE_FACTOR, tileName);
-
-      auto parallelName =
-          paramPrefix + "_parallel" + std::to_string(size.index());
-      auto parallelBounds = {rewriter.getAffineConstantExpr(0),
-                             rewriter.getAffineDimExpr(0)};
-      auto parallelParam = rewriter.create<ParamOp>(
-          loc, rewriter.getIndexType(), tileParam.getResult(),
-          AffineMap::get(1, 0, parallelBounds, rewriter.getContext()),
-          ParamKind::PARALLEL_FACTOR, parallelName);
-
-      rewriter.setInsertionPoint(op);
-      tileFactors.push_back(rewriter.create<GetParamOp>(
-          loc, tileParam.getType(), spaceName.str(), tileName));
-      parallelFactors.push_back(rewriter.create<GetParamOp>(
-          loc, parallelParam.getType(), spaceName.str(), parallelName));
+    for (auto &op : llvm::make_early_inc_range(dispatch.getOps())) {
+      if (auto linalgOp = dyn_cast<linalg::LinalgOp>(op)) {
+        if (linalgOp.hasDynamicShape())
+          return linalgOp.emitOpError("cannot handle dynamic shape yet");
+        fuseOpsIntoTask({linalgOp}, rewriter);
+      } else if (isa<tensor::ReshapeOp, tensor::ExpandShapeOp,
+                     tensor::CollapseShapeOp, tensor::InsertSliceOp,
+                     tensor::ExtractSliceOp, tensor::PackOp, tensor::UnPackOp,
+                     tensor::PadOp>(op))
+        fuseOpsIntoTask({&op}, rewriter);
     }
-    fuseOpsIntoTask({op}, rewriter, op, tileFactors, parallelFactors);
-    return success();
-  }
-
-private:
-  Block *spaceBlock;
-  StringRef spaceName;
-  unsigned &taskIdx;
-};
-} // namespace
-
-namespace {
-/// This pattern will outline ops into a separate task.
-template <typename OpType> struct OutlineOp : public OpRewritePattern<OpType> {
-  using OpRewritePattern<OpType>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(OpType op,
-                                PatternRewriter &rewriter) const override {
-    if (op->template getParentOfType<TaskOp>())
-      return failure();
-    fuseOpsIntoTask({op}, rewriter);
     return success();
   }
 };
@@ -116,40 +71,24 @@ template <typename OpType> struct OutlineOp : public OpRewritePattern<OpType> {
 namespace {
 struct ConvertLinalgToFDF : public ConvertLinalgToFDFBase<ConvertLinalgToFDF> {
   void runOnOperation() override {
-    auto module = getOperation();
-    auto context = module.getContext();
+    auto func = getOperation();
+    auto context = func.getContext();
 
-    // Convert temsor.empty and linalg.fill ops to fdf.alloc_tensor ops.
+    // Convert linalg ops to FDF ops.
+    ConversionTarget target(*context);
+    target.addIllegalOp<tensor::EmptyOp, linalg::FillOp>();
+    target.addLegalOp<hls::AllocTensorOp>();
+
     mlir::RewritePatternSet patterns(context);
     patterns.add<ConvertTensorEmptyOp>(context);
     patterns.add<ConvertLinalgFillOp>(context);
-    (void)applyPatternsAndFoldGreedily(module, std::move(patterns));
-
-    // Get the design space for holding parameters.
-    auto space = getOrCreateGlobalSpaceOp(module);
-    if (!space.has_value()) {
-      module.emitOpError("cannot find or create space op");
+    if (failed(applyPartialConversion(func, target, std::move(patterns))))
       return signalPassFailure();
-    }
 
-    unsigned taskIdx = 0;
+    // Dispatch the current function to create the dataflow hierarchy.
     patterns.clear();
-    patterns.add<OutlineLinalgInterface>(context, &space->getBody().front(),
-                                         space->getSymName(), taskIdx);
-    patterns.add<OutlineOp<tensor::ReshapeOp>>(context);
-    patterns.add<OutlineOp<tensor::ExpandShapeOp>>(context);
-    patterns.add<OutlineOp<tensor::CollapseShapeOp>>(context);
-    patterns.add<OutlineOp<tensor::InsertSliceOp>>(context);
-    patterns.add<OutlineOp<tensor::ExtractSliceOp>>(context);
-    patterns.add<OutlineOp<tensor::PackOp>>(context);
-    patterns.add<OutlineOp<tensor::UnPackOp>>(context);
-    patterns.add<OutlineOp<tensor::PadOp>>(context);
-
-    for (auto func : module.getOps<func::FuncOp>()) {
-      dispatchBlock(&func.front());
-      auto frozenPatterns = FrozenRewritePatternSet(std::move(patterns));
-      (void)applyPatternsAndFoldGreedily(func, frozenPatterns);
-    }
+    patterns.add<DispatchFuncOp>(context);
+    (void)applyOpPatternsAndFold({func}, std::move(patterns));
   }
 };
 } // namespace

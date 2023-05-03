@@ -14,7 +14,7 @@ include "mlir/Pass/PassBase.td"
 //===----------------------------------------------------------------------===//
 
 def ConvertLinalgToFDF :
-    Pass<"scalehls-convert-linalg-to-fdf", "mlir::ModuleOp"> {
+    Pass<"scalehls-convert-linalg-to-fdf", "func::FuncOp"> {
   let summary = "Convert linalg to functional dataflow";
   let constructor = "mlir::scalehls::createConvertLinalgToFDFPass()";
 }
@@ -24,8 +24,7 @@ def ConvertFDFToSDF : Pass<"scalehls-convert-fdf-to-sdf", "func::FuncOp"> {
   let constructor = "mlir::scalehls::createConvertFDFToSDFPass()";
 }
 
-def ConvertSDFToFunc :
-    Pass<"scalehls-convert-sdf-to-func", "mlir::ModuleOp"> {
+def ConvertSDFToFunc : Pass<"scalehls-convert-sdf-to-func", "mlir::ModuleOp"> {
   let summary = "Convert structural dataflow to function for C++ emission";
   let constructor = "mlir::scalehls::createConvertSDFToFuncPass()";
 }

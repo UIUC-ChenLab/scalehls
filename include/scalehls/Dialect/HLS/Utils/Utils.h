@@ -63,15 +63,16 @@ void setRuntimeAttr(Operation *op);
 //===----------------------------------------------------------------------===//
 
 /// Find an existing space op for the given module. If there is no space op,
-/// create a new one.
-llvm::Optional<SpaceOp> getOrCreateGlobalSpaceOp(ModuleOp module);
+/// create a new one. Return a nullptr if failed.
+SpaceOp getOrCreateGlobalSpaceOp(ModuleOp module);
 
 /// Constantize the given param op with the given constant value.
 void constantizeParamOp(ParamOp param, PatternRewriter &rewriter,
                         Attribute constValue);
 
-/// Wrap the operations in the block with dispatch op.
-DispatchOp dispatchBlock(Block *block);
+/// Wrap the operations in the block with dispatch op. Return a nullptr if
+/// failed.
+DispatchOp dispatchBlock(Block *block, PatternRewriter &rewriter);
 
 /// Fuse the given operations into a new task. The new task will be created
 /// before "insertToOp" and each operation will be in the original order. This

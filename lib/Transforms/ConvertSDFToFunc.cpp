@@ -97,10 +97,6 @@ struct ConvertSDFToFunc : public ConvertSDFToFuncBase<ConvertSDFToFunc> {
 
     for (auto func :
          llvm::make_early_inc_range(module.getOps<func::FuncOp>())) {
-      // ConversionTarget target(*context);
-      // target.addIllegalOp<ScheduleOp, NodeOp>();
-      // target.addLegalOp<func::FuncOp, func::ReturnOp, func::CallOp>();
-
       unsigned nodeIdx = 0;
       mlir::RewritePatternSet patterns(context);
       patterns.add<InlineSchedule>(context);

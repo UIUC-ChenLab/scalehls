@@ -130,7 +130,7 @@ bool hls::hasRuntimeAttr(Operation *op) {
 
 /// Find an existing space op for the given function. If there is no space op,
 /// create a new one.
-llvm::Optional<SpaceOp> hls::getOrCreateGlobalSpaceOp(ModuleOp module) {
+SpaceOp hls::getOrCreateGlobalSpaceOp(ModuleOp module) {
   auto spaceOps = module.getOps<SpaceOp>();
   if (spaceOps.empty()) {
     OpBuilder builder(module.getBody(), module.getBody()->begin());
@@ -157,19 +157,19 @@ void hls::constantizeParamOp(ParamOp param, PatternRewriter &rewriter,
 }
 
 /// Wrap the operations in the block with dispatch op.
-DispatchOp hls::dispatchBlock(Block *block) {
+DispatchOp hls::dispatchBlock(Block *block, PatternRewriter &rewriter) {
   if (!block->getOps<DispatchOp>().empty() ||
-      !isa<func::FuncOp, affine::AffineForOp>(block->getParentOp()))
-    return DispatchOp();
+      !isa<func::FuncOp, affine::AffineForOp, scf::ForOp>(block->getParentOp()))
+    return nullptr;
 
-  OpBuilder builder(block, block->begin());
+  auto loc = rewriter.getUnknownLoc();
   ValueRange returnValues(block->getTerminator()->getOperands());
-  auto loc = builder.getUnknownLoc();
-  auto dispatch = builder.create<DispatchOp>(loc, returnValues);
+  rewriter.setInsertionPointToStart(block);
+  auto dispatch = rewriter.create<DispatchOp>(loc, returnValues);
 
   auto &dispatchBlock = dispatch.getBody().emplaceBlock();
-  builder.setInsertionPointToEnd(&dispatchBlock);
-  builder.create<YieldOp>(loc, returnValues);
+  rewriter.setInsertionPointToEnd(&dispatchBlock);
+  rewriter.create<YieldOp>(loc, returnValues);
 
   auto &dispatchOps = dispatchBlock.getOperations();
   auto &parentOps = block->getOperations();

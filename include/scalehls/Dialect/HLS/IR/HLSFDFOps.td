@@ -76,9 +76,14 @@ def TaskOp : HLSOp<"fdf.task", [
     /// Get the terminator yield op.
     YieldOp getYieldOp();
 
+    /// Return true if this task op contains nested sub-tasks.
     bool hasHierarchy() {
       return cast<ContainerLikeInterface>(this->getOperation()).hasHierarchy();
     }
+
+    /// Get the immediate included linalg op. Will return nullptr if there is no
+    /// such linalg op or more than one linalg op.
+    linalg::LinalgOp getPayloadLinalgOp();
   }];
 }
 

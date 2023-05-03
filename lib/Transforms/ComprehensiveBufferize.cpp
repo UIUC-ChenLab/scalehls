@@ -119,9 +119,7 @@ struct ComprehensiveBufferize
     // Remove redundant args and unused results.
     RewritePatternSet patterns(&getContext());
     linalg::populateEraseUnusedOperandsAndResultsPatterns(patterns);
-    if (failed(applyPatternsAndFoldGreedily(moduleOp, std::move(patterns)))) {
-      return signalPassFailure();
-    }
+    (void)applyPatternsAndFoldGreedily(moduleOp, std::move(patterns));
   }
 
 private:

@@ -108,11 +108,8 @@ YieldOp DispatchOp::getYieldOp() {
 void TaskOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                          MLIRContext *context) {
   results.add<SimplifyDispatchOrTaskOutputs<TaskOp>>(context);
-  results.add<InlineDispatchOrTask<TaskOp>>(context, [](TaskOp op) {
-    return llvm::hasSingleElement(op.getOps());
-    // return llvm::hasSingleElement(op.getDispatchOp().getOps<TaskOp>()) ||
-    //        llvm::hasSingleElement(op.getOps());
-  });
+  results.add<InlineDispatchOrTask<TaskOp>>(
+      context, [](TaskOp op) { return llvm::hasSingleElement(op.getOps()); });
 }
 
 LogicalResult TaskOp::verify() {
@@ -129,6 +126,15 @@ DispatchOp TaskOp::getDispatchOp() {
 /// Get the terminator yield op.
 YieldOp TaskOp::getYieldOp() {
   return cast<YieldOp>(getBody().front().getTerminator());
+}
+
+/// Get the immediate included linalg op. Will return nullptr if there is no
+/// such linalg op or more than one linalg op.
+linalg::LinalgOp TaskOp::getPayloadLinalgOp() {
+  auto linalgOps = getOps<linalg::LinalgOp>();
+  if (llvm::hasSingleElement(linalgOps))
+    return *linalgOps.begin();
+  return nullptr;
 }
 
 bool TaskOp::isLivein(Value value) {

@@ -16,7 +16,7 @@ def EliminateBufferYield :
 }
 
 def ParametricTaskTiling :
-    Pass<"scalehls-parametric-task-tiling", "func::FuncOp"> {
+    Pass<"scalehls-parametric-task-tiling", "mlir::ModuleOp"> {
   let summary = "Parametric tiling of functional dataflow tasks";
   let constructor = "mlir::scalehls::hls::createParametricTaskTilingPass()";
 
