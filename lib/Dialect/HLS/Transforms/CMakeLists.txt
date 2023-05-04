@@ -1,7 +1,7 @@
 add_mlir_dialect_library(MLIRScaleHLSHLSTransforms
   BufferizableOpInterfaceImpl.cpp
   EliminateBufferYield.cpp
-  ParametricTaskTiling.cpp
+  ParameterizeDataflowTask.cpp
   Passes.cpp
 
   DEPENDS

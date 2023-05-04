@@ -15,14 +15,16 @@ def EliminateBufferYield :
   let constructor = "mlir::scalehls::hls::createEliminateBufferYieldPass()";
 }
 
-def ParametricTaskTiling :
-    Pass<"scalehls-parametric-task-tiling", "mlir::ModuleOp"> {
-  let summary = "Parametric tiling of functional dataflow tasks";
-  let constructor = "mlir::scalehls::hls::createParametricTaskTilingPass()";
+def ParameterizeDataflowTask :
+    Pass<"scalehls-parameterize-dataflow-task", "mlir::ModuleOp"> {
+  let summary = "Parameterize dataflow tasks";
+  let constructor = "mlir::scalehls::hls::createParameterizeDataflowTaskPass()";
 
   let options = [
     Option<"defaultTileFactor", "default-tile-factor", "unsigned",
-          /*default=*/"32", "Positive number">
+          /*default=*/"32", "Positive number">,
+    Option<"defaultParallelFactor", "default-parallel-factor", "unsigned",
+          /*default=*/"2", "Positive number">
   ];
 }
 

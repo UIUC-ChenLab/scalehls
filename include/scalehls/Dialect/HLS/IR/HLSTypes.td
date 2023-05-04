@@ -30,17 +30,11 @@ def PortType : HLSType<"Port"> {
 def IPIdentifierType : HLSType<"IPIdentifier"> {
   let summary = "An IP identifier type";
   let mnemonic = "uip.ip";
-
-  let parameters = (ins IPLibraryParam:$library, IPNameParam:$name);
-  let assemblyFormat = "`<` $library `_` $name `>`";
 }
 
 def MemoryKindType : HLSType<"MemoryKind"> {
   let summary = "A memory kind type";
   let mnemonic = "ubuf.mem";
-
-  let parameters = (ins MemoryKindParam:$kind);
-  let assemblyFormat = "`<` $kind `>`";
 }
 
 def StreamType : HLSType<"Stream"> {

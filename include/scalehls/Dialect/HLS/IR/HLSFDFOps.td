@@ -46,7 +46,8 @@ def TaskOp : HLSOp<"fdf.task", [
   }];
 
   let arguments = (ins Variadic<Index>:$tile_factors,
-      Variadic<Index>:$parallel_factors, Optional<IPIdentifierType>:$ip_name);
+      Variadic<Index>:$parallel_factors,
+      Optional<IPIdentifierType>:$ip_identifier);
   let results = (outs Variadic<AnyType>:$results);
   let regions = (region SizedRegion<1>:$body);
 
@@ -62,7 +63,7 @@ def TaskOp : HLSOp<"fdf.task", [
 
   let assemblyFormat = [{
     (`tile` `(` $tile_factors^ `)`)? (`parallel` `(` $parallel_factors^ `)`)?
-    ($ip_name^ `:` type($ip_name))? attr-dict-with-keyword (`:`
+    ($ip_identifier^ `:` type($ip_identifier))? attr-dict-with-keyword (`:`
     type($results)^)? $body
   }];
 

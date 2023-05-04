@@ -60,19 +60,19 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
 
         // FDF-level transformation.
         pm.addPass(scalehls::createConvertLinalgToFDFPass());
-        pm.addPass(hls::createParametricTaskTilingPass(32));
-        addComprehensiveBufferizePasses(pm);
-        pm.addPass(hls::createEliminateBufferYieldPass());
-        pm.addPass(mlir::createCanonicalizerPass());
+        pm.addPass(hls::createParameterizeDataflowTaskPass());
+        // addComprehensiveBufferizePasses(pm);
+        // pm.addPass(hls::createEliminateBufferYieldPass());
+        // pm.addPass(mlir::createCanonicalizerPass());
 
-        // SDF-level transformation.
-        pm.addPass(scalehls::createConvertFDFToSDFPass());
-        pm.addPass(mlir::createCanonicalizerPass());
+        // // SDF-level transformation.
+        // pm.addPass(scalehls::createConvertFDFToSDFPass());
+        // pm.addPass(mlir::createCanonicalizerPass());
 
-        // Func-level transformation.
-        pm.addPass(scalehls::createConvertSDFToFuncPass());
-        pm.addPass(scalehls::createGenerateRuntimeFuncPass());
-        addLowerLinalgToAffinePasses(pm);
+        // // Func-level transformation.
+        // pm.addPass(scalehls::createConvertSDFToFuncPass());
+        // pm.addPass(scalehls::createGenerateRuntimeFuncPass());
+        // addLowerLinalgToAffinePasses(pm);
       });
 }
 
