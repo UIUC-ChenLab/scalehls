@@ -62,10 +62,13 @@ PYBIND11_MODULE(_scalehls, m) {
     // Get the MlirContext capsule from PyMlirContext capsule.
     auto wrappedCapsule = capsule.attr(MLIR_PYTHON_CAPI_PTR_ATTR);
     MlirContext context = mlirPythonCapsuleToContext(wrappedCapsule.ptr());
-
     MlirDialectHandle hls = mlirGetDialectHandle__hls__();
-    mlirDialectHandleRegisterDialect(hls, context);
-    mlirDialectHandleLoadDialect(hls, context);
+
+    mlir::DialectRegistry registry;
+    mlirRegisterAllDialects(wrap(&registry));
+    mlirDialectHandleInsertDialect(hls, wrap(&registry));
+    unwrap(context)->appendDialectRegistry(registry);
+    mlirContextLoadAllAvailableDialects(context);
   });
 
   m.def("emit_hlscpp", &emitHlsCpp);
