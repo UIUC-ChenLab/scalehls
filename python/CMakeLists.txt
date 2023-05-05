@@ -11,10 +11,12 @@ add_compile_definitions("MLIR_PYTHON_PACKAGE_PREFIX=scalehls.")
 ################################################################################
 
 declare_mlir_python_sources(ScaleHLSPythonSources
-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
+  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/scalehls"
   SOURCES
     __init__.py
     uip.py
+
+    _mlir_libs/_scalehls.pyi
 )
 
 ################################################################################
@@ -30,7 +32,7 @@ declare_mlir_python_sources(ScaleHLSPythonSources.Dialects
 
 declare_mlir_dialect_python_bindings(
   ADD_TO_PARENT ScaleHLSPythonSources.Dialects
-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
+  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/scalehls"
   TD_FILE dialects/HLSOps.td
   SOURCES
     dialects/hls.py
