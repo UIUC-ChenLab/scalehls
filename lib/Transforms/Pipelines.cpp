@@ -36,10 +36,10 @@ static void addComprehensiveBufferizePasses(OpPassManager &pm) {
 }
 
 static void addLowerLinalgToAffinePasses(OpPassManager &pm) {
-  pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
+  pm.addNestedPass<func::FuncOp>(mlir::createConvertLinalgToAffineLoopsPass());
   pm.addPass(memref::createFoldMemRefAliasOpsPass());
-  pm.addPass(affine::createAffineLoopNormalizePass());
-  pm.addPass(affine::createSimplifyAffineStructuresPass());
+  pm.addNestedPass<func::FuncOp>(affine::createAffineLoopNormalizePass());
+  pm.addNestedPass<func::FuncOp>(affine::createSimplifyAffineStructuresPass());
   pm.addPass(mlir::createCanonicalizerPass());
 }
 
@@ -59,20 +59,21 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         pm.addPass(bufferization::createEmptyTensorEliminationPass());
 
         // FDF-level transformation.
-        pm.addPass(scalehls::createConvertLinalgToFDFPass());
+        pm.addNestedPass<func::FuncOp>(
+            scalehls::createConvertLinalgToFDFPass());
         pm.addPass(hls::createParameterizeDataflowTaskPass());
-        // addComprehensiveBufferizePasses(pm);
-        // pm.addPass(hls::createEliminateBufferYieldPass());
-        // pm.addPass(mlir::createCanonicalizerPass());
+        addComprehensiveBufferizePasses(pm);
+        pm.addNestedPass<func::FuncOp>(hls::createEliminateBufferYieldPass());
+        pm.addPass(mlir::createCanonicalizerPass());
 
-        // // SDF-level transformation.
-        // pm.addPass(scalehls::createConvertFDFToSDFPass());
-        // pm.addPass(mlir::createCanonicalizerPass());
+        // SDF-level transformation.
+        pm.addNestedPass<func::FuncOp>(scalehls::createConvertFDFToSDFPass());
+        pm.addPass(mlir::createCanonicalizerPass());
 
-        // // Func-level transformation.
-        // pm.addPass(scalehls::createConvertSDFToFuncPass());
-        // pm.addPass(scalehls::createGenerateRuntimeFuncPass());
-        // addLowerLinalgToAffinePasses(pm);
+        // Func-level transformation.
+        pm.addPass(scalehls::createConvertSDFToFuncPass());
+        pm.addPass(scalehls::createGenerateRuntimeFuncPass());
+        addLowerLinalgToAffinePasses(pm);
       });
 }
 

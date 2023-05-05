@@ -8,4 +8,8 @@ add_mlir_library(MLIRScaleHLSTransforms
 
   DEPENDS
   MLIRScaleHLSTransformsIncGen
+
+  LINK_LIBS PUBLIC
+  MLIRLinalgTransforms
+  MLIRAffineTransforms
 )

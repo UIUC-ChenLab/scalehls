@@ -55,19 +55,7 @@ fi
 
 # Run building.
 if [ "${CMAKE_GENERATOR}" == "Ninja" ]; then
-  ninja
+  ninja && ninja check-scalehls
 else 
-  make -j "$(nproc)"
-fi
-
-echo ""
-echo ">>> ScaleHLS check..."
-echo ""
-
-cd "${SCALEHLS_DIR}/build"
-
-if [ "${CMAKE_GENERATOR}" == "Ninja" ]; then
-  ninja check-scalehls
-else
-  make -j "$(nproc)" check-scalehls
+  make -j "$(nproc)" && make -j "$(nproc)" check-scalehls
 fi

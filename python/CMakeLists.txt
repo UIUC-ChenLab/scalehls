@@ -55,6 +55,7 @@ declare_mlir_python_extension(ScaleHLSPythonExtension.Core
   EMBED_CAPI_LINK_LIBS
     MLIRScaleHLSCAPIHLSDialect
     MLIRScaleHLSCAPITransforms
+    MLIRScaleHLSCAPIRegistration
     MLIRScaleHLSCAPIEmitHLSCpp
   PRIVATE_LINK_LIBS
     LLVMSupport

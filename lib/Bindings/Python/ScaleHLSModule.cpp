@@ -11,8 +11,7 @@
 #include "mlir/Bindings/Python/PybindAdaptors.h"
 #include "mlir/CAPI/IR.h"
 #include "scalehls-c/Dialect/HLS/HLS.h"
-#include "scalehls-c/Dialect/HLS/Passes.h"
-#include "scalehls-c/Transforms/Passes.h"
+#include "scalehls-c/Registration.h"
 #include "scalehls-c/Translation/EmitHLSCpp.h"
 #include "scalehls/Dialect/HLS/IR/HLS.h"
 #include "llvm-c/ErrorHandling.h"
@@ -47,22 +46,23 @@ PYBIND11_MODULE(_scalehls, m) {
   llvm::sys::PrintStackTraceOnErrorSignal(/*argv=*/"");
   LLVMEnablePrettyStackTrace();
 
-  m.def("register_dialects", [](py::object capsule) {
+  m.def("register_everything", [](py::object capsule) {
     // Get the MlirContext capsule from PyMlirContext capsule.
     auto wrappedCapsule = capsule.attr(MLIR_PYTHON_CAPI_PTR_ATTR);
     MlirContext context = mlirPythonCapsuleToContext(wrappedCapsule.ptr());
-    MlirDialectHandle hls = mlirGetDialectHandle__hls__();
-    mlirDialectHandleRegisterDialect(hls, context);
-    mlirDialectHandleLoadDialect(hls, context);
+
+    MlirDialectRegistry registry = mlirDialectRegistryCreate();
+    mlirScaleHLSRegisterAllDialects(registry);
+    mlirScaleHLSRegisterAllInterfaceExternalModels(registry);
+    mlirContextAppendDialectRegistry(context, registry);
+    mlirContextLoadAllAvailableDialects(context);
+    mlirScaleHLSRegisterAllPasses();
   });
 
   m.def("emit_hlscpp", [](MlirModule mod, py::object fileObject) {
     PyFileAccumulator accum(fileObject, false);
     py::gil_scoped_release();
     return mlirLogicalResultIsSuccess(
-        mlirEmitHlsCpp(mod, accum.getCallback(), accum.getUserData()));
+        mlirScaleHLSEmitHlsCpp(mod, accum.getCallback(), accum.getUserData()));
   });
-
-  mlirRegisterScaleHLSHLSTransformsPasses();
-  mlirRegisterScaleHLSTransformsPasses();
 }

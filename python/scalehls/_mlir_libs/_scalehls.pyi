@@ -5,11 +5,11 @@ import typing
 
 __all__ = [
     "emit_hlscpp",
-    "register_dialects"
+    "register_everything"
 ]
 
 
 def emit_hlscpp(arg0: MlirModule, arg1: object) -> bool:
     pass
-def register_dialects(arg0: object) -> None:
+def register_everything(arg0: object) -> None:
     pass
