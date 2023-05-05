@@ -3,4 +3,4 @@ add_mlir_library(MLIRScaleHLSUtils
 
   LINK_LIBS PUBLIC
   MLIRScaleHLSHLSDialect
-  )
+)

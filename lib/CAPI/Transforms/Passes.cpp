@@ -12,11 +12,6 @@
 using namespace mlir;
 using namespace scalehls;
 
-namespace {
-#define GEN_PASS_REGISTRATION
-#include "scalehls/Transforms/Passes.h.inc"
-} // namespace
-
 #ifdef __cplusplus
 extern "C" {
 #endif

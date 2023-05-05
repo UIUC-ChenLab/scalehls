@@ -7,4 +7,4 @@ add_mlir_library(MLIRScaleHLSEmitHLSCpp
   ${dialect_libs}
   MLIRScaleHLSHLSDialect
   MLIRScaleHLSUtils
-  )
+)

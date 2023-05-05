@@ -13,11 +13,6 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
-namespace {
-#define GEN_PASS_REGISTRATION
-#include "scalehls/Dialect/HLS/Transforms/Passes.h.inc"
-} // namespace
-
 #ifdef __cplusplus
 extern "C" {
 #endif

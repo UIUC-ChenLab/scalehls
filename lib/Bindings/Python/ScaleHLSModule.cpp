@@ -39,17 +39,6 @@ mlir::python::SetPyError(PyObject *excClass, const llvm::Twine &message) {
 }
 
 //===----------------------------------------------------------------------===//
-// Emission APIs
-//===----------------------------------------------------------------------===//
-
-static bool emitHlsCpp(MlirModule mod, py::object fileObject) {
-  PyFileAccumulator accum(fileObject, false);
-  py::gil_scoped_release();
-  return mlirLogicalResultIsSuccess(
-      mlirEmitHlsCpp(mod, accum.getCallback(), accum.getUserData()));
-}
-
-//===----------------------------------------------------------------------===//
 // ScaleHLS Python module definition
 //===----------------------------------------------------------------------===//
 
@@ -63,15 +52,16 @@ PYBIND11_MODULE(_scalehls, m) {
     auto wrappedCapsule = capsule.attr(MLIR_PYTHON_CAPI_PTR_ATTR);
     MlirContext context = mlirPythonCapsuleToContext(wrappedCapsule.ptr());
     MlirDialectHandle hls = mlirGetDialectHandle__hls__();
-
-    mlir::DialectRegistry registry;
-    mlirRegisterAllDialects(wrap(&registry));
-    mlirDialectHandleInsertDialect(hls, wrap(&registry));
-    unwrap(context)->appendDialectRegistry(registry);
-    mlirContextLoadAllAvailableDialects(context);
+    mlirDialectHandleRegisterDialect(hls, context);
+    mlirDialectHandleLoadDialect(hls, context);
   });
 
-  m.def("emit_hlscpp", &emitHlsCpp);
+  m.def("emit_hlscpp", [](MlirModule mod, py::object fileObject) {
+    PyFileAccumulator accum(fileObject, false);
+    py::gil_scoped_release();
+    return mlirLogicalResultIsSuccess(
+        mlirEmitHlsCpp(mod, accum.getCallback(), accum.getUserData()));
+  });
 
   mlirRegisterScaleHLSHLSTransformsPasses();
   mlirRegisterScaleHLSTransformsPasses();

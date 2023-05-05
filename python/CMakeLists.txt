@@ -1,23 +1,20 @@
-get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
-get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
-get_property(translation_libs GLOBAL PROPERTY MLIR_TRANSLATION_LIBS)
-
 ################################################################################
 # Set up Python binding tools
 ################################################################################
 
 include(AddMLIRPython)
 
+add_compile_definitions("MLIR_PYTHON_PACKAGE_PREFIX=scalehls.")
+
 ################################################################################
 # Declare Python sources
 ################################################################################
 
-declare_mlir_python_sources(ScaleHLSBindingsPythonSources
+declare_mlir_python_sources(ScaleHLSPythonSources
   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
   SOURCES
-    scalehls/__init__.py
-    scalehls/uip.py
-    scalehls/dialects/_ods_common.py
+    __init__.py
+    uip.py
 )
 
 ################################################################################
@@ -26,17 +23,17 @@ declare_mlir_python_sources(ScaleHLSBindingsPythonSources
 
 # Ensure the build directory for generated Python files exists. Ninja is able to
 # generate this, but make does not and the build fails.
-file(MAKE_DIRECTORY ${SCALEHLS_BINARY_DIR}/python/scalehls/dialects)
+file(MAKE_DIRECTORY ${SCALEHLS_BINARY_DIR}/python/dialects)
 
-declare_mlir_python_sources(ScaleHLSBindingsPythonSources.Dialects
-  ADD_TO_PARENT ScaleHLSBindingsPythonSources)
+declare_mlir_python_sources(ScaleHLSPythonSources.Dialects
+  ADD_TO_PARENT ScaleHLSPythonSources)
 
 declare_mlir_dialect_python_bindings(
-  ADD_TO_PARENT ScaleHLSBindingsPythonSources.Dialects
+  ADD_TO_PARENT ScaleHLSPythonSources.Dialects
   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
-  TD_FILE scalehls/dialects/HLSOps.td
+  TD_FILE dialects/HLSOps.td
   SOURCES
-    scalehls/dialects/hls.py
+    dialects/hls.py
   DIALECT_NAME hls
 )
 
@@ -44,12 +41,12 @@ declare_mlir_dialect_python_bindings(
 # Declare native Python extension
 ################################################################################
 
-declare_mlir_python_sources(ScaleHLSBindingsPythonExtension)
+declare_mlir_python_sources(ScaleHLSPythonExtension)
 
 set(PYTHON_SOURCE_DIR "${SCALEHLS_SOURCE_DIR}/lib/Bindings/Python")
-declare_mlir_python_extension(ScaleHLSBindingsPythonExtension.Core
+declare_mlir_python_extension(ScaleHLSPythonExtension.Core
   MODULE_NAME _scalehls
-  ADD_TO_PARENT ScaleHLSBindingsPythonExtension
+  ADD_TO_PARENT ScaleHLSPythonExtension
   ROOT_DIR "${PYTHON_SOURCE_DIR}"
   SOURCES
     ScaleHLSModule.cpp
@@ -57,60 +54,38 @@ declare_mlir_python_extension(ScaleHLSBindingsPythonExtension.Core
     MLIRScaleHLSCAPIHLSDialect
     MLIRScaleHLSCAPITransforms
     MLIRScaleHLSCAPIEmitHLSCpp
-    MLIRCAPITransforms
   PRIVATE_LINK_LIBS
-    ${dialect_libs}
-    ${conversion_libs}
-    ${translation_libs}
     LLVMSupport
-    MLIRScaleHLSHLSDialect
-    MLIRScaleHLSTransforms
 )
-
 
 ################################################################################
 # Build composite binaries
 ################################################################################
 
 # Bundle our own, self-contained CAPI library with all of our deps.
-add_mlir_python_common_capi_library(ScaleHLSBindingsPythonCAPI
-  INSTALL_COMPONENT ScaleHLSBindingsPythonModules
-  INSTALL_DESTINATION python_packages/scalehls_core/mlir/_mlir_libs
-  # NOTE: When the MLIR API is relocated under scalehls, this would change to
-  # .../scalehls/_mlir_libs
-  OUTPUT_DIRECTORY "${SCALEHLS_PYTHON_PACKAGES_DIR}/scalehls_core/mlir/_mlir_libs"
+add_mlir_python_common_capi_library(ScaleHLSPythonCAPI
+  INSTALL_COMPONENT ScaleHLSPythonModules
+  INSTALL_DESTINATION python_packages/scalehls_core/scalehls/_mlir_libs
+  OUTPUT_DIRECTORY "${SCALEHLS_PYTHON_PACKAGES_DIR}/scalehls_core/scalehls/_mlir_libs"
   RELATIVE_INSTALL_ROOT "../../../.."
+  DECLARED_HEADERS
+    MLIRPythonCAPI.HeaderSources
   DECLARED_SOURCES
     MLIRPythonSources
     MLIRPythonExtension.RegisterEverything
-    ScaleHLSBindingsPythonSources
-    ScaleHLSBindingsPythonExtension
-)
-
-# Bundle the MLIR python sources into our package.
-# The MLIR API is position independent, so we explicitly output it to the mlir/
-# folder as a temporary measure. It will eventually migrate under the scalehls/
-# folder and be accessible under the unified "import scalehls..." namespace.
-add_mlir_python_modules(ScaleHLSMLIRPythonModules
-  ROOT_PREFIX "${SCALEHLS_PYTHON_PACKAGES_DIR}/scalehls_core/mlir"
-  INSTALL_PREFIX "python_packages/scalehls_core/mlir"
-  DECLARED_SOURCES
-    MLIRPythonSources
-    MLIRPythonExtension.RegisterEverything
-    # We need the scalehls extensions co-located with the MLIR extensions. When
-    # the namespace is unified, this moves to the below.
-    ScaleHLSBindingsPythonExtension
-  COMMON_CAPI_LINK_LIBS
-    ScaleHLSBindingsPythonCAPI
-    MLIRPythonCAPI
+    ScaleHLSPythonSources
+    ScaleHLSPythonExtension
 )
 
 # Bundle the ScaleHLS python sources into our package.
 add_mlir_python_modules(ScaleHLSPythonModules
-  ROOT_PREFIX "${SCALEHLS_PYTHON_PACKAGES_DIR}/scalehls_core"
-  INSTALL_PREFIX "python_packages/scalehls_core"
+  ROOT_PREFIX "${SCALEHLS_PYTHON_PACKAGES_DIR}/scalehls_core/scalehls"
+  INSTALL_PREFIX "python_packages/scalehls_core/scalehls"
   DECLARED_SOURCES
-    ScaleHLSBindingsPythonSources
+    MLIRPythonSources
+    MLIRPythonExtension.RegisterEverything
+    ScaleHLSPythonSources
+    ScaleHLSPythonExtension
   COMMON_CAPI_LINK_LIBS
-    ScaleHLSBindingsPythonCAPI
+    ScaleHLSPythonCAPI
 )

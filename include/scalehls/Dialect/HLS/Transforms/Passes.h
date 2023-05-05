@@ -23,14 +23,15 @@ namespace mlir {
 namespace scalehls {
 namespace hls {
 
-void registerScaleHLSHLSTransformsPasses();
-
 std::unique_ptr<Pass> createEliminateBufferYieldPass();
 std::unique_ptr<Pass>
 createParameterizeDataflowTaskPass(unsigned defaultTileFactor = 32,
                                    unsigned defaultParallelFactor = 2);
 
 #define GEN_PASS_CLASSES
+#include "scalehls/Dialect/HLS/Transforms/Passes.h.inc"
+
+#define GEN_PASS_REGISTRATION
 #include "scalehls/Dialect/HLS/Transforms/Passes.h.inc"
 
 } // namespace hls

@@ -4,4 +4,4 @@
 #
 # ===----------------------------------------------------------------------=== #
 
-from mlir._mlir_libs._scalehls import *
+from ._mlir_libs._scalehls import *

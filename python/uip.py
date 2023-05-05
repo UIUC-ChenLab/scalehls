@@ -4,5 +4,4 @@
 #
 # ===----------------------------------------------------------------------=== #
 
-from mlir.dialects import transform
 from .dialects import hls

@@ -3,7 +3,7 @@ get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
 
 add_llvm_tool(scalehls-opt
   scalehls-opt.cpp
-  )
+)
 
 llvm_update_compile_flags(scalehls-opt)
 
@@ -20,4 +20,4 @@ target_link_libraries(scalehls-opt
 
   MLIRScaleHLSUtils
   MLIRScaleHLSTransforms
-  )
+)

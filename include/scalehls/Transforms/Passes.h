@@ -44,9 +44,10 @@ std::unique_ptr<Pass>
 createGenerateRuntimeFuncPass(std::string topFunc = "forward",
                               std::string runtimeFunc = "runtime");
 
-void registerScaleHLSTransformsPasses();
-
 #define GEN_PASS_CLASSES
+#include "scalehls/Transforms/Passes.h.inc"
+
+#define GEN_PASS_REGISTRATION
 #include "scalehls/Transforms/Passes.h.inc"
 
 } // namespace scalehls
