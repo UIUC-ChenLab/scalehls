@@ -20,10 +20,6 @@ using namespace mlir;
 using namespace mlir::python;
 using namespace mlir::python::adaptors;
 
-//===----------------------------------------------------------------------===//
-// ScaleHLS Python Module Definition
-//===----------------------------------------------------------------------===//
-
 PYBIND11_MODULE(_scalehls, m) {
   m.doc() = "ScaleHLS Python Native Extension";
   llvm::sys::PrintStackTraceOnErrorSignal(/*argv=*/"");

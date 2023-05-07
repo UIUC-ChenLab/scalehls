@@ -80,7 +80,7 @@ def ValueParamOp : HLSOp<"uip.value_param", [HasParent<"DeclareOp">]> {
   let results = (outs ValueParamType:$result);
 
   let assemblyFormat = [{
-    $name $kind (`candidates` $candidates^)?
+    $kind $name (`candidates` $candidates^)?
     (`range` `(` $args `)` $bounds `step` $step^)? attr-dict `:` type($result)
   }];
 
@@ -134,7 +134,7 @@ def PortOp : HLSOp<"uip.port", [HasParent<"DeclareOp">]> {
   let results = (outs PortType:$result);
 
   let assemblyFormat = [{
-    $name $direction `type` $type `indices` `(` $indices `)` $layout attr-dict
+    $direction $name `type` $type `indices` `(` $indices `)` $layout attr-dict
     `:` type($result)
   }];
 }

@@ -16,12 +16,54 @@ using namespace mlir;
 using namespace mlir::python;
 using namespace mlir::python::adaptors;
 
-//===----------------------------------------------------------------------===//
-// HLS Dialect Python Submodule Definition
-//===----------------------------------------------------------------------===//
-
 PYBIND11_MODULE(_hls_dialect, m) {
   m.doc() = "HLS Dialect Python Native Extension";
+
+  //===--------------------------------------------------------------------===//
+  // HLS Dialect Attributes Definition
+  //===--------------------------------------------------------------------===//
+
+  py::enum_<MlirValueParamKind>(m, "ValueParamKind", py::module_local())
+      .value("static", MlirValueParamKind::STATIC)
+      .value("dynamic", MlirValueParamKind::DYNAMIC);
+
+  auto valueParamKindAttr = mlir_attribute_subclass(
+      m, "ValueParamKindAttr", mlirAttrIsHLSValueParamKindAttr);
+  valueParamKindAttr.def_classmethod(
+      "get",
+      [](py::object cls, MlirValueParamKind kind, MlirContext ctx) {
+        return cls(mlirHLSValueParamKindAttrGet(ctx, kind));
+      },
+      "Get an instance of ValueParamKindAttr in given context.", py::arg("cls"),
+      py::arg("kind"), py::arg("context") = py::none());
+  valueParamKindAttr.def_property_readonly(
+      "value",
+      [](MlirAttribute attr) {
+        return mlirHLSValueParamKindAttrGetValue(attr);
+      },
+      "Returns the value of ValueParamKindAttr.");
+
+  py::enum_<MlirPortDirection>(m, "PortDirection", py::module_local())
+      .value("input", MlirPortDirection::INPUT)
+      .value("output", MlirPortDirection::OUTPUT);
+
+  auto PortDirectionAttr = mlir_attribute_subclass(
+      m, "PortDirectionAttr", mlirAttrIsHLSPortDirectionAttr);
+  PortDirectionAttr.def_classmethod(
+      "get",
+      [](py::object cls, MlirPortDirection direction, MlirContext ctx) {
+        return cls(mlirHLSPortDirectionAttrGet(ctx, direction));
+      },
+      "Get an instance of PortDirectionAttr in given context.", py::arg("cls"),
+      py::arg("direction"), py::arg("context") = py::none());
+  PortDirectionAttr.def_property_readonly(
+      "value",
+      [](MlirAttribute attr) { return mlirHLSPortDirectionAttrGetValue(attr); },
+      "Returns the value of PortDirectionAttr.");
+
+  //===--------------------------------------------------------------------===//
+  // HLS Dialect Types Definition
+  //===--------------------------------------------------------------------===//
 
   auto typeParamType =
       mlir_type_subclass(m, "TypeParamType", mlirTypeIsHLSTypeParamType);

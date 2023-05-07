@@ -52,7 +52,7 @@ def ParamOp : HLSOp<"dse.param", [Symbol, HasParent<"SpaceOp">]> {
   let results = (outs AnyType:$result);
 
   let assemblyFormat = [{
-    $sym_name $kind (`candidates` $candidates^)?
+    $kind $sym_name (`candidates` $candidates^)?
     (`range` `(` $args `)` $bounds `step` $step^)? attr-dict `:` type($result)
   }];
 

@@ -13,7 +13,15 @@
 extern "C" {
 #endif
 
+//===----------------------------------------------------------------------===//
+// HLS Dialect Operations
+//===----------------------------------------------------------------------===//
+
 MLIR_DECLARE_CAPI_DIALECT_REGISTRATION(HLS, hls);
+
+//===----------------------------------------------------------------------===//
+// HLS Dialect Types
+//===----------------------------------------------------------------------===//
 
 MLIR_CAPI_EXPORTED bool mlirTypeIsHLSTypeParamType(MlirType type);
 MLIR_CAPI_EXPORTED MlirType mlirHLSTypeParamTypeGet(MlirContext ctx);
@@ -29,6 +37,26 @@ MLIR_CAPI_EXPORTED MlirType mlirHLSIPIdentifierTypeGet(MlirContext ctx);
 
 MLIR_CAPI_EXPORTED bool mlirTypeIsHLSMemoryKindType(MlirType type);
 MLIR_CAPI_EXPORTED MlirType mlirHLSMemoryKindTypeGet(MlirContext ctx);
+
+//===----------------------------------------------------------------------===//
+// HLS Dialect Attributes
+//===----------------------------------------------------------------------===//
+
+enum class MlirValueParamKind : uint32_t { STATIC = 0, DYNAMIC = 1 };
+
+MLIR_CAPI_EXPORTED bool mlirAttrIsHLSValueParamKindAttr(MlirAttribute attr);
+MLIR_CAPI_EXPORTED MlirAttribute
+mlirHLSValueParamKindAttrGet(MlirContext ctx, MlirValueParamKind kind);
+MLIR_CAPI_EXPORTED MlirValueParamKind
+mlirHLSValueParamKindAttrGetValue(MlirAttribute attr);
+
+enum class MlirPortDirection : uint32_t { INPUT = 0, OUTPUT = 1 };
+
+MLIR_CAPI_EXPORTED bool mlirAttrIsHLSPortDirectionAttr(MlirAttribute attr);
+MLIR_CAPI_EXPORTED MlirAttribute
+mlirHLSPortDirectionAttrGet(MlirContext ctx, MlirPortDirection direction);
+MLIR_CAPI_EXPORTED MlirPortDirection
+mlirHLSPortDirectionAttrGetValue(MlirAttribute attr);
 
 #ifdef __cplusplus
 }
