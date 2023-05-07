@@ -63,8 +63,8 @@ def TaskOp : HLSOp<"fdf.task", [
 
   let assemblyFormat = [{
     (`tile` `(` $tile_factors^ `)`)? (`parallel` `(` $parallel_factors^ `)`)?
-    ($ip_identifier^ `:` type($ip_identifier))? attr-dict-with-keyword (`:`
-    type($results)^)? $body
+    (`ip` $ip_identifier^ `:` type($ip_identifier))? attr-dict-with-keyword
+    (`:` type($results)^)? $body
   }];
 
   let hasVerifier = 1;

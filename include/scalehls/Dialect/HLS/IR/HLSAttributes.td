@@ -74,15 +74,25 @@ def PartitionKindParam: EnumParameter<PartitionKind>;
 // UIP Attributes
 //===----------------------------------------------------------------------===//
 
-def IPLibraryParam: StringRefParameter<"Library of an IP">;
-def IPNameParam: StringRefParameter<"Name of an IP">;
+def IPLibraryParam: StringRefParameter<"Library of an IP"> {
+  let defaultValue = "\"\"";
+}
+def IPNameParam: StringRefParameter<"Name of an IP"> {
+  let defaultValue = "\"\"";
+}
 
 def IPIdentifierAttr : HLSAttr<"IPIdentifier"> {
   let summary = "Identifier of an IP";
   let parameters = (ins IPLibraryParam:$library, IPNameParam:$name);
   
   let mnemonic = "ip";
-  let assemblyFormat = "`<` $library `:` `:` $name `>`";
+  let assemblyFormat = "`<` $library `,` $name `>`";
+
+  let extraClassDeclaration = [{
+    bool isDefault() {
+      return getLibrary().empty() && getName().empty();
+    }
+  }];
 }
 
 def ValueParamKind: I32EnumAttr<"ValueParamKind", "Kind of a value parameter", [

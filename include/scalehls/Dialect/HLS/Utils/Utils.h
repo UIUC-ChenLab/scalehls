@@ -62,6 +62,9 @@ void setRuntimeAttr(Operation *op);
 // Transform Utils
 //===----------------------------------------------------------------------===//
 
+/// Get all IP declarations in the given module.
+SmallVector<DeclareOp> getIPDeclares(ModuleOp module);
+
 /// Find an existing space op for the given module. If there is no space op,
 /// create a new one. Return a nullptr if failed.
 SpaceOp getOrCreateGlobalSpaceOp(ModuleOp module);

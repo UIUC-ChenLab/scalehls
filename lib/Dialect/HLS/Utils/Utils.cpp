@@ -128,6 +128,15 @@ bool hls::hasRuntimeAttr(Operation *op) {
 // Transform Utils
 //===----------------------------------------------------------------------===//
 
+/// Get all IP declarations in the given module.
+SmallVector<DeclareOp> hls::getIPDeclares(ModuleOp module) {
+  SmallVector<DeclareOp> ipDeclares;
+  for (auto library : module.getOps<LibraryOp>())
+    for (auto declare : library.getOps<DeclareOp>())
+      ipDeclares.push_back(declare);
+  return ipDeclares;
+}
+
 /// Find an existing space op for the given function. If there is no space op,
 /// create a new one.
 SpaceOp hls::getOrCreateGlobalSpaceOp(ModuleOp module) {
