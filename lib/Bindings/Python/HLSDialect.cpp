@@ -16,13 +16,11 @@ using namespace mlir;
 using namespace mlir::python;
 using namespace mlir::python::adaptors;
 
-PYBIND11_MODULE(_hls_dialect, m) {
-  m.doc() = "HLS Dialect Python Native Extension";
+//===----------------------------------------------------------------------===//
+// HLS Dialect Attributes
+//===----------------------------------------------------------------------===//
 
-  //===--------------------------------------------------------------------===//
-  // HLS Dialect Attributes Definition
-  //===--------------------------------------------------------------------===//
-
+void populateHLSAttributes(py::module &m) {
   py::enum_<MlirValueParamKind>(m, "ValueParamKind", py::module_local())
       .value("static", MlirValueParamKind::STATIC)
       .value("dynamic", MlirValueParamKind::DYNAMIC);
@@ -60,10 +58,13 @@ PYBIND11_MODULE(_hls_dialect, m) {
       "value",
       [](MlirAttribute attr) { return mlirHLSPortDirectionAttrGetValue(attr); },
       "Returns the value of PortDirectionAttr.");
+}
 
-  //===--------------------------------------------------------------------===//
-  // HLS Dialect Types Definition
-  //===--------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
+// HLS Dialect Types
+//===----------------------------------------------------------------------===//
+
+void populateHLSTypes(py::module &m) {
 
   auto typeParamType =
       mlir_type_subclass(m, "TypeParamType", mlirTypeIsHLSTypeParamType);
@@ -113,4 +114,10 @@ PYBIND11_MODULE(_hls_dialect, m) {
       },
       "Get an instance of MemoryKindType in given context.", py::arg("cls"),
       py::arg("context") = py::none());
+}
+
+PYBIND11_MODULE(_hls_dialect, m) {
+  m.doc() = "HLS Dialect Python Native Extension";
+  populateHLSAttributes(m);
+  populateHLSTypes(m);
 }

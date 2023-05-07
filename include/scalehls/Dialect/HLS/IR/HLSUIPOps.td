@@ -51,11 +51,11 @@ def InstanceOp : HLSOp<"uip.instance", [AttrSizedOperandSegments,
 def TypeParamOp : HLSOp<"uip.type_param", [HasParent<"DeclareOp">]> {
   let summary = "Declare a type parameter of an IP";
 
-  let arguments = (ins OptionalAttr<TypeArrayAttr>:$candidates, StrAttr:$name);
+  let arguments = (ins TypeArrayAttr:$candidates, StrAttr:$name);
   let results = (outs TypeParamType:$result);
 
   let assemblyFormat = [{
-    $name (`candidates` $candidates^)? attr-dict `:` type($result)
+    $name `candidates` $candidates attr-dict `:` type($result)
   }];
 
   let builders = [
@@ -74,43 +74,46 @@ def TypeParamOp : HLSOp<"uip.type_param", [HasParent<"DeclareOp">]> {
 def ValueParamOp : HLSOp<"uip.value_param", [HasParent<"DeclareOp">]> {
   let summary = "Declare a value parameter of an IP";
 
-  let arguments = (ins Variadic<Index>:$args, OptionalAttr<IndexAttr>:$step,
-      OptionalAttr<AffineMapAttr>:$bounds, OptionalAttr<ArrayAttr>:$candidates,
-      ValueParamKindAttr:$kind, StrAttr:$name);
+  let arguments = (ins TypeParamType:$type, Variadic<Index>:$args,
+      OptionalAttr<IndexAttr>:$step, OptionalAttr<AffineMapAttr>:$bounds,
+      OptionalAttr<ArrayAttr>:$candidates, ValueParamKindAttr:$kind,
+      StrAttr:$name);
   let results = (outs ValueParamType:$result);
 
   let assemblyFormat = [{
-    $kind $name (`candidates` $candidates^)?
+    $kind $name `type` $type (`candidates` $candidates^)?
     (`range` `(` $args `)` $bounds `step` $step^)? attr-dict `:` type($result)
   }];
 
   let builders = [
     // Parameter builder constrained by candidates.
-    OpBuilder<(ins "mlir::ArrayAttr":$candidates, "ValueParamKind":$kind,
-        "std::string":$name), [{
+    OpBuilder<(ins "mlir::Value":$type, "mlir::ArrayAttr":$candidates,
+        "ValueParamKind":$kind, "std::string":$name), [{
           build($_builder, $_state, ValueParamType::get($_builder.getContext()),
-              {}, nullptr, nullptr, candidates,
+              type, {}, nullptr, nullptr, candidates,
               ValueParamKindAttr::get($_builder.getContext(), kind),
               $_builder.getStringAttr(name));
         }]>,
 
     // Parameter builder constrained by affine lower and upper bounds.
-    OpBuilder<(ins "mlir::ValueRange":$args, "unsigned":$step,
-        "mlir::AffineMap":$bounds, "ValueParamKind":$kind, "std::string":$name),
+    OpBuilder<(ins "mlir::Value":$type, "mlir::ValueRange":$args,
+        "unsigned":$step, "mlir::AffineMap":$bounds, "ValueParamKind":$kind,
+        "std::string":$name),
         [{
           build($_builder, $_state, ValueParamType::get($_builder.getContext()),
-              args, $_builder.getIndexAttr(step),
+              type, args, $_builder.getIndexAttr(step),
               mlir::AffineMapAttr::get(bounds), nullptr,
               ValueParamKindAttr::get($_builder.getContext(), kind),
               $_builder.getStringAttr(name));
         }]>,
-    OpBuilder<(ins "mlir::ValueRange":$args, "mlir::AffineMap":$bounds,
-        "ValueParamKind":$kind, "std::string":$name),
-        "build($_builder, $_state, args, 1, bounds, kind, name);">,
+    OpBuilder<(ins "mlir::Value":$type, "mlir::ValueRange":$args,
+        "mlir::AffineMap":$bounds, "ValueParamKind":$kind, "std::string":$name),
+        "build($_builder, $_state, type, args, 1, bounds, kind, name);">,
 
     // Parameter builder without constraints.
-    OpBuilder<(ins "ValueParamKind":$kind, "std::string":$name),
-        "build($_builder, $_state, nullptr, kind, name);">
+    OpBuilder<(ins "mlir::Value":$type, "ValueParamKind":$kind,
+        "std::string":$name),
+        "build($_builder, $_state, type, nullptr, kind, name);">
   ];
 
   let extraClassDeclaration = [{
@@ -128,8 +131,8 @@ def ValueParamOp : HLSOp<"uip.value_param", [HasParent<"DeclareOp">]> {
 def PortOp : HLSOp<"uip.port", [HasParent<"DeclareOp">]> {
   let summary = "Declare a port of an IP";
 
-  let arguments = (ins PortDirectionAttr:$direction, TypeParamType:$type,
-      Variadic<ValueParamType>:$indices, MemRefLayoutAttrInterface:$layout,
+  let arguments = (ins TypeParamType:$type, Variadic<ValueParamType>:$indices,
+      MemRefLayoutAttrInterface:$layout, PortDirectionAttr:$direction,
       StrAttr:$name);
   let results = (outs PortType:$result);
 
