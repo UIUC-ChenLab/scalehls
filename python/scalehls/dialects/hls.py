@@ -5,3 +5,4 @@
 # ===----------------------------------------------------------------------=== #
 
 from ._hls_ops_gen import *
+from .._mlir_libs._hls_dialect import *

@@ -12,7 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 def SpaceOp : HLSOp<"dse.space", [IsolatedFromAbove, NoTerminator, SymbolTable,
-      Symbol, ParentOneOf<["mlir::ModuleOp", "SpaceOp"]>]> {
+      Symbol, SingleBlock, ParentOneOf<["mlir::ModuleOp", "SpaceOp"]>]> {
   let summary = "Declare a design space";
   let description = [{
     SpaceOp declares a design space. The design space is a collection of

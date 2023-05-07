@@ -4,41 +4,24 @@
 //
 //===----------------------------------------------------------------------===//
 
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
-
 #include "IRModule.h"
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/Bindings/Python/PybindAdaptors.h"
-#include "mlir/CAPI/IR.h"
-#include "scalehls-c/Dialect/HLS/HLS.h"
 #include "scalehls-c/Registration.h"
 #include "scalehls-c/Translation/EmitHLSCpp.h"
-#include "scalehls/Dialect/HLS/IR/HLS.h"
 #include "llvm-c/ErrorHandling.h"
 #include "llvm/Support/Signals.h"
 
-#include <numpy/arrayobject.h>
 #include <pybind11/pybind11.h>
 
 namespace py = pybind11;
 
 using namespace mlir;
 using namespace mlir::python;
-using namespace scalehls;
+using namespace mlir::python::adaptors;
 
 //===----------------------------------------------------------------------===//
-// PybindUtils
-//===----------------------------------------------------------------------===//
-
-pybind11::error_already_set
-mlir::python::SetPyError(PyObject *excClass, const llvm::Twine &message) {
-  auto messageStr = message.str();
-  PyErr_SetString(excClass, messageStr.c_str());
-  return pybind11::error_already_set();
-}
-
-//===----------------------------------------------------------------------===//
-// ScaleHLS Python module definition
+// ScaleHLS Python Module Definition
 //===----------------------------------------------------------------------===//
 
 PYBIND11_MODULE(_scalehls, m) {

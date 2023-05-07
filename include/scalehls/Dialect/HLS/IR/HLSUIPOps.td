@@ -12,7 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 def LibraryOp : HLSOp<"uip.library", [IsolatedFromAbove, SymbolTable, Symbol,
-      NoTerminator, HasParent<"mlir::ModuleOp">]> {
+      NoTerminator, SingleBlock, HasParent<"mlir::ModuleOp">]> {
   let summary = "Declare a library of IPs";
 
   let arguments = (ins SymbolNameAttr:$sym_name);
@@ -21,7 +21,7 @@ def LibraryOp : HLSOp<"uip.library", [IsolatedFromAbove, SymbolTable, Symbol,
 }
 
 def DeclareOp : HLSOp<"uip.declare", [IsolatedFromAbove, Symbol, NoTerminator,
-      HasParent<"LibraryOp">]> {
+      SingleBlock, HasParent<"LibraryOp">]> {
   let summary = "Declare an IP";
   let description = [{
     DeclareOp declares an IP in the parent library. DeclareOp contains an region
@@ -147,7 +147,7 @@ def IncludeOp : HLSOp<"uip.include", [HasParent<"DeclareOp">]> {
 }
 
 def SemanticsOp : HLSOp<"uip.semantics", [HasParent<"DeclareOp">, NoTerminator,
-    ]> {
+    SingleBlock]> {
   let summary = "Declare the semantics of an IP";
 
   let regions = (region SizedRegion<1>:$body);

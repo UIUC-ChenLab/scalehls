@@ -1903,7 +1903,7 @@ using namespace std;
     if (auto func = dyn_cast<func::FuncOp>(op)) {
       if (!emittedFuncs.count(func) && !hasRuntimeAttr(func))
         emitFunction(func);
-    } else if (!isa<ml_program::GlobalOp>(op))
+    } else if (!isa<ml_program::GlobalOp, SpaceOp, LibraryOp>(op))
       emitError(&op, "is unsupported operation");
   }
 }
