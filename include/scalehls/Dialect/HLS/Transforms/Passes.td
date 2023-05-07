@@ -22,10 +22,15 @@ def ParameterizeDataflowTask :
 
   let options = [
     Option<"defaultTileFactor", "default-tile-factor", "unsigned",
-          /*default=*/"32", "Positive number">,
+           /*default=*/"32", "Positive number">,
     Option<"defaultParallelFactor", "default-parallel-factor", "unsigned",
-          /*default=*/"2", "Positive number">
+           /*default=*/"2", "Positive number">
   ];
+}
+
+def MatchIPCandidates : Pass<"scalehls-match-ip-candidates", "mlir::ModuleOp"> {
+  let summary = "Match IP candidates for each dataflow task";
+  let constructor = "mlir::scalehls::hls::createMatchIPCandidatesPass()";
 }
 
 #endif // SCALEHLS_DIALECT_HLS_TRANSFORMS_PASSES_TD
