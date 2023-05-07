@@ -20,8 +20,8 @@ def LibraryOp : HLSOp<"uip.library", [IsolatedFromAbove, SymbolTable, Symbol,
   let assemblyFormat = "$sym_name attr-dict-with-keyword $body";
 }
 
-def DeclareOp : HLSOp<"uip.declare", [IsolatedFromAbove, Symbol, NoTerminator,
-      SingleBlock, HasParent<"LibraryOp">]> {
+def DeclareOp : HLSOp<"uip.declare", [IsolatedFromAbove, Symbol, SingleBlock,
+      HasParent<"LibraryOp">]> {
   let summary = "Declare an IP";
   let description = [{
     DeclareOp declares an IP in the parent library. DeclareOp contains an region
@@ -145,16 +145,44 @@ def PortOp : HLSOp<"uip.port", [HasParent<"DeclareOp">]> {
 def IncludeOp : HLSOp<"uip.include", [HasParent<"DeclareOp">]> {
   let summary = "Declare a dependency of an IP";
 
-  let arguments = (ins StrAttr:$name);
-  let assemblyFormat = "$name attr-dict";
+  let arguments = (ins StrAttr:$path);
+  let assemblyFormat = "$path attr-dict";
 }
 
-def SemanticsOp : HLSOp<"uip.semantics", [HasParent<"DeclareOp">, NoTerminator,
-    SingleBlock]> {
+def SemanticsOp : HLSOp<"uip.semantics", [Terminator, IsolatedFromAbove,
+      AttrSizedOperandSegments, SingleBlockImplicitTerminator<"OutputOp">,
+      HasParent<"DeclareOp">]> {
   let summary = "Declare the semantics of an IP";
 
+  let arguments = (ins Variadic<PortType>:$inputs,
+      Variadic<PortType>:$outputs, Variadic<ValueParamType>:$params);
   let regions = (region SizedRegion<1>:$body);
-  let assemblyFormat = "attr-dict-with-keyword $body";
+  let assemblyFormat = [{
+    `(` $inputs `)` `->` `(` $outputs `)` (`[` $params^ `]`)? attr-dict `:`
+    functional-type($inputs, $outputs) (`[` type($params)^ `]`)? $body
+  }];
+
+  let extraClassDeclaration = [{
+    /// Initialize the block arguments. We create a tensor for each input and
+    /// output. The tensor type is determined by the corresponding port type.
+    void initializeBlockArguments();
+  }];
+}
+
+def OutputOp : HLSOp<"uip.output", [Terminator, AttrSizedOperandSegments,
+      ParentOneOf<["SemanticsOp"]>]> {
+  let summary = "Terminate and yield results of a semantics op";
+
+  let arguments = (ins Variadic<AnyType>:$sources, Variadic<AnyType>:$targets);
+  let assemblyFormat = [{
+    $sources `->` $targets attr-dict `:` functional-type($sources, $targets)
+  }];
+
+  let builders = [
+    OpBuilder<(ins), [{
+      build($_builder, $_state, ValueRange({}), ValueRange({}));
+    }]>
+  ];
 }
 
 #endif // SCALEHLS_DIALECT_HLS_HLSOPSUIP_TD

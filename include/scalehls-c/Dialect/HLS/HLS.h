@@ -19,6 +19,9 @@ extern "C" {
 
 MLIR_DECLARE_CAPI_DIALECT_REGISTRATION(HLS, hls);
 
+MLIR_CAPI_EXPORTED void
+mlirSemanticsInitializeBlockArguments(MlirOperation semantics);
+
 //===----------------------------------------------------------------------===//
 // HLS Dialect Types
 //===----------------------------------------------------------------------===//

@@ -18,6 +18,12 @@ using namespace hls;
 
 MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(HLS, hls, hls::HLSDialect)
 
+void mlirSemanticsInitializeBlockArguments(MlirOperation semantics) {
+  auto op = dyn_cast<SemanticsOp>(unwrap(semantics));
+  assert(op && "expected a semantics op");
+  op.initializeBlockArguments();
+}
+
 //===----------------------------------------------------------------------===//
 // HLS Dialect Types
 //===----------------------------------------------------------------------===//

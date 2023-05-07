@@ -118,6 +118,10 @@ void populateHLSTypes(py::module &m) {
 
 PYBIND11_MODULE(_hls_dialect, m) {
   m.doc() = "HLS Dialect Python Native Extension";
+
+  m.def("semantics_init_args", mlirSemanticsInitializeBlockArguments,
+        py::arg("semantics"));
+
   populateHLSAttributes(m);
   populateHLSTypes(m);
 }

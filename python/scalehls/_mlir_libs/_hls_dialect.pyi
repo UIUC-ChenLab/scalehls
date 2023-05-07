@@ -19,7 +19,8 @@ __all__ = [
     "TypeParamType",
     "ValueParamKind",
     "ValueParamKindAttr",
-    "ValueParamType"
+    "ValueParamType",
+    "semantics_init_args"
 ]
 
 
@@ -90,4 +91,8 @@ class ValueParamKind():
     __members__: dict  # value = {'static': <ValueParamKind.static: 0>, 'dynamic': <ValueParamKind.dynamic: 1>}
     dynamic: _hls_dialect.ValueParamKind  # value = <ValueParamKind.dynamic: 1>
     static: _hls_dialect.ValueParamKind  # value = <ValueParamKind.static: 0>
+    pass
+
+
+def semantics_init_args(semantics: MlirOperation) -> None:
     pass
