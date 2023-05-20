@@ -191,7 +191,6 @@ def RequireOp : HLSOp<"dse.require", [NoMemoryEffect,
 
   let hasVerifier = 1;
   let extraClassDeclaration = [{
-    /// Get the terminator condition op.
     ConditionOp getConditionOp();
   }];
 }
@@ -219,9 +218,6 @@ def ConditionOp : HLSOp<"dse.condition", [NoMemoryEffect, Terminator,
   // let hasCustomAssemblyFormat = 1;
   let hasVerifier = 1;
   let extraClassDeclaration = [{
-    /// Get the parent require op.
-    RequireOp getRequireOp();
-    
     static StringRef getConditionAttrStrName() { return "condition"; }
 
     IntegerSet getIntegerSet();
@@ -229,6 +225,8 @@ def ConditionOp : HLSOp<"dse.condition", [NoMemoryEffect, Terminator,
 
     /// Sets the integer set with its operands.
     void setConditional(IntegerSet set, ValueRange operands);
+
+    RequireOp getRequireOp();
   }];
 }
 

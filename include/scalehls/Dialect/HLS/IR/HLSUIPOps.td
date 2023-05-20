@@ -32,6 +32,10 @@ def DeclareOp : HLSOp<"uip.declare", [IsolatedFromAbove, Symbol, SingleBlock,
   let arguments = (ins SymbolNameAttr:$sym_name);
   let regions = (region SizedRegion<1>:$meta);
   let assemblyFormat = "$sym_name attr-dict-with-keyword $meta";
+
+  let extraClassDeclaration = [{
+    SemanticsOp getSemanticsOp();
+  }];
 }
 
 def InstanceOp : HLSOp<"uip.instance", [AttrSizedOperandSegments,
@@ -150,8 +154,8 @@ def IncludeOp : HLSOp<"uip.include", [HasParent<"DeclareOp">]> {
 }
 
 def SemanticsOp : HLSOp<"uip.semantics", [Terminator, IsolatedFromAbove,
-      AttrSizedOperandSegments, SingleBlockImplicitTerminator<"OutputOp">,
-      HasParent<"DeclareOp">]> {
+      AttrSizedOperandSegments, HasParent<"DeclareOp">,
+      SingleBlockImplicitTerminator<"SemanticsOutputOp">]> {
   let summary = "Declare the semantics of an IP";
 
   let arguments = (ins Variadic<PortType>:$inputs,
@@ -166,11 +170,18 @@ def SemanticsOp : HLSOp<"uip.semantics", [Terminator, IsolatedFromAbove,
     /// Initialize the block arguments. We create a tensor for each input and
     /// output. The tensor type is determined by the corresponding port type.
     void initializeBlockArguments();
+
+    /// Get the immediate included linalg op. Will return nullptr if there is no
+    /// such linalg op or more than one linalg op.
+    linalg::LinalgOp getSemanticsLinalgOp();
+
+    DeclareOp getDeclareOp();
+    SemanticsOutputOp getSemanticsOutputOp();
   }];
 }
 
-def OutputOp : HLSOp<"uip.output", [Terminator, AttrSizedOperandSegments,
-      ParentOneOf<["SemanticsOp"]>]> {
+def SemanticsOutputOp : HLSOp<"uip.semantics.output", [Terminator,
+      AttrSizedOperandSegments, HasParent<"SemanticsOp">]> {
   let summary = "Terminate and yield results of a semantics op";
 
   let arguments = (ins Variadic<AnyType>:$sources, Variadic<AnyType>:$targets);
@@ -183,6 +194,9 @@ def OutputOp : HLSOp<"uip.output", [Terminator, AttrSizedOperandSegments,
       build($_builder, $_state, ValueRange({}), ValueRange({}));
     }]>
   ];
+  let extraClassDeclaration = [{
+    SemanticsOp getSemanticsOp();
+  }];
 }
 
 #endif // SCALEHLS_DIALECT_HLS_HLSOPSUIP_TD

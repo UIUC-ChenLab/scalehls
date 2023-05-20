@@ -96,9 +96,6 @@ def NodeOp : HLSOp<"sdf.node", [
   ];
 
   let extraClassDeclaration = [{
-    /// Get the parent schedule op.
-    ScheduleOp getScheduleOp();
-
     /// Get input taps.
     void setInputTap(unsigned idx, unsigned tap);
     unsigned getInputTap(unsigned idx);
@@ -124,6 +121,8 @@ def NodeOp : HLSOp<"sdf.node", [
 
     /// Update the signature of the node op recursively.
     void updateSignatureRecursively();
+
+    ScheduleOp getScheduleOp();
   }];
 }
 

@@ -29,7 +29,6 @@ def DispatchOp : HLSOp<"fdf.dispatch", [RecursiveMemoryEffects,
   let hasCanonicalizer = 1;
 
   let extraClassDeclaration = [{
-    /// Get the terminator yield op.
     YieldOp getYieldOp();
   }];
 }
@@ -71,12 +70,6 @@ def TaskOp : HLSOp<"fdf.task", [
   let hasCanonicalizer = 1;
 
   let extraClassDeclaration = [{
-    /// Get the parent dispatch op.
-    DispatchOp getDispatchOp();
-
-    /// Get the terminator yield op.
-    YieldOp getYieldOp();
-
     /// Return true if this task op contains nested sub-tasks.
     bool hasHierarchy() {
       return cast<ContainerLikeInterface>(this->getOperation()).hasHierarchy();
@@ -85,6 +78,9 @@ def TaskOp : HLSOp<"fdf.task", [
     /// Get the immediate included linalg op. Will return nullptr if there is no
     /// such linalg op or more than one linalg op.
     linalg::LinalgOp getPayloadLinalgOp();
+
+    DispatchOp getDispatchOp();
+    YieldOp getYieldOp();
   }];
 }
 

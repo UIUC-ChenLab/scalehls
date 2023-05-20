@@ -89,8 +89,14 @@ def IPIdentifierAttr : HLSAttr<"IPIdentifier"> {
   let assemblyFormat = "`<` $library `,` $name `>`";
 
   let extraClassDeclaration = [{
-    bool isDefault() {
+    bool isDefaultImpl() {
       return getLibrary().empty() && getName().empty();
+    }
+    SymbolRefAttr getSymbolRef() {
+      if (isDefaultImpl())
+        return nullptr;
+      return SymbolRefAttr::get(StringAttr::get(getContext(), getLibrary()),
+          {FlatSymbolRefAttr::get(getContext(), getName())});
     }
   }];
 }
