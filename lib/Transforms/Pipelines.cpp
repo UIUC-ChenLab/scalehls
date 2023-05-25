@@ -61,20 +61,20 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         // FDF-level transformation.
         pm.addNestedPass<func::FuncOp>(
             scalehls::createConvertLinalgToFDFPass());
-        pm.addPass(hls::createParameterizeDataflowTaskPass());
-        pm.addPass(hls::createMatchIPCandidatesPass());
-        // addComprehensiveBufferizePasses(pm);
-        // pm.addNestedPass<func::FuncOp>(hls::createEliminateBufferYieldPass());
-        // pm.addPass(mlir::createCanonicalizerPass());
+        // pm.addPass(hls::createParameterizeDataflowTaskPass());
+        // pm.addPass(hls::createMatchIPCandidatesPass());
+        addComprehensiveBufferizePasses(pm);
+        pm.addNestedPass<func::FuncOp>(hls::createEliminateBufferYieldPass());
+        pm.addPass(mlir::createCanonicalizerPass());
 
-        // // SDF-level transformation.
-        // pm.addNestedPass<func::FuncOp>(scalehls::createConvertFDFToSDFPass());
-        // pm.addPass(mlir::createCanonicalizerPass());
+        // SDF-level transformation.
+        pm.addNestedPass<func::FuncOp>(scalehls::createConvertFDFToSDFPass());
+        pm.addPass(mlir::createCanonicalizerPass());
 
-        // // Func-level transformation.
-        // pm.addPass(scalehls::createConvertSDFToFuncPass());
-        // pm.addPass(scalehls::createGenerateRuntimeFuncPass());
-        // addLowerLinalgToAffinePasses(pm);
+        // Func-level transformation.
+        pm.addPass(scalehls::createConvertSDFToFuncPass());
+        pm.addPass(scalehls::createGenerateRuntimeFuncPass());
+        addLowerLinalgToAffinePasses(pm);
       });
 }
 

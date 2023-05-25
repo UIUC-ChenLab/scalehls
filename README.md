@@ -52,28 +52,8 @@ $ ./build-scalehls.sh
 
 After the build, we suggest to export the following paths.
 ```sh
-$ export PATH=$PATH:$PWD/build/bin:$PWD/polygeist/build/bin
+$ export PATH=$PATH:$PWD/build/bin
 $ export PYTHONPATH=$PYTHONPATH:$PWD/build/tools/scalehls/python_packages/scalehls_core
-```
-
-## Compiling HLS C/C++ 
-To optimize C/C++ kernels with the design space exploration (DSE) engine, run:
-```sh
-$ cd samples/polybench/gemm
-
-$ # Parse C/C++ kernel into MLIR.
-$ cgeist test_gemm.c -function=test_gemm -S \
-    -memref-fullrank -raise-scf-to-affine > test_gemm.mlir
-
-$ # Launch the DSE and emit the optimized design as C++ code.
-$ scalehls-opt test_gemm.mlir -debug-only=scalehls \
-    -scalehls-dse-pipeline="top-func=test_gemm target-spec=../config.json" \
-    | scalehls-translate -scalehls-emit-hlscpp > test_gemm_dse.cpp
-```
-
-If Python binding is enabled, we provide a `pyscalehls` tool to showcase the `scalehls` Python library:
-```sh
-$ pyscalehls.py test_gemm.c -f test_gemm > test_gemm_pyscalehls.cpp
 ```
 
 ## Compiling PyTorch Model
@@ -87,21 +67,6 @@ $ pip install --pre torch-mlir torchvision -f https://llvm.github.io/torch-mlir/
 
 Once Torch-MLIR is installed, you should be able to run the following test:
 ```sh
-$ cd samples/pytorch/resnet18
-
-$ # Parse PyTorch model to LinAlg dialect (with Torch-MLIR mlir_venv activated).
-$ python3 resnet18.py > resnet18.mlir
-
-$ # Optimize the model and emit C++ code.
-$ scalehls-opt resnet18.mlir \
-    -scaleflow-pytorch-pipeline="top-func=forward loop-tile-size=8 loop-unroll-factor=4" \
+$ scalehls-opt resnet18.mlir -scaleflow-pytorch-pipeline \
     | scalehls-translate -scalehls-emit-hlscpp > resnet18.cpp
 ```
-
-## Repository Layout
-The project follows the conventions of typical MLIR-based projects:
-- `include/scalehls` and `lib` for C++ MLIR dialects/passes.
-- `polygeist` for the C/C++ front-end.
-- `samples` for C/C++ and PyTorch examples.
-- `test` for holding regression tests.
-- `tools` for command line tools.
