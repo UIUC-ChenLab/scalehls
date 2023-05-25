@@ -38,8 +38,7 @@ def AnyBufferOrStream : Type<Or<[AnyBuffer.predicate, AnyStream.predicate]>,
 //===----------------------------------------------------------------------===//
 
 include "scalehls/Dialect/HLS/IR/HLSDSEOps.td"
-include "scalehls/Dialect/HLS/IR/HLSFDFOps.td"
-include "scalehls/Dialect/HLS/IR/HLSSDFOps.td"
+include "scalehls/Dialect/HLS/IR/HLSDataflowOps.td"
 include "scalehls/Dialect/HLS/IR/HLSUBUFOps.td"
 include "scalehls/Dialect/HLS/IR/HLSUIPOps.td"
 

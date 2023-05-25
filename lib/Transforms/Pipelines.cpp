@@ -53,26 +53,26 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
       "scalehls-pytorch-pipeline",
       "Compile from Torch-MLIR (Linalg) to HLS C++",
       [](OpPassManager &pm, const ScaleHLSPyTorchPipelineOptions &opts) {
-        // Linalg-level transformation.
+        // Linalg transformation.
         pm.addPass(mlir::createConvertTensorToLinalgPass());
         pm.addPass(mlir::createLinalgElementwiseOpFusionPass());
         pm.addPass(bufferization::createEmptyTensorEliminationPass());
 
-        // FDF-level transformation.
+        // Functional dataflow transformation.
         pm.addNestedPass<func::FuncOp>(
-            scalehls::createConvertLinalgToFDFPass());
-        // pm.addPass(hls::createParameterizeDataflowTaskPass());
-        // pm.addPass(hls::createMatchIPCandidatesPass());
+            scalehls::createConvertLinalgToDataflowPass());
+        pm.addPass(hls::createParameterizeTileParallelFactorPass());
+        pm.addPass(hls::createParameterizeIPCandidatePass());
         addComprehensiveBufferizePasses(pm);
         pm.addNestedPass<func::FuncOp>(hls::createEliminateBufferYieldPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
-        // SDF-level transformation.
-        pm.addNestedPass<func::FuncOp>(scalehls::createConvertFDFToSDFPass());
+        // Structural dataflow transformation.
+        pm.addNestedPass<func::FuncOp>(hls::createLowerDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
-        // Func-level transformation.
-        pm.addPass(scalehls::createConvertSDFToFuncPass());
+        // Function transformation.
+        pm.addPass(scalehls::createConvertDataflowToFuncPass());
         pm.addPass(scalehls::createGenerateRuntimeFuncPass());
         addLowerLinalgToAffinePasses(pm);
       });

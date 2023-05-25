@@ -26,9 +26,8 @@ namespace scalehls {
 // Conversion Passes
 //===----------------------------------------------------------------------===//
 
-std::unique_ptr<Pass> createConvertLinalgToFDFPass();
-std::unique_ptr<Pass> createConvertFDFToSDFPass();
-std::unique_ptr<Pass> createConvertSDFToFuncPass();
+std::unique_ptr<Pass> createConvertLinalgToDataflowPass();
+std::unique_ptr<Pass> createConvertDataflowToFuncPass();
 
 //===----------------------------------------------------------------------===//
 // Transform Passes

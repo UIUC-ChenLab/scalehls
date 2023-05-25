@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_DIALECT_HLS_HLSOPSUIP_TD
-#define SCALEHLS_DIALECT_HLS_HLSOPSUIP_TD
+#ifndef SCALEHLS_DIALECT_HLS_HLSUIPOPS_TD
+#define SCALEHLS_DIALECT_HLS_HLSUIPOPS_TD
 
 //===----------------------------------------------------------------------===//
 // Unified IP (UIP) Operations
@@ -199,4 +199,4 @@ def SemanticsOutputOp : HLSOp<"uip.semantics.output", [Terminator,
   }];
 }
 
-#endif // SCALEHLS_DIALECT_HLS_HLSOPSUIP_TD
+#endif // SCALEHLS_DIALECT_HLS_HLSUIPOPS_TD

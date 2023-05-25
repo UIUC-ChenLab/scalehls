@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_DIALECT_HLS_HLSOPSDSE_TD
-#define SCALEHLS_DIALECT_HLS_HLSOPSDSE_TD
+#ifndef SCALEHLS_DIALECT_HLS_HLSDSEOPS_TD
+#define SCALEHLS_DIALECT_HLS_HLSDSEOPS_TD
 
 //===----------------------------------------------------------------------===//
 // Design Space Exploration (DSE) Operations
@@ -230,4 +230,4 @@ def ConditionOp : HLSOp<"dse.condition", [NoMemoryEffect, Terminator,
   }];
 }
 
-#endif // SCALEHLS_DIALECT_HLS_HLSOPSDSE_TD
+#endif // SCALEHLS_DIALECT_HLS_HLSDSEOPS_TD

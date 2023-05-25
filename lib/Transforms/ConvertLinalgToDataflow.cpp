@@ -69,7 +69,8 @@ struct DispatchFuncOp : public OpRewritePattern<func::FuncOp> {
 } // namespace
 
 namespace {
-struct ConvertLinalgToFDF : public ConvertLinalgToFDFBase<ConvertLinalgToFDF> {
+struct ConvertLinalgToDataflow
+    : public ConvertLinalgToDataflowBase<ConvertLinalgToDataflow> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -93,6 +94,6 @@ struct ConvertLinalgToFDF : public ConvertLinalgToFDFBase<ConvertLinalgToFDF> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createConvertLinalgToFDFPass() {
-  return std::make_unique<ConvertLinalgToFDF>();
+std::unique_ptr<Pass> scalehls::createConvertLinalgToDataflowPass() {
+  return std::make_unique<ConvertLinalgToDataflow>();
 }

@@ -90,7 +90,8 @@ private:
 } // namespace
 
 namespace {
-struct ConvertSDFToFunc : public ConvertSDFToFuncBase<ConvertSDFToFunc> {
+struct ConvertDataflowToFunc
+    : public ConvertDataflowToFuncBase<ConvertDataflowToFunc> {
   void runOnOperation() override {
     auto module = getOperation();
     auto context = module.getContext();
@@ -107,6 +108,6 @@ struct ConvertSDFToFunc : public ConvertSDFToFuncBase<ConvertSDFToFunc> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createConvertSDFToFuncPass() {
-  return std::make_unique<ConvertSDFToFunc>();
+std::unique_ptr<Pass> scalehls::createConvertDataflowToFuncPass() {
+  return std::make_unique<ConvertDataflowToFunc>();
 }

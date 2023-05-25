@@ -20,12 +20,12 @@ using namespace hls;
 
 /// A map holding the possible equivalences between a value in a dataflow and a
 /// set of values in another dataflow.
-using MaybeEquivalenceMap =
+using PossibleEquivalenceMap =
     llvm::SmallDenseMap<Value, llvm::SmallDenseSet<Value>>;
 
 /// Recursively check the equivalence between two values. Note we don't consider
 /// associativity in the current implementation.
-static bool checkEquivalence(Value a, Value b, MaybeEquivalenceMap &map) {
+static bool checkEquivalence(Value a, Value b, PossibleEquivalenceMap &map) {
   // If a and b are both block argument, they may be equivalent. If only one of
   // a and b is block argument, they cannot be equivalent.
   if (a.isa<BlockArgument>() && b.isa<BlockArgument>())
@@ -105,7 +105,7 @@ static LogicalResult matchLinalgPayloads(linalg::LinalgOp a,
   assert(succeeded(matchLinalgNumPorts(a, b)) &&
          "invalid input or output port number");
 
-  MaybeEquivalenceMap valueMap;
+  PossibleEquivalenceMap valueMap;
   for (auto resultA : a.getBlock()->getTerminator()->getOperands()) {
     unsigned numMatched = 0;
     for (auto resultB : b.getBlock()->getTerminator()->getOperands())
@@ -117,11 +117,11 @@ static LogicalResult matchLinalgPayloads(linalg::LinalgOp a,
 }
 
 namespace {
-struct MatchIPCandidatesPattern : public OpRewritePattern<TaskOp> {
-  MatchIPCandidatesPattern(MLIRContext *context, Block *spaceBlock,
-                           StringRef spaceName,
-                           const SmallVector<DeclareOp> &ipDeclares,
-                           unsigned &taskIdx)
+struct ParameterizeIPCandidatePattern : public OpRewritePattern<TaskOp> {
+  ParameterizeIPCandidatePattern(MLIRContext *context, Block *spaceBlock,
+                                 StringRef spaceName,
+                                 const SmallVector<DeclareOp> &ipDeclares,
+                                 unsigned &taskIdx)
       : OpRewritePattern<TaskOp>(context), spaceBlock(spaceBlock),
         spaceName(spaceName), ipDeclares(ipDeclares), taskIdx(taskIdx) {}
 
@@ -194,7 +194,8 @@ private:
 } // namespace
 
 namespace {
-struct MatchIPCandidates : public MatchIPCandidatesBase<MatchIPCandidates> {
+struct ParameterizeIPCandidate
+    : public ParameterizeIPCandidateBase<ParameterizeIPCandidate> {
   void runOnOperation() override {
     auto module = getOperation();
     auto context = module.getContext();
@@ -212,14 +213,14 @@ struct MatchIPCandidates : public MatchIPCandidatesBase<MatchIPCandidates> {
     SmallVector<TaskOp, 32> tasks;
     module.walk([&](TaskOp op) { tasks.push_back(op); });
 
-    // Tile each task in the module. Note we don't use the greedy pattern driver
-    // here because the tiling will generated hierarchy, which we don't want to
-    // recursively delve into.
+    // Parameterize each dataflow task in the module. Note we don't use the
+    // greedy pattern driver here because the tiling will generated hierarchy,
+    // which we don't want to recursively delve into.
     unsigned taskIdx = 0;
     mlir::RewritePatternSet patterns(context);
-    patterns.add<MatchIPCandidatesPattern>(context, &space.getBody().front(),
-                                           space.getName(), ipDeclares,
-                                           taskIdx);
+    patterns.add<ParameterizeIPCandidatePattern>(
+        context, &space.getBody().front(), space.getName(), ipDeclares,
+        taskIdx);
     FrozenRewritePatternSet frozenPatterns(std::move(patterns));
     for (auto task : tasks)
       if (failed(applyOpPatternsAndFold({task}, frozenPatterns)))
@@ -228,6 +229,6 @@ struct MatchIPCandidates : public MatchIPCandidatesBase<MatchIPCandidates> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::hls::createMatchIPCandidatesPass() {
-  return std::make_unique<MatchIPCandidates>();
+std::unique_ptr<Pass> scalehls::hls::createParameterizeIPCandidatePass() {
+  return std::make_unique<ParameterizeIPCandidate>();
 }

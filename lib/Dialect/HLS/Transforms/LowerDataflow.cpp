@@ -7,8 +7,8 @@
 #include "mlir/Analysis/Liveness.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "scalehls/Dialect/HLS/Transforms/Passes.h"
 #include "scalehls/Dialect/HLS/Utils/Utils.h"
-#include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -145,7 +145,7 @@ struct ConvertConstantToConstBuffer
 } // namespace
 
 namespace {
-struct ConvertFDFToSDF : public ConvertFDFToSDFBase<ConvertFDFToSDF> {
+struct LowerDataflow : public LowerDataflowBase<LowerDataflow> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -179,6 +179,6 @@ struct ConvertFDFToSDF : public ConvertFDFToSDFBase<ConvertFDFToSDF> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createConvertFDFToSDFPass() {
-  return std::make_unique<ConvertFDFToSDF>();
+std::unique_ptr<Pass> scalehls::hls::createLowerDataflowPass() {
+  return std::make_unique<LowerDataflow>();
 }

@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_DIALECT_HLS_HLSOPSUBUF_TD
-#define SCALEHLS_DIALECT_HLS_HLSOPSUBUF_TD
+#ifndef SCALEHLS_DIALECT_HLS_HLSUBUFOPS_TD
+#define SCALEHLS_DIALECT_HLS_HLSUBUFOPS_TD
 
 //===----------------------------------------------------------------------===//
 // Unified Buffer (UBUF) Operations
@@ -132,4 +132,4 @@ def BufferDevectorizeOp : HLSOp<"buffer_devectorize", [ViewLikeOpInterface,
   }];
 }
 
-#endif // SCALEHLS_DIALECT_HLS_HLSOPSUBUF_TD
+#endif // SCALEHLS_DIALECT_HLS_HLSUBUFOPS_TD

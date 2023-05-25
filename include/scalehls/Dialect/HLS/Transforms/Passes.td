@@ -15,10 +15,15 @@ def EliminateBufferYield :
   let constructor = "mlir::scalehls::hls::createEliminateBufferYieldPass()";
 }
 
-def ParameterizeDataflowTask :
-    Pass<"scalehls-parameterize-dataflow-task", "mlir::ModuleOp"> {
-  let summary = "Parameterize dataflow tasks";
-  let constructor = "mlir::scalehls::hls::createParameterizeDataflowTaskPass()";
+def LowerDataflow : Pass<"scalehls-lower-dataflow", "func::FuncOp"> {
+  let summary = "Convert functional to structural dataflow";
+  let constructor = "mlir::scalehls::hls::createLowerDataflowPass()";
+}
+
+def ParameterizeTileParallelFactor :
+    Pass<"scalehls-parameterize-tile-parallel-factor", "mlir::ModuleOp"> {
+  let summary = "Parameterize tile and parallel factor for each dataflow task";
+  let constructor = "mlir::scalehls::hls::createParameterizeTileParallelFactorPass()";
 
   let options = [
     Option<"defaultTileFactor", "default-tile-factor", "unsigned",
@@ -28,9 +33,10 @@ def ParameterizeDataflowTask :
   ];
 }
 
-def MatchIPCandidates : Pass<"scalehls-match-ip-candidates", "mlir::ModuleOp"> {
-  let summary = "Match IP candidates for each dataflow task";
-  let constructor = "mlir::scalehls::hls::createMatchIPCandidatesPass()";
+def ParameterizeIPCandidate :
+    Pass<"scalehls-parameterize-ip-candidates", "mlir::ModuleOp"> {
+  let summary = "Paremterize matched IP candidates for each dataflow task";
+  let constructor = "mlir::scalehls::hls::createParameterizeIPCandidatePass()";
 }
 
 #endif // SCALEHLS_DIALECT_HLS_TRANSFORMS_PASSES_TD

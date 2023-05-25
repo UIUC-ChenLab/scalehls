@@ -16,9 +16,9 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-struct ParameterizeDataflowTaskPattern : public OpRewritePattern<TaskOp> {
-  ParameterizeDataflowTaskPattern(MLIRContext *context, Block *spaceBlock,
-                                  StringRef spaceName, unsigned &taskIdx)
+struct ParameterizeTileParallelFactorPattern : public OpRewritePattern<TaskOp> {
+  ParameterizeTileParallelFactorPattern(MLIRContext *context, Block *spaceBlock,
+                                        StringRef spaceName, unsigned &taskIdx)
       : OpRewritePattern<TaskOp>(context), spaceBlock(spaceBlock),
         spaceName(spaceName), taskIdx(taskIdx) {}
 
@@ -76,8 +76,9 @@ private:
 } // namespace
 
 namespace {
-struct ParameterizeDataflowTask
-    : public ParameterizeDataflowTaskBase<ParameterizeDataflowTask> {
+struct ParameterizeTileParallelFactor
+    : public ParameterizeTileParallelFactorBase<
+          ParameterizeTileParallelFactor> {
   void runOnOperation() override {
     auto module = getOperation();
     auto context = module.getContext();
@@ -92,12 +93,12 @@ struct ParameterizeDataflowTask
     SmallVector<TaskOp, 32> tasks;
     module.walk([&](TaskOp op) { tasks.push_back(op); });
 
-    // Tile each task in the module. Note we don't use the greedy pattern driver
-    // here because the tiling will generated hierarchy, which we don't want to
-    // recursively delve into.
+    // Parameterize each dataflow task in the module. Note we don't use the
+    // greedy pattern driver here because the tiling will generated hierarchy,
+    // which we don't want to recursively delve into.
     unsigned taskIdx = 0;
     mlir::RewritePatternSet patterns(context);
-    patterns.add<ParameterizeDataflowTaskPattern>(
+    patterns.add<ParameterizeTileParallelFactorPattern>(
         context, &space.getBody().front(), space.getName(), taskIdx);
     FrozenRewritePatternSet frozenPatterns(std::move(patterns));
     for (auto task : tasks)
@@ -107,7 +108,7 @@ struct ParameterizeDataflowTask
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::hls::createParameterizeDataflowTaskPass(
+std::unique_ptr<Pass> scalehls::hls::createParameterizeTileParallelFactorPass(
     unsigned defaultTileFactor, unsigned defaultParallelFactor) {
-  return std::make_unique<ParameterizeDataflowTask>();
+  return std::make_unique<ParameterizeTileParallelFactor>();
 }
