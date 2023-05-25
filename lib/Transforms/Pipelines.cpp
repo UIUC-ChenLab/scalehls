@@ -37,6 +37,7 @@ static void addComprehensiveBufferizePasses(OpPassManager &pm) {
 
 static void addLowerLinalgToAffinePasses(OpPassManager &pm) {
   pm.addNestedPass<func::FuncOp>(mlir::createConvertLinalgToAffineLoopsPass());
+  pm.addNestedPass<func::FuncOp>(scalehls::createLowerCopyToAffineLoopsPass());
   pm.addPass(memref::createFoldMemRefAliasOpsPass());
   pm.addNestedPass<func::FuncOp>(affine::createAffineLoopNormalizePass());
   pm.addNestedPass<func::FuncOp>(affine::createSimplifyAffineStructuresPass());

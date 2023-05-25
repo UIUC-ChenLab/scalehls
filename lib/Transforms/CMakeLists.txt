@@ -3,6 +3,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   ConvertDataflowToFunc.cpp
   ComprehensiveBufferize.cpp
   GenerateRuntimeFunc.cpp
+  LowerCopyToAffineLoops.cpp
   Pipelines.cpp
 
   DEPENDS

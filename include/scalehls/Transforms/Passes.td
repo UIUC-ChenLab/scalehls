@@ -35,6 +35,12 @@ def ComprehensiveBufferize :
   let constructor = "mlir::scalehls::createComprehensiveBufferizePass()";
 }
 
+def LowerCopyToAffineLoops :
+    Pass<"scalehls-lower-copy-to-affine-loops", "func::FuncOp"> {
+  let summary = "Convert memref copy to affine loops";
+  let constructor = "mlir::scalehls::createLowerCopyToAffineLoopsPass()";
+}
+
 def GenerateRuntimeFunc :
     Pass<"scalehls-generate-runtime-func", "mlir::ModuleOp"> {
   let summary = "Outline the top function for HLS";

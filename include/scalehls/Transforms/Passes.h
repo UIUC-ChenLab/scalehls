@@ -42,6 +42,7 @@ std::unique_ptr<Pass> createComprehensiveBufferizePass(
 std::unique_ptr<Pass>
 createGenerateRuntimeFuncPass(std::string topFunc = "forward",
                               std::string runtimeFunc = "runtime");
+std::unique_ptr<Pass> createLowerCopyToAffineLoopsPass();
 
 #define GEN_PASS_CLASSES
 #include "scalehls/Transforms/Passes.h.inc"

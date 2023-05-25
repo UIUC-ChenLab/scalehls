@@ -57,10 +57,7 @@ struct DispatchFuncOp : public OpRewritePattern<func::FuncOp> {
         if (linalgOp.hasDynamicShape())
           return linalgOp.emitOpError("cannot handle dynamic shape yet");
         fuseOpsIntoTask({linalgOp}, rewriter);
-      } else if (isa<tensor::ReshapeOp, tensor::ExpandShapeOp,
-                     tensor::CollapseShapeOp, tensor::InsertSliceOp,
-                     tensor::ExtractSliceOp, tensor::PackOp, tensor::UnPackOp,
-                     tensor::PadOp>(op))
+      } else if (isa<tensor::TensorDialect>(op.getDialect()))
         fuseOpsIntoTask({&op}, rewriter);
     }
     return success();
@@ -77,7 +74,8 @@ struct ConvertLinalgToDataflow
 
     // Convert linalg ops to FDF ops.
     ConversionTarget target(*context);
-    target.addIllegalOp<tensor::EmptyOp, linalg::FillOp>();
+    target.addIllegalOp<tensor::EmptyOp, tensor::DimOp, tensor::RankOp,
+                        linalg::FillOp>();
     target.addLegalOp<hls::AllocTensorOp>();
 
     mlir::RewritePatternSet patterns(context);
