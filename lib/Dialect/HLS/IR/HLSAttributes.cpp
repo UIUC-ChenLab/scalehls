@@ -92,7 +92,7 @@ PartitionLayoutAttr::verify(function_ref<InFlightDiagnostic()> emitError,
 /// given array shape.
 SmallVector<int64_t>
 PartitionLayoutAttr::getActualFactors(ArrayRef<int64_t> shape) {
-  SmallVector<int64_t, 4> actualFactors;
+  SmallVector<int64_t> actualFactors;
   for (auto [size, kind, factor] : llvm::zip(shape, getKinds(), getFactors())) {
     if (kind == PartitionKind::BLOCK)
       actualFactors.push_back((size + factor - 1) / factor);
@@ -107,7 +107,7 @@ PartitionLayoutAttr::getActualFactors(ArrayRef<int64_t> shape) {
 PartitionLayoutAttr PartitionLayoutAttr::getWithActualFactors(
     MLIRContext *context, ArrayRef<PartitionKind> kinds,
     ArrayRef<int64_t> actualFactors, ArrayRef<int64_t> shape) {
-  SmallVector<int64_t, 4> factors;
+  SmallVector<int64_t> factors;
   for (auto [size, kind, factor] : llvm::zip(shape, kinds, actualFactors)) {
     if (kind == PartitionKind::BLOCK)
       factors.push_back((size + factor - 1) / factor);
