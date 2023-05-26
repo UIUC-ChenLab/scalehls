@@ -11,6 +11,17 @@ using namespace scalehls;
 using namespace hls;
 
 //===----------------------------------------------------------------------===//
+// DeclareOp
+//===----------------------------------------------------------------------===//
+
+LibraryOp DeclareOp::getLibraryOp() {
+  return cast<LibraryOp>((*this)->getParentOp());
+}
+SemanticsOp DeclareOp::getSemanticsOp() {
+  return cast<SemanticsOp>(getMeta().front().getTerminator());
+}
+
+//===----------------------------------------------------------------------===//
 // InstanceOp
 //===----------------------------------------------------------------------===//
 
@@ -20,10 +31,6 @@ LogicalResult InstanceOp::verifySymbolUses(mlir::SymbolTableCollection &table) {
   if (!param)
     return (*this)->emitOpError("unknown IP name ") << getIpAttr();
   return success(param);
-}
-
-SemanticsOp DeclareOp::getSemanticsOp() {
-  return cast<SemanticsOp>(getMeta().front().getTerminator());
 }
 
 //===----------------------------------------------------------------------===//

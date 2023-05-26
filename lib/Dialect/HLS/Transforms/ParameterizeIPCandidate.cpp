@@ -10,120 +10,19 @@
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Dialect/HLS/Transforms/Passes.h"
 #include "scalehls/Dialect/HLS/Utils/Utils.h"
-#include "llvm/Support/Debug.h"
-
-#define DEBUG_TYPE "scalehls-match-ip-canidates"
+#include "scalehls/Utils/Matchers.h"
 
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
-/// A map holding the possible equivalences between a value in a dataflow and a
-/// set of values in another dataflow.
-using PossibleEquivalenceMap =
-    llvm::SmallDenseMap<Value, llvm::SmallDenseSet<Value>>;
-
-/// Recursively check the equivalence between two values. Note we don't consider
-/// associativity in the current implementation.
-static bool checkEquivalence(Value a, Value b, PossibleEquivalenceMap &map) {
-  // If a and b are both block argument, they may be equivalent. If only one of
-  // a and b is block argument, they cannot be equivalent.
-  if (a.isa<BlockArgument>() && b.isa<BlockArgument>())
-    return map[a].insert(b), true;
-  else if ((a.isa<BlockArgument>() && !b.isa<BlockArgument>()) ||
-           (!a.isa<BlockArgument>() && b.isa<BlockArgument>()))
-    return false;
-
-  // Otherwise, both a and b must have defining operations.
-  auto opA = a.getDefiningOp();
-  auto opB = b.getDefiningOp();
-
-  // If a and b are both constant and have the same value, they are equivalent.
-  // If only one of a and b is constant, they cannot be equivalent.
-  if (isa<arith::ConstantOp>(opA) && isa<arith::ConstantOp>(opB)) {
-    auto constA = cast<arith::ConstantOp>(opA).getValue();
-    auto constB = cast<arith::ConstantOp>(opB).getValue();
-    if (constA == constB)
-      return map[a].insert(b), true;
-    return false;
-  } else if ((isa<arith::ConstantOp>(opA) && !isa<arith::ConstantOp>(opB)) ||
-             (!isa<arith::ConstantOp>(opA) && isa<arith::ConstantOp>(opB)))
-    return false;
-
-  // If the defining operation of a and b has the same name and same predicate
-  // (for comparison operations), we recursively check the equivalence of their
-  // operands. Otherwise, they cannot be equivalent.
-  if (opA->getName() == opB->getName()) {
-    // TODO: Consider the reversed semantics of comparison operations.
-    if (isa<arith::CmpIOp>(opA))
-      if (cast<arith::CmpIOp>(opA).getPredicate() !=
-          cast<arith::CmpIOp>(opB).getPredicate())
-        return false;
-    if (isa<arith::CmpFOp>(opA))
-      if (cast<arith::CmpFOp>(opA).getPredicate() !=
-          cast<arith::CmpFOp>(opB).getPredicate())
-        return false;
-
-    // We have checked the equivalence of the semantics of the defining ops of a
-    // and b. Now we can recursively check the equivalence of their operands.
-    if (opA->getNumOperands() == 1) {
-      if (checkEquivalence(opA->getOperand(0), opB->getOperand(0), map))
-        return map[a].insert(b), true;
-      return false;
-    } else if (opA->getNumOperands() == 2) {
-      if (checkEquivalence(opA->getOperand(0), opB->getOperand(0), map) &&
-          checkEquivalence(opA->getOperand(1), opB->getOperand(1), map))
-        return map[a].insert(b), true;
-
-      // Here, we take communitivity into consideration.
-      if (opA->hasTrait<OpTrait::IsCommutative>() &&
-          checkEquivalence(opA->getOperand(0), opB->getOperand(1), map) &&
-          checkEquivalence(opA->getOperand(1), opB->getOperand(0), map))
-        return map[a].insert(b), true;
-      return false;
-    }
-
-    // The only operation with no operand and we can handle is constant op.
-    return llvm::llvm_unreachable_internal("unknown op type"), false;
-  }
-  return false;
-}
-
-/// Match the input output numbers of two linalg ops.
-static LogicalResult matchLinalgNumPorts(linalg::LinalgOp a,
-                                         linalg::LinalgOp b) {
-  if (a.getNumDpsInputs() != b.getNumDpsInputs() ||
-      a.getNumDpsInits() != b.getNumDpsInits() ||
-      a->getNumResults() != b->getNumResults())
-    return failure();
-  return success();
-}
-
-/// Match the payloads of two linalg ops and record matched values in the map.
-static LogicalResult matchLinalgPayloads(linalg::LinalgOp a,
-                                         linalg::LinalgOp b) {
-  assert(succeeded(matchLinalgNumPorts(a, b)) &&
-         "invalid input or output port number");
-
-  PossibleEquivalenceMap valueMap;
-  for (auto resultA : a.getBlock()->getTerminator()->getOperands()) {
-    unsigned numMatched = 0;
-    for (auto resultB : b.getBlock()->getTerminator()->getOperands())
-      numMatched += checkEquivalence(resultA, resultB, valueMap);
-    if (!numMatched)
-      return failure();
-  }
-  return success();
-}
-
 namespace {
 struct ParameterizeIPCandidatePattern : public OpRewritePattern<TaskOp> {
   ParameterizeIPCandidatePattern(MLIRContext *context, Block *spaceBlock,
-                                 StringRef spaceName,
-                                 const SmallVector<DeclareOp> &ipDeclares,
-                                 unsigned &taskIdx)
+                                 StringRef spaceName, unsigned &taskIdx,
+                                 const SmallVector<DeclareOp> &ipDeclares)
       : OpRewritePattern<TaskOp>(context), spaceBlock(spaceBlock),
-        spaceName(spaceName), ipDeclares(ipDeclares), taskIdx(taskIdx) {}
+        spaceName(spaceName), taskIdx(taskIdx), ipDeclares(ipDeclares) {}
 
   LogicalResult matchAndRewrite(TaskOp task,
                                 PatternRewriter &rewriter) const override {
@@ -145,29 +44,21 @@ struct ParameterizeIPCandidatePattern : public OpRewritePattern<TaskOp> {
     // Match IPs. Note that we assume the linalg op is in canonicalized format
     // to avoid unnecessary complexity in matching.
     for (auto declare : ipDeclares) {
+      auto libraryName = declare.getLibraryOp().getName();
+      auto ipName = declare.getName();
       auto ipLinalgOp = declare.getSemanticsOp().getSemanticsLinalgOp();
 
-      LLVM_DEBUG(llvm::dbgs() << "\n----- match begin -----\n");
-      LLVM_DEBUG(llvm::dbgs() << "ip semantics: " << ipLinalgOp << "\n");
-      LLVM_DEBUG(llvm::dbgs() << "computation: " << linalgOp << "\n");
-
-      // We first check if the number of input and output ports match.
-      if (failed(matchLinalgNumPorts(ipLinalgOp, linalgOp))) {
-        LLVM_DEBUG(llvm::dbgs() << "failed: number of ports mismatch\n");
+      // If the number of inputs, outputs, or loops are different, we skip the
+      // matching process.
+      if (linalgOp.getNumDpsInputs() != ipLinalgOp.getNumDpsInputs() ||
+          linalgOp.getNumDpsInits() != ipLinalgOp.getNumDpsInits() ||
+          linalgOp.getNumLoops() != ipLinalgOp.getNumLoops())
         continue;
-      }
 
-      // We create a valueMap here to record possible equivalent value pairs.
-      // This map will be pruned in the following steps until we find a match or
-      // fail the process.
-
-      // We then check if the payloads match.
-      if (failed(matchLinalgPayloads(ipLinalgOp, linalgOp))) {
-        LLVM_DEBUG(llvm::dbgs() << "failed: payload mismatch\n");
-        continue;
-      }
-
-      LLVM_DEBUG(llvm::dbgs() << "----- match end -----\n");
+      // Otherwise, match the two linalg ops with LinalgMatcher.
+      if (succeeded(LinalgMatcher(ipLinalgOp, linalgOp).match()))
+        ipCandidates.push_back(
+            IPIdentifierAttr::get(rewriter.getContext(), libraryName, ipName));
     }
 
     // Generate the IP identifier parameter from all candidates.
@@ -188,8 +79,8 @@ struct ParameterizeIPCandidatePattern : public OpRewritePattern<TaskOp> {
 private:
   Block *spaceBlock;
   StringRef spaceName;
-  const SmallVector<DeclareOp> &ipDeclares;
   unsigned &taskIdx;
+  const SmallVector<DeclareOp> &ipDeclares;
 };
 } // namespace
 
@@ -219,8 +110,8 @@ struct ParameterizeIPCandidate
     unsigned taskIdx = 0;
     mlir::RewritePatternSet patterns(context);
     patterns.add<ParameterizeIPCandidatePattern>(
-        context, &space.getBody().front(), space.getName(), ipDeclares,
-        taskIdx);
+        context, &space.getBody().front(), space.getName(), taskIdx,
+        ipDeclares);
     FrozenRewritePatternSet frozenPatterns(std::move(patterns));
     for (auto task : tasks)
       if (failed(applyOpPatternsAndFold({task}, frozenPatterns)))

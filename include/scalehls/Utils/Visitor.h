@@ -4,15 +4,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_DIALECT_HLS_UTILS_VISITOR_H
-#define SCALEHLS_DIALECT_HLS_UTILS_VISITOR_H
+#ifndef SCALEHLS_UTILS_VISITOR_H
+#define SCALEHLS_UTILS_VISITOR_H
 
 #include "scalehls/InitAllDialects.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 namespace mlir {
 namespace scalehls {
-namespace hls {
 
 /// This class is a visitor for SSACFG operation nodes.
 template <typename ConcreteType, typename ResultType, typename... ExtraArgs>
@@ -23,8 +22,8 @@ public:
     return TypeSwitch<Operation *, ResultType>(op)
         .template Case<
             // HLS dialect operations.
-            BufferOp, ConstBufferOp, StreamOp, StreamReadOp, StreamWriteOp,
-            hls::AffineSelectOp,
+            hls::BufferOp, hls::ConstBufferOp, hls::StreamOp, hls::StreamReadOp,
+            hls::StreamWriteOp, hls::AffineSelectOp,
 
             // Function operations.
             func::CallOp, func::ReturnOp,
@@ -97,12 +96,12 @@ public:
   }
 
   // HLS dialect operations.
-  HANDLE(BufferOp);
-  HANDLE(ConstBufferOp);
-  HANDLE(StreamOp);
-  HANDLE(StreamReadOp);
-  HANDLE(StreamWriteOp);
-  HANDLE(AffineSelectOp);
+  HANDLE(hls::BufferOp);
+  HANDLE(hls::ConstBufferOp);
+  HANDLE(hls::StreamOp);
+  HANDLE(hls::StreamReadOp);
+  HANDLE(hls::StreamWriteOp);
+  HANDLE(hls::AffineSelectOp);
 
   // Control flow operations.
   HANDLE(func::CallOp);
@@ -208,8 +207,7 @@ public:
 #undef HANDLE
 };
 
-} // namespace hls
 } // namespace scalehls
 } // namespace mlir
 
-#endif // SCALEHLS_DIALECT_HLS_UTILS_VISITOR_H
+#endif // SCALEHLS_UTILS_VISITOR_H

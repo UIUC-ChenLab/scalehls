@@ -34,6 +34,7 @@ def DeclareOp : HLSOp<"uip.declare", [IsolatedFromAbove, Symbol, SingleBlock,
   let assemblyFormat = "$sym_name attr-dict-with-keyword $meta";
 
   let extraClassDeclaration = [{
+    LibraryOp getLibraryOp();
     SemanticsOp getSemanticsOp();
   }];
 }
