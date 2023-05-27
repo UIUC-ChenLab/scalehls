@@ -35,8 +35,7 @@ def DispatchOp : HLSOp<"fdf.dispatch", [RecursiveMemoryEffects,
 
 def TaskOp : HLSOp<"fdf.task", [
       DeclareOpInterfaceMethods<ContainerLikeInterface>, RecursiveMemoryEffects,
-      AttrSizedOperandSegments, SingleBlockImplicitTerminator<"YieldOp">,
-      HasParent<"DispatchOp">]> {
+      SingleBlockImplicitTerminator<"YieldOp">, HasParent<"DispatchOp">]> {
   let summary = "Represent a dataflow task";
   let description = [{
     Task op has a transparent region that contains a list of ops to be executed
@@ -44,26 +43,17 @@ def TaskOp : HLSOp<"fdf.task", [
     level and will be lowered to node op for dataflow scheduling.
   }];
 
-  let arguments = (ins Variadic<Index>:$tile_factors,
-      Variadic<Index>:$parallel_factors,
-      Optional<IPIdentifierType>:$ip_identifier);
+  let arguments = (ins OptionalAttr<SymbolRefAttr>:$space);
   let results = (outs Variadic<AnyType>:$results);
   let regions = (region SizedRegion<1>:$body);
 
   let builders = [
     OpBuilder<(ins "mlir::TypeRange":$results),
-        "build($_builder, $_state, results, {}, {}, nullptr);">,
-    OpBuilder<(ins "mlir::TypeRange":$results, "mlir::ValueRange":$tileFactors,
-        "mlir::ValueRange":$parallelFactors), [{
-          build($_builder, $_state, results, tileFactors, parallelFactors,
-          nullptr);
-        }]>
+        "build($_builder, $_state, results, nullptr);">
   ];
 
   let assemblyFormat = [{
-    (`tile` `(` $tile_factors^ `)`)? (`parallel` `(` $parallel_factors^ `)`)?
-    (`ip` $ip_identifier^ `:` type($ip_identifier))? attr-dict-with-keyword
-    (`:` type($results)^)? $body
+    (`space` $space^)? attr-dict-with-keyword (`:` type($results)^)? $body
   }];
 
   let hasVerifier = 1;

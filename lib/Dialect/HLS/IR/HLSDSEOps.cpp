@@ -83,6 +83,18 @@ LogicalResult ConstParamOp::verify() { return success(); }
 OpFoldResult ConstParamOp::fold(FoldAdaptor adaptor) { return getValueAttr(); }
 
 //===----------------------------------------------------------------------===//
+// GetSpaceOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult GetSpaceOp::verifySymbolUses(mlir::SymbolTableCollection &table) {
+  auto param = table.lookupNearestSymbolFrom<SpaceOp>(
+      (*this)->getParentOfType<ModuleOp>(), getNameAttr());
+  if (!param)
+    return (*this)->emitOpError("unknown space ") << getNameAttr();
+  return success(param);
+}
+
+//===----------------------------------------------------------------------===//
 // RequireOp
 //===----------------------------------------------------------------------===//
 
@@ -101,9 +113,9 @@ LogicalResult GetParamOp::verify() { return success(); }
 
 LogicalResult GetParamOp::verifySymbolUses(mlir::SymbolTableCollection &table) {
   auto param = table.lookupNearestSymbolFrom<ParamOp>(
-      (*this)->getParentOfType<ModuleOp>(), getParamAttr());
+      (*this)->getParentOfType<ModuleOp>(), getNameAttr());
   if (!param)
-    return (*this)->emitOpError("unknown param ") << getParamAttr();
+    return (*this)->emitOpError("unknown param ") << getNameAttr();
   return success(param);
 }
 

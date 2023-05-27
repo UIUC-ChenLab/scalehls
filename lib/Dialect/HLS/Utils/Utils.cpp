@@ -145,11 +145,14 @@ SpaceOp hls::getOrCreateGlobalSpaceOp(ModuleOp module) {
     OpBuilder builder(module.getBody(), module.getBody()->begin());
     auto newSpace = builder.create<SpaceOp>(builder.getUnknownLoc(), "global");
     builder.createBlock(&newSpace.getBody());
+    builder.create<SpacePackOp>(builder.getUnknownLoc());
     return newSpace;
-  } else if (llvm::hasSingleElement(spaceOps))
-    return *spaceOps.begin();
-  else
-    return nullptr;
+  } else if (llvm::hasSingleElement(spaceOps)) {
+    auto space = *spaceOps.begin();
+    if (space.getBody().hasOneBlock())
+      return space;
+  }
+  return nullptr;
 }
 
 /// Constantize the given param op with the given constant value.
@@ -158,11 +161,10 @@ void hls::constantizeParamOp(ParamOp param, PatternRewriter &rewriter,
   for (auto getParam : param.getGetParamOps()) {
     rewriter.setInsertionPoint(getParam);
     rewriter.replaceOpWithNewOp<ConstParamOp>(getParam, param.getType(),
-                                              param.getKind(), constValue);
+                                              constValue);
   }
   rewriter.setInsertionPoint(param);
-  rewriter.replaceOpWithNewOp<ConstParamOp>(param, param.getType(),
-                                            param.getKind(), constValue);
+  rewriter.replaceOpWithNewOp<ConstParamOp>(param, param.getType(), constValue);
 }
 
 /// Wrap the operations in the block with dispatch op.
@@ -192,9 +194,7 @@ DispatchOp hls::dispatchBlock(Block *block, PatternRewriter &rewriter) {
 /// before "insertToOp" and each operation will be in the original order. This
 /// method always succeeds even if the resulting IR is invalid.
 TaskOp hls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
-                            PatternRewriter &rewriter, Operation *insertToOp,
-                            ArrayRef<Value> tileFactors,
-                            ArrayRef<Value> parallelFactors) {
+                            PatternRewriter &rewriter, Operation *insertToOp) {
   assert(!ops.empty() && "must fuse at least one op");
   llvm::SmallDenseSet<Operation *, 4> opsSet(ops.begin(), ops.end());
 
@@ -214,8 +214,7 @@ TaskOp hls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
   else
     rewriter.setInsertionPoint(insertToOp);
   auto task =
-      rewriter.create<TaskOp>(loc, ValueRange(outputValues.getArrayRef()),
-                              tileFactors, parallelFactors);
+      rewriter.create<TaskOp>(loc, ValueRange(outputValues.getArrayRef()));
   auto taskBlock = rewriter.createBlock(&task.getBody());
 
   // Move each targeted op into the new graph task.

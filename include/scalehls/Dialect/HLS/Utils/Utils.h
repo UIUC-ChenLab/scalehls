@@ -81,9 +81,7 @@ DispatchOp dispatchBlock(Block *block, PatternRewriter &rewriter);
 /// before "insertToOp" and each operation will be in the original order. This
 /// method always succeeds even if the resulting IR is invalid.
 TaskOp fuseOpsIntoTask(ArrayRef<Operation *> ops, PatternRewriter &rewriter,
-                       Operation *insertToOp = nullptr,
-                       ArrayRef<Value> tileFactors = {},
-                       ArrayRef<Value> parallelFactors = {});
+                       Operation *insertToOp = nullptr);
 
 /// Fuse multiple nodes into a new node.
 NodeOp fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter);

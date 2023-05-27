@@ -20,10 +20,10 @@ def LowerDataflow : Pass<"scalehls-lower-dataflow", "func::FuncOp"> {
   let constructor = "mlir::scalehls::hls::createLowerDataflowPass()";
 }
 
-def ParameterizeTileParallelFactor :
-    Pass<"scalehls-parameterize-tile-parallel-factor", "mlir::ModuleOp"> {
-  let summary = "Parameterize tile and parallel factor for each dataflow task";
-  let constructor = "mlir::scalehls::hls::createParameterizeTileParallelFactorPass()";
+def GenerateTaskDesignSpace :
+    Pass<"scalehls-generate-task-design-space", "mlir::ModuleOp"> {
+  let summary = "Generate design space for each dataflow task";
+  let constructor = "mlir::scalehls::hls::createGenerateTaskDesignSpacePass()";
 
   let options = [
     Option<"defaultTileFactor", "default-tile-factor", "unsigned",
@@ -31,12 +31,6 @@ def ParameterizeTileParallelFactor :
     Option<"defaultParallelFactor", "default-parallel-factor", "unsigned",
            /*default=*/"2", "Positive number">
   ];
-}
-
-def ParameterizeIPCandidate :
-    Pass<"scalehls-parameterize-ip-candidates", "mlir::ModuleOp"> {
-  let summary = "Paremterize matched IP candidates for each dataflow task";
-  let constructor = "mlir::scalehls::hls::createParameterizeIPCandidatePass()";
 }
 
 #endif // SCALEHLS_DIALECT_HLS_TRANSFORMS_PASSES_TD

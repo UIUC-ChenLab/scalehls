@@ -26,9 +26,8 @@ namespace hls {
 std::unique_ptr<Pass> createEliminateBufferYieldPass();
 std::unique_ptr<Pass> createLowerDataflowPass();
 std::unique_ptr<Pass>
-createParameterizeTileParallelFactorPass(unsigned defaultTileFactor = 32,
-                                         unsigned defaultParallelFactor = 2);
-std::unique_ptr<Pass> createParameterizeIPCandidatePass();
+createGenerateTaskDesignSpacePass(unsigned defaultTileFactor = 32,
+                                  unsigned defaultParallelFactor = 2);
 
 #define GEN_PASS_CLASSES
 #include "scalehls/Dialect/HLS/Transforms/Passes.h.inc"

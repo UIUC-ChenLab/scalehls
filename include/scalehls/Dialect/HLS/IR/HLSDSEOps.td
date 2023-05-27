@@ -11,27 +11,111 @@
 // Design Space Exploration (DSE) Operations
 //===----------------------------------------------------------------------===//
 
-def SpaceOp : HLSOp<"dse.space", [IsolatedFromAbove, NoTerminator, SymbolTable,
-      Symbol, SingleBlock, ParentOneOf<["mlir::ModuleOp", "SpaceOp"]>]> {
+def SpaceOp : HLSOp<"dse.space", [IsolatedFromAbove, Symbol,
+      ParentOneOf<["mlir::ModuleOp", "SpaceOp"]>]> {
   let summary = "Declare a design space";
   let description = [{
-    SpaceOp declares a design space. The design space is a collection of
-    parameters and constraints. The parameters are declared with ParamOp and
-    the constraints are declared with RequireOp. The design space can be nested
-    to form a hierarchy of design spaces.
+    SpaceOp declares a design space. The space is a collection of parameters,
+    constraints, and sub-spaces, declared with ParamOp, RequireOp, and nested
+    SpaceOp, respectively. The space has a symbolic name that can be used to
+    refer to by GetSpaceOp in the payload IR.
+
+    SpaceOp can contain multiple blocks to represent different branches of the
+    same design space. For example:
+    ```
+    %space = dse.space @task0 {
+      %impl = dse.param @impl candidates [#hls.ip<,>, #hls.ip<"vitis", "gemm">]
+      dse.space_branch %impl [#hls.ip<,>, #hls.ip<"vitis", "gemm">] ^bb1, ^bb2
+    ^bb1:
+      %p0 = dse.param @p0 candidates [2, 4, 8] : index
+      %p1 = dse.param @p1 candidates [2, 4, 8] : index
+      dse.space_pack (%p0, %p1) : (index, index)
+    ^bb2:
+      $parN = dse.param @parN candidates [16, 32] : index
+      dse.space_pack ($parN) : (index)
+    }
+    ```
   }];
 
-  let arguments = (ins Variadic<AnyType>:$args, SymbolNameAttr:$sym_name);
-  let regions = (region SizedRegion<1>:$body);
+  let arguments = (ins Variadic<AnyType>:$hyper_params,
+                       SymbolNameAttr:$sym_name);
+  let results = (outs SpaceType:$result);
+  let regions = (region MinSizedRegion<1>:$body);
   let assemblyFormat = [{
-    $sym_name `(` $args `)` attr-dict-with-keyword (`:` type($args)^)? $body
+    $sym_name `(` $hyper_params `)` attr-dict `:`
+    functional-type($hyper_params, $result) $body
   }];
 
   let builders = [
-    OpBuilder<(ins "std::string":$symName),
-          "build($_builder, $_state, {}, $_builder.getStringAttr(symName));">
+    OpBuilder<(ins "ValueRange":$hyperParams, "StringRef":$symName), [{
+      build($_builder, $_state, SpaceType::get($_builder.getContext()),
+          hyperParams, $_builder.getStringAttr(symName));
+    }]>,
+    OpBuilder<(ins "StringRef":$symName), [{
+      build($_builder, $_state, {}, $_builder.getStringAttr(symName));
+    }]>
   ];
+}
 
+def SpaceBranchOp : HLSOp<"dse.space_branch", [Terminator,
+      HasParent<"SpaceOp">]> {
+  let summary = "Branch to a design space block";
+  let description = [{
+    SpaceBranchOp branches to a block of the parent SpaceOp. SpaceBranchOp takes
+    a single value as argument, which is compared against the conditions. The
+    first condition that evaluates to be equal to the argument determines the
+    block to branch to.
+  }];
+
+  let arguments = (ins AnyType:$arg, ArrayAttr:$conditions);
+  let successors = (successor VariadicSuccessor<AnySuccessor>:$branches);
+  let assemblyFormat = [{
+    $arg $conditions $branches attr-dict `:` type($arg)
+  }];
+}
+
+def SpacePackOp : HLSOp<"dse.space_pack", [Terminator, HasParent<"SpaceOp">]> {
+  let summary = "Pack the parameters and sub-spaces of a design space";
+  let description = [{
+    SpacePackOp packs the parameters and sub-spaces of a design space and
+    terminate the space. The packed parameters can optionally be named.
+  }];
+
+  let arguments = (ins Variadic<AnyType>:$args,
+                       OptionalAttr<StrArrayAttr>:$names);
+  let assemblyFormat = "$args ($names^)? attr-dict (`:` type($args)^)?";
+
+  let builders = [
+    OpBuilder<(ins "mlir::ValueRange":$args), [{
+      build($_builder, $_state, args, nullptr);
+    }]>,
+    OpBuilder<(ins), "build($_builder, $_state, {});">
+  ];
+}
+
+def SpaceUnpackOp : HLSOp<"dse.space_unpack", [NoMemoryEffect]> {
+  let summary = "Unpack the parameters and sub-spaces of a design space";
+  let description = [{
+    SpaceUnpackOp unpacks the parameters and sub-spaces of a design space.
+  }];
+
+  let arguments = (ins SpaceType:$space);
+  let results = (outs Variadic<AnyType>:$results);
+  let assemblyFormat = [{
+    $space attr-dict `:` functional-type($space, $results)
+  }];
+}
+
+def GetSpaceOp : HLSOp<"dse.get_space", [NoMemoryEffect,
+      DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+  let summary = "Get a design space with symbolic name";
+  let description = [{
+    GetSpaceOp gets a design space, which is identified by its symbolic name.
+  }];
+
+  let arguments = (ins SymbolRefAttr:$name);
+  let results = (outs SpaceType:$space);
+  let assemblyFormat = "$name attr-dict `:` type($space)";
 }
 
 def ParamOp : HLSOp<"dse.param", [Symbol, HasParent<"SpaceOp">]> {
@@ -46,42 +130,37 @@ def ParamOp : HLSOp<"dse.param", [Symbol, HasParent<"SpaceOp">]> {
 
   let arguments = (ins Variadic<Index>:$args, OptionalAttr<IndexAttr>:$step,
       OptionalAttr<AffineMapAttr>:$bounds, OptionalAttr<ArrayAttr>:$candidates,
-      ParamKindAttr:$kind, OptionalAttr<AnyAttr>:$value,
-      SymbolNameAttr:$sym_name
+      OptionalAttr<AnyAttr>:$value, SymbolNameAttr:$sym_name
   );
   let results = (outs AnyType:$result);
 
   let assemblyFormat = [{
-    $kind $sym_name (`candidates` $candidates^)?
-    (`range` `(` $args `)` $bounds `step` $step^)? attr-dict `:` type($result)
+    $sym_name (`range` `(` $args `)` $bounds `step` $step^)?
+    (`candidates` $candidates^)? attr-dict `:` type($result)
   }];
 
   let builders = [
     // Parameter builder constrained by candidates.
     OpBuilder<(ins "mlir::Type":$result, "mlir::ArrayAttr":$candidates,
-        "ParamKind":$kind, "std::string":$symName), [{
+        "StringRef":$symName), [{
           build($_builder, $_state, result, {}, nullptr, nullptr, candidates,
-              ParamKindAttr::get($_builder.getContext(), kind), nullptr,
-              $_builder.getStringAttr(symName));
+              nullptr, $_builder.getStringAttr(symName));
         }]>,
 
     // Parameter builder constrained by affine lower and upper bounds.
     OpBuilder<(ins "mlir::Type":$result, "mlir::ValueRange":$args,
-        "unsigned":$step, "mlir::AffineMap":$bounds, "ParamKind":$kind,
-        "std::string":$symName), [{
+        "unsigned":$step, "mlir::AffineMap":$bounds, "StringRef":$symName), [{
           build($_builder, $_state, result, args, $_builder.getIndexAttr(step),
               mlir::AffineMapAttr::get(bounds), nullptr,
-              ParamKindAttr::get($_builder.getContext(), kind), nullptr,
-              $_builder.getStringAttr(symName));
+              nullptr, $_builder.getStringAttr(symName));
         }]>,
     OpBuilder<(ins "mlir::Type":$result, "mlir::ValueRange":$args,
-        "mlir::AffineMap":$bounds, "ParamKind":$kind, "std::string":$symName),
-        "build($_builder, $_state, result, args, 1, bounds, kind, symName);">,
+        "mlir::AffineMap":$bounds, "StringRef":$symName),
+        "build($_builder, $_state, result, args, 1, bounds, symName);">,
 
     // Parameter builder without constraints.
-    OpBuilder<(ins "mlir::Type":$result, "ParamKind":$kind,
-        "std::string":$symName),
-        "build($_builder, $_state, result, nullptr, kind, symName);">
+    OpBuilder<(ins "mlir::Type":$result, "StringRef":$symName),
+        "build($_builder, $_state, result, nullptr, symName);">
   ];
 
   let hasVerifier = 1;
@@ -116,7 +195,7 @@ def ParamOp : HLSOp<"dse.param", [Symbol, HasParent<"SpaceOp">]> {
     void assignValue(MemoryKind kind) {
       assignValue(MemoryKindAttr::get(getContext(), kind));
     }
-    void assignValue(std::string library, std::string name) {
+    void assignValue(StringRef library, StringRef name) {
       assignValue(IPIdentifierAttr::get(getContext(), library, name));
     }
 
@@ -133,57 +212,44 @@ def GetParamOp : HLSOp<"dse.get_param", [NoMemoryEffect,
     identified by its symbolic name.
   }];
 
-  let arguments = (ins SymbolRefAttr:$param);
-  let results = (outs AnyType:$result);
-  let assemblyFormat = "$param attr-dict `:` type($result)";
+  let arguments = (ins SymbolRefAttr:$name);
+  let results = (outs AnyType:$param);
+  let assemblyFormat = "$name attr-dict `:` type($param)";
 
   let hasVerifier = 1;
-  let builders = [
-    OpBuilder<(ins "mlir::Type":$result, "std::string":$spaceName,
-        "std::string":$paramName), [{
-          auto rootAttr = $_builder.getStringAttr(spaceName);
-          auto leafAttr = $_builder.getStringAttr(paramName);
-          build($_builder, $_state, result, mlir::SymbolRefAttr::get(
-              rootAttr, {mlir::FlatSymbolRefAttr::get(leafAttr)}));
-        }]>
-  ];
 }
 
 def ConstParamOp : HLSOp<"dse.const_param", [NoMemoryEffect, ConstantLike]> {
   let summary = "Declare a design space constant parameter";
 
-  let arguments = (ins ParamKindAttr:$kind, AnyAttr:$value);
+  let arguments = (ins AnyAttr:$value);
   let results = (outs AnyType:$result);
   let builders = [
-    OpBuilder<(ins "mlir::Type":$result, "ParamKind":$kind, "unsigned":$value),
-        [{
-          build($_builder, $_state, result, kind,
-            $_builder.getIndexAttr(value));
+    OpBuilder<(ins "mlir::Type":$result, "unsigned":$value), [{
+          build($_builder, $_state, result, $_builder.getIndexAttr(value));
         }]>,
-    OpBuilder<(ins "mlir::Type":$result, "ParamKind":$kind,
-        "MemoryKind":$mem_kind), [{
-          build($_builder, $_state, result, kind,
+    OpBuilder<(ins "mlir::Type":$result, "MemoryKind":$mem_kind), [{
+          build($_builder, $_state, result,
               MemoryKindAttr::get($_builder.getContext(), mem_kind));
         }]>,
-    OpBuilder<(ins "mlir::Type":$result, "ParamKind":$kind,
-        "std::string":$library, "std::string":$name), [{
-          build($_builder, $_state, result, kind,
+    OpBuilder<(ins "mlir::Type":$result, "StringRef":$library,
+        "StringRef":$name), [{
+          build($_builder, $_state, result,
               IPIdentifierAttr::get($_builder.getContext(), library, name));
         }]>
   ];
 
-  let assemblyFormat = "$kind attr-dict `:` type($result)";
+  let assemblyFormat = "attr-dict `:` type($result)";
   let hasFolder = 1;
   let hasVerifier = 1;
 }
 
 def RequireOp : HLSOp<"dse.require", [NoMemoryEffect,
-      SingleBlockImplicitTerminator<"RequireOp">, HasParent<"SpaceOp">]> {
-  let summary = "Declare a design space constraint";
+      SingleBlockImplicitTerminator<"ConditionOp">, HasParent<"SpaceOp">]> {
+  let summary = "Declare a design space requirement";
   let description = [{
-    RequireOp declares a design space constraint. The constraint is represented
-    by a single block terminated by RequireOp. The constraint can be deduced at
-    runtime to prune the design space.
+    The design space requirement is represented by a single block terminated by
+    ConditionOp, which can be deduced at runtime to prune the design space.
   }];
 
   let regions = (region SizedRegion<1>:$body);
@@ -196,13 +262,13 @@ def RequireOp : HLSOp<"dse.require", [NoMemoryEffect,
 }
 
 def ConditionOp : HLSOp<"dse.condition", [NoMemoryEffect, Terminator,
-      AttrSizedOperandSegments, HasParent<"ConditionOp">]> {
+      AttrSizedOperandSegments, HasParent<"RequireOp">]> {
   let summary = "Terminate a constraint with requirement";
   let description = [{
-    ConditionOp terminates a ConstaintOp with a requirement. The requirement can
-    either be a boolean value (condition) or a list of affine parameters (args)
-    with an integerset. The latter can enable trivial verification and
-    canonicalization in some cases, so is preferred.
+    ConditionOp terminates a RequireOp. The condition can either be a boolean
+    value (condition) or a list of affine parameters (args) with an integerset.
+    The latter can enable trivial verification and canonicalization in some
+    cases, so is preferred.
   }];
 
   let arguments = (ins Optional<I1>:$condition, Variadic<Index>:$args);
@@ -210,6 +276,9 @@ def ConditionOp : HLSOp<"dse.condition", [NoMemoryEffect, Terminator,
     /// Condition builder with a boolean value.
     OpBuilder<(ins "mlir::Value":$condition), 
         "build($_builder, $_state, condition, {});">,
+
+    /// Condition builder with no constraints.
+    OpBuilder<(ins), "build($_builder, $_state, nullptr);">,
 
     /// Condition builder with integer set.
     OpBuilder<(ins "IntegerSet":$set, "ValueRange":$args)>

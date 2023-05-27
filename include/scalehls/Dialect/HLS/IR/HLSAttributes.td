@@ -16,24 +16,6 @@ class HLSAttr<string name, list<Trait> traits = []> :
     AttrDef<HLSDialect, name, traits>;
 
 //===----------------------------------------------------------------------===//
-// DSE Attributes
-//===----------------------------------------------------------------------===//
-
-def ParamKind: I32EnumAttr<"ParamKind", "Kind of param", [
-    I32EnumAttrCase<"TILE_FACTOR", 0, "tile_factor">,  
-    I32EnumAttrCase<"PARALLEL_FACTOR", 1, "parallel_factor">,
-    I32EnumAttrCase<"IP_IDENTIFIER", 2, "ip_identifier">,
-    I32EnumAttrCase<"IP_FACTOR", 3, "ip_factor">,
-    I32EnumAttrCase<"MEMORY_KIND", 4, "memory_kind">]> {
-  let cppNamespace = "mlir::scalehls::hls";
-  let genSpecializedAttr = 0;
-}
-def ParamKindAttr: EnumAttr<HLSDialect, ParamKind> {
-  let mnemonic = "param";
-  let assemblyFormat = "`<` $value `>`";
-}
-
-//===----------------------------------------------------------------------===//
 // SDF/FDF Attributes
 //===----------------------------------------------------------------------===//
 
@@ -74,12 +56,8 @@ def PartitionKindParam: EnumParameter<PartitionKind>;
 // UIP Attributes
 //===----------------------------------------------------------------------===//
 
-def IPLibraryParam: StringRefParameter<"Library of an IP"> {
-  let defaultValue = "\"\"";
-}
-def IPNameParam: StringRefParameter<"Name of an IP"> {
-  let defaultValue = "\"\"";
-}
+def IPLibraryParam: StringRefParameter<"Library of an IP"> {}
+def IPNameParam: StringRefParameter<"Name of an IP"> {}
 
 def IPIdentifierAttr : HLSAttr<"IPIdentifier"> {
   let summary = "Identifier of an IP";

@@ -12,6 +12,11 @@ include "scalehls/Dialect/HLS/IR/HLSAttributes.td"
 class HLSType<string name, list<Trait> traits = []> :
     TypeDef<HLSDialect, name, traits>;
 
+def SpaceType : HLSType<"Space"> {
+  let summary = "Represent a design space containing multiple parameters";
+  let mnemonic = "dse.space";
+}
+
 def TypeParamType : HLSType<"TypeParam"> {
   let summary = "Used to represent a type parameter";
   let mnemonic = "uip.type_param";
