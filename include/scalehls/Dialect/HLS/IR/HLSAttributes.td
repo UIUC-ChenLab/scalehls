@@ -16,6 +16,24 @@ class HLSAttr<string name, list<Trait> traits = []> :
     AttrDef<HLSDialect, name, traits>;
 
 //===----------------------------------------------------------------------===//
+// DSE Attributes
+//===----------------------------------------------------------------------===//
+
+def ParamKind: I32EnumAttr<"ParamKind", "Kind of a parameter", [
+    I32EnumAttrCase<"TILE_SIZE", 0, "tile">,
+    I32EnumAttrCase<"PARALLEL_SIZE", 1, "parallel">,
+    I32EnumAttrCase<"IP_TEMPLATE", 2, "template">,
+    I32EnumAttrCase<"TASK_IMPL", 3, "impl">,
+    I32EnumAttrCase<"MEMORY_KIND", 4, "memory">]> {
+  let cppNamespace = "mlir::scalehls::hls";
+  let genSpecializedAttr = 0;
+}
+def ParamKindAttr: EnumAttr<HLSDialect, ParamKind> {
+  let mnemonic = "param";
+  let assemblyFormat = "`<` $value `>`";
+}
+
+//===----------------------------------------------------------------------===//
 // UIP Attributes
 //===----------------------------------------------------------------------===//
 

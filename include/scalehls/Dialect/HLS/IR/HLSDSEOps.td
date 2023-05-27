@@ -118,37 +118,42 @@ def ParamOp : HLSOp<"dse.param", [Symbol, HasParent<"SpaceOp, DeclareOp">]> {
 
   let arguments = (ins Variadic<Index>:$args, OptionalAttr<IndexAttr>:$step,
       OptionalAttr<AffineMapAttr>:$bounds, OptionalAttr<ArrayAttr>:$candidates,
-      OptionalAttr<AnyAttr>:$value, SymbolNameAttr:$sym_name
+      OptionalAttr<AnyAttr>:$value, ParamKindAttr:$kind,
+      SymbolNameAttr:$sym_name
   );
   let results = (outs AnyType:$result);
 
   let assemblyFormat = [{
-    $sym_name (`range` `(` $args `)` $bounds `step` $step^)?
+    $sym_name $kind (`range` `(` $args `)` $bounds `step` $step^)?
     (`candidates` $candidates^)? attr-dict `:` type($result)
   }];
 
   let builders = [
     // Parameter builder constrained by candidates.
     OpBuilder<(ins "mlir::Type":$result, "mlir::ArrayAttr":$candidates,
-        "StringRef":$symName), [{
+        "ParamKind":$kind, "StringRef":$symName), [{
           build($_builder, $_state, result, {}, nullptr, nullptr, candidates,
-              nullptr, $_builder.getStringAttr(symName));
+              nullptr, ParamKindAttr::get($_builder.getContext(), kind),
+              $_builder.getStringAttr(symName));
         }]>,
 
     // Parameter builder constrained by affine lower and upper bounds.
     OpBuilder<(ins "mlir::Type":$result, "mlir::ValueRange":$args,
-        "unsigned":$step, "mlir::AffineMap":$bounds, "StringRef":$symName), [{
+        "unsigned":$step, "mlir::AffineMap":$bounds, "ParamKind":$kind,
+        "StringRef":$symName), [{
           build($_builder, $_state, result, args, $_builder.getIndexAttr(step),
               mlir::AffineMapAttr::get(bounds), nullptr,
-              nullptr, $_builder.getStringAttr(symName));
+              nullptr, ParamKindAttr::get($_builder.getContext(), kind),
+              $_builder.getStringAttr(symName));
         }]>,
     OpBuilder<(ins "mlir::Type":$result, "mlir::ValueRange":$args,
-        "mlir::AffineMap":$bounds, "StringRef":$symName),
-        "build($_builder, $_state, result, args, 1, bounds, symName);">,
+        "mlir::AffineMap":$bounds, "ParamKind":$kind, "StringRef":$symName),
+          "build($_builder, $_state, result, args, 1, bounds, kind, symName);">,
 
     // Parameter builder without constraints.
-    OpBuilder<(ins "mlir::Type":$result, "StringRef":$symName),
-        "build($_builder, $_state, result, nullptr, symName);">
+    OpBuilder<(ins "mlir::Type":$result, "ParamKind":$kind,
+        "StringRef":$symName),
+          "build($_builder, $_state, result, nullptr, kind, symName);">
   ];
 
   let hasVerifier = 1;
@@ -195,24 +200,28 @@ def ParamOp : HLSOp<"dse.param", [Symbol, HasParent<"SpaceOp, DeclareOp">]> {
 def ConstParamOp : HLSOp<"dse.const_param", [NoMemoryEffect, ConstantLike]> {
   let summary = "Declare a design space constant parameter";
 
-  let arguments = (ins AnyAttr:$value);
+  let arguments = (ins AnyAttr:$value, ParamKindAttr:$kind);
   let results = (outs AnyType:$result);
   let builders = [
-    OpBuilder<(ins "mlir::Type":$result, "unsigned":$value), [{
-          build($_builder, $_state, result, $_builder.getIndexAttr(value));
+    OpBuilder<(ins "mlir::Type":$result, "unsigned":$value, "ParamKind":$kind),
+        [{
+          build($_builder, $_state, result, $_builder.getIndexAttr(value),
+              ParamKindAttr::get($_builder.getContext(), kind));
         }]>,
     OpBuilder<(ins "mlir::Type":$result, "MemoryKind":$mem_kind), [{
           build($_builder, $_state, result,
-              MemoryKindAttr::get($_builder.getContext(), mem_kind));
+              MemoryKindAttr::get($_builder.getContext(), mem_kind),
+              ParamKindAttr::get($_builder.getContext(), ParamKind::MEMORY_KIND));
         }]>,
     OpBuilder<(ins "mlir::Type":$result, "StringRef":$library,
         "StringRef":$name), [{
           build($_builder, $_state, result,
-              TaskImplAttr::get($_builder.getContext(), library, name));
+              TaskImplAttr::get($_builder.getContext(), library, name),
+              ParamKindAttr::get($_builder.getContext(), ParamKind::TASK_IMPL));
         }]>
   ];
 
-  let assemblyFormat = "attr-dict `:` type($result)";
+  let assemblyFormat = "$kind attr-dict `:` type($result)";
   let hasFolder = 1;
   let hasVerifier = 1;
 }

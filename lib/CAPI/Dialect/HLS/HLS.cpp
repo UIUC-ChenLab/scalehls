@@ -60,6 +60,30 @@ MlirType mlirHLSMemoryKindTypeGet(MlirContext ctx) {
 // HLS Dialect Attributes
 //===----------------------------------------------------------------------===//
 
+static_assert(static_cast<int>(MlirParamKind::TILE_SIZE) ==
+                      static_cast<int>(ParamKind::TILE_SIZE) &&
+                  static_cast<int>(MlirParamKind::PARALLEL_SIZE) ==
+                      static_cast<int>(ParamKind::PARALLEL_SIZE) &&
+                  static_cast<int>(MlirParamKind::IP_TEMPLATE) ==
+                      static_cast<int>(ParamKind::IP_TEMPLATE) &&
+                  static_cast<int>(MlirParamKind::TASK_IMPL) ==
+                      static_cast<int>(ParamKind::TASK_IMPL) &&
+                  static_cast<int>(MlirParamKind::MEMORY_KIND) ==
+                      static_cast<int>(ParamKind::MEMORY_KIND),
+              "MlirParamKind (C-API) and ParamKind (C++) mismatch");
+
+bool mlirAttrIsHLSParamKindAttr(MlirAttribute attr) {
+  return unwrap(attr).isa<hls::ParamKindAttr>();
+}
+MlirAttribute mlirHLSParamKindAttrGet(MlirContext ctx, MlirParamKind kind) {
+  return wrap(
+      hls::ParamKindAttr::get(unwrap(ctx), static_cast<ParamKind>(kind)));
+}
+MlirParamKind mlirHLSParamKindAttrGetValue(MlirAttribute attr) {
+  return static_cast<MlirParamKind>(
+      unwrap(attr).cast<hls::ParamKindAttr>().getValue());
+}
+
 static_assert(static_cast<int>(MlirPortKind::INPUT) ==
                       static_cast<int>(PortKind::INPUT) &&
                   static_cast<int>(MlirPortKind::OUTPUT) ==
@@ -69,9 +93,8 @@ static_assert(static_cast<int>(MlirPortKind::INPUT) ==
 bool mlirAttrIsHLSPortKindAttr(MlirAttribute attr) {
   return unwrap(attr).isa<hls::PortKindAttr>();
 }
-MlirAttribute mlirHLSPortKindAttrGet(MlirContext ctx, MlirPortKind direction) {
-  return wrap(
-      hls::PortKindAttr::get(unwrap(ctx), static_cast<PortKind>(direction)));
+MlirAttribute mlirHLSPortKindAttrGet(MlirContext ctx, MlirPortKind kind) {
+  return wrap(hls::PortKindAttr::get(unwrap(ctx), static_cast<PortKind>(kind)));
 }
 MlirPortKind mlirHLSPortKindAttrGetValue(MlirAttribute attr) {
   return static_cast<MlirPortKind>(

@@ -42,11 +42,25 @@ MLIR_CAPI_EXPORTED MlirType mlirHLSMemoryKindTypeGet(MlirContext ctx);
 // HLS Dialect Attributes
 //===----------------------------------------------------------------------===//
 
+enum class MlirParamKind : uint32_t {
+  TILE_SIZE = 0,
+  PARALLEL_SIZE = 1,
+  IP_TEMPLATE = 2,
+  TASK_IMPL = 3,
+  MEMORY_KIND = 4
+};
+
+MLIR_CAPI_EXPORTED bool mlirAttrIsHLSParamKindAttr(MlirAttribute attr);
+MLIR_CAPI_EXPORTED MlirAttribute
+mlirHLSParamKindAttrGet(MlirContext ctx, MlirParamKind kind);
+MLIR_CAPI_EXPORTED MlirParamKind
+mlirHLSParamKindAttrGetValue(MlirAttribute attr);
+
 enum class MlirPortKind : uint32_t { INPUT = 0, OUTPUT = 1, PARAM = 2 };
 
 MLIR_CAPI_EXPORTED bool mlirAttrIsHLSPortKindAttr(MlirAttribute attr);
 MLIR_CAPI_EXPORTED MlirAttribute mlirHLSPortKindAttrGet(MlirContext ctx,
-                                                        MlirPortKind direction);
+                                                        MlirPortKind kind);
 MLIR_CAPI_EXPORTED MlirPortKind mlirHLSPortKindAttrGetValue(MlirAttribute attr);
 
 #ifdef __cplusplus

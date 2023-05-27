@@ -161,10 +161,11 @@ void hls::constantizeParamOp(ParamOp param, PatternRewriter &rewriter,
   for (auto getParam : param.getGetParamOps()) {
     rewriter.setInsertionPoint(getParam);
     rewriter.replaceOpWithNewOp<ConstParamOp>(getParam, param.getType(),
-                                              constValue);
+                                              constValue, param.getKind());
   }
   rewriter.setInsertionPoint(param);
-  rewriter.replaceOpWithNewOp<ConstParamOp>(param, param.getType(), constValue);
+  rewriter.replaceOpWithNewOp<ConstParamOp>(param, param.getType(), constValue,
+                                            param.getKind());
 }
 
 /// Wrap the operations in the block with dispatch op.

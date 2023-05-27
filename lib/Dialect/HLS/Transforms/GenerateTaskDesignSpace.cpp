@@ -46,7 +46,7 @@ struct GenerateTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
       auto tileParamOp = rewriter.create<ParamOp>(
           loc, rewriter.getIndexType(), ValueRange(),
           AffineMap::get(0, 0, tileBounds, rewriter.getContext()),
-          "tile" + std::to_string(loopSize.index()));
+          ParamKind::TILE_SIZE, "tile" + std::to_string(loopSize.index()));
       tileParams.push_back(tileParamOp);
     }
 
@@ -71,6 +71,7 @@ struct GenerateTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
       auto parallelParamOp = rewriter.create<ParamOp>(
           loc, rewriter.getIndexType(), tileSize.value(),
           AffineMap::get(0, 1, parallelBounds, rewriter.getContext()),
+          ParamKind::PARALLEL_SIZE,
           "parallel" + std::to_string(tileSize.index()));
       parallelParams.push_back(parallelParamOp);
     }
@@ -116,9 +117,10 @@ struct GenerateTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
     // design space, which will be used to select the implementation of the
     // current task.
     rewriter.setInsertionPointToEnd(taskSpaceBlock);
-    auto candidatesParamOp = rewriter.create<ParamOp>(
-        loc, TaskImplType::get(rewriter.getContext()),
-        rewriter.getArrayAttr(implCandidates), "candidates");
+    auto candidatesParamOp =
+        rewriter.create<ParamOp>(loc, TaskImplType::get(rewriter.getContext()),
+                                 rewriter.getArrayAttr(implCandidates),
+                                 ParamKind::TASK_IMPL, "candidates");
     auto select = rewriter.create<SpaceSelectOp>(
         loc, SpaceType::get(rewriter.getContext()), candidatesParamOp,
         implSpaces, rewriter.getArrayAttr(implCandidates));

@@ -21,6 +21,27 @@ using namespace mlir::python::adaptors;
 //===----------------------------------------------------------------------===//
 
 void populateHLSAttributes(py::module &m) {
+  py::enum_<MlirParamKind>(m, "ParamKind", py::module_local())
+      .value("tile", MlirParamKind::TILE_SIZE)
+      .value("parallel", MlirParamKind::PARALLEL_SIZE)
+      .value("template", MlirParamKind::IP_TEMPLATE)
+      .value("impl", MlirParamKind::TASK_IMPL)
+      .value("memory", MlirParamKind::MEMORY_KIND);
+
+  auto paramKindAttr =
+      mlir_attribute_subclass(m, "ParamKindAttr", mlirAttrIsHLSParamKindAttr);
+  paramKindAttr.def_classmethod(
+      "get",
+      [](py::object cls, MlirParamKind kind, MlirContext ctx) {
+        return cls(mlirHLSParamKindAttrGet(ctx, kind));
+      },
+      "Get an instance of ParamKindAttr in given context.", py::arg("cls"),
+      py::arg("kind"), py::arg("context") = py::none());
+  paramKindAttr.def_property_readonly(
+      "value",
+      [](MlirAttribute attr) { return mlirHLSParamKindAttrGetValue(attr); },
+      "Returns the value of ParamKindAttr.");
+
   py::enum_<MlirPortKind>(m, "PortKind", py::module_local())
       .value("input", MlirPortKind::INPUT)
       .value("output", MlirPortKind::OUTPUT)
@@ -30,11 +51,11 @@ void populateHLSAttributes(py::module &m) {
       mlir_attribute_subclass(m, "PortKindAttr", mlirAttrIsHLSPortKindAttr);
   portKindAttr.def_classmethod(
       "get",
-      [](py::object cls, MlirPortKind direction, MlirContext ctx) {
-        return cls(mlirHLSPortKindAttrGet(ctx, direction));
+      [](py::object cls, MlirPortKind kind, MlirContext ctx) {
+        return cls(mlirHLSPortKindAttrGet(ctx, kind));
       },
       "Get an instance of PortKindAttr in given context.", py::arg("cls"),
-      py::arg("direction"), py::arg("context") = py::none());
+      py::arg("kind"), py::arg("context") = py::none());
   portKindAttr.def_property_readonly(
       "value",
       [](MlirAttribute attr) { return mlirHLSPortKindAttrGetValue(attr); },
