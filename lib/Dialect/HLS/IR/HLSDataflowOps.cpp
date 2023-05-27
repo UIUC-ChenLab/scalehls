@@ -310,10 +310,10 @@ struct SimplifyNodeIOs : public OpRewritePattern<NodeOp> {
         unusedArgs.insert(arg);
       } else {
         auto idx = arg.getArgNumber();
-        if (node.getOperandKind(idx) == OperandKind::INPUT) {
+        if (node.getPortKind(idx) == PortKind::INPUT) {
           usedInputs.push_back(node.getOperand(idx));
           usedInputTaps.push_back(node.getInputTap(idx));
-        } else if (node.getOperandKind(idx) == OperandKind::OUTPUT)
+        } else if (node.getPortKind(idx) == PortKind::OUTPUT)
           usedOutputs.push_back(node.getOperand(idx));
         else
           usedParams.push_back(node.getOperand(idx));
@@ -455,17 +455,17 @@ unsigned NodeOp::getNumParams() {
 }
 
 /// Get the type of operand: input, output, or param.
-OperandKind NodeOp::getOperandKind(OpOperand &operand) {
+PortKind NodeOp::getPortKind(OpOperand &operand) {
   assert(operand.getOwner() == *this && "invalid operand");
-  return getOperandKind(operand.getOperandNumber());
+  return getPortKind(operand.getOperandNumber());
 }
-OperandKind NodeOp::getOperandKind(unsigned operandIdx) {
+PortKind NodeOp::getPortKind(unsigned operandIdx) {
   if (operandIdx >= getODSOperandIndexAndLength(2).first)
-    return OperandKind::PARAM;
+    return PortKind::PARAM;
   else if (operandIdx >= getODSOperandIndexAndLength(1).first)
-    return OperandKind::OUTPUT;
+    return PortKind::OUTPUT;
   else
-    return OperandKind::INPUT;
+    return PortKind::INPUT;
 }
 
 /// Get the input, output, and param arguments.

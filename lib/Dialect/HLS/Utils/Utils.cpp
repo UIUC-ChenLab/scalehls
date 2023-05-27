@@ -341,21 +341,21 @@ bool hls::isUnknown(MemRefType type) {
 
 /// A helper to get all users of a buffer except the given node and with the
 /// given kind (producer or consumer).
-static auto getUsersExcept(Value buffer, OperandKind kind, NodeOp except) {
+static auto getUsersExcept(Value buffer, PortKind kind, NodeOp except) {
   SmallVector<NodeOp> nodes;
   for (auto &use : buffer.getUses())
     if (auto node = dyn_cast<NodeOp>(use.getOwner()))
-      if (node != except && node.getOperandKind(use) == kind)
+      if (node != except && node.getPortKind(use) == kind)
         nodes.push_back(node);
   return nodes;
 }
 
 /// Get the consumer/producer nodes of the given buffer expect the given op.
 SmallVector<NodeOp> hls::getConsumersExcept(Value buffer, NodeOp except) {
-  return getUsersExcept(buffer, OperandKind::INPUT, except);
+  return getUsersExcept(buffer, PortKind::INPUT, except);
 }
 SmallVector<NodeOp> hls::getProducersExcept(Value buffer, NodeOp except) {
-  return getUsersExcept(buffer, OperandKind::OUTPUT, except);
+  return getUsersExcept(buffer, PortKind::OUTPUT, except);
 }
 SmallVector<NodeOp> hls::getConsumers(Value buffer) {
   return getConsumersExcept(buffer, NodeOp());
@@ -380,15 +380,15 @@ SmallVector<NodeOp> hls::getDependentConsumers(Value buffer, NodeOp node) {
 /// A helper to get all nested users of a buffer except the given node and with
 /// the given kind (producer or consumer).
 static SmallVector<std::pair<NodeOp, Value>>
-getNestedUsersExcept(Value buffer, OperandKind kind, NodeOp except) {
-  SmallVector<std::tuple<NodeOp, Value, OperandKind>> worklist;
+getNestedUsersExcept(Value buffer, PortKind kind, NodeOp except) {
+  SmallVector<std::tuple<NodeOp, Value, PortKind>> worklist;
 
   // A helper to append all node users of the given buffer.
   auto appendWorklist = [&](Value buffer) {
     for (auto &use : buffer.getUses())
       if (auto node = dyn_cast<NodeOp>(use.getOwner()))
         if (node != except)
-          worklist.push_back({node, buffer, node.getOperandKind(use)});
+          worklist.push_back({node, buffer, node.getPortKind(use)});
   };
 
   // Initialize the worklist.
@@ -427,11 +427,11 @@ getNestedUsersExcept(Value buffer, OperandKind kind, NodeOp except) {
 /// node. The corresponding buffer values are also returned.
 SmallVector<std::pair<NodeOp, Value>>
 hls::getNestedConsumersExcept(Value buffer, NodeOp except) {
-  return getNestedUsersExcept(buffer, OperandKind::INPUT, except);
+  return getNestedUsersExcept(buffer, PortKind::INPUT, except);
 }
 SmallVector<std::pair<NodeOp, Value>>
 hls::getNestedProducersExcept(Value buffer, NodeOp except) {
-  return getNestedUsersExcept(buffer, OperandKind::OUTPUT, except);
+  return getNestedUsersExcept(buffer, PortKind::OUTPUT, except);
 }
 SmallVector<std::pair<NodeOp, Value>> hls::getNestedConsumers(Value buffer) {
   return getNestedConsumersExcept(buffer, NodeOp());
@@ -502,7 +502,7 @@ bool hls::isWritten(OpOperand &use) {
   // into its region to figure out the effect. However, for NodeOp, we don't
   // need this recursive approach any more.
   if (auto node = dyn_cast<NodeOp>(use.getOwner()))
-    return node.getOperandKind(use) == OperandKind::OUTPUT;
+    return node.getPortKind(use) == PortKind::OUTPUT;
   else if (auto schedule = dyn_cast<ScheduleOp>(use.getOwner()))
     return llvm::any_of(
         schedule.getBody().getArgument(use.getOperandNumber()).getUses(),

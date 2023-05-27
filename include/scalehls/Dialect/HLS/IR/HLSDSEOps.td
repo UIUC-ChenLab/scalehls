@@ -106,7 +106,7 @@ def GetSpaceOp : HLSOp<"dse.get_space", [NoMemoryEffect,
   let assemblyFormat = "$name attr-dict `:` type($space)";
 }
 
-def ParamOp : HLSOp<"dse.param", [Symbol, HasParent<"SpaceOp">]> {
+def ParamOp : HLSOp<"dse.param", [Symbol, HasParent<"SpaceOp, DeclareOp">]> {
   let summary = "Declare a design space parameter";
   let description = [{
     ParamOp declares a design space parameter. The parameter can either be
@@ -192,21 +192,6 @@ def ParamOp : HLSOp<"dse.param", [Symbol, HasParent<"SpaceOp">]> {
   }];
 }
 
-def GetParamOp : HLSOp<"dse.get_param", [NoMemoryEffect,
-      DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
-  let summary = "Get the value of a design space parameter";
-  let description = [{
-    GetParamOp gets the value of a design space parameter. The parameter is
-    identified by its symbolic name.
-  }];
-
-  let arguments = (ins SymbolRefAttr:$name);
-  let results = (outs AnyType:$param);
-  let assemblyFormat = "$name attr-dict `:` type($param)";
-
-  let hasVerifier = 1;
-}
-
 def ConstParamOp : HLSOp<"dse.const_param", [NoMemoryEffect, ConstantLike]> {
   let summary = "Declare a design space constant parameter";
 
@@ -229,6 +214,21 @@ def ConstParamOp : HLSOp<"dse.const_param", [NoMemoryEffect, ConstantLike]> {
 
   let assemblyFormat = "attr-dict `:` type($result)";
   let hasFolder = 1;
+  let hasVerifier = 1;
+}
+
+def GetParamOp : HLSOp<"dse.get_param", [NoMemoryEffect,
+      DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+  let summary = "Get the value of a design space parameter";
+  let description = [{
+    GetParamOp gets the value of a design space parameter. The parameter is
+    identified by its symbolic name.
+  }];
+
+  let arguments = (ins SymbolRefAttr:$name);
+  let results = (outs AnyType:$param);
+  let assemblyFormat = "$name attr-dict `:` type($param)";
+
   let hasVerifier = 1;
 }
 

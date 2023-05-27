@@ -28,18 +28,11 @@ void mlirSemanticsInitializeBlockArguments(MlirOperation semantics) {
 // HLS Dialect Types
 //===----------------------------------------------------------------------===//
 
-bool mlirTypeIsHLSTypeParamType(MlirType type) {
-  return unwrap(type).isa<hls::TypeParamType>();
+bool mlirTypeIsHLSTypeType(MlirType type) {
+  return unwrap(type).isa<hls::TypeType>();
 }
-MlirType mlirHLSTypeParamTypeGet(MlirContext ctx) {
-  return wrap(hls::TypeParamType::get(unwrap(ctx)));
-}
-
-bool mlirTypeIsHLSValueParamType(MlirType type) {
-  return unwrap(type).isa<hls::ValueParamType>();
-}
-MlirType mlirHLSValueParamTypeGet(MlirContext ctx) {
-  return wrap(hls::ValueParamType::get(unwrap(ctx)));
+MlirType mlirHLSTypeTypeGet(MlirContext ctx) {
+  return wrap(hls::TypeType::get(unwrap(ctx)));
 }
 
 bool mlirTypeIsHLSPortType(MlirType type) {
@@ -67,40 +60,20 @@ MlirType mlirHLSMemoryKindTypeGet(MlirContext ctx) {
 // HLS Dialect Attributes
 //===----------------------------------------------------------------------===//
 
-static_assert(static_cast<int>(MlirValueParamKind::DYNAMIC) ==
-                      static_cast<int>(ValueParamKind::DYNAMIC) &&
-                  static_cast<int>(MlirValueParamKind::STATIC) ==
-                      static_cast<int>(ValueParamKind::STATIC),
-              "MlirValueParamKind (C-API) and ValueParamKind (C++) mismatch");
+static_assert(static_cast<int>(MlirPortKind::INPUT) ==
+                      static_cast<int>(PortKind::INPUT) &&
+                  static_cast<int>(MlirPortKind::OUTPUT) ==
+                      static_cast<int>(PortKind::OUTPUT),
+              "MlirPortKind (C-API) and PortKind (C++) mismatch");
 
-bool mlirAttrIsHLSValueParamKindAttr(MlirAttribute attr) {
-  return unwrap(attr).isa<hls::ValueParamKindAttr>();
+bool mlirAttrIsHLSPortKindAttr(MlirAttribute attr) {
+  return unwrap(attr).isa<hls::PortKindAttr>();
 }
-MlirAttribute mlirHLSValueParamKindAttrGet(MlirContext ctx,
-                                           MlirValueParamKind kind) {
-  return wrap(hls::ValueParamKindAttr::get(unwrap(ctx),
-                                           static_cast<ValueParamKind>(kind)));
+MlirAttribute mlirHLSPortKindAttrGet(MlirContext ctx, MlirPortKind direction) {
+  return wrap(
+      hls::PortKindAttr::get(unwrap(ctx), static_cast<PortKind>(direction)));
 }
-MlirValueParamKind mlirHLSValueParamKindAttrGetValue(MlirAttribute attr) {
-  return static_cast<MlirValueParamKind>(
-      unwrap(attr).cast<hls::ValueParamKindAttr>().getValue());
-}
-
-static_assert(static_cast<int>(MlirPortDirection::INPUT) ==
-                      static_cast<int>(PortDirection::INPUT) &&
-                  static_cast<int>(MlirPortDirection::OUTPUT) ==
-                      static_cast<int>(PortDirection::OUTPUT),
-              "MlirPortDirection (C-API) and PortDirection (C++) mismatch");
-
-bool mlirAttrIsHLSPortDirectionAttr(MlirAttribute attr) {
-  return unwrap(attr).isa<hls::PortDirectionAttr>();
-}
-MlirAttribute mlirHLSPortDirectionAttrGet(MlirContext ctx,
-                                          MlirPortDirection direction) {
-  return wrap(hls::PortDirectionAttr::get(
-      unwrap(ctx), static_cast<PortDirection>(direction)));
-}
-MlirPortDirection mlirHLSPortDirectionAttrGetValue(MlirAttribute attr) {
-  return static_cast<MlirPortDirection>(
-      unwrap(attr).cast<hls::PortDirectionAttr>().getValue());
+MlirPortKind mlirHLSPortKindAttrGetValue(MlirAttribute attr) {
+  return static_cast<MlirPortKind>(
+      unwrap(attr).cast<hls::PortKindAttr>().getValue());
 }

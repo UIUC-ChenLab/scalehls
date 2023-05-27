@@ -17,14 +17,9 @@ def SpaceType : HLSType<"Space"> {
   let mnemonic = "space";
 }
 
-def TypeParamType : HLSType<"TypeParam"> {
-  let summary = "Used to represent a type parameter";
-  let mnemonic = "type_param";
-}
-
-def ValueParamType : HLSType<"ValueParam"> {
-  let summary = "Used to represent a static or dynamic value parameter";
-  let mnemonic = "value_param";
+def TypeType : HLSType<"Type"> {
+  let summary = "Used to represent a type";
+  let mnemonic = "type";
 }
 
 def PortType : HLSType<"Port"> {
@@ -39,7 +34,7 @@ def TaskImplType : HLSType<"TaskImpl"> {
 
 def MemoryKindType : HLSType<"MemoryKind"> {
   let summary = "A memory kind type";
-  let mnemonic = "mem";
+  let mnemonic = "memory";
 }
 
 def StreamType : HLSType<"Stream"> {
@@ -48,7 +43,7 @@ def StreamType : HLSType<"Stream"> {
     Represents a stream of any type that can be transfered between HLS modules.
     This type is equal to the hls::stream<> type in Xilinx Vivado HLS.
   }];
-  let mnemonic = "ubuf.stream";
+  let mnemonic = "stream";
 
   let parameters = (ins "mlir::Type":$elementType, "unsigned":$depth);
   let assemblyFormat = "`<` qualified($elementType) `,` $depth `>`";

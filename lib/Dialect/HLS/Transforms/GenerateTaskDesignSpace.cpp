@@ -104,13 +104,9 @@ struct GenerateTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
                                                          ipName.str());
         rewriter.createBlock(&ipSpace.getBody());
         SmallVector<Value> ipParams;
-        for (auto staticParam : declare.getOps<ValueParamOp>())
-          if (staticParam.getKind() == ValueParamKind::STATIC) {
-            auto ipParamOp = rewriter.create<ParamOp>(
-                loc, staticParam.getResult().getType(),
-                staticParam.getCandidatesAttr(), staticParam.getName());
-            ipParams.push_back(ipParamOp);
-          }
+        for (auto ipParamOp : declare.getOps<ParamOp>())
+          if (!ipParamOp.getType().isa<TypeType>())
+            ipParams.push_back(rewriter.clone(*ipParamOp)->getResult(0));
         rewriter.create<SpacePackOp>(loc, ipParams);
         implSpaces.push_back(ipSpace);
       }

@@ -21,43 +21,24 @@ using namespace mlir::python::adaptors;
 //===----------------------------------------------------------------------===//
 
 void populateHLSAttributes(py::module &m) {
-  py::enum_<MlirValueParamKind>(m, "ValueParamKind", py::module_local())
-      .value("static", MlirValueParamKind::STATIC)
-      .value("dynamic", MlirValueParamKind::DYNAMIC);
+  py::enum_<MlirPortKind>(m, "PortKind", py::module_local())
+      .value("input", MlirPortKind::INPUT)
+      .value("output", MlirPortKind::OUTPUT)
+      .value("param", MlirPortKind::PARAM);
 
-  auto valueParamKindAttr = mlir_attribute_subclass(
-      m, "ValueParamKindAttr", mlirAttrIsHLSValueParamKindAttr);
-  valueParamKindAttr.def_classmethod(
+  auto portKindAttr =
+      mlir_attribute_subclass(m, "PortKindAttr", mlirAttrIsHLSPortKindAttr);
+  portKindAttr.def_classmethod(
       "get",
-      [](py::object cls, MlirValueParamKind kind, MlirContext ctx) {
-        return cls(mlirHLSValueParamKindAttrGet(ctx, kind));
+      [](py::object cls, MlirPortKind direction, MlirContext ctx) {
+        return cls(mlirHLSPortKindAttrGet(ctx, direction));
       },
-      "Get an instance of ValueParamKindAttr in given context.", py::arg("cls"),
-      py::arg("kind"), py::arg("context") = py::none());
-  valueParamKindAttr.def_property_readonly(
-      "value",
-      [](MlirAttribute attr) {
-        return mlirHLSValueParamKindAttrGetValue(attr);
-      },
-      "Returns the value of ValueParamKindAttr.");
-
-  py::enum_<MlirPortDirection>(m, "PortDirection", py::module_local())
-      .value("input", MlirPortDirection::INPUT)
-      .value("output", MlirPortDirection::OUTPUT);
-
-  auto PortDirectionAttr = mlir_attribute_subclass(
-      m, "PortDirectionAttr", mlirAttrIsHLSPortDirectionAttr);
-  PortDirectionAttr.def_classmethod(
-      "get",
-      [](py::object cls, MlirPortDirection direction, MlirContext ctx) {
-        return cls(mlirHLSPortDirectionAttrGet(ctx, direction));
-      },
-      "Get an instance of PortDirectionAttr in given context.", py::arg("cls"),
+      "Get an instance of PortKindAttr in given context.", py::arg("cls"),
       py::arg("direction"), py::arg("context") = py::none());
-  PortDirectionAttr.def_property_readonly(
+  portKindAttr.def_property_readonly(
       "value",
-      [](MlirAttribute attr) { return mlirHLSPortDirectionAttrGetValue(attr); },
-      "Returns the value of PortDirectionAttr.");
+      [](MlirAttribute attr) { return mlirHLSPortKindAttrGetValue(attr); },
+      "Returns the value of PortKindAttr.");
 }
 
 //===----------------------------------------------------------------------===//
@@ -65,25 +46,13 @@ void populateHLSAttributes(py::module &m) {
 //===----------------------------------------------------------------------===//
 
 void populateHLSTypes(py::module &m) {
-
-  auto typeParamType =
-      mlir_type_subclass(m, "TypeParamType", mlirTypeIsHLSTypeParamType);
-  typeParamType.def_classmethod(
+  auto typeType = mlir_type_subclass(m, "TypeType", mlirTypeIsHLSTypeType);
+  typeType.def_classmethod(
       "get",
       [](py::object cls, MlirContext ctx) {
-        return cls(mlirHLSTypeParamTypeGet(ctx));
+        return cls(mlirHLSTypeTypeGet(ctx));
       },
-      "Get an instance of TypeParamType in given context.", py::arg("cls"),
-      py::arg("context") = py::none());
-
-  auto valueParamType =
-      mlir_type_subclass(m, "ValueParamType", mlirTypeIsHLSValueParamType);
-  valueParamType.def_classmethod(
-      "get",
-      [](py::object cls, MlirContext ctx) {
-        return cls(mlirHLSValueParamTypeGet(ctx));
-      },
-      "Get an instance of ValueParamType in given context.", py::arg("cls"),
+      "Get an instance of TypeType in given context.", py::arg("cls"),
       py::arg("context") = py::none());
 
   auto portType = mlir_type_subclass(m, "PortType", mlirTypeIsHLSPortType);

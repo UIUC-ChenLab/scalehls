@@ -31,9 +31,6 @@ namespace hls {
 
 #include "scalehls/Dialect/HLS/IR/HLSOpsInterfaces.h.inc"
 
-/// Kind of dataflow.node operands.
-enum class OperandKind { INPUT, OUTPUT, PARAM };
-
 /// Memory effects for dataflow.stream operations.
 namespace StreamEffects {
 struct Instantiate : public MemoryEffects::Effect::Base<Instantiate> {};

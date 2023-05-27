@@ -20,8 +20,8 @@ def LibraryOp : HLSOp<"uip.library", [IsolatedFromAbove, SymbolTable, Symbol,
   let assemblyFormat = "$sym_name attr-dict-with-keyword $body";
 }
 
-def DeclareOp : HLSOp<"uip.declare", [IsolatedFromAbove, Symbol, SingleBlock,
-      HasParent<"LibraryOp">]> {
+def DeclareOp : HLSOp<"uip.declare", [IsolatedFromAbove, SymbolTable, Symbol,
+      SingleBlock, HasParent<"LibraryOp">]> {
   let summary = "Declare an IP";
   let description = [{
     DeclareOp declares an IP in the parent library. DeclareOp contains an region
@@ -46,6 +46,7 @@ def InstanceOp : HLSOp<"uip.instance", [AttrSizedOperandSegments,
   let arguments = (ins Variadic<AnyType>:$inputs, Variadic<AnyType>:$outputs,
       Variadic<AnyType>:$params, SymbolRefAttr:$ip);
   let results = (outs Variadic<AnyType>:$results);
+
   let assemblyFormat = [{
     $ip `(` $inputs `)` `->` `(` $outputs `)` (`[` $params^ `]`)? attr-dict `:`
     functional-type($inputs, $outputs) (`[` type($params)^ `]`)?
@@ -53,97 +54,17 @@ def InstanceOp : HLSOp<"uip.instance", [AttrSizedOperandSegments,
   }];
 }
 
-def TypeParamOp : HLSOp<"uip.type_param", [HasParent<"DeclareOp">]> {
-  let summary = "Declare a type parameter of an IP";
-
-  let arguments = (ins TypeArrayAttr:$candidates, StrAttr:$name);
-  let results = (outs TypeParamType:$result);
-
-  let assemblyFormat = [{
-    $name `candidates` $candidates attr-dict `:` type($result)
-  }];
-
-  let builders = [
-    // Parameter builder constrained by candidates.
-    OpBuilder<(ins "mlir::ArrayRef<Type>":$candidates, "std::string":$name), [{
-          build($_builder, $_state, TypeParamType::get($_builder.getContext()),
-              $_builder.getTypeArrayAttr(candidates),
-              $_builder.getStringAttr(name));
-        }]>,
-
-    // Parameter builder without constraints.
-    OpBuilder<(ins "std::string":$name), "build($_builder, $_state, {}, name);">
-  ];
-}
-
-def ValueParamOp : HLSOp<"uip.value_param", [HasParent<"DeclareOp">]> {
-  let summary = "Declare a value parameter of an IP";
-
-  let arguments = (ins TypeParamType:$type, Variadic<Index>:$args,
-      OptionalAttr<IndexAttr>:$step, OptionalAttr<AffineMapAttr>:$bounds,
-      OptionalAttr<ArrayAttr>:$candidates, ValueParamKindAttr:$kind,
-      StrAttr:$name);
-  let results = (outs ValueParamType:$result);
-
-  let assemblyFormat = [{
-    $kind $name `type` $type (`candidates` $candidates^)?
-    (`range` `(` $args `)` $bounds `step` $step^)? attr-dict `:` type($result)
-  }];
-
-  let builders = [
-    // Parameter builder constrained by candidates.
-    OpBuilder<(ins "mlir::Value":$type, "mlir::ArrayAttr":$candidates,
-        "ValueParamKind":$kind, "std::string":$name), [{
-          build($_builder, $_state, ValueParamType::get($_builder.getContext()),
-              type, {}, nullptr, nullptr, candidates,
-              ValueParamKindAttr::get($_builder.getContext(), kind),
-              $_builder.getStringAttr(name));
-        }]>,
-
-    // Parameter builder constrained by affine lower and upper bounds.
-    OpBuilder<(ins "mlir::Value":$type, "mlir::ValueRange":$args,
-        "unsigned":$step, "mlir::AffineMap":$bounds, "ValueParamKind":$kind,
-        "std::string":$name),
-        [{
-          build($_builder, $_state, ValueParamType::get($_builder.getContext()),
-              type, args, $_builder.getIndexAttr(step),
-              mlir::AffineMapAttr::get(bounds), nullptr,
-              ValueParamKindAttr::get($_builder.getContext(), kind),
-              $_builder.getStringAttr(name));
-        }]>,
-    OpBuilder<(ins "mlir::Value":$type, "mlir::ValueRange":$args,
-        "mlir::AffineMap":$bounds, "ValueParamKind":$kind, "std::string":$name),
-        "build($_builder, $_state, type, args, 1, bounds, kind, name);">,
-
-    // Parameter builder without constraints.
-    OpBuilder<(ins "mlir::Value":$type, "ValueParamKind":$kind,
-        "std::string":$name),
-        "build($_builder, $_state, type, nullptr, kind, name);">
-  ];
-
-  let extraClassDeclaration = [{
-    /// Check the parameter's constraint type.
-    bool isRangeConstrained() {
-      return getBounds().has_value() && getStep().has_value();
-    }
-    bool isCandidateConstrained() { return getCandidates().has_value(); }
-    bool isUnconstrained() {
-      return !isRangeConstrained() && !isCandidateConstrained();
-    }
-  }];
-}
-
-def PortOp : HLSOp<"uip.port", [HasParent<"DeclareOp">]> {
+def PortOp : HLSOp<"uip.port", [Symbol, HasParent<"DeclareOp">]> {
   let summary = "Declare a port of an IP";
 
-  let arguments = (ins TypeParamType:$type, Variadic<ValueParamType>:$indices,
-      MemRefLayoutAttrInterface:$layout, PortDirectionAttr:$direction,
-      StrAttr:$name);
+  let arguments = (ins TypeType:$type, Variadic<AnyType>:$sizes,
+      MemRefLayoutAttrInterface:$layout, PortKindAttr:$kind,
+      SymbolNameAttr:$sym_name);
   let results = (outs PortType:$result);
 
   let assemblyFormat = [{
-    $direction $name `type` $type `indices` `(` $indices `)` $layout attr-dict
-    `:` type($result)
+    $sym_name $kind `type` $type `sizes` `(` $sizes `)` $layout attr-dict
+    `:` functional-type($sizes, $result)
   }];
 }
 
@@ -160,7 +81,7 @@ def SemanticsOp : HLSOp<"uip.semantics", [Terminator, IsolatedFromAbove,
   let summary = "Declare the semantics of an IP";
 
   let arguments = (ins Variadic<PortType>:$inputs,
-      Variadic<PortType>:$outputs, Variadic<ValueParamType>:$params);
+      Variadic<PortType>:$outputs, Variadic<PortType>:$params);
   let regions = (region SizedRegion<1>:$body);
   let assemblyFormat = [{
     `(` $inputs `)` `->` `(` $outputs `)` (`[` $params^ `]`)? attr-dict `:`

@@ -48,7 +48,7 @@ void SemanticsOp::initializeBlockArguments() {
       auto port = value.getDefiningOp<PortOp>();
       assert(port && "invalid semantics input/output");
       auto tensorType = RankedTensorType::get(
-          SmallVector<int64_t>(port.getIndices().size(), ShapedType::kDynamic),
+          SmallVector<int64_t>(port.getSizes().size(), ShapedType::kDynamic),
           /*port.getType().getType()*/ Builder(*this).getF32Type(), nullptr);
       argTypes.push_back(tensorType);
       argLocs.push_back(port.getLoc());

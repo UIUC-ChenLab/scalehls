@@ -200,8 +200,8 @@ def NodeOp : HLSOp<"sdf.node", [
     unsigned getNumParams();
 
     /// Get the type of operand: input, output, or param.
-    OperandKind getOperandKind(OpOperand &operand);
-    OperandKind getOperandKind(unsigned operandIdx);
+    PortKind getPortKind(OpOperand &operand);
+    PortKind getPortKind(unsigned operandIdx);
 
     /// Get the input, output, and param arguments.
     iterator_range<Block::args_iterator> getInputArgs();

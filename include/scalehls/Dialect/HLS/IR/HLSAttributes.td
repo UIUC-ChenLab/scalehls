@@ -42,25 +42,15 @@ def TaskImplAttr : HLSAttr<"TaskImpl"> {
   }];
 }
 
-def ValueParamKind: I32EnumAttr<"ValueParamKind", "Kind of a value parameter", [
-    I32EnumAttrCase<"STATIC", 0, "static">,
-    I32EnumAttrCase<"DYNAMIC", 1, "dynamic">]> {
-  let cppNamespace = "mlir::scalehls::hls";
-  let genSpecializedAttr = 0;
-}
-def ValueParamKindAttr: EnumAttr<HLSDialect, ValueParamKind> {
-  let mnemonic = "value_param";
-  let assemblyFormat = "`<` $value `>`";
-}
-
-def PortDirection: I32EnumAttr<"PortDirection", "Direction of a port", [
+def PortKind: I32EnumAttr<"PortKind", "Kind of a port", [
     I32EnumAttrCase<"INPUT", 0, "input">,
-    I32EnumAttrCase<"OUTPUT", 1, "output">]> {
+    I32EnumAttrCase<"OUTPUT", 1, "output">,
+    I32EnumAttrCase<"PARAM", 2, "param">]> {
   let cppNamespace = "mlir::scalehls::hls";
   let genSpecializedAttr = 0;
 }
-def PortDirectionAttr: EnumAttr<HLSDialect, PortDirection> {
-  let mnemonic = "direction";
+def PortKindAttr: EnumAttr<HLSDialect, PortKind> {
+  let mnemonic = "port";
   let assemblyFormat = "`<` $value `>`";
 }
 
@@ -86,7 +76,7 @@ def MemoryKind: I32EnumAttr<"MemoryKind", "Kind of memory", [
   let genSpecializedAttr = 0;
 }
 def MemoryKindAttr: EnumAttr<HLSDialect, MemoryKind> {
-  let mnemonic = "mem";
+  let mnemonic = "memory";
   let assemblyFormat = "`<` $value `>`";
 }
 def MemoryKindParam: EnumParameter<MemoryKind>;
