@@ -16,55 +16,18 @@ class HLSAttr<string name, list<Trait> traits = []> :
     AttrDef<HLSDialect, name, traits>;
 
 //===----------------------------------------------------------------------===//
-// SDF/FDF Attributes
-//===----------------------------------------------------------------------===//
-
-def MemoryKind: I32EnumAttr<"MemoryKind", "Kind of memory", [
-    I32EnumAttrCase<"UNKNOWN", 0, "unknown">,  
-    I32EnumAttrCase<"LUTRAM_1P", 1, "lutram_1p">,
-    I32EnumAttrCase<"LUTRAM_2P", 2, "lutram_2p">,
-    I32EnumAttrCase<"LUTRAM_S2P", 3, "lutram_s2p">,
-    I32EnumAttrCase<"BRAM_1P", 4, "bram_1p">,
-    I32EnumAttrCase<"BRAM_2P", 5, "bram_2p">,
-    I32EnumAttrCase<"BRAM_S2P", 6, "bram_s2p">,
-    I32EnumAttrCase<"BRAM_T2P", 7, "bram_t2p">,
-    I32EnumAttrCase<"URAM_1P", 8, "uram_1p">,
-    I32EnumAttrCase<"URAM_2P", 9, "uram_2p">,
-    I32EnumAttrCase<"URAM_S2P", 10, "uram_s2p">,
-    I32EnumAttrCase<"URAM_T2P", 11, "uram_t2p">,
-    I32EnumAttrCase<"DRAM", 12, "dram">]> {
-  let cppNamespace = "mlir::scalehls::hls";
-  let genSpecializedAttr = 0;
-}
-def MemoryKindAttr: EnumAttr<HLSDialect, MemoryKind> {
-  let mnemonic = "mem";
-  let assemblyFormat = "`<` $value `>`";
-}
-def MemoryKindParam: EnumParameter<MemoryKind>;
-
-def PartitionKind: I32EnumAttr<"PartitionKind", "Kind of array partition", [
-    I32EnumAttrCase<"NONE", 0, "none">,
-    I32EnumAttrCase<"CYCLIC", 1, "cyclic">,
-    I32EnumAttrCase<"BLOCK", 2, "block">,
-    I32EnumAttrCase<"COMPLETE", 3, "complete">]> {
-  let cppNamespace = "mlir::scalehls::hls";
-  let genSpecializedAttr = 0;
-}
-def PartitionKindParam: EnumParameter<PartitionKind>;
-
-//===----------------------------------------------------------------------===//
 // UIP Attributes
 //===----------------------------------------------------------------------===//
 
-def IPLibraryParam: StringRefParameter<"Library of an IP"> {}
-def IPNameParam: StringRefParameter<"Name of an IP"> {}
+def IPLibraryParam: StringRefParameter<"Library of an IP">;
+def IPNameParam: StringRefParameter<"Name of an IP">;
 
-def IPIdentifierAttr : HLSAttr<"IPIdentifier"> {
-  let summary = "Identifier of an IP";
+def TaskImplAttr : HLSAttr<"TaskImpl"> {
+  let summary = "Implementation of a task";
   let parameters = (ins IPLibraryParam:$library, IPNameParam:$name);
   
-  let mnemonic = "ip";
-  let assemblyFormat = "`<` $library `,` $name `>`";
+  let mnemonic = "impl";
+  let assemblyFormat = "`<` $library `_` $name `>`";
 
   let extraClassDeclaration = [{
     bool isDefaultImpl() {
@@ -104,6 +67,39 @@ def PortDirectionAttr: EnumAttr<HLSDialect, PortDirection> {
 //===----------------------------------------------------------------------===//
 // UBUF Attributes
 //===----------------------------------------------------------------------===//
+
+def MemoryKind: I32EnumAttr<"MemoryKind", "Kind of memory", [
+    I32EnumAttrCase<"UNKNOWN", 0, "unknown">,  
+    I32EnumAttrCase<"LUTRAM_1P", 1, "lutram_1p">,
+    I32EnumAttrCase<"LUTRAM_2P", 2, "lutram_2p">,
+    I32EnumAttrCase<"LUTRAM_S2P", 3, "lutram_s2p">,
+    I32EnumAttrCase<"BRAM_1P", 4, "bram_1p">,
+    I32EnumAttrCase<"BRAM_2P", 5, "bram_2p">,
+    I32EnumAttrCase<"BRAM_S2P", 6, "bram_s2p">,
+    I32EnumAttrCase<"BRAM_T2P", 7, "bram_t2p">,
+    I32EnumAttrCase<"URAM_1P", 8, "uram_1p">,
+    I32EnumAttrCase<"URAM_2P", 9, "uram_2p">,
+    I32EnumAttrCase<"URAM_S2P", 10, "uram_s2p">,
+    I32EnumAttrCase<"URAM_T2P", 11, "uram_t2p">,
+    I32EnumAttrCase<"DRAM", 12, "dram">]> {
+  let cppNamespace = "mlir::scalehls::hls";
+  let genSpecializedAttr = 0;
+}
+def MemoryKindAttr: EnumAttr<HLSDialect, MemoryKind> {
+  let mnemonic = "mem";
+  let assemblyFormat = "`<` $value `>`";
+}
+def MemoryKindParam: EnumParameter<MemoryKind>;
+
+def PartitionKind: I32EnumAttr<"PartitionKind", "Kind of array partition", [
+    I32EnumAttrCase<"NONE", 0, "none">,
+    I32EnumAttrCase<"CYCLIC", 1, "cyclic">,
+    I32EnumAttrCase<"BLOCK", 2, "block">,
+    I32EnumAttrCase<"COMPLETE", 3, "complete">]> {
+  let cppNamespace = "mlir::scalehls::hls";
+  let genSpecializedAttr = 0;
+}
+def PartitionKindParam: EnumParameter<PartitionKind>;
 
 def PartitionLayoutAttr : HLSAttr<"PartitionLayout",
     [DeclareAttrInterfaceMethods<MemRefLayoutAttrInterface,

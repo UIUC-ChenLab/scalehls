@@ -13,6 +13,16 @@ using namespace hls;
 using namespace affine;
 
 //===----------------------------------------------------------------------===//
+// SpaceSelectOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult SpaceSelectOp::fold(FoldAdaptor adaptor) {
+  if (getSpaces().size() == 1)
+    return getSpaces()[0];
+  return {};
+}
+
+//===----------------------------------------------------------------------===//
 // ParamOp
 //===----------------------------------------------------------------------===//
 
@@ -30,7 +40,7 @@ struct ConstantizeParamOpPattern : public OpRewritePattern<ParamOp> {
     } else if (op.isRangeConstrained())
       if (auto constLb = op.getLowerBound().dyn_cast<AffineConstantExpr>()) {
         auto ub = op.getUpperBound();
-        auto diff = simplifyAffineExpr(ub - constLb, op.getNumOperands(), 0);
+        auto diff = simplifyAffineExpr(ub - constLb, 0, op.getNumOperands());
         if (auto constDiff = diff.dyn_cast<AffineConstantExpr>())
           if (constDiff.getValue() <= op.getStepAttr().getInt())
             constValue =

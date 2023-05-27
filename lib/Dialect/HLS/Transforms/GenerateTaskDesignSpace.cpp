@@ -54,8 +54,7 @@ struct GenerateTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
     // default implementatoin without using IPs as the first candidate.
     SmallVector<Attribute> implCandidates;
     SmallVector<Value> implSpaces;
-    implCandidates.push_back(
-        IPIdentifierAttr::get(rewriter.getContext(), "", ""));
+    implCandidates.push_back(TaskImplAttr::get(rewriter.getContext(), "", ""));
 
     // Generate a sub-space for holding default implementation parameters, which
     // are a list of parallel factors. The sub-space should take the tile
@@ -96,7 +95,7 @@ struct GenerateTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
       // Otherwise, match the two linalg ops with LinalgMatcher.
       if (succeeded(LinalgMatcher(linalgOp, ipLinalgOp).match())) {
         implCandidates.push_back(
-            IPIdentifierAttr::get(rewriter.getContext(), libraryName, ipName));
+            TaskImplAttr::get(rewriter.getContext(), libraryName, ipName));
 
         // Generate a separate sub-space for holding the parameters of each IP.
         // TODO: We don't know how to handle the parameter type yet.
@@ -122,7 +121,7 @@ struct GenerateTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
     // current task.
     rewriter.setInsertionPointToEnd(taskSpaceBlock);
     auto candidatesParamOp = rewriter.create<ParamOp>(
-        loc, IPIdentifierType::get(rewriter.getContext()),
+        loc, TaskImplType::get(rewriter.getContext()),
         rewriter.getArrayAttr(implCandidates), "candidates");
     auto select = rewriter.create<SpaceSelectOp>(
         loc, SpaceType::get(rewriter.getContext()), candidatesParamOp,

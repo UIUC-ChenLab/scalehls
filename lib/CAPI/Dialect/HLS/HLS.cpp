@@ -49,11 +49,11 @@ MlirType mlirHLSPortTypeGet(MlirContext ctx) {
   return wrap(hls::PortType::get(unwrap(ctx)));
 }
 
-bool mlirTypeIsHLSIPIdentifierType(MlirType type) {
-  return unwrap(type).isa<hls::IPIdentifierType>();
+bool mlirTypeIsHLSTaskImplType(MlirType type) {
+  return unwrap(type).isa<hls::TaskImplType>();
 }
-MlirType mlirHLSIPIdentifierTypeGet(MlirContext ctx) {
-  return wrap(hls::IPIdentifierType::get(unwrap(ctx)));
+MlirType mlirHLSTaskImplTypeGet(MlirContext ctx) {
+  return wrap(hls::TaskImplType::get(unwrap(ctx)));
 }
 
 bool mlirTypeIsHLSMemoryKindType(MlirType type) {

@@ -58,6 +58,8 @@ def SpaceSelectOp : HLSOp<"dse.space_select", [NoMemoryEffect,
     $arg $conditions $spaces attr-dict `:` type($arg) `,`
     functional-type($spaces, $result)
   }];
+
+  let hasFolder = 1;
 }
 
 def SpacePackOp : HLSOp<"dse.space_pack", [Terminator, HasParent<"SpaceOp">]> {
@@ -182,7 +184,7 @@ def ParamOp : HLSOp<"dse.param", [Symbol, HasParent<"SpaceOp">]> {
       assignValue(MemoryKindAttr::get(getContext(), kind));
     }
     void assignValue(StringRef library, StringRef name) {
-      assignValue(IPIdentifierAttr::get(getContext(), library, name));
+      assignValue(TaskImplAttr::get(getContext(), library, name));
     }
 
     SmallVector<GetParamOp, 8> getGetParamOps();
@@ -221,7 +223,7 @@ def ConstParamOp : HLSOp<"dse.const_param", [NoMemoryEffect, ConstantLike]> {
     OpBuilder<(ins "mlir::Type":$result, "StringRef":$library,
         "StringRef":$name), [{
           build($_builder, $_state, result,
-              IPIdentifierAttr::get($_builder.getContext(), library, name));
+              TaskImplAttr::get($_builder.getContext(), library, name));
         }]>
   ];
 

@@ -95,14 +95,14 @@ void populateHLSTypes(py::module &m) {
       "Get an instance of PortType in given context.", py::arg("cls"),
       py::arg("context") = py::none());
 
-  auto ipIdentifierType =
-      mlir_type_subclass(m, "IPIdentifierType", mlirTypeIsHLSIPIdentifierType);
-  ipIdentifierType.def_classmethod(
+  auto taskImplType =
+      mlir_type_subclass(m, "TaskImplType", mlirTypeIsHLSTaskImplType);
+  taskImplType.def_classmethod(
       "get",
       [](py::object cls, MlirContext ctx) {
-        return cls(mlirHLSIPIdentifierTypeGet(ctx));
+        return cls(mlirHLSTaskImplTypeGet(ctx));
       },
-      "Get an instance of IPIdentifierType in given context.", py::arg("cls"),
+      "Get an instance of TaskImplType in given context.", py::arg("cls"),
       py::arg("context") = py::none());
 
   auto memoryKindType =

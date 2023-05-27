@@ -14,32 +14,32 @@ class HLSType<string name, list<Trait> traits = []> :
 
 def SpaceType : HLSType<"Space"> {
   let summary = "Represent a design space containing multiple parameters";
-  let mnemonic = "dse.space";
+  let mnemonic = "space";
 }
 
 def TypeParamType : HLSType<"TypeParam"> {
   let summary = "Used to represent a type parameter";
-  let mnemonic = "uip.type_param";
+  let mnemonic = "type_param";
 }
 
 def ValueParamType : HLSType<"ValueParam"> {
   let summary = "Used to represent a static or dynamic value parameter";
-  let mnemonic = "uip.value_param";
+  let mnemonic = "value_param";
 }
 
 def PortType : HLSType<"Port"> {
   let summary = "Used to represent an input/output";
-  let mnemonic = "uip.port";
+  let mnemonic = "port";
 }
 
-def IPIdentifierType : HLSType<"IPIdentifier"> {
+def TaskImplType : HLSType<"TaskImpl"> {
   let summary = "An IP identifier type";
-  let mnemonic = "uip.ip";
+  let mnemonic = "impl";
 }
 
 def MemoryKindType : HLSType<"MemoryKind"> {
   let summary = "A memory kind type";
-  let mnemonic = "ubuf.mem";
+  let mnemonic = "mem";
 }
 
 def StreamType : HLSType<"Stream"> {

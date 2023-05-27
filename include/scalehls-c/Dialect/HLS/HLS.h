@@ -35,8 +35,8 @@ MLIR_CAPI_EXPORTED MlirType mlirHLSValueParamTypeGet(MlirContext ctx);
 MLIR_CAPI_EXPORTED bool mlirTypeIsHLSPortType(MlirType type);
 MLIR_CAPI_EXPORTED MlirType mlirHLSPortTypeGet(MlirContext ctx);
 
-MLIR_CAPI_EXPORTED bool mlirTypeIsHLSIPIdentifierType(MlirType type);
-MLIR_CAPI_EXPORTED MlirType mlirHLSIPIdentifierTypeGet(MlirContext ctx);
+MLIR_CAPI_EXPORTED bool mlirTypeIsHLSTaskImplType(MlirType type);
+MLIR_CAPI_EXPORTED MlirType mlirHLSTaskImplTypeGet(MlirContext ctx);
 
 MLIR_CAPI_EXPORTED bool mlirTypeIsHLSMemoryKindType(MlirType type);
 MLIR_CAPI_EXPORTED MlirType mlirHLSMemoryKindTypeGet(MlirContext ctx);
