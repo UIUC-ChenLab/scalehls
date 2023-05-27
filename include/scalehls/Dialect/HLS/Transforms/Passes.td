@@ -33,4 +33,10 @@ def GenerateTaskDesignSpace :
   ];
 }
 
+def SimplifyDesignSpace :
+      Pass<"scalehls-simplify-design-space", "mlir::ModuleOp"> {
+  let summary = "Simplify design space";
+  let constructor = "mlir::scalehls::hls::createSimplifyDesignSpacePass()";
+}
+
 #endif // SCALEHLS_DIALECT_HLS_TRANSFORMS_PASSES_TD

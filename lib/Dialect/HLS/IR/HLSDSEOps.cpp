@@ -26,38 +26,8 @@ OpFoldResult SpaceSelectOp::fold(FoldAdaptor adaptor) {
 // ParamOp
 //===----------------------------------------------------------------------===//
 
-namespace {
-struct ConstantizeParamOpPattern : public OpRewritePattern<ParamOp> {
-  using OpRewritePattern<ParamOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(ParamOp op,
-                                PatternRewriter &rewriter) const override {
-    Attribute constValue;
-    if (op.isCandidateConstrained()) {
-      if (op.getCandidates().value().size() == 1)
-        constValue = op.getCandidates().value()[0];
-
-    } else if (op.isRangeConstrained())
-      if (auto constLb = op.getLowerBound().dyn_cast<AffineConstantExpr>()) {
-        auto ub = op.getUpperBound();
-        auto diff = simplifyAffineExpr(ub - constLb, 0, op.getNumOperands());
-        if (auto constDiff = diff.dyn_cast<AffineConstantExpr>())
-          if (constDiff.getValue() <= op.getStepAttr().getInt())
-            constValue =
-                Builder(op.getContext()).getIndexAttr(constLb.getValue());
-      }
-
-    if (constValue)
-      return constantizeParamOp(op, rewriter, constValue), success();
-    return failure();
-  }
-};
-} // namespace
-
 void ParamOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                          MLIRContext *context) {
-  results.add<ConstantizeParamOpPattern>(context);
-}
+                                          MLIRContext *context) {}
 
 OpFoldResult ParamOp::fold(FoldAdaptor adaptor) {
   if (isRangeConstrained()) {
