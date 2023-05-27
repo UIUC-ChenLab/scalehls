@@ -11,7 +11,8 @@
 // Design Space Exploration (DSE) Operations
 //===----------------------------------------------------------------------===//
 
-def SpaceOp : HLSOp<"dse.space", [IsolatedFromAbove, Symbol,
+def SpaceOp : HLSOp<"dse.space", [IsolatedFromAbove, SymbolTable, Symbol,
+      SingleBlockImplicitTerminator<"SpacePackOp">,
       ParentOneOf<["mlir::ModuleOp", "SpaceOp"]>]> {
   let summary = "Declare a design space";
   let description = [{
@@ -19,28 +20,12 @@ def SpaceOp : HLSOp<"dse.space", [IsolatedFromAbove, Symbol,
     constraints, and sub-spaces, declared with ParamOp, RequireOp, and nested
     SpaceOp, respectively. The space has a symbolic name that can be used to
     refer to by GetSpaceOp in the payload IR.
-
-    SpaceOp can contain multiple blocks to represent different branches of the
-    same design space. For example:
-    ```
-    %space = dse.space @task0 {
-      %impl = dse.param @impl candidates [#hls.ip<,>, #hls.ip<"vitis", "gemm">]
-      dse.space_branch %impl [#hls.ip<,>, #hls.ip<"vitis", "gemm">] ^bb1, ^bb2
-    ^bb1:
-      %p0 = dse.param @p0 candidates [2, 4, 8] : index
-      %p1 = dse.param @p1 candidates [2, 4, 8] : index
-      dse.space_pack (%p0, %p1) : (index, index)
-    ^bb2:
-      $parN = dse.param @parN candidates [16, 32] : index
-      dse.space_pack ($parN) : (index)
-    }
-    ```
   }];
 
   let arguments = (ins Variadic<AnyType>:$hyper_params,
                        SymbolNameAttr:$sym_name);
   let results = (outs SpaceType:$result);
-  let regions = (region MinSizedRegion<1>:$body);
+  let regions = (region SizedRegion<1>:$body);
   let assemblyFormat = [{
     $sym_name `(` $hyper_params `)` attr-dict `:`
     functional-type($hyper_params, $result) $body
@@ -57,20 +42,21 @@ def SpaceOp : HLSOp<"dse.space", [IsolatedFromAbove, Symbol,
   ];
 }
 
-def SpaceBranchOp : HLSOp<"dse.space_branch", [Terminator,
+def SpaceSelectOp : HLSOp<"dse.space_select", [NoMemoryEffect,
       HasParent<"SpaceOp">]> {
-  let summary = "Branch to a design space block";
+  let summary = "Select a design space based on conditions";
   let description = [{
-    SpaceBranchOp branches to a block of the parent SpaceOp. SpaceBranchOp takes
-    a single value as argument, which is compared against the conditions. The
-    first condition that evaluates to be equal to the argument determines the
-    block to branch to.
+    SpaceSelectOp takes a single value as argument, which is compared against
+    the conditions. The first condition that evaluates to be equal to the
+    argument determines the space to be selected.
   }];
 
-  let arguments = (ins AnyType:$arg, ArrayAttr:$conditions);
-  let successors = (successor VariadicSuccessor<AnySuccessor>:$branches);
+  let arguments = (ins AnyType:$arg, Variadic<SpaceType>:$spaces,
+                       ArrayAttr:$conditions);
+  let results = (outs SpaceType:$result);
   let assemblyFormat = [{
-    $arg $conditions $branches attr-dict `:` type($arg)
+    $arg $conditions $spaces attr-dict `:` type($arg) `,`
+    functional-type($spaces, $result)
   }];
 }
 
@@ -244,7 +230,7 @@ def ConstParamOp : HLSOp<"dse.const_param", [NoMemoryEffect, ConstantLike]> {
   let hasVerifier = 1;
 }
 
-def RequireOp : HLSOp<"dse.require", [NoMemoryEffect,
+def RequireOp : HLSOp<"dse.require", [IsolatedFromAbove, NoMemoryEffect,
       SingleBlockImplicitTerminator<"ConditionOp">, HasParent<"SpaceOp">]> {
   let summary = "Declare a design space requirement";
   let description = [{

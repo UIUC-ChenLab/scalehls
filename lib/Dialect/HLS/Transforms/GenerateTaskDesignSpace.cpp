@@ -50,26 +50,23 @@ struct GenerateTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
       tileParams.push_back(tileParamOp);
     }
 
-    // Now we generate a sub-space for the implementation of the current task.
-    // The implementation should take the tile factors as hyper parameters for
-    // constraining the parallel factors.
-    auto implSpace = rewriter.create<SpaceOp>(loc, tileParams, "impl");
-    auto implEntryBlock = rewriter.createBlock(&implSpace.getBody());
-    auto tileParamArgs = implEntryBlock->addArguments(
-        ValueRange(tileParams), SmallVector<Location>(tileParams.size(), loc));
-
-    // We start to collect implementation candidates as an array attribute. We
-    // always push the default implementatoin as the first candidate.
+    // We start to collect implementation candidates. We  always push the
+    // default implementatoin without using IPs as the first candidate.
     SmallVector<Attribute> implCandidates;
-    SmallVector<Block *> implBlocks;
+    SmallVector<Value> implSpaces;
     implCandidates.push_back(
         IPIdentifierAttr::get(rewriter.getContext(), "", ""));
 
-    // Generate a block for holding default implementation parameters, which are
-    // a list of parallel factors.
-    auto implDefaultBlock = rewriter.createBlock(&implSpace.getBody());
+    // Generate a sub-space for holding default implementation parameters, which
+    // are a list of parallel factors. The sub-space should take the tile
+    // factors as hyper parameters for constraining the parallel factors.
+    auto defaultSpace = rewriter.create<SpaceOp>(loc, tileParams, "default");
+    auto defaultBlock = rewriter.createBlock(
+        &defaultSpace.getBody(), Region::iterator(), ValueRange(tileParams),
+        SmallVector<Location>(tileParams.size(), loc));
+
     SmallVector<Value> parallelParams;
-    for (auto tileSize : llvm::enumerate(tileParamArgs)) {
+    for (auto tileSize : llvm::enumerate(defaultBlock->getArguments())) {
       auto parallelBounds = {rewriter.getAffineConstantExpr(0),
                              rewriter.getAffineSymbolExpr(0)};
       auto parallelParamOp = rewriter.create<ParamOp>(
@@ -79,12 +76,14 @@ struct GenerateTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
       parallelParams.push_back(parallelParamOp);
     }
     rewriter.create<SpacePackOp>(loc, parallelParams);
-    implBlocks.push_back(implDefaultBlock);
+    implSpaces.push_back(defaultSpace);
 
-    // Now, we start to match exsting IP declares and generate blocks for
+    // Now, we start to match exsting IP declares and generate sub-spaces for
     // holding matched IP parameters. Note that we assume the linalg op is in
     // canonicalized format to avoid unnecessary complexity in matching.
     for (auto declare : ipDeclares) {
+      auto libraryName = declare.getLibraryOp().getName();
+      auto ipName = declare.getName();
       auto ipLinalgOp = declare.getSemanticsOp().getSemanticsLinalgOp();
 
       // If the number of inputs, outputs, or loops are different, we skip the
@@ -96,13 +95,15 @@ struct GenerateTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
 
       // Otherwise, match the two linalg ops with LinalgMatcher.
       if (succeeded(LinalgMatcher(linalgOp, ipLinalgOp).match())) {
-        implCandidates.push_back(IPIdentifierAttr::get(
-            rewriter.getContext(), declare.getLibraryOp().getName(),
-            declare.getName()));
+        implCandidates.push_back(
+            IPIdentifierAttr::get(rewriter.getContext(), libraryName, ipName));
 
-        // Generate a separate block for holding the parameters of each IP.
+        // Generate a separate sub-space for holding the parameters of each IP.
         // TODO: We don't know how to handle the parameter type yet.
-        auto implIpBlock = rewriter.createBlock(&implSpace.getBody());
+        rewriter.setInsertionPointToEnd(taskSpaceBlock);
+        auto ipSpace = rewriter.create<SpaceOp>(loc, libraryName.str() + "_" +
+                                                         ipName.str());
+        rewriter.createBlock(&ipSpace.getBody());
         SmallVector<Value> ipParams;
         for (auto staticParam : declare.getOps<ValueParamOp>())
           if (staticParam.getKind() == ValueParamKind::STATIC) {
@@ -112,25 +113,24 @@ struct GenerateTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
             ipParams.push_back(ipParamOp);
           }
         rewriter.create<SpacePackOp>(loc, ipParams);
-        implBlocks.push_back(implIpBlock);
+        implSpaces.push_back(ipSpace);
       }
     }
 
-    // Now we can go back ang generate a implementation candidates parameter in
-    // the entry block, which will be used to select the implementation of the
+    // Now we can generate an implementation candidates parameter in the task
+    // design space, which will be used to select the implementation of the
     // current task.
-    rewriter.setInsertionPointToStart(implEntryBlock);
+    rewriter.setInsertionPointToEnd(taskSpaceBlock);
     auto candidatesParamOp = rewriter.create<ParamOp>(
         loc, IPIdentifierType::get(rewriter.getContext()),
         rewriter.getArrayAttr(implCandidates), "candidates");
-    rewriter.create<SpaceBranchOp>(loc, candidatesParamOp,
-                                   rewriter.getArrayAttr(implCandidates),
-                                   implBlocks);
+    auto select = rewriter.create<SpaceSelectOp>(
+        loc, SpaceType::get(rewriter.getContext()), candidatesParamOp,
+        implSpaces, rewriter.getArrayAttr(implCandidates));
 
     // Finally, pack the whole task design space and update the current task
     // with the space symbolic name.
-    rewriter.setInsertionPointToEnd(taskSpaceBlock);
-    tileParams.push_back(implSpace.getResult());
+    tileParams.push_back(select);
     rewriter.create<SpacePackOp>(loc, tileParams);
 
     task.setSpaceAttr(SymbolRefAttr::get(

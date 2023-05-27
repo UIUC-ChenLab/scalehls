@@ -62,8 +62,7 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
         // Functional dataflow transformation.
         pm.addNestedPass<func::FuncOp>(
             scalehls::createConvertLinalgToDataflowPass());
-        pm.addPass(hls::createParameterizeTileParallelFactorPass());
-        pm.addPass(hls::createParameterizeIPCandidatePass());
+        pm.addPass(hls::createGenerateTaskDesignSpacePass());
         addComprehensiveBufferizePasses(pm);
         pm.addNestedPass<func::FuncOp>(hls::createEliminateBufferYieldPass());
         pm.addPass(mlir::createCanonicalizerPass());
