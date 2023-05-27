@@ -8,6 +8,7 @@
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/Bindings/Python/PybindAdaptors.h"
 #include "scalehls-c/Registration.h"
+#include "scalehls-c/Transforms/Pipelines.h"
 #include "scalehls-c/Translation/EmitHLSCpp.h"
 #include "llvm-c/ErrorHandling.h"
 #include "llvm/Support/Signals.h"
@@ -25,23 +26,42 @@ PYBIND11_MODULE(_scalehls, m) {
   llvm::sys::PrintStackTraceOnErrorSignal(/*argv=*/"");
   LLVMEnablePrettyStackTrace();
 
-  m.def("register_everything", [](py::object capsule) {
-    // Get the MlirContext capsule from PyMlirContext capsule.
-    auto wrappedCapsule = capsule.attr(MLIR_PYTHON_CAPI_PTR_ATTR);
-    MlirContext context = mlirPythonCapsuleToContext(wrappedCapsule.ptr());
+  m.def(
+      "register_everything",
+      [](py::object capsule) {
+        // Get the MlirContext capsule from PyMlirContext capsule.
+        auto wrappedCapsule = capsule.attr(MLIR_PYTHON_CAPI_PTR_ATTR);
+        MlirContext context = mlirPythonCapsuleToContext(wrappedCapsule.ptr());
 
-    MlirDialectRegistry registry = mlirDialectRegistryCreate();
-    mlirScaleHLSRegisterAllDialects(registry);
-    mlirScaleHLSRegisterAllInterfaceExternalModels(registry);
-    mlirContextAppendDialectRegistry(context, registry);
-    mlirContextLoadAllAvailableDialects(context);
-    mlirScaleHLSRegisterAllPasses();
-  });
+        MlirDialectRegistry registry = mlirDialectRegistryCreate();
+        mlirScaleHLSRegisterAllDialects(registry);
+        mlirScaleHLSRegisterAllInterfaceExternalModels(registry);
+        mlirContextAppendDialectRegistry(context, registry);
+        mlirContextLoadAllAvailableDialects(context);
+        mlirScaleHLSRegisterAllPasses();
+      },
+      py::arg("context"));
 
-  m.def("emit_hlscpp", [](MlirModule mod, py::object fileObject) {
-    PyFileAccumulator accum(fileObject, false);
-    py::gil_scoped_release();
-    return mlirLogicalResultIsSuccess(
-        mlirScaleHLSEmitHlsCpp(mod, accum.getCallback(), accum.getUserData()));
-  });
+  m.def(
+      "emit_hlscpp",
+      [](MlirModule module, py::object fileObject) {
+        PyFileAccumulator accum(fileObject, false);
+        py::gil_scoped_release();
+        return mlirLogicalResultIsSuccess(mlirScaleHLSEmitHlsCpp(
+            module, accum.getCallback(), accum.getUserData()));
+      },
+      py::arg("module"), py::arg("file_object"));
+
+  m.def("add_linalg_transform_passes", mlirAddLinalgTransformPasses,
+        py::arg("pass_manager"));
+  m.def("add_convert_linalg_to_dataflow_passes",
+        mlirAddConvertLinalgToDataflowPasses, py::arg("pass_manager"));
+  m.def("add_generate_design_space_passes", mlirAddGenerateDesignSpacePasses,
+        py::arg("pass_manager"));
+  m.def("add_comprehensive_bufferize_passes",
+        mlirAddComprehensiveBufferizePasses, py::arg("pass_manager"));
+  m.def("add_lower_dataflow_passes", mlirAddLowerDataflowPasses,
+        py::arg("pass_manager"));
+  m.def("add_convert_dataflow_to_func_passes",
+        mlirAddConvertDataflowToFuncPasses, py::arg("pass_manager"));
 }

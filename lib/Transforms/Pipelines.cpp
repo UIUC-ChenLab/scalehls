@@ -15,7 +15,6 @@
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
 #include "mlir/Dialect/Tensor/Transforms/Passes.h"
-#include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
 #include "scalehls/Dialect/HLS/Transforms/Passes.h"
 #include "scalehls/Transforms/Passes.h"
@@ -24,7 +23,25 @@ using namespace mlir;
 using namespace bufferization;
 using namespace scalehls;
 
-static void addComprehensiveBufferizePasses(OpPassManager &pm) {
+void scalehls::addLinalgTransformPasses(OpPassManager &pm) {
+  pm.addPass(mlir::createConvertTensorToLinalgPass());
+  pm.addPass(mlir::createLinalgElementwiseOpFusionPass());
+  pm.addPass(bufferization::createEmptyTensorEliminationPass());
+  pm.addPass(mlir::createCanonicalizerPass());
+}
+
+void scalehls::addConvertLinalgToDataflowPasses(OpPassManager &pm) {
+  pm.addNestedPass<func::FuncOp>(scalehls::createConvertLinalgToDataflowPass());
+  pm.addPass(mlir::createCanonicalizerPass());
+}
+
+void scalehls::addGenerateDesignSpacePasses(OpPassManager &pm) {
+  pm.addPass(hls::createGenerateTaskDesignSpacePass());
+  pm.addPass(hls::createSimplifyDesignSpacePass());
+  pm.addPass(mlir::createCanonicalizerPass());
+}
+
+void scalehls::addComprehensiveBufferizePasses(OpPassManager &pm) {
   pm.addPass(scalehls::createComprehensiveBufferizePass());
   pm.addPass(memref::createResolveShapedTypeResultDimsPass());
   pm.addPass(mlir::createCanonicalizerPass());
@@ -33,9 +50,19 @@ static void addComprehensiveBufferizePasses(OpPassManager &pm) {
   // can be deleted by canonicalizer. We have to run it again because the
   // memrefs are unified in CSE pass, so we can truely remove redundant memcpy.
   pm.addPass(mlir::createCanonicalizerPass());
+  pm.addNestedPass<func::FuncOp>(hls::createEliminateBufferYieldPass());
+  pm.addPass(mlir::createCanonicalizerPass());
 }
 
-static void addLowerLinalgToAffinePasses(OpPassManager &pm) {
+void scalehls::addLowerDataflowPasses(OpPassManager &pm) {
+  pm.addNestedPass<func::FuncOp>(hls::createLowerDataflowPass());
+  pm.addPass(mlir::createCanonicalizerPass());
+}
+
+void scalehls::addConvertDataflowToFuncPasses(OpPassManager &pm) {
+  pm.addPass(scalehls::createConvertDataflowToFuncPass());
+  pm.addPass(scalehls::createGenerateRuntimeFuncPass());
+  // Lower linalg to affine loops.
   pm.addNestedPass<func::FuncOp>(mlir::createConvertLinalgToAffineLoopsPass());
   pm.addNestedPass<func::FuncOp>(scalehls::createLowerCopyToAffineLoopsPass());
   pm.addPass(memref::createFoldMemRefAliasOpsPass());
@@ -54,27 +81,12 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
       "scalehls-pytorch-pipeline",
       "Compile from Torch-MLIR (Linalg) to HLS C++",
       [](OpPassManager &pm, const ScaleHLSPyTorchPipelineOptions &opts) {
-        // Linalg transformation.
-        pm.addPass(mlir::createConvertTensorToLinalgPass());
-        pm.addPass(mlir::createLinalgElementwiseOpFusionPass());
-        pm.addPass(bufferization::createEmptyTensorEliminationPass());
-
-        // Functional dataflow transformation.
-        pm.addNestedPass<func::FuncOp>(
-            scalehls::createConvertLinalgToDataflowPass());
-        pm.addPass(hls::createGenerateTaskDesignSpacePass());
+        addLinalgTransformPasses(pm);
+        addConvertLinalgToDataflowPasses(pm);
+        addGenerateDesignSpacePasses(pm);
         addComprehensiveBufferizePasses(pm);
-        pm.addNestedPass<func::FuncOp>(hls::createEliminateBufferYieldPass());
-        pm.addPass(mlir::createCanonicalizerPass());
-
-        // Structural dataflow transformation.
-        pm.addNestedPass<func::FuncOp>(hls::createLowerDataflowPass());
-        pm.addPass(mlir::createCanonicalizerPass());
-
-        // Function transformation.
-        pm.addPass(scalehls::createConvertDataflowToFuncPass());
-        pm.addPass(scalehls::createGenerateRuntimeFuncPass());
-        addLowerLinalgToAffinePasses(pm);
+        addLowerDataflowPasses(pm);
+        addConvertDataflowToFuncPasses(pm);
       });
 }
 
