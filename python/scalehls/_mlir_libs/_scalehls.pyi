@@ -11,7 +11,8 @@ __all__ = [
     "add_linalg_transform_passes",
     "add_lower_dataflow_passes",
     "emit_hlscpp",
-    "register_everything"
+    "register_everything",
+    "walk_operation"
 ]
 
 
@@ -44,4 +45,8 @@ def emit_hlscpp(module: MlirModule, file_object: object) -> bool:
 
 
 def register_everything(context: object) -> None:
+    pass
+
+
+def walk_operation(self: MlirOperation, callback: typing.Callable[[MlirOperation], None]) -> None:
     pass

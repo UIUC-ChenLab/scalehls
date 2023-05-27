@@ -7,12 +7,14 @@
 #include "IRModule.h"
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/Bindings/Python/PybindAdaptors.h"
+#include "mlir/CAPI/IR.h"
 #include "scalehls-c/Registration.h"
 #include "scalehls-c/Transforms/Pipelines.h"
 #include "scalehls-c/Translation/EmitHLSCpp.h"
 #include "llvm-c/ErrorHandling.h"
 #include "llvm/Support/Signals.h"
 
+#include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 
 namespace py = pybind11;
@@ -41,6 +43,17 @@ PYBIND11_MODULE(_scalehls, m) {
         mlirScaleHLSRegisterAllPasses();
       },
       py::arg("context"));
+
+  auto pyOperationCallback = py::class_<std::function<void(MlirOperation)>>(
+      m, "Callable[[MlirOperation], None]");
+
+  m.def(
+      "walk_operation",
+      [](MlirOperation self, std::function<void(MlirOperation)> callback) {
+        unwrap(self)->walk<WalkOrder::PreOrder>(
+            [&callback](Operation *op) { callback(wrap(op)); });
+      },
+      py::arg("self"), py::arg("callback"));
 
   m.def(
       "emit_hlscpp",

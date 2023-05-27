@@ -22,7 +22,7 @@ declare_mlir_python_sources(ScaleHLSPythonSources.Core
 )
 
 ################################################################################
-# Declare dialect-specific bindings.
+# Declare dialect-specific bindings
 ################################################################################
 
 # Ensure the build directory for generated Python files exists. Ninja is able to
@@ -42,6 +42,7 @@ declare_mlir_dialect_python_bindings(
   TD_FILE dialects/HLSOps.td
   SOURCES
     dialects/hls.py
+    dialects/_hls_ops_ext.py
   DIALECT_NAME hls
 )
 
@@ -56,6 +57,7 @@ declare_mlir_python_extension(ScaleHLSPythonExtension.Core
   SOURCES
     ScaleHLSModule.cpp
   EMBED_CAPI_LINK_LIBS
+    MLIRCAPIIR
     MLIRScaleHLSCAPIHLSDialect
     MLIRScaleHLSCAPITransforms
     MLIRScaleHLSCAPIRegistration
