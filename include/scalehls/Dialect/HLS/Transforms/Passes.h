@@ -28,6 +28,7 @@ std::unique_ptr<Pass> createLowerDataflowPass();
 std::unique_ptr<Pass>
 createGenerateTaskDesignSpacePass(unsigned defaultTileFactor = 32,
                                   unsigned defaultParallelFactor = 2);
+std::unique_ptr<Pass> createImplementTaskDesignSpacePass();
 std::unique_ptr<Pass> createSimplifyDesignSpacePass();
 
 #define GEN_PASS_CLASSES

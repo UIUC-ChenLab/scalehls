@@ -3,6 +3,7 @@ add_mlir_dialect_library(MLIRScaleHLSHLSTransforms
   LowerDataflow.cpp
   EliminateBufferYield.cpp
   GenerateTaskDesignSpace.cpp
+  ImplementTaskDesignSpace.cpp
   SimplifyDesignSpace.cpp
 
   DEPENDS

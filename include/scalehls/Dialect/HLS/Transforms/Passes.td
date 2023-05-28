@@ -33,6 +33,12 @@ def GenerateTaskDesignSpace :
   ];
 }
 
+def ImplementTaskDesignSpace :
+      Pass<"scalehls-implement-task-design-space", "mlir::ModuleOp"> {
+  let summary = "Implement design space for each dataflow task";
+  let constructor = "mlir::scalehls::hls::createImplementTaskDesignSpacePass()";
+}
+
 def SimplifyDesignSpace :
       Pass<"scalehls-simplify-design-space", "mlir::ModuleOp"> {
   let summary = "Simplify design space";
