@@ -44,13 +44,13 @@ def InstanceOp : HLSOp<"uip.instance", [AttrSizedOperandSegments,
   let summary = "Instantiate an IP declared by DeclareOp";
 
   let arguments = (ins Variadic<AnyType>:$inputs, Variadic<AnyType>:$outputs,
-      Variadic<AnyType>:$params, SymbolRefAttr:$ip);
+      Variadic<AnyType>:$params, ArrayAttr:$templates, SymbolRefAttr:$ip);
   let results = (outs Variadic<AnyType>:$results);
 
   let assemblyFormat = [{
-    $ip `(` $inputs `)` `->` `(` $outputs `)` (`[` $params^ `]`)? attr-dict `:`
-    functional-type($inputs, $outputs) (`[` type($params)^ `]`)?
-    (`->` type($results)^)?
+    $ip `<` $templates `>` `(` $inputs `)` `->` `(` $outputs `)`
+    (`[` $params^ `]`)? attr-dict `:` functional-type($inputs, $outputs)
+    (`[` type($params)^ `]`)? (`results` type($results)^)?
   }];
 
   let extraClassDeclaration = [{
@@ -82,10 +82,10 @@ def PortOp : HLSOp<"uip.port", [Symbol, HasParent<"DeclareOp">]> {
 }
 
 def IncludeOp : HLSOp<"uip.include", [HasParent<"DeclareOp">]> {
-  let summary = "Declare a dependency of an IP";
+  let summary = "Declare the dependencies of an IP";
 
-  let arguments = (ins StrAttr:$path);
-  let assemblyFormat = "$path attr-dict";
+  let arguments = (ins StrArrayAttr:$paths);
+  let assemblyFormat = "$paths attr-dict";
 }
 
 def SemanticsOp : HLSOp<"uip.semantics", [Terminator, IsolatedFromAbove,

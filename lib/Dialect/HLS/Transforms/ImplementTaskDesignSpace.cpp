@@ -107,7 +107,7 @@ struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
         outputs.push_back(operand->get());
       rewriter.replaceOpWithNewOp<InstanceOp>(
           linalgOp, linalgOp->getResultTypes(), inputs, outputs, ValueRange({}),
-          symbol);
+          rewriter.getArrayAttr({}), symbol);
     } else {
       // TODO: Otherwise, we parallelize the linalg op with the explored
       // parallel sizes.
