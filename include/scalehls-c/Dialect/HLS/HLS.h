@@ -51,8 +51,8 @@ enum class MlirParamKind : uint32_t {
 };
 
 MLIR_CAPI_EXPORTED bool mlirAttrIsHLSParamKindAttr(MlirAttribute attr);
-MLIR_CAPI_EXPORTED MlirAttribute
-mlirHLSParamKindAttrGet(MlirContext ctx, MlirParamKind kind);
+MLIR_CAPI_EXPORTED MlirAttribute mlirHLSParamKindAttrGet(MlirContext ctx,
+                                                         MlirParamKind kind);
 MLIR_CAPI_EXPORTED MlirParamKind
 mlirHLSParamKindAttrGetValue(MlirAttribute attr);
 
