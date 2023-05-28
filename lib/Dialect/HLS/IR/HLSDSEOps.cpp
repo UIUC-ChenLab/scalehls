@@ -13,12 +13,30 @@ using namespace hls;
 using namespace affine;
 
 //===----------------------------------------------------------------------===//
+// SpaceOp
+//===----------------------------------------------------------------------===//
+
+SpacePackOp SpaceOp::getSpacePackOp() {
+  return cast<SpacePackOp>(getBody().front().getTerminator());
+}
+
+//===----------------------------------------------------------------------===//
+// SpacePackOp
+//===----------------------------------------------------------------------===//
+
+SpaceOp SpacePackOp::getSpaceOp() {
+  return (*this)->getParentOfType<SpaceOp>();
+}
+
+//===----------------------------------------------------------------------===//
 // SpaceSelectOp
 //===----------------------------------------------------------------------===//
 
 OpFoldResult SpaceSelectOp::fold(FoldAdaptor adaptor) {
-  if (getSpaces().size() == 1)
-    return getSpaces()[0];
+  // For now, we always don't fold this to avoid losing the information of task
+  // implementation.
+  // if (getSpaces().size() == 1)
+  //   return getSpaces()[0];
   return {};
 }
 

@@ -9,6 +9,22 @@
 
 include "mlir/IR/OpBase.td"
 
+def ParamLikeInterface : OpInterface<"ParamLikeInterface"> {
+  let methods = [
+    InterfaceMethod<"Return the value of the parameter if it exists",
+      "std::optional<mlir::Attribute>", "getValue", (ins), [{
+        return $_op.getValue();
+      }]
+    >,
+    InterfaceMethod<"Return the type of the parameter",
+      "mlir::Type", "getType", (ins), [{ return $_op.getType(); }]
+    >,
+    InterfaceMethod<"Return the kind of the parameter",
+      "ParamKind", "getKind", (ins), [{ return $_op.getKind(); }]
+    >
+  ];
+}
+
 def BufferLikeInterface : OpInterface<"BufferLikeInterface"> {
   let description = [{
     This interface is used to represent dataflow buffers.

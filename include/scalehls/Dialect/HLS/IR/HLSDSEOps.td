@@ -40,6 +40,10 @@ def SpaceOp : HLSOp<"dse.space", [IsolatedFromAbove, SymbolTable, Symbol,
       build($_builder, $_state, {}, $_builder.getStringAttr(symName));
     }]>
   ];
+
+  let extraClassDeclaration = [{
+    SpacePackOp getSpacePackOp();
+  }];
 }
 
 def SpaceSelectOp : HLSOp<"dse.space_select", [NoMemoryEffect,
@@ -79,6 +83,10 @@ def SpacePackOp : HLSOp<"dse.space_pack", [Terminator, HasParent<"SpaceOp">]> {
     }]>,
     OpBuilder<(ins), "build($_builder, $_state, {});">
   ];
+
+  let extraClassDeclaration = [{
+    SpaceOp getSpaceOp();
+  }];
 }
 
 def SpaceUnpackOp : HLSOp<"dse.space_unpack", [NoMemoryEffect]> {
@@ -106,7 +114,8 @@ def GetSpaceOp : HLSOp<"dse.get_space", [NoMemoryEffect,
   let assemblyFormat = "$name attr-dict `:` type($space)";
 }
 
-def ParamOp : HLSOp<"dse.param", [Symbol, HasParent<"SpaceOp, DeclareOp">]> {
+def ParamOp : HLSOp<"dse.param", [Symbol, HasParent<"SpaceOp, DeclareOp">,
+      DeclareOpInterfaceMethods<ParamLikeInterface>]> {
   let summary = "Declare a design space parameter";
   let description = [{
     ParamOp declares a design space parameter. The parameter can either be
@@ -197,7 +206,8 @@ def ParamOp : HLSOp<"dse.param", [Symbol, HasParent<"SpaceOp, DeclareOp">]> {
   }];
 }
 
-def ConstParamOp : HLSOp<"dse.const_param", [NoMemoryEffect, ConstantLike]> {
+def ConstParamOp : HLSOp<"dse.const_param", [NoMemoryEffect, ConstantLike,
+      DeclareOpInterfaceMethods<ParamLikeInterface>]> {
   let summary = "Declare a design space constant parameter";
 
   let arguments = (ins AnyAttr:$value, ParamKindAttr:$kind);

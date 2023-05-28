@@ -39,6 +39,7 @@ struct GenerateTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
     auto taskSpaceBlock = rewriter.createBlock(&taskSpace.getBody());
 
     // Generate tile factors of the current task.
+    // TODO: We also need to generate vectorization factors here.
     SmallVector<Value> tileParams;
     for (auto loopSize : llvm::enumerate(linalgOp.computeStaticLoopSizes())) {
       auto tileBounds = {rewriter.getAffineConstantExpr(0),
