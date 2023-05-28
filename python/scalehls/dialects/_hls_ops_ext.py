@@ -21,3 +21,7 @@ class ParamOp:
     @property
     def kind(self):
         return ParamKindAttr(self.operation.attributes["kind"]).value
+
+    @property
+    def candidates(self):
+        return ArrayAttr(self.operation.attributes["candidates"])
