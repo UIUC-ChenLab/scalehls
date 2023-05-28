@@ -65,11 +65,15 @@ static OneShotBufferizationOptions getBufferizationOptions() {
   OneShotBufferizationOptions options;
   options.setFunctionBoundaryTypeConversion(LayoutMapOption::IdentityLayoutMap);
 
-  // bufferization.to_memref is used to bufferize constants in IREE. IREE has
-  // it's own logic to handle constants. We'd like to leave the arith.constant
-  // as is and insert bufferization.to_memref to convert the tensor to memref.
+  // bufferization.to_memref is used to bufferize constants. We'd like to leave
+  // the arith.constant as is and insert bufferization.to_memref to convert the
+  // tensor to memref.
   options.opFilter.denyOperation<arith::ConstantOp>();
   options.opFilter.denyOperation<bufferization::ToMemrefOp>();
+
+  // We always don't bufferize operations inside LibraryOp.
+  options.opFilter.denyOperation(
+      [](Operation *op) { return op->getParentOfType<hls::LibraryOp>(); });
 
   // This type converter converts tensor types to memref types when no exact
   // memref type can be inferred from the context.
