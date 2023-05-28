@@ -52,6 +52,19 @@ def InstanceOp : HLSOp<"uip.instance", [AttrSizedOperandSegments,
     functional-type($inputs, $outputs) (`[` type($params)^ `]`)?
     (`->` type($results)^)?
   }];
+
+  let extraClassDeclaration = [{
+    /// Get the number of inputs, outputs, and params.
+    unsigned getNumInputs();
+    unsigned getNumOutputs();
+    unsigned getNumParams();
+
+    /// Get the type of operand: input, output, or param.
+    PortKind getPortKind(OpOperand &operand);
+    PortKind getPortKind(unsigned operandIdx);
+
+    OpResult getTiedOpResult(OpOperand &operand);
+  }];
 }
 
 def PortOp : HLSOp<"uip.port", [Symbol, HasParent<"DeclareOp">]> {

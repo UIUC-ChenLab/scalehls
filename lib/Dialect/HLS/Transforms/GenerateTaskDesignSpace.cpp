@@ -128,8 +128,9 @@ struct GenerateTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
 
     // Finally, pack the whole task design space and update the current task
     // with the space symbolic name.
-    tileParams.push_back(select);
-    rewriter.create<SpacePackOp>(loc, tileParams);
+    auto packParams = tileParams;
+    packParams.push_back(select);
+    rewriter.create<SpacePackOp>(loc, packParams);
 
     task.setSpaceAttr(SymbolRefAttr::get(
         rewriter.getStringAttr(globalSpaceName),

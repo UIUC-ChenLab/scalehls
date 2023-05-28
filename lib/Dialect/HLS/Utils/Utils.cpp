@@ -483,8 +483,12 @@ bool hls::isExtBuffer(Value memref) {
 /// Check whether the given use has read/write semantics.
 bool hls::isRead(OpOperand &use) {
   // For NodeOp and ScheduleOp, we don't rely on memory effect interface.
-  // Instead, we delve into its region to figure out the effect.
-  if (auto node = dyn_cast<NodeOp>(use.getOwner()))
+  // Instead, we delve into its region to figure out the effect. However, for
+  // InstanceOp, we don't need this recursive approach any more.
+  if (auto instance = dyn_cast<InstanceOp>(use.getOwner()))
+    return instance.getPortKind(use) == PortKind::OUTPUT ||
+           instance.getPortKind(use) == PortKind::INPUT;
+  else if (auto node = dyn_cast<NodeOp>(use.getOwner()))
     return llvm::any_of(
         node.getBody().getArgument(use.getOperandNumber()).getUses(),
         [](OpOperand &argUse) { return isRead(argUse); });
@@ -500,9 +504,11 @@ bool hls::isRead(OpOperand &use) {
 }
 bool hls::isWritten(OpOperand &use) {
   // For ScheduleOp, we don't rely on memory effect interface. Instead, we delve
-  // into its region to figure out the effect. However, for NodeOp, we don't
-  // need this recursive approach any more.
-  if (auto node = dyn_cast<NodeOp>(use.getOwner()))
+  // into its region to figure out the effect. However, for InstanceOp and
+  // NodeOp, we don't need this recursive approach any more.
+  if (auto instance = dyn_cast<InstanceOp>(use.getOwner()))
+    return instance.getPortKind(use) == PortKind::OUTPUT;
+  else if (auto node = dyn_cast<NodeOp>(use.getOwner()))
     return node.getPortKind(use) == PortKind::OUTPUT;
   else if (auto schedule = dyn_cast<ScheduleOp>(use.getOwner()))
     return llvm::any_of(

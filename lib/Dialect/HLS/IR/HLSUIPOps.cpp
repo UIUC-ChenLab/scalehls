@@ -33,6 +33,36 @@ LogicalResult InstanceOp::verifySymbolUses(mlir::SymbolTableCollection &table) {
   return success(param);
 }
 
+/// Return the number of inputs, outputs, and params.
+unsigned InstanceOp::getNumInputs() {
+  return getODSOperandIndexAndLength(0).second;
+}
+unsigned InstanceOp::getNumOutputs() {
+  return getODSOperandIndexAndLength(1).second;
+}
+unsigned InstanceOp::getNumParams() {
+  return getODSOperandIndexAndLength(2).second;
+}
+
+/// Get the type of operand: input, output, or param.
+PortKind InstanceOp::getPortKind(OpOperand &operand) {
+  assert(operand.getOwner() == *this && "invalid operand");
+  return getPortKind(operand.getOperandNumber());
+}
+PortKind InstanceOp::getPortKind(unsigned operandIdx) {
+  if (operandIdx >= getODSOperandIndexAndLength(2).first)
+    return PortKind::PARAM;
+  else if (operandIdx >= getODSOperandIndexAndLength(1).first)
+    return PortKind::OUTPUT;
+  else
+    return PortKind::INPUT;
+}
+
+OpResult InstanceOp::getTiedOpResult(OpOperand &operand) {
+  assert(getPortKind(operand) == PortKind::OUTPUT && "invalid operand");
+  return (*this)->getOpResult(operand.getOperandNumber() - getNumInputs());
+}
+
 //===----------------------------------------------------------------------===//
 // SemanticsOp
 //===----------------------------------------------------------------------===//

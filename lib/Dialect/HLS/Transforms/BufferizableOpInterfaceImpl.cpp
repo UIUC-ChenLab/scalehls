@@ -200,6 +200,76 @@ struct AllocTensorOpInterface
   }
 };
 
+/// Bufferization of uip.instance operation.
+struct InstanceOpInterface
+    : public BufferizableOpInterface::ExternalModel<InstanceOpInterface,
+                                                    InstanceOp> {
+  bool bufferizesToMemoryRead(Operation *op, OpOperand &opOperand,
+                              const AnalysisState &state) const {
+    auto instance = cast<InstanceOp>(op);
+    return instance.getPortKind(opOperand) == PortKind::INPUT;
+  }
+
+  bool bufferizesToMemoryWrite(Operation *op, OpOperand &opOperand,
+                               const AnalysisState &state) const {
+    auto instance = cast<InstanceOp>(op);
+    return instance.getPortKind(opOperand) == PortKind::OUTPUT;
+  }
+
+  LogicalResult bufferize(Operation *op, RewriterBase &rewriter,
+                          const BufferizationOptions &options) const {
+    // Take a guard before anything else.
+    OpBuilder::InsertionGuard g(rewriter);
+    auto instance = cast<InstanceOp>(op);
+    rewriter.setInsertionPoint(instance);
+
+    // New input operands for the cloned op.
+    SmallVector<Value> newInputBuffers;
+    newInputBuffers.reserve(instance.getNumInputs());
+    for (auto input : instance.getInputs()) {
+      FailureOr<Value> buffer = getBuffer(rewriter, input, options);
+      if (failed(buffer))
+        return failure();
+      newInputBuffers.push_back(*buffer);
+    }
+
+    // New output operands for the cloned op.
+    SmallVector<Value> newOutputBuffers;
+    for (auto result : instance->getOpResults()) {
+      auto output = instance.getOutputs()[result.getResultNumber()];
+      FailureOr<Value> buffer = getBuffer(rewriter, output, options);
+      if (failed(buffer))
+        return failure();
+      newOutputBuffers.push_back(*buffer);
+    }
+
+    // Merge input/output operands.
+    SmallVector<Value> newOperands = newInputBuffers;
+    newOperands.append(newOutputBuffers.begin(), newOutputBuffers.end());
+    newOperands.append(instance.getParams().begin(),
+                       instance.getParams().end());
+
+    // Clone the op, but use the new operands. Since the new op does not have
+    // any tensor results, it does not return anything.
+    rewriter.setInsertionPoint(instance);
+    clone(rewriter, instance, /*newResultTypes=*/TypeRange{}, newOperands);
+
+    // Replace the results of the old op with the new output buffers.
+    replaceOpWithBufferizedValues(rewriter, instance, newOutputBuffers);
+    return success();
+  }
+
+  AliasingOpResultList getAliasingOpResults(Operation *op, OpOperand &opOperand,
+                                            const AnalysisState &state) const {
+    // Output operands alias with their respective tied OpResults.
+    auto instance = cast<InstanceOp>(op);
+    if (instance.getPortKind(opOperand) == PortKind::OUTPUT)
+      return {
+          {instance.getTiedOpResult(opOperand), BufferRelation::Equivalent}};
+    return {};
+  }
+};
+
 void mlir::scalehls::hls::registerBufferizableOpInterfaceExternalModels(
     DialectRegistry &registry) {
   registry.addExtension(+[](MLIRContext *ctx, HLSDialect *dialect) {
@@ -207,5 +277,6 @@ void mlir::scalehls::hls::registerBufferizableOpInterfaceExternalModels(
     TaskOp::attachInterface<DispatchOrTaskOpInterface<TaskOp>>(*ctx);
     YieldOp::attachInterface<YieldOpInterface>(*ctx);
     AllocTensorOp::attachInterface<AllocTensorOpInterface>(*ctx);
+    InstanceOp::attachInterface<InstanceOpInterface>(*ctx);
   });
 }
