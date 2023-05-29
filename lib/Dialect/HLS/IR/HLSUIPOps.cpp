@@ -65,15 +65,26 @@ DeclareOp InstanceOp::getDeclareOp() {
 /// output. The tensor type is determined by the corresponding port type.
 void SemanticsOp::initializeBlockArguments(
     const SmallVectorImpl<Value> &ports) {
+  Builder builder(getContext());
   SmallVector<Type> argTypes;
   SmallVector<Location> argLocs;
+  SmallVector<int64_t> argMap;
 
   for (auto value : ports) {
+    // Find the operand number of the given value to construct the argMap.
+    auto opOperand = llvm::find_if((*this)->getOpOperands(),
+                                   [&](auto &op) { return op.get() == value; });
+    assert(opOperand != (*this)->getOpOperands().end() && "invalid port");
+    argMap.push_back(opOperand->getOperandNumber());
+
+    // Get the port type and location.
+    // TODO: How to handle the element type of the tensor?
+    // TODO: Handle constant sized port.
     auto port = value.getDefiningOp<PortOp>();
     assert(port && port.getKind() != PortKind::PARAM && "invalid port");
     auto tensorType = RankedTensorType::get(
         SmallVector<int64_t>(port.getSizes().size(), ShapedType::kDynamic),
-        /*port.getType().getType()*/ Builder(*this).getF32Type(), nullptr);
+        /*port.getType().getType()*/ builder.getF32Type(), nullptr);
     argTypes.push_back(tensorType);
     argLocs.push_back(port.getLoc());
   }
@@ -81,6 +92,7 @@ void SemanticsOp::initializeBlockArguments(
   if (getBody().empty())
     getBody().emplaceBlock();
   getBody().addArguments(argTypes, argLocs);
+  setArgsMapAttr(builder.getIndexArrayAttr(argMap));
 }
 
 /// Get the immediate included linalg op. Will return nullptr if there is no

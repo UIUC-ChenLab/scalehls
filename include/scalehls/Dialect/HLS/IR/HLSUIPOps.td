@@ -86,15 +86,20 @@ def IncludeOp : HLSOp<"uip.include", [HasParent<"DeclareOp">]> {
   let assemblyFormat = "$paths attr-dict";
 }
 
+def IndexArrayAttr : TypedArrayAttrBase<IndexAttr, "index array attribute"> {
+  let constBuilderCall = "$_builder.getIndexArrayAttr($0)";
+}
+
 def SemanticsOp : HLSOp<"uip.semantics", [Terminator, IsolatedFromAbove,
       AttrSizedOperandSegments, HasParent<"DeclareOp">,
       SingleBlockImplicitTerminator<"SemanticsOutputOp">]> {
   let summary = "Declare the semantics of an IP";
 
-  let arguments = (ins Variadic<PortType>:$ports, Variadic<AnyType>:$templates);
+  let arguments = (ins Variadic<PortType>:$ports, Variadic<AnyType>:$templates,
+      IndexArrayAttr:$args_map);
   let regions = (region SizedRegion<1>:$body);
   let assemblyFormat = [{
-    (`<` $templates^ `>`)? `(` $ports `)` attr-dict `:`
+    (`<` $templates^ `>`)? `(` $ports `)` $args_map attr-dict `:`
     (`<` type($templates)^ `>`)? `(` type($ports) `)` $body
   }];
 
