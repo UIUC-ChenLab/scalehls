@@ -65,14 +65,15 @@ bool BlockMatcher::checkEquivalence(Value a, Value b) {
         return map[a].insert(b), true;
       return false;
     } else if (opA->getNumOperands() == 2) {
-      if (checkEquivalence(opA->getOperand(0), opB->getOperand(0)) &&
-          checkEquivalence(opA->getOperand(1), opB->getOperand(1)))
-        return map[a].insert(b), true;
-
       // Here, we take communitivity into consideration.
-      if (opA->hasTrait<OpTrait::IsCommutative>() &&
+      auto isEq = checkEquivalence(opA->getOperand(0), opB->getOperand(0)) &&
+                  checkEquivalence(opA->getOperand(1), opB->getOperand(1));
+      auto isCommEq =
+          opA->hasTrait<OpTrait::IsCommutative>() &&
           checkEquivalence(opA->getOperand(0), opB->getOperand(1)) &&
-          checkEquivalence(opA->getOperand(1), opB->getOperand(0)))
+          checkEquivalence(opA->getOperand(1), opB->getOperand(0));
+
+      if (isEq || isCommEq)
         return map[a].insert(b), true;
       return false;
     }
@@ -222,15 +223,15 @@ bool LinalgMatcher::matchPortMap() {
 
   // We first prune the invalid loop maps.
   status.eraseLoopMapIf([&](PermuteMap loopMap) {
-    auto emptyArgMapList =
+    auto argMapListIsEmpty =
         llvm::all_of(status.getArgMapList(), [&](PermuteMap argMap) {
           return !matchIndexingMaps(loopMap, argMap, 0);
         });
-    auto emptyResMapList =
+    auto resMapListIsEmpty =
         llvm::all_of(status.getResMapList(), [&](PermuteMap resMap) {
           return !matchIndexingMaps(loopMap, resMap, a.getNumDpsInputs());
         });
-    return emptyArgMapList || emptyResMapList;
+    return argMapListIsEmpty || resMapListIsEmpty;
   });
 
   // Then, we prune the invalid argument and result maps.

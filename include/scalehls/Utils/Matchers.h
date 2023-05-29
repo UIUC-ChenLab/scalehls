@@ -69,7 +69,15 @@ private:
 /// equivalent index of another LinalgOp.
 using PermuteMap = SmallVector<unsigned>;
 using PermuteMapList = SmallVector<PermuteMap>;
-using LinalgMatchingResult = std::tuple<PermuteMap, PermuteMap, PermuteMap>;
+
+struct LinalgMatchingResult {
+  const PermuteMap argMap;
+  const PermuteMap resMap;
+  const PermuteMap loopMap;
+
+  LinalgMatchingResult(PermuteMap argMap, PermuteMap resMap, PermuteMap loopMap)
+      : argMap(argMap), resMap(resMap), loopMap(loopMap) {}
+};
 
 /// Status of LinalgOp matching that records the equivalent indices maps of
 /// arguments, results, and loops.
@@ -135,8 +143,8 @@ struct LinalgMatchingStatus {
   FailureOr<LinalgMatchingResult> getConvergedMaps() const {
     if (!isConverged())
       return failure();
-    return std::make_tuple(argMapList.front(), resMapList.front(),
-                           loopMapList.front());
+    return LinalgMatchingResult(argMapList.front(), resMapList.front(),
+                                loopMapList.front());
   }
 
   /// Check whether the matching status is valid.

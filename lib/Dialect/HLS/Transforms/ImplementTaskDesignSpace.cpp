@@ -96,6 +96,10 @@ struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
           op->getParentOfType<ModuleOp>(), symbol);
       assert(ipDeclare && "invalid IP declaration");
 
+      auto ipLinalgOp = ipDeclare.getSemanticsOp().getSemanticsLinalgOp();
+      auto matchingResult = LinalgMatcher(linalgOp, ipLinalgOp).match();
+      assert(succeeded(matchingResult) && "IP matching failed");
+
       // TODO: We actually have a LOT of works to do here. But to demonstrate
       // the idea, we start from simply replacing the linalg op.
       rewriter.setInsertionPoint(linalgOp);
