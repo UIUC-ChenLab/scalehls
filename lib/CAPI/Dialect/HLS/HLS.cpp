@@ -18,10 +18,13 @@ using namespace hls;
 
 MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(HLS, hls, hls::HLSDialect)
 
-void mlirSemanticsInitializeBlockArguments(MlirOperation semantics) {
+void mlirSemanticsInitializeBlockArguments(
+    MlirOperation semantics, const std::vector<MlirValue> &ports) {
   auto op = dyn_cast<SemanticsOp>(unwrap(semantics));
   assert(op && "expected a semantics op");
-  op.initializeBlockArguments();
+  SmallVector<Value> unwrappedPorts(
+      llvm::map_range(ports, [](MlirValue v) { return unwrap(v); }));
+  op.initializeBlockArguments(unwrappedPorts);
 }
 
 //===----------------------------------------------------------------------===//

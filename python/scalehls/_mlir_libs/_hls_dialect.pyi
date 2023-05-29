@@ -104,5 +104,5 @@ class PortKind():
     pass
 
 
-def semantics_init_args(semantics: MlirOperation) -> None:
+def semantics_init_args(semantics: MlirOperation, ports: typing.List[MlirValue]) -> None:
     pass

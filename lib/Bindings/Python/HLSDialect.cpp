@@ -110,7 +110,7 @@ PYBIND11_MODULE(_hls_dialect, m) {
   m.doc() = "HLS Dialect Python Native Extension";
 
   m.def("semantics_init_args", mlirSemanticsInitializeBlockArguments,
-        py::arg("semantics"));
+        py::arg("semantics"), py::arg("ports"));
 
   populateHLSAttributes(m);
   populateHLSTypes(m);

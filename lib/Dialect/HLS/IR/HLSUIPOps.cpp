@@ -26,22 +26,9 @@ SemanticsOp DeclareOp::getSemanticsOp() {
 //===----------------------------------------------------------------------===//
 
 LogicalResult InstanceOp::verifySymbolUses(mlir::SymbolTableCollection &table) {
-  auto param = table.lookupNearestSymbolFrom<DeclareOp>(
-      (*this)->getParentOfType<ModuleOp>(), getIpAttr());
-  if (!param)
-    return (*this)->emitOpError("unknown IP name ") << getIpAttr();
-  return success(param);
-}
-
-/// Return the number of inputs, outputs, and params.
-unsigned InstanceOp::getNumInputs() {
-  return getODSOperandIndexAndLength(0).second;
-}
-unsigned InstanceOp::getNumOutputs() {
-  return getODSOperandIndexAndLength(1).second;
-}
-unsigned InstanceOp::getNumParams() {
-  return getODSOperandIndexAndLength(2).second;
+  if (!getDeclareOp())
+    return (*this)->emitOpError("unknown IP name ") << getNameAttr();
+  return success();
 }
 
 /// Get the type of operand: input, output, or param.
@@ -50,17 +37,24 @@ PortKind InstanceOp::getPortKind(OpOperand &operand) {
   return getPortKind(operand.getOperandNumber());
 }
 PortKind InstanceOp::getPortKind(unsigned operandIdx) {
-  if (operandIdx >= getODSOperandIndexAndLength(2).first)
-    return PortKind::PARAM;
-  else if (operandIdx >= getODSOperandIndexAndLength(1).first)
-    return PortKind::OUTPUT;
-  else
-    return PortKind::INPUT;
+  auto semantics = getDeclareOp().getSemanticsOp();
+  return semantics.getPorts()[operandIdx].getDefiningOp<PortOp>().getKind();
 }
 
+/// Get the tied op result of an output operand. Assert if the given operand is
+/// not an output.
 OpResult InstanceOp::getTiedOpResult(OpOperand &operand) {
   assert(getPortKind(operand) == PortKind::OUTPUT && "invalid operand");
-  return (*this)->getOpResult(operand.getOperandNumber() - getNumInputs());
+  unsigned resultIdx = 0;
+  for (unsigned i = 0; i < operand.getOperandNumber(); ++i)
+    if (getPortKind(i) == PortKind::OUTPUT)
+      ++resultIdx;
+  return (*this)->getOpResult(resultIdx);
+}
+
+DeclareOp InstanceOp::getDeclareOp() {
+  return SymbolTable::lookupNearestSymbolFrom<DeclareOp>(
+      (*this)->getParentOfType<ModuleOp>(), getNameAttr());
 }
 
 //===----------------------------------------------------------------------===//
@@ -69,23 +63,20 @@ OpResult InstanceOp::getTiedOpResult(OpOperand &operand) {
 
 /// Initialize the block arguments. We create a tensor for each input and
 /// output. The tensor type is determined by the corresponding port type.
-void SemanticsOp::initializeBlockArguments() {
+void SemanticsOp::initializeBlockArguments(
+    const SmallVectorImpl<Value> &ports) {
   SmallVector<Type> argTypes;
   SmallVector<Location> argLocs;
 
-  auto appendTypesAndLocs = [&](ValueRange values) {
-    for (auto value : values) {
-      auto port = value.getDefiningOp<PortOp>();
-      assert(port && "invalid semantics input/output");
-      auto tensorType = RankedTensorType::get(
-          SmallVector<int64_t>(port.getSizes().size(), ShapedType::kDynamic),
-          /*port.getType().getType()*/ Builder(*this).getF32Type(), nullptr);
-      argTypes.push_back(tensorType);
-      argLocs.push_back(port.getLoc());
-    }
-  };
-  appendTypesAndLocs(getInputs());
-  appendTypesAndLocs(getOutputs());
+  for (auto value : ports) {
+    auto port = value.getDefiningOp<PortOp>();
+    assert(port && port.getKind() != PortKind::PARAM && "invalid port");
+    auto tensorType = RankedTensorType::get(
+        SmallVector<int64_t>(port.getSizes().size(), ShapedType::kDynamic),
+        /*port.getType().getType()*/ Builder(*this).getF32Type(), nullptr);
+    argTypes.push_back(tensorType);
+    argLocs.push_back(port.getLoc());
+  }
 
   if (getBody().empty())
     getBody().emplaceBlock();

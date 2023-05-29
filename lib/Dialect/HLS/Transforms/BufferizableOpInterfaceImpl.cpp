@@ -223,36 +223,33 @@ struct InstanceOpInterface
     auto instance = cast<InstanceOp>(op);
     rewriter.setInsertionPoint(instance);
 
-    // New input operands for the cloned op.
-    SmallVector<Value> newInputBuffers;
-    newInputBuffers.reserve(instance.getNumInputs());
-    for (auto input : instance.getInputs()) {
-      FailureOr<Value> buffer = getBuffer(rewriter, input, options);
-      if (failed(buffer))
-        return failure();
-      newInputBuffers.push_back(*buffer);
-    }
-
-    // New output operands for the cloned op.
+    // New buffer operands for the cloned op.
+    SmallVector<Value> newBuffers;
     SmallVector<Value> newOutputBuffers;
-    for (auto result : instance->getOpResults()) {
-      auto output = instance.getOutputs()[result.getResultNumber()];
-      FailureOr<Value> buffer = getBuffer(rewriter, output, options);
+    newBuffers.reserve(instance.getNumOperands());
+    for (auto &port : instance->getOpOperands()) {
+      // For param ports, we just use the original value.
+      auto kind = instance.getPortKind(port);
+      if (kind == PortKind::PARAM) {
+        newBuffers.push_back(port.get());
+        continue;
+      }
+
+      // For input/output ports, we need to convert them to buffers.
+      FailureOr<Value> buffer = getBuffer(rewriter, port.get(), options);
       if (failed(buffer))
         return failure();
-      newOutputBuffers.push_back(*buffer);
-    }
+      newBuffers.push_back(*buffer);
 
-    // Merge input/output operands.
-    SmallVector<Value> newOperands = newInputBuffers;
-    newOperands.append(newOutputBuffers.begin(), newOutputBuffers.end());
-    newOperands.append(instance.getParams().begin(),
-                       instance.getParams().end());
+      // We also collect the output buffers to replace the results later.
+      if (kind == PortKind::OUTPUT)
+        newOutputBuffers.push_back(*buffer);
+    }
 
     // Clone the op, but use the new operands. Since the new op does not have
     // any tensor results, it does not return anything.
     rewriter.setInsertionPoint(instance);
-    clone(rewriter, instance, /*newResultTypes=*/TypeRange{}, newOperands);
+    clone(rewriter, instance, /*newResultTypes=*/TypeRange{}, newBuffers);
 
     // Replace the results of the old op with the new output buffers.
     replaceOpWithBufferizedValues(rewriter, instance, newOutputBuffers);

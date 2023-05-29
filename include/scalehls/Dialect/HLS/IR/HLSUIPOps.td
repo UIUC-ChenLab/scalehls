@@ -39,31 +39,29 @@ def DeclareOp : HLSOp<"uip.declare", [IsolatedFromAbove, SymbolTable, Symbol,
   }];
 }
 
-def InstanceOp : HLSOp<"uip.instance", [AttrSizedOperandSegments,
+def InstanceOp : HLSOp<"uip.instance", [
       DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
   let summary = "Instantiate an IP declared by DeclareOp";
 
-  let arguments = (ins Variadic<AnyType>:$inputs, Variadic<AnyType>:$outputs,
-      Variadic<AnyType>:$params, ArrayAttr:$templates, SymbolRefAttr:$ip);
+  let arguments = (ins Variadic<AnyType>:$ports, ArrayAttr:$templates,
+      SymbolRefAttr:$name);
   let results = (outs Variadic<AnyType>:$results);
 
   let assemblyFormat = [{
-    $ip `<` $templates `>` `(` $inputs `)` `->` `(` $outputs `)`
-    (`[` $params^ `]`)? attr-dict `:` functional-type($inputs, $outputs)
-    (`[` type($params)^ `]`)? (`results` type($results)^)?
+    $name `<` $templates `>` `(` $ports `)` attr-dict `:`
+    functional-type($ports, $results)
   }];
 
   let extraClassDeclaration = [{
-    /// Get the number of inputs, outputs, and params.
-    unsigned getNumInputs();
-    unsigned getNumOutputs();
-    unsigned getNumParams();
-
     /// Get the type of operand: input, output, or param.
     PortKind getPortKind(OpOperand &operand);
     PortKind getPortKind(unsigned operandIdx);
 
+    /// Get the tied op result of an output operand. Assert if the given operand
+    /// is not an output.
     OpResult getTiedOpResult(OpOperand &operand);
+
+    DeclareOp getDeclareOp();
   }];
 }
 
@@ -93,18 +91,17 @@ def SemanticsOp : HLSOp<"uip.semantics", [Terminator, IsolatedFromAbove,
       SingleBlockImplicitTerminator<"SemanticsOutputOp">]> {
   let summary = "Declare the semantics of an IP";
 
-  let arguments = (ins Variadic<PortType>:$inputs,
-      Variadic<PortType>:$outputs, Variadic<PortType>:$params);
+  let arguments = (ins Variadic<PortType>:$ports, Variadic<AnyType>:$templates);
   let regions = (region SizedRegion<1>:$body);
   let assemblyFormat = [{
-    `(` $inputs `)` `->` `(` $outputs `)` (`[` $params^ `]`)? attr-dict `:`
-    functional-type($inputs, $outputs) (`[` type($params)^ `]`)? $body
+    (`<` $templates^ `>`)? `(` $ports `)` attr-dict `:`
+    (`<` type($templates)^ `>`)? `(` type($ports) `)` $body
   }];
 
   let extraClassDeclaration = [{
     /// Initialize the block arguments. We create a tensor for each input and
     /// output. The tensor type is determined by the corresponding port type.
-    void initializeBlockArguments();
+    void initializeBlockArguments(const SmallVectorImpl<Value> &ports);
 
     /// Get the immediate included linalg op. Will return nullptr if there is no
     /// such linalg op or more than one linalg op.

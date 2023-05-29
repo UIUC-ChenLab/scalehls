@@ -8,6 +8,7 @@
 #define SCALEHLS_C_DIALECT_HLS_HLS_H
 
 #include "mlir-c/RegisterEverything.h"
+#include <vector>
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,7 +21,8 @@ extern "C" {
 MLIR_DECLARE_CAPI_DIALECT_REGISTRATION(HLS, hls);
 
 MLIR_CAPI_EXPORTED void
-mlirSemanticsInitializeBlockArguments(MlirOperation semantics);
+mlirSemanticsInitializeBlockArguments(MlirOperation semantics,
+                                      const std::vector<MlirValue> &ports);
 
 //===----------------------------------------------------------------------===//
 // HLS Dialect Types

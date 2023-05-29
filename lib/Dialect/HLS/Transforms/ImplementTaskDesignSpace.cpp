@@ -99,14 +99,13 @@ struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
       // TODO: We actually have a LOT of works to do here. But to demonstrate
       // the idea, we start from simply replacing the linalg op.
       rewriter.setInsertionPoint(linalgOp);
-      SmallVector<Value> inputs;
-      SmallVector<Value> outputs;
+      SmallVector<Value> ports;
       for (auto operand : linalgOp.getDpsInputOperands())
-        inputs.push_back(operand->get());
+        ports.push_back(operand->get());
       for (auto operand : linalgOp.getDpsInitOperands())
-        outputs.push_back(operand->get());
+        ports.push_back(operand->get());
       rewriter.replaceOpWithNewOp<InstanceOp>(
-          linalgOp, linalgOp->getResultTypes(), inputs, outputs, ValueRange({}),
+          linalgOp, linalgOp->getResultTypes(), ports,
           rewriter.getArrayAttr({}), symbol);
     } else {
       // TODO: Otherwise, we parallelize the linalg op with the explored
