@@ -70,7 +70,7 @@ def PortOp : HLSOp<"uip.port", [Symbol, HasParent<"DeclareOp">]> {
 
   let arguments = (ins TypeType:$type, Variadic<AnyType>:$sizes,
       MemRefLayoutAttrInterface:$layout, PortKindAttr:$kind,
-      SymbolNameAttr:$sym_name);
+      OptionalAttr<TypedAttrInterface>:$value, SymbolNameAttr:$sym_name);
   let results = (outs PortType:$result);
 
   let assemblyFormat = [{
@@ -112,8 +112,14 @@ def SemanticsOp : HLSOp<"uip.semantics", [Terminator, IsolatedFromAbove,
     /// such linalg op or more than one linalg op.
     linalg::LinalgOp getSemanticsLinalgOp();
 
+    unsigned mapArgIndexToOperandIndex(unsigned argIndex);
+    std::optional<unsigned> mapOperandIndexToArgIndex(unsigned operandIndex);
+
     DeclareOp getDeclareOp();
     SemanticsOutputOp getSemanticsOutputOp();
+
+    PortKind getPortKind(OpOperand &operand);
+    PortKind getPortKind(unsigned operandIdx);
   }];
 }
 

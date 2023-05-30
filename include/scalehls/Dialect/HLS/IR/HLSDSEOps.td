@@ -85,6 +85,7 @@ def SpacePackOp : HLSOp<"dse.space_pack", [Terminator, HasParent<"SpaceOp">]> {
   ];
 
   let extraClassDeclaration = [{
+    Value findOperand(StringRef name);
     SpaceOp getSpaceOp();
   }];
 }

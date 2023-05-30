@@ -24,6 +24,15 @@ SpacePackOp SpaceOp::getSpacePackOp() {
 // SpacePackOp
 //===----------------------------------------------------------------------===//
 
+Value SpacePackOp::findOperand(StringRef name) {
+  if (!getNames().has_value())
+    return Value();
+  for (auto operandName :
+       llvm::enumerate(getNamesAttr().getAsRange<StringAttr>()))
+    if (operandName.value().getValue() == name)
+      return getOperand(operandName.index());
+}
+
 SpaceOp SpacePackOp::getSpaceOp() {
   return (*this)->getParentOfType<SpaceOp>();
 }

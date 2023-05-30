@@ -38,7 +38,7 @@ PortKind InstanceOp::getPortKind(OpOperand &operand) {
 }
 PortKind InstanceOp::getPortKind(unsigned operandIdx) {
   auto semantics = getDeclareOp().getSemanticsOp();
-  return semantics.getPorts()[operandIdx].getDefiningOp<PortOp>().getKind();
+  return semantics.getPortKind(operandIdx);
 }
 
 /// Get the tied op result of an output operand. Assert if the given operand is
@@ -102,6 +102,29 @@ linalg::LinalgOp SemanticsOp::getSemanticsLinalgOp() {
   if (llvm::hasSingleElement(linalgOps))
     return *linalgOps.begin();
   return nullptr;
+}
+
+unsigned SemanticsOp::mapArgIndexToOperandIndex(unsigned argIndex) {
+  return getArgsMap()[argIndex].cast<IntegerAttr>().getInt();
+}
+std::optional<unsigned>
+SemanticsOp::mapOperandIndexToArgIndex(unsigned operandIndex) {
+  auto argMap = getArgsMap();
+  auto it = llvm::find_if(argMap, [&](auto attr) {
+    return attr.template cast<IntegerAttr>().getInt() == operandIndex;
+  });
+  if (it == argMap.end())
+    return std::nullopt;
+  return std::distance(argMap.begin(), it);
+}
+
+/// Get the type of operand: input, output, or param.
+PortKind SemanticsOp::getPortKind(OpOperand &operand) {
+  assert(operand.getOwner() == *this && "invalid operand");
+  return getPortKind(operand.getOperandNumber());
+}
+PortKind SemanticsOp::getPortKind(unsigned operandIdx) {
+  return getPorts()[operandIdx].getDefiningOp<PortOp>().getKind();
 }
 
 DeclareOp SemanticsOp::getDeclareOp() {
