@@ -123,7 +123,7 @@ FailureOr<LinalgMatchingResult> LinalgMatcher::match() {
     return failure();
   }
   LLVM_DEBUG(llvm::dbgs() << "succeeded: ip matched!\n");
-  return status.getConvergedMaps();
+  return status.getConvergedResult();
 }
 
 /// Match the payload blocks of "a" and "b" and update the matching status.
@@ -250,4 +250,182 @@ bool LinalgMatcher::matchPortMap() {
   LLVM_DEBUG(llvm::dbgs() << "\nstatus after port map matching:\n");
   status.debug();
   return !status.isEmpty();
+}
+
+//===----------------------------------------------------------------------===//
+// IPMatcher
+//===----------------------------------------------------------------------===//
+
+FailureOr<IPMatchingResult> IPMatcher::match() {
+  auto ipSemantics = declare.getSemanticsOp();
+  auto ipLinalgOp = ipSemantics.getSemanticsLinalgOp();
+
+  // If the number of inputs, outputs, or loops are different, we fail the
+  // matching process.
+  if (payload.getNumDpsInputs() != ipLinalgOp.getNumDpsInputs() ||
+      payload.getNumDpsInits() != ipLinalgOp.getNumDpsInits() ||
+      payload.getNumLoops() != ipLinalgOp.getNumLoops())
+    return failure();
+
+  // If the linalg op matching fails, we fail the matching process.
+  auto linalgMatchingResult = LinalgMatcher(ipLinalgOp, payload).match();
+  if (failed(linalgMatchingResult))
+    return failure();
+
+  LLVM_DEBUG(llvm::dbgs() << "\ninitial ip matching status:\n");
+  status.debug();
+
+  Builder builder(declare.getContext());
+  unsigned iteration = 0;
+  while (maxIterations > iteration++) {
+    // Treverse all semantics ports to match them.
+    for (auto port : llvm::enumerate(ipSemantics.getPorts())) {
+      auto portOp = port.value().getDefiningOp<PortOp>();
+
+      // If the port is already matched, we will try to match the ports or
+      // template params it consumes.
+      if (auto matchedPort = status.lookupMatchedPort(port.value())) {
+        auto portType = matchedPort.getType();
+        auto portElementTypeOperand = portOp.getType();
+
+        if (auto tensorType = portType.dyn_cast<RankedTensorType>()) {
+          // Infer the port element type.
+          if (!status.updateMatchedTemplate(
+                  portElementTypeOperand,
+                  TypeAttr::get(tensorType.getElementType())))
+            return failure();
+
+          // Infer the port sizes.
+          for (auto [portSizeOperand, size] :
+               llvm::zip(portOp.getSizes(), tensorType.getShape())) {
+            auto sizeAttr = builder.getIndexAttr(size);
+            if (portSizeOperand.getType().isa<PortType>()) {
+              if (!status.updateMatchedPort(
+                      portSizeOperand, Port(builder.getIndexType(), sizeAttr)))
+                return failure();
+            } else {
+              if (!status.updateMatchedTemplate(portSizeOperand, sizeAttr))
+                return failure();
+            }
+          }
+        } else if (!status.updateMatchedTemplate(portElementTypeOperand,
+                                                 TypeAttr::get(portType)))
+          return failure();
+
+        // LLVM_DEBUG(llvm::dbgs() << "\ncurrent matching status:\n");
+        // status.debug();
+        continue;
+      }
+
+      // Otherwise, the matching from a port of a SemanticsOp to a port of the
+      // InstanceOp is a bit complicated:
+      //
+      //   1) semantics operand -> semantics block argument
+      //   2) semantics block argument -> semantics linalg/output operand
+      //   3) semantics linalg/output operand -> payload linalg operand
+      //
+      // Then, the paylod linalg operand should be used by the new InstanceOp to
+      // replace the payload linalg op. Note that from step 2), we need to
+      // separate the handling of input, initiation, and output port.
+
+      // We start from step 1) mapping. If failed, it indicates the current port
+      // is a param port and doesn't need to be handled here.
+      auto argIndex = ipSemantics.mapOperandIndexToArgIndex(port.index());
+      if (!argIndex.has_value())
+        continue;
+
+      // A helper for step 2) mapping.
+      auto arg = ipSemantics.getBody().getArgument(argIndex.value());
+      auto getIndex =
+          [&](const SmallVector<Value> &operands) -> std::optional<int64_t> {
+        auto it = llvm::find(operands, arg);
+        if (it != operands.end())
+          return std::distance(operands.begin(), it);
+        return std::nullopt;
+      };
+
+      // We handle step 2) and 3) mapping with 3 different cases: input, init,
+      // and output. The rationale here is a bit unintuitive, for example:
+      //
+      // Semantics:
+      // hls.semantics (%a, %b, %c, %r) {
+      // ^bb0(%arg_a, %arg_b, %arg_c, %arg_r):
+      //   %0 = linalg.matmul ins(%arg_a, %arg_b) outs(%arg_c)
+      //   hls.semantics_output %0 -> %arg_r
+      // }
+      //
+      // Payload:
+      // %t_r = linalg.matmul ins(%t_a, %t_b) outs(%t_c)
+      // is substituted by:
+      // %t_r = hls.instance (%t_a, %t_b, %t_c, %t_c)
+      //
+      // In the case above, %arg_a and %arg_b is the "input" of the semantics
+      // linalg op; %arg_c is the "init" of the semantics linalg op; %arg_r is
+      // the "output" of the semantics output op.
+      //
+      // Here, we can observe the %t_c is passed two times to hls.instance,
+      // where is first %t_c is read-only for init, and the second %t_c is
+      // write-only for output. This case will be handled in the bufferization
+      // to generate corresponding buffer-level hls.instance.
+      //
+      Value matchedPort;
+      if (auto ipInputIndex = getIndex(ipLinalgOp.getDpsInputOperands())) {
+        // When the argument is "input" port, the "mapLhsArgIndexToRhs" is used
+        // for the step 3) mapping.
+        auto payloadInputIndex =
+            linalgMatchingResult->mapLhsArgIndexToRhs(ipInputIndex.value());
+        matchedPort = payload.getDpsInputOperand(payloadInputIndex)->get();
+
+      } else if (auto ipInitIndex = getIndex(ipLinalgOp.getDpsInitOperands())) {
+        // When the argument is "initiation" port, the "mapLhsResIndexToRhs" is
+        // used for the step 3) mapping.
+        auto payloadInitIndex =
+            linalgMatchingResult->mapLhsResIndexToRhs(ipInitIndex.value());
+        matchedPort = payload.getDpsInitOperand(payloadInitIndex)->get();
+
+      } else if (auto ipOutputIndex = getIndex(
+                     ipSemantics.getSemanticsOutputOp().getTargets())) {
+        // When the argument is "output" port, the "mapLhsResIndexToRhs" is used
+        // for the step 3) mapping.
+        auto payloadOutputIndex =
+            linalgMatchingResult->mapLhsResIndexToRhs(ipOutputIndex.value());
+        matchedPort = payload.getDpsInitOperand(payloadOutputIndex)->get();
+      } else
+        llvm_unreachable("invalid IP port argument");
+
+      // Finally, update the matching status.
+      if (!status.updateMatchedPort(port.value(), matchedPort))
+        return failure();
+
+      LLVM_DEBUG(llvm::dbgs() << "\ncurrent matching status:\n");
+      status.debug();
+    }
+
+    // Break the loop if the matching has already converged.
+    if (status.isConverged())
+      break;
+  }
+
+  // After the iteration, we will try to fill those unmatched ports and template
+  // parameters with default value it has.
+  for (auto port : ipSemantics.getPorts()) {
+    auto portOp = port.getDefiningOp<PortOp>();
+    if (auto defaultValue = portOp.getValue())
+      status.updateMatchedPort(port, defaultValue.value());
+  }
+  for (auto temp : ipSemantics.getTemplates()) {
+    auto tempOp = temp.getDefiningOp<hls::ParamLikeInterface>();
+    if (auto defaultValue = tempOp.getValue())
+      status.updateMatchedTemplate(temp, defaultValue.value());
+  }
+
+  LLVM_DEBUG(llvm::dbgs() << "\nfinal matching status:\n");
+  status.debug();
+
+  if (!status.isConverged())
+    return failure();
+  LLVM_DEBUG(llvm::dbgs() << "\nip matching succeeded!\n");
+  return IPMatchingResult(status.getMatchedPorts(),
+                          status.getMatchedTemplates(),
+                          linalgMatchingResult.value());
 }

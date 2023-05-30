@@ -24,13 +24,13 @@ SpacePackOp SpaceOp::getSpacePackOp() {
 // SpacePackOp
 //===----------------------------------------------------------------------===//
 
-Value SpacePackOp::findOperand(StringRef name) {
+Value SpacePackOp::findOperand(StringAttr name) {
   if (!getNames().has_value())
     return Value();
-  for (auto operandName :
-       llvm::enumerate(getNamesAttr().getAsRange<StringAttr>()))
-    if (operandName.value().getValue() == name)
+  for (auto operandName : llvm::enumerate(getNamesAttr()))
+    if (operandName.value() == name)
       return getOperand(operandName.index());
+  return Value();
 }
 
 SpaceOp SpacePackOp::getSpaceOp() {

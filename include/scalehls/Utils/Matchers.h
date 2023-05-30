@@ -7,6 +7,7 @@
 #ifndef SCALEHLS_UTILS_MATCHERS_H
 #define SCALEHLS_UTILS_MATCHERS_H
 
+#include "scalehls/Dialect/HLS/IR/HLS.h"
 #include "scalehls/Utils/Utils.h"
 #include "llvm/Support/Debug.h"
 
@@ -14,6 +15,8 @@
 
 namespace mlir {
 namespace scalehls {
+
+using namespace hls;
 
 //===----------------------------------------------------------------------===//
 // BlockMatcher
@@ -71,12 +74,34 @@ using PermuteMap = SmallVector<unsigned>;
 using PermuteMapList = SmallVector<PermuteMap>;
 
 struct LinalgMatchingResult {
+  LinalgMatchingResult(const PermuteMap &argMap, const PermuteMap &resMap,
+                       const PermuteMap &loopMap)
+      : argMap(argMap), resMap(resMap), loopMap(loopMap) {}
+
+  unsigned mapLhsArgIndexToRhs(unsigned lhsArgIndex) const {
+    return argMap[lhsArgIndex];
+  }
+  unsigned mapLhsResIndexToRhs(unsigned lhsResIndex) const {
+    return resMap[lhsResIndex];
+  }
+  unsigned mapLhsLoopIndexToRhs(unsigned lhsLoopIndex) const {
+    return loopMap[lhsLoopIndex];
+  }
+
+  unsigned mapRhsArgIndexToLhs(unsigned rhsArgIndex) const {
+    return llvm::find(argMap, rhsArgIndex) - argMap.begin();
+  }
+  unsigned mapRhsResIndexToLhs(unsigned rhsResIndex) const {
+    return llvm::find(resMap, rhsResIndex) - resMap.begin();
+  }
+  unsigned mapRhsLoopIndexToLhs(unsigned rhsLoopIndex) const {
+    return llvm::find(loopMap, rhsLoopIndex) - loopMap.begin();
+  }
+
+private:
   const PermuteMap argMap;
   const PermuteMap resMap;
   const PermuteMap loopMap;
-
-  LinalgMatchingResult(PermuteMap argMap, PermuteMap resMap, PermuteMap loopMap)
-      : argMap(argMap), resMap(resMap), loopMap(loopMap) {}
 };
 
 /// Status of LinalgOp matching that records the equivalent indices maps of
@@ -140,14 +165,14 @@ struct LinalgMatchingStatus {
 
   /// Get the permutation maps from the matching status. Return failure if the
   /// matching status is not converged.
-  FailureOr<LinalgMatchingResult> getConvergedMaps() const {
+  FailureOr<LinalgMatchingResult> getConvergedResult() const {
     if (!isConverged())
       return failure();
     return LinalgMatchingResult(argMapList.front(), resMapList.front(),
                                 loopMapList.front());
   }
 
-  /// Check whether the matching status is valid.
+  /// Debug the matching status.
   void debug() const {
     LLVM_DEBUG(llvm::dbgs() << "Argument permutation maps:\n");
     for (auto argMap : argMapList) {
@@ -199,6 +224,160 @@ private:
   linalg::LinalgOp a;
   linalg::LinalgOp b;
   LinalgMatchingStatus status;
+};
+
+//===----------------------------------------------------------------------===//
+// IPMatcher
+//===----------------------------------------------------------------------===//
+
+/// Represent a port, which can be a tensor/scalar value or a typed attribute if
+/// it is a constant.
+struct Port : OpFoldResult {
+  Port(Value value) : OpFoldResult(value), type(value.getType()) {}
+  Port(TypedAttr attr) : OpFoldResult(Attribute(attr)), type(attr.getType()) {}
+  Port(Type type, Attribute attr) : OpFoldResult(attr), type(type) {}
+  Port() = default;
+
+  Type getType() const { return type; }
+  explicit operator bool() const { return type && !isNull(); }
+
+  bool operator==(const Port &other) {
+    return getType() == other.getType() &&
+           getOpaqueValue() == other.getOpaqueValue();
+  }
+
+  bool operator!=(const Port &other) {
+    return getType() != other.getType() ||
+           getOpaqueValue() != other.getOpaqueValue();
+  }
+
+private:
+  Type type;
+};
+
+struct IPMatchingResult {
+  const SmallVector<Port> instPorts;
+  const SmallVector<Attribute> instTemplates;
+  const LinalgMatchingResult result;
+
+  unsigned mapIpResIndexToPayload(unsigned ipResIndex) const {
+    return result.mapLhsResIndexToRhs(ipResIndex);
+  }
+  unsigned mapPayloadResIndexToIp(unsigned payloadResIndex) const {
+    return result.mapRhsResIndexToLhs(payloadResIndex);
+  }
+
+  IPMatchingResult(const SmallVector<Port> &instPorts,
+                   const SmallVector<Attribute> &instTemplates,
+                   const LinalgMatchingResult &result)
+      : instPorts(instPorts), instTemplates(instTemplates), result(result) {}
+};
+
+struct IPMatchingStatus {
+  IPMatchingStatus(SmallVector<Value> ports, SmallVector<Value> templates)
+      : ports(ports), templates(templates) {
+    matchedPorts.resize(ports.size());
+    matchedTemplates.resize(templates.size());
+  }
+
+  /// Check whether the matching status is converged.
+  bool isConverged() const {
+    return llvm::all_of(matchedPorts, [](auto port) { return port; }) &&
+           llvm::all_of(llvm::zip(templates, matchedTemplates), [](auto t) {
+             return !std::get<0>(t).getType().template isa<TypeType>() ||
+                    std::get<1>(t);
+           });
+  }
+
+  /// Update the matching status with the given port and template.
+  bool updateMatchedPort(Value port, Port value) {
+    auto index = getPortIndex(port);
+    if (matchedPorts[index] && matchedPorts[index] != value)
+      return false;
+    matchedPorts[index] = value;
+    return true;
+  }
+  bool updateMatchedTemplate(Value temp, Attribute value) {
+    auto index = getTemplateIndex(temp);
+    if (matchedTemplates[index] && matchedTemplates[index] != value)
+      return false;
+    matchedTemplates[index] = value;
+    return true;
+  }
+
+  /// Lookup the matched port and template.
+  Port lookupMatchedPort(Value port) const {
+    return matchedPorts[getPortIndex(port)];
+  }
+  Attribute lookupMatchedTemplate(Value temp) const {
+    return matchedTemplates[getTemplateIndex(temp)];
+  }
+
+  /// Matched ports and templates getters.
+  SmallVector<Port> getMatchedPorts() const { return matchedPorts; }
+  SmallVector<Attribute> getMatchedTemplates() const {
+    return matchedTemplates;
+  }
+
+  /// Debug the matching status.
+  void debug() const {
+    LLVM_DEBUG(llvm::dbgs() << "Matched ports:\n");
+    for (auto [port, matchedPort] : llvm::zip(ports, matchedPorts)) {
+      LLVM_DEBUG(llvm::dbgs() << port << "\n=> ");
+      if (!matchedPort)
+        LLVM_DEBUG(llvm::dbgs() << "null\n");
+      else if (matchedPort.is<Value>())
+        LLVM_DEBUG(llvm::dbgs() << matchedPort.get<Value>() << "\n");
+      else if (matchedPort.is<Attribute>())
+        LLVM_DEBUG(llvm::dbgs() << matchedPort.get<Attribute>() << "\n");
+    }
+    LLVM_DEBUG(llvm::dbgs() << "Matched templates:\n");
+    for (auto [temp, matchedTemp] : llvm::zip(templates, matchedTemplates)) {
+      LLVM_DEBUG(llvm::dbgs() << temp << "\n=> ");
+      if (!matchedTemp)
+        LLVM_DEBUG(llvm::dbgs() << "null\n");
+      else
+        LLVM_DEBUG(llvm::dbgs() << matchedTemp << "\n");
+    }
+  }
+
+private:
+  std::ptrdiff_t getPortIndex(Value port) const {
+    auto it = llvm::find(ports, port);
+    assert(it != ports.end() && "invalid port to lookup");
+    return std::distance(ports.begin(), it);
+  }
+
+  std::ptrdiff_t getTemplateIndex(Value temp) const {
+    auto it = llvm::find(templates, temp);
+    assert(it != templates.end() && "invalid template to lookup");
+    return std::distance(templates.begin(), it);
+  }
+
+  /// Ports and templates of the IP semantics.
+  const SmallVector<Value> ports;
+  const SmallVector<Value> templates;
+
+  /// The matched ports and templates.
+  SmallVector<Port> matchedPorts;
+  SmallVector<Attribute> matchedTemplates;
+};
+
+struct IPMatcher {
+  /// Match a payload linalg op to an IP declaration.
+  IPMatcher(linalg::LinalgOp payload, DeclareOp declare,
+            unsigned maxIterations = 3)
+      : payload(payload), declare(declare), maxIterations(maxIterations),
+        status(declare.getSemanticsOp().getPorts(),
+               declare.getSemanticsOp().getTemplates()) {}
+
+  FailureOr<IPMatchingResult> match();
+
+private:
+  linalg::LinalgOp payload;
+  DeclareOp declare;
+  const unsigned maxIterations;
+  IPMatchingStatus status;
 };
 
 } // namespace scalehls
