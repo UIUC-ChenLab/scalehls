@@ -82,10 +82,12 @@ void SemanticsOp::initializeBlockArguments(
     // TODO: Handle constant sized port.
     auto port = value.getDefiningOp<PortOp>();
     assert(port && port.getKind() != PortKind::PARAM && "invalid port");
-    auto tensorType = RankedTensorType::get(
-        SmallVector<int64_t>(port.getSizes().size(), ShapedType::kDynamic),
-        /*port.getType().getType()*/ builder.getF32Type(), nullptr);
-    argTypes.push_back(tensorType);
+    if (port.getSizes().empty())
+      argTypes.push_back(/*port.getType().getType()*/ builder.getF32Type());
+    else
+      argTypes.push_back(RankedTensorType::get(
+          SmallVector<int64_t>(port.getSizes().size(), ShapedType::kDynamic),
+          /*port.getType().getType()*/ builder.getF32Type(), nullptr));
     argLocs.push_back(port.getLoc());
   }
 
