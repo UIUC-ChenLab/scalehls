@@ -89,10 +89,6 @@ struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
     auto implSpaceOp = implSpace.getDefiningOp<SpaceOp>();
     assert(implSpaceOp && "invalid task implementation candidates");
 
-
-//==========================================================================================
-    // if (0 == 1) {
-    //   auto symbol = implParamOp.getValue()->cast<TaskImplAttr>().getSymbolRef();
     if (auto symbol =
             implParamOp.getValue()->cast<TaskImplAttr>().getSymbolRef()) {
 
@@ -158,19 +154,15 @@ struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
         linalgOp->getResult(resIndex).replaceAllUsesWith(instance.getResult(i));
       }
       rewriter.eraseOp(linalgOp);
+
     } else {
 
-      //TRY
-      // auto symbol = implParamOp.getValue()->cast<TaskImplAttr>().getSymbolRef()
-      // auto default_space = SymbolTable::lookupNearestSymbolFrom<SpaceOp>(
-      //   op->getParentOfType<ModuleOp>(), symbol);
+      // auto default_spaceOp = implSelect.getSpaces()[0].getDefiningOp<SpaceOp>();
 
-      auto default_spaceOp = implSelect.getSpaces()[0].getDefiningOp<SpaceOp>();
+      SmallVector<int64_t> parallelParam;
 
-      SmallVector<int64_t> parallel_para;
-
-      for (auto param : default_spaceOp.getSpacePackOp().getArgs()) {
-        // The tile size parameter must be TILE_SIZE kind and have an index type.
+      for (auto param : implSpaceOp.getSpacePackOp().getArgs()) {
+        // The tile size parameter must be PARALLEL_SIZE kind and have an index type.
         auto paramOp = param.getDefiningOp<hls::ParamLikeInterface>();
         assert(paramOp.getKind() == ParamKind::PARALLEL_SIZE &&
               "invalid parallel parameter");
@@ -178,21 +170,20 @@ struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
         if (!paramOp.getValue().has_value())
           return op.removeSpaceAttr(), failure();
 
-        // Get the tile size value store as an attribute of the ParamOp.
-        parallel_para.push_back(paramOp.getValue()->cast<IntegerAttr>().getInt());
+        // Get the parallel size value store as an attribute of the ParamOp.
+        parallelParam.push_back(paramOp.getValue()->cast<IntegerAttr>().getInt());
       }
 
       linalg::LinalgTilingOptions options;
-      options.setTileSizes(parallel_para);
+      options.setTileSizes(parallelParam);
       auto parallelLinalgOp = linalg::tileLinalgOp(rewriter, linalgOp, options);
       if (failed(parallelLinalgOp))
         return op.removeSpaceAttr(), failure();
 
-      // Replace the original linalg op with the tiled one.
+      // Replace the original linalg op with the parallel one.
       rewriter.replaceOp(linalgOp, parallelLinalgOp->tensorResults);
       linalgOp = parallelLinalgOp->op;
 
-      // TODO: Otherwise, we parallelize the linalg op with the explored
 
     }
 
