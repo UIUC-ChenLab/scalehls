@@ -23,8 +23,8 @@ public:
         .template Case<
 
             // HLS Ip Reg
-            hls::Instance,
-            
+            hls::InstanceOp,
+
             // HLS dialect operations.
             hls::BufferOp, hls::ConstBufferOp, hls::StreamOp, hls::StreamReadOp,
             hls::StreamWriteOp, hls::AffineSelectOp,

@@ -89,8 +89,13 @@ struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
     auto implSpaceOp = implSpace.getDefiningOp<SpaceOp>();
     assert(implSpaceOp && "invalid task implementation candidates");
 
+
+//==========================================================================================
+    // if (0 == 1) {
+    //   auto symbol = implParamOp.getValue()->cast<TaskImplAttr>().getSymbolRef();
     if (auto symbol =
             implParamOp.getValue()->cast<TaskImplAttr>().getSymbolRef()) {
+
       // If the task will be implemented with an IP, we substitute the original
       // linalg operation with an IP instance.
       auto ipDeclare = SymbolTable::lookupNearestSymbolFrom<DeclareOp>(
@@ -154,8 +159,41 @@ struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
       }
       rewriter.eraseOp(linalgOp);
     } else {
+
+      //TRY
+      // auto symbol = implParamOp.getValue()->cast<TaskImplAttr>().getSymbolRef()
+      // auto default_space = SymbolTable::lookupNearestSymbolFrom<SpaceOp>(
+      //   op->getParentOfType<ModuleOp>(), symbol);
+
+      auto default_spaceOp = implSelect.getSpaces()[0].getDefiningOp<SpaceOp>();
+
+      SmallVector<int64_t> parallel_para;
+
+      for (auto param : default_spaceOp.getSpacePackOp().getArgs()) {
+        // The tile size parameter must be TILE_SIZE kind and have an index type.
+        auto paramOp = param.getDefiningOp<hls::ParamLikeInterface>();
+        assert(paramOp.getKind() == ParamKind::PARALLEL_SIZE &&
+              "invalid parallel parameter");
+
+        if (!paramOp.getValue().has_value())
+          return op.removeSpaceAttr(), failure();
+
+        // Get the tile size value store as an attribute of the ParamOp.
+        parallel_para.push_back(paramOp.getValue()->cast<IntegerAttr>().getInt());
+      }
+
+      linalg::LinalgTilingOptions options;
+      options.setTileSizes(parallel_para);
+      auto parallelLinalgOp = linalg::tileLinalgOp(rewriter, linalgOp, options);
+      if (failed(parallelLinalgOp))
+        return op.removeSpaceAttr(), failure();
+
+      // Replace the original linalg op with the tiled one.
+      rewriter.replaceOp(linalgOp, parallelLinalgOp->tensorResults);
+      linalgOp = parallelLinalgOp->op;
+
       // TODO: Otherwise, we parallelize the linalg op with the explored
-      // parallel sizes.
+
     }
 
     // Finally, we remove the space attribute from the task op.

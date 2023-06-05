@@ -708,8 +708,8 @@ void ModuleEmitter::emitLibraryIp(InstanceOp op) {
   // Get ip function name
   os << op.getName();
 
-  // // emit template
-  // os << "<";
+  // emit template
+  os << "<";
   // for (auto each_template : llvm::drop_end(op.getResults())) {
   //   emitValue(each_template);
   //   os << ", ";
