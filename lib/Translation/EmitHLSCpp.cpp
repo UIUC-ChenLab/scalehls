@@ -288,6 +288,9 @@ public:
   explicit ModuleEmitter(ScaleHLSEmitterState &state)
       : ScaleHLSEmitterBase(state) {}
 
+  /// Lib Ip operation emitter
+  void emitLibraryIp(InstanceOp op);
+  
   /// HLS dialect operation emitters.
   void emitConstBuffer(ConstBufferOp op);
   void emitStreamChannel(StreamOp op);
@@ -456,6 +459,9 @@ class StmtVisitor : public HLSVisitorBase<StmtVisitor, bool> {
 public:
   StmtVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
   using HLSVisitorBase::visitOp;
+
+  // Test registered ip expression
+  bool visitOp(InstanceOp op) { return emitter.emitLibraryIp(op), true; }
 
   /// HLS dialect operations.
   bool visitOp(BufferOp op) {
@@ -686,10 +692,45 @@ bool ExprVisitor::visitOp(arith::CmpIOp op) {
 // ModuleEmitter Class Definition
 //===----------------------------------------------------------------------===//
 
+
+
+
 /// HLS dialect operation emitters.
 void ModuleEmitter::emitConstBuffer(ConstBufferOp op) {
   emitConstant(op);
   emitArrayDirectives(op.getResult());
+}
+
+/// Library Ip emitter
+void ModuleEmitter::emitLibraryIp(InstanceOp op) {
+  indent();
+
+  // Get ip function name
+  os << op.getName();
+
+  // emit template
+  os << "<";
+  // for (auto each_template : llvm::drop_end(op.getResults())) {
+  //   emitValue(each_template);
+  //   os << ", ";
+  // }
+  // auto last_template = op.getTemplates().back();
+  // emitValue(last_template);
+  // os << ">";
+
+  // //emit varibales
+  // os << "(";
+  // for (auto each_var : llvm::drop_end(op.getResults())) {
+  //   emitValue(each_var);
+  //   os << ", ";
+  // }
+  // auto last_var = op.getResults().back();
+  // emitValue(last_var);
+  // os << ")";
+
+  // //emit ends
+  // os << ";";
+  // emitInfoAndNewLine(op);
 }
 
 void ModuleEmitter::emitStreamChannel(StreamOp op) {
