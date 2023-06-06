@@ -154,8 +154,33 @@ struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
       }
       rewriter.eraseOp(linalgOp);
     } else {
-      // TODO: Otherwise, we parallelize the linalg op with the explored
-      // parallel sizes.
+      // Parallelize and use the default method.
+      SmallVector<int64_t> parallelParam;
+      for (auto param : implSpaceOp.getSpacePackOp().getArgs()) {
+        // The tile size parameter must be PARALLEL_SIZE kind and have an index
+        // type.
+        auto paramOp = param.getDefiningOp<hls::ParamLikeInterface>();
+
+        // Check if the params are valid
+        assert(paramOp.getKind() == ParamKind::PARALLEL_SIZE &&
+               "invalid parallel parameter");
+        if (!paramOp.getValue().has_value())
+          return op.removeSpaceAttr(), failure();
+
+        // Get the parallel size value store as an attribute of the ParamOp.
+        parallelParam.push_back(
+            paramOp.getValue()->cast<IntegerAttr>().getInt());
+      }
+
+      linalg::LinalgTilingOptions options;
+      options.setTileSizes(parallelParam);
+      auto parallelLinalgOp = linalg::tileLinalgOp(rewriter, linalgOp, options);
+      if (failed(parallelLinalgOp))
+        return op.removeSpaceAttr(), failure();
+
+      // Replace the original linalg op with the parallel one.
+      rewriter.replaceOp(linalgOp, parallelLinalgOp->tensorResults);
+      linalgOp = parallelLinalgOp->op;
     }
 
     // Finally, we remove the space attribute from the task op.
