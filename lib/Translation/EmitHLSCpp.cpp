@@ -288,6 +288,9 @@ public:
   explicit ModuleEmitter(ScaleHLSEmitterState &state)
       : ScaleHLSEmitterBase(state) {}
 
+  /// Lib Ip operation emitter
+  void emitLibraryIp(InstanceOp op);
+
   /// HLS dialect operation emitters.
   void emitConstBuffer(ConstBufferOp op);
   void emitStreamChannel(StreamOp op);
@@ -456,6 +459,9 @@ class StmtVisitor : public HLSVisitorBase<StmtVisitor, bool> {
 public:
   StmtVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
   using HLSVisitorBase::visitOp;
+
+  // Test registered ip expression
+  bool visitOp(InstanceOp op) { return emitter.emitLibraryIp(op), true; }
 
   /// HLS dialect operations.
   bool visitOp(BufferOp op) {
@@ -690,6 +696,63 @@ bool ExprVisitor::visitOp(arith::CmpIOp op) {
 void ModuleEmitter::emitConstBuffer(ConstBufferOp op) {
   emitConstant(op);
   emitArrayDirectives(op.getResult());
+}
+
+/// Library Ip emitter
+void ModuleEmitter::emitLibraryIp(InstanceOp op) {
+  indent();
+  // Get Lib name. (Print is not used, but left for future updates)
+  auto ipName = op->getAttrOfType<mlir::SymbolRefAttr>("name");
+  // os << ipName.getRootReference().getValue().str();
+
+  // Get Ip name, print Ip name.
+  auto ipName = op->getAttrOfType<mlir::SymbolRefAttr>("name");
+  os << ipName.getNestedReferences()[0].getValue().str();
+
+  // Emit template.
+  os << "<";
+  auto allTemplate = op.getTemplates();
+  for (unsigned i = 0; i < allTemplate.size(); ++i) {
+    if (auto curAttr = allTemplate[i].dyn_cast<TypeAttr>()) {
+
+      if (auto floatType = curAttr.getValue().dyn_cast<FloatType>()) {
+        os << "float";
+      } else if (auto indexType = curAttr.getValue().dyn_cast<IndexType>()) {
+        os << "Int";
+      }
+    } else if (auto curAttr = allTemplate[i].dyn_cast<IntegerAttr>()) {
+      os << curAttr.getValue();
+    }
+    if (i != allTemplate.size() - 1) {
+      os << ",";
+    }
+  }
+  os << ">";
+  os << "(";
+
+  // Emit Variables.
+  auto allVar = op.getOperands();
+  for (unsigned i = 0; i < allVar.size(); ++i) {
+    if (auto curVar = allVar[i].getDefiningOp<arith::ConstantOp>()) {
+      if (auto floatValue = curVar.getValue().dyn_cast<FloatAttr>()) {
+        os << floatValue.getValueAsDouble();
+      } else if (auto intValue = curVar.getValue().dyn_cast<IntegerAttr>()) {
+        os << intValue.getValue();
+      }
+    } else {
+      emitValue(allVar[i]);
+    }
+
+    // Check for variable end
+    if (i != allVar.size() - 1) {
+      os << ",";
+    }
+  }
+  os << ")";
+
+  // Emit ends
+  os << ";";
+  emitInfoAndNewLine(op);
 }
 
 void ModuleEmitter::emitStreamChannel(StreamOp op) {
@@ -1385,8 +1448,8 @@ void ModuleEmitter::emitBroadcast(vector::BroadcastOp op) {
 
 /// Memref-related statement emitters.
 template <typename OpType> void ModuleEmitter::emitAlloc(OpType op) {
-  // A declared result indicates that the memref is output of the function, and
-  // has been declared in the function signature.
+  // A declared result indicates that the memref is output of the function,
+  // and has been declared in the function signature.
   if (isDeclared(op.getResult()))
     return;
 
@@ -1622,8 +1685,8 @@ unsigned ModuleEmitter::emitNestedLoopHeader(Value val) {
       os << "++iv" << dimIdx++ << ") {\n";
 
       addIndent();
-      // TODO: More precise control here. Now we assume vectorization loops are
-      // always fully unrolled.
+      // TODO: More precise control here. Now we assume vectorization loops
+      // are always fully unrolled.
       if (type.isa<VectorType>())
         indent() << "#pragma HLS unroll\n";
     }
@@ -1746,8 +1809,8 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
   if (hasTopFuncAttr(func)) {
     indent() << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
     for (auto &port : portList) {
-      // MemRefType and StreamType must have been converted to AXI ports for the
-      // top function.
+      // MemRefType and StreamType must have been converted to AXI ports for
+      // the top function.
       if (port.getType().isa<MemRefType, StreamType>()) {
         indent() << "#pragma HLS interface";
 
