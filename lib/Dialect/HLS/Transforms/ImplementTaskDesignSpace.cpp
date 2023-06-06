@@ -153,8 +153,7 @@ struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
         linalgOp->getResult(resIndex).replaceAllUsesWith(instance.getResult(i));
       }
       rewriter.eraseOp(linalgOp);
-    }
-    else {
+    } else {
       // Parallelize and use the default method.
       SmallVector<int64_t> parallelParam;
       for (auto param : implSpaceOp.getSpacePackOp().getArgs()) {
