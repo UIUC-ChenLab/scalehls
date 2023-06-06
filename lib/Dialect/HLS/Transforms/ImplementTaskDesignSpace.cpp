@@ -91,7 +91,6 @@ struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
 
     if (auto symbol =
             implParamOp.getValue()->cast<TaskImplAttr>().getSymbolRef()) {
-
       // If the task will be implemented with an IP, we substitute the original
       // linalg operation with an IP instance.
       auto ipDeclare = SymbolTable::lookupNearestSymbolFrom<DeclareOp>(
@@ -155,14 +154,12 @@ struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
       }
       rewriter.eraseOp(linalgOp);
     }
-
     else {
-
-      // Parallelize and use the default method
+      // Parallelize and use the default method.
       SmallVector<int64_t> parallelParam;
       for (auto param : implSpaceOp.getSpacePackOp().getArgs()) {
         // The tile size parameter must be PARALLEL_SIZE kind and have an index
-        // type
+        // type.
         auto paramOp = param.getDefiningOp<hls::ParamLikeInterface>();
 
         // Check if the params are valid
@@ -171,7 +168,7 @@ struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
         if (!paramOp.getValue().has_value())
           return op.removeSpaceAttr(), failure();
 
-        // Get the parallel size value store as an attribute of the ParamOp
+        // Get the parallel size value store as an attribute of the ParamOp.
         parallelParam.push_back(
             paramOp.getValue()->cast<IntegerAttr>().getInt());
       }
