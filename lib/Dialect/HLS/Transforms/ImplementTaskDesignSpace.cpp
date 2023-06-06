@@ -154,23 +154,28 @@ struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
         linalgOp->getResult(resIndex).replaceAllUsesWith(instance.getResult(i));
       }
       rewriter.eraseOp(linalgOp);
-    } 
-    
+    }
+
     else {
-      //Parallelize and use the default method
+
+
+      
+      // Parallelize and use the default method
       SmallVector<int64_t> parallelParam;
       for (auto param : implSpaceOp.getSpacePackOp().getArgs()) {
-        // The tile size parameter must be PARALLEL_SIZE kind and have an index type.
+        // The tile size parameter must be PARALLEL_SIZE kind and have an index
+        // type.
         auto paramOp = param.getDefiningOp<hls::ParamLikeInterface>();
 
         // Check if the params are valid
         assert(paramOp.getKind() == ParamKind::PARALLEL_SIZE &&
-              "invalid parallel parameter");
+               "invalid parallel parameter");
         if (!paramOp.getValue().has_value())
           return op.removeSpaceAttr(), failure();
 
         // Get the parallel size value store as an attribute of the ParamOp.
-        parallelParam.push_back(paramOp.getValue()->cast<IntegerAttr>().getInt());
+        parallelParam.push_back(
+            paramOp.getValue()->cast<IntegerAttr>().getInt());
       }
 
       linalg::LinalgTilingOptions options;
