@@ -701,9 +701,9 @@ void ModuleEmitter::emitConstBuffer(ConstBufferOp op) {
 /// Library Ip emitter
 void ModuleEmitter::emitLibraryIp(InstanceOp op) {
   indent();
-  // Get Lib name. (Print is not used, but left for future updates)
-  auto ipName = op->getAttrOfType<mlir::SymbolRefAttr>("name");
-  // os << ipName.getRootReference().getValue().str();
+  /// Get Lib name. (Print is not used, but left for future updates)
+  // auto libName = op->getAttrOfType<mlir::SymbolRefAttr>("name");
+  // os << libName.getRootReference().getValue().str();
 
   // Get Ip name, print Ip name.
   auto ipName = op->getAttrOfType<mlir::SymbolRefAttr>("name");
@@ -715,14 +715,20 @@ void ModuleEmitter::emitLibraryIp(InstanceOp op) {
   for (unsigned i = 0; i < allTemplate.size(); ++i) {
     if (auto curAttr = allTemplate[i].dyn_cast<TypeAttr>()) {
 
+      // If template is a TPYE, print out the corresponding type string
       if (auto floatType = curAttr.getValue().dyn_cast<FloatType>()) {
         os << "float";
       } else if (auto indexType = curAttr.getValue().dyn_cast<IndexType>()) {
         os << "Int";
       }
+
+      // If template is a number, print the number. (For now, support integer
+      // only)
     } else if (auto curAttr = allTemplate[i].dyn_cast<IntegerAttr>()) {
       os << curAttr.getValue();
     }
+
+    // Check for template end.
     if (i != allTemplate.size() - 1) {
       os << ",";
     }
@@ -733,24 +739,29 @@ void ModuleEmitter::emitLibraryIp(InstanceOp op) {
   // Emit Variables.
   auto allVar = op.getOperands();
   for (unsigned i = 0; i < allVar.size(); ++i) {
+
+    // If variable is constant, print the value based on type. (Support float
+    // and integer )
     if (auto curVar = allVar[i].getDefiningOp<arith::ConstantOp>()) {
       if (auto floatValue = curVar.getValue().dyn_cast<FloatAttr>()) {
         os << floatValue.getValueAsDouble();
       } else if (auto intValue = curVar.getValue().dyn_cast<IntegerAttr>()) {
         os << intValue.getValue();
       }
+
+    // If variable is data, print the name of the data.
     } else {
       emitValue(allVar[i]);
     }
 
-    // Check for variable end
+    // Check for variable end.
     if (i != allVar.size() - 1) {
       os << ",";
     }
   }
   os << ")";
 
-  // Emit ends
+  // Emit ends.
   os << ";";
   emitInfoAndNewLine(op);
 }
