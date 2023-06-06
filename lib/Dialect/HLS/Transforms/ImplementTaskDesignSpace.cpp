@@ -154,19 +154,18 @@ struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
         linalgOp->getResult(resIndex).replaceAllUsesWith(instance.getResult(i));
       }
       rewriter.eraseOp(linalgOp);
-
-    } else {
-
-      // auto default_spaceOp = implSelect.getSpaces()[0].getDefiningOp<SpaceOp>();
-
+    } 
+    
+    else {
+      //Parallelize and use the default method
       SmallVector<int64_t> parallelParam;
-
       for (auto param : implSpaceOp.getSpacePackOp().getArgs()) {
         // The tile size parameter must be PARALLEL_SIZE kind and have an index type.
         auto paramOp = param.getDefiningOp<hls::ParamLikeInterface>();
+
+        // Check if the params are valid
         assert(paramOp.getKind() == ParamKind::PARALLEL_SIZE &&
               "invalid parallel parameter");
-
         if (!paramOp.getValue().has_value())
           return op.removeSpaceAttr(), failure();
 
@@ -183,8 +182,6 @@ struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
       // Replace the original linalg op with the parallel one.
       rewriter.replaceOp(linalgOp, parallelLinalgOp->tensorResults);
       linalgOp = parallelLinalgOp->op;
-
-
     }
 
     // Finally, we remove the space attribute from the task op.
