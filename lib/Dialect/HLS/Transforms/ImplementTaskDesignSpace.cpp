@@ -158,13 +158,11 @@ struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
 
     else {
 
-
-      
       // Parallelize and use the default method
       SmallVector<int64_t> parallelParam;
       for (auto param : implSpaceOp.getSpacePackOp().getArgs()) {
         // The tile size parameter must be PARALLEL_SIZE kind and have an index
-        // type.
+        // type
         auto paramOp = param.getDefiningOp<hls::ParamLikeInterface>();
 
         // Check if the params are valid
@@ -173,7 +171,7 @@ struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
         if (!paramOp.getValue().has_value())
           return op.removeSpaceAttr(), failure();
 
-        // Get the parallel size value store as an attribute of the ParamOp.
+        // Get the parallel size value store as an attribute of the ParamOp
         parallelParam.push_back(
             paramOp.getValue()->cast<IntegerAttr>().getInt());
       }
