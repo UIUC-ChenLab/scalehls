@@ -745,7 +745,7 @@ void ModuleEmitter::emitLibraryIp(InstanceOp op) {
       } else if (auto intValue = curVar.getValue().dyn_cast<IntegerAttr>()) {
         os << intValue.getValue();
       }
-
+      
       // If variable is data, print the name of the data.
     } else {
       emitValue(allVar[i]);
@@ -1967,7 +1967,7 @@ void ModuleEmitter::emitModule(ModuleOp module) {
   os << "\n";
   os << "using namespace std";
   os << "\n";
-  
+
   CallGraph graph(module);
   // Emit all functions in the call graph in a post order.
   llvm::SmallDenseSet<func::FuncOp> emittedFuncs;
