@@ -701,7 +701,7 @@ void ModuleEmitter::emitConstBuffer(ConstBufferOp op) {
 /// Library Ip emitter
 void ModuleEmitter::emitLibraryIp(InstanceOp op) {
   indent();
-  /// Get Lib name. (Print is not used, but left for future updates)
+  /// Get Lib name. (This is not used, but left for future updates)
   // auto libName = op->getAttrOfType<mlir::SymbolRefAttr>("name");
   // os << libName.getRootReference().getValue().str();
 
@@ -727,14 +727,11 @@ void ModuleEmitter::emitLibraryIp(InstanceOp op) {
     } else if (auto curAttr = allTemplate[i].dyn_cast<IntegerAttr>()) {
       os << curAttr.getValue();
     }
-
-    // Check for template end.
     if (i != allTemplate.size() - 1) {
       os << ",";
     }
   }
-  os << ">";
-  os << "(";
+  os << ">(";
 
   // Emit Variables.
   auto allVar = op.getOperands();
@@ -749,12 +746,10 @@ void ModuleEmitter::emitLibraryIp(InstanceOp op) {
         os << intValue.getValue();
       }
 
-    // If variable is data, print the name of the data.
+      // If variable is data, print the name of the data.
     } else {
       emitValue(allVar[i]);
     }
-
-    // Check for variable end.
     if (i != allVar.size() - 1) {
       os << ",";
     }
@@ -1959,8 +1954,23 @@ using namespace std;
 
 )XXX";
 
-  // Emit all functions in the call graph in a post order.
+  // Emit all includes for library ip.
+  module->walk([&](Operation *op) {
+    if (auto libraryOp = dyn_cast<hls::LibraryOp>(op)) {
+      libraryOp.walk([&](Operation *nestedOp) {
+        if (nestedOp->getName().getStringRef() == "hls.uip.include") {
+          auto curPath = nestedOp->getAttr("paths").dyn_cast<ArrayAttr>()[0];
+          os << "#include ";
+          os << curPath;
+          os << "\n"
+        }
+      });
+    }
+  });
+  os << "\n";
+
   CallGraph graph(module);
+  // Emit all functions in the call graph in a post order.
   llvm::SmallDenseSet<func::FuncOp> emittedFuncs;
   for (auto node : llvm::post_order<const CallGraph *>(&graph)) {
     if (node->isExternal())
