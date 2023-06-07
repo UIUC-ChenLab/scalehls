@@ -736,25 +736,24 @@ void ModuleEmitter::emitLibraryIp(InstanceOp op) {
   // Emit Variables.
   auto allVar = op.getOperands();
   for (unsigned i = 0; i < allVar.size(); ++i) {
-
     // If variable is constant, print the value based on type. (Support float
-    // and integer )
+    // and integer)
     if (auto curVar = allVar[i].getDefiningOp<arith::ConstantOp>()) {
       if (auto floatValue = curVar.getValue().dyn_cast<FloatAttr>()) {
         os << floatValue.getValueAsDouble();
-      } 
-      else if (auto intValue = curVar.getValue().dyn_cast<IntegerAttr>()) {
+      } else if (auto intValue = curVar.getValue().dyn_cast<IntegerAttr>()) {
         os << intValue.getValue();
       }
-
-      // If variable is data, print the name of the data.
     } else {
+      // If variable is data, print the name of the data.
       emitValue(allVar[i]);
     }
+
     if (i != allVar.size() - 1) {
       os << ",";
     }
   }
+
   os << ")";
 
   // Emit ends.
