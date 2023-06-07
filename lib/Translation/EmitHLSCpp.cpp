@@ -742,10 +742,11 @@ void ModuleEmitter::emitLibraryIp(InstanceOp op) {
     if (auto curVar = allVar[i].getDefiningOp<arith::ConstantOp>()) {
       if (auto floatValue = curVar.getValue().dyn_cast<FloatAttr>()) {
         os << floatValue.getValueAsDouble();
-      } else if (auto intValue = curVar.getValue().dyn_cast<IntegerAttr>()) {
+      } 
+      else if (auto intValue = curVar.getValue().dyn_cast<IntegerAttr>()) {
         os << intValue.getValue();
       }
-      
+
       // If variable is data, print the name of the data.
     } else {
       emitValue(allVar[i]);
