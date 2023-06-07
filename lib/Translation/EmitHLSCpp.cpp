@@ -1949,9 +1949,6 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
-
-using namespace std;
-
 )XXX";
 
   // Emit all includes for library ip.
@@ -1962,13 +1959,15 @@ using namespace std;
           auto curPath = nestedOp->getAttr("paths").dyn_cast<ArrayAttr>()[0];
           os << "#include ";
           os << curPath;
-          os << "\n"
+          os << "\n";
         }
       });
     }
   });
   os << "\n";
-
+  os << "using namespace std";
+  os << "\n";
+  
   CallGraph graph(module);
   // Emit all functions in the call graph in a post order.
   llvm::SmallDenseSet<func::FuncOp> emittedFuncs;
