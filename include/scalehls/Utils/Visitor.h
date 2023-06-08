@@ -22,7 +22,7 @@ public:
     return TypeSwitch<Operation *, ResultType>(op)
         .template Case<
 
-            // HLS Ip Reg
+            // HLS Library Ip operation.
             hls::InstanceOp,
 
             // HLS dialect operations.
@@ -98,7 +98,7 @@ public:
   ResultType visitOp(OPTYPE op, ExtraArgs... args) {                           \
     return static_cast<ConcreteType *>(this)->visitUnhandledOp(op, args...);   \
   }
-  // HLS IP Reg
+  // HLS Library Ip operation.
   HANDLE(hls::InstanceOp);
   // HLS dialect operations.
   HANDLE(hls::BufferOp);

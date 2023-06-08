@@ -288,8 +288,8 @@ public:
   explicit ModuleEmitter(ScaleHLSEmitterState &state)
       : ScaleHLSEmitterBase(state) {}
 
-  /// Lib Ip operation emitter
-  void emitLibraryIp(InstanceOp op);
+  /// Lib Ip operation emitter.
+  void emitInstanceOp(InstanceOp op);
 
   /// HLS dialect operation emitters.
   void emitConstBuffer(ConstBufferOp op);
@@ -460,8 +460,8 @@ public:
   StmtVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
   using HLSVisitorBase::visitOp;
 
-  // Test registered ip expression
-  bool visitOp(InstanceOp op) { return emitter.emitLibraryIp(op), true; }
+  // Test registered ip expression.
+  bool visitOp(InstanceOp op) { return emitter.emitInstanceOp(op), true; }
 
   /// HLS dialect operations.
   bool visitOp(BufferOp op) {
@@ -698,62 +698,42 @@ void ModuleEmitter::emitConstBuffer(ConstBufferOp op) {
   emitArrayDirectives(op.getResult());
 }
 
-/// Library Ip emitter
-void ModuleEmitter::emitLibraryIp(InstanceOp op) {
+/// Library Ip emitter.
+void ModuleEmitter::emitInstanceOp(InstanceOp op) {
   indent();
-  /// Get Lib name. (This is not used, but left for future updates)
-  // auto libName = op->getAttrOfType<mlir::SymbolRefAttr>("name");
-  // os << libName.getRootReference().getValue().str();
 
   // Get Ip name, print Ip name.
-  auto ipName = op->getAttrOfType<mlir::SymbolRefAttr>("name");
+  auto ipName = op.getNameAttr();
   os << ipName.getNestedReferences()[0].getValue().str();
 
   // Emit template.
   os << "<";
-  auto allTemplate = op.getTemplates();
-  for (unsigned i = 0; i < allTemplate.size(); ++i) {
-    if (auto curAttr = allTemplate[i].dyn_cast<TypeAttr>()) {
+  for (auto [i, curTemplate] : llvm::enumerate(op.getTemplates())) {
+    if (auto curAttr = curTemplate.dyn_cast<TypeAttr>()) {
 
-      // If template is a TPYE, print out the corresponding type string
-      if (auto floatType = curAttr.getValue().dyn_cast<FloatType>()) {
-        os << "float";
-      } else if (auto indexType = curAttr.getValue().dyn_cast<IndexType>()) {
-        os << "Int";
-      }
+      // If template is a TPYE, print out the corresponding type string.
+      os << getDataTypeName(curAttr.getValue());
 
       // If template is a number, print the number. (For now, support integer
       // only)
-    } else if (auto curAttr = allTemplate[i].dyn_cast<IntegerAttr>()) {
-      os << curAttr.getValue();
+    } else if (auto curAttr = curTemplate.dyn_cast<IntegerAttr>()) {
+      os << curAttr.getInt();
+    } else {
+      llvm_unreachable("Invalid template parameter");
     }
-    if (i != allTemplate.size() - 1) {
+    if (i != op.getTemplates().size() - 1) {
       os << ",";
     }
   }
   os << ">(";
 
   // Emit Variables.
-  auto allVar = op.getOperands();
-  for (unsigned i = 0; i < allVar.size(); ++i) {
-    // If variable is constant, print the value based on type. (Support float
-    // and integer)
-    if (auto curVar = allVar[i].getDefiningOp<arith::ConstantOp>()) {
-      if (auto floatValue = curVar.getValue().dyn_cast<FloatAttr>()) {
-        os << floatValue.getValueAsDouble();
-      } else if (auto intValue = curVar.getValue().dyn_cast<IntegerAttr>()) {
-        os << intValue.getValue();
-      }
-    } else {
-      // If variable is data, print the name of the data.
-      emitValue(allVar[i]);
-    }
-
-    if (i != allVar.size() - 1) {
+  for (auto [i, curVar] : llvm::enumerate(op.getOperands())) {
+    emitValue(curVar);
+    if (i != op.getOperands().size() - 1) {
       os << ",";
     }
   }
-
   os << ")";
 
   // Emit ends.
@@ -1951,17 +1931,22 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 #include <string.h>
 )XXX";
 
-  // Emit all includes for library ip.
+  // Check for used Ip, emit corresponding include paths.
+  llvm::SmallDenseSet<hls::DeclareOp> emittedDeclareOp;
   module->walk([&](Operation *op) {
-    if (auto libraryOp = dyn_cast<hls::LibraryOp>(op)) {
-      libraryOp.walk([&](Operation *nestedOp) {
-        if (nestedOp->getName().getStringRef() == "hls.uip.include") {
-          auto curPath = nestedOp->getAttr("paths").dyn_cast<ArrayAttr>()[0];
-          os << "#include ";
-          os << curPath;
-          os << "\n";
-        }
-      });
+    if (auto instanceOp = dyn_cast<hls::InstanceOp>(op)) {
+      auto declaredOp = instanceOp.getDeclareOp();
+      if (!emittedDeclareOp.contains(declaredOp)) {
+        declaredOp.walk([&](Operation *nestedOp) {
+          if (nestedOp->getName().getStringRef() == "hls.uip.include") {
+            auto curPath = nestedOp->getAttr("paths").dyn_cast<ArrayAttr>()[0];
+            os << "#include ";
+            os << curPath;
+            os << "\n";
+            emittedDeclareOp.insert(declaredOp);
+          }
+        });
+      }
     }
   });
   os << "\n";
