@@ -1,5 +1,4 @@
 // RUN: scalehls-translate -scalehls-emit-hlscpp %s | FileCheck %s
-// XFAIL: *
 
 
 #map = affine_map<() -> ()>
