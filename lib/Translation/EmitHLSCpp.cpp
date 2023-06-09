@@ -1932,9 +1932,9 @@ void ModuleEmitter::emitModule(ModuleOp module) {
     auto declaredOp = instance.getDeclareOp();
     declaredOp.walk([&](hls::IncludeOp include) {
       emittedIncludeAttrs.insert(include->getAttr("paths"));
-    });
+      });
   });
-  for (const Attribute& curPath : emittedIncludeAttrs) {
+  for (const Attribute &curPath : emittedIncludeAttrs) {
     os << "#include ";
     os << curPath.dyn_cast<ArrayAttr>()[0];
     os << "\n";
