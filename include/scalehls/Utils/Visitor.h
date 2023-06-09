@@ -21,6 +21,10 @@ public:
     auto *thisCast = static_cast<ConcreteType *>(this);
     return TypeSwitch<Operation *, ResultType>(op)
         .template Case<
+
+            // HLS Library Ip operation.
+            hls::InstanceOp,
+
             // HLS dialect operations.
             hls::BufferOp, hls::ConstBufferOp, hls::StreamOp, hls::StreamReadOp,
             hls::StreamWriteOp, hls::AffineSelectOp,
@@ -94,7 +98,8 @@ public:
   ResultType visitOp(OPTYPE op, ExtraArgs... args) {                           \
     return static_cast<ConcreteType *>(this)->visitUnhandledOp(op, args...);   \
   }
-
+  // HLS Library Ip operation.
+  HANDLE(hls::InstanceOp);
   // HLS dialect operations.
   HANDLE(hls::BufferOp);
   HANDLE(hls::ConstBufferOp);

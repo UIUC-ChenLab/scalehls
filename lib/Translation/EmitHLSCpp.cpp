@@ -288,6 +288,9 @@ public:
   explicit ModuleEmitter(ScaleHLSEmitterState &state)
       : ScaleHLSEmitterBase(state) {}
 
+  /// Lib Ip operation emitter.
+  void emitInstanceOp(InstanceOp op);
+
   /// HLS dialect operation emitters.
   void emitConstBuffer(ConstBufferOp op);
   void emitStreamChannel(StreamOp op);
@@ -456,6 +459,9 @@ class StmtVisitor : public HLSVisitorBase<StmtVisitor, bool> {
 public:
   StmtVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
   using HLSVisitorBase::visitOp;
+
+  // Test registered ip expression.
+  bool visitOp(InstanceOp op) { return emitter.emitInstanceOp(op), true; }
 
   /// HLS dialect operations.
   bool visitOp(BufferOp op) {
@@ -690,6 +696,44 @@ bool ExprVisitor::visitOp(arith::CmpIOp op) {
 void ModuleEmitter::emitConstBuffer(ConstBufferOp op) {
   emitConstant(op);
   emitArrayDirectives(op.getResult());
+}
+
+/// Library Ip emitter.
+void ModuleEmitter::emitInstanceOp(InstanceOp op) {
+  indent();
+
+  // Get Ip name, print Ip name.
+  auto ipName = op.getNameAttr();
+  os << ipName.getNestedReferences()[0].getValue().str();
+
+  // Emit template.
+  os << "<";
+  for (auto [i, curTemplate] : llvm::enumerate(op.getTemplates())) {
+    if (auto curAttr = curTemplate.dyn_cast<TypeAttr>()) {
+      os << getDataTypeName(curAttr.getValue());
+    } else if (auto curAttr = curTemplate.dyn_cast<IntegerAttr>()) {
+      os << curAttr.getInt();
+    } else {
+      llvm_unreachable("Invalid template parameter");
+    }
+    if (i != op.getTemplates().size() - 1) {
+      os << ", ";
+    }
+  }
+  os << ">(";
+
+  // Emit Variables.
+  for (auto [i, curVar] : llvm::enumerate(op.getOperands())) {
+    emitValue(curVar);
+    if (i != op.getOperands().size() - 1) {
+      os << ", ";
+    }
+  }
+  os << ")";
+
+  // Emit ends.
+  os << ";";
+  emitInfoAndNewLine(op);
 }
 
 void ModuleEmitter::emitStreamChannel(StreamOp op) {
@@ -1880,13 +1924,28 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
-
-using namespace std;
-
 )XXX";
 
-  // Emit all functions in the call graph in a post order.
+  // Check for used Ip, emit corresponding include paths.
+  llvm::SmallDenseSet<Attribute> emittedIncludeAttrs;
+  module->walk([&](hls::InstanceOp instance) {
+    auto declaredOp = instance.getDeclareOp();
+    declaredOp.walk([&](hls::IncludeOp include) {
+      for (auto path : include.getPaths()) {
+        emittedIncludeAttrs.insert(path.dyn_cast<StringAttr>());
+      }
+    });
+  });
+  for (const Attribute &curPath : emittedIncludeAttrs) {
+    os << "#include ";
+    os << curPath;
+    os << "\n";
+  }
+
+  os << "\nusing namespace std\n\n";
+
   CallGraph graph(module);
+  // Emit all functions in the call graph in a post order.
   llvm::SmallDenseSet<func::FuncOp> emittedFuncs;
   for (auto node : llvm::post_order<const CallGraph *>(&graph)) {
     if (node->isExternal())
