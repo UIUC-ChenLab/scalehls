@@ -1931,7 +1931,7 @@ void ModuleEmitter::emitModule(ModuleOp module) {
   module->walk([&](hls::InstanceOp instance) {
     auto declaredOp = instance.getDeclareOp();
     declaredOp.walk([&](hls::IncludeOp include) {
-      for (auto path: include.getPaths()) {
+      for (auto path : include.getPaths()) {
         emittedIncludeAttrs.insert(path.dyn_cast<StringAttr>());
       }
     });
