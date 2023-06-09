@@ -710,19 +710,14 @@ void ModuleEmitter::emitInstanceOp(InstanceOp op) {
   os << "<";
   for (auto [i, curTemplate] : llvm::enumerate(op.getTemplates())) {
     if (auto curAttr = curTemplate.dyn_cast<TypeAttr>()) {
-
-      // If template is a TPYE, print out the corresponding type string.
       os << getDataTypeName(curAttr.getValue());
-
-      // If template is a number, print the number. (For now, support integer
-      // only)
     } else if (auto curAttr = curTemplate.dyn_cast<IntegerAttr>()) {
       os << curAttr.getInt();
     } else {
       llvm_unreachable("Invalid template parameter");
     }
     if (i != op.getTemplates().size() - 1) {
-      os << ",";
+      os << ", ";
     }
   }
   os << ">(";
@@ -731,7 +726,7 @@ void ModuleEmitter::emitInstanceOp(InstanceOp op) {
   for (auto [i, curVar] : llvm::enumerate(op.getOperands())) {
     emitValue(curVar);
     if (i != op.getOperands().size() - 1) {
-      os << ",";
+      os << ", ";
     }
   }
   os << ")";
@@ -1434,8 +1429,8 @@ void ModuleEmitter::emitBroadcast(vector::BroadcastOp op) {
 
 /// Memref-related statement emitters.
 template <typename OpType> void ModuleEmitter::emitAlloc(OpType op) {
-  // A declared result indicates that the memref is output of the function,
-  // and has been declared in the function signature.
+  // A declared result indicates that the memref is output of the function, and
+  // has been declared in the function signature.
   if (isDeclared(op.getResult()))
     return;
 
@@ -1932,26 +1927,20 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 )XXX";
 
   // Check for used Ip, emit corresponding include paths.
-  llvm::SmallDenseSet<hls::DeclareOp> emittedDeclareOp;
-  module->walk([&](Operation *op) {
-    if (auto instanceOp = dyn_cast<hls::InstanceOp>(op)) {
-      auto declaredOp = instanceOp.getDeclareOp();
-      if (!emittedDeclareOp.contains(declaredOp)) {
-        declaredOp.walk([&](Operation *nestedOp) {
-          if (nestedOp->getName().getStringRef() == "hls.uip.include") {
-            auto curPath = nestedOp->getAttr("paths").dyn_cast<ArrayAttr>()[0];
-            os << "#include ";
-            os << curPath;
-            os << "\n";
-            emittedDeclareOp.insert(declaredOp);
-          }
-        });
-      }
-    }
+  llvm::SmallDenseSet<Attribute> emittedIncludeAttrs;
+  module->walk([&](hls::InstanceOp instance) {
+    auto declaredOp = instance.getDeclareOp();
+    declaredOp.walk([&](hls::IncludeOp include) {
+      emittedIncludeAttrs.insert(include->getAttr("paths"));
+    });
   });
-  os << "\n";
-  os << "using namespace std";
-  os << "\n";
+  for (const Attribute& curPath : emittedIncludeAttrs) {
+    os << "#include ";
+    os << curPath.dyn_cast<ArrayAttr>()[0];
+    os << "\n";
+  }
+
+  os << "\nusing namespace std\n\n";
 
   CallGraph graph(module);
   // Emit all functions in the call graph in a post order.
