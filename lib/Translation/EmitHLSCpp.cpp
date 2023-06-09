@@ -1666,8 +1666,8 @@ unsigned ModuleEmitter::emitNestedLoopHeader(Value val) {
       os << "++iv" << dimIdx++ << ") {\n";
 
       addIndent();
-      // TODO: More precise control here. Now we assume vectorization loops
-      // are always fully unrolled.
+      // TODO: More precise control here. Now we assume vectorization loops are
+      // always fully unrolled.
       if (type.isa<VectorType>())
         indent() << "#pragma HLS unroll\n";
     }
@@ -1790,8 +1790,8 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
   if (hasTopFuncAttr(func)) {
     indent() << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
     for (auto &port : portList) {
-      // MemRefType and StreamType must have been converted to AXI ports for
-      // the top function.
+      // MemRefType and StreamType must have been converted to AXI ports for the
+      // top function.
       if (port.getType().isa<MemRefType, StreamType>()) {
         indent() << "#pragma HLS interface";
 
