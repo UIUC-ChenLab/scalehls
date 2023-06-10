@@ -1942,7 +1942,7 @@ void ModuleEmitter::emitModule(ModuleOp module) {
     os << "\n";
   }
 
-  os << "\nusing namespace std\n\n";
+  os << "\nusing namespace std;\n\n";
 
   CallGraph graph(module);
   // Emit all functions in the call graph in a post order.
