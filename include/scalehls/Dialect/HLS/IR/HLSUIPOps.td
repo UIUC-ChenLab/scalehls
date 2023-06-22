@@ -86,6 +86,18 @@ def IncludeOp : HLSOp<"uip.include", [HasParent<"DeclareOp">]> {
   let assemblyFormat = "$paths attr-dict";
 }
 
+def StructOp : HLSOp<"uip.struct", [AttrSizedOperandSegments, HasParent<"DeclareOp">]> {
+  let summary = "Setup a struct for IP input";
+  
+  let arguments = (ins SymbolRefAttr:$struct_name, 
+     Variadic<AnyType>:$templates, Variadic<PortType>:$ports);
+
+  let assemblyFormat = [{
+    $struct_name (`<` $templates^ `>`)? `(` $ports `)` attr-dict `:`
+    (`<` type($templates)^ `>`)? `(` type($ports) `)`
+  }];
+}
+
 def IndexArrayAttr : TypedArrayAttrBase<IndexAttr, "index array attribute"> {
   let constBuilderCall = "$_builder.getIndexArrayAttr($0)";
 }
