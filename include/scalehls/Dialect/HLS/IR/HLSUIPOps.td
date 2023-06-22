@@ -65,17 +65,17 @@ def InstanceOp : HLSOp<"uip.instance", [
   }];
 }
 
-def PortOp : HLSOp<"uip.port", [Symbol, HasParent<"DeclareOp">]> {
+def PortOp : HLSOp<"uip.port", [AttrSizedOperandSegments, Symbol, HasParent<"DeclareOp">]> {
   let summary = "Declare a port of an IP";
 
   let arguments = (ins TypeType:$type, Variadic<AnyType>:$sizes,
-      MemRefLayoutAttrInterface:$layout, PortKindAttr:$kind,
+      MemRefLayoutAttrInterface:$layout, PortKindAttr:$kind, Variadic<AnyType>:$symbol_ref,
       OptionalAttr<TypedAttrInterface>:$value, SymbolNameAttr:$sym_name);
   let results = (outs PortType:$result);
 
   let assemblyFormat = [{
-    $sym_name $kind `type` $type `sizes` `(` $sizes `)` $layout attr-dict
-    `:` functional-type($sizes, $result)
+    $sym_name $kind `type` $type `sizes` `(` $sizes `)` `symbol_ref` `(` $symbol_ref `)` `(` type($symbol_ref) `)` $layout attr-dict
+    `:` functional-type($sizes, $result) 
   }];
 }
 
