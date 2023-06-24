@@ -713,6 +713,8 @@ void ModuleEmitter::emitInstanceOp(InstanceOp op) {
       os << getDataTypeName(curAttr.getValue());
     } else if (auto curAttr = curTemplate.dyn_cast<IntegerAttr>()) {
       os << curAttr.getInt();
+    } else if (auto curAttr = curTemplate.dyn_cast<StringAttr>()) {
+      os << curAttr.getValue().str();
     } else {
       llvm_unreachable("Invalid template parameter");
     }
@@ -1928,6 +1930,7 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 
   // Check for used Ip, emit corresponding include paths.
   llvm::SmallDenseSet<Attribute> emittedIncludeAttrs;
+  llvm::SmallDenseSet<StructOp> emittedStructOps;
   module->walk([&](hls::InstanceOp instance) {
     auto declaredOp = instance.getDeclareOp();
     declaredOp.walk([&](hls::IncludeOp include) {
@@ -1935,7 +1938,11 @@ void ModuleEmitter::emitModule(ModuleOp module) {
         emittedIncludeAttrs.insert(path.dyn_cast<StringAttr>());
       }
     });
+    declaredOp.walk([&](hls::StructOp curStruct) {
+      emittedStructOps.insert(curStruct);
+    });
   });
+
   for (const Attribute &curPath : emittedIncludeAttrs) {
     os << "#include ";
     os << curPath;
@@ -1943,6 +1950,39 @@ void ModuleEmitter::emitModule(ModuleOp module) {
   }
 
   os << "\nusing namespace std;\n\n";
+
+  for (hls::StructOp &curStruct : emittedStructOps) {
+    os << "Struct " << curStruct.getStructName() << " {\n";
+    for (auto [i, curTemplate] : llvm::enumerate(curStruct.getTemplates())) {
+      if (auto curStructName = curTemplate.getDefiningOp()->getAttr("sym_name").dyn_cast<StringAttr>()) {
+        auto candidates = curTemplate.getDefiningOp()->getAttr("candidates").dyn_cast<ArrayAttr>().getValue();
+        if (candidates.size() == 1) {
+          if (auto intPara = candidates[0].dyn_cast<IntegerAttr>()) {
+            os << "static const unsigned " <<  curStructName.str() << " = ";
+            os << intPara.getValue().getSExtValue();
+          }
+          if (auto typePara = candidates[0].dyn_cast<TypeAttr>()) {
+            os << "typedef " << getDataTypeName(typePara.getValue()) << " " << curStructName.str();
+          }
+        } else {
+          if (auto moduleOp = curStruct.getOperation()->getParentOfType<mlir::ModuleOp>()) {
+            if (auto dseParamOp = moduleOp.lookupSymbol<hls::ParamOp>(curStructName.getValue())) {
+              os << "The above line is incorrect";
+              if (auto valueAttr = dseParamOp.getValue()->dyn_cast<IntegerAttr>()) {
+                os << "const unsigned " << curStructName.getValue().str() << " = ";
+                os << valueAttr.getValue().getSExtValue();
+              } 
+            }
+          }
+        }
+      }
+      if (i != curStruct.getTemplates().size() - 1) {
+        os << ";";
+      }
+      os << "\n"; 
+    }
+    os << "};\n";
+  }
 
   CallGraph graph(module);
   // Emit all functions in the call graph in a post order.
