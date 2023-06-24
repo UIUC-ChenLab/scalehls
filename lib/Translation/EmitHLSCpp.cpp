@@ -1952,7 +1952,7 @@ void ModuleEmitter::emitModule(ModuleOp module) {
   os << "\nusing namespace std;\n\n";
 
   for (hls::StructOp &curStruct : emittedStructOps) {
-    os << "Struct " << curStruct.getStructName() << " {\n";
+    os << "struct " << curStruct.getStructName() << " {\n";
     for (auto [i, curTemplate] : llvm::enumerate(curStruct.getTemplates())) {
       if (auto curStructName = curTemplate.getDefiningOp()->getAttr("sym_name").dyn_cast<StringAttr>()) {
         auto candidates = curTemplate.getDefiningOp()->getAttr("candidates").dyn_cast<ArrayAttr>().getValue();
@@ -1965,14 +1965,15 @@ void ModuleEmitter::emitModule(ModuleOp module) {
             os << "typedef " << getDataTypeName(typePara.getValue()) << " " << curStructName.str();
           }
         } else {
-          if (auto moduleOp = curStruct.getOperation()->getParentOfType<mlir::ModuleOp>()) {
-            if (auto dseParamOp = moduleOp.lookupSymbol<hls::ParamOp>(curStructName.getValue())) {
-              os << "The above line is incorrect";
-              if (auto valueAttr = dseParamOp.getValue()->dyn_cast<IntegerAttr>()) {
-                os << "const unsigned " << curStructName.getValue().str() << " = ";
-                os << valueAttr.getValue().getSExtValue();
-              } 
-            }
+          if (auto gobalSpace = curStruct.getOperation()->getParentOfType<mlir::ModuleOp>().lookupSymbol<hls::SpaceOp>("global")) {
+            gobalSpace.walk([&](hls::ParamOp curParam) {
+              if (curParam.getName().str() == curStructName.str()) {
+                if (auto valueAttr = curParam.getValue()->dyn_cast<IntegerAttr>()) {
+                  os << "const unsigned " << curStructName.getValue().str() << " = ";
+                  os << valueAttr.getValue().getSExtValue();
+                } 
+              }
+            });
           }
         }
       }
@@ -1981,7 +1982,7 @@ void ModuleEmitter::emitModule(ModuleOp module) {
       }
       os << "\n"; 
     }
-    os << "};\n";
+    os << "};\n\n";
   }
 
   CallGraph graph(module);
