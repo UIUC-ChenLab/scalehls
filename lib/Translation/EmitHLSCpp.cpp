@@ -702,6 +702,11 @@ void ModuleEmitter::emitConstBuffer(ConstBufferOp op) {
 
 /// Library Ip emitter.
 void ModuleEmitter::emitInstanceOp(InstanceOp op) {
+  auto declaredOp = op.getDeclareOp();
+  declaredOp.walk([&](hls::StructOp curStruct) {
+    emitStructOp(curStruct);
+  }); 
+
   indent();
 
   // Get Ip name, print Ip name.
@@ -1913,25 +1918,28 @@ void ModuleEmitter::emitStructOp(StructOp op) {
   os << "struct " << op.getStructName() << " {\n";
   indent();
   for (auto [i, curTemplate] : llvm::enumerate(op.getTemplates())) {
-    if (auto curStructName = curTemplate.getDefiningOp()->getAttr("sym_name").dyn_cast<StringAttr>()) {
+    bool hasEmit = false;
+    if (auto curTemplateName = curTemplate.getDefiningOp()->getAttr("sym_name").dyn_cast<StringAttr>()) {
       auto candidates = curTemplate.getDefiningOp()->getAttr("candidates").dyn_cast<ArrayAttr>().getValue();
       if (candidates.size() == 1) {
         if (auto intPara = candidates[0].dyn_cast<IntegerAttr>()) {
-          os << "static const unsigned " <<  curStructName.str() << " = ";
+          os << "static const unsigned " <<  curTemplateName.str() << " = ";
           os << intPara.getValue().getSExtValue();
         }
         if (auto typePara = candidates[0].dyn_cast<TypeAttr>()) {
-          os << "typedef " << getDataTypeName(typePara.getValue()) << " " << curStructName.str();
+          os << "typedef " << getDataTypeName(typePara.getValue()) << " " << curTemplateName.str();
         }
       } else {
         if (auto gobalSpace = op.getOperation()->getParentOfType<mlir::ModuleOp>().lookupSymbol<hls::SpaceOp>("global")) {
           gobalSpace.walk([&](hls::ParamOp curParam) {
-            if (curParam.getName().str() == curStructName.str()) {
+            if (curParam.getName().str() == curTemplateName.str() && !hasEmit) {
               if (auto valueAttr = curParam.getValue()->dyn_cast<IntegerAttr>()) {
-                os << "const unsigned " << curStructName.getValue().str() << " = ";
+                os << "const unsigned " << curTemplateName.getValue().str() << " = ";
                 os << valueAttr.getValue().getSExtValue();
+                curParam.setSymNameAttr(StringAttr::get(curParam.getContext(), "emitted"));
+                hasEmit = true;
               } 
-            }
+            } 
           });
         }
       }
@@ -1967,16 +1975,12 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 
   // Check for used Ip, emit corresponding include paths.
   llvm::SmallDenseSet<Attribute> emittedIncludeAttrs;
-  llvm::SmallDenseSet<StructOp> emittedStructOps;
   module->walk([&](hls::InstanceOp instance) {
     auto declaredOp = instance.getDeclareOp();
     declaredOp.walk([&](hls::IncludeOp include) {
       for (auto path : include.getPaths()) {
         emittedIncludeAttrs.insert(path.dyn_cast<StringAttr>());
       }
-    });
-    declaredOp.walk([&](hls::StructOp curStruct) {
-      emittedStructOps.insert(curStruct);
     });
   });
 
@@ -1987,10 +1991,6 @@ void ModuleEmitter::emitModule(ModuleOp module) {
   }
 
   os << "\nusing namespace std;\n\n";
-
-  for (hls::StructOp &curStruct : emittedStructOps) {
-    emitStructOp(curStruct);
-  }
 
   CallGraph graph(module);
   // Emit all functions in the call graph in a post order.
