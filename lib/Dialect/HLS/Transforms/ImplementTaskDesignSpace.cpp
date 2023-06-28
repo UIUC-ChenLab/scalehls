@@ -16,6 +16,154 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+static FailureOr<Attribute> getParamAttr(Value param, ParamKind paramKind) {
+  // If the param is not defined by ParamLikeInterface or doesn't align with the
+  // given paramKind, return nullptr.
+  auto paramOp = param.getDefiningOp<hls::ParamLikeInterface>();
+  if (!paramOp || paramOp.getKind() != paramKind)
+    return failure();
+
+  // If the param hasn't been assigned a value, return nullptr.
+  if (!paramOp.getValue().has_value())
+    return failure();
+  return *paramOp.getValue();
+}
+
+static FailureOr<SpaceOp> getImplSpaceOp(SpaceOp parentSpace,
+                                         SymbolRefAttr &implSymbolRef) {
+  // For now, the implementation design space must be defined by SpaceSelectOp.
+  auto implSpace = parentSpace.getSpacePackOp().getOperands().back();
+  auto implSelect = implSpace.getDefiningOp<SpaceSelectOp>();
+  assert(implSelect && "invalid task implementation design space");
+
+  // Return failure if we cannot get the task implementation parameter.
+  auto implParamAttr = getParamAttr(implSelect.getArg(), ParamKind::TASK_IMPL);
+  if (failed(implParamAttr))
+    return failure();
+
+  // Find the space corresponding to the selected task implementation.
+  for (auto [candidate, space] :
+       llvm::zip(implSelect.getConditions(), implSelect.getSpaces()))
+    if (candidate == *implParamAttr) {
+      implSpace = space;
+      break;
+    }
+  auto implSpaceOp = implSpace.getDefiningOp<SpaceOp>();
+  assert(implSpaceOp && "invalid task implementation candidates");
+
+  // Get the symbol name of the IP declaration if applicable.
+  implSymbolRef = implParamAttr->cast<TaskImplAttr>().getSymbolRef();
+  return implSpaceOp;
+}
+
+static FailureOr<linalg::TiledLinalgOp>
+tileLinalgOp(linalg::LinalgOp linalgOp, ValueRange tileParams,
+             ParamKind paramKind, PatternRewriter &rewriter) {
+  // Extract the tile sizes from the given tile params.
+  SmallVector<int64_t> tileSizes;
+  for (auto tileParam : tileParams) {
+    auto tileParamAttr = getParamAttr(tileParam, paramKind);
+    if (failed(tileParamAttr))
+      return failure();
+    tileSizes.push_back(tileParamAttr->cast<IntegerAttr>().getInt());
+  }
+
+  // Tile the linalg op with the collected tile sizes.
+  linalg::LinalgTilingOptions options;
+  options.setTileSizes(tileSizes);
+  auto tiledLinalgOp = linalg::tileLinalgOp(rewriter, linalgOp, options);
+  if (failed(tiledLinalgOp))
+    return failure();
+
+  // Replace the original linalg op with the tiled one.
+  rewriter.replaceOp(linalgOp, tiledLinalgOp->tensorResults);
+  return tiledLinalgOp;
+}
+
+static FailureOr<InstanceOp>
+replaceLinalgOpWithInstanceOp(SpaceOp implSpaceOp, linalg::LinalgOp linalgOp,
+                              SymbolRefAttr symbol, PatternRewriter &rewriter) {
+  auto ipDeclare = SymbolTable::lookupNearestSymbolFrom<DeclareOp>(
+      linalgOp->getParentOfType<ModuleOp>(), symbol);
+  assert(ipDeclare && "invalid IP declaration");
+
+  auto matchingResult = IPMatcher(linalgOp, ipDeclare).match();
+  if (failed(matchingResult))
+    return failure();
+
+  // Collect the result types of the IP instance.
+  SmallVector<Type> instResultTypes;
+  for (unsigned i = 0; i < linalgOp.getNumDpsInits(); ++i) {
+    auto resIndex = matchingResult->mapIpResIndexToPayload(i);
+    instResultTypes.push_back(linalgOp->getResult(resIndex).getType());
+  }
+
+  // If the given pointer union is a value, return it. Otherwise, create a
+  // constant op and return it.
+  auto getValueOrCreateConstant = [&](OpFoldResult valueOrAttr) -> Value {
+    if (valueOrAttr.is<Value>())
+      return valueOrAttr.get<Value>();
+    auto attr = valueOrAttr.get<Attribute>();
+    return rewriter.create<arith::ConstantOp>(rewriter.getUnknownLoc(),
+                                              TypedAttr(attr));
+  };
+
+  // Map from a port/template value in an IP declaration to a value in the
+  // payload IR.
+  llvm::SmallDenseMap<Value, Value> ipToInstValueMap;
+
+  // Collect the instance ports.
+  rewriter.setInsertionPoint(linalgOp);
+  SmallVector<Value> instPorts;
+  for (auto [ipPort, instPortOrAttr] : llvm::zip(
+           ipDeclare.getSemanticsOp().getPorts(), matchingResult->instPorts)) {
+    auto instPort = getValueOrCreateConstant(instPortOrAttr);
+    instPorts.push_back(instPort);
+    ipToInstValueMap[ipPort] = instPort;
+  }
+
+  // Collect the instance templates.
+  SmallVector<Attribute> instTemplates;
+  for (auto [ipTemplate, instTemplateAttr] :
+       llvm::zip(ipDeclare.getSemanticsOp().getTemplates(),
+                 matchingResult->instTemplates)) {
+    if (instTemplateAttr) {
+      instTemplates.push_back(instTemplateAttr);
+      continue;
+    }
+
+    // In some cases, the template value cannot be inferred from the IP
+    // matching. So these values MUST have a default value.
+    auto templateParam = implSpaceOp.getSpacePackOp().findOperand(
+        ipTemplate.getDefiningOp<ParamOp>().getNameAttr());
+    assert(templateParam && "invalid template parameter");
+
+    auto templateParamAttr =
+        getParamAttr(templateParam, ParamKind::IP_TEMPLATE);
+    if (failed(templateParamAttr))
+      return failure();
+
+    instTemplates.push_back(*templateParamAttr);
+    if (!ipTemplate.getType().isa<hls::TypeType>()) {
+      auto instTemplate = getValueOrCreateConstant(*templateParamAttr);
+      ipToInstValueMap[ipTemplate] = instTemplate;
+    }
+  }
+
+  // Finally, we can create the instance op.
+  auto instance =
+      rewriter.create<InstanceOp>(linalgOp.getLoc(), instResultTypes, instPorts,
+                                  rewriter.getArrayAttr(instTemplates), symbol);
+
+  // Replace the original linalg op results with the instance op.
+  for (unsigned i = 0; i < instance.getNumResults(); ++i) {
+    auto resIndex = matchingResult->mapIpResIndexToPayload(i);
+    linalgOp->getResult(resIndex).replaceAllUsesWith(instance.getResult(i));
+  }
+  rewriter.eraseOp(linalgOp);
+  return instance;
+}
+
 namespace {
 struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
   using OpRewritePattern<TaskOp>::OpRewritePattern;
@@ -33,153 +181,36 @@ struct ImplementTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
     if (!space || !linalgOp)
       return op.removeSpaceAttr(), failure();
 
-    // Collect tile sizes. All operands of the terminator SpacePackOp except the
-    // last one are the tile size parameters.
-    SmallVector<int64_t> tileSizes;
-    for (auto param : llvm::drop_end(space.getSpacePackOp().getOperands())) {
-      // The tile size parameter must be TILE_SIZE kind and have an index type.
-      auto paramOp = param.getDefiningOp<hls::ParamLikeInterface>();
-      assert(paramOp && paramOp.getKind() == ParamKind::TILE_SIZE &&
-             "invalid tile parameter");
-
-      // If the param hasn't been assigned a value, return failure. This pass is
-      // expected to run after design space exploration of each param.
-      if (!paramOp.getValue().has_value())
-        return op.removeSpaceAttr(), failure();
-
-      // Get the tile size value store as an attribute of the ParamOp.
-      tileSizes.push_back(paramOp.getValue()->cast<IntegerAttr>().getInt());
-    }
-
-    // Tile the linalg op with the collected tile sizes.
-    linalg::LinalgTilingOptions options;
-    options.setTileSizes(tileSizes);
-    auto tiledLinalgOp = linalg::tileLinalgOp(rewriter, linalgOp, options);
+    // First, tile the linalg op with the tile parameters. All operands of the
+    // terminator SpacePackOp except the last one should be tile parameters.
+    auto tiledLinalgOp = tileLinalgOp(
+        linalgOp, llvm::drop_end(space.getSpacePackOp().getOperands()),
+        ParamKind::TILE_SIZE, rewriter);
     if (failed(tiledLinalgOp))
       return op.removeSpaceAttr(), failure();
-
-    // Replace the original linalg op with the tiled one.
-    rewriter.replaceOp(linalgOp, tiledLinalgOp->tensorResults);
     linalgOp = tiledLinalgOp->op;
 
-    // Then, we start to handle the implementation design space, which must be
-    // defined by a SpaceSelectOp for now.
-    auto implSpace = space.getSpacePackOp().getOperands().back();
-    auto implSelect = implSpace.getDefiningOp<SpaceSelectOp>();
-    assert(implSelect && "invalid task implementation design space");
-
-    // Similarly, the task implementation parameter must be TASK_IMPL kind and
-    // has a TaskImplType.
-    auto implParamOp =
-        implSelect.getArg().getDefiningOp<hls::ParamLikeInterface>();
-    assert(implParamOp && implParamOp.getKind() == ParamKind::TASK_IMPL &&
-           "invalid task implementation parameter");
-
-    // Again, if the param hasn't been assigned a value, return failure.
-    if (!implParamOp.getValue().has_value())
+    // Then, we find the implementation design space of the task to handle the
+    // IP substitution or parallelization of the task.
+    SymbolRefAttr symbol;
+    auto implSpaceOp = getImplSpaceOp(space, symbol);
+    if (failed(implSpaceOp))
       return op.removeSpaceAttr(), failure();
 
-    // Find the space corresponding to the selected task implementation.
-    for (auto [candidate, space] :
-         llvm::zip(implSelect.getConditionsAttr(), implSelect.getSpaces()))
-      if (candidate == implParamOp.getValue()) {
-        implSpace = space;
-        break;
-      }
-    auto implSpaceOp = implSpace.getDefiningOp<SpaceOp>();
-    assert(implSpaceOp && "invalid task implementation candidates");
-
-    if (auto symbol =
-            implParamOp.getValue()->cast<TaskImplAttr>().getSymbolRef()) {
+    if (symbol) {
       // If the task will be implemented with an IP, we substitute the original
       // linalg operation with an IP instance.
-      auto ipDeclare = SymbolTable::lookupNearestSymbolFrom<DeclareOp>(
-          op->getParentOfType<ModuleOp>(), symbol);
-      assert(ipDeclare && "invalid IP declaration");
-
-      auto matchingResult = IPMatcher(linalgOp, ipDeclare).match();
-      if (failed(matchingResult))
+      if (failed(replaceLinalgOpWithInstanceOp(*implSpaceOp, linalgOp, symbol,
+                                               rewriter)))
         return op.removeSpaceAttr(), failure();
-
-      // Collect the result types of the IP instance.
-      SmallVector<Type> instResultTypes;
-      for (unsigned i = 0; i < linalgOp.getNumDpsInits(); ++i) {
-        auto resIndex = matchingResult->mapIpResIndexToPayload(i);
-        instResultTypes.push_back(linalgOp->getResult(resIndex).getType());
-      }
-
-      // Collect the instance ports.
-      rewriter.setInsertionPoint(linalgOp);
-      SmallVector<Value> instPorts;
-      for (auto port : matchingResult->instPorts) {
-        if (port.is<Value>())
-          instPorts.push_back(port.get<Value>());
-        else if (auto portAttr = port.get<Attribute>())
-          instPorts.push_back(rewriter.create<arith::ConstantOp>(
-              linalgOp.getLoc(), TypedAttr(portAttr)));
-      }
-
-      // Collect the instance templates.
-      SmallVector<Attribute> instTemplates;
-      for (auto [tempOperand, tempAttr] :
-           llvm::zip(ipDeclare.getSemanticsOp().getTemplates(),
-                     matchingResult->instTemplates)) {
-        if (tempAttr) {
-          instTemplates.push_back(tempAttr);
-          continue;
-        }
-        auto tempParam = implSpaceOp.getSpacePackOp().findOperand(
-            tempOperand.getDefiningOp<ParamOp>().getNameAttr());
-        assert(tempParam && "invalid template parameter");
-
-        auto tempParamOp = tempParam.getDefiningOp<hls::ParamLikeInterface>();
-        assert(tempParamOp && tempParamOp.getKind() == ParamKind::IP_TEMPLATE &&
-               "invalid template parameter");
-
-        // Again, if the param hasn't been assigned a value, return failure.
-        if (!tempParamOp.getValue().has_value())
-          return op.removeSpaceAttr(), failure();
-        instTemplates.push_back(*tempParamOp.getValue());
-      }
-
-      // Finally, we can create the instance op.
-      auto instance = rewriter.create<InstanceOp>(
-          linalgOp.getLoc(), instResultTypes, instPorts,
-          rewriter.getArrayAttr(instTemplates), symbol);
-
-      // Replace the original linalg op results with the instance op.
-      for (unsigned i = 0; i < instance.getNumResults(); ++i) {
-        auto resIndex = matchingResult->mapIpResIndexToPayload(i);
-        linalgOp->getResult(resIndex).replaceAllUsesWith(instance.getResult(i));
-      }
-      rewriter.eraseOp(linalgOp);
     } else {
-      // Parallelize and use the default method.
-      SmallVector<int64_t> parallelParam;
-      for (auto param : implSpaceOp.getSpacePackOp().getArgs()) {
-        // The tile size parameter must be PARALLEL_SIZE kind and have an index
-        // type.
-        auto paramOp = param.getDefiningOp<hls::ParamLikeInterface>();
-
-        // Check if the params are valid
-        assert(paramOp.getKind() == ParamKind::PARALLEL_SIZE &&
-               "invalid parallel parameter");
-        if (!paramOp.getValue().has_value())
-          return op.removeSpaceAttr(), failure();
-
-        // Get the parallel size value store as an attribute of the ParamOp.
-        parallelParam.push_back(
-            paramOp.getValue()->cast<IntegerAttr>().getInt());
-      }
-
-      linalg::LinalgTilingOptions options;
-      options.setTileSizes(parallelParam);
-      auto parallelLinalgOp = linalg::tileLinalgOp(rewriter, linalgOp, options);
+      // Otherwise, use the default implementation that parallelize the linalg
+      // operation with the parallel parameters.
+      auto parallelLinalgOp =
+          tileLinalgOp(linalgOp, implSpaceOp->getSpacePackOp().getArgs(),
+                       ParamKind::PARALLEL_SIZE, rewriter);
       if (failed(parallelLinalgOp))
         return op.removeSpaceAttr(), failure();
-
-      // Replace the original linalg op with the parallel one.
-      rewriter.replaceOp(linalgOp, parallelLinalgOp->tensorResults);
       linalgOp = parallelLinalgOp->op;
     }
 
