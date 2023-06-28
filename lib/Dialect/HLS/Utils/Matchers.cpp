@@ -4,13 +4,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "scalehls/Utils/Matchers.h"
+#include "scalehls/Dialect/HLS/Utils/Matchers.h"
 #include "llvm/Support/Debug.h"
 
 #define DEBUG_TYPE "scalehls-matchers"
 
 using namespace mlir;
 using namespace scalehls;
+using namespace hls;
 
 //===----------------------------------------------------------------------===//
 // BlockMatcher

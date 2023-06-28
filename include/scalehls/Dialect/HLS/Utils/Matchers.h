@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_UTILS_MATCHERS_H
-#define SCALEHLS_UTILS_MATCHERS_H
+#ifndef SCALEHLS_DIALECT_HLS_UTILS_MATCHERS_H
+#define SCALEHLS_DIALECT_HLS_UTILS_MATCHERS_H
 
 #include "scalehls/Dialect/HLS/IR/HLS.h"
 #include "scalehls/Utils/Utils.h"
@@ -15,8 +15,7 @@
 
 namespace mlir {
 namespace scalehls {
-
-using namespace hls;
+namespace hls {
 
 //===----------------------------------------------------------------------===//
 // BlockMatcher
@@ -380,7 +379,8 @@ private:
   IPMatchingStatus status;
 };
 
+} // namespace hls
 } // namespace scalehls
 } // namespace mlir
 
-#endif // SCALEHLS_UTILS_MATCHERS_H
+#endif // SCALEHLS_DIALECT_HLS_UTILS_MATCHERS_H

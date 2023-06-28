@@ -4,13 +4,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/Linalg/Transforms/Transforms.h"
-#include "mlir/Dialect/SCF/Transforms/Transforms.h"
-#include "mlir/Dialect/SCF/Utils/Utils.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Dialect/HLS/Transforms/Passes.h"
 #include "scalehls/Dialect/HLS/Utils/Utils.h"
-#include "scalehls/Utils/Matchers.h"
 
 using namespace mlir;
 using namespace scalehls;
