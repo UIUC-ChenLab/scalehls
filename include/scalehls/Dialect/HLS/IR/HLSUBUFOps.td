@@ -11,6 +11,36 @@
 // Unified Buffer (UBUF) Operations
 //===----------------------------------------------------------------------===//
 
+def TensorToStreamOp : HLSOp<"ubuf.tensor_to_stream",[
+      AttrSizedOperandSegments, NoMemoryEffect]> {
+  let summary = "Convert a tensor to a stream channel";
+
+  let arguments = (ins AnyTensor:$tensor, Variadic<Index>:$dims,
+      Variadic<Index>:$symbols, MemRefLayoutAttrInterface:$stream_layout,
+      MemRefLayoutAttrInterface:$memory_layout);
+  let results = (outs StreamOf<[AnyType]>:$stream);
+  let assemblyFormat = [{
+    $tensor (`[` $dims^ `]`)? (`(` $symbols^ `)`)? `stream_layout`
+    $stream_layout `memory_layout` $memory_layout attr-dict `:`
+    functional-type($tensor, $stream)
+  }];
+}
+
+def StreamToTensorOp : HLSOp<"ubuf.stream_to_tensor", [
+      AttrSizedOperandSegments, NoMemoryEffect]> {
+  let summary = "Convert a stream channel to a tensor";
+
+  let arguments = (ins StreamOf<[AnyType]>:$stream, Variadic<Index>:$dims,
+      Variadic<Index>:$symbols, MemRefLayoutAttrInterface:$stream_layout,
+      MemRefLayoutAttrInterface:$memory_layout);
+  let results = (outs AnyTensor:$tensor);
+  let assemblyFormat = [{
+    $stream (`[` $dims^ `]`)? (`(` $symbols^ `)`)? `stream_layout`
+    $stream_layout `memory_layout` $memory_layout attr-dict `:`
+    functional-type($stream, $tensor)
+  }];
+}
+
 def BufferOp : HLSOp<"ubuf.buffer", [
       DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
       DeclareOpInterfaceMethods<BufferLikeInterface>]> {

@@ -102,25 +102,33 @@ replaceLinalgOpWithInstanceOp(SpaceOp implSpaceOp, linalg::LinalgOp linalgOp,
   if (failed(matchingResult))
     return failure();
 
-  // Collect the result types of the IP instance.
-  SmallVector<Type> instResultTypes;
-  for (unsigned i = 0; i < linalgOp.getNumDpsInits(); ++i) {
-    auto resIndex = matchingResult->mapIpResIndexToPayload(i);
-    instResultTypes.push_back(linalgOp->getResult(resIndex).getType());
-  }
-
-  // Map from a port/template value in an IP declaration to a value in the
-  // payload IR.
+  // Mapping from a value (port/template) in an IP declaration to a payload IR.
   llvm::SmallDenseMap<Value, Value> ipToInstValueMap;
 
-  // Collect the instance ports.
+  // Collect the instance ports and the result types of the IP instance.
   rewriter.setInsertionPoint(linalgOp);
+  SmallVector<Type> instOutputTypes;
   SmallVector<Value> instPorts;
+  unsigned outputIdx = 0;
   for (auto [ipPort, instPortOrAttr] : llvm::zip(
            ipDeclare.getSemanticsOp().getPorts(), matchingResult->instPorts)) {
     auto instPort = getValueOrCreateConstant(instPortOrAttr, rewriter);
     instPorts.push_back(instPort);
     ipToInstValueMap[ipPort] = instPort;
+
+    // If the port is an output, collect the type of it.
+    auto portOp = ipPort.getDefiningOp<PortOp>();
+    if (portOp.getKind() == PortKind::OUTPUT) {
+      auto linalgIdx = matchingResult->mapIpResIndexToPayload(outputIdx++);
+      auto outputType =
+          linalgOp->getResult(linalgIdx).getType().cast<TensorType>();
+      assert(instPort.getType() == outputType && "invalid result type");
+
+      if (portOp.isStream())
+        instOutputTypes.push_back(StreamType::get(outputType.getElementType()));
+      else
+        instOutputTypes.push_back(outputType);
+    }
   }
 
   // Collect the instance templates.
@@ -152,15 +160,58 @@ replaceLinalgOpWithInstanceOp(SpaceOp implSpaceOp, linalg::LinalgOp linalgOp,
     }
   }
 
+  // Now, we can create the instance op.
   auto instance =
-      rewriter.create<InstanceOp>(linalgOp.getLoc(), instResultTypes, instPorts,
+      rewriter.create<InstanceOp>(linalgOp.getLoc(), instOutputTypes, instPorts,
                                   rewriter.getArrayAttr(instTemplates), symbol);
 
-  // Replace the original linalg op results with the instance op.
-  for (unsigned i = 0; i < instance.getNumResults(); ++i) {
-    auto resIndex = matchingResult->mapIpResIndexToPayload(i);
-    linalgOp->getResult(resIndex).replaceAllUsesWith(instance.getResult(i));
+  // If the IP expects stream interface, we will convert tensor to stream for
+  // inputs and vice versa for outputs.
+  outputIdx = 0;
+  for (auto [ipPort, instPort] :
+       llvm::zip(ipDeclare.getSemanticsOp().getPorts(), instPorts)) {
+    auto portOp = ipPort.getDefiningOp<PortOp>();
+
+    // We use the ipToInstValueMap to get the corresponding dim/symbol values
+    // in the payload IR.
+    SmallVector<Value> instDims;
+    for (auto ipDim : portOp.getDims())
+      instDims.push_back(ipToInstValueMap.lookup(ipDim));
+    SmallVector<Value> instSymbols;
+    for (auto ipSymbol : portOp.getSymbols())
+      instSymbols.push_back(ipToInstValueMap.lookup(ipSymbol));
+
+    // Replace the original input port with a stream port is applicable.
+    if (portOp.isStream()) {
+      rewriter.setInsertionPoint(instance);
+      auto streamType = StreamType::get(
+          instPort.getType().cast<TensorType>().getElementType());
+      auto stream = rewriter.create<TensorToStreamOp>(
+          linalgOp.getLoc(), streamType, instPort, instDims, instSymbols,
+          portOp.getStreamLayoutAttr(), portOp.getMemoryLayoutAttr());
+      instPort.replaceUsesWithIf(stream.getResult(), [&](OpOperand &use) {
+        return use.getOwner() == instance;
+      });
+    }
+
+    // Convert stream output to tensors and replace all uses of the original
+    // linalg op results.
+    if (portOp.getKind() == PortKind::OUTPUT) {
+      auto tensor = instance.getResult(outputIdx);
+
+      if (portOp.isStream()) {
+        rewriter.setInsertionPointAfter(instance);
+        tensor = rewriter.create<StreamToTensorOp>(
+            linalgOp.getLoc(), instPort.getType(), tensor, instDims,
+            instSymbols, portOp.getStreamLayoutAttr(),
+            portOp.getMemoryLayoutAttr());
+      }
+
+      auto linalgIdx = matchingResult->mapIpResIndexToPayload(outputIdx++);
+      linalgOp->getResult(linalgIdx).replaceAllUsesWith(tensor);
+    }
   }
+
   rewriter.eraseOp(linalgOp);
   return instance;
 }
