@@ -297,7 +297,7 @@ FailureOr<IPMatchingResult> IPMatcher::match() {
 
           // Infer the port sizes.
           for (auto [portSizeOperand, size] :
-               llvm::zip(portOp.getSizes(), tensorType.getShape())) {
+               llvm::zip(portOp.getDims(), tensorType.getShape())) {
             auto sizeAttr = builder.getIndexAttr(size);
             if (portSizeOperand.getType().isa<PortType>()) {
               if (!status.updateMatchedPort(

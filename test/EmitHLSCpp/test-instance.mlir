@@ -11,11 +11,11 @@ module attributes { torch.debug_module_name = "MLP" } {
       %1 = hls.dse.param @template1 <template> candidates [f32] : !hls.type
       %2 = hls.dse.param @template2 <template> candidates [index] : !hls.type
       %3 = hls.dse.param @template3 <template> candidates [4 : index] : index
-      %4 = hls.uip.port @para1 <param> type %2 sizes() #map : () -> !hls.port
-      %5 = hls.uip.port @para2 <param> type %2 sizes() #map : () -> !hls.port
-      %6 = hls.uip.port @input1 <input> type %1 sizes(%4, %5) #map1 : (!hls.port, !hls.port) -> !hls.port
-      %7 = hls.uip.port @input2 <input> type %1 sizes(%4, %5) #map1 : (!hls.port, !hls.port) -> !hls.port
-      %8 = hls.uip.port @output1 <output> type %1 sizes(%4, %5) #map1 : (!hls.port, !hls.port) -> !hls.port
+      %4 = hls.uip.port @para1 <param> type %2 memory_layout #map : () -> !hls.port
+      %5 = hls.uip.port @para2 <param> type %2 memory_layout #map : () -> !hls.port
+      %6 = hls.uip.port @input1 <input> type %1 [%4, %5] memory_layout #map1 : [!hls.port, !hls.port] () -> !hls.port
+      %7 = hls.uip.port @input2 <input> type %1 [%4, %5] memory_layout #map1 : [!hls.port, !hls.port] () -> !hls.port
+      %8 = hls.uip.port @output1 <output> type %1 [%4, %5] memory_layout #map1 : [!hls.port, !hls.port] () -> !hls.port
       hls.uip.semantics<%1, %2, %3> (%4, %5, %6, %7, %8) [2 : index, 3 : index, 4 : index] : <!hls.type, !hls.type, index> (!hls.port, !hls.port, !hls.port, !hls.port, !hls.port) {
       ^bb0(%arg0: tensor<?x?xf32>, %arg1: tensor<?x?xf32>, %arg2: tensor<?x?xf32>):
         %9 = linalg.generic {indexing_maps = [#map1, #map1], iterator_types = ["parallel", "parallel"]} ins(%arg0 : tensor<?x?xf32>) outs(%arg1 : tensor<?x?xf32>) {
@@ -31,11 +31,11 @@ module attributes { torch.debug_module_name = "MLP" } {
       %1 = hls.dse.param @template1 <template> candidates [f32] : !hls.type
       %2 = hls.dse.param @template2 <template> candidates [index] : !hls.type
       %3 = hls.dse.param @template3 <template> candidates [4 : index] : index
-      %4 = hls.uip.port @para1 <param> type %2 sizes() #map : () -> !hls.port
-      %5 = hls.uip.port @para2 <param> type %2 sizes() #map : () -> !hls.port
-      %6 = hls.uip.port @input1 <input> type %1 sizes(%4, %5) #map1 : (!hls.port, !hls.port) -> !hls.port
-      %7 = hls.uip.port @input2 <input> type %1 sizes(%4, %5) #map1 : (!hls.port, !hls.port) -> !hls.port
-      %8 = hls.uip.port @output1 <output> type %1 sizes(%4, %5) #map1 : (!hls.port, !hls.port) -> !hls.port
+      %4 = hls.uip.port @para1 <param> type %2 memory_layout #map : () -> !hls.port
+      %5 = hls.uip.port @para2 <param> type %2 memory_layout #map : () -> !hls.port
+      %6 = hls.uip.port @input1 <input> type %1 [%4, %5] memory_layout #map1 : [!hls.port, !hls.port] () -> !hls.port
+      %7 = hls.uip.port @input2 <input> type %1 [%4, %5] memory_layout #map1 : [!hls.port, !hls.port] () -> !hls.port
+      %8 = hls.uip.port @output1 <output> type %1 [%4, %5] memory_layout #map1 : [!hls.port, !hls.port] () -> !hls.port
       hls.uip.semantics<%1, %2, %3> (%4, %5, %6, %7, %8) [2 : index, 3 : index, 4 : index] : <!hls.type, !hls.type, index> (!hls.port, !hls.port, !hls.port, !hls.port, !hls.port) {
       ^bb0(%arg0: tensor<?x?xf32>, %arg1: tensor<?x?xf32>, %arg2: tensor<?x?xf32>):
         %9 = linalg.generic {indexing_maps = [#map1, #map1], iterator_types = ["parallel", "parallel"]} ins(%arg0 : tensor<?x?xf32>) outs(%arg1 : tensor<?x?xf32>) {
