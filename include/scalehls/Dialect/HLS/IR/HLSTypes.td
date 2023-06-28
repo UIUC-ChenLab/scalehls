@@ -12,6 +12,27 @@ include "scalehls/Dialect/HLS/IR/HLSAttributes.td"
 class HLSType<string name, list<Trait> traits = []> :
     TypeDef<HLSDialect, name, traits>;
 
+def StreamType : HLSType<"Stream"> {
+  let summary = "An HLS stream type";
+  let description = [{
+    Represents a stream of any type that can be transfered between HLS modules.
+    This type is equal to the hls::stream<> type in Xilinx Vivado HLS.
+  }];
+  let mnemonic = "stream";
+
+  let parameters = (ins "mlir::Type":$elementType, "unsigned":$depth);
+  let assemblyFormat = "`<` qualified($elementType) `,` $depth `>`";
+
+  let extraClassDeclaration = [{
+    static StreamType get(mlir::Type elementType, unsigned depth) {
+      return get(elementType.getContext(), elementType, depth);
+    }
+    static StreamType get(mlir::Type elementType) {
+      return get(elementType, 1);
+    }
+  }];
+}
+
 def SpaceType : HLSType<"Space"> {
   let summary = "Represent a design space containing multiple parameters";
   let mnemonic = "space";
@@ -35,18 +56,6 @@ def TaskImplType : HLSType<"TaskImpl"> {
 def MemoryKindType : HLSType<"MemoryKind"> {
   let summary = "A memory kind type";
   let mnemonic = "memory";
-}
-
-def StreamType : HLSType<"Stream"> {
-  let summary = "An HLS stream type";
-  let description = [{
-    Represents a stream of any type that can be transfered between HLS modules.
-    This type is equal to the hls::stream<> type in Xilinx Vivado HLS.
-  }];
-  let mnemonic = "stream";
-
-  let parameters = (ins "mlir::Type":$elementType, "unsigned":$depth);
-  let assemblyFormat = "`<` qualified($elementType) `,` $depth `>`";
 }
 
 #endif // SCALEHLS_DIALECT_HLS_HLSTYPES_TD

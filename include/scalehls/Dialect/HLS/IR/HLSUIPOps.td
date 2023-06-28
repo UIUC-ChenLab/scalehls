@@ -81,6 +81,12 @@ def PortOp : HLSOp<"uip.port", [Symbol, AttrSizedOperandSegments,
     (`stream_layout` $stream_layout^)? `memory_layout` $memory_layout attr-dict
     `:` (`[` type($dims)^ `]`)? functional-type($symbols, $result)
   }];
+
+  let extraClassDeclaration = [{
+    bool isStream() {
+      return getStreamLayout().has_value();
+    }
+  }];
 }
 
 def IncludeOp : HLSOp<"uip.include", [HasParent<"DeclareOp">]> {

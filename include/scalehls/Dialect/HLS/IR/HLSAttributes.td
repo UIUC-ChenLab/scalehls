@@ -45,7 +45,7 @@ def TaskImplAttr : HLSAttr<"TaskImpl"> {
   let parameters = (ins IPLibraryParam:$library, IPNameParam:$name);
   
   let mnemonic = "impl";
-  let assemblyFormat = "`<` $library `_` $name `>`";
+  let assemblyFormat = "`<` $library `:` $name `>`";
 
   let extraClassDeclaration = [{
     bool isDefaultImpl() {

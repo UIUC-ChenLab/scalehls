@@ -80,6 +80,17 @@ tileLinalgOp(linalg::LinalgOp linalgOp, ValueRange tileParams,
   return tiledLinalgOp;
 }
 
+// If the given pointer union is a value, return it. Otherwise, create a
+// constant op and return it.
+static Value getValueOrCreateConstant(OpFoldResult valueOrAttr,
+                                      PatternRewriter &rewriter) {
+  if (valueOrAttr.is<Value>())
+    return valueOrAttr.get<Value>();
+  auto attr = valueOrAttr.get<Attribute>();
+  return rewriter.create<arith::ConstantOp>(rewriter.getUnknownLoc(),
+                                            TypedAttr(attr));
+}
+
 static FailureOr<InstanceOp>
 replaceLinalgOpWithInstanceOp(SpaceOp implSpaceOp, linalg::LinalgOp linalgOp,
                               SymbolRefAttr symbol, PatternRewriter &rewriter) {
@@ -98,16 +109,6 @@ replaceLinalgOpWithInstanceOp(SpaceOp implSpaceOp, linalg::LinalgOp linalgOp,
     instResultTypes.push_back(linalgOp->getResult(resIndex).getType());
   }
 
-  // If the given pointer union is a value, return it. Otherwise, create a
-  // constant op and return it.
-  auto getValueOrCreateConstant = [&](OpFoldResult valueOrAttr) -> Value {
-    if (valueOrAttr.is<Value>())
-      return valueOrAttr.get<Value>();
-    auto attr = valueOrAttr.get<Attribute>();
-    return rewriter.create<arith::ConstantOp>(rewriter.getUnknownLoc(),
-                                              TypedAttr(attr));
-  };
-
   // Map from a port/template value in an IP declaration to a value in the
   // payload IR.
   llvm::SmallDenseMap<Value, Value> ipToInstValueMap;
@@ -117,7 +118,7 @@ replaceLinalgOpWithInstanceOp(SpaceOp implSpaceOp, linalg::LinalgOp linalgOp,
   SmallVector<Value> instPorts;
   for (auto [ipPort, instPortOrAttr] : llvm::zip(
            ipDeclare.getSemanticsOp().getPorts(), matchingResult->instPorts)) {
-    auto instPort = getValueOrCreateConstant(instPortOrAttr);
+    auto instPort = getValueOrCreateConstant(instPortOrAttr, rewriter);
     instPorts.push_back(instPort);
     ipToInstValueMap[ipPort] = instPort;
   }
@@ -145,12 +146,12 @@ replaceLinalgOpWithInstanceOp(SpaceOp implSpaceOp, linalg::LinalgOp linalgOp,
 
     instTemplates.push_back(*templateParamAttr);
     if (!ipTemplate.getType().isa<hls::TypeType>()) {
-      auto instTemplate = getValueOrCreateConstant(*templateParamAttr);
+      auto instTemplate =
+          getValueOrCreateConstant(*templateParamAttr, rewriter);
       ipToInstValueMap[ipTemplate] = instTemplate;
     }
   }
 
-  // Finally, we can create the instance op.
   auto instance =
       rewriter.create<InstanceOp>(linalgOp.getLoc(), instResultTypes, instPorts,
                                   rewriter.getArrayAttr(instTemplates), symbol);
