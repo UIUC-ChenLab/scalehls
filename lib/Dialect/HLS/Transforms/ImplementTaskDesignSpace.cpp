@@ -103,7 +103,7 @@ replaceLinalgOpWithInstanceOp(SpaceOp implSpaceOp, linalg::LinalgOp linalgOp,
     return failure();
 
   // Mapping from a value (port/template) in an IP declaration to a payload IR.
-  llvm::SmallDenseMap<Value, Value> ipToInstValueMap;
+  llvm::SmallDenseMap<Value, OpFoldResult> ipToInstMap;
 
   // Collect the instance ports and the result types of the IP instance.
   rewriter.setInsertionPoint(linalgOp);
@@ -112,11 +112,11 @@ replaceLinalgOpWithInstanceOp(SpaceOp implSpaceOp, linalg::LinalgOp linalgOp,
   unsigned outputIdx = 0;
   for (auto [ipPort, instPortOrAttr] : llvm::zip(
            ipDeclare.getSemanticsOp().getPorts(), matchingResult->instPorts)) {
-    auto instPort = getValueOrCreateConstant(instPortOrAttr, rewriter);
+    Value instPort = getValueOrCreateConstant(instPortOrAttr, rewriter);
     instPorts.push_back(instPort);
-    ipToInstValueMap[ipPort] = instPort;
+    ipToInstMap[ipPort] = instPort;
 
-    // If the port is an output, collect the type of it.
+    // If the port is an output, collect its type for later use.
     auto portOp = ipPort.getDefiningOp<PortOp>();
     if (portOp.getKind() == PortKind::OUTPUT) {
       auto linalgIdx = matchingResult->mapIpResIndexToPayload(outputIdx++);
@@ -131,39 +131,63 @@ replaceLinalgOpWithInstanceOp(SpaceOp implSpaceOp, linalg::LinalgOp linalgOp,
     }
   }
 
-  // Collect the instance templates.
-  SmallVector<Attribute> instTemplates;
+  // Collect the instance template values.
   for (auto [ipTemplate, instTemplateAttr] :
-       llvm::zip(ipDeclare.getSemanticsOp().getTemplates(),
-                 matchingResult->instTemplates)) {
-    if (instTemplateAttr) {
-      instTemplates.push_back(instTemplateAttr);
-      continue;
+       llvm::zip(ipDeclare.getSemanticsOp().getStructPeeledTemplates(),
+                 matchingResult->instStructPeeledTemplates)) {
+    OpFoldResult instTemplate = instTemplateAttr;
+    if (!instTemplateAttr) {
+      // Template value may have been inferred from the IP matching, e.g., the
+      // array shapes. However, if the template value cannot be inferred and has
+      // been explored by DSE, we need to extract its result here.
+      auto templateParam = implSpaceOp.getSpacePackOp().findOperand(
+          ipTemplate.getDefiningOp<ParamOp>().getNameAttr());
+      assert(templateParam && "invalid template parameter");
+
+      auto templateParamAttr =
+          getParamAttr(templateParam, ParamKind::IP_TEMPLATE);
+      if (failed(templateParamAttr))
+        return failure();
+      instTemplate = *templateParamAttr;
+    }
+    if (!ipTemplate.getType().isa<TypeType>())
+      instTemplate = getValueOrCreateConstant(instTemplate, rewriter);
+    ipToInstMap[ipTemplate] = instTemplate;
+  }
+
+  // Instantiate all structs of the IP in a topological order, which implicitly
+  // ensured the dependencies between them.
+  for (auto structOp : ipDeclare.getOps<StructOp>()) {
+    SmallVector<Value> structInstParams;
+    for (auto param : structOp.getParams()) {
+      assert(ipToInstMap.count(param) && "invalid struct parameter");
+      structInstParams.push_back(ipToInstMap.lookup(param).get<Value>());
     }
 
-    // In some cases, the template value cannot be inferred from the IP
-    // matching. So these values MUST have a default value.
-    auto templateParam = implSpaceOp.getSpacePackOp().findOperand(
-        ipTemplate.getDefiningOp<ParamOp>().getNameAttr());
-    assert(templateParam && "invalid template parameter");
+    SmallVector<FlatSymbolRefAttr> structNestedSymbols(
+        symbol.getNestedReferences());
+    structNestedSymbols.push_back(
+        FlatSymbolRefAttr::get(structOp.getNameAttr()));
 
-    auto templateParamAttr =
-        getParamAttr(templateParam, ParamKind::IP_TEMPLATE);
-    if (failed(templateParamAttr))
-      return failure();
+    auto structSymbolRef =
+        SymbolRefAttr::get(symbol.getRootReference(), structNestedSymbols);
+    auto structInst = rewriter.create<StructInstanceOp>(
+        structOp.getLoc(), structOp.getType(), structInstParams,
+        SmallVector<OpFoldResult>(), structSymbolRef);
+    ipToInstMap[structOp] = structInst.getResult();
+  }
 
-    instTemplates.push_back(*templateParamAttr);
-    if (!ipTemplate.getType().isa<hls::TypeType>()) {
-      auto instTemplate =
-          getValueOrCreateConstant(*templateParamAttr, rewriter);
-      ipToInstValueMap[ipTemplate] = instTemplate;
-    }
+  // Finally, we can construct the list of templates that is going to be passed
+  // to the IP instance.
+  SmallVector<OpFoldResult> instTemplates;
+  for (auto ipTemplate : ipDeclare.getSemanticsOp().getTemplates()) {
+    assert(ipToInstMap.count(ipTemplate) && "invalid struct template");
+    instTemplates.push_back(ipToInstMap.lookup(ipTemplate));
   }
 
   // Now, we can create the instance op.
-  auto instance =
-      rewriter.create<InstanceOp>(linalgOp.getLoc(), instOutputTypes, instPorts,
-                                  rewriter.getArrayAttr(instTemplates), symbol);
+  auto instance = rewriter.create<InstanceOp>(
+      linalgOp.getLoc(), instOutputTypes, instPorts, instTemplates, symbol);
 
   // If the IP expects stream interface, we will convert tensor to stream for
   // inputs and vice versa for outputs.
@@ -172,14 +196,18 @@ replaceLinalgOpWithInstanceOp(SpaceOp implSpaceOp, linalg::LinalgOp linalgOp,
        llvm::zip(ipDeclare.getSemanticsOp().getPorts(), instPorts)) {
     auto portOp = ipPort.getDefiningOp<PortOp>();
 
-    // We use the ipToInstValueMap to get the corresponding dim/symbol values
+    // We use the ipToInstMap to get the corresponding dim/symbol values
     // in the payload IR.
     SmallVector<Value> instDims;
-    for (auto ipDim : portOp.getDims())
-      instDims.push_back(ipToInstValueMap.lookup(ipDim));
+    for (auto ipDim : portOp.getDims()) {
+      assert(ipToInstMap.count(ipDim) && "invalid dim");
+      instDims.push_back(ipToInstMap.lookup(ipDim).get<Value>());
+    }
     SmallVector<Value> instSymbols;
-    for (auto ipSymbol : portOp.getSymbols())
-      instSymbols.push_back(ipToInstValueMap.lookup(ipSymbol));
+    for (auto ipSymbol : portOp.getSymbols()) {
+      assert(ipToInstMap.count(ipSymbol) && "invalid dim");
+      instDims.push_back(ipToInstMap.lookup(ipSymbol).get<Value>());
+    }
 
     // Replace the original input port with a stream port is applicable.
     if (portOp.isStream()) {
@@ -206,7 +234,6 @@ replaceLinalgOpWithInstanceOp(SpaceOp implSpaceOp, linalg::LinalgOp linalgOp,
             instSymbols, portOp.getStreamLayoutAttr(),
             portOp.getMemoryLayoutAttr());
       }
-
       auto linalgIdx = matchingResult->mapIpResIndexToPayload(outputIdx++);
       linalgOp->getResult(linalgIdx).replaceAllUsesWith(tensor);
     }

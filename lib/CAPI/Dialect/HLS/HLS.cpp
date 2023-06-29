@@ -31,6 +31,13 @@ void mlirSemanticsInitializeBlockArguments(
 // HLS Dialect Types
 //===----------------------------------------------------------------------===//
 
+bool mlirTypeIsHLSStructType(MlirType type) {
+  return unwrap(type).isa<hls::StructType>();
+}
+MlirType mlirHLSStructTypeGet(MlirStringRef name, MlirContext ctx) {
+  return wrap(hls::StructType::get(unwrap(ctx), unwrap(name)));
+}
+
 bool mlirTypeIsHLSTypeType(MlirType type) {
   return unwrap(type).isa<hls::TypeType>();
 }

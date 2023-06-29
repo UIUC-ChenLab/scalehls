@@ -15,6 +15,10 @@ include "mlir/IR/EnumAttr.td"
 class HLSAttr<string name, list<Trait> traits = []> :
     AttrDef<HLSDialect, name, traits>;
 
+def IndexArrayAttr : TypedArrayAttrBase<IndexAttr, "index array attribute"> {
+  let constBuilderCall = "$_builder.getIndexArrayAttr($0)";
+}
+
 //===----------------------------------------------------------------------===//
 // DSE Attributes
 //===----------------------------------------------------------------------===//

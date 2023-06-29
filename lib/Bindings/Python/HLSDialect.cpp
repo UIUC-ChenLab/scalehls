@@ -67,6 +67,17 @@ void populateHLSAttributes(py::module &m) {
 //===----------------------------------------------------------------------===//
 
 void populateHLSTypes(py::module &m) {
+  auto StructType =
+      mlir_type_subclass(m, "StructType", mlirTypeIsHLSStructType);
+  StructType.def_classmethod(
+      "get",
+      [](py::object cls, std::string name, MlirContext ctx) {
+        return cls(mlirHLSStructTypeGet(
+            mlirStringRefCreateFromCString(name.c_str()), ctx));
+      },
+      "Get an instance of StructType in given context.", py::arg("cls"),
+      py::arg("name"), py::arg("context") = py::none());
+
   auto typeType = mlir_type_subclass(m, "TypeType", mlirTypeIsHLSTypeType);
   typeType.def_classmethod(
       "get",

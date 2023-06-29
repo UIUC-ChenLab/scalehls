@@ -50,12 +50,13 @@ module attributes { torch.debug_module_name = "MLP" } {
     // CHECK: #include "Path/to/test.hpp"
     // CHECK-NOT: #include "Path/to/no_used_test.hpp"
     
-    // CHECK: testIp<float, int, 4>((int)1, (int)2, v0, v1);
+    // CHECK: testIp<float, int, (int)4>((int)1, (int)2, v0, v1);
     // CHECK-NOT: not_used_Ip<float, int, 4>((int)1, (int)2, v0, v1);
   func.func @forward(%input: memref<1x10xf32>, %output: memref<1x10xf32>) {
     %c1 = arith.constant 1 : index
     %c2 = arith.constant 2 : index
-    hls.uip.instance @testLib::@testIp<[f32, index, 4 : index]>(%c1, %c2, %input, %output) : (index, index, memref<1x10xf32>, memref<1x10xf32>) -> ()
+    %c4 = arith.constant 4 : index
+    hls.uip.instance @testLib::@testIp<f32, index, %c4>(%c1, %c2, %input, %output) : <index>(index, index, memref<1x10xf32>, memref<1x10xf32>) -> ()
     return
   }
     

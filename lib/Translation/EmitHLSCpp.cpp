@@ -46,7 +46,9 @@ static std::string getDataTypeName(Type type) {
     return vectorName;
   }
 
-  // Handle scalar types, including float and integer.
+  // Handle scalar types, including float and integer, or struct type.
+  if (auto structType = type.dyn_cast<StructType>())
+    return structType.getName().str();
   if (type.isa<Float32Type>())
     return "float";
   else if (type.isa<Float64Type>())
@@ -290,6 +292,7 @@ public:
 
   /// Lib Ip operation emitter.
   void emitInstanceOp(InstanceOp op);
+  void emitStructInstanceOp(StructInstanceOp op);
 
   /// HLS dialect operation emitters.
   void emitConstBuffer(ConstBufferOp op);
@@ -357,6 +360,7 @@ private:
   unsigned emitNestedLoopHeader(Value val);
   void emitNestedLoopFooter(unsigned rank);
   void emitInfoAndNewLine(Operation *op);
+  void emitTemplateList(hls::TemplatedOpInterface op);
 
   /// MLIR component and HLS C++ pragma emitters.
   void emitBlock(Block &block);
@@ -460,10 +464,11 @@ public:
   StmtVisitor(ModuleEmitter &emitter) : emitter(emitter) {}
   using HLSVisitorBase::visitOp;
 
-  // Test registered ip expression.
-  bool visitOp(InstanceOp op) { return emitter.emitInstanceOp(op), true; }
-
   /// HLS dialect operations.
+  bool visitOp(InstanceOp op) { return emitter.emitInstanceOp(op), true; }
+  bool visitOp(StructInstanceOp op) {
+    return emitter.emitStructInstanceOp(op), true;
+  }
   bool visitOp(BufferOp op) {
     if (op.getDepth() == 1)
       return emitter.emitAlloc(op), true;
@@ -701,38 +706,31 @@ void ModuleEmitter::emitConstBuffer(ConstBufferOp op) {
 /// Library Ip emitter.
 void ModuleEmitter::emitInstanceOp(InstanceOp op) {
   indent();
+  os << op.getName().getLeafReference().getValue().str();
+  emitTemplateList(op);
 
-  // Get Ip name, print Ip name.
-  auto ipName = op.getNameAttr();
-  os << ipName.getNestedReferences()[0].getValue().str();
-
-  // Emit template.
-  os << "<";
-  for (auto [i, curTemplate] : llvm::enumerate(op.getTemplates())) {
-    if (auto curAttr = curTemplate.dyn_cast<TypeAttr>()) {
-      os << getDataTypeName(curAttr.getValue());
-    } else if (auto curAttr = curTemplate.dyn_cast<IntegerAttr>()) {
-      os << curAttr.getInt();
-    } else {
-      llvm_unreachable("Invalid template parameter");
-    }
-    if (i != op.getTemplates().size() - 1) {
+  // Emit IP ports.
+  os << "(";
+  for (auto port : op.getPorts()) {
+    emitValue(port);
+    if (port != op.getPorts().back())
       os << ", ";
-    }
   }
-  os << ">(";
+  os << ");";
+  emitInfoAndNewLine(op);
+}
 
-  // Emit Variables.
-  for (auto [i, curVar] : llvm::enumerate(op.getOperands())) {
-    emitValue(curVar);
-    if (i != op.getOperands().size() - 1) {
+// TODO: Emit template list.
+void ModuleEmitter::emitStructInstanceOp(StructInstanceOp op) {
+  indent();
+  emitValue(op.getResult());
+  os << " = {";
+  for (auto param : op.getParams()) {
+    emitValue(param);
+    if (param != op.getParams().back())
       os << ", ";
-    }
   }
-  os << ")";
-
-  // Emit ends.
-  os << ";";
+  os << "};";
   emitInfoAndNewLine(op);
 }
 
@@ -1693,6 +1691,22 @@ void ModuleEmitter::emitInfoAndNewLine(Operation *op) {
   os << "\n";
 }
 
+void ModuleEmitter::emitTemplateList(hls::TemplatedOpInterface op) {
+  os << "<";
+  auto composedTemplates = op.getComposedTemplates();
+  for (auto temp : composedTemplates) {
+    if (temp.is<Value>())
+      emitValue(temp.get<Value>());
+    else if (auto typeAttr = temp.get<Attribute>().dyn_cast<TypeAttr>()) {
+      assert(typeAttr && "should be a type attribute.");
+      os << getDataTypeName(typeAttr.getValue());
+    }
+    if (temp != composedTemplates.back())
+      os << ", ";
+  }
+  os << ">";
+}
+
 /// MLIR component and HLS C++ pragma emitters.
 void ModuleEmitter::emitBlock(Block &block) {
   for (auto &op : block) {
@@ -1936,6 +1950,7 @@ void ModuleEmitter::emitModule(ModuleOp module) {
       }
     });
   });
+
   for (const Attribute &curPath : emittedIncludeAttrs) {
     os << "#include ";
     os << curPath;

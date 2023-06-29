@@ -95,7 +95,7 @@ struct GenerateTaskDesignSpacePattern : public OpRewritePattern<TaskOp> {
         continue;
 
       // Otherwise, match the two linalg ops with LinalgMatcher.
-      if (succeeded(LinalgMatcher(linalgOp, ipLinalgOp).match())) {
+      if (succeeded(IPMatcher(linalgOp, declare).match())) {
         implCandidates.push_back(
             TaskImplAttr::get(rewriter.getContext(), libraryName, ipName));
 
