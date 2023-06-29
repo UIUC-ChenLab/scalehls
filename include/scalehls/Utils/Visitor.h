@@ -22,11 +22,9 @@ public:
     return TypeSwitch<Operation *, ResultType>(op)
         .template Case<
 
-            // HLS Library Ip operation.
-            hls::InstanceOp, hls::StructOp,
-
             // HLS dialect operations.
-            hls::BufferOp, hls::ConstBufferOp, hls::StreamOp, hls::StreamReadOp,
+            hls::InstanceOp, hls::StructInstanceOp, hls::BufferOp,
+            hls::ConstBufferOp, hls::StreamOp, hls::StreamReadOp,
             hls::StreamWriteOp, hls::AffineSelectOp,
 
             // Function operations.
@@ -98,10 +96,10 @@ public:
   ResultType visitOp(OPTYPE op, ExtraArgs... args) {                           \
     return static_cast<ConcreteType *>(this)->visitUnhandledOp(op, args...);   \
   }
-  // HLS Library Ip operation.
-  HANDLE(hls::InstanceOp);
-  HANDLE(hls::StructOp);
+
   // HLS dialect operations.
+  HANDLE(hls::InstanceOp);
+  HANDLE(hls::StructInstanceOp);
   HANDLE(hls::BufferOp);
   HANDLE(hls::ConstBufferOp);
   HANDLE(hls::StreamOp);
