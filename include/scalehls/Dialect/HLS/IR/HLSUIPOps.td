@@ -96,27 +96,16 @@ def IncludeOp : HLSOp<"uip.include", [HasParent<"DeclareOp">]> {
   let assemblyFormat = "$paths attr-dict";
 }
 
-def EmitInstOp : HLSOp<"uip.emitinst", [HasParent<"DeclareOp">]> {
-  let summary = "Conatins IP emit instruction";
-
-  let arguments = (ins StrArrayAttr:$emitinst);
-  let assemblyFormat = "$emitinst attr-dict";
-}
-
-def StructOp : HLSOp<"uip.struct", [AttrSizedOperandSegments, HasParent<"DeclareOp">]> {
-  let summary = "Set a struct for IP input";
+def StructOp : HLSOp<"uip.struct", [Symbol, HasParent<"SpaceOp, DeclareOp">]> {
+  let summary = "Declare a struct containing multiple parameters";
   
-  let arguments = (ins SymbolNameAttr:$struct_name, 
-     Variadic<AnyType>:$templates, Variadic<PortType>:$ports);
+  let arguments = (ins Variadic<AnyType>:$params, SymbolNameAttr:$sym_name);
+  let results = (outs StructType:$result);
 
   let assemblyFormat = [{
-    $struct_name (`<` $templates^ `>`)? `(` $ports `)` attr-dict `:`
-    (`<` type($templates)^ `>`)? `(` type($ports) `)`
+    $sym_name `(` $params `)` attr-dict `:` functional-type($params, $result)
   }];
-
 }
-
-
 
 def IndexArrayAttr : TypedArrayAttrBase<IndexAttr, "index array attribute"> {
   let constBuilderCall = "$_builder.getIndexArrayAttr($0)";

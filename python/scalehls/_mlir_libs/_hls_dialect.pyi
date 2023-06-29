@@ -6,6 +6,7 @@ from importlib._bootstrap import MemoryKindType
 from importlib._bootstrap import ParamKindAttr
 from importlib._bootstrap import PortKindAttr
 from importlib._bootstrap import PortType
+from importlib._bootstrap import StructType
 from importlib._bootstrap import TaskImplType
 from importlib._bootstrap import TypeType
 
@@ -16,6 +17,7 @@ __all__ = [
     "PortKind",
     "PortKindAttr",
     "PortType",
+    "StructType",
     "TaskImplType",
     "TypeType",
     "semantics_init_args"

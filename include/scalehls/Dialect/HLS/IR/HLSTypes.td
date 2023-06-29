@@ -38,6 +38,11 @@ def SpaceType : HLSType<"Space"> {
   let mnemonic = "space";
 }
 
+def StructType : HLSType<"Struct"> {
+  let summary = "Represent a struct type";
+  let mnemonic = "struct";
+}
+
 def TypeType : HLSType<"Type"> {
   let summary = "Used to represent a type";
   let mnemonic = "type";
