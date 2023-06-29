@@ -290,6 +290,7 @@ public:
 
   /// Lib Ip operation emitter.
   void emitInstanceOp(InstanceOp op);
+  void emitStructOp(StructOp op);
 
   /// HLS dialect operation emitters.
   void emitConstBuffer(ConstBufferOp op);
@@ -462,6 +463,7 @@ public:
 
   // Test registered ip expression.
   bool visitOp(InstanceOp op) { return emitter.emitInstanceOp(op), true; }
+  bool visitOp(StructOp op) { return emitter.emitStructOp(op), true;}
 
   /// HLS dialect operations.
   bool visitOp(BufferOp op) {
@@ -700,6 +702,11 @@ void ModuleEmitter::emitConstBuffer(ConstBufferOp op) {
 
 /// Library Ip emitter.
 void ModuleEmitter::emitInstanceOp(InstanceOp op) {
+  auto declaredOp = op.getDeclareOp();
+  declaredOp.walk([&](hls::StructOp curStruct) {
+    emitStructOp(curStruct);
+  }); 
+
   indent();
 
   // Get Ip name, print Ip name.
@@ -713,6 +720,8 @@ void ModuleEmitter::emitInstanceOp(InstanceOp op) {
       os << getDataTypeName(curAttr.getValue());
     } else if (auto curAttr = curTemplate.dyn_cast<IntegerAttr>()) {
       os << curAttr.getInt();
+    } else if (auto curAttr = curTemplate.dyn_cast<StringAttr>()) {
+      os << curAttr.getValue().str();
     } else {
       llvm_unreachable("Invalid template parameter");
     }
@@ -1905,6 +1914,44 @@ void ModuleEmitter::emitFunction(func::FuncOp func) {
   os << "\n";
 }
 
+void ModuleEmitter::emitStructOp(StructOp op) {
+  os << "struct " << op.getStructName() << " {\n";
+  indent();
+  for (auto [i, curTemplate] : llvm::enumerate(op.getTemplates())) {
+    bool hasEmit = false;
+    if (auto curTemplateName = curTemplate.getDefiningOp()->getAttr("sym_name").dyn_cast<StringAttr>()) {
+      auto candidates = curTemplate.getDefiningOp()->getAttr("candidates").dyn_cast<ArrayAttr>().getValue();
+      if (candidates.size() == 1) {
+        if (auto intPara = candidates[0].dyn_cast<IntegerAttr>()) {
+          os << "static const unsigned " <<  curTemplateName.str() << " = ";
+          os << intPara.getValue().getSExtValue();
+        }
+        if (auto typePara = candidates[0].dyn_cast<TypeAttr>()) {
+          os << "typedef " << getDataTypeName(typePara.getValue()) << " " << curTemplateName.str();
+        }
+      } else {
+        if (auto gobalSpace = op.getOperation()->getParentOfType<mlir::ModuleOp>().lookupSymbol<hls::SpaceOp>("global")) {
+          gobalSpace.walk([&](hls::ParamOp curParam) {
+            if (curParam.getName().str() == curTemplateName.str() && !hasEmit) {
+              if (auto valueAttr = curParam.getValue()->dyn_cast<IntegerAttr>()) {
+                os << "const unsigned " << curTemplateName.getValue().str() << " = ";
+                os << valueAttr.getValue().getSExtValue();
+                curParam.setSymNameAttr(StringAttr::get(curParam.getContext(), "emitted"));
+                hasEmit = true;
+              } 
+            } 
+          });
+        }
+      }
+    }
+    if (i != op.getTemplates().size() - 1) {
+      os << ";";
+    }
+    os << "\n"; 
+  }
+  os << "};\n\n";
+}
+
 /// Top-level MLIR module emitter.
 void ModuleEmitter::emitModule(ModuleOp module) {
   os << R"XXX(
@@ -1936,6 +1983,7 @@ void ModuleEmitter::emitModule(ModuleOp module) {
       }
     });
   });
+
   for (const Attribute &curPath : emittedIncludeAttrs) {
     os << "#include ";
     os << curPath;

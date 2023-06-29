@@ -23,7 +23,7 @@ public:
         .template Case<
 
             // HLS Library Ip operation.
-            hls::InstanceOp,
+            hls::InstanceOp, hls::StructOp,
 
             // HLS dialect operations.
             hls::BufferOp, hls::ConstBufferOp, hls::StreamOp, hls::StreamReadOp,
@@ -100,6 +100,7 @@ public:
   }
   // HLS Library Ip operation.
   HANDLE(hls::InstanceOp);
+  HANDLE(hls::StructOp);
   // HLS dialect operations.
   HANDLE(hls::BufferOp);
   HANDLE(hls::ConstBufferOp);
