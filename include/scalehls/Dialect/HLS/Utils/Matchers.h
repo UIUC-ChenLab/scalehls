@@ -256,7 +256,7 @@ private:
 
 struct IPMatchingResult {
   const SmallVector<Port> instPorts;
-  const SmallVector<Attribute> instTemplates;
+  const SmallVector<Attribute> instStructPeeledTemplates;
   const LinalgMatchingResult result;
 
   unsigned mapIpResIndexToPayload(unsigned ipResIndex) const {
@@ -267,9 +267,10 @@ struct IPMatchingResult {
   }
 
   IPMatchingResult(const SmallVector<Port> &instPorts,
-                   const SmallVector<Attribute> &instTemplates,
+                   const SmallVector<Attribute> &instStructPeeledTemplates,
                    const LinalgMatchingResult &result)
-      : instPorts(instPorts), instTemplates(instTemplates), result(result) {}
+      : instPorts(instPorts),
+        instStructPeeledTemplates(instStructPeeledTemplates), result(result) {}
 };
 
 struct IPMatchingStatus {

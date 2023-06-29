@@ -408,7 +408,7 @@ FailureOr<IPMatchingResult> IPMatcher::match() {
   }
 
   // After the iteration, we will try to fill those unmatched ports and template
-  // parameters with default value it has.
+  // parameters with default value if it has.
   for (auto port : ipSemantics.getPorts()) {
     auto portOp = port.getDefiningOp<PortOp>();
     if (auto defaultValue = portOp.getValue())
