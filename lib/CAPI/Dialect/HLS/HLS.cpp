@@ -34,8 +34,8 @@ void mlirSemanticsInitializeBlockArguments(
 bool mlirTypeIsHLSStructType(MlirType type) {
   return unwrap(type).isa<hls::StructType>();
 }
-MlirType mlirHLSStructTypeGet(MlirContext ctx) {
-  return wrap(hls::StructType::get(unwrap(ctx)));
+MlirType mlirHLSStructTypeGet(MlirStringRef name, MlirContext ctx) {
+  return wrap(hls::StructType::get(unwrap(ctx), unwrap(name)));
 }
 
 bool mlirTypeIsHLSTypeType(MlirType type) {

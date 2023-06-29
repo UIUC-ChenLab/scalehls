@@ -29,7 +29,8 @@ mlirSemanticsInitializeBlockArguments(MlirOperation semantics,
 //===----------------------------------------------------------------------===//
 
 MLIR_CAPI_EXPORTED bool mlirTypeIsHLSStructType(MlirType type);
-MLIR_CAPI_EXPORTED MlirType mlirHLSStructTypeGet(MlirContext ctx);
+MLIR_CAPI_EXPORTED MlirType mlirHLSStructTypeGet(MlirStringRef name,
+                                                 MlirContext ctx);
 
 MLIR_CAPI_EXPORTED bool mlirTypeIsHLSTypeType(MlirType type);
 MLIR_CAPI_EXPORTED MlirType mlirHLSTypeTypeGet(MlirContext ctx);

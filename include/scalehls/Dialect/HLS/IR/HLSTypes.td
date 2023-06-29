@@ -41,6 +41,9 @@ def SpaceType : HLSType<"Space"> {
 def StructType : HLSType<"Struct"> {
   let summary = "Represent a struct type";
   let mnemonic = "struct";
+
+  let parameters = (ins StringRefParameter<>:$name);
+  let assemblyFormat = "`<` $name `>`";
 }
 
 def TypeType : HLSType<"Type"> {
