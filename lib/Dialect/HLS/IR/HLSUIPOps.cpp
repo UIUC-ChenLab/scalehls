@@ -25,6 +25,31 @@ SemanticsOp DeclareOp::getSemanticsOp() {
 // InstanceOp
 //===----------------------------------------------------------------------===//
 
+static void dispatchTemplateOpFoldResults(
+    ArrayRef<OpFoldResult> composedTemplates, SmallVectorImpl<Value> &templates,
+    SmallVectorImpl<Attribute> &staticTemplates, OpBuilder &builder) {
+  for (OpFoldResult ofr : composedTemplates) {
+    if (ofr.is<Attribute>()) {
+      staticTemplates.push_back(ofr.get<Attribute>());
+      continue;
+    }
+    templates.push_back(ofr.get<Value>());
+    staticTemplates.push_back(builder.getI64IntegerAttr(ShapedType::kDynamic));
+  }
+}
+
+void InstanceOp::build(OpBuilder &builder, OperationState &state,
+                       TypeRange results, ValueRange ports,
+                       ArrayRef<OpFoldResult> composedTemplates,
+                       SymbolRefAttr name) {
+  SmallVector<Value> templates;
+  SmallVector<Attribute> staticTemplates;
+  dispatchTemplateOpFoldResults(composedTemplates, templates, staticTemplates,
+                                builder);
+  build(builder, state, results, ports, templates,
+        builder.getArrayAttr(staticTemplates), name);
+}
+
 LogicalResult InstanceOp::verifySymbolUses(mlir::SymbolTableCollection &table) {
   if (!getDeclareOp())
     return (*this)->emitOpError("unknown IP name ") << getNameAttr();
@@ -55,6 +80,30 @@ OpResult InstanceOp::getTiedOpResult(OpOperand &operand) {
 DeclareOp InstanceOp::getDeclareOp() {
   return SymbolTable::lookupNearestSymbolFrom<DeclareOp>(
       (*this)->getParentOfType<ModuleOp>(), getNameAttr());
+}
+
+//===----------------------------------------------------------------------===//
+// StructInstanceOp
+//===----------------------------------------------------------------------===//
+
+void StructInstanceOp::build(OpBuilder &builder, OperationState &state,
+                             Type result, ValueRange params,
+                             ArrayRef<OpFoldResult> composedTemplates,
+                             SymbolRefAttr name) {
+  SmallVector<Value> templates;
+  SmallVector<Attribute> staticTemplates;
+  dispatchTemplateOpFoldResults(composedTemplates, templates, staticTemplates,
+                                builder);
+  build(builder, state, result, params, templates,
+        builder.getArrayAttr(staticTemplates), name);
+}
+
+LogicalResult
+StructInstanceOp::verifySymbolUses(mlir::SymbolTableCollection &table) {
+  if (!table.lookupNearestSymbolFrom<StructOp>(
+          (*this)->getParentOfType<ModuleOp>(), getNameAttr()))
+    return (*this)->emitOpError("unknown struct name ") << getNameAttr();
+  return success();
 }
 
 //===----------------------------------------------------------------------===//

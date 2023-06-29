@@ -39,18 +39,26 @@ def DeclareOp : HLSOp<"uip.declare", [IsolatedFromAbove, SymbolTable, Symbol,
   }];
 }
 
-def InstanceOp : HLSOp<"uip.instance", [
-      DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+def InstanceOp : HLSOp<"uip.instance", [AttrSizedOperandSegments,
+      DeclareOpInterfaceMethods<SymbolUserOpInterface>,
+      DeclareOpInterfaceMethods<TemplatedOpInterface>]> {
   let summary = "Instantiate an IP declared by DeclareOp";
 
-  let arguments = (ins Variadic<AnyType>:$ports, ArrayAttr:$templates,
-      SymbolRefAttr:$name);
+  let arguments = (ins Variadic<AnyType>:$ports, Variadic<AnyType>:$templates,
+      ArrayAttr:$static_templates, SymbolRefAttr:$name);
   let results = (outs Variadic<AnyType>:$results);
 
   let assemblyFormat = [{
-    $name `<` $templates `>` `(` $ports `)` attr-dict `:`
+    $name custom<DynamicTemplateList>($templates, $static_templates) `(` $ports
+    `)` attr-dict `:` (`<` type($templates)^ `>`)?
     functional-type($ports, $results)
   }];
+
+  let builders = [
+    OpBuilder<(ins "mlir::TypeRange":$results, "mlir::ValueRange":$ports,
+        "mlir::ArrayRef<mlir::OpFoldResult>":$composedTemplates,
+        "mlir::SymbolRefAttr":$name)>
+  ];
 
   let extraClassDeclaration = [{
     /// Get the type of operand: input, output, or param.
@@ -96,19 +104,40 @@ def IncludeOp : HLSOp<"uip.include", [HasParent<"DeclareOp">]> {
   let assemblyFormat = "$paths attr-dict";
 }
 
-def StructOp : HLSOp<"uip.struct", [Symbol, HasParent<"SpaceOp, DeclareOp">]> {
+def StructOp : HLSOp<"uip.struct", [Symbol, AttrSizedOperandSegments,
+      HasParent<"SpaceOp, DeclareOp">]> {
   let summary = "Declare a struct containing multiple parameters";
   
-  let arguments = (ins Variadic<AnyType>:$params, SymbolNameAttr:$sym_name);
+  let arguments = (ins Variadic<AnyType>:$params, Variadic<AnyType>:$templates,
+      SymbolNameAttr:$sym_name);
   let results = (outs StructType:$result);
 
   let assemblyFormat = [{
-    $sym_name `(` $params `)` attr-dict `:` functional-type($params, $result)
+    $sym_name (`<` $templates^ `>`)? `(` $params `)` attr-dict `:`
+    (`<` type($templates)^ `>`)? functional-type($params, $result)
   }];
 }
 
-def IndexArrayAttr : TypedArrayAttrBase<IndexAttr, "index array attribute"> {
-  let constBuilderCall = "$_builder.getIndexArrayAttr($0)";
+def StructInstanceOp : HLSOp<"uip.struct_instance", [AttrSizedOperandSegments,
+      DeclareOpInterfaceMethods<SymbolUserOpInterface>,
+      DeclareOpInterfaceMethods<TemplatedOpInterface>]> {
+  let summary = "Instantiate a struct declared by StructOp";
+  
+  let arguments = (ins Variadic<AnyType>:$params, Variadic<AnyType>:$templates,
+      ArrayAttr:$static_templates, SymbolRefAttr:$name);
+  let results = (outs StructType:$result);
+
+  let assemblyFormat = [{
+    $name custom<DynamicTemplateList>($templates, $static_templates) `(` $params
+    `)` attr-dict `:` (`<` type($templates)^ `>`)?
+    functional-type($params, $result)
+  }];
+
+  let builders = [
+    OpBuilder<(ins "mlir::Type":$result, "mlir::ValueRange":$params,
+        "mlir::ArrayRef<mlir::OpFoldResult>":$composedTemplates,
+        "mlir::SymbolRefAttr":$name)>
+  ];
 }
 
 def SemanticsOp : HLSOp<"uip.semantics", [Terminator, IsolatedFromAbove,
