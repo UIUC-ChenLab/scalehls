@@ -368,7 +368,7 @@ struct IPMatcher {
             unsigned maxIterations = 3)
       : payload(payload), declare(declare), maxIterations(maxIterations),
         status(declare.getSemanticsOp().getPorts(),
-               declare.getSemanticsOp().getTemplates()) {}
+               declare.getSemanticsOp().getStructPeeledTemplates()) {}
 
   FailureOr<IPMatchingResult> match();
 

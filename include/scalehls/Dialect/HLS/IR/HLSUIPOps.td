@@ -141,6 +141,11 @@ def SemanticsOp : HLSOp<"uip.semantics", [Terminator, IsolatedFromAbove,
 
     PortKind getPortKind(OpOperand &operand);
     PortKind getPortKind(unsigned operandIdx);
+
+    /// The template of an IP could be recursively a struct type. This method
+    /// can recursively peel off all the structs and return the real templates,
+    /// which are gauranteed to be ParamOp.
+    SmallVector<Value> getStructPeeledTemplates();
   }];
 }
 

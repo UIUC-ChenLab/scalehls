@@ -325,8 +325,8 @@ FailureOr<IPMatchingResult> IPMatcher::match() {
       //   2) semantics block argument -> semantics linalg/output operand
       //   3) semantics linalg/output operand -> payload linalg operand
       //
-      // Then, the paylod linalg operand should be used by the new InstanceOp to
-      // replace the payload linalg op. Note that from step 2), we need to
+      // Then, the payload linalg operand should be used by the new InstanceOp
+      // to replace the payload linalg op. Note that from step 2), we need to
       // separate the handling of input, initiation, and output port.
 
       // We start from step 1) mapping. If failed, it indicates the current port
@@ -414,7 +414,7 @@ FailureOr<IPMatchingResult> IPMatcher::match() {
     if (auto defaultValue = portOp.getValue())
       status.updateMatchedPort(port, defaultValue.value());
   }
-  for (auto temp : ipSemantics.getTemplates()) {
+  for (auto temp : ipSemantics.getStructPeeledTemplates()) {
     auto tempOp = temp.getDefiningOp<hls::ParamLikeInterface>();
     if (auto defaultValue = tempOp.getValue())
       status.updateMatchedTemplate(temp, defaultValue.value());

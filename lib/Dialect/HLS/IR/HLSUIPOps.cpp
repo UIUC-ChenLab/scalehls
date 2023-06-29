@@ -136,6 +136,31 @@ SemanticsOutputOp SemanticsOp::getSemanticsOutputOp() {
   return cast<SemanticsOutputOp>(getBody().front().getTerminator());
 }
 
+/// The template of an IP could be recursively a struct type. This method
+/// can recursively peel off all the structs and return the real templates,
+/// which are gauranteed to be ParamOp.
+SmallVector<Value> SemanticsOp::getStructPeeledTemplates() {
+  SmallVector<Value> temps;
+  SmallVector<StructOp> worklist;
+  for (auto temp : getTemplates()) {
+    if (auto structOp = temp.getDefiningOp<StructOp>())
+      worklist.push_back(structOp);
+    else
+      temps.push_back(temp);
+  }
+
+  while (!worklist.empty()) {
+    auto structOp = worklist.pop_back_val();
+    for (auto temp : structOp.getParams()) {
+      if (auto structOp = temp.getDefiningOp<StructOp>())
+        worklist.push_back(structOp);
+      else
+        temps.push_back(temp);
+    }
+  }
+  return temps;
+}
+
 //===----------------------------------------------------------------------===//
 // SemanticsOutputOp
 //===----------------------------------------------------------------------===//
