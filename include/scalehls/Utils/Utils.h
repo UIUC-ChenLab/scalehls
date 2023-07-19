@@ -78,15 +78,15 @@ bool crossRegionDominates(Operation *a, Operation *b);
 /// Check if the lhsOp and rhsOp are in the same block. If so, return their
 /// ancestors that are located at the same block. Note that in this check,
 /// AffineIfOp is transparent.
-Optional<std::pair<Operation *, Operation *>> checkSameLevel(Operation *lhsOp,
-                                                             Operation *rhsOp);
+std::optional<std::pair<Operation *, Operation *>>
+checkSameLevel(Operation *lhsOp, Operation *rhsOp);
 
 unsigned getCommonSurroundingLoops(Operation *A, Operation *B,
                                    AffineLoopBand *band);
 
 /// Calculate the upper and lower bound of the affine map if possible.
-Optional<std::pair<int64_t, int64_t>> getBoundOfAffineMap(AffineMap map,
-                                                          ValueRange operands);
+std::optional<std::pair<int64_t, int64_t>>
+getBoundOfAffineMap(AffineMap map, ValueRange operands);
 
 /// Calculate partition factors through analyzing the "memrefType" and return
 /// them in "factors". Meanwhile, the overall partition number is calculated and
@@ -128,7 +128,7 @@ void getLoopBands(Block &block, AffineLoopBands &bands,
 void getArrays(Block &block, SmallVectorImpl<Value> &arrays,
                bool allowArguments = true);
 
-Optional<unsigned> getAverageTripCount(affine::AffineForOp forOp);
+std::optional<unsigned> getAverageTripCount(affine::AffineForOp forOp);
 
 bool checkDependence(Operation *A, Operation *B);
 

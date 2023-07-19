@@ -404,7 +404,7 @@ bool scalehls::crossRegionDominates(Operation *a, Operation *b) {
 // Check if the lhsOp and rhsOp are in the same block. If so, return their
 // ancestors that are located at the same block. Note that in this check,
 // AffineIfOp is transparent.
-Optional<std::pair<Operation *, Operation *>>
+std::optional<std::pair<Operation *, Operation *>>
 scalehls::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
   // If lhsOp and rhsOp are already at the same level, return true.
   if (lhsOp->getBlock() == rhsOp->getBlock())
@@ -438,7 +438,7 @@ scalehls::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
       if (lhs->getBlock() == rhs->getBlock())
         return std::pair<Operation *, Operation *>(lhs, rhs);
 
-  return Optional<std::pair<Operation *, Operation *>>();
+  return std::optional<std::pair<Operation *, Operation *>>();
 }
 
 /// Returns the number of surrounding loops common to 'loopsA' and 'loopsB',
@@ -462,7 +462,7 @@ unsigned scalehls::getCommonSurroundingLoops(Operation *A, Operation *B,
 }
 
 /// Calculate the lower and upper bound of the affine map if possible.
-Optional<std::pair<int64_t, int64_t>>
+std::optional<std::pair<int64_t, int64_t>>
 scalehls::getBoundOfAffineMap(AffineMap map, ValueRange operands) {
   if (map.isSingleConstant()) {
     auto constBound = map.getSingleConstantResult();
@@ -471,7 +471,7 @@ scalehls::getBoundOfAffineMap(AffineMap map, ValueRange operands) {
 
   // For now, we can only handle one result value map.
   if (map.getNumResults() != 1)
-    return Optional<std::pair<int64_t, int64_t>>();
+    return std::optional<std::pair<int64_t, int64_t>>();
 
   auto context = map.getContext();
   SmallVector<int64_t, 4> lbs;
@@ -480,13 +480,13 @@ scalehls::getBoundOfAffineMap(AffineMap map, ValueRange operands) {
     // Only if the affine map operands are induction variable, the calculation
     // is possible.
     if (!isAffineForInductionVar(operand))
-      return Optional<std::pair<int64_t, int64_t>>();
+      return std::optional<std::pair<int64_t, int64_t>>();
 
     // Only if the owner for op of the induction variable has constant bound,
     // the calculation is possible.
     auto forOp = getForInductionVarOwner(operand);
     if (!forOp.hasConstantBounds())
-      return Optional<std::pair<int64_t, int64_t>>();
+      return std::optional<std::pair<int64_t, int64_t>>();
 
     auto lb = forOp.getConstantLowerBound();
     auto ub = forOp.getConstantUpperBound();
@@ -512,7 +512,7 @@ scalehls::getBoundOfAffineMap(AffineMap map, ValueRange operands) {
     if (auto constExpr = newExpr.dyn_cast<AffineConstantExpr>())
       results.push_back(constExpr.getValue());
     else
-      return Optional<std::pair<int64_t, int64_t>>();
+      return std::optional<std::pair<int64_t, int64_t>>();
   }
 
   auto minmax = std::minmax_element(results.begin(), results.end());
@@ -697,7 +697,7 @@ void scalehls::getArrays(Block &block, SmallVectorImpl<Value> &arrays,
   }
 }
 
-Optional<unsigned> scalehls::getAverageTripCount(AffineForOp forOp) {
+std::optional<unsigned> scalehls::getAverageTripCount(AffineForOp forOp) {
   if (auto optionalTripCount = getConstantTripCount(forOp))
     return optionalTripCount.value();
   else {
@@ -716,7 +716,7 @@ Optional<unsigned> scalehls::getAverageTripCount(AffineForOp forOp) {
           upperBound.value().first - lowerBound.value().second;
       return (lowerTripCount + upperTripCount + 1) / 2;
     } else
-      return Optional<unsigned>();
+      return std::optional<unsigned>();
   }
 }
 

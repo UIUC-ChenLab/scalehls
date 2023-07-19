@@ -14,6 +14,6 @@ int main(int argc, char **argv) {
   mlir::scalehls::registerAllInterfaceExternalModels(registry);
   mlir::scalehls::registerAllPasses();
 
-  return mlir::failed(mlir::MlirOptMain(
-      argc, argv, "ScaleHLS Optimization Tool", registry, true));
+  return mlir::failed(
+      mlir::MlirOptMain(argc, argv, "ScaleHLS Optimization Tool", registry));
 }

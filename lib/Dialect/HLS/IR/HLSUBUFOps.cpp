@@ -159,7 +159,9 @@ LogicalResult BufferOp::verify() {
 }
 
 int32_t BufferOp::getBufferDepth() { return getDepth(); }
-Optional<TypedAttr> BufferOp::getBufferInitValue() { return getInitValue(); }
+std::optional<TypedAttr> BufferOp::getBufferInitValue() {
+  return getInitValue();
+}
 
 void BufferOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
@@ -169,8 +171,8 @@ void BufferOp::getEffects(
 }
 
 int32_t ConstBufferOp::getBufferDepth() { return 1; }
-Optional<TypedAttr> ConstBufferOp::getBufferInitValue() {
-  return Optional<TypedAttr>();
+std::optional<TypedAttr> ConstBufferOp::getBufferInitValue() {
+  return std::optional<TypedAttr>();
 }
 
 LogicalResult ConstBufferOp::verify() {
