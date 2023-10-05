@@ -11,6 +11,7 @@ include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/BuiltinAttributeInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
+include "scalehls/Dialect/HLS/HLS.td"
 include "scalehls/Dialect/HLS/Interfaces.td"
 
 //===----------------------------------------------------------------------===//
