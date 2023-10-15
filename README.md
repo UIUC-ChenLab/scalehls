@@ -4,7 +4,9 @@ ScaleHLS is a High-level Synthesis (HLS) framework on [MLIR](https://mlir.llvm.o
 
 By using the MLIR framework that can be better tuned to particular algorithms at different representation levels, ScaleHLS is more scalable and customizable towards various applications coming with intrinsic structural or functional hierarchies. ScaleHLS represents HLS designs at multiple levels of abstraction and provides an HLS-dedicated analysis and transform library (in both C++ and Python) to solve the optimization problems at the suitable representation levels. Using this library, we've developed a design space exploration engine to generate optimized HLS designs automatically.
 
-For more details, please see our [ScaleHLS (HPCA'22)](https://doi.org/10.1109/HPCA53966.2022.00060) and [HIDA (ASPLOS'24)](https://doi.org/10.1145/3617232.3624850) paper:
+Working with a set of neural networks modeled in PyTorch, comparing to the baseline designs without manual directives insertion and code-rewriting, that are only optimized by Xilinx Vivado HLS, ScaleHLS improves the performances with up to 3825.0x better. Furthermore, HIDA (ScaleHLS 2.0) achieves up to 8.54x higher throughput compared to ScaleHLS. Meanwhile, dsespite being fully automated and able to handle various applications, HIDA achieves 1.29$\times$ higher throughput over [DNNBuilder](https://github.com/IBM/AccDNN), the SOTA RTL-based neural network accelerator on FPGAs.
+
+For more details, please see our [ScaleHLS (HPCA'22)](https://arxiv.org/abs/2107.11673) and [HIDA (ASPLOS'24)](https://doi.org/10.1145/3617232.3624850) paper:
 ```bibtex
 @inproceedings{ye2022scalehls,
   title={ScaleHLS: A New Scalable High-Level Synthesis Framework on Multi-Level Intermediate Representation},
