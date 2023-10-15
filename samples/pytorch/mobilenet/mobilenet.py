@@ -1,7 +1,3 @@
-'''MobileNet in PyTorch.
-Modified based on (https://github.com/kuangliu/pytorch-cifar/blob/master/models/mobilenet.py)
-'''
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -29,10 +25,10 @@ class MobileNet(nn.Module):
     cfg = [64, (128, 2), 128, (256, 2), 256, (512, 2),
            512, 512, 512, 512, 512, (1024, 2), 1024]
 
-    def __init__(self, num_classes=10):
+    def __init__(self, num_classes=1000):
         super(MobileNet, self).__init__()
         self.conv1 = nn.Conv2d(3, 32, kernel_size=3,
-                               stride=1, padding=1, bias=False)
+                               stride=2, padding=1, bias=False)
         self.layers = self._make_layers(in_planes=32)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.linear = nn.Linear(1024, num_classes)
@@ -56,6 +52,8 @@ class MobileNet(nn.Module):
 
 
 module = torch_mlir.compile(MobileNet(), torch.ones(
-    1, 3, 32, 32), output_type=torch_mlir.OutputType.LINALG_ON_TENSORS)
-
+    1, 3, 224, 224), output_type="linalg-on-tensors")
 print(module)
+
+# traced_script_module = torch.jit.trace(model, torch.ones(1, 3, 224, 224))
+# traced_script_module.save("model.pt")

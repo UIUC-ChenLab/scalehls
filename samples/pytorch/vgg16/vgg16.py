@@ -1,58 +1,52 @@
-'''VGG16 in PyTorch.
-Modified based on (https://github.com/kuangliu/pytorch-cifar/blob/master/models/vgg.py)
-'''
-
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch_mlir
 
 
-cfg = {
-    'VGG11': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
-    'VGG13': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
-    'VGG16': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M'],
-    'VGG19': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M'],
-}
+def make_layers(cfg):
+    layers = []
+    in_channels = 3
+    for v in cfg:
+        if v == 'M':
+            layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+        else:
+            conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
+            layers += [conv2d, nn.ReLU(inplace=True)]
+            in_channels = v
+    return nn.Sequential(*layers)
 
 
 class VGG(nn.Module):
-    def __init__(self, vgg_name):
+    def __init__(self, features, num_conv_channels=512, num_fc_channels=2048, num_classes=1000):
         super(VGG, self).__init__()
-        self.features = self._make_layers(cfg[vgg_name])
-        self.classifier = nn.Linear(512, 10)
+        self.features = features
+        self.conv = nn.Conv2d(
+            num_conv_channels, num_fc_channels, kernel_size=7)
+        self.classifier = nn.Sequential(
+            # nn.Linear(num_conv_channels*7*7, num_fc_channels),
+            # nn.ReLU(True),
+            nn.Linear(num_fc_channels, num_fc_channels),
+            nn.ReLU(True),
+            nn.Linear(num_fc_channels, num_classes),
+        )
 
     def forward(self, x):
-        out = self.features(x)
-        out = torch.flatten(out, 1)  # out.view(out.size(0), -1)
-        out = self.classifier(out)
-        return out
-
-    def _make_layers(self, cfg):
-        layers = []
-        in_channels = 3
-        index = 0
-        for x in cfg:
-            if x == 'M':
-                layers += []
-                # layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
-            elif cfg[index+1] == 'M':
-                layers += [nn.Conv2d(in_channels, x, kernel_size=3, padding=1, stride=2, bias=False),
-                           nn.ReLU(inplace=True)]
-                in_channels = x
-            else:
-                layers += [nn.Conv2d(in_channels, x, kernel_size=3, padding=1, bias=False),
-                           nn.ReLU(inplace=True)]
-                in_channels = x
-            index += 1
-        layers += [nn.AdaptiveAvgPool2d((1, 1))]
-        return nn.Sequential(*layers)
+        x = self.features(x)
+        x = F.relu(self.conv(x))
+        x = x.view(x.size(0), -1)
+        x = self.classifier(x)
+        return x
 
 
-def VGG16():
-    return VGG('VGG16')
+cfg = [32, 32, 'M', 64, 64, 'M', 128, 128, 128,
+       'M', 256, 256, 256, 'M', 512, 512, 512, 'M']
 
 
-module = torch_mlir.compile(VGG16(), torch.ones(
-    1, 3, 32, 32), output_type=torch_mlir.OutputType.LINALG_ON_TENSORS)
-
+module = torch_mlir.compile(VGG(make_layers(cfg)), torch.ones(1, 3, 224, 224),
+                            output_type=torch_mlir.OutputType.LINALG_ON_TENSORS)
 print(module)
+
+# traced_script_module = torch.jit.trace(
+#     VGG(make_layers(cfg)), torch.ones(1, 3, 224, 224))
+# traced_script_module.save("vgg16.pt")
