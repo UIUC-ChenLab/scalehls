@@ -49,7 +49,7 @@ struct InsertForkNode : public OpRewritePattern<NodeOp> {
       auto fork = rewriter.create<NodeOp>(loc, output, buffers);
       auto block = rewriter.createBlock(&fork.getBody());
       auto outputArg = block->addArgument(output.getType(), output.getLoc());
-      auto bufferArgs = block->addArguments(ValueRange(buffers), bufferLocs);
+      auto bufferArgs = block->addArguments(TypeRange(ValueRange(buffers)), bufferLocs);
 
       // Create explicit copy from the original output to the buffers.
       rewriter.setInsertionPointToStart(block);

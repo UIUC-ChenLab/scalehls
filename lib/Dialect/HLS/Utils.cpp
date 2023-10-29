@@ -46,7 +46,7 @@ DispatchOp scalehls::dispatchBlock(Block *block) {
   OpBuilder builder(block, block->begin());
   ValueRange returnValues(block->getTerminator()->getOperands());
   auto loc = builder.getUnknownLoc();
-  auto dispatch = builder.create<DispatchOp>(loc, returnValues);
+  auto dispatch = builder.create<DispatchOp>(loc, TypeRange(returnValues));
 
   auto &dispatchBlock = dispatch.getBody().emplaceBlock();
   builder.setInsertionPointToEnd(&dispatchBlock);
@@ -86,7 +86,7 @@ TaskOp scalehls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
   else
     rewriter.setInsertionPoint(ops.back());
   auto task =
-      rewriter.create<TaskOp>(loc, ValueRange(outputValues.getArrayRef()));
+      rewriter.create<TaskOp>(loc, TypeRange(ValueRange(outputValues.getArrayRef())));
   auto taskBlock = rewriter.createBlock(&task.getBody());
 
   // Move each targeted op into the new graph task.
@@ -151,9 +151,9 @@ NodeOp scalehls::fuseNodeOps(ArrayRef<NodeOp> nodes,
       rewriter.getUnknownLoc(), inputs.getArrayRef(), outputs.getArrayRef(),
       params.getArrayRef(), inputTaps);
   auto block = rewriter.createBlock(&newNode.getBody());
-  block->addArguments(ValueRange(inputs.getArrayRef()), inputLocs);
-  block->addArguments(ValueRange(outputs.getArrayRef()), outputLocs);
-  block->addArguments(ValueRange(params.getArrayRef()), paramLocs);
+  block->addArguments(TypeRange(ValueRange(inputs.getArrayRef())), inputLocs);
+  block->addArguments(TypeRange(ValueRange(outputs.getArrayRef())), outputLocs);
+  block->addArguments(TypeRange(ValueRange(params.getArrayRef())), paramLocs);
 
   // Inline all nodes into the new node.
   for (auto node : nodes) {

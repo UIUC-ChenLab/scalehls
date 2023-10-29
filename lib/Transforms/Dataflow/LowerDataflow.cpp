@@ -43,7 +43,7 @@ struct LowerDispatchToSchedule : public OpRewritePattern<DispatchOp> {
         rewriter.create<ScheduleOp>(rewriter.getUnknownLoc(), inputs);
     auto scheduleBlock = rewriter.createBlock(&schedule.getBody());
 
-    auto inputArgs = scheduleBlock->addArguments(ValueRange(inputs), inputLocs);
+    auto inputArgs = scheduleBlock->addArguments(TypeRange(ValueRange(inputs)), inputLocs);
     for (auto t : llvm::zip(inputs, inputArgs))
       std::get<0>(t).replaceUsesWithIf(std::get<1>(t), isInDispatch);
 
@@ -103,16 +103,16 @@ struct LowerTaskToNode : public OpRewritePattern<TaskOp> {
                                         outputs, params);
     auto nodeBlock = rewriter.createBlock(&node.getBody());
 
-    auto inputArgs = nodeBlock->addArguments(ValueRange(inputs), inputLocs);
+    auto inputArgs = nodeBlock->addArguments(TypeRange(ValueRange(inputs)), inputLocs);
     for (auto t : llvm::zip(inputs, inputArgs))
       std::get<0>(t).replaceUsesWithIf(std::get<1>(t), isInTask);
 
     auto outputArgs =
-        node.getBody().addArguments(ValueRange(outputs), outputLocs);
+        node.getBody().addArguments(TypeRange(ValueRange(outputs)), outputLocs);
     for (auto t : llvm::zip(outputs, outputArgs))
       std::get<0>(t).replaceUsesWithIf(std::get<1>(t), isInTask);
 
-    auto paramArgs = nodeBlock->addArguments(ValueRange(params), paramLocs);
+    auto paramArgs = nodeBlock->addArguments(TypeRange(ValueRange(params)), paramLocs);
     for (auto t : llvm::zip(params, paramArgs))
       std::get<0>(t).replaceUsesWithIf(std::get<1>(t), isInTask);
 
