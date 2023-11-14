@@ -77,7 +77,7 @@ def PortOp : HLSOp<"uip.port", [Symbol, AttrSizedOperandSegments,
       HasParent<"DeclareOp">]> {
   let summary = "Declare a port of an IP";
 
-  let arguments = (ins TypeType:$type, Variadic<AnyType>:$dims,
+  let arguments = (ins FloatOrIntParamType:$type, Variadic<AnyType>:$dims,
       Variadic<AnyType>:$symbols, PortKindAttr:$kind,
       OptionalAttr<MemRefLayoutAttrInterface>:$stream_layout,
       MemRefLayoutAttrInterface:$memory_layout,
@@ -87,7 +87,7 @@ def PortOp : HLSOp<"uip.port", [Symbol, AttrSizedOperandSegments,
   let assemblyFormat = [{
     $sym_name $kind `type` $type (`[` $dims^ `]`)? (`(` $symbols^ `)`)?
     (`stream_layout` $stream_layout^)? `memory_layout` $memory_layout attr-dict
-    `:` (`[` type($dims)^ `]`)? functional-type($symbols, $result)
+    `:` type($type) (`[` type($dims)^ `]`)? functional-type($symbols, $result)
   }];
 
   let extraClassDeclaration = [{

@@ -2,6 +2,8 @@
 from __future__ import annotations
 import _hls_dialect
 import typing
+from importlib._bootstrap import FloatParamType
+from importlib._bootstrap import IntParamType
 from importlib._bootstrap import MemoryKindType
 from importlib._bootstrap import ParamKindAttr
 from importlib._bootstrap import PortKindAttr
@@ -11,6 +13,8 @@ from importlib._bootstrap import TaskImplType
 from importlib._bootstrap import TypeType
 
 __all__ = [
+    "FloatParamType",
+    "IntParamType",
     "MemoryKindType",
     "ParamKind",
     "ParamKindAttr",

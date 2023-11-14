@@ -9,8 +9,11 @@
 
 include "scalehls/Dialect/HLS/IR/HLSAttributes.td"
 
-class HLSType<string name, list<Trait> traits = []> :
-    TypeDef<HLSDialect, name, traits>;
+class HLSType<string name, list<Trait> traits = [],
+              string baseCppClass = "::mlir::Type">
+    : TypeDef<HLSDialect, name, traits, baseCppClass> {
+  let mnemonic = ?;
+}
 
 def StreamType : HLSType<"Stream"> {
   let summary = "An HLS stream type";
@@ -49,6 +52,22 @@ def StructType : HLSType<"Struct"> {
 def TypeType : HLSType<"Type"> {
   let summary = "Used to represent a type";
   let mnemonic = "type";
+}
+
+def IntParamType : HLSType<"IntParam", [], "mlir::IntegerType"> {
+  let summary = "Used to represent an integer parameter";
+  let mnemonic = "int_param";
+
+  let builders = [
+    TypeBuilder<(ins "mlir::MLIRContext *":$context), [{
+      return $_get(context, mlir::IntegerType::k);
+    }]>
+  ];
+}
+
+def FloatParamType : HLSType<"FloatParam", [], "mlir::FloatType"> {
+  let summary = "Used to represent a float parameter";
+  let mnemonic = "float_param";
 }
 
 def PortType : HLSType<"Port"> {

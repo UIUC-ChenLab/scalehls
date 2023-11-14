@@ -32,6 +32,9 @@ def AnyBuffer : StaticShapeMemRefOf<[AnyType]>;
 def AnyStream : StreamOf<[AnyType]>;
 def AnyBufferOrStream : Type<Or<[AnyBuffer.predicate, AnyStream.predicate]>,
     "memref or stream values">;
+def FloatOrIntParamType : Type<Or<[FloatParamType.predicate,
+    IntParamType.predicate, TypeType.predicate]>,
+    "float or integer parameter types">;
 
 //===----------------------------------------------------------------------===//
 // HLS Operations

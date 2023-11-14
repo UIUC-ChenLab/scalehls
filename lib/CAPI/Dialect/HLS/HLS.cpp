@@ -45,6 +45,20 @@ MlirType mlirHLSTypeTypeGet(MlirContext ctx) {
   return wrap(hls::TypeType::get(unwrap(ctx)));
 }
 
+bool mlirTypeIsHLSIntParamType(MlirType type) {
+  return unwrap(type).isa<hls::IntParamType>();
+}
+MlirType mlirHLSIntParamTypeGet(MlirContext ctx) {
+  return wrap(hls::IntParamType::get(unwrap(ctx)));
+}
+
+bool mlirTypeIsHLSFloatParamType(MlirType type) {
+  return unwrap(type).isa<hls::FloatParamType>();
+}
+MlirType mlirHLSFloatParamTypeGet(MlirContext ctx) {
+  return wrap(hls::FloatParamType::get(unwrap(ctx)));
+}
+
 bool mlirTypeIsHLSPortType(MlirType type) {
   return unwrap(type).isa<hls::PortType>();
 }

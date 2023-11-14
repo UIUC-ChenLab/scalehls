@@ -11,6 +11,7 @@ from ...dialects import linalg
 from ...dialects import math
 from ...dialects import arith
 from ...dialects import complex
+from ...dialects import hls
 from ...dialects._ods_common import (
     get_op_result_or_value as _get_op_result_or_value,
     get_op_results_or_values as _get_op_results_or_values,
@@ -636,11 +637,12 @@ def _is_floating_point_type(t: Type) -> bool:
         or F32Type.isinstance(t)
         or F16Type.isinstance(t)
         or BF16Type.isinstance(t)
+        or isinstance(t, hls.FloatParamType)
     )
 
 
 def _is_integer_type(t: Type) -> bool:
-    return IntegerType.isinstance(t)
+    return (IntegerType.isinstance(t) or isinstance(t, hls.IntParamType))
 
 
 def _is_index_type(t: Type) -> bool:

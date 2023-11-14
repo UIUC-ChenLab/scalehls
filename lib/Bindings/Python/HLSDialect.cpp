@@ -87,6 +87,26 @@ void populateHLSTypes(py::module &m) {
       "Get an instance of TypeType in given context.", py::arg("cls"),
       py::arg("context") = py::none());
 
+  auto intParamType =
+      mlir_type_subclass(m, "IntParamType", mlirTypeIsHLSIntParamType);
+  intParamType.def_classmethod(
+      "get",
+      [](py::object cls, MlirContext ctx) {
+        return cls(mlirHLSIntParamTypeGet(ctx));
+      },
+      "Get an instance of IntParamType in given context.", py::arg("cls"),
+      py::arg("context") = py::none());
+
+  auto floatParamType =
+      mlir_type_subclass(m, "FloatParamType", mlirTypeIsHLSFloatParamType);
+  floatParamType.def_classmethod(
+      "get",
+      [](py::object cls, MlirContext ctx) {
+        return cls(mlirHLSFloatParamTypeGet(ctx));
+      },
+      "Get an instance of FloatParamType in given context.", py::arg("cls"),
+      py::arg("context") = py::none());
+
   auto portType = mlir_type_subclass(m, "PortType", mlirTypeIsHLSPortType);
   portType.def_classmethod(
       "get",

@@ -35,6 +35,12 @@ MLIR_CAPI_EXPORTED MlirType mlirHLSStructTypeGet(MlirStringRef name,
 MLIR_CAPI_EXPORTED bool mlirTypeIsHLSTypeType(MlirType type);
 MLIR_CAPI_EXPORTED MlirType mlirHLSTypeTypeGet(MlirContext ctx);
 
+MLIR_CAPI_EXPORTED bool mlirTypeIsHLSIntParamType(MlirType type);
+MLIR_CAPI_EXPORTED MlirType mlirHLSIntParamTypeGet(MlirContext ctx);
+
+MLIR_CAPI_EXPORTED bool mlirTypeIsHLSFloatParamType(MlirType type);
+MLIR_CAPI_EXPORTED MlirType mlirHLSFloatParamTypeGet(MlirContext ctx);
+
 MLIR_CAPI_EXPORTED bool mlirTypeIsHLSPortType(MlirType type);
 MLIR_CAPI_EXPORTED MlirType mlirHLSPortTypeGet(MlirContext ctx);
 
