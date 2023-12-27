@@ -413,7 +413,7 @@ public:
   /// Affine expression emitters.
   void emitAffineBinary(AffineBinaryOpExpr expr, const char *syntax) {
     os << "(";
-    if (auto constRHS = expr.getRHS().dyn_cast<AffineConstantExpr>()) {
+    if (auto constRHS = dyn_cast<AffineConstantExpr>(expr.getRHS())) {
       if ((unsigned)*syntax == (unsigned)*"*" && constRHS.getValue() == -1) {
         os << "-";
         visit(expr.getLHS());
@@ -428,8 +428,8 @@ public:
         return;
       }
     }
-    if (auto binaryRHS = expr.getRHS().dyn_cast<AffineBinaryOpExpr>()) {
-      if (auto constRHS = binaryRHS.getRHS().dyn_cast<AffineConstantExpr>()) {
+    if (auto binaryRHS = dyn_cast<AffineBinaryOpExpr>(expr.getRHS())) {
+      if (auto constRHS = dyn_cast<AffineConstantExpr>(binaryRHS.getRHS())) {
         if ((unsigned)*syntax == (unsigned)*"+" && constRHS.getValue() == -1 &&
             binaryRHS.getKind() == AffineExprKind::Mul) {
           visit(expr.getLHS());
@@ -593,8 +593,12 @@ public:
   bool visitOp(arith::MulFOp op) { return emitter.emitBinary(op, "*"), true; }
   bool visitOp(arith::DivFOp op) { return emitter.emitBinary(op, "/"), true; }
   bool visitOp(arith::RemFOp op) { return emitter.emitBinary(op, "%"), true; }
-  bool visitOp(arith::MaxFOp op) { return emitter.emitMaxMin(op, "max"), true; }
-  bool visitOp(arith::MinFOp op) { return emitter.emitMaxMin(op, "min"), true; }
+  bool visitOp(arith::MaximumFOp op) {
+    return emitter.emitMaxMin(op, "max"), true;
+  }
+  bool visitOp(arith::MinimumFOp op) {
+    return emitter.emitMaxMin(op, "min"), true;
+  }
   bool visitOp(math::PowFOp op) { return emitter.emitMaxMin(op, "pow"), true; }
 
   /// Integer binary expressions.
@@ -1228,7 +1232,8 @@ void ModuleEmitter::emitAffineYield(affine::AffineYieldOp op) {
         os << " = ";
         emitValue(op.getOperand(resultIdx++), rank);
         break;
-      case (arith::AtomicRMWKind::maxf):
+      case (arith::AtomicRMWKind::maximumf):
+      case (arith::AtomicRMWKind::maxnumf):
       case (arith::AtomicRMWKind::maxs):
       case (arith::AtomicRMWKind::maxu):
         os << " = max(";
@@ -1237,7 +1242,8 @@ void ModuleEmitter::emitAffineYield(affine::AffineYieldOp op) {
         emitValue(op.getOperand(resultIdx++), rank);
         os << ")";
         break;
-      case (arith::AtomicRMWKind::minf):
+      case (arith::AtomicRMWKind::minimumf):
+      case (arith::AtomicRMWKind::minnumf):
       case (arith::AtomicRMWKind::mins):
       case (arith::AtomicRMWKind::minu):
         os << " = min(";
@@ -1283,7 +1289,7 @@ ModuleEmitter::getTransferIndices(TransferOpType op) {
   // Construct the physical indices.
   for (unsigned i = 0, e = op.getPermutationMap().getNumResults(); i < e; ++i) {
     auto expr = op.getPermutationMap().getResult(i);
-    if (auto dimExpr = expr.template dyn_cast<AffineDimExpr>())
+    if (auto dimExpr = dyn_cast<AffineDimExpr>(expr))
       indices[dimExpr.getPosition()] += " + iv" + std::to_string(i);
   }
   return indices;
@@ -1304,7 +1310,7 @@ getTransferCondition(TransferOpType op,
   SmallString<16> condition;
   for (auto i : outOfBoundDims) {
     auto expr = op.getPermutationMap().getResult(i);
-    if (auto dimExpr = expr.template dyn_cast<AffineDimExpr>()) {
+    if (auto dimExpr = dyn_cast<AffineDimExpr>(expr)) {
       auto pos = dimExpr.getPosition();
       condition += indices[pos];
       condition += " < " + std::to_string(op.getShapedType().getDimSize(pos));
@@ -1320,7 +1326,7 @@ void ModuleEmitter::emitInsert(vector::InsertOp op) {
   addAlias(op.getDest(), op.getResult());
   indent();
   emitValue(op.getDest());
-  os << "[" << op.getPosition()[0].cast<IntegerAttr>().getInt() << "] = ";
+  os << "[" << op.getStaticPosition()[0] << "] = ";
   emitValue(op.getSource());
   os << ";";
   emitInfoAndNewLine(op);
@@ -1331,7 +1337,7 @@ void ModuleEmitter::emitExtract(vector::ExtractOp op) {
   emitValue(op.getResult());
   os << " = ";
   emitValue(op.getVector());
-  os << "[" << op.getPosition()[0].cast<IntegerAttr>().getInt() << "];";
+  os << "[" << op.getStaticPosition()[0] << "];";
   emitInfoAndNewLine(op);
 }
 

@@ -265,6 +265,146 @@ LogicalResult scalehls::getEvenlyDistributedFactors(
   return success();
 }
 
+/// Replace all occurrences of AffineExpr at position `pos` in `map` by the
+/// defining AffineApplyOp expression and operands.
+/// When `dimOrSymbolPosition < dims.size()`, AffineDimExpr@[pos] is replaced.
+/// When `dimOrSymbolPosition >= dims.size()`,
+/// AffineSymbolExpr@[pos - dims.size()] is replaced.
+/// Mutate `map`,`dims` and `syms` in place as follows:
+///   1. `dims` and `syms` are only appended to.
+///   2. `map` dim and symbols are gradually shifted to higher positions.
+///   3. Old `dim` and `sym` entries are replaced by nullptr
+/// This avoids the need for any bookkeeping.
+static LogicalResult replaceDimOrSym(AffineMap *map,
+                                     unsigned dimOrSymbolPosition,
+                                     SmallVectorImpl<Value> &dims,
+                                     SmallVectorImpl<Value> &syms) {
+  MLIRContext *ctx = map->getContext();
+  bool isDimReplacement = (dimOrSymbolPosition < dims.size());
+  unsigned pos = isDimReplacement ? dimOrSymbolPosition
+                                  : dimOrSymbolPosition - dims.size();
+  Value &v = isDimReplacement ? dims[pos] : syms[pos];
+  if (!v)
+    return failure();
+
+  auto affineApply = v.getDefiningOp<AffineApplyOp>();
+  if (!affineApply)
+    return failure();
+
+  // At this point we will perform a replacement of `v`, set the entry in `dim`
+  // or `sym` to nullptr immediately.
+  v = nullptr;
+
+  // Compute the map, dims and symbols coming from the AffineApplyOp.
+  AffineMap composeMap = affineApply.getAffineMap();
+  assert(composeMap.getNumResults() == 1 && "affine.apply with >1 results");
+  SmallVector<Value> composeOperands(affineApply.getMapOperands().begin(),
+                                     affineApply.getMapOperands().end());
+  // Canonicalize the map to promote dims to symbols when possible. This is to
+  // avoid generating invalid maps.
+  canonicalizeMapAndOperands(&composeMap, &composeOperands);
+  AffineExpr replacementExpr =
+      composeMap.shiftDims(dims.size()).shiftSymbols(syms.size()).getResult(0);
+  ValueRange composeDims =
+      ArrayRef<Value>(composeOperands).take_front(composeMap.getNumDims());
+  ValueRange composeSyms =
+      ArrayRef<Value>(composeOperands).take_back(composeMap.getNumSymbols());
+  AffineExpr toReplace = isDimReplacement ? getAffineDimExpr(pos, ctx)
+                                          : getAffineSymbolExpr(pos, ctx);
+
+  // Append the dims and symbols where relevant and perform the replacement.
+  dims.append(composeDims.begin(), composeDims.end());
+  syms.append(composeSyms.begin(), composeSyms.end());
+  *map = map->replace(toReplace, replacementExpr, dims.size(), syms.size());
+
+  return success();
+}
+
+/// Iterate over `operands` and fold away all those produced by an AffineApplyOp
+/// iteratively. Perform canonicalization of map and operands as well as
+/// AffineMap simplification. `map` and `operands` are mutated in place.
+static void composeAffineMapAndOperands(AffineMap *map,
+                                        SmallVectorImpl<Value> *operands) {
+  if (map->getNumResults() == 0) {
+    canonicalizeMapAndOperands(map, operands);
+    *map = simplifyAffineMap(*map);
+    return;
+  }
+
+  MLIRContext *ctx = map->getContext();
+  SmallVector<Value, 4> dims(operands->begin(),
+                             operands->begin() + map->getNumDims());
+  SmallVector<Value, 4> syms(operands->begin() + map->getNumDims(),
+                             operands->end());
+
+  // Iterate over dims and symbols coming from AffineApplyOp and replace until
+  // exhaustion. This iteratively mutates `map`, `dims` and `syms`. Both `dims`
+  // and `syms` can only increase by construction.
+  // The implementation uses a `while` loop to support the case of symbols
+  // that may be constructed from dims ;this may be overkill.
+  while (true) {
+    bool changed = false;
+    for (unsigned pos = 0; pos != dims.size() + syms.size(); ++pos)
+      if ((changed |= succeeded(replaceDimOrSym(map, pos, dims, syms))))
+        break;
+    if (!changed)
+      break;
+  }
+
+  // Clear operands so we can fill them anew.
+  operands->clear();
+
+  // At this point we may have introduced null operands, prune them out before
+  // canonicalizing map and operands.
+  unsigned nDims = 0, nSyms = 0;
+  SmallVector<AffineExpr, 4> dimReplacements, symReplacements;
+  dimReplacements.reserve(dims.size());
+  symReplacements.reserve(syms.size());
+  for (auto *container : {&dims, &syms}) {
+    bool isDim = (container == &dims);
+    auto &repls = isDim ? dimReplacements : symReplacements;
+    for (const auto &en : llvm::enumerate(*container)) {
+      Value v = en.value();
+      if (!v) {
+        assert(isDim ? !map->isFunctionOfDim(en.index())
+                     : !map->isFunctionOfSymbol(en.index()) &&
+                           "map is function of unexpected expr@pos");
+        repls.push_back(getAffineConstantExpr(0, ctx));
+        continue;
+      }
+      repls.push_back(isDim ? getAffineDimExpr(nDims++, ctx)
+                            : getAffineSymbolExpr(nSyms++, ctx));
+      operands->push_back(v);
+    }
+  }
+  *map = map->replaceDimsAndSymbols(dimReplacements, symReplacements, nDims,
+                                    nSyms);
+
+  // Canonicalize and simplify before returning.
+  canonicalizeMapAndOperands(map, operands);
+  *map = simplifyAffineMap(*map);
+}
+
+/// Compose any affine.apply ops feeding into `operands` of the integer set
+/// `set` by composing the maps of such affine.apply ops with the integer
+/// set constraints.
+void scalehls::composeSetAndOperands(IntegerSet &set,
+                                     SmallVectorImpl<Value> &operands) {
+  // We will simply reuse the API of the map composition by viewing the LHSs of
+  // the equalities and inequalities of `set` as the affine exprs of an affine
+  // map. Convert to equivalent map, compose, and convert back to set.
+  auto map = AffineMap::get(set.getNumDims(), set.getNumSymbols(),
+                            set.getConstraints(), set.getContext());
+  // Check if any composition is possible.
+  if (llvm::none_of(operands,
+                    [](Value v) { return v.getDefiningOp<AffineApplyOp>(); }))
+    return;
+
+  composeAffineMapAndOperands(&map, &operands);
+  set = IntegerSet::get(map.getNumDims(), map.getNumSymbols(), map.getResults(),
+                        set.getEqFlags());
+}
+
 /// Return a pair which indicates whether the if statement is always true or
 /// false, respectively. The returned result is one-hot.
 std::pair<bool, bool> scalehls::ifAlwaysTrueOrFalse(AffineIfOp ifOp) {
@@ -305,7 +445,7 @@ std::pair<bool, bool> scalehls::ifAlwaysTrueOrFalse(AffineIfOp ifOp) {
     unsigned idx = 0;
     for (auto expr : set.getConstraints()) {
       bool eqFlag = set.isEq(idx++);
-      auto constValue = expr.cast<AffineConstantExpr>().getValue();
+      auto constValue = cast<AffineConstantExpr>(expr).getValue();
 
       if (eqFlag)
         flagList.push_back(constValue == 0);
@@ -490,7 +630,7 @@ scalehls::getBoundOfAffineMap(AffineMap map, ValueRange operands) {
 
     auto lb = forOp.getConstantLowerBound();
     auto ub = forOp.getConstantUpperBound();
-    auto step = forOp.getStep();
+    auto step = forOp.getStep().getSExtValue();
 
     lbs.push_back(lb);
     ubs.push_back(ub - 1 - (ub - 1 - lb) % step);
@@ -509,7 +649,7 @@ scalehls::getBoundOfAffineMap(AffineMap map, ValueRange operands) {
     }
     auto newExpr = map.getResult(0).replaceDimsAndSymbols(replacements, {});
 
-    if (auto constExpr = newExpr.dyn_cast<AffineConstantExpr>())
+    if (auto constExpr = dyn_cast<AffineConstantExpr>(newExpr))
       results.push_back(constExpr.getValue());
     else
       return std::optional<std::pair<int64_t, int64_t>>();

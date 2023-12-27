@@ -78,10 +78,10 @@ func.func @test_float_binary_unary(%arg0: f32, %arg1: f32) -> f32 {
   %17 = math.log10 %16 : f32
 
   // CHECK: float [[VAL_4:.*]] = max([[ARG_0:.*]], [[VAL_3:.*]]);
-  %18 = arith.maxf %arg0, %17 : f32
+  %18 = arith.maximumf %arg0, %17 : f32
 
   // CHECK: *[[VAL_5:.*]] = min([[ARG_0:.*]], [[VAL_4]]);
-  %19 = arith.minf %arg0, %18 : f32
+  %19 = arith.minimumf %arg0, %18 : f32
   return %19 : f32
 }
 

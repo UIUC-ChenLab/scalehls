@@ -8,6 +8,7 @@
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/IntegerSet.h"
 #include "scalehls/Dialect/HLS/Utils/Utils.h"
+#include "scalehls/Utils/Utils.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 using namespace mlir;
@@ -145,7 +146,7 @@ struct AlwaysTrueOrFalseSelect : public OpRewritePattern<AffineSelectOp> {
     else if (set.getNumInputs() == 0) {
       SmallVector<bool, 4> flagList;
       for (auto expr : llvm::enumerate(set.getConstraints())) {
-        auto constValue = expr.value().cast<AffineConstantExpr>().getValue();
+        auto constValue = cast<AffineConstantExpr>(expr.value()).getValue();
         flagList.push_back(set.isEq(expr.index()) ? constValue == 0
                                                   : constValue >= 0);
       }
@@ -260,6 +261,16 @@ ParseResult AffineSelectOp::parse(OpAsmParser &parser, OperationState &result) {
                              result.operands))
     return failure();
   return success();
+}
+
+/// Prints dimension and symbol list.
+static void printDimAndSymbolList(Operation::operand_iterator begin,
+                                  Operation::operand_iterator end,
+                                  unsigned numDims, OpAsmPrinter &printer) {
+  OperandRange operands(begin, end);
+  printer << '(' << operands.take_front(numDims) << ')';
+  if (operands.size() > numDims)
+    printer << '[' << operands.drop_front(numDims) << ']';
 }
 
 void AffineSelectOp::print(OpAsmPrinter &p) {

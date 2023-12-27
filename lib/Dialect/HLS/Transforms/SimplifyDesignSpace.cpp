@@ -24,10 +24,10 @@ struct ConstantizeParamOpPattern : public OpRewritePattern<ParamOp> {
         constValue = op.getCandidates().value()[0];
 
     } else if (op.isRangeConstrained())
-      if (auto constLb = op.getLowerBound().dyn_cast<AffineConstantExpr>()) {
+      if (auto constLb = dyn_cast<AffineConstantExpr>(op.getLowerBound())) {
         auto ub = op.getUpperBound();
         auto diff = simplifyAffineExpr(ub - constLb, 0, op.getNumOperands());
-        if (auto constDiff = diff.dyn_cast<AffineConstantExpr>())
+        if (auto constDiff = dyn_cast<AffineConstantExpr>(diff))
           if (constDiff.getValue() <= op.getStepAttr().getInt())
             constValue =
                 Builder(op.getContext()).getIndexAttr(constLb.getValue());

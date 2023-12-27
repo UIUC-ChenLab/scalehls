@@ -370,14 +370,14 @@ FailureOr<IPMatchingResult> IPMatcher::match() {
       // to generate corresponding buffer-level hls.instance.
       //
       Value matchedPort;
-      if (auto ipInputIndex = getIndex(ipLinalgOp.getDpsInputOperands())) {
+      if (auto ipInputIndex = getIndex(ipLinalgOp.getDpsInputs())) {
         // When the argument is "input" port, the "mapLhsArgIndexToRhs" is used
         // for the step 3) mapping.
         auto payloadInputIndex =
             linalgMatchingResult->mapLhsArgIndexToRhs(ipInputIndex.value());
         matchedPort = payload.getDpsInputOperand(payloadInputIndex)->get();
 
-      } else if (auto ipInitIndex = getIndex(ipLinalgOp.getDpsInitOperands())) {
+      } else if (auto ipInitIndex = getIndex(ipLinalgOp.getDpsInits())) {
         // When the argument is "initiation" port, the "mapLhsResIndexToRhs" is
         // used for the step 3) mapping.
         auto payloadInitIndex =

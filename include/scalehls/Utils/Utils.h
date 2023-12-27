@@ -55,6 +55,11 @@ getEvenlyDistributedFactors(unsigned maxFactor, FactorList &factors,
                             const SmallVectorImpl<FactorList> &constrFactors,
                             bool powerOf2Constr = false);
 
+/// Compose any affine.apply ops feeding into `operands` of the integer set
+/// `set` by composing the maps of such affine.apply ops with the integer
+/// set constraints.
+void composeSetAndOperands(IntegerSet &set, SmallVectorImpl<Value> &operands);
+
 /// Return a pair which indicates whether the if statement is always true or
 /// false, respectively. The returned result is one-hot.
 std::pair<bool, bool> ifAlwaysTrueOrFalse(affine::AffineIfOp ifOp);

@@ -114,7 +114,7 @@ struct ComprehensiveBufferize
     OneShotBufferizationOptions options = getBufferizationOptions();
     options.allocationFn = allocationFn;
     options.memCpyFn = memCpyFn;
-    options.allowReturnAllocs = true;
+    options.allowReturnAllocsFromLoops = true;
     options.bufferizeFunctionBoundaries = true;
 
     if (failed(runScaleHLSOneShotBufferize(moduleOp, options)))

@@ -20,13 +20,13 @@ struct DispatchOrTaskOpInterface
     : public BufferizableOpInterface::ExternalModel<
           DispatchOrTaskOpInterface<OpType>, OpType> {
   AliasingOpOperandList
-  getAliasingOpOperands(Operation *op, OpResult opResult,
+  getAliasingOpOperands(Operation *op, Value value,
                         const AnalysisState &state) const {
     // Dispatch/task do not have tensor OpOperands. The yielded value can be any
     // SSA value that is in scope. To allow for use-def chain traversal in the
     // analysis, the yielded value is aliasing with the result.
     size_t resultNum = std::distance(op->getOpResults().begin(),
-                                     llvm::find(op->getOpResults(), opResult));
+                                     llvm::find(op->getOpResults(), value));
     OpOperand *operand =
         &cast<OpType>(op).getYieldOp()->getOpOperand(resultNum);
     return {{operand, BufferRelation::Equivalent}};
@@ -63,7 +63,7 @@ struct DispatchOrTaskOpInterface
 
   FailureOr<BaseMemRefType>
   getBufferType(Operation *op, Value value, const BufferizationOptions &options,
-                const DenseMap<Value, BaseMemRefType> &fixedTypes) const {
+                SmallVector<Value> &invocationStack) const {
     assert(value.getDefiningOp() == op && "invalid value");
     auto yieldedValue = cast<OpType>(op).getYieldOp().getOperand(
         value.cast<OpResult>().getResultNumber());
@@ -73,7 +73,7 @@ struct DispatchOrTaskOpInterface
       return bufferType;
 
     auto maybeBufferType =
-        bufferization::getBufferType(yieldedValue, options, fixedTypes);
+        bufferization::getBufferType(yieldedValue, options, invocationStack);
     if (failed(maybeBufferType))
       return failure();
     return *maybeBufferType;
@@ -94,8 +94,8 @@ struct YieldOpInterface
     return false;
   }
 
-  AliasingOpResultList getAliasingOpResults(Operation *op, OpOperand &opOperand,
-                                            const AnalysisState &state) const {
+  AliasingValueList getAliasingOpResults(Operation *op, OpOperand &opOperand,
+                                         const AnalysisState &state) const {
     if (isa<DispatchOp, TaskOp>(op->getParentOp()))
       return {{op->getParentOp()->getResult(opOperand.getOperandNumber()),
                BufferRelation::Equivalent}};
@@ -172,19 +172,17 @@ struct AllocTensorOpInterface
     return false;
   }
 
-  bool bufferizesToAllocation(Operation *op, OpResult opResult) const {
-    return true;
-  }
+  bool bufferizesToAllocation(Operation *op, Value value) const { return true; }
 
-  AliasingOpResultList getAliasingOpResults(Operation *op, OpOperand &opOperand,
-                                            const AnalysisState &state) const {
+  AliasingValueList getAliasingOpResults(Operation *op, OpOperand &opOperand,
+                                         const AnalysisState &state) const {
     // This is a new allocation. It does not alias with any other buffer.
     return {};
   }
 
   FailureOr<BaseMemRefType>
   getBufferType(Operation *op, Value value, const BufferizationOptions &options,
-                const DenseMap<Value, BaseMemRefType> &fixedTypes) const {
+                SmallVector<Value> &invocationStack) const {
     auto allocTensor = cast<AllocTensorOp>(op);
     assert(value == allocTensor.getResult() && "invalid value");
 
@@ -256,8 +254,8 @@ struct InstanceOpInterface
     return success();
   }
 
-  AliasingOpResultList getAliasingOpResults(Operation *op, OpOperand &opOperand,
-                                            const AnalysisState &state) const {
+  AliasingValueList getAliasingOpResults(Operation *op, OpOperand &opOperand,
+                                         const AnalysisState &state) const {
     // Output operands alias with their respective tied OpResults.
     auto instance = cast<InstanceOp>(op);
     if (instance.getPortKind(opOperand) == PortKind::OUTPUT)
