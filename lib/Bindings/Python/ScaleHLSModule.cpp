@@ -69,8 +69,6 @@ PYBIND11_MODULE(_scalehls, m) {
         py::arg("pass_manager"));
   m.def("add_convert_linalg_to_dataflow_passes",
         mlirAddConvertLinalgToDataflowPasses, py::arg("pass_manager"));
-  m.def("add_generate_design_space_passes", mlirAddGenerateDesignSpacePasses,
-        py::arg("pass_manager"));
   m.def("add_comprehensive_bufferize_passes",
         mlirAddComprehensiveBufferizePasses, py::arg("pass_manager"));
   m.def("add_lower_dataflow_passes", mlirAddLowerDataflowPasses,

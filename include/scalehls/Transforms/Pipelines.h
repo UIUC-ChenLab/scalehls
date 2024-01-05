@@ -14,7 +14,6 @@ namespace scalehls {
 
 void addLinalgTransformPasses(OpPassManager &pm);
 void addConvertLinalgToDataflowPasses(OpPassManager &pm);
-void addGenerateDesignSpacePasses(OpPassManager &pm);
 void addComprehensiveBufferizePasses(OpPassManager &pm);
 void addLowerDataflowPasses(OpPassManager &pm);
 void addConvertDataflowToFuncPasses(OpPassManager &pm);

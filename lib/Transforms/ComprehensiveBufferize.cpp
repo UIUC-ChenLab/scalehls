@@ -71,10 +71,6 @@ static OneShotBufferizationOptions getBufferizationOptions() {
   options.opFilter.denyOperation<arith::ConstantOp>();
   options.opFilter.denyOperation<bufferization::ToMemrefOp>();
 
-  // We always don't bufferize operations inside LibraryOp.
-  options.opFilter.denyOperation(
-      [](Operation *op) { return op->getParentOfType<hls::LibraryOp>(); });
-
   // This type converter converts tensor types to memref types when no exact
   // memref type can be inferred from the context.
   options.unknownTypeConverterFn = [](Value value, Attribute memorySpace,

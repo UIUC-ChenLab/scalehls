@@ -128,46 +128,6 @@ bool hls::hasRuntimeAttr(Operation *op) {
 // Transform Utils
 //===----------------------------------------------------------------------===//
 
-/// Get all IP declarations in the given module.
-SmallVector<DeclareOp> hls::getIPDeclares(ModuleOp module) {
-  SmallVector<DeclareOp> ipDeclares;
-  for (auto library : module.getOps<LibraryOp>())
-    for (auto declare : library.getOps<DeclareOp>())
-      ipDeclares.push_back(declare);
-  return ipDeclares;
-}
-
-/// Find an existing space op for the given function. If there is no space op,
-/// create a new one.
-SpaceOp hls::getOrCreateGlobalSpaceOp(ModuleOp module) {
-  auto spaceOps = module.getOps<SpaceOp>();
-  if (spaceOps.empty()) {
-    OpBuilder builder(module.getBody(), module.getBody()->begin());
-    auto newSpace = builder.create<SpaceOp>(builder.getUnknownLoc(), "global");
-    builder.createBlock(&newSpace.getBody());
-    builder.create<SpacePackOp>(builder.getUnknownLoc());
-    return newSpace;
-  } else if (llvm::hasSingleElement(spaceOps)) {
-    auto space = *spaceOps.begin();
-    if (space.getBody().hasOneBlock())
-      return space;
-  }
-  return nullptr;
-}
-
-/// Constantize the given param op with the given constant value.
-void hls::constantizeParamOp(ParamOp param, PatternRewriter &rewriter,
-                             Attribute constValue) {
-  for (auto getParam : param.getGetParamOps()) {
-    rewriter.setInsertionPoint(getParam);
-    rewriter.replaceOpWithNewOp<ConstParamOp>(getParam, param.getType(),
-                                              constValue, param.getKind());
-  }
-  rewriter.setInsertionPoint(param);
-  rewriter.replaceOpWithNewOp<ConstParamOp>(param, param.getType(), constValue,
-                                            param.getKind());
-}
-
 /// Wrap the operations in the block with dispatch op.
 DispatchOp hls::dispatchBlock(Block *block, PatternRewriter &rewriter) {
   if (!block->getOps<DispatchOp>().empty() ||
@@ -485,10 +445,7 @@ bool hls::isRead(OpOperand &use) {
   // For NodeOp and ScheduleOp, we don't rely on memory effect interface.
   // Instead, we delve into its region to figure out the effect. However, for
   // InstanceOp, we don't need this recursive approach any more.
-  if (auto instance = dyn_cast<InstanceOp>(use.getOwner()))
-    return instance.getPortKind(use) == PortKind::OUTPUT ||
-           instance.getPortKind(use) == PortKind::INPUT;
-  else if (auto node = dyn_cast<NodeOp>(use.getOwner()))
+  if (auto node = dyn_cast<NodeOp>(use.getOwner()))
     return llvm::any_of(
         node.getBody().getArgument(use.getOperandNumber()).getUses(),
         [](OpOperand &argUse) { return isRead(argUse); });
@@ -506,9 +463,7 @@ bool hls::isWritten(OpOperand &use) {
   // For ScheduleOp, we don't rely on memory effect interface. Instead, we delve
   // into its region to figure out the effect. However, for InstanceOp and
   // NodeOp, we don't need this recursive approach any more.
-  if (auto instance = dyn_cast<InstanceOp>(use.getOwner()))
-    return instance.getPortKind(use) == PortKind::OUTPUT;
-  else if (auto node = dyn_cast<NodeOp>(use.getOwner()))
+  if (auto node = dyn_cast<NodeOp>(use.getOwner()))
     return node.getPortKind(use) == PortKind::OUTPUT;
   else if (auto schedule = dyn_cast<ScheduleOp>(use.getOwner()))
     return llvm::any_of(

@@ -18,95 +18,9 @@ using namespace hls;
 
 MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(HLS, hls, hls::HLSDialect)
 
-void mlirSemanticsInitializeBlockArguments(
-    MlirOperation semantics, const std::vector<MlirValue> &ports) {
-  auto op = dyn_cast<SemanticsOp>(unwrap(semantics));
-  assert(op && "expected a semantics op");
-  SmallVector<Value> unwrappedPorts(
-      llvm::map_range(ports, [](MlirValue v) { return unwrap(v); }));
-  op.initializeBlockArguments(unwrappedPorts);
-}
-
-//===----------------------------------------------------------------------===//
-// HLS Dialect Types
-//===----------------------------------------------------------------------===//
-
-bool mlirTypeIsHLSStructType(MlirType type) {
-  return unwrap(type).isa<hls::StructType>();
-}
-MlirType mlirHLSStructTypeGet(MlirStringRef name, MlirContext ctx) {
-  return wrap(hls::StructType::get(unwrap(ctx), unwrap(name)));
-}
-
-bool mlirTypeIsHLSTypeType(MlirType type) {
-  return unwrap(type).isa<hls::TypeType>();
-}
-MlirType mlirHLSTypeTypeGet(MlirContext ctx) {
-  return wrap(hls::TypeType::get(unwrap(ctx)));
-}
-
-bool mlirTypeIsHLSIntParamType(MlirType type) {
-  return unwrap(type).isa<hls::IntParamType>();
-}
-MlirType mlirHLSIntParamTypeGet(MlirContext ctx) {
-  return wrap(hls::IntParamType::get(unwrap(ctx)));
-}
-
-bool mlirTypeIsHLSFloatParamType(MlirType type) {
-  return unwrap(type).isa<hls::FloatParamType>();
-}
-MlirType mlirHLSFloatParamTypeGet(MlirContext ctx) {
-  return wrap(hls::FloatParamType::get(unwrap(ctx)));
-}
-
-bool mlirTypeIsHLSPortType(MlirType type) {
-  return unwrap(type).isa<hls::PortType>();
-}
-MlirType mlirHLSPortTypeGet(MlirContext ctx) {
-  return wrap(hls::PortType::get(unwrap(ctx)));
-}
-
-bool mlirTypeIsHLSTaskImplType(MlirType type) {
-  return unwrap(type).isa<hls::TaskImplType>();
-}
-MlirType mlirHLSTaskImplTypeGet(MlirContext ctx) {
-  return wrap(hls::TaskImplType::get(unwrap(ctx)));
-}
-
-bool mlirTypeIsHLSMemoryKindType(MlirType type) {
-  return unwrap(type).isa<hls::MemoryKindType>();
-}
-MlirType mlirHLSMemoryKindTypeGet(MlirContext ctx) {
-  return wrap(hls::MemoryKindType::get(unwrap(ctx)));
-}
-
 //===----------------------------------------------------------------------===//
 // HLS Dialect Attributes
 //===----------------------------------------------------------------------===//
-
-static_assert(static_cast<int>(MlirParamKind::TILE_SIZE) ==
-                      static_cast<int>(ParamKind::TILE_SIZE) &&
-                  static_cast<int>(MlirParamKind::PARALLEL_SIZE) ==
-                      static_cast<int>(ParamKind::PARALLEL_SIZE) &&
-                  static_cast<int>(MlirParamKind::IP_TEMPLATE) ==
-                      static_cast<int>(ParamKind::IP_TEMPLATE) &&
-                  static_cast<int>(MlirParamKind::TASK_IMPL) ==
-                      static_cast<int>(ParamKind::TASK_IMPL) &&
-                  static_cast<int>(MlirParamKind::MEMORY_KIND) ==
-                      static_cast<int>(ParamKind::MEMORY_KIND),
-              "MlirParamKind (C-API) and ParamKind (C++) mismatch");
-
-bool mlirAttrIsHLSParamKindAttr(MlirAttribute attr) {
-  return unwrap(attr).isa<hls::ParamKindAttr>();
-}
-MlirAttribute mlirHLSParamKindAttrGet(MlirContext ctx, MlirParamKind kind) {
-  return wrap(
-      hls::ParamKindAttr::get(unwrap(ctx), static_cast<ParamKind>(kind)));
-}
-MlirParamKind mlirHLSParamKindAttrGetValue(MlirAttribute attr) {
-  return static_cast<MlirParamKind>(
-      unwrap(attr).cast<hls::ParamKindAttr>().getValue());
-}
 
 static_assert(static_cast<int>(MlirPortKind::INPUT) ==
                       static_cast<int>(PortKind::INPUT) &&

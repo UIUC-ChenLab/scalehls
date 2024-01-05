@@ -62,17 +62,6 @@ void setRuntimeAttr(Operation *op);
 // Transform Utils
 //===----------------------------------------------------------------------===//
 
-/// Get all IP declarations in the given module.
-SmallVector<DeclareOp> getIPDeclares(ModuleOp module);
-
-/// Find an existing space op for the given module. If there is no space op,
-/// create a new one. Return a nullptr if failed.
-SpaceOp getOrCreateGlobalSpaceOp(ModuleOp module);
-
-/// Constantize the given param op with the given constant value.
-void constantizeParamOp(ParamOp param, PatternRewriter &rewriter,
-                        Attribute constValue);
-
 /// Wrap the operations in the block with dispatch op. Return a nullptr if
 /// failed.
 DispatchOp dispatchBlock(Block *block, PatternRewriter &rewriter);

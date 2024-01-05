@@ -21,10 +21,8 @@ public:
     auto *thisCast = static_cast<ConcreteType *>(this);
     return TypeSwitch<Operation *, ResultType>(op)
         .template Case<
-
             // HLS dialect operations.
-            hls::InstanceOp, hls::StructInstanceOp, hls::BufferOp,
-            hls::ConstBufferOp, hls::StreamOp, hls::StreamReadOp,
+            hls::BufferOp, hls::ConstBufferOp, hls::StreamOp, hls::StreamReadOp,
             hls::StreamWriteOp, hls::AffineSelectOp,
 
             // Function operations.
@@ -98,8 +96,6 @@ public:
   }
 
   // HLS dialect operations.
-  HANDLE(hls::InstanceOp);
-  HANDLE(hls::StructInstanceOp);
   HANDLE(hls::BufferOp);
   HANDLE(hls::ConstBufferOp);
   HANDLE(hls::StreamOp);

@@ -9,41 +9,6 @@
 
 include "mlir/IR/OpBase.td"
 
-def TemplatedOpInterface : OpInterface<"TemplatedOpInterface"> {
-  let methods = [
-    InterfaceMethod<"Return the composed templates",
-      "mlir::SmallVector<OpFoldResult>", "getComposedTemplates", (ins), [{
-        SmallVector<OpFoldResult> composedTemplates;
-        unsigned dynIdx = 0;
-        for (auto attr : $_op.getStaticTemplates()) {
-          if (auto intAttr = attr.template dyn_cast<IntegerAttr>())
-            if (intAttr.getInt() == ShapedType::kDynamic) {
-              composedTemplates.push_back($_op.getTemplates()[dynIdx++]);
-              continue;
-            }
-          composedTemplates.push_back(attr);
-        }
-        return composedTemplates;
-      }]>
-  ];
-}
-
-def ParamLikeInterface : OpInterface<"ParamLikeInterface"> {
-  let methods = [
-    InterfaceMethod<"Return the value of the parameter if it exists",
-      "std::optional<mlir::Attribute>", "getValue", (ins), [{
-        return $_op.getValue();
-      }]
-    >,
-    InterfaceMethod<"Return the type of the parameter",
-      "mlir::Type", "getType", (ins), [{ return $_op.getType(); }]
-    >,
-    InterfaceMethod<"Return the kind of the parameter",
-      "ParamKind", "getKind", (ins), [{ return $_op.getKind(); }]
-    >
-  ];
-}
-
 def BufferLikeInterface : OpInterface<"BufferLikeInterface"> {
   let description = [{
     This interface is used to represent dataflow buffers.

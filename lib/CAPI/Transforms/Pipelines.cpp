@@ -17,9 +17,6 @@ void mlirAddLinalgTransformPasses(MlirPassManager pm) {
 void mlirAddConvertLinalgToDataflowPasses(MlirPassManager pm) {
   addConvertLinalgToDataflowPasses(*unwrap(pm));
 }
-void mlirAddGenerateDesignSpacePasses(MlirPassManager pm) {
-  addGenerateDesignSpacePasses(*unwrap(pm));
-}
 void mlirAddComprehensiveBufferizePasses(MlirPassManager pm) {
   addComprehensiveBufferizePasses(*unwrap(pm));
 }

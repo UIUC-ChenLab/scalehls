@@ -35,12 +35,6 @@ void scalehls::addConvertLinalgToDataflowPasses(OpPassManager &pm) {
   pm.addPass(mlir::createCanonicalizerPass());
 }
 
-void scalehls::addGenerateDesignSpacePasses(OpPassManager &pm) {
-  pm.addPass(hls::createGenerateTaskDesignSpacePass());
-  pm.addPass(hls::createSimplifyDesignSpacePass());
-  pm.addPass(mlir::createCanonicalizerPass());
-}
-
 void scalehls::addComprehensiveBufferizePasses(OpPassManager &pm) {
   pm.addPass(scalehls::createComprehensiveBufferizePass());
   pm.addPass(memref::createResolveShapedTypeResultDimsPass());
@@ -83,7 +77,6 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
       [](OpPassManager &pm, const ScaleHLSPyTorchPipelineOptions &opts) {
         addLinalgTransformPasses(pm);
         addConvertLinalgToDataflowPasses(pm);
-        addGenerateDesignSpacePasses(pm);
         addComprehensiveBufferizePasses(pm);
         addLowerDataflowPasses(pm);
         addConvertDataflowToFuncPasses(pm);

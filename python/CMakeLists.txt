@@ -21,13 +21,6 @@ declare_mlir_python_sources(ScaleHLSPythonSources.Core
     _mlir_libs/_scalehls.pyi
 )
 
-declare_mlir_python_sources(ScaleHLSPythonSources.OpDSL
-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/scalehls"
-  ADD_TO_PARENT ScaleHLSPythonSources
-  SOURCES_GLOB
-    opdsl/*.py
-)
-
 ################################################################################
 # Declare dialect-specific bindings
 ################################################################################

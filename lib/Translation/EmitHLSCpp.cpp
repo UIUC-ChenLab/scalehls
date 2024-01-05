@@ -47,8 +47,6 @@ static std::string getDataTypeName(Type type) {
   }
 
   // Handle scalar types, including float and integer, or struct type.
-  if (auto structType = type.dyn_cast<StructType>())
-    return structType.getName().str();
   if (type.isa<Float32Type>())
     return "float";
   else if (type.isa<Float64Type>())
@@ -290,10 +288,6 @@ public:
   explicit ModuleEmitter(ScaleHLSEmitterState &state)
       : ScaleHLSEmitterBase(state) {}
 
-  /// Lib Ip operation emitter.
-  void emitInstanceOp(InstanceOp op);
-  void emitStructInstanceOp(StructInstanceOp op);
-
   /// HLS dialect operation emitters.
   void emitConstBuffer(ConstBufferOp op);
   void emitStreamChannel(StreamOp op);
@@ -360,7 +354,6 @@ private:
   unsigned emitNestedLoopHeader(Value val);
   void emitNestedLoopFooter(unsigned rank);
   void emitInfoAndNewLine(Operation *op);
-  void emitTemplateList(hls::TemplatedOpInterface op);
 
   /// MLIR component and HLS C++ pragma emitters.
   void emitBlock(Block &block);
@@ -465,10 +458,6 @@ public:
   using HLSVisitorBase::visitOp;
 
   /// HLS dialect operations.
-  bool visitOp(InstanceOp op) { return emitter.emitInstanceOp(op), true; }
-  bool visitOp(StructInstanceOp op) {
-    return emitter.emitStructInstanceOp(op), true;
-  }
   bool visitOp(BufferOp op) {
     if (op.getDepth() == 1)
       return emitter.emitAlloc(op), true;
@@ -705,37 +694,6 @@ bool ExprVisitor::visitOp(arith::CmpIOp op) {
 void ModuleEmitter::emitConstBuffer(ConstBufferOp op) {
   emitConstant(op);
   emitArrayDirectives(op.getResult());
-}
-
-/// Library Ip emitter.
-void ModuleEmitter::emitInstanceOp(InstanceOp op) {
-  indent();
-  os << op.getName().getLeafReference().getValue().str();
-  emitTemplateList(op);
-
-  // Emit IP ports.
-  os << "(";
-  for (auto port : op.getPorts()) {
-    emitValue(port);
-    if (port != op.getPorts().back())
-      os << ", ";
-  }
-  os << ");";
-  emitInfoAndNewLine(op);
-}
-
-// TODO: Emit template list.
-void ModuleEmitter::emitStructInstanceOp(StructInstanceOp op) {
-  indent();
-  emitValue(op.getResult());
-  os << " = {";
-  for (auto param : op.getParams()) {
-    emitValue(param);
-    if (param != op.getParams().back())
-      os << ", ";
-  }
-  os << "};";
-  emitInfoAndNewLine(op);
 }
 
 void ModuleEmitter::emitStreamChannel(StreamOp op) {
@@ -1697,22 +1655,6 @@ void ModuleEmitter::emitInfoAndNewLine(Operation *op) {
   os << "\n";
 }
 
-void ModuleEmitter::emitTemplateList(hls::TemplatedOpInterface op) {
-  os << "<";
-  auto composedTemplates = op.getComposedTemplates();
-  for (auto temp : composedTemplates) {
-    if (temp.is<Value>())
-      emitValue(temp.get<Value>());
-    else if (auto typeAttr = temp.get<Attribute>().dyn_cast<TypeAttr>()) {
-      assert(typeAttr && "should be a type attribute.");
-      os << getDataTypeName(typeAttr.getValue());
-    }
-    if (temp != composedTemplates.back())
-      os << ", ";
-  }
-  os << ">";
-}
-
 /// MLIR component and HLS C++ pragma emitters.
 void ModuleEmitter::emitBlock(Block &block) {
   for (auto &op : block) {
@@ -1946,23 +1888,6 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 #include <string.h>
 )XXX";
 
-  // Check for used Ip, emit corresponding include paths.
-  llvm::SmallDenseSet<Attribute> emittedIncludeAttrs;
-  module->walk([&](hls::InstanceOp instance) {
-    auto declaredOp = instance.getDeclareOp();
-    declaredOp.walk([&](hls::IncludeOp include) {
-      for (auto path : include.getPaths()) {
-        emittedIncludeAttrs.insert(path.dyn_cast<StringAttr>());
-      }
-    });
-  });
-
-  for (const Attribute &curPath : emittedIncludeAttrs) {
-    os << "#include ";
-    os << curPath;
-    os << "\n";
-  }
-
   os << "\nusing namespace std;\n\n";
 
   CallGraph graph(module);
@@ -1983,7 +1908,7 @@ void ModuleEmitter::emitModule(ModuleOp module) {
     if (auto func = dyn_cast<func::FuncOp>(op)) {
       if (!emittedFuncs.count(func) && !hasRuntimeAttr(func))
         emitFunction(func);
-    } else if (!isa<ml_program::GlobalOp, SpaceOp, LibraryOp>(op))
+    } else if (!isa<ml_program::GlobalOp>(op))
       emitError(&op, "is unsupported operation");
   }
 }

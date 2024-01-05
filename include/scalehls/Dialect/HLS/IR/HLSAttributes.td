@@ -20,49 +20,8 @@ def IndexArrayAttr : TypedArrayAttrBase<IndexAttr, "index array attribute"> {
 }
 
 //===----------------------------------------------------------------------===//
-// DSE Attributes
+// PortKind Attribute
 //===----------------------------------------------------------------------===//
-
-def ParamKind: I32EnumAttr<"ParamKind", "Kind of a parameter", [
-    I32EnumAttrCase<"TILE_SIZE", 0, "tile">,
-    I32EnumAttrCase<"PARALLEL_SIZE", 1, "parallel">,
-    I32EnumAttrCase<"IP_TEMPLATE", 2, "template">,
-    I32EnumAttrCase<"TASK_IMPL", 3, "impl">,
-    I32EnumAttrCase<"MEMORY_KIND", 4, "memory">]> {
-  let cppNamespace = "mlir::scalehls::hls";
-  let genSpecializedAttr = 0;
-}
-def ParamKindAttr: EnumAttr<HLSDialect, ParamKind> {
-  let mnemonic = "param";
-  let assemblyFormat = "`<` $value `>`";
-}
-
-//===----------------------------------------------------------------------===//
-// UIP Attributes
-//===----------------------------------------------------------------------===//
-
-def IPLibraryParam: StringRefParameter<"Library of an IP">;
-def IPNameParam: StringRefParameter<"Name of an IP">;
-
-def TaskImplAttr : HLSAttr<"TaskImpl"> {
-  let summary = "Implementation of a task";
-  let parameters = (ins IPLibraryParam:$library, IPNameParam:$name);
-  
-  let mnemonic = "impl";
-  let assemblyFormat = "`<` $library `:` $name `>`";
-
-  let extraClassDeclaration = [{
-    bool isDefaultImpl() {
-      return getLibrary().empty() && getName().empty();
-    }
-    SymbolRefAttr getSymbolRef() {
-      if (isDefaultImpl())
-        return nullptr;
-      return SymbolRefAttr::get(StringAttr::get(getContext(), getLibrary()),
-          {FlatSymbolRefAttr::get(getContext(), getName())});
-    }
-  }];
-}
 
 def PortKind: I32EnumAttr<"PortKind", "Kind of a port", [
     I32EnumAttrCase<"INPUT", 0, "input">,
@@ -71,13 +30,14 @@ def PortKind: I32EnumAttr<"PortKind", "Kind of a port", [
   let cppNamespace = "mlir::scalehls::hls";
   let genSpecializedAttr = 0;
 }
+def PortKindParam: EnumParameter<PortKind>;
 def PortKindAttr: EnumAttr<HLSDialect, PortKind> {
   let mnemonic = "port";
   let assemblyFormat = "`<` $value `>`";
 }
 
 //===----------------------------------------------------------------------===//
-// UBUF Attributes
+// MemoryKind Attribute
 //===----------------------------------------------------------------------===//
 
 def MemoryKind: I32EnumAttr<"MemoryKind", "Kind of memory", [
@@ -97,11 +57,15 @@ def MemoryKind: I32EnumAttr<"MemoryKind", "Kind of memory", [
   let cppNamespace = "mlir::scalehls::hls";
   let genSpecializedAttr = 0;
 }
+def MemoryKindParam: EnumParameter<MemoryKind>;
 def MemoryKindAttr: EnumAttr<HLSDialect, MemoryKind> {
   let mnemonic = "memory";
   let assemblyFormat = "`<` $value `>`";
 }
-def MemoryKindParam: EnumParameter<MemoryKind>;
+
+//===----------------------------------------------------------------------===//
+// PartitionLayout Attribute
+//===----------------------------------------------------------------------===//
 
 def PartitionKind: I32EnumAttr<"PartitionKind", "Kind of array partition", [
     I32EnumAttrCase<"NONE", 0, "none">,
@@ -144,6 +108,10 @@ def PartitionLayoutAttr : HLSAttr<"PartitionLayout",
   }];
 }
 
+//===----------------------------------------------------------------------===//
+// TileLayout Attribute
+//===----------------------------------------------------------------------===//
+
 def TileLayoutAttr : HLSAttr<"TileLayout",
     [DeclareAttrInterfaceMethods<MemRefLayoutAttrInterface,
                                  ["verifyLayout"]>]> {
@@ -175,7 +143,7 @@ def TileLayoutAttr : HLSAttr<"TileLayout",
 }
 
 //===----------------------------------------------------------------------===//
-// HLS directive attributes
+// Directive Attributes
 //===----------------------------------------------------------------------===//
 
 def LoopDirectiveAttr : HLSAttr<"LoopDirective"> {
