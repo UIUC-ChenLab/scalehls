@@ -44,8 +44,8 @@ void scalehls::addComprehensiveBufferizePasses(OpPassManager &pm) {
   // can be deleted by canonicalizer. We have to run it again because the
   // memrefs are unified in CSE pass, so we can truely remove redundant memcpy.
   pm.addPass(mlir::createCanonicalizerPass());
-  pm.addNestedPass<func::FuncOp>(hls::createEliminateBufferYieldPass());
-  pm.addPass(mlir::createCanonicalizerPass());
+  // pm.addNestedPass<func::FuncOp>(hls::createEliminateBufferYieldPass());
+  // pm.addPass(mlir::createCanonicalizerPass());
 }
 
 void scalehls::addLowerDataflowPasses(OpPassManager &pm) {

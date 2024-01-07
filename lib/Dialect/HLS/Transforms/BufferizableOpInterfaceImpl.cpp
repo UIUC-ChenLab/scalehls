@@ -19,14 +19,21 @@ template <typename OpType>
 struct DispatchOrTaskOpInterface
     : public BufferizableOpInterface::ExternalModel<
           DispatchOrTaskOpInterface<OpType>, OpType> {
+  /// Dispatch/task do not have tensor OpOperands. Thus, no OpOperand will be
+  /// bufferized to memory read/write or be aliased to any returned values.
+  AliasingValueList getAliasingValues(Operation *op, OpOperand &opOperand,
+                                      const AnalysisState &state) const {
+    return {};
+  }
+
+  // Dispatch/task do not have tensor OpOperands. The yielded value can be any
+  // SSA value that is in scope. To allow for use-def chain traversal in the
+  // analysis, the yielded value is aliasing with the result.
   AliasingOpOperandList
   getAliasingOpOperands(Operation *op, Value value,
                         const AnalysisState &state) const {
-    // Dispatch/task do not have tensor OpOperands. The yielded value can be any
-    // SSA value that is in scope. To allow for use-def chain traversal in the
-    // analysis, the yielded value is aliasing with the result.
-    size_t resultNum = std::distance(op->getOpResults().begin(),
-                                     llvm::find(op->getOpResults(), value));
+    size_t resultNum = std::distance(op->getResults().begin(),
+                                     llvm::find(op->getResults(), value));
     OpOperand *operand =
         &cast<OpType>(op).getYieldOp()->getOpOperand(resultNum);
     return {{operand, BufferRelation::Equivalent}};
@@ -35,11 +42,10 @@ struct DispatchOrTaskOpInterface
   LogicalResult bufferize(Operation *op, RewriterBase &rewriter,
                           const BufferizationOptions &options) const {
     OpBuilder::InsertionGuard g(rewriter);
-    auto task = cast<OpType>(op);
 
     // Compute bufferized result types.
     SmallVector<Type> newTypes;
-    for (Value result : task.getResults()) {
+    for (Value result : op->getResults()) {
       if (!result.getType().isa<TensorType>()) {
         newTypes.push_back(result.getType());
         continue;
@@ -51,13 +57,13 @@ struct DispatchOrTaskOpInterface
     }
 
     // Create new dispatch/task op.
-    rewriter.setInsertionPoint(task);
-    auto newTask = rewriter.create<OpType>(task.getLoc(), newTypes);
-    rewriter.inlineRegionBefore(task.getBody(), newTask.getBody(),
-                                newTask.getBody().end());
+    rewriter.setInsertionPoint(op);
+    auto newOp = rewriter.create<OpType>(op->getLoc(), newTypes);
+    rewriter.inlineRegionBefore(cast<OpType>(op).getBody(), newOp.getBody(),
+                                newOp.getBody().end());
 
     // Replace dispatch/task op results.
-    replaceOpWithBufferizedValues(rewriter, op, newTask->getResults());
+    replaceOpWithBufferizedValues(rewriter, op, newOp->getResults());
     return success();
   }
 
@@ -88,14 +94,13 @@ struct YieldOpInterface
                               const AnalysisState &state) const {
     return true;
   }
-
   bool bufferizesToMemoryWrite(Operation *op, OpOperand &opOperand,
                                const AnalysisState &state) const {
     return false;
   }
 
-  AliasingValueList getAliasingOpResults(Operation *op, OpOperand &opOperand,
-                                         const AnalysisState &state) const {
+  AliasingValueList getAliasingValues(Operation *op, OpOperand &opOperand,
+                                      const AnalysisState &state) const {
     if (isa<DispatchOp, TaskOp>(op->getParentOp()))
       return {{op->getParentOp()->getResult(opOperand.getOperandNumber()),
                BufferRelation::Equivalent}};
@@ -174,8 +179,8 @@ struct AllocTensorOpInterface
 
   bool bufferizesToAllocation(Operation *op, Value value) const { return true; }
 
-  AliasingValueList getAliasingOpResults(Operation *op, OpOperand &opOperand,
-                                         const AnalysisState &state) const {
+  AliasingValueList getAliasingValues(Operation *op, OpOperand &opOperand,
+                                      const AnalysisState &state) const {
     // This is a new allocation. It does not alias with any other buffer.
     return {};
   }

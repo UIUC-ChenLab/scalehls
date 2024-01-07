@@ -120,7 +120,7 @@ def AllocTensorOp : HLSOp<"fdf.alloc_tensor", [NoMemoryEffect]> {
   ];
 }
 
-def TensorToStreamOp : HLSOp<"ubuf.tensor_to_stream",[
+def TensorToStreamOp : HLSOp<"fdf.tensor_to_stream",[
       AttrSizedOperandSegments, NoMemoryEffect]> {
   let summary = "Convert a tensor to a stream channel";
 
@@ -135,7 +135,7 @@ def TensorToStreamOp : HLSOp<"ubuf.tensor_to_stream",[
   }];
 }
 
-def StreamToTensorOp : HLSOp<"ubuf.stream_to_tensor", [
+def StreamToTensorOp : HLSOp<"fdf.stream_to_tensor", [
       AttrSizedOperandSegments, NoMemoryEffect]> {
   let summary = "Convert a stream channel to a tensor";
 
@@ -269,7 +269,7 @@ def NodeOp : HLSOp<"sdf.node", [
   }];
 }
 
-def BufferOp : HLSOp<"ubuf.buffer", [
+def BufferOp : HLSOp<"sdf.buffer", [
       DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
       DeclareOpInterfaceMethods<BufferLikeInterface>]> {
   let summary = "Represent a dataflow buffer";
@@ -287,7 +287,7 @@ def BufferOp : HLSOp<"ubuf.buffer", [
   ];
 }
 
-def ConstBufferOp : HLSOp<"ubuf.const_buffer", [
+def ConstBufferOp : HLSOp<"sdf.const_buffer", [
       DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
       DeclareOpInterfaceMethods<BufferLikeInterface>]> {
   let summary = "Represent a constant dataflow buffer";
@@ -299,7 +299,7 @@ def ConstBufferOp : HLSOp<"ubuf.const_buffer", [
   let hasVerifier = 1;
 }
 
-def StreamOp : HLSOp<"ubuf.stream", [
+def StreamOp : HLSOp<"sdf.stream", [
       DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Declare a stream channel";
 
@@ -314,7 +314,7 @@ def StreamOp : HLSOp<"ubuf.stream", [
   ];
 }
 
-def StreamReadOp : HLSOp<"ubuf.stream_read", []> {
+def StreamReadOp : HLSOp<"sdf.stream_read", []> {
   let summary = "Read a stream channel";
   let description = [{
     Read/pop a value from a stream channel. The absence of the result indicates
@@ -330,7 +330,7 @@ def StreamReadOp : HLSOp<"ubuf.stream_read", []> {
   let hasVerifier = 1;
 }
 
-def StreamWriteOp : HLSOp<"ubuf.stream_write", []> {
+def StreamWriteOp : HLSOp<"sdf.stream_write", []> {
   let summary = "Write a stream channel";
   let description = [{
     Write/push a value to a stream channel. Each stream channel can only be
