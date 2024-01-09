@@ -52,6 +52,17 @@ struct DispatchFuncOp : public OpRewritePattern<func::FuncOp> {
     if (!dispatch)
       return failure();
 
+    // Ensure each AllocTensorOp is only used once.
+    for (auto allocTensor :
+         llvm::make_early_inc_range(dispatch.getOps<hls::AllocTensorOp>())) {
+      for (auto &use : llvm::make_early_inc_range(allocTensor->getUses())) {
+        rewriter.setInsertionPoint(use.getOwner());
+        auto newAllocTensor =
+            cast<hls::AllocTensorOp>(rewriter.clone(*allocTensor));
+        use.set(newAllocTensor);
+      }
+    }
+
     for (auto &op : llvm::make_early_inc_range(dispatch.getOps())) {
       if (auto linalgOp = dyn_cast<linalg::LinalgOp>(op)) {
         if (linalgOp.hasDynamicShape())

@@ -9,12 +9,6 @@
 
 include "mlir/Pass/PassBase.td"
 
-def EliminateBufferYield :
-    Pass<"scalehls-fdf-eliminate-buffer-yield", "func::FuncOp"> {
-  let summary = "Eliminate unecessary buffer yield operations";
-  let constructor = "mlir::scalehls::hls::createEliminateBufferYieldPass()";
-}
-
 def LowerDataflow : Pass<"scalehls-lower-dataflow", "func::FuncOp"> {
   let summary = "Convert functional to structural dataflow";
   let constructor = "mlir::scalehls::hls::createLowerDataflowPass()";

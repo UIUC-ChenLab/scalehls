@@ -23,7 +23,6 @@ namespace mlir {
 namespace scalehls {
 namespace hls {
 
-std::unique_ptr<Pass> createEliminateBufferYieldPass();
 std::unique_ptr<Pass> createLowerDataflowPass();
 
 #define GEN_PASS_CLASSES

@@ -6,6 +6,9 @@
 
 #include "scalehls/Dialect/HLS/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/Bufferization/IR/BufferizableOpInterface.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Interfaces/ViewLikeInterface.h"
 #include "scalehls/Dialect/HLS/IR/HLS.h"
 
 using namespace mlir;
@@ -32,20 +35,19 @@ struct DispatchOrTaskOpInterface
   AliasingOpOperandList
   getAliasingOpOperands(Operation *op, Value value,
                         const AnalysisState &state) const {
-    size_t resultNum = std::distance(op->getResults().begin(),
-                                     llvm::find(op->getResults(), value));
-    OpOperand *operand =
-        &cast<OpType>(op).getYieldOp()->getOpOperand(resultNum);
+    OpOperand *operand = &cast<OpType>(op).getYieldOp()->getOpOperand(
+        cast<OpResult>(value).getResultNumber());
     return {{operand, BufferRelation::Equivalent}};
   }
 
   LogicalResult bufferize(Operation *op, RewriterBase &rewriter,
                           const BufferizationOptions &options) const {
     OpBuilder::InsertionGuard g(rewriter);
+    auto concreteOp = cast<OpType>(op);
 
     // Compute bufferized result types.
     SmallVector<Type> newTypes;
-    for (Value result : op->getResults()) {
+    for (Value result : concreteOp.getResults()) {
       if (!result.getType().isa<TensorType>()) {
         newTypes.push_back(result.getType());
         continue;
@@ -57,13 +59,13 @@ struct DispatchOrTaskOpInterface
     }
 
     // Create new dispatch/task op.
-    rewriter.setInsertionPoint(op);
-    auto newOp = rewriter.create<OpType>(op->getLoc(), newTypes);
-    rewriter.inlineRegionBefore(cast<OpType>(op).getBody(), newOp.getBody(),
+    rewriter.setInsertionPoint(concreteOp);
+    auto newOp = rewriter.create<OpType>(concreteOp.getLoc(), newTypes);
+    rewriter.inlineRegionBefore(concreteOp.getBody(), newOp.getBody(),
                                 newOp.getBody().end());
 
     // Replace dispatch/task op results.
-    replaceOpWithBufferizedValues(rewriter, op, newOp->getResults());
+    replaceOpWithBufferizedValues(rewriter, concreteOp, newOp->getResults());
     return success();
   }
 
@@ -86,10 +88,11 @@ struct DispatchOrTaskOpInterface
   }
 };
 
-/// Bufferization of fdf.yield operation. Bufferized as part of their enclosing
-/// ops, so this is for analysis only.
+/// Bufferization of fdf.yield operation.
 struct YieldOpInterface
     : public BufferizableOpInterface::ExternalModel<YieldOpInterface, YieldOp> {
+  bool bufferizesToAllocation(Operation *op, Value value) const { return true; }
+
   bool bufferizesToMemoryRead(Operation *op, OpOperand &opOperand,
                               const AnalysisState &state) const {
     return true;
@@ -117,18 +120,46 @@ struct YieldOpInterface
 
   LogicalResult bufferize(Operation *op, RewriterBase &rewriter,
                           const BufferizationOptions &options) const {
-    SmallVector<Value> newResults;
-    for (const auto value : cast<YieldOp>(op).getResults()) {
-      if (value.getType().isa<TensorType>()) {
-        FailureOr<Value> maybeBuffer = getBuffer(rewriter, value, options);
-        if (failed(maybeBuffer))
+    OpBuilder::InsertionGuard g(rewriter);
+    auto yield = cast<YieldOp>(op);
+    auto parent = yield->getParentOp();
+
+    // Traverse and bufferize each operand of the yield operation.
+    for (auto operand : yield.getOperands()) {
+      if (!operand.getType().isa<TensorType>())
+        continue;
+
+      auto maybeBuffer = getBuffer(rewriter, operand, options);
+      auto maybeType = bufferization::getBufferType(operand, options);
+      if (failed(maybeBuffer) || failed(maybeType))
+        continue;
+
+      // For now, we always generate an explicit copy to handle view-like
+      // operations. This is not efficient but it's safe.
+      if (auto view = maybeBuffer->getDefiningOp<ViewLikeOpInterface>()) {
+        rewriter.setInsertionPoint(parent);
+        auto localBuffer = options.createAlloc(
+            rewriter, yield.getLoc(), maybeType->cast<MemRefType>(), {});
+        if (failed(localBuffer))
           return failure();
-        newResults.push_back(*maybeBuffer);
+
+        rewriter.setInsertionPoint(yield);
+        if (failed(options.createMemCpy(rewriter, yield.getLoc(), *maybeBuffer,
+                                        *localBuffer)))
+          return failure();
+
+        rewriter.replaceUsesWithIf(operand, *localBuffer, [&](OpOperand &use) {
+          return use.getOwner() == yield;
+        });
       } else {
-        newResults.push_back(value);
+        rewriter.setInsertionPoint(yield);
+        auto replacement = rewriter.create<bufferization::ToMemrefOp>(
+            yield.getLoc(), *maybeType, operand);
+        rewriter.replaceUsesWithIf(operand, replacement, [&](OpOperand &use) {
+          return use.getOwner() == yield;
+        });
       }
     }
-    replaceOpWithNewBufferizedOp<YieldOp>(rewriter, op, newResults);
     return success();
   }
 };
@@ -136,11 +167,24 @@ struct YieldOpInterface
 /// Bufferization of fdf.alloc_tensor operation.
 struct AllocTensorOpInterface
     : public BufferizableOpInterface::ExternalModel<AllocTensorOpInterface,
-                                                    AllocTensorOp> {
+                                                    hls::AllocTensorOp> {
+  bool bufferizesToAllocation(Operation *op, Value value) const { return true; }
+
+  bool resultBufferizesToMemoryWrite(Operation *op, OpResult opResult,
+                                     const AnalysisState &state) const {
+    return false;
+  }
+
+  AliasingValueList getAliasingValues(Operation *op, OpOperand &opOperand,
+                                      const AnalysisState &state) const {
+    // This is a new allocation. It does not alias with any other buffer.
+    return {};
+  }
+
   LogicalResult bufferize(Operation *op, RewriterBase &rewriter,
                           const BufferizationOptions &options) const {
     OpBuilder::InsertionGuard g(rewriter);
-    auto allocTensor = cast<AllocTensorOp>(op);
+    auto allocTensor = cast<hls::AllocTensorOp>(op);
 
     // Nothing to do for dead AllocTensorOps.
     if (allocTensor->getUses().empty()) {
@@ -149,12 +193,13 @@ struct AllocTensorOpInterface
     }
 
     // Create memory allocation.
-    auto allocType =
+    auto maybeType =
         bufferization::getBufferType(allocTensor.getResult(), options);
-    if (failed(allocType))
+    if (failed(maybeType))
       return failure();
+
     FailureOr<Value> buffer = options.createAlloc(
-        rewriter, allocTensor.getLoc(), allocType->cast<MemRefType>(), {});
+        rewriter, allocTensor.getLoc(), maybeType->cast<MemRefType>(), {});
     if (failed(buffer))
       return failure();
 
@@ -172,23 +217,10 @@ struct AllocTensorOpInterface
     return success();
   }
 
-  bool resultBufferizesToMemoryWrite(Operation *op, OpResult opResult,
-                                     const AnalysisState &state) const {
-    return false;
-  }
-
-  bool bufferizesToAllocation(Operation *op, Value value) const { return true; }
-
-  AliasingValueList getAliasingValues(Operation *op, OpOperand &opOperand,
-                                      const AnalysisState &state) const {
-    // This is a new allocation. It does not alias with any other buffer.
-    return {};
-  }
-
   FailureOr<BaseMemRefType>
   getBufferType(Operation *op, Value value, const BufferizationOptions &options,
                 SmallVector<Value> &invocationStack) const {
-    auto allocTensor = cast<AllocTensorOp>(op);
+    auto allocTensor = cast<hls::AllocTensorOp>(op);
     assert(value == allocTensor.getResult() && "invalid value");
 
     // Compute memory space of this allocation.
@@ -209,6 +241,6 @@ void mlir::scalehls::hls::registerBufferizableOpInterfaceExternalModels(
     DispatchOp::attachInterface<DispatchOrTaskOpInterface<DispatchOp>>(*ctx);
     TaskOp::attachInterface<DispatchOrTaskOpInterface<TaskOp>>(*ctx);
     YieldOp::attachInterface<YieldOpInterface>(*ctx);
-    AllocTensorOp::attachInterface<AllocTensorOpInterface>(*ctx);
+    hls::AllocTensorOp::attachInterface<AllocTensorOpInterface>(*ctx);
   });
 }

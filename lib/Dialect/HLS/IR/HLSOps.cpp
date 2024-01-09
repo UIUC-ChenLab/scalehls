@@ -83,12 +83,39 @@ private:
 };
 } // namespace
 
+namespace {
+template <typename OpType>
+struct DemoteYieldedBuffer : public OpRewritePattern<OpType> {
+  using OpRewritePattern<OpType>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(OpType op,
+                                PatternRewriter &rewriter) const override {
+    auto yield = op.getYieldOp();
+    bool hasChanged = false;
+
+    // Eliminat each yielded buffer. It's always safe to move the buffer to
+    // higher level hierarchy.
+    for (auto [yieldedValue, result] :
+         llvm::zip(yield.getOperands(), op.getResults()))
+      if (auto buffer = yieldedValue.template getDefiningOp<BufferOp>()) {
+        if (op->isAncestor(buffer))
+          buffer->moveBefore(op);
+
+        rewriter.replaceAllUsesWith(result, buffer);
+        hasChanged = true;
+      }
+    return success(hasChanged);
+  }
+};
+} // namespace
+
 void DispatchOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                              MLIRContext *context) {
   results.add<SimplifyDispatchOrTaskOutputs<DispatchOp>>(context);
   results.add<InlineDispatchOrTask<DispatchOp>>(context, [](DispatchOp op) {
     return op.getOps<TaskOp>().empty() || llvm::hasSingleElement(op.getOps());
   });
+  results.add<DemoteYieldedBuffer<DispatchOp>>(context);
 }
 
 LogicalResult DispatchOp::verify() {
@@ -111,6 +138,7 @@ void TaskOp::getCanonicalizationPatterns(RewritePatternSet &results,
   results.add<SimplifyDispatchOrTaskOutputs<TaskOp>>(context);
   results.add<InlineDispatchOrTask<TaskOp>>(
       context, [](TaskOp op) { return llvm::hasSingleElement(op.getOps()); });
+  results.add<DemoteYieldedBuffer<TaskOp>>(context);
 }
 
 LogicalResult TaskOp::verify() {
