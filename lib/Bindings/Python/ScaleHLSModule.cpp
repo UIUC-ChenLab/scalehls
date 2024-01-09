@@ -37,6 +37,7 @@ PYBIND11_MODULE(_scalehls, m) {
 
         MlirDialectRegistry registry = mlirDialectRegistryCreate();
         mlirScaleHLSRegisterAllDialects(registry);
+        mlirScaleHLSRegisterAllExtensions(registry);
         mlirScaleHLSRegisterAllInterfaceExternalModels(registry);
         mlirContextAppendDialectRegistry(context, registry);
         mlirContextLoadAllAvailableDialects(context);

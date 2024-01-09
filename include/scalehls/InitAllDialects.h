@@ -14,12 +14,16 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/Linalg/TransformOps/DialectExtension.h"
 #include "mlir/Dialect/MLProgram/IR/MLProgram.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/PDL/IR/PDL.h"
+#include "mlir/Dialect/PDLInterp/IR/PDLInterp.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
+#include "mlir/Dialect/Transform/IR/TransformDialect.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "scalehls/Dialect/HLS/IR/HLS.h"
 
@@ -52,7 +56,10 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
     mlir::scalehls::hls::HLSDialect,
     mlir::LLVM::LLVMDialect,
     mlir::DLTIDialect,
-    mlir::ml_program::MLProgramDialect
+    mlir::ml_program::MLProgramDialect,
+    mlir::pdl::PDLDialect,
+    mlir::pdl_interp::PDLInterpDialect,
+    mlir::transform::TransformDialect
   >();
   // clang-format on
 }
@@ -68,6 +75,11 @@ registerAllInterfaceExternalModels(mlir::DialectRegistry &registry) {
   tensor::registerBufferizableOpInterfaceExternalModels(registry);
   vector::registerBufferizableOpInterfaceExternalModels(registry);
   hls::registerBufferizableOpInterfaceExternalModels(registry);
+}
+
+/// Add all required dialect extensions to the provided registry.
+inline void registerAllExtensions(DialectRegistry &registry) {
+  linalg::registerTransformDialectExtension(registry);
 }
 
 } // namespace scalehls

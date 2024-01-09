@@ -32,6 +32,7 @@ void scalehls::addLinalgTransformPasses(OpPassManager &pm) {
 
 void scalehls::addConvertLinalgToDataflowPasses(OpPassManager &pm) {
   pm.addNestedPass<func::FuncOp>(scalehls::createConvertLinalgToDataflowPass());
+  pm.addPass(mlir::createLinalgGeneralizationPass());
   pm.addPass(mlir::createCanonicalizerPass());
 }
 

@@ -12,6 +12,7 @@ int main(int argc, char **argv) {
   mlir::DialectRegistry registry;
   mlir::scalehls::registerAllDialects(registry);
   mlir::scalehls::registerAllInterfaceExternalModels(registry);
+  mlir::scalehls::registerAllExtensions(registry);
   mlir::scalehls::registerAllPasses();
 
   return mlir::failed(

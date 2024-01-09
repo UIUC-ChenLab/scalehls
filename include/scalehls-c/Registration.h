@@ -17,6 +17,9 @@ MLIR_CAPI_EXPORTED void
 mlirScaleHLSRegisterAllDialects(MlirDialectRegistry registry);
 
 MLIR_CAPI_EXPORTED void
+mlirScaleHLSRegisterAllExtensions(MlirDialectRegistry registry);
+
+MLIR_CAPI_EXPORTED void
 mlirScaleHLSRegisterAllInterfaceExternalModels(MlirDialectRegistry registry);
 
 MLIR_CAPI_EXPORTED void mlirScaleHLSRegisterAllPasses(void);

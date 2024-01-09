@@ -16,6 +16,10 @@ void mlirScaleHLSRegisterAllDialects(MlirDialectRegistry registry) {
   registerAllDialects(*unwrap(registry));
 }
 
+void mlirScaleHLSRegisterAllExtensions(MlirDialectRegistry registry) {
+  registerAllExtensions(*unwrap(registry));
+}
+
 void mlirScaleHLSRegisterAllInterfaceExternalModels(
     MlirDialectRegistry registry) {
   registerAllInterfaceExternalModels(*unwrap(registry));
