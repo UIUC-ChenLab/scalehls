@@ -573,6 +573,7 @@ public:
   bool visitOp(math::Log10Op op) {
     return emitter.emitUnary(op, "log10"), true;
   }
+  bool visitOp(math::ErfOp op) { return emitter.emitUnary(op, "erf"), true; }
   bool visitOp(arith::NegFOp op) { return emitter.emitUnary(op, "-"), true; }
 
   /// Float binary expressions.
@@ -1877,6 +1878,7 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 //===----------------------------------------------------------------------===//
 
 #include <algorithm>
+#include <cmath>
 #include <ap_axi_sdata.h>
 #include <ap_fixed.h>
 #include <ap_int.h>

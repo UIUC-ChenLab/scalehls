@@ -51,7 +51,7 @@ public:
             // Unary expressions.
             math::AbsIOp, math::AbsFOp, math::CeilOp, math::CosOp, math::SinOp,
             math::TanhOp, math::SqrtOp, math::RsqrtOp, math::ExpOp,
-            math::Exp2Op, math::LogOp, math::Log2Op, math::Log10Op,
+            math::Exp2Op, math::LogOp, math::Log2Op, math::Log10Op, math::ErfOp,
             arith::NegFOp,
 
             // Float binary expressions.
@@ -158,6 +158,7 @@ public:
   HANDLE(math::LogOp);
   HANDLE(math::Log2Op);
   HANDLE(math::Log10Op);
+  HANDLE(math::ErfOp);
   HANDLE(arith::NegFOp);
 
   // Float binary expressions.
