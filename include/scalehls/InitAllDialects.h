@@ -10,6 +10,7 @@
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
 #include "mlir/Dialect/DLTI/DLTI.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
@@ -27,12 +28,34 @@
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "scalehls/Dialect/HLS/IR/HLS.h"
 
+#include "mlir/Dialect/Affine/IR/ValueBoundsOpInterfaceImpl.h"
+#include "mlir/Dialect/Arith/IR/ValueBoundsOpInterfaceImpl.h"
+#include "mlir/Dialect/Arith/Transforms/BufferDeallocationOpInterfaceImpl.h"
 #include "mlir/Dialect/Arith/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/Bufferization/Transforms/FuncBufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/ControlFlow/Transforms/BufferDeallocationOpInterfaceImpl.h"
+#include "mlir/Dialect/ControlFlow/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/Linalg/IR/ValueBoundsOpInterfaceImpl.h"
 #include "mlir/Dialect/Linalg/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/Linalg/Transforms/SubsetInsertionOpInterfaceImpl.h"
+#include "mlir/Dialect/Linalg/Transforms/TilingInterfaceImpl.h"
+#include "mlir/Dialect/MemRef/IR/MemRefMemorySlot.h"
+#include "mlir/Dialect/MemRef/IR/ValueBoundsOpInterfaceImpl.h"
+#include "mlir/Dialect/MemRef/Transforms/AllocationOpInterfaceImpl.h"
+#include "mlir/Dialect/MemRef/Transforms/RuntimeOpVerification.h"
+#include "mlir/Dialect/SCF/IR/ValueBoundsOpInterfaceImpl.h"
+#include "mlir/Dialect/SCF/Transforms/BufferDeallocationOpInterfaceImpl.h"
 #include "mlir/Dialect/SCF/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/Shape/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/Tensor/IR/TensorInferTypeOpInterfaceImpl.h"
+#include "mlir/Dialect/Tensor/IR/TensorTilingInterfaceImpl.h"
+#include "mlir/Dialect/Tensor/IR/ValueBoundsOpInterfaceImpl.h"
+#include "mlir/Dialect/Tensor/TransformOps/TensorTransformOps.h"
 #include "mlir/Dialect/Tensor/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/Tensor/Transforms/SubsetInsertionOpInterfaceImpl.h"
+#include "mlir/Dialect/Tosa/IR/ShardingInterfaceImpl.h"
 #include "mlir/Dialect/Vector/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/Vector/Transforms/SubsetOpInterfaceImpl.h"
 #include "scalehls/Dialect/HLS/Transforms/BufferizableOpInterfaceImpl.h"
 
 namespace mlir {
@@ -53,6 +76,7 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
     mlir::arith::ArithDialect,
     mlir::vector::VectorDialect,
     mlir::scf::SCFDialect,
+    mlir::cf::ControlFlowDialect,
     mlir::scalehls::hls::HLSDialect,
     mlir::LLVM::LLVMDialect,
     mlir::DLTIDialect,
@@ -67,13 +91,36 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
 // Add all required external models to the provided registry.
 inline void
 registerAllInterfaceExternalModels(mlir::DialectRegistry &registry) {
+  // Register all external models.
+  affine::registerValueBoundsOpInterfaceExternalModels(registry);
+  arith::registerBufferDeallocationOpInterfaceExternalModels(registry);
   arith::registerBufferizableOpInterfaceExternalModels(registry);
-  linalg::registerBufferizableOpInterfaceExternalModels(registry);
-  scf::registerBufferizableOpInterfaceExternalModels(registry);
+  arith::registerValueBoundsOpInterfaceExternalModels(registry);
   bufferization::func_ext::registerBufferizableOpInterfaceExternalModels(
       registry);
+  builtin::registerCastOpInterfaceExternalModels(registry);
+  cf::registerBufferizableOpInterfaceExternalModels(registry);
+  cf::registerBufferDeallocationOpInterfaceExternalModels(registry);
+  linalg::registerBufferizableOpInterfaceExternalModels(registry);
+  linalg::registerSubsetOpInterfaceExternalModels(registry);
+  linalg::registerTilingInterfaceExternalModels(registry);
+  linalg::registerValueBoundsOpInterfaceExternalModels(registry);
+  memref::registerAllocationOpInterfaceExternalModels(registry);
+  memref::registerRuntimeVerifiableOpInterfaceExternalModels(registry);
+  memref::registerValueBoundsOpInterfaceExternalModels(registry);
+  memref::registerMemorySlotExternalModels(registry);
+  scf::registerBufferDeallocationOpInterfaceExternalModels(registry);
+  scf::registerBufferizableOpInterfaceExternalModels(registry);
+  scf::registerValueBoundsOpInterfaceExternalModels(registry);
   tensor::registerBufferizableOpInterfaceExternalModels(registry);
+  tensor::registerFindPayloadReplacementOpInterfaceExternalModels(registry);
+  tensor::registerInferTypeOpInterfaceExternalModels(registry);
+  tensor::registerSubsetOpInterfaceExternalModels(registry);
+  tensor::registerTilingInterfaceExternalModels(registry);
+  tensor::registerValueBoundsOpInterfaceExternalModels(registry);
+  tosa::registerShardingInterfaceExternalModels(registry);
   vector::registerBufferizableOpInterfaceExternalModels(registry);
+  vector::registerSubsetOpInterfaceExternalModels(registry);
   hls::registerBufferizableOpInterfaceExternalModels(registry);
 }
 
