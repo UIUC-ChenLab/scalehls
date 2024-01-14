@@ -63,13 +63,26 @@ struct DispatchFuncOp : public OpRewritePattern<func::FuncOp> {
       }
     }
 
+    unsigned taskId = 0;
     for (auto &op : llvm::make_early_inc_range(dispatch.getOps())) {
       if (auto linalgOp = dyn_cast<linalg::LinalgOp>(op)) {
         if (linalgOp.hasDynamicShape())
           return linalgOp.emitOpError("cannot handle dynamic shape yet");
-        fuseOpsIntoTask({linalgOp}, rewriter);
-      } else if (isa<tensor::TensorDialect>(op.getDialect()))
-        fuseOpsIntoTask({&op}, rewriter);
+        auto task = fuseOpsIntoTask({linalgOp}, rewriter);
+
+        std::string taskName =
+            func.getName().str() + "_" + std::to_string(taskId++);
+        linalgOp.getOperation()->setAttr(taskName, rewriter.getUnitAttr());
+        task->setAttr(taskName, rewriter.getUnitAttr());
+
+      } else if (isa<tensor::TensorDialect>(op.getDialect())) {
+        auto task = fuseOpsIntoTask({&op}, rewriter);
+
+        std::string taskName =
+            func.getName().str() + "_" + std::to_string(taskId++);
+        op.setAttr(taskName, rewriter.getUnitAttr());
+        task->setAttr(taskName, rewriter.getUnitAttr());
+      }
     }
     return success();
   }
