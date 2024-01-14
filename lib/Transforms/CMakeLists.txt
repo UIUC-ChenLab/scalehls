@@ -5,6 +5,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   GenerateRuntimeFunc.cpp
   LowerCopyToAffineLoops.cpp
   Pipelines.cpp
+  RaiseSCFToAffine.cpp
 
   DEPENDS
   MLIRScaleHLSTransformsIncGen

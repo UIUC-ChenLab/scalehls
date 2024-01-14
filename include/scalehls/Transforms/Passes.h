@@ -28,6 +28,7 @@ namespace scalehls {
 
 std::unique_ptr<Pass> createConvertLinalgToDataflowPass();
 std::unique_ptr<Pass> createConvertDataflowToFuncPass();
+std::unique_ptr<Pass> createRaiseSCFToAffinePass();
 
 //===----------------------------------------------------------------------===//
 // Transform Passes

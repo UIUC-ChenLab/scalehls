@@ -25,6 +25,11 @@ def ConvertDataflowToFunc :
   let constructor = "mlir::scalehls::createConvertDataflowToFuncPass()";
 }
 
+def RaiseSCFToAffine : Pass<"scalehls-raise-scf-to-affine"> {
+  let summary = "Raise SCF to affine";
+  let constructor = "mlir::scalehls::createRaiseSCFToAffinePass()";
+}
+
 //===----------------------------------------------------------------------===//
 // Transform Passes
 //===----------------------------------------------------------------------===//
