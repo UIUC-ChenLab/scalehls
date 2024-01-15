@@ -23,18 +23,13 @@ namespace mlir {
 namespace scalehls {
 
 //===----------------------------------------------------------------------===//
-// Conversion Passes
-//===----------------------------------------------------------------------===//
-
-std::unique_ptr<Pass> createConvertLinalgToDataflowPass();
-std::unique_ptr<Pass> createConvertDataflowToFuncPass();
-std::unique_ptr<Pass> createRaiseSCFToAffinePass();
-
-//===----------------------------------------------------------------------===//
 // Transform Passes
 //===----------------------------------------------------------------------===//
 
 using namespace bufferization;
+
+std::unique_ptr<Pass> createApplyTransformPatternPass();
+std::unique_ptr<Pass> createRaiseSCFToAffinePass();
 
 std::unique_ptr<Pass> createComprehensiveBufferizePass(
     std::optional<BufferizationOptions::AllocationFn> allocationFn =

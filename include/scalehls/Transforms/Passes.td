@@ -10,29 +10,19 @@
 include "mlir/Pass/PassBase.td"
 
 //===----------------------------------------------------------------------===//
-// Conversion Passes
+// Transform Passes
 //===----------------------------------------------------------------------===//
 
-def ConvertLinalgToDataflow :
-    Pass<"scalehls-convert-linalg-to-dataflow", "func::FuncOp"> {
-  let summary = "Convert linalg to functional dataflow";
-  let constructor = "mlir::scalehls::createConvertLinalgToDataflowPass()";
-}
-
-def ConvertDataflowToFunc :
-    Pass<"scalehls-convert-dataflow-to-func", "mlir::ModuleOp"> {
-  let summary = "Convert structural dataflow to function for C++ emission";
-  let constructor = "mlir::scalehls::createConvertDataflowToFuncPass()";
+def ApplyTransformPattern :
+    Pass<"scalehls-apply-transform-pattern", "func::FuncOp"> {
+  let summary = "A test pass to apply transformation patterns";
+  let constructor = "mlir::scalehls::createApplyTransformPatternPass()";
 }
 
 def RaiseSCFToAffine : Pass<"scalehls-raise-scf-to-affine"> {
   let summary = "Raise SCF to affine";
   let constructor = "mlir::scalehls::createRaiseSCFToAffinePass()";
 }
-
-//===----------------------------------------------------------------------===//
-// Transform Passes
-//===----------------------------------------------------------------------===//
 
 def ComprehensiveBufferize :
     Pass<"scalehls-comprehensive-bufferize", "mlir::ModuleOp"> {

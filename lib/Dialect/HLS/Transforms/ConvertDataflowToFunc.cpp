@@ -7,8 +7,8 @@
 #include "mlir/Dialect/Affine/LoopUtils.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "scalehls/Dialect/HLS/Transforms/Passes.h"
 #include "scalehls/Dialect/HLS/Utils/Utils.h"
-#include "scalehls/Transforms/Passes.h"
 #include "scalehls/Utils/Utils.h"
 
 using namespace mlir;
@@ -108,6 +108,6 @@ struct ConvertDataflowToFunc
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createConvertDataflowToFuncPass() {
+std::unique_ptr<Pass> scalehls::hls::createConvertDataflowToFuncPass() {
   return std::make_unique<ConvertDataflowToFunc>();
 }

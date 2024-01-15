@@ -7,38 +7,12 @@
 #include "mlir/IR/Dominance.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "scalehls/Dialect/HLS/Transforms/Passes.h"
 #include "scalehls/Dialect/HLS/Utils/Utils.h"
-#include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
-
-namespace {
-/// This pattern will convert a tensor.empty op to an fdf.alloc_tensor op.
-struct ConvertTensorEmptyOp : public OpRewritePattern<tensor::EmptyOp> {
-  using OpRewritePattern<tensor::EmptyOp>::OpRewritePattern;
-  LogicalResult matchAndRewrite(tensor::EmptyOp op,
-                                PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<hls::AllocTensorOp>(op, op.getType());
-    return success();
-  }
-};
-} // namespace
-
-namespace {
-/// This pattern will convert a linalg.fill op to an fdf.alloc_tensor op with
-/// initial value.
-struct ConvertLinalgFillOp : public OpRewritePattern<linalg::FillOp> {
-  using OpRewritePattern<linalg::FillOp>::OpRewritePattern;
-  LogicalResult matchAndRewrite(linalg::FillOp op,
-                                PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<hls::AllocTensorOp>(op, op.getType(0),
-                                                    op.value());
-    return success();
-  }
-};
-} // namespace
 
 namespace {
 // TODO: For now, we also dispatch most tensor ops into separate tasks. We
@@ -51,17 +25,6 @@ struct DispatchFuncOp : public OpRewritePattern<func::FuncOp> {
     auto dispatch = dispatchBlock(&func.front(), rewriter);
     if (!dispatch)
       return failure();
-
-    // Ensure each AllocTensorOp is only used once.
-    for (auto allocTensor :
-         llvm::make_early_inc_range(dispatch.getOps<hls::AllocTensorOp>())) {
-      for (auto &use : llvm::make_early_inc_range(allocTensor->getUses())) {
-        rewriter.setInsertionPoint(use.getOwner());
-        auto newAllocTensor =
-            cast<hls::AllocTensorOp>(rewriter.clone(*allocTensor));
-        use.set(newAllocTensor);
-      }
-    }
 
     unsigned taskId = 0;
     for (auto &op : llvm::make_early_inc_range(dispatch.getOps())) {
@@ -90,32 +53,19 @@ struct DispatchFuncOp : public OpRewritePattern<func::FuncOp> {
 } // namespace
 
 namespace {
-struct ConvertLinalgToDataflow
-    : public ConvertLinalgToDataflowBase<ConvertLinalgToDataflow> {
+struct CreateDataflow : public CreateDataflowBase<CreateDataflow> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
 
-    // Convert linalg ops to FDF ops.
-    ConversionTarget target(*context);
-    target.addIllegalOp<tensor::EmptyOp, tensor::DimOp, tensor::RankOp,
-                        linalg::FillOp>();
-    target.addLegalOp<hls::AllocTensorOp>();
-
-    mlir::RewritePatternSet patterns(context);
-    patterns.add<ConvertTensorEmptyOp>(context);
-    patterns.add<ConvertLinalgFillOp>(context);
-    if (failed(applyPartialConversion(func, target, std::move(patterns))))
-      return signalPassFailure();
-
     // Dispatch the current function to create the dataflow hierarchy.
-    patterns.clear();
+    mlir::RewritePatternSet patterns(context);
     patterns.add<DispatchFuncOp>(context);
     (void)applyOpPatternsAndFold({func}, std::move(patterns));
   }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createConvertLinalgToDataflowPass() {
-  return std::make_unique<ConvertLinalgToDataflow>();
+std::unique_ptr<Pass> scalehls::hls::createCreateDataflowPass() {
+  return std::make_unique<CreateDataflow>();
 }

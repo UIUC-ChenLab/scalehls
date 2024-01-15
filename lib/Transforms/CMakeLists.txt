@@ -1,6 +1,5 @@
 add_mlir_library(MLIRScaleHLSTransforms
-  ConvertLinalgToDataflow.cpp
-  ConvertDataflowToFunc.cpp
+  ApplyTransformPattern.cpp
   ComprehensiveBufferize.cpp
   GenerateRuntimeFunc.cpp
   LowerCopyToAffineLoops.cpp

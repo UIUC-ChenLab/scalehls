@@ -23,6 +23,9 @@ namespace mlir {
 namespace scalehls {
 namespace hls {
 
+std::unique_ptr<Pass> createConvertEmptyTensorToAllocTensorPass();
+std::unique_ptr<Pass> createConvertDataflowToFuncPass();
+std::unique_ptr<Pass> createCreateDataflowPass();
 std::unique_ptr<Pass> createLowerDataflowPass();
 
 #define GEN_PASS_CLASSES
