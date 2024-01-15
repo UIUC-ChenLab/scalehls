@@ -74,6 +74,7 @@
 #include "mlir/Dialect/Transform/LoopExtension/LoopExtension.h"
 #include "mlir/Dialect/Transform/PDLExtension/PDLExtension.h"
 #include "mlir/Dialect/Vector/TransformOps/VectorTransformOps.h"
+#include "scalehls/Dialect/HLS/TransformOps/HLSTransformOps.h"
 
 namespace mlir {
 namespace scalehls {
@@ -161,6 +162,7 @@ inline void registerAllExtensions(DialectRegistry &registry) {
   transform::registerLoopExtension(registry);
   transform::registerPDLExtension(registry);
   vector::registerTransformDialectExtension(registry);
+  hls::registerTransformDialectExtension(registry);
 }
 
 } // namespace scalehls

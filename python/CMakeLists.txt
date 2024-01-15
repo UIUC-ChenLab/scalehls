@@ -46,6 +46,17 @@ declare_mlir_dialect_python_bindings(
   DIALECT_NAME hls
 )
 
+declare_mlir_dialect_extension_python_bindings(
+  ADD_TO_PARENT ScaleHLSPythonSources.Dialects
+  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/scalehls"
+  TD_FILE dialects/HLSTransformOps.td
+  SOURCES
+    dialects/hls_transform.py
+    dialects/_hls_transform_ops_ext.py
+  DIALECT_NAME transform
+  EXTENSION_NAME hls_transform
+)
+
 ################################################################################
 # Declare native Python extension
 ################################################################################
