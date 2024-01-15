@@ -15,7 +15,6 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
-#include "mlir/Dialect/Linalg/TransformOps/DialectExtension.h"
 #include "mlir/Dialect/MLProgram/IR/MLProgram.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
@@ -58,6 +57,24 @@
 #include "mlir/Dialect/Vector/Transforms/SubsetOpInterfaceImpl.h"
 #include "scalehls/Dialect/HLS/Transforms/BufferizableOpInterfaceImpl.h"
 
+#include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
+#include "mlir/Conversion/ControlFlowToLLVM/ControlFlowToLLVM.h"
+#include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVM.h"
+#include "mlir/Conversion/IndexToLLVM/IndexToLLVM.h"
+#include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
+#include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
+#include "mlir/Dialect/Affine/TransformOps/AffineTransformOps.h"
+#include "mlir/Dialect/Bufferization/TransformOps/BufferizationTransformOps.h"
+#include "mlir/Dialect/Func/Extensions/AllExtensions.h"
+#include "mlir/Dialect/Func/TransformOps/FuncTransformOps.h"
+#include "mlir/Dialect/Linalg/TransformOps/DialectExtension.h"
+#include "mlir/Dialect/MemRef/TransformOps/MemRefTransformOps.h"
+#include "mlir/Dialect/SCF/TransformOps/SCFTransformOps.h"
+#include "mlir/Dialect/Transform/DebugExtension/DebugExtension.h"
+#include "mlir/Dialect/Transform/LoopExtension/LoopExtension.h"
+#include "mlir/Dialect/Transform/PDLExtension/PDLExtension.h"
+#include "mlir/Dialect/Vector/TransformOps/VectorTransformOps.h"
+
 namespace mlir {
 namespace scalehls {
 
@@ -66,7 +83,6 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
   // clang-format off
   registry.insert<
     mlir::func::FuncDialect,
-    mlir::tosa::TosaDialect,
     mlir::tensor::TensorDialect,
     mlir::linalg::LinalgDialect,
     mlir::memref::MemRefDialect,
@@ -118,7 +134,6 @@ registerAllInterfaceExternalModels(mlir::DialectRegistry &registry) {
   tensor::registerSubsetOpInterfaceExternalModels(registry);
   tensor::registerTilingInterfaceExternalModels(registry);
   tensor::registerValueBoundsOpInterfaceExternalModels(registry);
-  tosa::registerShardingInterfaceExternalModels(registry);
   vector::registerBufferizableOpInterfaceExternalModels(registry);
   vector::registerSubsetOpInterfaceExternalModels(registry);
   hls::registerBufferizableOpInterfaceExternalModels(registry);
@@ -126,7 +141,26 @@ registerAllInterfaceExternalModels(mlir::DialectRegistry &registry) {
 
 /// Add all required dialect extensions to the provided registry.
 inline void registerAllExtensions(DialectRegistry &registry) {
+  arith::registerConvertArithToLLVMInterface(registry);
+  cf::registerConvertControlFlowToLLVMInterface(registry);
+  // func::registerAllExtensions(registry);
+  registerConvertFuncToLLVMInterface(registry);
+  index::registerConvertIndexToLLVMInterface(registry);
+  registerConvertMathToLLVMInterface(registry);
+  registerConvertMemRefToLLVMInterface(registry);
+
+  // Register all transform dialect extensions.
+  affine::registerTransformDialectExtension(registry);
+  bufferization::registerTransformDialectExtension(registry);
+  func::registerTransformDialectExtension(registry);
   linalg::registerTransformDialectExtension(registry);
+  memref::registerTransformDialectExtension(registry);
+  scf::registerTransformDialectExtension(registry);
+  tensor::registerTransformDialectExtension(registry);
+  transform::registerDebugExtension(registry);
+  transform::registerLoopExtension(registry);
+  transform::registerPDLExtension(registry);
+  vector::registerTransformDialectExtension(registry);
 }
 
 } // namespace scalehls
