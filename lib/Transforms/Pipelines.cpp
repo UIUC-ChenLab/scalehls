@@ -25,17 +25,16 @@ using namespace scalehls;
 
 void scalehls::addLinalgTransformPasses(OpPassManager &pm) {
   pm.addPass(mlir::createConvertTensorToLinalgPass());
+  pm.addPass(mlir::createLinalgGeneralizationPass());
   pm.addPass(mlir::createLinalgElementwiseOpFusionPass());
   pm.addPass(bufferization::createEmptyTensorEliminationPass());
-  // pm.addPass(mlir::createCanonicalizerPass());
-  pm.addNestedPass<func::FuncOp>(
-      hls::createConvertEmptyTensorToAllocTensorPass());
+  pm.addPass(mlir::createLinalgInlineScalarOperandsPass());
+  // pm.addNestedPass<func::FuncOp>(hls::createCreateTensorInitPass());
   pm.addPass(mlir::createCanonicalizerPass());
 }
 
 void scalehls::addConvertLinalgToDataflowPasses(OpPassManager &pm) {
   pm.addNestedPass<func::FuncOp>(hls::createCreateDataflowPass());
-  // pm.addPass(mlir::createLinalgGeneralizationPass());
   pm.addPass(mlir::createCanonicalizerPass());
 }
 

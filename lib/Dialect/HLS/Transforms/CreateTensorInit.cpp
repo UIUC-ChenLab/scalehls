@@ -15,35 +15,33 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-/// This pattern will convert a tensor.empty op to an fdf.alloc_tensor op.
+/// This pattern will convert a tensor.empty op to an fdf.tensor_init op.
 struct ConvertTensorEmptyOp : public OpRewritePattern<tensor::EmptyOp> {
   using OpRewritePattern<tensor::EmptyOp>::OpRewritePattern;
   LogicalResult matchAndRewrite(tensor::EmptyOp op,
                                 PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<hls::AllocTensorOp>(op, op.getType());
+    rewriter.replaceOpWithNewOp<hls::TensorInitOp>(op, op.getType());
     return success();
   }
 };
 } // namespace
 
 namespace {
-/// This pattern will convert a linalg.fill op to an fdf.alloc_tensor op with
+/// This pattern will convert a linalg.fill op to an fdf.tensor_init op with
 /// initial value.
 struct ConvertLinalgFillOp : public OpRewritePattern<linalg::FillOp> {
   using OpRewritePattern<linalg::FillOp>::OpRewritePattern;
   LogicalResult matchAndRewrite(linalg::FillOp op,
                                 PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<hls::AllocTensorOp>(op, op.getType(0),
-                                                    op.value());
+    rewriter.replaceOpWithNewOp<hls::TensorInitOp>(op, op.result().getType(),
+                                                   op.value());
     return success();
   }
 };
 } // namespace
 
 namespace {
-struct ConvertEmptyTensorToAllocTensor
-    : public ConvertEmptyTensorToAllocTensorBase<
-          ConvertEmptyTensorToAllocTensor> {
+struct CreateTensorInit : public CreateTensorInitBase<CreateTensorInit> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -53,7 +51,7 @@ struct ConvertEmptyTensorToAllocTensor
     ConversionTarget target(*context);
     target.addIllegalOp<tensor::EmptyOp, tensor::DimOp, tensor::RankOp,
                         linalg::FillOp>();
-    target.addLegalOp<hls::AllocTensorOp>();
+    target.addLegalOp<hls::TensorInitOp>();
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<ConvertTensorEmptyOp>(context);
@@ -61,21 +59,20 @@ struct ConvertEmptyTensorToAllocTensor
     if (failed(applyPartialConversion(func, target, std::move(patterns))))
       return signalPassFailure();
 
-    // Ensure each AllocTensorOp is only used once.
-    for (auto allocTensor :
-         llvm::make_early_inc_range(func.getOps<hls::AllocTensorOp>())) {
-      for (auto &use : llvm::make_early_inc_range(allocTensor->getUses())) {
+    // Ensure each TensorInitOp is only used once.
+    for (auto tensorInit :
+         llvm::make_early_inc_range(func.getOps<hls::TensorInitOp>())) {
+      for (auto &use : llvm::make_early_inc_range(tensorInit->getUses())) {
         builder.setInsertionPoint(use.getOwner());
-        auto newAllocTensor =
-            cast<hls::AllocTensorOp>(builder.clone(*allocTensor));
-        use.set(newAllocTensor);
+        auto newTensorInit =
+            cast<hls::TensorInitOp>(builder.clone(*tensorInit));
+        use.set(newTensorInit);
       }
     }
   }
 };
 } // namespace
 
-std::unique_ptr<Pass>
-scalehls::hls::createConvertEmptyTensorToAllocTensorPass() {
-  return std::make_unique<ConvertEmptyTensorToAllocTensor>();
+std::unique_ptr<Pass> scalehls::hls::createCreateTensorInitPass() {
+  return std::make_unique<CreateTensorInit>();
 }

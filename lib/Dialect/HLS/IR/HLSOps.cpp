@@ -185,10 +185,10 @@ SmallVector<Operation *> TaskOp::getLiveinUsers(Value livein) {
 }
 
 //===----------------------------------------------------------------------===//
-// AllocTensorOp
+// TensorInitOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult AllocTensorOp::verify() {
+LogicalResult TensorInitOp::verify() {
   if (auto initValue = getInitValue())
     if (initValue.getType() != getType().getElementType() &&
         initValue.getType() != getType())

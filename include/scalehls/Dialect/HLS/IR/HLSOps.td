@@ -104,8 +104,8 @@ def YieldOp : HLSOp<"fdf.yield", [NoMemoryEffect, ReturnLike, Terminator,
   let builders = [OpBuilder<(ins), "build($_builder, $_state, std::nullopt);">];
 }
 
-def AllocTensorOp : HLSOp<"fdf.alloc_tensor", [NoMemoryEffect]> {
-  let summary = "Allocate a tensor";
+def TensorInitOp : HLSOp<"fdf.tensor_init", [NoMemoryEffect]> {
+  let summary = "Initiate a tensor";
 
   let arguments = (ins Optional<AnyType>:$init_value);
   let results = (outs AnyRankedTensor:$result);

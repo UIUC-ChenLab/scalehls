@@ -1,9 +1,9 @@
 add_mlir_dialect_library(MLIRScaleHLSHLSTransforms
   BufferizableOpInterfaceImpl.cpp
+  CreateTensorInit.cpp
   CreateDataflow.cpp
-  ConvertEmptyTensorToAllocTensor.cpp
-  ConvertDataflowToFunc.cpp
   LowerDataflow.cpp
+  ConvertDataflowToFunc.cpp
 
   DEPENDS
   MLIRScaleHLSHLSTransformsIncGen

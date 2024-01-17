@@ -9,18 +9,9 @@
 
 include "mlir/Pass/PassBase.td"
 
-def ConvertEmptyTensorToAllocTensor :
-    Pass<"scalehls-convert-empty-tensor-to-alloc-tensor", "func::FuncOp"> {
-  let summary = "Convert tensor.empty to hls.fdf.alloc_tensor";
-  let constructor = [{
-      mlir::scalehls::hls::createConvertEmptyTensorToAllocTensorPass()
-  }];
-}
-
-def ConvertDataflowToFunc :
-    Pass<"scalehls-convert-dataflow-to-func", "mlir::ModuleOp"> {
-  let summary = "Convert structural dataflow to function for C++ emission";
-  let constructor = "mlir::scalehls::hls::createConvertDataflowToFuncPass()";
+def CreateTensorInit : Pass<"scalehls-create-tensor-init", "func::FuncOp"> {
+  let summary = "Create hls.fdf.tensor_init operations";
+  let constructor = "mlir::scalehls::hls::createCreateTensorInitPass()";
 }
 
 def CreateDataflow : Pass<"scalehls-create-dataflow", "func::FuncOp"> {
@@ -31,6 +22,12 @@ def CreateDataflow : Pass<"scalehls-create-dataflow", "func::FuncOp"> {
 def LowerDataflow : Pass<"scalehls-lower-dataflow", "func::FuncOp"> {
   let summary = "Convert functional to structural dataflow";
   let constructor = "mlir::scalehls::hls::createLowerDataflowPass()";
+}
+
+def ConvertDataflowToFunc :
+    Pass<"scalehls-convert-dataflow-to-func", "mlir::ModuleOp"> {
+  let summary = "Convert structural dataflow to function for C++ emission";
+  let constructor = "mlir::scalehls::hls::createConvertDataflowToFuncPass()";
 }
 
 #endif // SCALEHLS_DIALECT_HLS_TRANSFORMS_PASSES_TD
