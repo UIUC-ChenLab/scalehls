@@ -27,9 +27,11 @@ void scalehls::addLinalgTransformPasses(OpPassManager &pm) {
   pm.addPass(mlir::createConvertTensorToLinalgPass());
   pm.addPass(mlir::createLinalgGeneralizationPass());
   pm.addPass(mlir::createLinalgElementwiseOpFusionPass());
+  pm.addPass(mlir::createLinalgFoldUnitExtentDimsPass());
   pm.addPass(bufferization::createEmptyTensorEliminationPass());
   pm.addPass(mlir::createLinalgInlineScalarOperandsPass());
-  // pm.addNestedPass<func::FuncOp>(hls::createCreateTensorInitPass());
+  pm.addPass(mlir::createCSEPass());
+  pm.addNestedPass<func::FuncOp>(hls::createPreprocessDataflowPass());
   pm.addPass(mlir::createCanonicalizerPass());
 }
 

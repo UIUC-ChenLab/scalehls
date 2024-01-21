@@ -9,9 +9,9 @@
 
 include "mlir/Pass/PassBase.td"
 
-def CreateTensorInit : Pass<"scalehls-create-tensor-init", "func::FuncOp"> {
-  let summary = "Create hls.fdf.tensor_init operations";
-  let constructor = "mlir::scalehls::hls::createCreateTensorInitPass()";
+def PreprocessDataflow : Pass<"scalehls-preprocess-dataflow", "func::FuncOp"> {
+  let summary = "Preprocess the IR for dataflow transformation";
+  let constructor = "mlir::scalehls::hls::createPreprocessDataflowPass()";
 }
 
 def CreateDataflow : Pass<"scalehls-create-dataflow", "func::FuncOp"> {
