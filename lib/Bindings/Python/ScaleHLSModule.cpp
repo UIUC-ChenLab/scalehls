@@ -8,6 +8,7 @@
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/Bindings/Python/PybindAdaptors.h"
 #include "mlir/CAPI/IR.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "scalehls-c/Registration.h"
 #include "scalehls-c/Transforms/Pipelines.h"
 #include "scalehls-c/Translation/EmitHLSCpp.h"
@@ -49,6 +50,19 @@ PYBIND11_MODULE(_scalehls, m) {
       m, "Callable[[MlirOperation], None]");
 
   m.def(
+      "get_static_loop_ranges",
+      [](MlirOperation linalg_op) {
+        linalg::GenericOp generic_op =
+            dyn_cast<linalg::GenericOp>(unwrap(linalg_op));
+        assert(generic_op && "input operation is not linalg generic operation");
+        py::list py_loop_ranges;
+        for (auto &range : generic_op.getStaticLoopRanges())
+          py_loop_ranges.append(range);
+        return py_loop_ranges;
+      },
+      py::arg("linalg_op"));
+
+  m.def(
       "walk_operation",
       [](MlirOperation self, std::function<void(MlirOperation)> callback) {
         unwrap(self)->walk<WalkOrder::PreOrder>(
@@ -68,8 +82,8 @@ PYBIND11_MODULE(_scalehls, m) {
 
   m.def("add_linalg_transform_passes", mlirAddLinalgTransformPasses,
         py::arg("pass_manager"));
-  m.def("add_convert_linalg_to_dataflow_passes",
-        mlirAddConvertLinalgToDataflowPasses, py::arg("pass_manager"));
+  m.def("add_create_dataflow_passes", mlirAddCreateDataflowPasses,
+        py::arg("pass_manager"));
   m.def("add_comprehensive_bufferize_passes",
         mlirAddComprehensiveBufferizePasses, py::arg("pass_manager"));
   m.def("add_lower_dataflow_passes", mlirAddLowerDataflowPasses,

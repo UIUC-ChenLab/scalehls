@@ -13,7 +13,7 @@ namespace mlir {
 namespace scalehls {
 
 void addLinalgTransformPasses(OpPassManager &pm);
-void addConvertLinalgToDataflowPasses(OpPassManager &pm);
+void addCreateDataflowPasses(OpPassManager &pm);
 void addComprehensiveBufferizePasses(OpPassManager &pm);
 void addLowerDataflowPasses(OpPassManager &pm);
 void addConvertDataflowToFuncPasses(OpPassManager &pm);
