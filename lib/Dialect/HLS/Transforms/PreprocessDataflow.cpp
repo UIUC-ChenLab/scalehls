@@ -70,7 +70,7 @@ struct ConvertLinalgGenericOp : public OpRewritePattern<linalg::GenericOp> {
 
       } else if (auto yieldedArg = dyn_cast<BlockArgument>(yieldedValue)) {
         // If the yielded value is from a constant tensor, we replace the
-        // original result with the transposed yielded tensor if applicable.
+        // original result with the transposed tensor if applicable.
         auto inputTensor = op.getMatchingOpOperand(yieldedArg);
         auto inputMap = op.getMatchingIndexingMap(inputTensor);
         auto resultMap = op.getIndexingMapMatchingResult(result);
@@ -78,6 +78,7 @@ struct ConvertLinalgGenericOp : public OpRewritePattern<linalg::GenericOp> {
         if (inputMap == resultMap) {
           rewriter.replaceAllUsesWith(result, inputTensor->get());
           hasChanged = true;
+
         } else if (inputMap.isPermutation()) {
           auto permutation = llvm::map_to_vector(
               inversePermutation(inputMap).compose(resultMap).getResults(),

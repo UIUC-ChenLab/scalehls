@@ -11,46 +11,38 @@
 #include "mlir/Dialect/Transform/IR/TransformDialect.h"
 #include "mlir/Dialect/Transform/IR/TransformInterfaces.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "scalehls/Dialect/HLS/IR/HLS.h"
 
 using namespace mlir;
 using namespace scalehls;
 
 //===----------------------------------------------------------------------===//
-// HLSLinalgTileOp
+// HLSConvertExtractSliceToTensorInitOp
 //===----------------------------------------------------------------------===//
 
-void transform::HLSLinalgTileOp::build(OpBuilder &builder,
-                                       OperationState &result, Value target,
-                                       ArrayRef<int64_t> staticTileSizes) {
-  // Call the default builder.
-  // This is future-proof re mixed static-dynamic and setting up the proper
-  // operands segment sizes attributes for multiple variadic operands.
-  // In the absence of this, horrible bugs ensue.
-  // TODO: support mixed static-dynamic (see TileUsingForallOp).
-  MLIRContext *ctx = builder.getContext();
-  auto opTy = transform::AnyOpType::get(ctx);
-  auto staticTileSizesAttr = builder.getDenseI64ArrayAttr(staticTileSizes);
-  build(builder, result,
-        /*resultTypes=*/TypeRange{opTy, opTy, opTy, opTy},
-        /*target=*/target,
-        /*tile_sizes=*/staticTileSizesAttr);
+static Value getUntiledProducer(Value source) {
+  while (auto arg = dyn_cast<BlockArgument>(source)) {
+    if (auto loop = dyn_cast<scf::ForOp>(arg.getOwner()->getParentOp()))
+      source = loop.getTiedLoopInit(arg)->get();
+    else
+      break;
+  }
+  return source;
 }
 
-DiagnosedSilenceableFailure transform::HLSLinalgTileOp::applyToOne(
-    transform::TransformRewriter &rewriter, linalg::LinalgOp target,
+DiagnosedSilenceableFailure
+transform::HLSConvertExtractSliceToTensorInitOp::applyToOne(
+    transform::TransformRewriter &rewriter, tensor::ExtractSliceOp target,
     transform::ApplyToEachResultList &results,
     transform::TransformState &state) {
   rewriter.setInsertionPoint(target);
-  FailureOr<scf::SCFReductionTilingResult> result = scf::tileReductionUsingScf(
-      rewriter, cast<PartialReductionOpInterface>(target.getOperation()),
-      getAsOpFoldResult(rewriter.getI64ArrayAttr(getTileSizes())));
-
-  if (failed(result))
+  auto tensorInit =
+      getUntiledProducer(target.getSource()).getDefiningOp<hls::TensorInitOp>();
+  if (!tensorInit)
     return emitDefaultSilenceableFailure(target);
-  results.push_back(result->initialOp);
-  results.push_back(result->parallelTiledOp);
-  results.push_back(result->mergeOp);
-  results.push_back(result->loops.front());
+  auto localTensorInit = rewriter.replaceOpWithNewOp<hls::TensorInitOp>(
+      target, target.getType(), tensorInit.getInitValue());
+  results.push_back(localTensorInit);
   return DiagnosedSilenceableFailure::success();
 }
 
@@ -69,6 +61,7 @@ public:
     declareGeneratedDialect<linalg::LinalgDialect>();
     declareGeneratedDialect<scf::SCFDialect>();
     declareGeneratedDialect<tensor::TensorDialect>();
+    declareGeneratedDialect<hls::HLSDialect>();
 
     registerTransformOps<
 #define GET_OP_LIST
