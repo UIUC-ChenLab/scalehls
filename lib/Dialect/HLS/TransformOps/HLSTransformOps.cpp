@@ -47,6 +47,46 @@ transform::HLSConvertExtractSliceToTensorInitOp::applyToOne(
 }
 
 //===----------------------------------------------------------------------===//
+// HLSDemoteExtractSliceOp
+//===----------------------------------------------------------------------===//
+
+DiagnosedSilenceableFailure transform::HLSDemoteExtractSliceOp::applyToOne(
+    transform::TransformRewriter &rewriter, tensor::ExtractSliceOp target,
+    transform::ApplyToEachResultList &results,
+    transform::TransformState &state) {
+  // We first check whether the extract_slice op's source is an iter_args.
+  auto sourceArg = dyn_cast<BlockArgument>(target.getSource());
+  if (sourceArg && isa<scf::ForOp>(sourceArg.getOwner()->getParentOp()))
+    return emitDefaultSilenceableFailure(target);
+
+  // We then check if all offsets are loop induction variables, and collect
+  // them into a set.
+  llvm::SmallDenseSet<Value> offsets;
+  for (auto offset : target.getMixedOffsets())
+    if (auto offsetValue = offset.dyn_cast<Value>()) {
+      auto offsetArg = dyn_cast<BlockArgument>(offsetValue);
+      if (!offsetArg || !isa<scf::ForOp>(offsetArg.getOwner()->getParentOp()))
+        return emitDefaultSilenceableFailure(target);
+      offsets.insert(offsetValue);
+    }
+
+  // Then, we find the outermost loop that does not contain any of the offsets.
+  Operation *insertBefore = target;
+  while (auto loop = insertBefore->getParentOfType<scf::ForOp>()) {
+    if (!offsets.count(loop.getInductionVar()))
+      insertBefore = loop;
+    else
+      break;
+  }
+
+  // Finally, we move the extract_slice op before the outermost loop.
+  if (insertBefore != target)
+    target->moveBefore(insertBefore);
+  results.push_back(target);
+  return DiagnosedSilenceableFailure::success();
+}
+
+//===----------------------------------------------------------------------===//
 // Transform op registration
 //===----------------------------------------------------------------------===//
 
