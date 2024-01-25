@@ -37,7 +37,7 @@ def AnyBufferOrStream : Type<Or<[AnyBuffer.predicate, AnyStream.predicate]>,
 // Functional Dataflow (FDF) Operations
 //===----------------------------------------------------------------------===//
 
-def DispatchOp : HLSOp<"fdf.dispatch", [RecursiveMemoryEffects,
+def DispatchOp : HLSOp<"dispatch", [RecursiveMemoryEffects,
       SingleBlockImplicitTerminator<"YieldOp">,
       ParentOneOf<["func::FuncOp", "affine::AffineForOp", "scf::ForOp"]>]> {
   let summary = "Represent a dataflow dispatch";
@@ -59,9 +59,9 @@ def DispatchOp : HLSOp<"fdf.dispatch", [RecursiveMemoryEffects,
   }];
 }
 
-def TaskOp : HLSOp<"fdf.task", [
-      DeclareOpInterfaceMethods<ContainerLikeInterface>, RecursiveMemoryEffects,
-      SingleBlockImplicitTerminator<"YieldOp">, HasParent<"DispatchOp">]> {
+def TaskOp : HLSOp<"task", [DeclareOpInterfaceMethods<ContainerLikeInterface>,
+      RecursiveMemoryEffects, SingleBlockImplicitTerminator<"YieldOp">,
+      HasParent<"DispatchOp">]> {
   let summary = "Represent a dataflow task";
   let description = [{
     Task op has a transparent region that contains a list of ops to be executed
@@ -94,7 +94,7 @@ def TaskOp : HLSOp<"fdf.task", [
   }];
 }
 
-def YieldOp : HLSOp<"fdf.yield", [NoMemoryEffect, ReturnLike, Terminator,
+def YieldOp : HLSOp<"yield", [NoMemoryEffect, ReturnLike, Terminator,
       ParentOneOf<["DispatchOp", "TaskOp"]>]> {
   let summary = "Terminate and yield results of a dispatch or task op";
 
@@ -104,7 +104,7 @@ def YieldOp : HLSOp<"fdf.yield", [NoMemoryEffect, ReturnLike, Terminator,
   let builders = [OpBuilder<(ins), "build($_builder, $_state, std::nullopt);">];
 }
 
-def TensorInitOp : HLSOp<"fdf.tensor_init", [NoMemoryEffect]> {
+def TensorInitOp : HLSOp<"tensor_init", [NoMemoryEffect]> {
   let summary = "Initiate a tensor";
 
   let arguments = (ins Optional<AnyType>:$init_value);
@@ -120,41 +120,72 @@ def TensorInitOp : HLSOp<"fdf.tensor_init", [NoMemoryEffect]> {
   ];
 }
 
-def TensorToStreamOp : HLSOp<"fdf.tensor_to_stream",[
-      AttrSizedOperandSegments, NoMemoryEffect]> {
+def TensorToStreamOp : HLSOp<"tensor_to_stream",[NoMemoryEffect]> {
   let summary = "Convert a tensor to a stream channel";
 
-  let arguments = (ins AnyTensor:$tensor, Variadic<Index>:$dims,
-      Variadic<Index>:$symbols, MemRefLayoutAttrInterface:$stream_layout,
-      MemRefLayoutAttrInterface:$memory_layout);
+  let arguments = (ins AnyTensor:$tensor);
   let results = (outs StreamOf<[AnyType]>:$stream);
   let assemblyFormat = [{
-    $tensor (`[` $dims^ `]`)? (`(` $symbols^ `)`)? `stream_layout`
-    $stream_layout `memory_layout` $memory_layout attr-dict `:`
-    functional-type($tensor, $stream)
+    $tensor attr-dict `:` functional-type($tensor, $stream)
   }];
 }
 
-def StreamToTensorOp : HLSOp<"fdf.stream_to_tensor", [
-      AttrSizedOperandSegments, NoMemoryEffect]> {
+def StreamToTensorOp : HLSOp<"stream_to_tensor", [NoMemoryEffect]> {
   let summary = "Convert a stream channel to a tensor";
 
-  let arguments = (ins StreamOf<[AnyType]>:$stream, Variadic<Index>:$dims,
-      Variadic<Index>:$symbols, MemRefLayoutAttrInterface:$stream_layout,
-      MemRefLayoutAttrInterface:$memory_layout);
+  let arguments = (ins StreamOf<[AnyType]>:$stream);
   let results = (outs AnyTensor:$tensor);
   let assemblyFormat = [{
-    $stream (`[` $dims^ `]`)? (`(` $symbols^ `)`)? `stream_layout`
-    $stream_layout `memory_layout` $memory_layout attr-dict `:`
-    functional-type($stream, $tensor)
+    $stream attr-dict `:` functional-type($stream, $tensor)
   }];
+}
+
+def StreamOp : HLSOp<"stream", [
+      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+  let summary = "Declare a stream channel";
+
+  let results = (outs StreamOf<[AnyType]>:$channel);
+  let assemblyFormat = "attr-dict `:` type($channel)";
+
+  let hasVerifier = 1;
+}
+
+def StreamReadOp : HLSOp<"stream_read", []> {
+  let summary = "Read a stream channel";
+  let description = [{
+    Read/pop a value from a stream channel. The absence of the result indicates
+    the popped value is dropped. Each stream channel can be read multiple times.
+  }];
+
+  let arguments = (ins StreamOf<[AnyType]>:$channel);
+  let results = (outs Optional<AnyType>:$result);
+  let assemblyFormat = [{
+    $channel attr-dict `:` functional-type($channel, $result)
+  }];
+
+  let hasVerifier = 1;
+}
+
+def StreamWriteOp : HLSOp<"stream_write", []> {
+  let summary = "Write a stream channel";
+  let description = [{
+    Write/push a value to a stream channel. Each stream channel can only be
+    written once.
+  }];
+
+  let arguments = (ins StreamOf<[AnyType]>:$channel, AnyType:$value);
+  let assemblyFormat = [{
+    $channel `,` $value attr-dict `:` type($channel) `,` type($value)
+  }];
+
+  let hasVerifier = 1;
 }
 
 //===----------------------------------------------------------------------===//
 // Structural Dataflow (SDF) Operations
 //===----------------------------------------------------------------------===//
 
-def ScheduleOp : HLSOp<"sdf.schedule", [
+def ScheduleOp : HLSOp<"schedule", [
       DeclareOpInterfaceMethods<MemoryEffectsOpInterface>, IsolatedFromAbove,
       AffineScope, SingleBlock, NoTerminator,
       ParentOneOf<["func::FuncOp", "affine::AffineForOp", "scf::ForOp"]>]> {
@@ -184,8 +215,7 @@ def ScheduleOp : HLSOp<"sdf.schedule", [
   }];
 }
 
-def NodeOp : HLSOp<"sdf.node", [
-      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
+def NodeOp : HLSOp<"node", [DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
       DeclareOpInterfaceMethods<ContainerLikeInterface>, IsolatedFromAbove,
       AffineScope, SingleBlock, NoTerminator, AttrSizedOperandSegments,
       HasParent<"ScheduleOp">]> {
@@ -269,9 +299,8 @@ def NodeOp : HLSOp<"sdf.node", [
   }];
 }
 
-def BufferOp : HLSOp<"sdf.buffer", [
-      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
-      DeclareOpInterfaceMethods<BufferLikeInterface>]> {
+def BufferOp : HLSOp<"buffer", [DeclareOpInterfaceMethods<BufferLikeInterface>,
+      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Represent a dataflow buffer";
 
   let arguments = (ins I32Attr:$depth,
@@ -287,60 +316,14 @@ def BufferOp : HLSOp<"sdf.buffer", [
   ];
 }
 
-def ConstBufferOp : HLSOp<"sdf.const_buffer", [
-      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
-      DeclareOpInterfaceMethods<BufferLikeInterface>]> {
+def ConstBufferOp : HLSOp<"const_buffer", [
+      DeclareOpInterfaceMethods<BufferLikeInterface>,
+      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Represent a constant dataflow buffer";
 
   let arguments = (ins ElementsAttr:$value);
   let results = (outs AnyBuffer:$memref);
   let assemblyFormat = "attr-dict `:` type($memref)";
-
-  let hasVerifier = 1;
-}
-
-def StreamOp : HLSOp<"sdf.stream", [
-      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
-  let summary = "Declare a stream channel";
-
-  let arguments = (ins I32Attr:$depth);
-  let results = (outs StreamOf<[AnyType]>:$channel);
-  let assemblyFormat = "attr-dict `:` type($channel)";
-
-  let hasVerifier = 1;
-  let builders = [
-    OpBuilder<(ins "mlir::Type":$channel),
-        "build($_builder, $_state, channel, 1);">
-  ];
-}
-
-def StreamReadOp : HLSOp<"sdf.stream_read", []> {
-  let summary = "Read a stream channel";
-  let description = [{
-    Read/pop a value from a stream channel. The absence of the result indicates
-    the popped value is dropped. Each stream channel can be read multiple times.
-  }];
-
-  let arguments = (ins StreamOf<[AnyType]>:$channel);
-  let results = (outs Optional<AnyType>:$result);
-  let assemblyFormat = [{
-    $channel attr-dict `:` functional-type($channel, $result)
-  }];
-
-  let hasVerifier = 1;
-}
-
-def StreamWriteOp : HLSOp<"sdf.stream_write", []> {
-  let summary = "Write a stream channel";
-  let description = [{
-    Write/push a value to a stream channel. Each stream channel can only be
-    written once.
-  }];
-
-  let arguments = (ins StreamOf<[AnyType]>:$channel, AnyType:$value);
-  let assemblyFormat = [{
-    $channel `,` $value attr-dict `:` type($channel) `,` type($value)
-  }];
 
   let hasVerifier = 1;
 }

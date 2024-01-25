@@ -22,10 +22,6 @@ namespace scalehls {
 // Linalg Analysis Utils
 //===----------------------------------------------------------------------===//
 
-Value getUntiledProducer(Value source);
-
-SmallVector<scf::ForOp> getSurroundingLoops(Value source);
-
 /// Check whether the given generic operation is elementwise.
 bool isElementwiseGenericOp(linalg::GenericOp op);
 

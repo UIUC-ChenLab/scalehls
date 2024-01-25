@@ -731,11 +731,7 @@ void ConstBufferOp::getEffects(
 // StreamOp, StreamReadOp, and StreamWriteOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult StreamOp::verify() {
-  if (getDepth() != getChannel().getType().cast<StreamType>().getDepth())
-    return emitOpError("stream channel depth is not aligned");
-  return success();
-}
+LogicalResult StreamOp::verify() { return success(); }
 
 void StreamOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>

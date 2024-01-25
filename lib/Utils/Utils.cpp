@@ -22,28 +22,6 @@ using namespace affine;
 // Linalg Analysis Utils
 //===----------------------------------------------------------------------===//
 
-Value scalehls::getUntiledProducer(Value source) {
-  while (auto arg = dyn_cast<BlockArgument>(source)) {
-    if (auto loop = dyn_cast<scf::ForOp>(arg.getOwner()->getParentOp()))
-      source = loop.getTiedLoopInit(arg)->get();
-    else
-      break;
-  }
-  return source;
-}
-
-SmallVector<scf::ForOp> scalehls::getSurroundingLoops(Value source) {
-  SmallVector<scf::ForOp> loops;
-  while (auto arg = dyn_cast<BlockArgument>(source)) {
-    if (auto loop = dyn_cast<scf::ForOp>(arg.getOwner()->getParentOp())) {
-      loops.push_back(loop);
-      source = loop.getTiedLoopInit(arg)->get();
-    } else
-      break;
-  }
-  return SmallVector<scf::ForOp>(llvm::reverse(loops));
-}
-
 bool scalehls::isElementwiseGenericOp(linalg::GenericOp op) {
   // All loops must be parallel loop.
   if (op.getNumParallelLoops() != op.getNumLoops())

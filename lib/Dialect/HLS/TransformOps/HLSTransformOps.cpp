@@ -17,6 +17,17 @@
 using namespace mlir;
 using namespace scalehls;
 
+template <typename OpTy>
+static std::tuple<OpTy, OpOperand *> getUntiledProducer(OpOperand *source) {
+  while (auto arg = dyn_cast<BlockArgument>(source->get())) {
+    if (auto loop = dyn_cast<scf::ForOp>(arg.getOwner()->getParentOp()))
+      source = loop.getTiedLoopInit(arg);
+    else
+      break;
+  }
+  return {source->get().getDefiningOp<OpTy>(), source};
+}
+
 //===----------------------------------------------------------------------===//
 // HLSConvertExtractSliceToTensorInitOp
 //===----------------------------------------------------------------------===//
@@ -26,11 +37,12 @@ transform::HLSConvertExtractSliceToTensorInitOp::applyToOne(
     transform::TransformRewriter &rewriter, tensor::ExtractSliceOp target,
     transform::ApplyToEachResultList &results,
     transform::TransformState &state) {
-  rewriter.setInsertionPoint(target);
-  auto tensorInit =
-      getUntiledProducer(target.getSource()).getDefiningOp<hls::TensorInitOp>();
+  auto [tensorInit, use] =
+      getUntiledProducer<hls::TensorInitOp>(&target.getSourceMutable());
   if (!tensorInit)
     return emitDefaultSilenceableFailure(target);
+
+  rewriter.setInsertionPoint(target);
   auto localTensorInit = rewriter.replaceOpWithNewOp<hls::TensorInitOp>(
       target, target.getType(), tensorInit.getInitValue());
   results.push_back(localTensorInit);
@@ -74,6 +86,35 @@ DiagnosedSilenceableFailure transform::HLSDemoteExtractSliceOp::applyToOne(
   if (insertBefore != target)
     target->moveBefore(insertBefore);
   results.push_back(target);
+  return DiagnosedSilenceableFailure::success();
+}
+
+//===----------------------------------------------------------------------===//
+// HLSConvertInsertSliceToStreamOp
+//===----------------------------------------------------------------------===//
+
+DiagnosedSilenceableFailure
+transform::HLSConvertInsertSliceToStreamOp::applyToOne(
+    transform::TransformRewriter &rewriter, tensor::InsertSliceOp target,
+    transform::ApplyToEachResultList &results,
+    transform::TransformState &state) {
+  auto [tensorInit, use] =
+      getUntiledProducer<hls::TensorInitOp>(&target.getSourceMutable());
+  if (!tensorInit || !target.getSource().hasOneUse())
+    return emitDefaultSilenceableFailure(target);
+
+  return DiagnosedSilenceableFailure::success();
+}
+
+//===----------------------------------------------------------------------===//
+// HLSConvertExtractSliceToStreamOp
+//===----------------------------------------------------------------------===//
+
+DiagnosedSilenceableFailure
+transform::HLSConvertExtractSliceToStreamOp::applyToOne(
+    transform::TransformRewriter &rewriter, tensor::ExtractSliceOp target,
+    transform::ApplyToEachResultList &results,
+    transform::TransformState &state) {
   return DiagnosedSilenceableFailure::success();
 }
 

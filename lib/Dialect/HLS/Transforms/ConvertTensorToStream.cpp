@@ -20,13 +20,8 @@ struct StreamerizeInsertSlicePattern
 
   LogicalResult matchAndRewrite(tensor::InsertSliceOp insertSlice,
                                 PatternRewriter &rewriter) const override {
-    auto untiledProducer = getUntiledProducer(insertSlice.getSource())
-                               .getDefiningOp<hls::TensorInitOp>();
-    if (!untiledProducer || !untiledProducer->hasOneUse() ||
-        !insertSlice.getSource().hasOneUse())
-      return failure();
 
-    auto loops = getSurroundingLoops(insertSlice.getSource());
+    return failure();
   }
 };
 } // namespace
