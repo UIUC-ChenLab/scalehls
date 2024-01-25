@@ -29,6 +29,19 @@ std::unique_ptr<Pass> createCreateDataflowPass();
 std::unique_ptr<Pass> createLowerDataflowPass();
 std::unique_ptr<Pass> createConvertDataflowToFuncPass();
 
+std::unique_ptr<Pass> createApplyTransformPatternPass();
+std::unique_ptr<Pass> createRaiseSCFToAffinePass();
+
+std::unique_ptr<Pass> createComprehensiveBufferizePass(
+    std::optional<bufferization::BufferizationOptions::AllocationFn>
+        allocationFn = std::nullopt,
+    std::optional<bufferization::BufferizationOptions::MemCpyFn> memCpyFn =
+        std::nullopt);
+std::unique_ptr<Pass>
+createGenerateRuntimeFuncPass(std::string topFunc = "forward",
+                              std::string runtimeFunc = "runtime");
+std::unique_ptr<Pass> createLowerCopyToAffineLoopsPass();
+
 #define GEN_PASS_CLASSES
 #include "scalehls/Dialect/HLS/Transforms/Passes.h.inc"
 

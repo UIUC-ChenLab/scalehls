@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_C_TRANSFORMS_PIPELINES_H
-#define SCALEHLS_C_TRANSFORMS_PIPELINES_H
+#ifndef SCALEHLS_C_PIPELINES_PIPELINES_H
+#define SCALEHLS_C_PIPELINES_PIPELINES_H
 
 #include "mlir-c/Pass.h"
 #include "mlir-c/Support.h"
@@ -27,4 +27,4 @@ MLIR_CAPI_EXPORTED void mlirRegisterScaleHLSPipelines(void);
 }
 #endif
 
-#endif // SCALEHLS_C_TRANSFORMS_PIPELINES_H
+#endif // SCALEHLS_C_PIPELINES_PIPELINES_H

@@ -12,12 +12,14 @@
 #include "mlir/Dialect/Bufferization/Transforms/OneShotAnalysis.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "scalehls/Transforms/Passes.h"
+#include "scalehls/Dialect/HLS/Transforms/Passes.h"
 
 #define DEBUG_TYPE "scalehls-comprehensive-bufferize"
 
 using namespace mlir;
 using namespace scalehls;
+using namespace hls;
+using namespace bufferization;
 
 /// Create a linalg::GenericOp version of an n-D copy that can further tile,
 /// lower to loops or vectorize, unlike the current implementation of
@@ -128,7 +130,7 @@ private:
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createComprehensiveBufferizePass(
+std::unique_ptr<Pass> scalehls::hls::createComprehensiveBufferizePass(
     std::optional<BufferizationOptions::AllocationFn> allocationFn,
     std::optional<BufferizationOptions::MemCpyFn> memCpyFn) {
   if (!allocationFn)

@@ -24,6 +24,8 @@ mlirScaleHLSRegisterAllInterfaceExternalModels(MlirDialectRegistry registry);
 
 MLIR_CAPI_EXPORTED void mlirScaleHLSRegisterAllPasses(void);
 
+MLIR_CAPI_EXPORTED void mlirRegisterScaleHLSPipelines(void);
+
 #ifdef __cplusplus
 }
 #endif

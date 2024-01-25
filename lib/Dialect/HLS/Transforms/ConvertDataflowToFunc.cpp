@@ -8,7 +8,6 @@
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Dialect/HLS/Transforms/Passes.h"
-#include "scalehls/Dialect/HLS/Utils/Utils.h"
 #include "scalehls/Utils/Utils.h"
 
 using namespace mlir;

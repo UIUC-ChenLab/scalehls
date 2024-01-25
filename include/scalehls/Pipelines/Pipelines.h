@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_TRANSFORMS_PIPELINES_H
-#define SCALEHLS_TRANSFORMS_PIPELINES_H
+#ifndef SCALEHLS_PIPELINES_PIPELINES_H
+#define SCALEHLS_PIPELINES_PIPELINES_H
 
 #include "mlir/Pass/PassManager.h"
 
@@ -24,4 +24,4 @@ void registerScaleHLSPyTorchPipeline();
 } // namespace scalehls
 } // namespace mlir
 
-#endif // SCALEHLS_TRANSFORMS_PIPELINES_H
+#endif // SCALEHLS_PIPELINES_PIPELINES_H

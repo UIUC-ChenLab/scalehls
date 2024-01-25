@@ -4,7 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "scalehls/Transforms/Pipelines.h"
+#include "scalehls/Pipelines/Pipelines.h"
 #include "mlir/Conversion/Passes.h"
 #include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/Dialect/Arith/Transforms/Passes.h"
@@ -17,11 +17,11 @@
 #include "mlir/Dialect/Tensor/Transforms/Passes.h"
 #include "mlir/Transforms/Passes.h"
 #include "scalehls/Dialect/HLS/Transforms/Passes.h"
-#include "scalehls/Transforms/Passes.h"
 
 using namespace mlir;
 using namespace bufferization;
 using namespace scalehls;
+using namespace hls;
 
 void scalehls::addLinalgTransformPasses(OpPassManager &pm) {
   pm.addPass(mlir::createConvertTensorToLinalgPass());
@@ -41,7 +41,7 @@ void scalehls::addCreateDataflowPasses(OpPassManager &pm) {
 }
 
 void scalehls::addComprehensiveBufferizePasses(OpPassManager &pm) {
-  pm.addPass(scalehls::createComprehensiveBufferizePass());
+  pm.addPass(hls::createComprehensiveBufferizePass());
   pm.addPass(memref::createResolveShapedTypeResultDimsPass());
   pm.addPass(mlir::createCanonicalizerPass());
   pm.addPass(mlir::createCSEPass());
@@ -58,10 +58,10 @@ void scalehls::addLowerDataflowPasses(OpPassManager &pm) {
 
 void scalehls::addConvertDataflowToFuncPasses(OpPassManager &pm) {
   pm.addPass(hls::createConvertDataflowToFuncPass());
-  pm.addPass(scalehls::createGenerateRuntimeFuncPass());
+  pm.addPass(hls::createGenerateRuntimeFuncPass());
   // Lower linalg to affine loops.
   pm.addNestedPass<func::FuncOp>(mlir::createConvertLinalgToAffineLoopsPass());
-  pm.addNestedPass<func::FuncOp>(scalehls::createLowerCopyToAffineLoopsPass());
+  pm.addNestedPass<func::FuncOp>(hls::createLowerCopyToAffineLoopsPass());
   pm.addPass(memref::createFoldMemRefAliasOpsPass());
   pm.addNestedPass<func::FuncOp>(affine::createAffineLoopNormalizePass());
   pm.addNestedPass<func::FuncOp>(affine::createSimplifyAffineStructuresPass());

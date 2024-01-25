@@ -11,7 +11,7 @@
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/IntegerSet.h"
-#include "scalehls/Dialect/HLS/Utils/Utils.h"
+#include "scalehls/Dialect/HLS/IR/HLS.h"
 
 using namespace mlir;
 using namespace scalehls;

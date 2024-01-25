@@ -6,7 +6,7 @@
 
 #include "mlir/Dialect/Tensor/Transforms/Transforms.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "scalehls/Transforms/Passes.h"
+#include "scalehls/Dialect/HLS/Transforms/Passes.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -27,6 +27,6 @@ struct ApplyTransformPattern
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createApplyTransformPatternPass() {
+std::unique_ptr<Pass> scalehls::hls::createApplyTransformPatternPass() {
   return std::make_unique<ApplyTransformPattern>();
 }

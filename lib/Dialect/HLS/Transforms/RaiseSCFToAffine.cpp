@@ -16,7 +16,7 @@
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "scalehls/Transforms/Passes.h"
+#include "scalehls/Dialect/HLS/Transforms/Passes.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/Support/Debug.h"
 
@@ -26,6 +26,7 @@ using namespace mlir;
 using namespace mlir::arith;
 using namespace scalehls;
 using namespace affine;
+using namespace hls;
 
 static bool isValidSymbolInt(Value value, bool recur = true);
 static bool isValidSymbolInt(Operation *defOp, bool recur) {
@@ -1025,6 +1026,6 @@ struct RaiseSCFToAffine : public RaiseSCFToAffineBase<RaiseSCFToAffine> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createRaiseSCFToAffinePass() {
+std::unique_ptr<Pass> scalehls::hls::createRaiseSCFToAffinePass() {
   return std::make_unique<RaiseSCFToAffine>();
 }

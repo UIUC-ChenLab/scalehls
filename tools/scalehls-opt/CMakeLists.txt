@@ -14,11 +14,8 @@ target_link_libraries(scalehls-opt
   MLIROptLib
 
   MLIRScaleHLSHLSDialect
-  MLIRScaleHLSHLSAnalysis
   MLIRScaleHLSHLSTransforms
   MLIRScaleHLSHLSTransformOps
-  MLIRScaleHLSHLSUtils
-
+  MLIRScaleHLSPipelines
   MLIRScaleHLSUtils
-  MLIRScaleHLSTransforms
 )

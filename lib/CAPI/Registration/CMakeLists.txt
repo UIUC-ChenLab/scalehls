@@ -5,5 +5,4 @@ add_mlir_public_c_api_library(MLIRScaleHLSCAPIRegistration
   MLIRCAPIIR
   MLIRScaleHLSHLSDialect
   MLIRScaleHLSHLSTransforms
-  MLIRScaleHLSTransforms
 )

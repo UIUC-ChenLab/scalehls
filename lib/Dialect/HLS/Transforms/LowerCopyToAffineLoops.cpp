@@ -6,7 +6,7 @@
 
 #include "mlir/IR/Dominance.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "scalehls/Transforms/Passes.h"
+#include "scalehls/Dialect/HLS/Transforms/Passes.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -61,6 +61,6 @@ struct LowerCopyToAffineLoops
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::createLowerCopyToAffineLoopsPass() {
+std::unique_ptr<Pass> scalehls::hls::createLowerCopyToAffineLoopsPass() {
   return std::make_unique<LowerCopyToAffineLoops>();
 }

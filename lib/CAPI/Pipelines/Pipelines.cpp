@@ -4,9 +4,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "scalehls-c/Transforms/Pipelines.h"
+#include "scalehls-c/Pipelines/Pipelines.h"
 #include "mlir/CAPI/Pass.h"
-#include "scalehls/Transforms/Pipelines.h"
+#include "scalehls/Pipelines/Pipelines.h"
 
 using namespace mlir;
 using namespace scalehls;

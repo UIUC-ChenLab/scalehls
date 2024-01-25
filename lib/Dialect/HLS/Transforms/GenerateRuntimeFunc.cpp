@@ -4,8 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "scalehls/Dialect/HLS/Utils/Utils.h"
-#include "scalehls/Transforms/Passes.h"
+#include "scalehls/Dialect/HLS/Transforms/Passes.h"
 #include "scalehls/Utils/Utils.h"
 
 using namespace mlir;
@@ -91,7 +90,7 @@ struct GenerateRuntimeFunc
 } // namespace
 
 std::unique_ptr<Pass>
-scalehls::createGenerateRuntimeFuncPass(std::string optTopFunc,
-                                        std::string optRuntimeFunc) {
+scalehls::hls::createGenerateRuntimeFuncPass(std::string optTopFunc,
+                                             std::string optRuntimeFunc) {
   return std::make_unique<GenerateRuntimeFunc>(optTopFunc, optRuntimeFunc);
 }

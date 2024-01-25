@@ -70,9 +70,9 @@ declare_mlir_python_extension(ScaleHLSPythonExtension.Core
   EMBED_CAPI_LINK_LIBS
     MLIRCAPIIR
     MLIRScaleHLSCAPIHLSDialect
-    MLIRScaleHLSCAPITransforms
     MLIRScaleHLSCAPIRegistration
     MLIRScaleHLSCAPIEmitHLSCpp
+    MLIRScaleHLSCAPIPipelines
   PRIVATE_LINK_LIBS
     LLVMSupport
 )

@@ -5,7 +5,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Analysis/Liveness.h"
-#include "scalehls/Dialect/HLS/Utils/Utils.h"
+#include "scalehls/Dialect/HLS/IR/HLS.h"
+#include "scalehls/Utils/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
