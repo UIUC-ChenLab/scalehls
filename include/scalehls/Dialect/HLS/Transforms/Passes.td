@@ -14,6 +14,12 @@ def PreprocessDataflow : Pass<"scalehls-preprocess-dataflow", "func::FuncOp"> {
   let constructor = "mlir::scalehls::hls::createPreprocessDataflowPass()";
 }
 
+def ConvertTensorToStream :
+    Pass<"scalehls-convert-tensor-to-stream", "func::FuncOp"> {
+  let summary = "Convert tensor to stream";
+  let constructor = "mlir::scalehls::hls::createConvertTensorToStreamPass()";
+}
+
 def CreateDataflow : Pass<"scalehls-create-dataflow", "func::FuncOp"> {
   let summary = "Convert linalg to functional dataflow";
   let constructor = "mlir::scalehls::hls::createCreateDataflowPass()";

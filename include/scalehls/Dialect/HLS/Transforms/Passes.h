@@ -24,6 +24,7 @@ namespace scalehls {
 namespace hls {
 
 std::unique_ptr<Pass> createPreprocessDataflowPass();
+std::unique_ptr<Pass> createConvertTensorToStreamPass();
 std::unique_ptr<Pass> createCreateDataflowPass();
 std::unique_ptr<Pass> createLowerDataflowPass();
 std::unique_ptr<Pass> createConvertDataflowToFuncPass();

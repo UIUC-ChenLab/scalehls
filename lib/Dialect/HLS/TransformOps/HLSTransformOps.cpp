@@ -12,6 +12,7 @@
 #include "mlir/Dialect/Transform/IR/TransformInterfaces.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Dialect/HLS/IR/HLS.h"
+#include "scalehls/Utils/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -19,16 +20,6 @@ using namespace scalehls;
 //===----------------------------------------------------------------------===//
 // HLSConvertExtractSliceToTensorInitOp
 //===----------------------------------------------------------------------===//
-
-static Value getUntiledProducer(Value source) {
-  while (auto arg = dyn_cast<BlockArgument>(source)) {
-    if (auto loop = dyn_cast<scf::ForOp>(arg.getOwner()->getParentOp()))
-      source = loop.getTiedLoopInit(arg)->get();
-    else
-      break;
-  }
-  return source;
-}
 
 DiagnosedSilenceableFailure
 transform::HLSConvertExtractSliceToTensorInitOp::applyToOne(
