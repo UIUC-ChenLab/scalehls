@@ -78,18 +78,18 @@ struct ConvertLinalgGenericOp : public OpRewritePattern<linalg::GenericOp> {
         if (inputMap == resultMap) {
           rewriter.replaceAllUsesWith(result, inputTensor->get());
           hasChanged = true;
-
-        } else if (inputMap.isPermutation()) {
-          auto permutation = llvm::map_to_vector(
-              inversePermutation(inputMap).compose(resultMap).getResults(),
-              [](AffineExpr expr) {
-                return (int64_t)cast<AffineDimExpr>(expr).getPosition();
-              });
-          auto transTensor = rewriter.create<linalg::TransposeOp>(
-              op.getLoc(), inputTensor->get(), init, permutation);
-          rewriter.replaceAllUsesWith(result, transTensor.getResult());
-          hasChanged = true;
         }
+        // else if (inputMap.isPermutation()) {
+        //   auto permutation = llvm::map_to_vector(
+        //       inversePermutation(inputMap).compose(resultMap).getResults(),
+        //       [](AffineExpr expr) {
+        //         return (int64_t)cast<AffineDimExpr>(expr).getPosition();
+        //       });
+        //   auto transTensor = rewriter.create<linalg::TransposeOp>(
+        //       op.getLoc(), inputTensor->get(), init, permutation);
+        //   rewriter.replaceAllUsesWith(result, transTensor.getResult());
+        //   hasChanged = true;
+        // }
       }
     }
     return success(hasChanged);
