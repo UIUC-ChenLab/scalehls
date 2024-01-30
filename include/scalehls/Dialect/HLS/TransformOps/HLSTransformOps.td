@@ -115,16 +115,21 @@ def HLSFoldExpandShapeOp : Op<Transform_Dialect, "hls.fold_expand_shape",
   }];
 }
 
-// def HLSFoldCollapseShapeOp : Op<Transform_Dialect, "hls.fold_collapse_shape",
-//     [DeclareOpInterfaceMethods<TransformOpInterface>,
-//      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
-//   let description = [{}];
-//   let arguments = (ins
-//       Transform_ConcreteOpType<"tensor.collapse_shape">:$collapse_shape);
-//   let assemblyFormat = [{
-//     $collapse_shape attr-dict `:` type(operands)
-//   }];
-// }
+def HLSFoldCollapseShapeOp : Op<Transform_Dialect, "hls.fold_collapse_shape",
+    [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
+     TransformOpInterface, MemoryEffectsOpInterface]> {
+  let description = [{}];
+  let arguments = (ins
+      Transform_ConcreteOpType<"tensor.collapse_shape">:$collapse_shape);
+  let assemblyFormat = "$collapse_shape attr-dict `:` type(operands)";
+  let extraClassDeclaration = [{
+    ::mlir::DiagnosedSilenceableFailure applyToOne(
+        ::mlir::transform::TransformRewriter &rewriter,
+        ::mlir::tensor::CollapseShapeOp collapseShape,
+        ::mlir::transform::ApplyToEachResultList &results,
+        ::mlir::transform::TransformState &state);
+  }];
+}
 
 // def HLSFoldTensorToStreamOp : Op<Transform_Dialect, "hls.fold_tensor_to_stream",
 //     [DeclareOpInterfaceMethods<TransformOpInterface>,
