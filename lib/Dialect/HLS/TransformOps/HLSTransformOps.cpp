@@ -178,9 +178,9 @@ transform::HLSConvertInsertSliceToStreamOp::applyToOne(
 
   // Create the streaming channel.
   rewriter.setInsertionPoint(loops.front());
-  auto channelType = hls::StreamType::get(
-      target.getSourceType(), *iterShape, AffineMapAttr::get(*iterMap),
-      target.getDestType().getNumElements());
+  auto channelType =
+      hls::StreamType::get(target.getSourceType(), *iterShape, *iterMap,
+                           target.getDestType().getNumElements());
   auto channel =
       rewriter.create<hls::StreamOp>(rewriter.getUnknownLoc(), channelType);
 
@@ -239,9 +239,9 @@ transform::HLSConvertExtractSliceToStreamOp::applyToOne(
 
   // Create the tensor_to_stream op.
   rewriter.setInsertionPointAfter(sourceOp);
-  auto channelType = hls::StreamType::get(
-      target.getResultType(), *iterShape, AffineMapAttr::get(*iterMap),
-      target.getSourceType().getNumElements());
+  auto channelType =
+      hls::StreamType::get(target.getResultType(), *iterShape, *iterMap,
+                           target.getSourceType().getNumElements());
   auto channel = rewriter.create<hls::TensorToStreamOp>(
       rewriter.getUnknownLoc(), channelType, target.getSource());
 
@@ -287,10 +287,11 @@ transform::HLSConvertExtractSliceToStreamOp::applyToOne(
 template <typename OpTy>
 static std::tuple<hls::StreamOp, scf::ForOp, hls::StreamToTensorOp>
 foldReshapeOpIntoStreamToTensorOp(transform::TransformRewriter &rewriter,
-                                  OpTy reshapeOp, Value channel,
+                                  OpTy reshapeOp,
+                                  StreamToTensorOp streamToTensor,
                                   ArrayRef<int64_t> reshapedSliceShape,
                                   ArrayRef<AffineExpr> reshapeExprs) {
-  auto streamType = cast<hls::StreamType>(channel.getType());
+  auto streamType = streamToTensor.getStream().getType();
   auto sliceType = cast<RankedTensorType>(streamType.getElementType());
 
   // Get the type of the reshaped tensor slice.
@@ -302,18 +303,18 @@ foldReshapeOpIntoStreamToTensorOp(transform::TransformRewriter &rewriter,
                                    reshapeExprs, rewriter.getContext());
   auto reshapedIterMap =
       reshapeMap.compose(streamType.getIterLayout().getAffineMap());
-  auto reshapedStreamType = StreamType::get(
-      reshapedSliceType, streamType.getIterShape(),
-      AffineMapAttr::get(reshapedIterMap), streamType.getDepth());
+  auto reshapedStreamType =
+      StreamType::get(reshapedSliceType, streamType.getShape(), reshapedIterMap,
+                      streamType.getDepth());
 
   // Instantiate a new reshaped stream channel.
   rewriter.setInsertionPoint(reshapeOp);
-  auto newChannel = rewriter.template create<hls::StreamOp>(
+  auto channel = rewriter.template create<hls::StreamOp>(
       rewriter.getUnknownLoc(), reshapedStreamType);
 
   // Construct scf loops to iterate over the stream channels.
   SmallVector<scf::ForOp> loops;
-  for (auto tripCount : streamType.getIterShape()) {
+  for (auto tripCount : streamType.getShape()) {
     auto lbValue = rewriter.template create<arith::ConstantIndexOp>(
         rewriter.getUnknownLoc(), 0);
     auto upValue = rewriter.template create<arith::ConstantIndexOp>(
@@ -328,19 +329,20 @@ foldReshapeOpIntoStreamToTensorOp(transform::TransformRewriter &rewriter,
 
   // Create the stream_read, tiled tensor reshape op, and stream_write op.
   auto slice = rewriter.template create<hls::StreamReadOp>(
-      rewriter.getUnknownLoc(), streamType.getElementType(), channel);
+      rewriter.getUnknownLoc(), streamType.getElementType(),
+      streamToTensor.getStream());
   auto reshapedSlice = rewriter.template create<OpTy>(
       rewriter.getUnknownLoc(), reshapedSliceType, slice.getResult(),
       reshapeOp.getReassociation());
   rewriter.template create<hls::StreamWriteOp>(rewriter.getUnknownLoc(),
-                                               newChannel, reshapedSlice);
+                                               channel, reshapedSlice);
 
   // Create a new stream_to_tensor op to replace the original reshape op.
   rewriter.setInsertionPointAfter(reshapeOp);
   auto replacement =
       rewriter.template replaceOpWithNewOp<hls::StreamToTensorOp>(
-          reshapeOp, reshapeOp.getResultType(), newChannel);
-  return {newChannel, loops.front(), replacement};
+          reshapeOp, reshapeOp.getResultType(), channel);
+  return {channel, loops.front(), replacement};
 }
 
 DiagnosedSilenceableFailure transform::HLSFoldExpandShapeOp::applyToOne(
@@ -353,7 +355,7 @@ DiagnosedSilenceableFailure transform::HLSFoldExpandShapeOp::applyToOne(
   if (!streamToTensor)
     return DiagnosedSilenceableFailure::success();
 
-  auto streamType = cast<hls::StreamType>(streamToTensor.getStream().getType());
+  auto streamType = streamToTensor.getStream().getType();
   auto sliceType = cast<RankedTensorType>(streamType.getElementType());
 
   // Calculate the shape of the expanded tensor slice. For example, if the
@@ -387,8 +389,7 @@ DiagnosedSilenceableFailure transform::HLSFoldExpandShapeOp::applyToOne(
     expandExprs.append(localExprs.begin(), localExprs.end());
   }
 
-  foldReshapeOpIntoStreamToTensorOp(rewriter, expandShape,
-                                    streamToTensor.getStream(),
+  foldReshapeOpIntoStreamToTensorOp(rewriter, expandShape, streamToTensor,
                                     expandedSliceShape, expandExprs);
   return DiagnosedSilenceableFailure::success();
 }
@@ -408,7 +409,7 @@ DiagnosedSilenceableFailure transform::HLSFoldCollapseShapeOp::applyToOne(
   if (!streamToTensor)
     return DiagnosedSilenceableFailure::success();
 
-  auto streamType = cast<hls::StreamType>(streamToTensor.getStream().getType());
+  auto streamType = streamToTensor.getStream().getType();
   auto sliceType = cast<RankedTensorType>(streamType.getElementType());
 
   // Calculate the shape of the collapsed tensor slice. For example, if the
@@ -435,8 +436,7 @@ DiagnosedSilenceableFailure transform::HLSFoldCollapseShapeOp::applyToOne(
     collapseExprs.push_back(localExpr);
   }
 
-  foldReshapeOpIntoStreamToTensorOp(rewriter, collapseShape,
-                                    streamToTensor.getStream(),
+  foldReshapeOpIntoStreamToTensorOp(rewriter, collapseShape, streamToTensor,
                                     collapsedSliceShape, collapseExprs);
   return DiagnosedSilenceableFailure::success();
 }
@@ -456,10 +456,8 @@ DiagnosedSilenceableFailure transform::HLSFoldTensorToStreamOp::applyToOne(
   if (!streamToTensor)
     return DiagnosedSilenceableFailure::success();
 
-  auto inStreamType =
-      cast<hls::StreamType>(streamToTensor.getStream().getType());
-  auto outStreamType =
-      cast<hls::StreamType>(tensorToStream.getStream().getType());
+  auto inStreamType = streamToTensor.getStream().getType();
+  auto outStreamType = tensorToStream.getStream().getType();
 
   // If the input and output stream types are the same, we can simply replace
   // the tensor_to_stream op with the input stream.
@@ -468,6 +466,7 @@ DiagnosedSilenceableFailure transform::HLSFoldTensorToStreamOp::applyToOne(
                                 streamToTensor.getStream());
     return DiagnosedSilenceableFailure::success();
   }
+
   return DiagnosedSilenceableFailure::success();
 }
 

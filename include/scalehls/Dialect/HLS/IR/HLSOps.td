@@ -18,15 +18,18 @@ include "mlir/IR/SymbolInterfaces.td"
 class HLSOp<string mnemonic, list<Trait> traits = []> :
     Op<HLSDialect, mnemonic, traits>;
 
-class StreamOf<list<Type> allowedTypes> : Type<And<[
-    CPred<"$_self.isa<mlir::scalehls::hls::StreamType>()">,
-    Concat<"[](mlir::Type elementType) { return ",
-      SubstLeaves<"$_self", "elementType", AnyTypeOf<allowedTypes>.predicate>,
-      "; }($_self.cast<mlir::scalehls::hls::StreamType>().getElementType())">
-  ]>,
-  "stream of " # AnyTypeOf<allowedTypes>.summary # " values",
-  "mlir::scalehls::hls::StreamType"
->;
+//===----------------------------------------------------------------------===//
+// StreamtType Predicates
+//===----------------------------------------------------------------------===//
+
+def IsStreamTypePred : CPred<
+  "::llvm::isa<::mlir::scalehls::hls::StreamType>($_self)">;
+
+class StreamOf<list<Type> allowedTypes, list<Pred> preds = [],
+    string summary = "stream">
+  : ShapedContainerType<allowedTypes,
+      And<!listconcat([IsStreamTypePred], preds)>,
+      summary, "::mlir::scalehls::hls::StreamType">;
 
 def AnyBuffer : StaticShapeMemRefOf<[AnyType]>;
 def AnyStream : StreamOf<[AnyType]>;
@@ -123,41 +126,46 @@ def TensorInitOp : HLSOp<"tensor_init", [NoMemoryEffect]> {
 def TensorToStreamOp : HLSOp<"tensor_to_stream",[NoMemoryEffect]> {
   let summary = "Convert a tensor to a stream channel";
 
-  let arguments = (ins AnyTensor:$tensor);
-  let results = (outs StreamOf<[AnyType]>:$stream);
+  let arguments = (ins AnyRankedTensor:$tensor);
+  let results = (outs AnyStream:$stream);
   let assemblyFormat = [{
     $tensor attr-dict `:` functional-type($tensor, $stream)
   }];
+
+  let hasVerifier = 1;
 }
 
 def StreamToTensorOp : HLSOp<"stream_to_tensor", [NoMemoryEffect]> {
   let summary = "Convert a stream channel to a tensor";
 
-  let arguments = (ins StreamOf<[AnyType]>:$stream);
-  let results = (outs AnyTensor:$tensor);
+  let arguments = (ins AnyStream:$stream);
+  let results = (outs AnyRankedTensor:$tensor);
   let assemblyFormat = [{
     $stream attr-dict `:` functional-type($stream, $tensor)
   }];
+
+  let hasVerifier = 1;
 }
 
 def StreamOp : HLSOp<"stream", [
       DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Declare a stream channel";
 
-  let results = (outs StreamOf<[AnyType]>:$channel);
+  let results = (outs AnyStream:$channel);
   let assemblyFormat = "attr-dict `:` type($channel)";
 
   let hasVerifier = 1;
 }
 
-def StreamReadOp : HLSOp<"stream_read", []> {
+def StreamReadOp : HLSOp<"stream_read", [
+    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Read a stream channel";
   let description = [{
     Read/pop a value from a stream channel. The absence of the result indicates
     the popped value is dropped. Each stream channel can be read multiple times.
   }];
 
-  let arguments = (ins StreamOf<[AnyType]>:$channel);
+  let arguments = (ins AnyStream:$channel);
   let results = (outs Optional<AnyType>:$result);
   let assemblyFormat = [{
     $channel attr-dict `:` functional-type($channel, $result)
@@ -166,16 +174,29 @@ def StreamReadOp : HLSOp<"stream_read", []> {
   let hasVerifier = 1;
 }
 
-def StreamWriteOp : HLSOp<"stream_write", []> {
+def StreamWriteOp : HLSOp<"stream_write", [
+    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Write a stream channel";
   let description = [{
     Write/push a value to a stream channel. Each stream channel can only be
     written once.
   }];
 
-  let arguments = (ins StreamOf<[AnyType]>:$channel, AnyType:$value);
+  let arguments = (ins AnyStream:$channel, AnyType:$value);
   let assemblyFormat = [{
-    $channel `,` $value attr-dict `:` type($channel) `,` type($value)
+    $channel `,` $value attr-dict `:` functional-type($value, $channel)
+  }];
+
+  let hasVerifier = 1;
+}
+
+def StreamCastOp : HLSOp<"stream_cast", [NoMemoryEffect]> {
+  let summary = "Cast a stream channel to another type";
+
+  let arguments = (ins AnyStream:$input);
+  let results = (outs AnyStream:$output);
+  let assemblyFormat = [{
+    $input attr-dict `:` functional-type($input, $output)
   }];
 
   let hasVerifier = 1;

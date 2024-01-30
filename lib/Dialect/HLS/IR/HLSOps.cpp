@@ -198,6 +198,72 @@ LogicalResult TensorInitOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
+// TensorToStreamOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult TensorToStreamOp::verify() { return success(); }
+
+//===----------------------------------------------------------------------===//
+// StreamToTensorOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult StreamToTensorOp::verify() { return success(); }
+
+//===----------------------------------------------------------------------===//
+// StreamOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult StreamOp::verify() { return success(); }
+
+void StreamOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  effects.emplace_back(MemoryEffects::Allocate::get(), getChannel(),
+                       SideEffects::DefaultResource::get());
+}
+
+//===----------------------------------------------------------------------===//
+// StreamReadOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult StreamReadOp::verify() {
+  if (getResult())
+    if (getChannel().getType().getElementType() != getResult().getType())
+      return emitOpError("result type doesn't align with channel type");
+  return success();
+}
+
+void StreamReadOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  effects.emplace_back(MemoryEffects::Read::get(), getChannel(),
+                       SideEffects::DefaultResource::get());
+}
+
+//===----------------------------------------------------------------------===//
+// StreamWriteOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult StreamWriteOp::verify() {
+  if (getChannel().getType().getElementType() != getValue().getType())
+    return emitOpError("value type doesn't align with channel type");
+  return success();
+}
+
+void StreamWriteOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  effects.emplace_back(MemoryEffects::Write::get(), getChannel(),
+                       SideEffects::DefaultResource::get());
+}
+
+//===----------------------------------------------------------------------===//
+// StreamCastOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult StreamCastOp::verify() { return success(); }
+
+//===----------------------------------------------------------------------===//
 // ScheduleOp
 //===----------------------------------------------------------------------===//
 
@@ -727,45 +793,3 @@ void ConstBufferOp::getEffects(
   effects.emplace_back(MemoryEffects::Allocate::get(), getMemref(),
                        SideEffects::DefaultResource::get());
 }
-
-//===----------------------------------------------------------------------===//
-// StreamOp, StreamReadOp, and StreamWriteOp
-//===----------------------------------------------------------------------===//
-
-LogicalResult StreamOp::verify() { return success(); }
-
-void StreamOp::getEffects(
-    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
-        &effects) {
-  effects.emplace_back(MemoryEffects::Allocate::get(), getChannel(),
-                       SideEffects::DefaultResource::get());
-}
-
-LogicalResult StreamReadOp::verify() {
-  if (getResult())
-    if (getChannel().getType().cast<StreamType>().getElementType() !=
-        getResult().getType())
-      return emitOpError("result type doesn't align with channel type");
-  return success();
-}
-
-// void StreamReadOp::getEffects(
-//     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
-//         &effects) {
-//   effects.emplace_back(MemoryEffects::Read::get(), getChannel(),
-//                        SideEffects::DefaultResource::get());
-// }
-
-LogicalResult StreamWriteOp::verify() {
-  if (getChannel().getType().cast<StreamType>().getElementType() !=
-      getValue().getType())
-    return emitOpError("value type doesn't align with channel type");
-  return success();
-}
-
-// void StreamWriteOp::getEffects(
-//     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
-//         &effects) {
-//   effects.emplace_back(MemoryEffects::Write::get(), getChannel(),
-//                        SideEffects::DefaultResource::get());
-// }
