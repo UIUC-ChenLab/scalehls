@@ -18,6 +18,7 @@
 
 using namespace mlir;
 using namespace scalehls;
+using namespace hls;
 
 //===----------------------------------------------------------------------===//
 // HLSConvertExtractSliceToTensorInitOp
@@ -253,6 +254,84 @@ transform::HLSConvertExtractSliceToStreamOp::applyToOne(
   rewriter.replaceAllUsesWith(target.getResult(), channelRead.getResult());
   results.push_back(channel);
   results.push_back(channelRead);
+  return DiagnosedSilenceableFailure::success();
+}
+
+//===----------------------------------------------------------------------===//
+// HLSFoldExpandShapeOp
+//===----------------------------------------------------------------------===//
+
+DiagnosedSilenceableFailure transform::HLSFoldExpandShapeOp::applyToOne(
+    transform::TransformRewriter &rewriter, tensor::ExpandShapeOp expandShape,
+    transform::ApplyToEachResultList &results,
+    transform::TransformState &state) {
+  auto streamToTensor =
+      expandShape.getSrc().getDefiningOp<hls::StreamToTensorOp>();
+  if (!streamToTensor)
+    return DiagnosedSilenceableFailure::success();
+
+  auto streamType = cast<hls::StreamType>(streamToTensor.getStream().getType());
+  auto originalTensorType = expandShape.getSrcType();
+  auto expandedTensorType = expandShape.getResultType();
+
+  // Figure out the type of the expanded stream channel.
+  SmallVector<AffineExpr> expandedExprs;
+  for (auto [dim, indices] :
+       llvm::enumerate(expandShape.getReassociationIndices())) {
+    auto dimExpr = rewriter.getAffineDimExpr(dim);
+    if (indices.size() == 1)
+      expandedExprs.push_back(dimExpr);
+    else {
+      SmallVector<AffineExpr> localExprs(indices.size(), dimExpr);
+      unsigned localDim = indices.size() - 1;
+      for (auto index : llvm::reverse(indices)) {
+        auto localDimSize = expandedTensorType.getDimSize(index);
+        localExprs[localDim] = localExprs[localDim] % localDimSize;
+        for (auto &dimExpr :
+             llvm::drop_end(localExprs, indices.size() - localDim))
+          dimExpr = dimExpr.floorDiv(localDimSize);
+        localDim--;
+      }
+      expandedExprs.append(localExprs.begin(), localExprs.end());
+    }
+  }
+  auto expandedMap = AffineMap::get(originalTensorType.getRank(), 0,
+                                    expandedExprs, rewriter.getContext());
+  auto composedMap =
+      expandedMap.compose(streamType.getIterLayout().getAffineMap());
+  auto expandedStreamType =
+      StreamType::get(streamType.getElementType(), streamType.getIterShape(),
+                      AffineMapAttr::get(composedMap), streamType.getDepth());
+
+  // Instantiate a new expanded stream channel.
+  rewriter.setInsertionPoint(expandShape);
+  auto channel = rewriter.create<hls::StreamOp>(rewriter.getUnknownLoc(),
+                                                expandedStreamType);
+
+  // Construct scf loops to iterate over the stream channels.
+  for (auto tripCount : streamType.getIterShape()) {
+    auto lbValue =
+        rewriter.create<arith::ConstantIndexOp>(rewriter.getUnknownLoc(), 0);
+    auto upValue = rewriter.create<arith::ConstantIndexOp>(
+        rewriter.getUnknownLoc(), tripCount);
+    auto stepValue =
+        rewriter.create<arith::ConstantIndexOp>(rewriter.getUnknownLoc(), 1);
+    auto loop = rewriter.create<scf::ForOp>(rewriter.getUnknownLoc(), lbValue,
+                                            upValue, stepValue);
+    rewriter.setInsertionPointToStart(loop.getBody());
+  }
+
+  // Create the stream_read and stream_write op.
+  auto sliceTensor = rewriter.create<hls::StreamReadOp>(
+      rewriter.getUnknownLoc(), streamType.getElementType(),
+      streamToTensor.getStream());
+  rewriter.create<hls::StreamWriteOp>(rewriter.getUnknownLoc(), channel,
+                                      sliceTensor.getResult());
+
+  // Create a new stream_to_tensor op.
+  rewriter.setInsertionPointAfter(expandShape);
+  rewriter.replaceOpWithNewOp<hls::StreamToTensorOp>(
+      expandShape, expandedTensorType, channel);
   return DiagnosedSilenceableFailure::success();
 }
 

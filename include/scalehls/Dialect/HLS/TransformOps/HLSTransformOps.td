@@ -18,34 +18,37 @@ def HLSConvertExtractSliceToTensorInitOp : Op<Transform_Dialect,
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {
   let description = [{}];
-  let arguments = (ins TransformHandleTypeInterface:$target);
-  let results = (outs TransformHandleTypeInterface:$result);
+  let arguments = (ins
+      Transform_ConcreteOpType<"tensor.extract_slice">:$extract_slice);
+  let results = (outs
+      Transform_ConcreteOpType<"hls.tensor_init">:$tensor_init);
   let assemblyFormat = [{
-    $target attr-dict `:` functional-type($target, $result)
+    $extract_slice attr-dict `:` functional-type(operands, results)
   }];
   let extraClassDeclaration = [{
     ::mlir::DiagnosedSilenceableFailure applyToOne(
         ::mlir::transform::TransformRewriter &rewriter,
-        ::mlir::tensor::ExtractSliceOp target,
+        ::mlir::tensor::ExtractSliceOp extractSlice,
         ::mlir::transform::ApplyToEachResultList &results,
         ::mlir::transform::TransformState &state);
   }];
 }
 
-def HLSDemoteExtractSliceOp : Op<Transform_Dialect,
-    "hls.demote_extract_slice",
+def HLSDemoteExtractSliceOp : Op<Transform_Dialect, "hls.demote_extract_slice",
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {
   let description = [{}];
-  let arguments = (ins TransformHandleTypeInterface:$target);
-  let results = (outs TransformHandleTypeInterface:$result);
+  let arguments = (ins
+      Transform_ConcreteOpType<"tensor.extract_slice">:$extract_slice);
+  let results = (outs
+      Transform_ConcreteOpType<"tensor.extract_slice">:$demoted_extract_slice);
   let assemblyFormat = [{
-    $target attr-dict `:` functional-type($target, $result)
+    $extract_slice attr-dict `:` functional-type(operands, results)
   }];
   let extraClassDeclaration = [{
     ::mlir::DiagnosedSilenceableFailure applyToOne(
         ::mlir::transform::TransformRewriter &rewriter,
-        ::mlir::tensor::ExtractSliceOp target,
+        ::mlir::tensor::ExtractSliceOp extractSlice,
         ::mlir::transform::ApplyToEachResultList &results,
         ::mlir::transform::TransformState &state);
   }];
@@ -56,18 +59,19 @@ def HLSConvertInsertSliceToStreamOp : Op<Transform_Dialect,
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {
   let description = [{}];
-  let arguments = (ins TransformHandleTypeInterface:$target);
+  let arguments = (ins
+      Transform_ConcreteOpType<"tensor.insert_slice">:$insert_slice);
   let results = (outs
       Transform_ConcreteOpType<"hls.stream">:$stream,
       Transform_ConcreteOpType<"hls.stream_write">:$stream_write,
       Transform_ConcreteOpType<"hls.stream_to_tensor">:$stream_to_tensor);
   let assemblyFormat = [{
-    $target attr-dict `:` functional-type($target, results)
+    $insert_slice attr-dict `:` functional-type(operands, results)
   }];
   let extraClassDeclaration = [{
     ::mlir::DiagnosedSilenceableFailure applyToOne(
         ::mlir::transform::TransformRewriter &rewriter,
-        ::mlir::tensor::InsertSliceOp target,
+        ::mlir::tensor::InsertSliceOp insertSlice,
         ::mlir::transform::ApplyToEachResultList &results,
         ::mlir::transform::TransformState &state);
   }];
@@ -78,20 +82,61 @@ def HLSConvertExtractSliceToStreamOp : Op<Transform_Dialect,
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {
   let description = [{}];
-  let arguments = (ins TransformHandleTypeInterface:$target);
+  let arguments = (ins
+      Transform_ConcreteOpType<"tensor.extract_slice">:$extract_slice);
   let results = (outs
       Transform_ConcreteOpType<"hls.tensor_to_stream">:$tensor_to_stream,
       Transform_ConcreteOpType<"hls.stream_read">:$stream_write);
   let assemblyFormat = [{
-    $target attr-dict `:` functional-type($target, results)
+    $extract_slice attr-dict `:` functional-type(operands, results)
   }];
   let extraClassDeclaration = [{
     ::mlir::DiagnosedSilenceableFailure applyToOne(
         ::mlir::transform::TransformRewriter &rewriter,
-        ::mlir::tensor::ExtractSliceOp target,
+        ::mlir::tensor::ExtractSliceOp extractSlice,
         ::mlir::transform::ApplyToEachResultList &results,
         ::mlir::transform::TransformState &state);
   }];
 }
+
+def HLSFoldExpandShapeOp : Op<Transform_Dialect, "hls.fold_expand_shape",
+    [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
+     TransformOpInterface, MemoryEffectsOpInterface]> {
+  let description = [{}];
+  let arguments = (ins
+      Transform_ConcreteOpType<"tensor.expand_shape">:$expand_shape);
+  let assemblyFormat = "$expand_shape attr-dict `:` type(operands)";
+  let extraClassDeclaration = [{
+    ::mlir::DiagnosedSilenceableFailure applyToOne(
+        ::mlir::transform::TransformRewriter &rewriter,
+        ::mlir::tensor::ExpandShapeOp expandShape,
+        ::mlir::transform::ApplyToEachResultList &results,
+        ::mlir::transform::TransformState &state);
+  }];
+}
+
+// def HLSFoldCollapseShapeOp : Op<Transform_Dialect, "hls.fold_collapse_shape",
+//     [DeclareOpInterfaceMethods<TransformOpInterface>,
+//      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+//   let description = [{}];
+//   let arguments = (ins
+//       Transform_ConcreteOpType<"tensor.collapse_shape">:$collapse_shape);
+//   let assemblyFormat = [{
+//     $collapse_shape attr-dict `:` type(operands)
+//   }];
+// }
+
+// def HLSFoldTensorToStreamOp : Op<Transform_Dialect, "hls.fold_tensor_to_stream",
+//     [DeclareOpInterfaceMethods<TransformOpInterface>,
+//      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+//   let description = [{}];
+//   let arguments = (ins
+//       Transform_ConcreteOpType<"hls.tensor_to_stream">:$tensor_to_stream,
+//       Transform_ConcreteOpType<"hls.stream_read">:$stream_read);
+//   let assemblyFormat = [{
+//     `tensor_to_stream` $tensor_to_stream `,` `stream_read` $stream_read
+//     attr-dict `:` type(operands)
+//   }];
+// }
 
 #endif // SCALEHLS_DIALECT_HLS_TRANSFORMOPS_HLSTRANSFORMOPS_TD

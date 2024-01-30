@@ -28,7 +28,8 @@ def StreamType : HLSType<"Stream"> {
       "mlir::MemRefLayoutAttrInterface":$iterLayout,
       "int64_t":$depth);
   let assemblyFormat = [{
-    `<` qualified($elementType) `,` $iterShape `,` $iterLayout `,` $depth `>`
+    `<` qualified($elementType) `,` `[` $iterShape `]` `,` $iterLayout `,`
+    $depth `>`
   }];
 
   let builders = [
