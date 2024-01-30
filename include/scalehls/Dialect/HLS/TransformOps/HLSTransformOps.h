@@ -12,6 +12,7 @@
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Transform/IR/TransformInterfaces.h"
 #include "mlir/IR/OpImplementation.h"
+#include "scalehls/Dialect/HLS/IR/HLS.h"
 
 #define GET_OP_CLASSES
 #include "scalehls/Dialect/HLS/TransformOps/HLSTransformOps.h.inc"

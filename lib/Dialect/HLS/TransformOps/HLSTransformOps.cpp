@@ -442,6 +442,36 @@ DiagnosedSilenceableFailure transform::HLSFoldCollapseShapeOp::applyToOne(
 }
 
 //===----------------------------------------------------------------------===//
+// HLSFoldTensorToStreamOp
+//===----------------------------------------------------------------------===//
+
+DiagnosedSilenceableFailure transform::HLSFoldTensorToStreamOp::applyToOne(
+    transform::TransformRewriter &rewriter,
+    hls::TensorToStreamOp tensorToStream,
+    transform::ApplyToEachResultList &results,
+    transform::TransformState &state) {
+  // TensorToStreamOp can only be folded into a StreamToTensorOp.
+  auto streamToTensor =
+      tensorToStream.getTensor().getDefiningOp<hls::StreamToTensorOp>();
+  if (!streamToTensor)
+    return DiagnosedSilenceableFailure::success();
+
+  auto inStreamType =
+      cast<hls::StreamType>(streamToTensor.getStream().getType());
+  auto outStreamType =
+      cast<hls::StreamType>(tensorToStream.getStream().getType());
+
+  // If the input and output stream types are the same, we can simply replace
+  // the tensor_to_stream op with the input stream.
+  if (inStreamType == outStreamType) {
+    rewriter.replaceAllUsesWith(tensorToStream.getStream(),
+                                streamToTensor.getStream());
+    return DiagnosedSilenceableFailure::success();
+  }
+  return DiagnosedSilenceableFailure::success();
+}
+
+//===----------------------------------------------------------------------===//
 // Transform op registration
 //===----------------------------------------------------------------------===//
 

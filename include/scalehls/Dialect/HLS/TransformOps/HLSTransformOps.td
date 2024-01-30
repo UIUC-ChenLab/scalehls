@@ -86,7 +86,7 @@ def HLSConvertExtractSliceToStreamOp : Op<Transform_Dialect,
       Transform_ConcreteOpType<"tensor.extract_slice">:$extract_slice);
   let results = (outs
       Transform_ConcreteOpType<"hls.tensor_to_stream">:$tensor_to_stream,
-      Transform_ConcreteOpType<"hls.stream_read">:$stream_write);
+      Transform_ConcreteOpType<"hls.stream_read">:$stream_read);
   let assemblyFormat = [{
     $extract_slice attr-dict `:` functional-type(operands, results)
   }];
@@ -179,17 +179,20 @@ def HLSFoldCollapseShapeOp : Op<Transform_Dialect, "hls.fold_collapse_shape",
   }];
 }
 
-// def HLSFoldTensorToStreamOp : Op<Transform_Dialect, "hls.fold_tensor_to_stream",
-//     [DeclareOpInterfaceMethods<TransformOpInterface>,
-//      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
-//   let description = [{}];
-//   let arguments = (ins
-//       Transform_ConcreteOpType<"hls.tensor_to_stream">:$tensor_to_stream,
-//       Transform_ConcreteOpType<"hls.stream_read">:$stream_read);
-//   let assemblyFormat = [{
-//     `tensor_to_stream` $tensor_to_stream `,` `stream_read` $stream_read
-//     attr-dict `:` type(operands)
-//   }];
-// }
+def HLSFoldTensorToStreamOp : Op<Transform_Dialect, "hls.fold_tensor_to_stream",
+    [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
+     TransformOpInterface, MemoryEffectsOpInterface]> {
+  let description = [{}];
+  let arguments = (ins
+      Transform_ConcreteOpType<"hls.tensor_to_stream">:$tensor_to_stream);
+  let assemblyFormat = "$tensor_to_stream attr-dict `:` type(operands)";
+  let extraClassDeclaration = [{
+    ::mlir::DiagnosedSilenceableFailure applyToOne(
+        ::mlir::transform::TransformRewriter &rewriter,
+        ::mlir::scalehls::hls::TensorToStreamOp tensorToStream,
+        ::mlir::transform::ApplyToEachResultList &results,
+        ::mlir::transform::TransformState &state);
+  }];
+}
 
 #endif // SCALEHLS_DIALECT_HLS_TRANSFORMOPS_HLSTRANSFORMOPS_TD
