@@ -99,6 +99,54 @@ def HLSConvertExtractSliceToStreamOp : Op<Transform_Dialect,
   }];
 }
 
+// def HLSTileExpandShapeOp : Op<Transform_Dialect, "hls.tile_expand_shape",
+//     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
+//      TransformOpInterface, MemoryEffectsOpInterface]> {
+//   let description = [{}];
+//   let arguments = (ins
+//       Transform_ConcreteOpType<"tensor.expand_shape">:$expand_shape,
+//       DenseI64ArrayAttr:$tile_sizes);
+//   let results = (outs
+//       Transform_ConcreteOpType<"scf.for">:$outermost_loop,
+//       Transform_ConcreteOpType<"tensor.extract_slice">:$extract_slice,
+//       Transform_ConcreteOpType<"tensor.expand_shape">:$tiled_expand_shape,
+//       Transform_ConcreteOpType<"tensor.insert_slice">:$insert_slice);
+//   let assemblyFormat = [{
+//     $expand_shape attr-dict `:` functional-type(operands, results)
+//   }];
+//   let extraClassDeclaration = [{
+//     ::mlir::DiagnosedSilenceableFailure applyToOne(
+//         ::mlir::transform::TransformRewriter &rewriter,
+//         ::mlir::tensor::ExpandShapeOp expandShape,
+//         ::mlir::transform::ApplyToEachResultList &results,
+//         ::mlir::transform::TransformState &state);
+//   }];
+// }
+
+// def HLSTileCollapseShapeOp : Op<Transform_Dialect, "hls.tile_collapse_shape",
+//     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
+//      TransformOpInterface, MemoryEffectsOpInterface]> {
+//   let description = [{}];
+//   let arguments = (ins
+//       Transform_ConcreteOpType<"tensor.collapse_shape">:$collapse_shape,
+//       DenseI64ArrayAttr:$tile_sizes);
+//   let results = (outs
+//       Transform_ConcreteOpType<"scf.for">:$outermost_loop,
+//       Transform_ConcreteOpType<"tensor.extract_slice">:$extract_slice,
+//       Transform_ConcreteOpType<"tensor.collapse_shape">:$tiled_collapse_shape,
+//       Transform_ConcreteOpType<"tensor.insert_slice">:$insert_slice);
+//   let assemblyFormat = [{
+//     $collapse_shape attr-dict `:` functional-type(operands, results)
+//   }];
+//   let extraClassDeclaration = [{
+//     ::mlir::DiagnosedSilenceableFailure applyToOne(
+//         ::mlir::transform::TransformRewriter &rewriter,
+//         ::mlir::tensor::CollapseShapeOp collapseShape,
+//         ::mlir::transform::ApplyToEachResultList &results,
+//         ::mlir::transform::TransformState &state);
+//   }];
+// }
+
 def HLSFoldExpandShapeOp : Op<Transform_Dialect, "hls.fold_expand_shape",
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {

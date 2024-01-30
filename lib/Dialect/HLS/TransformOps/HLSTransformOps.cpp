@@ -258,6 +258,29 @@ transform::HLSConvertExtractSliceToStreamOp::applyToOne(
 }
 
 //===----------------------------------------------------------------------===//
+// HLSTileExpandShapeOp
+//===----------------------------------------------------------------------===//
+
+// DiagnosedSilenceableFailure transform::HLSTileExpandShapeOp::applyToOne(
+//     transform::TransformRewriter &rewriter, tensor::ExpandShapeOp
+//     expandShape, transform::ApplyToEachResultList &results,
+//     transform::TransformState &state) {
+//   return DiagnosedSilenceableFailure::success();
+// }
+
+//===----------------------------------------------------------------------===//
+// HLSTileCollapseShapeOp
+//===----------------------------------------------------------------------===//
+
+// DiagnosedSilenceableFailure transform::HLSTileCollapseShapeOp::applyToOne(
+//     transform::TransformRewriter &rewriter,
+//     tensor::CollapseShapeOp collapseShape,
+//     transform::ApplyToEachResultList &results,
+//     transform::TransformState &state) {
+//   return DiagnosedSilenceableFailure::success();
+// }
+
+//===----------------------------------------------------------------------===//
 // HLSFoldExpandShapeOp
 //===----------------------------------------------------------------------===//
 
