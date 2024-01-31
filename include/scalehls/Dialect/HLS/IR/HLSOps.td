@@ -190,8 +190,43 @@ def StreamWriteOp : HLSOp<"stream_write", [
   let hasVerifier = 1;
 }
 
+def StreamElementChunkOp : HLSOp<"stream_element_chunk", [NoMemoryEffect]> {
+  let summary = [{
+    Chunk the input stream channel's element to smaller elements and pass to the
+    output stream channel. The output element type should have the same rank but
+    smaller dimension sizes compared to the input element type.
+  }];
+
+  let arguments = (ins AnyStream:$input);
+  let results = (outs AnyStream:$output);
+  let assemblyFormat = [{
+    $input attr-dict `:` functional-type($input, $output)
+  }];
+
+  let hasVerifier = 1;
+}
+
+def StreamElementConcatOp : HLSOp<"stream_element_concat", [NoMemoryEffect]> {
+  let summary = [{
+    Concatenate the input stream channel's elements to a larger element and pass
+    to the output stream channel. The output element type should have the same
+    rank but larger dimension sizes compared to the input element type.
+  }];
+
+  let arguments = (ins AnyStream:$input);
+  let results = (outs AnyStream:$output);
+  let assemblyFormat = [{
+    $input attr-dict `:` functional-type($input, $output)
+  }];
+
+  let hasVerifier = 1;
+}
+
 def StreamCastOp : HLSOp<"stream_cast", [NoMemoryEffect]> {
-  let summary = "Cast a stream channel to another type";
+  let summary = [{
+    Cast a stream channel to another type. The input and output stream channel
+    must be compatible with each other.
+  }];
 
   let arguments = (ins AnyStream:$input);
   let results = (outs AnyStream:$output);

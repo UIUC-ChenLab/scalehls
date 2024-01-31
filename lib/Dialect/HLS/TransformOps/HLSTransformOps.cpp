@@ -461,9 +461,9 @@ DiagnosedSilenceableFailure transform::HLSFoldTensorToStreamOp::applyToOne(
 
   // If the input and output stream types are the same, we can simply replace
   // the tensor_to_stream op with the input stream.
-  if (inStreamType == outStreamType) {
-    rewriter.replaceAllUsesWith(tensorToStream.getStream(),
-                                streamToTensor.getStream());
+  if (inStreamType.isCompatibleWith(outStreamType)) {
+    rewriter.replaceOpWithNewOp<hls::StreamCastOp>(
+        tensorToStream, outStreamType, streamToTensor.getStream());
     return DiagnosedSilenceableFailure::success();
   }
 
