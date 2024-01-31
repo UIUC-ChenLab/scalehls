@@ -97,6 +97,97 @@ struct ConvertLinalgGenericOp : public OpRewritePattern<linalg::GenericOp> {
 };
 } // namespace
 
+static SmallVector<AffineExpr> getLowRankTensorIndexingExprs(
+    const SmallVectorImpl<mlir::ReassociationIndices> &reassociationIndices,
+    RankedTensorType highRankTensorType, PatternRewriter &rewriter) {
+  SmallVector<AffineExpr> exprs;
+  for (auto indices : reassociationIndices) {
+    auto localExpr = rewriter.getAffineDimExpr(indices.front());
+    for (auto index : llvm::drop_begin(indices)) {
+      localExpr = localExpr * highRankTensorType.getDimSize(index);
+      localExpr = localExpr + rewriter.getAffineDimExpr(index);
+    }
+    exprs.push_back(localExpr);
+  }
+  return exprs;
+}
+
+template <typename OpTy>
+static linalg::GenericOp
+generateReshapeLinalgGenericOp(OpTy reshapeOp, AffineMap inputMap,
+                               AffineMap outputMap, PatternRewriter &rewriter) {
+  assert(inputMap.getNumDims() == outputMap.getNumDims() &&
+         "input/output map mismatch in number of dimensions");
+
+  auto init = rewriter.template create<hls::TensorInitOp>(
+      reshapeOp.getLoc(), reshapeOp.getResultType());
+  auto generic = rewriter.template create<linalg::GenericOp>(
+      reshapeOp.getLoc(), reshapeOp.getResultType(), reshapeOp.getOperand(),
+      init.getResult(), SmallVector<AffineMap>({inputMap, outputMap}),
+      SmallVector<utils::IteratorType>(inputMap.getNumDims(),
+                                       utils::IteratorType::parallel));
+
+  auto genericBlock = rewriter.createBlock(&generic.getRegion());
+  genericBlock->addArguments(
+      {reshapeOp.getSrcType().getElementType(),
+       init.getType().getElementType()},
+      {reshapeOp.getSrc().getLoc(), init.getResult().getLoc()});
+  rewriter.setInsertionPointToStart(genericBlock);
+  rewriter.template create<linalg::YieldOp>(reshapeOp.getLoc(),
+                                            genericBlock->getArgument(0));
+  return generic;
+}
+
+namespace {
+/// This pattern will convert a tensor.expand_shape op to linalg.generic op.
+struct ConvertTensorExpandShapeOp
+    : public OpRewritePattern<tensor::ExpandShapeOp> {
+  using OpRewritePattern<tensor::ExpandShapeOp>::OpRewritePattern;
+  LogicalResult matchAndRewrite(tensor::ExpandShapeOp op,
+                                PatternRewriter &rewriter) const override {
+    auto inputExprs = getLowRankTensorIndexingExprs(
+        op.getReassociationIndices(), op.getResultType(), rewriter);
+
+    // Generate the indexing maps for the linalg.generic op.
+    auto numLoops = op.getResultType().getRank();
+    auto inputMap =
+        AffineMap::get(numLoops, 0, inputExprs, rewriter.getContext());
+    auto outputMap = rewriter.getMultiDimIdentityMap(numLoops);
+    auto generic =
+        generateReshapeLinalgGenericOp(op, inputMap, outputMap, rewriter);
+
+    // Replace the uses of the tensor.expand_shape op.
+    rewriter.replaceAllUsesWith(op, generic.getResult(0));
+    return success();
+  }
+};
+} // namespace
+
+namespace {
+/// This pattern will convert a tensor.collapse op to linalg.generic op.
+struct ConvertTensorCollapseShapeOp
+    : public OpRewritePattern<tensor::CollapseShapeOp> {
+  using OpRewritePattern<tensor::CollapseShapeOp>::OpRewritePattern;
+  LogicalResult matchAndRewrite(tensor::CollapseShapeOp op,
+                                PatternRewriter &rewriter) const override {
+    auto outputExprs = getLowRankTensorIndexingExprs(
+        op.getReassociationIndices(), op.getSrcType(), rewriter);
+
+    // Generate the indexing maps for the linalg.generic op.
+    auto numLoops = op.getSrcType().getRank();
+    auto inputMap = rewriter.getMultiDimIdentityMap(numLoops);
+    auto outputMap =
+        AffineMap::get(numLoops, 0, outputExprs, rewriter.getContext());
+    auto generic =
+        generateReshapeLinalgGenericOp(op, inputMap, outputMap, rewriter);
+
+    // Replace the uses of the tensor.collapse_shape op.
+    rewriter.replaceAllUsesWith(op, generic.getResult(0));
+    return success();
+  }
+};
+} // namespace
+
 namespace {
 struct PreprocessDataflow : public PreprocessDataflowBase<PreprocessDataflow> {
   void runOnOperation() override {
@@ -108,6 +199,8 @@ struct PreprocessDataflow : public PreprocessDataflowBase<PreprocessDataflow> {
     patterns.add<ConvertTensorEmptyOp>(context);
     patterns.add<ConvertLinalgFillOp>(context);
     patterns.add<ConvertLinalgGenericOp>(context);
+    patterns.add<ConvertTensorExpandShapeOp>(context);
+    patterns.add<ConvertTensorCollapseShapeOp>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
     // Ensure each TensorInitOp is only used once.

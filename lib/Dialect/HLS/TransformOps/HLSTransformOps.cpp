@@ -257,9 +257,9 @@ transform::HLSConvertExtractSliceToStreamOp::applyToOne(
   return DiagnosedSilenceableFailure::success();
 }
 
-//===----------------------------------------------------------------------===//
-// HLSTileExpandShapeOp
-//===----------------------------------------------------------------------===//
+// //===----------------------------------------------------------------------===//
+// // HLSTileExpandShapeOp
+// //===----------------------------------------------------------------------===//
 
 // DiagnosedSilenceableFailure transform::HLSTileExpandShapeOp::applyToOne(
 //     transform::TransformRewriter &rewriter, tensor::ExpandShapeOp
@@ -268,15 +268,74 @@ transform::HLSConvertExtractSliceToStreamOp::applyToOne(
 //   return DiagnosedSilenceableFailure::success();
 // }
 
-//===----------------------------------------------------------------------===//
-// HLSTileCollapseShapeOp
-//===----------------------------------------------------------------------===//
+// //===----------------------------------------------------------------------===//
+// // HLSTileCollapseShapeOp
+// //===----------------------------------------------------------------------===//
 
 // DiagnosedSilenceableFailure transform::HLSTileCollapseShapeOp::applyToOne(
 //     transform::TransformRewriter &rewriter,
 //     tensor::CollapseShapeOp collapseShape,
 //     transform::ApplyToEachResultList &results,
 //     transform::TransformState &state) {
+//   // Create the tensor_init op for the collapsed tensor.
+//   rewriter.setInsertionPoint(collapseShape);
+//   auto tensorInit = rewriter.create<hls::TensorInitOp>(
+//       rewriter.getUnknownLoc(), collapseShape.getResultType());
+
+//   // Hold the sizes (shape) and offsets of the extracted tensor slice.
+//   SmallVector<OpFoldResult> sliceSizes;
+//   SmallVector<OpFoldResult> sliceOffsets;
+
+//   // Create the nested tile loops.
+//   auto iterTensor = cast<Value>(tensorInit.getResult());
+//   for (auto [tripCount, tileSize] :
+//        llvm::zip(collapseShape.getSrcType().getShape(), getTileSizes())) {
+//     // A tile size equaling to 0 means no tiling for the dimension.
+//     if (tileSize == 0) {
+//       sliceSizes.push_back(rewriter.getI64IntegerAttr(tripCount));
+//       sliceOffsets.push_back(rewriter.getI64IntegerAttr(0));
+//       continue;
+//     }
+
+//     auto lbValue = rewriter.template create<arith::ConstantIndexOp>(
+//         rewriter.getUnknownLoc(), 0);
+//     auto upValue = rewriter.template create<arith::ConstantIndexOp>(
+//         rewriter.getUnknownLoc(), tripCount);
+//     auto stepValue = rewriter.template create<arith::ConstantIndexOp>(
+//         rewriter.getUnknownLoc(), tileSize);
+//     auto loop = rewriter.template create<scf::ForOp>(
+//         rewriter.getUnknownLoc(), lbValue, upValue, stepValue, iterTensor);
+
+//     iterTensor = loop.getRegionIterArg(0);
+//     rewriter.setInsertionPointToStart(loop.getBody());
+
+//     sliceSizes.push_back(rewriter.getI64IntegerAttr(tileSize));
+//     sliceOffsets.push_back(loop.getInductionVar());
+//   }
+
+//   // Create the extract_slice op.
+//   SmallVector<OpFoldResult>
+//   sliceStrides(collapseShape.getSrcType().getRank(),
+//                                          rewriter.getI64IntegerAttr(1));
+//   auto slice = rewriter.template create<tensor::ExtractSliceOp>(
+//       rewriter.getUnknownLoc(), iterTensor, sliceOffsets, sliceSizes,
+//       sliceStrides);
+
+//   // Create the tiled collapse_shape op.
+//   auto collapsedSlice = rewriter.template create<tensor::CollapseShapeOp>(
+//       rewriter.getUnknownLoc(), slice, collapseShape.getReassociation());
+
+//   // Create the insert_slice op.
+//   SmallVector<AffineExpr> collapseExprs;
+//   for (auto indices : collapseShape.getReassociationIndices()) {
+//     auto localExpr = rewriter.getAffineDimExpr(indices.front());
+//     for (auto index : llvm::drop_begin(indices)) {
+//       localExpr = localExpr * (collapseShape.getSrcType().getDimSize(index) /
+//                                sliceType.getDimSize(index));
+//       localExpr = localExpr + rewriter.getAffineDimExpr(index);
+//     }
+//     collapseExprs.push_back(localExpr);
+//   }
 //   return DiagnosedSilenceableFailure::success();
 // }
 
@@ -441,34 +500,34 @@ DiagnosedSilenceableFailure transform::HLSFoldCollapseShapeOp::applyToOne(
   return DiagnosedSilenceableFailure::success();
 }
 
-//===----------------------------------------------------------------------===//
-// HLSFoldTensorToStreamOp
-//===----------------------------------------------------------------------===//
+// //===----------------------------------------------------------------------===//
+// // HLSFoldTensorToStreamOp
+// //===----------------------------------------------------------------------===//
 
-DiagnosedSilenceableFailure transform::HLSFoldTensorToStreamOp::applyToOne(
-    transform::TransformRewriter &rewriter,
-    hls::TensorToStreamOp tensorToStream,
-    transform::ApplyToEachResultList &results,
-    transform::TransformState &state) {
-  // TensorToStreamOp can only be folded into a StreamToTensorOp.
-  auto streamToTensor =
-      tensorToStream.getTensor().getDefiningOp<hls::StreamToTensorOp>();
-  if (!streamToTensor)
-    return DiagnosedSilenceableFailure::success();
+// DiagnosedSilenceableFailure transform::HLSFoldTensorToStreamOp::applyToOne(
+//     transform::TransformRewriter &rewriter,
+//     hls::TensorToStreamOp tensorToStream,
+//     transform::ApplyToEachResultList &results,
+//     transform::TransformState &state) {
+//   // TensorToStreamOp can only be folded into a StreamToTensorOp.
+//   auto streamToTensor =
+//       tensorToStream.getTensor().getDefiningOp<hls::StreamToTensorOp>();
+//   if (!streamToTensor)
+//     return DiagnosedSilenceableFailure::success();
 
-  auto inStreamType = streamToTensor.getStream().getType();
-  auto outStreamType = tensorToStream.getStream().getType();
+//   auto inStreamType = streamToTensor.getStream().getType();
+//   auto outStreamType = tensorToStream.getStream().getType();
 
-  // If the input and output stream types are the same, we can simply replace
-  // the tensor_to_stream op with the input stream.
-  if (inStreamType.isCompatibleWith(outStreamType)) {
-    rewriter.replaceOpWithNewOp<hls::StreamCastOp>(
-        tensorToStream, outStreamType, streamToTensor.getStream());
-    return DiagnosedSilenceableFailure::success();
-  }
+//   // If the input and output stream types are the same, we can simply replace
+//   // the tensor_to_stream op with the input stream.
+//   if (inStreamType.isCompatibleWith(outStreamType)) {
+//     rewriter.replaceOpWithNewOp<hls::StreamCastOp>(
+//         tensorToStream, outStreamType, streamToTensor.getStream());
+//     return DiagnosedSilenceableFailure::success();
+//   }
 
-  return DiagnosedSilenceableFailure::success();
-}
+//   return DiagnosedSilenceableFailure::success();
+// }
 
 //===----------------------------------------------------------------------===//
 // Transform op registration
