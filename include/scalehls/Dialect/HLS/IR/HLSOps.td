@@ -107,6 +107,10 @@ def YieldOp : HLSOp<"yield", [NoMemoryEffect, ReturnLike, Terminator,
   let builders = [OpBuilder<(ins), "build($_builder, $_state, std::nullopt);">];
 }
 
+//===----------------------------------------------------------------------===//
+// Stream Operations
+//===----------------------------------------------------------------------===//
+
 def TensorInitOp : HLSOp<"tensor_init", [NoMemoryEffect]> {
   let summary = "Initiate a tensor";
 
@@ -133,6 +137,7 @@ def TensorToStreamOp : HLSOp<"tensor_to_stream",[NoMemoryEffect]> {
   }];
 
   let hasVerifier = 1;
+  let hasFolder = 1;
 }
 
 def StreamToTensorOp : HLSOp<"stream_to_tensor", [NoMemoryEffect]> {
@@ -190,6 +195,54 @@ def StreamWriteOp : HLSOp<"stream_write", [
   let hasVerifier = 1;
 }
 
+def StreamExpandShapeOp : HLSOp<"stream_expand_shape", [NoMemoryEffect]> {
+  let summary = [{}];
+
+  let arguments = (ins AnyStream:$input, IndexListArrayAttr:$reassociation);
+  let results = (outs AnyStream:$output);
+  let assemblyFormat = [{
+    $input attr-dict `:` functional-type($input, $output)
+  }];
+
+  let hasVerifier = 1;
+
+  let extraClassDeclaration = [{
+    SmallVector<ReassociationIndices, 4> getReassociationIndices() {
+      SmallVector<ReassociationIndices, 4> reassociationIndices;
+      for (auto attr : getReassociation())
+        reassociationIndices.push_back(llvm::to_vector<2>(
+            llvm::map_range(::llvm::cast<ArrayAttr>(attr), [&](Attribute indexAttr) {
+              return ::llvm::cast<IntegerAttr>(indexAttr).getInt();
+            })));
+      return reassociationIndices;
+    }
+  }];
+}
+
+def StreamCollapseShapeOp : HLSOp<"stream_collapse_shape", [NoMemoryEffect]> {
+  let summary = [{}];
+
+  let arguments = (ins AnyStream:$input, IndexListArrayAttr:$reassociation);
+  let results = (outs AnyStream:$output);
+  let assemblyFormat = [{
+    $input attr-dict `:` functional-type($input, $output)
+  }];
+
+  let hasVerifier = 1;
+
+  let extraClassDeclaration = [{
+    SmallVector<ReassociationIndices, 4> getReassociationIndices() {
+      SmallVector<ReassociationIndices, 4> reassociationIndices;
+      for (auto attr : getReassociation())
+        reassociationIndices.push_back(llvm::to_vector<2>(
+            llvm::map_range(::llvm::cast<ArrayAttr>(attr), [&](Attribute indexAttr) {
+              return ::llvm::cast<IntegerAttr>(indexAttr).getInt();
+            })));
+      return reassociationIndices;
+    }
+  }];
+}
+
 def StreamElementChunkOp : HLSOp<"stream_element_chunk", [NoMemoryEffect]> {
   let summary = [{
     Chunk the input stream channel's element to smaller elements and pass to the
@@ -224,8 +277,7 @@ def StreamElementConcatOp : HLSOp<"stream_element_concat", [NoMemoryEffect]> {
 
 def StreamCastOp : HLSOp<"stream_cast", [NoMemoryEffect]> {
   let summary = [{
-    Cast a stream channel to another type. The input and output stream channel
-    must be compatible with each other.
+    Cast a stream channel to another type.
   }];
 
   let arguments = (ins AnyStream:$input);

@@ -201,13 +201,28 @@ LogicalResult TensorInitOp::verify() {
 // TensorToStreamOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult TensorToStreamOp::verify() { return success(); }
+LogicalResult TensorToStreamOp::verify() {
+  if (getStream().getType().isConvertableWith(getTensor().getType()))
+    return emitOpError("stream type is not convertable with tensor type");
+  return success();
+}
+
+OpFoldResult TensorToStreamOp::fold(FoldAdaptor adaptor) {
+  if (auto streamToTensor = getTensor().getDefiningOp<StreamToTensorOp>())
+    if (streamToTensor.getStream().getType() == getStream().getType())
+      return streamToTensor.getStream();
+  return {};
+}
 
 //===----------------------------------------------------------------------===//
 // StreamToTensorOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult StreamToTensorOp::verify() { return success(); }
+LogicalResult StreamToTensorOp::verify() {
+  if (getStream().getType().isConvertableWith(getTensor().getType()))
+    return emitOpError("stream type is not convertable with tensor type");
+  return success();
+}
 
 //===----------------------------------------------------------------------===//
 // StreamOp
@@ -268,6 +283,18 @@ LogicalResult StreamElementChunkOp::verify() { return success(); }
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamElementConcatOp::verify() { return success(); }
+
+//===----------------------------------------------------------------------===//
+// StreamExpandShapeOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult StreamExpandShapeOp::verify() { return success(); }
+
+//===----------------------------------------------------------------------===//
+// StreamCollapseShapeOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult StreamCollapseShapeOp::verify() { return success(); }
 
 //===----------------------------------------------------------------------===//
 // StreamCastOp

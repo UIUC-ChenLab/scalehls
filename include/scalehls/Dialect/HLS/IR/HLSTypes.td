@@ -62,6 +62,8 @@ def StreamType : HLSType<"Stream", [ShapedTypeInterface]> {
     }]>
   ];
 
+  let genVerifyDecl = 1;
+
   let extraClassDeclaration = [{
     /// Returns if this type is ranked.
     bool hasRank() const { return true; }
@@ -76,11 +78,17 @@ def StreamType : HLSType<"Stream", [ShapedTypeInterface]> {
     using ShapedType::Trait<StreamType>::getNumElements;
     using ShapedType::Trait<StreamType>::getDimSize;
 
+    /// Infer the integral shape of the data this stream type represents.
+    SmallVector<int64_t> inferIntegralShape() const;
+
     /// Return whether the "other" stream type is compatible with this stream
     /// type. By being compatible, it means that the two stream types have the
     /// element type and iteration order, but not necessarily the same iteration
-    /// shape and layout. Compatible stream types can be casted to each other.
-    bool isCompatibleWith(StreamType other);
+    /// shape and layout.
+    bool isCompatibleWith(StreamType other) const;
+
+    /// Return whether this stream type can be converted to the "tensor" type.
+    bool isConvertableWith(RankedTensorType tensor) const;
   }];
 }
 
