@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Dialect/HLS/TransformOps/HLSTransformOps.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/SCF/Transforms/TileUsingInterface.h"
@@ -19,6 +20,7 @@
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
+using namespace affine;
 
 //===----------------------------------------------------------------------===//
 // HLSConvertExtractSliceToTensorInitOp
@@ -62,6 +64,14 @@ transform::HLSConvertExtractSliceToTensorInitOp::applyToOne(
 // HLSDemoteExtractSliceOp
 //===----------------------------------------------------------------------===//
 
+static scf::ForOp getAssociatedLoop(Value value) {
+  if (auto arg = dyn_cast<BlockArgument>(value))
+    if (auto loop = dyn_cast<scf::ForOp>(arg.getOwner()->getParentOp()))
+      if (value == loop.getInductionVar())
+        return loop;
+  return nullptr;
+}
+
 DiagnosedSilenceableFailure transform::HLSDemoteExtractSliceOp::applyToOne(
     transform::TransformRewriter &rewriter, tensor::ExtractSliceOp target,
     transform::ApplyToEachResultList &results,
@@ -70,16 +80,26 @@ DiagnosedSilenceableFailure transform::HLSDemoteExtractSliceOp::applyToOne(
   auto sourceArg = dyn_cast<BlockArgument>(target.getSource());
   if (sourceArg && isa<scf::ForOp>(sourceArg.getOwner()->getParentOp()))
     return emitDefaultSilenceableFailure(target);
+  results.push_back(target);
 
   // We then check if all offsets are loop induction variables, and collect
   // them into a set.
   llvm::SmallDenseSet<Value> offsets;
   for (auto offset : target.getMixedOffsets())
     if (auto offsetValue = offset.dyn_cast<Value>()) {
-      auto offsetArg = dyn_cast<BlockArgument>(offsetValue);
-      if (!offsetArg || !isa<scf::ForOp>(offsetArg.getOwner()->getParentOp()))
-        return emitDefaultSilenceableFailure(target);
-      offsets.insert(offsetValue);
+      // Here, we need to handle the case where the offset is defined by an
+      // affine.apply op.
+      if (auto apply = offsetValue.getDefiningOp<affine::AffineApplyOp>()) {
+        for (auto operand : apply.getOperands()) {
+          if (!getAssociatedLoop(operand))
+            return emitDefaultSilenceableFailure(target);
+          offsets.insert(operand);
+        }
+      } else {
+        if (!getAssociatedLoop(offsetValue))
+          return emitDefaultSilenceableFailure(target);
+        offsets.insert(offsetValue);
+      }
     }
 
   // Then, we find the outermost loop that does not contain any of the offsets.
@@ -94,13 +114,22 @@ DiagnosedSilenceableFailure transform::HLSDemoteExtractSliceOp::applyToOne(
   // Finally, we move the extract_slice op before the outermost loop.
   if (insertBefore != target)
     target->moveBefore(insertBefore);
-  results.push_back(target);
   return DiagnosedSilenceableFailure::success();
 }
 
 //===----------------------------------------------------------------------===//
 // HLSConvertInsertSliceToStreamOp
 //===----------------------------------------------------------------------===//
+
+static std::optional<size_t>
+getLoopIndex(Value value, const SmallVectorImpl<scf::ForOp> &loops) {
+  if (auto loop = getAssociatedLoop(value)) {
+    size_t loopIndex = std::distance(loops.begin(), llvm::find(loops, loop));
+    if (loopIndex != loops.size())
+      return loopIndex;
+  }
+  return std::nullopt;
+}
 
 static std::optional<SmallVector<int64_t>>
 getTripCounts(const SmallVector<scf::ForOp> &loops) {
@@ -131,24 +160,20 @@ getIterationAffineMap(OpTy target, const SmallVector<scf::ForOp> &loops) {
   SmallVector<AffineExpr> exprs;
   for (auto offset : target.getMixedOffsets()) {
     if (auto offsetValue = offset.template dyn_cast<Value>()) {
-      // All the offsets must be block arguments.
-      auto offsetArg = dyn_cast<BlockArgument>(offsetValue);
-      if (!offsetArg)
+      if (auto apply = offsetValue.template getDefiningOp<AffineApplyOp>()) {
+        // We cannot handle apply operation right now.
         return std::nullopt;
-
-      // All the offsets must be loop induction variables.
-      auto loop = dyn_cast<scf::ForOp>(offsetArg.getOwner()->getParentOp());
-      if (!loop || loop.getInductionVar() != offsetArg)
-        return std::nullopt;
-
-      // Find the index of the offset-associated loop.
-      auto loopIndex = std::distance(loops.begin(), llvm::find(loops, loop));
-      if (loopIndex == (int64_t)loops.size())
-        return std::nullopt;
-
-      exprs.push_back(getAffineDimExpr(loopIndex, target.getContext()));
-    } else
+      } else {
+        auto loopIndex = getLoopIndex(offsetValue, loops);
+        if (!loopIndex)
+          return std::nullopt;
+        exprs.push_back(getAffineDimExpr(*loopIndex, target.getContext()));
+      }
+    } else {
+      // If the offset is a constant, it means we don't need to iterate over the
+      // dimension when streaming.
       exprs.push_back(getAffineConstantExpr(0, target.getContext()));
+    }
   }
   return AffineMap::get(loops.size(), 0, exprs, target.getContext());
 }
@@ -207,12 +232,12 @@ transform::HLSConvertInsertSliceToStreamOp::applyToOne(
 //===----------------------------------------------------------------------===//
 
 static SmallVector<scf::ForOp> getSurroundingLoops(Operation *target,
-                                                   Operation *source) {
+                                                   Block *sourceBlock) {
   SmallVector<scf::ForOp> reversedLoops;
   while (auto loop = target->getParentOfType<scf::ForOp>()) {
     reversedLoops.push_back(loop);
     target = loop;
-    if (source->getBlock() == loop->getBlock())
+    if (sourceBlock == loop->getBlock())
       break;
   }
   return {reversedLoops.rbegin(), reversedLoops.rend()};
@@ -223,13 +248,8 @@ transform::HLSConvertExtractSliceToStreamOp::applyToOne(
     transform::TransformRewriter &rewriter, tensor::ExtractSliceOp target,
     transform::ApplyToEachResultList &results,
     transform::TransformState &state) {
-  // Check if the source tensor is defined by an operation.
-  auto sourceOp = target.getSource().getDefiningOp();
-  if (!sourceOp)
-    return emitDefaultSilenceableFailure(target);
-
   // Collect the surrounding loops of the extract_slice op.
-  auto loops = getSurroundingLoops(target, sourceOp);
+  auto loops = getSurroundingLoops(target, target.getSource().getParentBlock());
 
   // Collect the iteration shape and affine map of the streaming channel.
   auto iterShape = getTripCounts(loops);
@@ -238,7 +258,7 @@ transform::HLSConvertExtractSliceToStreamOp::applyToOne(
     return emitDefaultSilenceableFailure(target);
 
   // Create the tensor_to_stream op.
-  rewriter.setInsertionPointAfter(sourceOp);
+  rewriter.setInsertionPointAfterValue(target.getSource());
   auto channelType =
       hls::StreamType::get(target.getResultType(), *iterShape, *iterMap,
                            target.getSourceType().getNumElements());
@@ -256,278 +276,6 @@ transform::HLSConvertExtractSliceToStreamOp::applyToOne(
   results.push_back(channelRead);
   return DiagnosedSilenceableFailure::success();
 }
-
-// //===----------------------------------------------------------------------===//
-// // HLSTileExpandShapeOp
-// //===----------------------------------------------------------------------===//
-
-// DiagnosedSilenceableFailure transform::HLSTileExpandShapeOp::applyToOne(
-//     transform::TransformRewriter &rewriter, tensor::ExpandShapeOp
-//     expandShape, transform::ApplyToEachResultList &results,
-//     transform::TransformState &state) {
-//   return DiagnosedSilenceableFailure::success();
-// }
-
-// //===----------------------------------------------------------------------===//
-// // HLSTileCollapseShapeOp
-// //===----------------------------------------------------------------------===//
-
-// DiagnosedSilenceableFailure transform::HLSTileCollapseShapeOp::applyToOne(
-//     transform::TransformRewriter &rewriter,
-//     tensor::CollapseShapeOp collapseShape,
-//     transform::ApplyToEachResultList &results,
-//     transform::TransformState &state) {
-//   // Create the tensor_init op for the collapsed tensor.
-//   rewriter.setInsertionPoint(collapseShape);
-//   auto tensorInit = rewriter.create<hls::TensorInitOp>(
-//       rewriter.getUnknownLoc(), collapseShape.getResultType());
-
-//   // Hold the sizes (shape) and offsets of the extracted tensor slice.
-//   SmallVector<OpFoldResult> sliceSizes;
-//   SmallVector<OpFoldResult> sliceOffsets;
-
-//   // Create the nested tile loops.
-//   auto iterTensor = cast<Value>(tensorInit.getResult());
-//   for (auto [tripCount, tileSize] :
-//        llvm::zip(collapseShape.getSrcType().getShape(), getTileSizes())) {
-//     // A tile size equaling to 0 means no tiling for the dimension.
-//     if (tileSize == 0) {
-//       sliceSizes.push_back(rewriter.getI64IntegerAttr(tripCount));
-//       sliceOffsets.push_back(rewriter.getI64IntegerAttr(0));
-//       continue;
-//     }
-
-//     auto lbValue = rewriter.template create<arith::ConstantIndexOp>(
-//         rewriter.getUnknownLoc(), 0);
-//     auto upValue = rewriter.template create<arith::ConstantIndexOp>(
-//         rewriter.getUnknownLoc(), tripCount);
-//     auto stepValue = rewriter.template create<arith::ConstantIndexOp>(
-//         rewriter.getUnknownLoc(), tileSize);
-//     auto loop = rewriter.template create<scf::ForOp>(
-//         rewriter.getUnknownLoc(), lbValue, upValue, stepValue, iterTensor);
-
-//     iterTensor = loop.getRegionIterArg(0);
-//     rewriter.setInsertionPointToStart(loop.getBody());
-
-//     sliceSizes.push_back(rewriter.getI64IntegerAttr(tileSize));
-//     sliceOffsets.push_back(loop.getInductionVar());
-//   }
-
-//   // Create the extract_slice op.
-//   SmallVector<OpFoldResult>
-//   sliceStrides(collapseShape.getSrcType().getRank(),
-//                                          rewriter.getI64IntegerAttr(1));
-//   auto slice = rewriter.template create<tensor::ExtractSliceOp>(
-//       rewriter.getUnknownLoc(), iterTensor, sliceOffsets, sliceSizes,
-//       sliceStrides);
-
-//   // Create the tiled collapse_shape op.
-//   auto collapsedSlice = rewriter.template create<tensor::CollapseShapeOp>(
-//       rewriter.getUnknownLoc(), slice, collapseShape.getReassociation());
-
-//   // Create the insert_slice op.
-//   SmallVector<AffineExpr> collapseExprs;
-//   for (auto indices : collapseShape.getReassociationIndices()) {
-//     auto localExpr = rewriter.getAffineDimExpr(indices.front());
-//     for (auto index : llvm::drop_begin(indices)) {
-//       localExpr = localExpr * (collapseShape.getSrcType().getDimSize(index) /
-//                                sliceType.getDimSize(index));
-//       localExpr = localExpr + rewriter.getAffineDimExpr(index);
-//     }
-//     collapseExprs.push_back(localExpr);
-//   }
-//   return DiagnosedSilenceableFailure::success();
-// }
-
-//===----------------------------------------------------------------------===//
-// HLSFoldExpandShapeOp
-//===----------------------------------------------------------------------===//
-
-template <typename OpTy>
-static std::tuple<hls::StreamOp, scf::ForOp, hls::StreamToTensorOp>
-foldReshapeOpIntoStreamToTensorOp(transform::TransformRewriter &rewriter,
-                                  OpTy reshapeOp,
-                                  StreamToTensorOp streamToTensor,
-                                  ArrayRef<int64_t> reshapedSliceShape,
-                                  ArrayRef<AffineExpr> reshapeExprs) {
-  auto streamType = streamToTensor.getStream().getType();
-  auto sliceType = cast<RankedTensorType>(streamType.getElementType());
-
-  // Get the type of the reshaped tensor slice.
-  auto reshapedSliceType =
-      RankedTensorType::get(reshapedSliceShape, sliceType.getElementType());
-
-  // Get the type of the reshaped stream channel.
-  auto reshapeMap = AffineMap::get(reshapeOp.getSrcType().getRank(), 0,
-                                   reshapeExprs, rewriter.getContext());
-  auto reshapedIterMap =
-      reshapeMap.compose(streamType.getIterLayout().getAffineMap());
-  auto reshapedStreamType =
-      StreamType::get(reshapedSliceType, streamType.getShape(), reshapedIterMap,
-                      streamType.getDepth());
-
-  // Instantiate a new reshaped stream channel.
-  rewriter.setInsertionPoint(reshapeOp);
-  auto channel = rewriter.template create<hls::StreamOp>(
-      rewriter.getUnknownLoc(), reshapedStreamType);
-
-  // Construct scf loops to iterate over the stream channels.
-  SmallVector<scf::ForOp> loops;
-  for (auto tripCount : streamType.getShape()) {
-    auto lbValue = rewriter.template create<arith::ConstantIndexOp>(
-        rewriter.getUnknownLoc(), 0);
-    auto upValue = rewriter.template create<arith::ConstantIndexOp>(
-        rewriter.getUnknownLoc(), tripCount);
-    auto stepValue = rewriter.template create<arith::ConstantIndexOp>(
-        rewriter.getUnknownLoc(), 1);
-    auto loop = rewriter.create<scf::ForOp>(rewriter.getUnknownLoc(), lbValue,
-                                            upValue, stepValue);
-    rewriter.setInsertionPointToStart(loop.getBody());
-    loops.push_back(loop);
-  }
-
-  // Create the stream_read, tiled tensor reshape op, and stream_write op.
-  auto slice = rewriter.template create<hls::StreamReadOp>(
-      rewriter.getUnknownLoc(), streamType.getElementType(),
-      streamToTensor.getStream());
-  auto reshapedSlice = rewriter.template create<OpTy>(
-      rewriter.getUnknownLoc(), reshapedSliceType, slice.getResult(),
-      reshapeOp.getReassociation());
-  rewriter.template create<hls::StreamWriteOp>(rewriter.getUnknownLoc(),
-                                               channel, reshapedSlice);
-
-  // Create a new stream_to_tensor op to replace the original reshape op.
-  rewriter.setInsertionPointAfter(reshapeOp);
-  auto replacement =
-      rewriter.template replaceOpWithNewOp<hls::StreamToTensorOp>(
-          reshapeOp, reshapeOp.getResultType(), channel);
-  return {channel, loops.front(), replacement};
-}
-
-DiagnosedSilenceableFailure transform::HLSFoldExpandShapeOp::applyToOne(
-    transform::TransformRewriter &rewriter, tensor::ExpandShapeOp expandShape,
-    transform::ApplyToEachResultList &results,
-    transform::TransformState &state) {
-  // ExpandShapeOp can only be folded into a StreamToTensorOp.
-  auto streamToTensor =
-      expandShape.getSrc().template getDefiningOp<hls::StreamToTensorOp>();
-  if (!streamToTensor)
-    return DiagnosedSilenceableFailure::success();
-
-  auto streamType = streamToTensor.getStream().getType();
-  auto sliceType = cast<RankedTensorType>(streamType.getElementType());
-
-  // Calculate the shape of the expanded tensor slice. For example, if the
-  // original tensor slice's shape is (16, 16) with an reassociation map of
-  // [[0], [1, 2, 3]], the resulting shape should be (16, 1, 1, 16).
-  SmallVector<int64_t> expandedSliceShape;
-  for (auto [dimSize, indices] :
-       llvm::zip(sliceType.getShape(), expandShape.getReassociationIndices())) {
-    SmallVector<int64_t> expandedDimSizes(indices.size(), 1);
-    expandedDimSizes.back() = dimSize;
-    expandedSliceShape.append(expandedDimSizes.begin(), expandedDimSizes.end());
-  }
-
-  // Calculate the affine expressions to map the original tensor's iteration
-  // space to the expanded tensor's iteration space.
-  SmallVector<AffineExpr> expandExprs;
-  for (auto [dim, indices] :
-       llvm::enumerate(expandShape.getReassociationIndices())) {
-    SmallVector<AffineExpr> localExprs(indices.size(),
-                                       rewriter.getAffineDimExpr(dim));
-    unsigned localDim = indices.size() - 1;
-    for (auto index : llvm::drop_end(llvm::reverse(indices))) {
-      auto localDimSize = expandShape.getResultType().getDimSize(index) /
-                          expandedSliceShape[index];
-      for (auto &localExpr :
-           llvm::drop_end(localExprs, indices.size() - localDim))
-        localExpr = localExpr.floorDiv(localDimSize);
-      localExprs[localDim] = localExprs[localDim] % localDimSize;
-      localDim--;
-    }
-    expandExprs.append(localExprs.begin(), localExprs.end());
-  }
-
-  foldReshapeOpIntoStreamToTensorOp(rewriter, expandShape, streamToTensor,
-                                    expandedSliceShape, expandExprs);
-  return DiagnosedSilenceableFailure::success();
-}
-
-//===----------------------------------------------------------------------===//
-// HLSFoldCollapseShapeOp
-//===----------------------------------------------------------------------===//
-
-DiagnosedSilenceableFailure transform::HLSFoldCollapseShapeOp::applyToOne(
-    transform::TransformRewriter &rewriter,
-    tensor::CollapseShapeOp collapseShape,
-    transform::ApplyToEachResultList &results,
-    transform::TransformState &state) {
-  // CollapseShapeOp can only be folded into a StreamToTensorOp.
-  auto streamToTensor =
-      collapseShape.getSrc().template getDefiningOp<hls::StreamToTensorOp>();
-  if (!streamToTensor)
-    return DiagnosedSilenceableFailure::success();
-
-  auto streamType = streamToTensor.getStream().getType();
-  auto sliceType = cast<RankedTensorType>(streamType.getElementType());
-
-  // Calculate the shape of the collapsed tensor slice. For example, if the
-  // original tensor slice's shape is (16, 2, 2, 16) with an reassociation map
-  // of [[0], [1, 2, 3]], the resulting shape should be (16, 64).
-  SmallVector<int64_t> collapsedSliceShape;
-  for (auto indices : collapseShape.getReassociationIndices()) {
-    unsigned dimSize = 1;
-    for (auto index : indices)
-      dimSize *= sliceType.getDimSize(index);
-    collapsedSliceShape.push_back(dimSize);
-  }
-
-  // Calculate the affine expressions to map the original tensor's iteration
-  // space to the collapsed tensor's iteration space.
-  SmallVector<AffineExpr> collapseExprs;
-  for (auto indices : collapseShape.getReassociationIndices()) {
-    auto localExpr = rewriter.getAffineDimExpr(indices.front());
-    for (auto index : llvm::drop_begin(indices)) {
-      localExpr = localExpr * (collapseShape.getSrcType().getDimSize(index) /
-                               sliceType.getDimSize(index));
-      localExpr = localExpr + rewriter.getAffineDimExpr(index);
-    }
-    collapseExprs.push_back(localExpr);
-  }
-
-  foldReshapeOpIntoStreamToTensorOp(rewriter, collapseShape, streamToTensor,
-                                    collapsedSliceShape, collapseExprs);
-  return DiagnosedSilenceableFailure::success();
-}
-
-// //===----------------------------------------------------------------------===//
-// // HLSFoldTensorToStreamOp
-// //===----------------------------------------------------------------------===//
-
-// DiagnosedSilenceableFailure transform::HLSFoldTensorToStreamOp::applyToOne(
-//     transform::TransformRewriter &rewriter,
-//     hls::TensorToStreamOp tensorToStream,
-//     transform::ApplyToEachResultList &results,
-//     transform::TransformState &state) {
-//   // TensorToStreamOp can only be folded into a StreamToTensorOp.
-//   auto streamToTensor =
-//       tensorToStream.getTensor().getDefiningOp<hls::StreamToTensorOp>();
-//   if (!streamToTensor)
-//     return DiagnosedSilenceableFailure::success();
-
-//   auto inStreamType = streamToTensor.getStream().getType();
-//   auto outStreamType = tensorToStream.getStream().getType();
-
-//   // If the input and output stream types are the same, we can simply replace
-//   // the tensor_to_stream op with the input stream.
-//   if (inStreamType.isCompatibleWith(outStreamType)) {
-//     rewriter.replaceOpWithNewOp<hls::StreamCastOp>(
-//         tensorToStream, outStreamType, streamToTensor.getStream());
-//     return DiagnosedSilenceableFailure::success();
-//   }
-
-//   return DiagnosedSilenceableFailure::success();
-// }
 
 //===----------------------------------------------------------------------===//
 // Transform op registration

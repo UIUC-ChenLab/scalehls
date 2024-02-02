@@ -199,8 +199,8 @@ struct PreprocessDataflow : public PreprocessDataflowBase<PreprocessDataflow> {
     patterns.add<ConvertTensorEmptyOp>(context);
     patterns.add<ConvertLinalgFillOp>(context);
     patterns.add<ConvertLinalgGenericOp>(context);
-    patterns.add<ConvertTensorExpandShapeOp>(context);
-    patterns.add<ConvertTensorCollapseShapeOp>(context);
+    // patterns.add<ConvertTensorExpandShapeOp>(context);
+    // patterns.add<ConvertTensorCollapseShapeOp>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
     // Ensure each TensorInitOp is only used once.
