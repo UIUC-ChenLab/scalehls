@@ -202,8 +202,10 @@ LogicalResult TensorInitOp::verify() {
 //===----------------------------------------------------------------------===//
 
 LogicalResult TensorToStreamOp::verify() {
-  if (getStream().getType().isConvertableWith(getTensor().getType()))
-    return emitOpError("stream type is not convertable with tensor type");
+  if (!getStream().getType().isConvertableWith(getTensor().getType()))
+    return emitOpError() << "stream type is not convertable with tensor type, "
+                            "stream type has an integral shape of ("
+                         << getStream().getType().getIntegralShape() << ")";
   return success();
 }
 
@@ -219,8 +221,10 @@ OpFoldResult TensorToStreamOp::fold(FoldAdaptor adaptor) {
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamToTensorOp::verify() {
-  if (getStream().getType().isConvertableWith(getTensor().getType()))
-    return emitOpError("stream type is not convertable with tensor type");
+  if (!getStream().getType().isConvertableWith(getTensor().getType()))
+    return emitOpError() << "stream type is not convertable with tensor type, "
+                            "stream type has an integral shape of ("
+                         << getStream().getType().getIntegralShape() << ")";
   return success();
 }
 

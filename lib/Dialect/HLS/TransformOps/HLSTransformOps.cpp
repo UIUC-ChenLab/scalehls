@@ -88,7 +88,8 @@ DiagnosedSilenceableFailure transform::HLSDemoteExtractSliceOp::applyToOne(
   for (auto offset : extractSlice.getMixedOffsets())
     if (auto offsetValue = offset.dyn_cast<Value>()) {
       // Here, we need to handle the case where the offset is defined by an
-      // affine.apply op.
+      // affine.apply op. Specifically, we need to check whether the operands
+      // of the affine.apply op are loop induction variables.
       if (auto apply = offsetValue.getDefiningOp<affine::AffineApplyOp>()) {
         for (auto operand : apply.getOperands()) {
           if (!getAssociatedLoop(operand))
@@ -121,6 +122,43 @@ DiagnosedSilenceableFailure transform::HLSDemoteExtractSliceOp::applyToOne(
 // HLSConvertInsertSliceToStreamOp
 //===----------------------------------------------------------------------===//
 
+static std::optional<SmallVector<int64_t>>
+getLoopSteps(const SmallVector<scf::ForOp> &loops) {
+  SmallVector<int64_t> steps;
+  for (auto loop : loops) {
+    auto stepCstOp = getConstantIntValue(loop.getStep());
+    if (!stepCstOp)
+      return std::nullopt;
+
+    int64_t stepCst = stepCstOp.value();
+    assert(stepCst >= 0 && "expected positive loop step");
+    steps.push_back(stepCst);
+  }
+  return steps;
+}
+
+static std::optional<SmallVector<int64_t>>
+getLoopTripCounts(const SmallVector<scf::ForOp> &loops) {
+  SmallVector<int64_t> tripCounts;
+  for (auto loop : loops) {
+    auto lbCstOp = getConstantIntValue(loop.getLowerBound());
+    auto ubCstOp = getConstantIntValue(loop.getUpperBound());
+    auto stepCstOp = getConstantIntValue(loop.getStep());
+    if (!lbCstOp || !ubCstOp || !stepCstOp)
+      return std::nullopt;
+
+    int64_t lbCst = lbCstOp.value();
+    int64_t ubCst = ubCstOp.value();
+    int64_t stepCst = stepCstOp.value();
+    assert(lbCst >= 0 && ubCst >= 0 && stepCst >= 0 &&
+           "expected positive loop bounds and step");
+    if ((ubCst - lbCst) % stepCst != 0)
+      return std::nullopt;
+    tripCounts.push_back((ubCst - lbCst) / stepCst);
+  }
+  return tripCounts;
+}
+
 static std::optional<size_t>
 getLoopIndex(Value value, const SmallVectorImpl<scf::ForOp> &loops) {
   if (auto loop = getAssociatedLoop(value)) {
@@ -131,29 +169,6 @@ getLoopIndex(Value value, const SmallVectorImpl<scf::ForOp> &loops) {
   return std::nullopt;
 }
 
-static std::optional<SmallVector<int64_t>>
-getTripCounts(const SmallVector<scf::ForOp> &loops) {
-  SmallVector<int64_t> tripCounts;
-  for (auto loop : loops) {
-    // All the loops must have static bounds and step.
-    auto lbCstOp = getConstantIntValue(loop.getLowerBound());
-    auto ubCstOp = getConstantIntValue(loop.getUpperBound());
-    auto stepCstOp = getConstantIntValue(loop.getStep());
-    if (!lbCstOp || !ubCstOp || !stepCstOp)
-      return std::nullopt;
-
-    // Calculate the trip count of the loop.
-    int64_t lbCst = lbCstOp.value();
-    int64_t ubCst = ubCstOp.value();
-    int64_t stepCst = stepCstOp.value();
-    assert(lbCst >= 0 && ubCst >= 0 && stepCst >= 0 &&
-           "expected positive loop bounds and step");
-    int64_t tripCount = mlir::ceilDiv(ubCst - lbCst, stepCst);
-    tripCounts.push_back(tripCount);
-  }
-  return tripCounts;
-}
-
 template <typename OpTy>
 static std::optional<AffineMap>
 getIterationAffineMap(OpTy target, const SmallVector<scf::ForOp> &loops) {
@@ -161,8 +176,16 @@ getIterationAffineMap(OpTy target, const SmallVector<scf::ForOp> &loops) {
   for (auto offset : target.getMixedOffsets()) {
     if (auto offsetValue = offset.template dyn_cast<Value>()) {
       if (auto apply = offsetValue.template getDefiningOp<AffineApplyOp>()) {
-        // We cannot handle apply operation right now.
-        return std::nullopt;
+        // Here, we need to handle the case where the offset is defined by an
+        // affine.apply op.
+        SmallVector<AffineExpr> repDims;
+        for (auto operand : apply.getOperands()) {
+          auto loopIndex = getLoopIndex(operand, loops);
+          if (!loopIndex)
+            return std::nullopt;
+          repDims.push_back(getAffineDimExpr(*loopIndex, target.getContext()));
+        }
+        exprs.push_back(apply.getAffineMap().getResult(0).replaceDims(repDims));
       } else {
         auto loopIndex = getLoopIndex(offsetValue, loops);
         if (!loopIndex)
@@ -196,16 +219,17 @@ transform::HLSConvertInsertSliceToStreamOp::applyToOne(
     return emitDefaultSilenceableFailure(insertSlice);
 
   // Collect the iteration shape and affine map of the streaming channel.
-  auto iterShape = getTripCounts(loops);
+  auto iterTripCounts = getLoopTripCounts(loops);
+  auto iterSteps = getLoopSteps(loops);
   auto iterMap = getIterationAffineMap(insertSlice, loops);
-  if (!iterShape || !iterMap)
+  if (!iterTripCounts || !iterSteps || !iterMap)
     return emitDefaultSilenceableFailure(insertSlice);
 
   // Create the streaming channel.
   rewriter.setInsertionPoint(loops.front());
-  auto channelType =
-      hls::StreamType::get(insertSlice.getSourceType(), *iterShape, *iterMap,
-                           insertSlice.getDestType().getNumElements());
+  auto channelType = hls::StreamType::get(
+      insertSlice.getSourceType(), *iterTripCounts, *iterSteps, *iterMap,
+      insertSlice.getDestType().getNumElements());
   auto channel =
       rewriter.create<hls::StreamOp>(rewriter.getUnknownLoc(), channelType);
 
@@ -253,16 +277,17 @@ transform::HLSConvertExtractSliceToStreamOp::applyToOne(
                                    extractSlice.getSource().getParentBlock());
 
   // Collect the iteration shape and affine map of the streaming channel.
-  auto iterShape = getTripCounts(loops);
+  auto iterTripCounts = getLoopTripCounts(loops);
+  auto iterSteps = getLoopSteps(loops);
   auto iterMap = getIterationAffineMap(extractSlice, loops);
-  if (!iterShape || !iterMap)
+  if (!iterTripCounts || !iterSteps || !iterMap)
     return emitDefaultSilenceableFailure(extractSlice);
 
   // Create the tensor_to_stream op.
   rewriter.setInsertionPointAfterValue(extractSlice.getSource());
-  auto channelType =
-      hls::StreamType::get(extractSlice.getResultType(), *iterShape, *iterMap,
-                           extractSlice.getSourceType().getNumElements());
+  auto channelType = hls::StreamType::get(
+      extractSlice.getResultType(), *iterTripCounts, *iterSteps, *iterMap,
+      extractSlice.getSourceType().getNumElements());
   auto channel = rewriter.create<hls::TensorToStreamOp>(
       rewriter.getUnknownLoc(), channelType, extractSlice.getSource());
 

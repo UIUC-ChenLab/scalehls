@@ -19,10 +19,12 @@ def HLSConvertExtractSliceToTensorInitOp : Op<Transform_Dialect,
      TransformOpInterface, MemoryEffectsOpInterface]> {
   let description = [{
     Convert a target `extract_slice` op to a `tensor_init` op, localizing the
-    initial tensor. This transform must be applied on the `init` operand of an
-    linalg op. Meanwhile, the real producer of the `init` operand must be an
-    `tensor_init` op in the first place, otherwise a silenceable failure will be
-    emitted. This transform returns the handle of the new `tensor_init` op.
+    extracted tensor. This transform returns the handle of the new local
+    `tensor_init` op.
+
+    **This transform must be applied on the `init` operand of a linalg op.
+    Meanwhile, the real producer of the source tensor must be an `tensor_init`
+    op in the first place, otherwise a silenceable failure will be emitted.**
   }];
   let arguments = (ins
       Transform_ConcreteOpType<"tensor.extract_slice">:$extract_slice);
@@ -45,11 +47,13 @@ def HLSDemoteExtractSliceOp : Op<Transform_Dialect, "hls.demote_extract_slice",
      TransformOpInterface, MemoryEffectsOpInterface]> {
   let description = [{
     Demote an `extract_slice` op to as outer as possible loop level, potentially
-    increasing the resuability of the extracted tensor. The source of the target
-    `extract_slice` op must not be an iteration argument of a loop, otherwise a
-    silenceable failure will be emitted. This transform always returns the
-    handle of the target `extract_slice` op, no matter it has been demoted or
-    not.
+    increasing the resuability of the extracted tensor. This transform always
+    returns the handle of the target `extract_slice` op, no matter it has been
+    demoted or not.
+
+    **This transform must be applied on the `input` operand of a linalg op,
+    which means the source tensor is not an iteration argument of any loop,
+    otherwise a silenceable failure will be emitted.**
   }];
   let arguments = (ins
       Transform_ConcreteOpType<"tensor.extract_slice">:$extract_slice);
@@ -71,7 +75,18 @@ def HLSConvertInsertSliceToStreamOp : Op<Transform_Dialect,
     "hls.convert_insert_slice_to_stream",
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {
-  let description = [{}];
+  let description = [{
+    Convert a target `insert_slice` op to 1) a `stream` op, replacing the
+    destination tensor with a stream channel, 2) a `stream_write` op, writing
+    the slice tensor to the stream channel instead of inserting to the
+    destination tensor, and 3) a `stream_to_tensor` op, converting the stream
+    channel back to a new destination tensor and replace the original one.
+
+    **This transform must be applied on the only user of an destination tensor,
+    and the source slice tensor must be the `result` of a statically tiled
+    linalg op, otherwise a silenceable failure will be emitted.** This can
+    ensure there's no other operations having effects on the destination tensor.
+  }];
   let arguments = (ins
       Transform_ConcreteOpType<"tensor.insert_slice">:$insert_slice);
   let results = (outs
@@ -94,7 +109,15 @@ def HLSConvertExtractSliceToStreamOp : Op<Transform_Dialect,
     "hls.convert_extract_slice_to_stream",
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {
-  let description = [{}];
+  let description = [{
+    Convert a target `extract_slice` op to 1) a `tensor_to_stream` op,
+    converting the source tensor to a stream channel, and 2) a `stream_read` op,
+    reading the destination slice tensor from the stream channel instead of
+    extracting from the source tensor.
+
+    **This transform must be applied on the `input` operand of a statically
+    tiled linalg op, otherwise a silenceable failure will be emitted.**
+  }];
   let arguments = (ins
       Transform_ConcreteOpType<"tensor.extract_slice">:$extract_slice);
   let results = (outs

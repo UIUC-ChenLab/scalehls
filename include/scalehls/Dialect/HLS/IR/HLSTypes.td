@@ -29,36 +29,41 @@ def StreamType : HLSType<"Stream", [ShapedTypeInterface]> {
 
   let parameters = (ins
       "mlir::Type":$elementType,
-      ArrayRefParameter<"int64_t">:$shape,
-      "mlir::MemRefLayoutAttrInterface":$iterLayout,
-      "int64_t":$depth);
+      ArrayRefParameter<"int64_t">:$iterTripCounts,
+      ArrayRefParameter<"int64_t">:$iterSteps,
+      "mlir::AffineMapAttr":$iterMap,
+      DefaultValuedParameter<"int64_t", "1">:$depth);
   let assemblyFormat = [{
-    `<` qualified($elementType) `,` `[` $shape `]` `,` $iterLayout `,`
-    $depth `>`
+    `<` qualified($elementType) `,` `[` $iterTripCounts `]` `,`
+    `[` $iterSteps `]` `,` $iterMap `,` $depth `>`
   }];
 
   let builders = [
     TypeBuilderWithInferredContext<(ins
-        "mlir::Type":$elementType, "ArrayRef<int64_t>":$shape,
-        "mlir::MemRefLayoutAttrInterface":$iterLayout,
+        "mlir::Type":$elementType, "ArrayRef<int64_t>":$iterTripCounts,
+        "ArrayRef<int64_t>":$iterSteps, "mlir::AffineMap":$iterMap,
         CArg<"int64_t", "1">:$depth), [{
-      return $_get(elementType.getContext(), elementType, shape, iterLayout,
-                   depth);
+      return $_get(elementType.getContext(), elementType, iterTripCounts,
+                   iterSteps, AffineMapAttr::get(iterMap), depth);
     }]>,
     TypeBuilderWithInferredContext<(ins
-        "mlir::Type":$elementType, "ArrayRef<int64_t>":$shape,
-        "mlir::AffineMap":$iterMap,
-        CArg<"int64_t", "1">:$depth), [{
-      return $_get(elementType.getContext(), elementType, shape,
-                   AffineMapAttr::get(iterMap), depth);
+        "mlir::Type":$elementType, "ArrayRef<int64_t>":$iterTripCounts,
+        "ArrayRef<int64_t>":$iterSteps, CArg<"int64_t", "1">:$depth), [{
+      auto identityMap = AffineMap::getMultiDimIdentityMap(
+          iterTripCounts.size(), elementType.getContext());
+      return get(elementType, iterTripCounts, iterSteps, identityMap, depth);
     }]>,
     TypeBuilderWithInferredContext<(ins
-        "mlir::Type":$elementType, "ArrayRef<int64_t>":$shape,
+        "mlir::Type":$elementType, "ArrayRef<int64_t>":$iterTripCounts,
+        "mlir::AffineMap":$iterMap, CArg<"int64_t", "1">:$depth), [{
+      return get(elementType, iterTripCounts,
+          SmallVector<int64_t>(iterTripCounts.size(), 1), iterMap, depth);
+    }]>,
+    TypeBuilderWithInferredContext<(ins
+        "mlir::Type":$elementType, "ArrayRef<int64_t>":$iterTripCounts,
         CArg<"int64_t", "1">:$depth), [{
-      auto identityMap = AffineMapAttr::get(AffineMap::getMultiDimIdentityMap(
-          shape.size(), elementType.getContext()));
-      return $_get(elementType.getContext(), elementType, shape, identityMap,
-                   depth);
+      return get(elementType, iterTripCounts,
+          SmallVector<int64_t>(iterTripCounts.size(), 1), depth);
     }]>
   ];
 
@@ -67,6 +72,10 @@ def StreamType : HLSType<"Stream", [ShapedTypeInterface]> {
   let extraClassDeclaration = [{
     /// Returns if this type is ranked.
     bool hasRank() const { return true; }
+
+    /// Returns the shape of this type. For stream types, we consider the
+    /// iteration trip counts as the shape.
+    ArrayRef<int64_t> getShape() const { return getIterTripCounts(); }
 
     /// Clone this type with the given shape and element type. If the provided
     /// shape is `std::nullopt`, the current shape of the type is used.
@@ -78,8 +87,11 @@ def StreamType : HLSType<"Stream", [ShapedTypeInterface]> {
     using ShapedType::Trait<StreamType>::getNumElements;
     using ShapedType::Trait<StreamType>::getDimSize;
 
-    /// Infer the integral shape of the data this stream type represents.
-    SmallVector<int64_t> inferIntegralShape() const;
+    /// Return the iteration bounds of this stream type.
+    SmallVector<int64_t> getIterBounds() const;
+
+    /// Infer and return the integral shape this stream type represents.
+    SmallVector<int64_t> getIntegralShape() const;
 
     /// Return whether the "other" stream type is compatible with this stream
     /// type. By being compatible, it means that the two stream types have the

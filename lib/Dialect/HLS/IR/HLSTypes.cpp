@@ -3,6 +3,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Support/MathExtras.h"
 #include "scalehls/Dialect/HLS/IR/HLS.h"
 
 using namespace mlir;
@@ -11,18 +12,21 @@ using namespace hls;
 
 LogicalResult
 hls::StreamType::verify(function_ref<InFlightDiagnostic()> emitError,
-                        Type elementType, ArrayRef<int64_t> shape,
-                        MemRefLayoutAttrInterface iterLayout, int64_t depth) {
-  if (iterLayout.getAffineMap().getNumSymbols())
-    return emitError() << "iteration layout cannot have symbols";
-  if (shape.size() != iterLayout.getAffineMap().getNumDims())
-    return emitError() << "shape size and iteration layout mismatch";
+                        Type elementType, ArrayRef<int64_t> iterTripCounts,
+                        ArrayRef<int64_t> iterSteps, AffineMapAttr iterMap,
+                        int64_t depth) {
+  if (iterMap.getAffineMap().getNumSymbols())
+    return emitError() << "iteration map cannot have symbols";
+  if (iterTripCounts.size() != iterMap.getAffineMap().getNumDims())
+    return emitError() << "iteration space trip counts and map mismatch";
+  if (iterTripCounts.size() != iterSteps.size())
+    return emitError() << "iteration space trip counts and steps mismatch";
+
   if (auto shapedElementType = llvm::dyn_cast<ShapedType>(elementType)) {
-    if (!shapedElementType.hasRank())
-      return emitError() << "element type must be ranked";
-    if (iterLayout.getAffineMap().getNumResults() !=
-        shapedElementType.getRank())
-      return emitError() << "iteration layout and element type rank mismatch";
+    if (!shapedElementType.hasStaticShape())
+      return emitError() << "element type must have static shape";
+    if (iterMap.getAffineMap().getNumResults() != shapedElementType.getRank())
+      return emitError() << "iteration map and element type rank mismatch";
   }
   return success();
 }
@@ -31,17 +35,28 @@ hls::StreamType::verify(function_ref<InFlightDiagnostic()> emitError,
 /// shape is `std::nullopt`, the current shape of the type is used.
 StreamType hls::StreamType::cloneWith(std::optional<ArrayRef<int64_t>> shape,
                                       Type elementType) const {
-  return StreamType::get(elementType, shape ? *shape : getShape(),
-                         getIterLayout(), getDepth());
+  return StreamType::get(getContext(), elementType, shape ? *shape : getShape(),
+                         getIterSteps(), getIterMap(), getDepth());
 }
 
-/// Infer the integral shape of the data this stream type represents.
-SmallVector<int64_t> hls::StreamType::inferIntegralShape() const {
-  SmallVector<AffineExpr> iterSizeInputs;
-  for (auto iterSize : getShape())
-    iterSizeInputs.push_back(getAffineConstantExpr(iterSize, getContext()));
-  auto iterSizeMap = getIterLayout().getAffineMap().replaceDimsAndSymbols(
-      iterSizeInputs, {}, 0, 0);
+/// Return the iteration trip counts of this stream type.
+SmallVector<int64_t> hls::StreamType::getIterBounds() const {
+  // Note that the verifier has ensured that the iteration bounds are
+  // divisible by the iteration steps.
+  SmallVector<int64_t> iterBounds;
+  for (auto [tripCount, step] : llvm::zip(getIterTripCounts(), getIterSteps()))
+    iterBounds.push_back(tripCount * step);
+  return iterBounds;
+}
+
+/// Infer and return the integral shape this stream type represents.
+SmallVector<int64_t> hls::StreamType::getIntegralShape() const {
+  SmallVector<AffineExpr> iterSizes;
+  for (auto [tripCount, step] : llvm::zip(getIterTripCounts(), getIterSteps()))
+    iterSizes.push_back(
+        getAffineConstantExpr((tripCount - 1) * step, getContext()));
+  auto iterSizeMap =
+      getIterMap().getAffineMap().replaceDimsAndSymbols(iterSizes, {}, 0, 0);
   auto shapedElementType = llvm::dyn_cast<ShapedType>(getElementType());
 
   SmallVector<int64_t> integralShape;
@@ -52,16 +67,16 @@ SmallVector<int64_t> hls::StreamType::inferIntegralShape() const {
     if (!shapedElementType)
       integralShape.push_back(constIterSize.getValue());
     else
-      integralShape.push_back(constIterSize.getValue() *
+      integralShape.push_back(constIterSize.getValue() +
                               shapedElementType.getDimSize(index));
   }
   return integralShape;
 }
 
-/// Return whether the "other" stream type is compatible with this stream type.
-/// By being compatible, it means that the two stream types have the element
-/// type and iteration order, but not necessarily the same iteration shape and
-/// layout.
+/// Return whether the "other" stream type is compatible with this stream
+/// type. By being compatible, it means that the two stream types have the
+/// element type and iteration order, but not necessarily the same iteration
+/// shape and layout.
 bool hls::StreamType::isCompatibleWith(StreamType other) const {
   if (*this == other)
     return true;
@@ -70,13 +85,19 @@ bool hls::StreamType::isCompatibleWith(StreamType other) const {
 
 /// Return whether this stream type can be converted to the "tensor" type.
 bool hls::StreamType::isConvertableWith(RankedTensorType tensor) const {
-  if (tensor.getElementType() != getElementType())
+  if (!tensor.hasStaticShape())
     return false;
-  if (tensor.getRank() != getRank())
+
+  if (auto shapedElementType = llvm::dyn_cast<ShapedType>(getElementType())) {
+    if (tensor.getElementType() != shapedElementType.getElementType())
+      return false;
+    if (tensor.getRank() != shapedElementType.getRank())
+      return false;
+  } else if (tensor.getElementType() != getElementType()) {
     return false;
-  if (llvm::any_of(llvm::zip(tensor.getShape(), getShape()), [](auto pair) {
-        return std::get<0>(pair) != std::get<1>(pair);
-      }))
+  }
+
+  if (tensor.getShape() != ArrayRef<int64_t>(getIntegralShape()))
     return false;
   return true;
 }
