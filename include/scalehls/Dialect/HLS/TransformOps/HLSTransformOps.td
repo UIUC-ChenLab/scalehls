@@ -26,6 +26,7 @@ def HLSConvertExtractSliceToTensorInitOp : Op<Transform_Dialect,
     Meanwhile, the real producer of the source tensor must be an `tensor_init`
     op in the first place, otherwise a silenceable failure will be emitted.**
   }];
+
   let arguments = (ins
       Transform_ConcreteOpType<"tensor.extract_slice">:$extract_slice);
   let results = (outs
@@ -33,6 +34,7 @@ def HLSConvertExtractSliceToTensorInitOp : Op<Transform_Dialect,
   let assemblyFormat = [{
     $extract_slice attr-dict `:` functional-type(operands, results)
   }];
+
   let extraClassDeclaration = [{
     ::mlir::DiagnosedSilenceableFailure applyToOne(
         ::mlir::transform::TransformRewriter &rewriter,
@@ -55,6 +57,7 @@ def HLSDemoteExtractSliceOp : Op<Transform_Dialect, "hls.demote_extract_slice",
     which means the source tensor is not an iteration argument of any loop,
     otherwise a silenceable failure will be emitted.**
   }];
+
   let arguments = (ins
       Transform_ConcreteOpType<"tensor.extract_slice">:$extract_slice);
   let results = (outs
@@ -62,6 +65,7 @@ def HLSDemoteExtractSliceOp : Op<Transform_Dialect, "hls.demote_extract_slice",
   let assemblyFormat = [{
     $extract_slice attr-dict `:` functional-type(operands, results)
   }];
+
   let extraClassDeclaration = [{
     ::mlir::DiagnosedSilenceableFailure applyToOne(
         ::mlir::transform::TransformRewriter &rewriter,
@@ -87,6 +91,7 @@ def HLSConvertInsertSliceToStreamOp : Op<Transform_Dialect,
     linalg op, otherwise a silenceable failure will be emitted.** This can
     ensure there's no other operations having effects on the destination tensor.
   }];
+
   let arguments = (ins
       Transform_ConcreteOpType<"tensor.insert_slice">:$insert_slice);
   let results = (outs
@@ -96,6 +101,7 @@ def HLSConvertInsertSliceToStreamOp : Op<Transform_Dialect,
   let assemblyFormat = [{
     $insert_slice attr-dict `:` functional-type(operands, results)
   }];
+
   let extraClassDeclaration = [{
     ::mlir::DiagnosedSilenceableFailure applyToOne(
         ::mlir::transform::TransformRewriter &rewriter,
@@ -118,6 +124,7 @@ def HLSConvertExtractSliceToStreamOp : Op<Transform_Dialect,
     **This transform must be applied on the `input` operand of a statically
     tiled linalg op, otherwise a silenceable failure will be emitted.**
   }];
+
   let arguments = (ins
       Transform_ConcreteOpType<"tensor.extract_slice">:$extract_slice);
   let results = (outs
@@ -126,10 +133,69 @@ def HLSConvertExtractSliceToStreamOp : Op<Transform_Dialect,
   let assemblyFormat = [{
     $extract_slice attr-dict `:` functional-type(operands, results)
   }];
+
   let extraClassDeclaration = [{
     ::mlir::DiagnosedSilenceableFailure applyToOne(
         ::mlir::transform::TransformRewriter &rewriter,
         ::mlir::tensor::ExtractSliceOp extractSlice,
+        ::mlir::transform::ApplyToEachResultList &results,
+        ::mlir::transform::TransformState &state);
+  }];
+}
+
+def HLSConvertExpandShapeToStreamOp : Op<Transform_Dialect,
+    "hls.convert_expand_shape_to_stream",
+    [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
+     TransformOpInterface, MemoryEffectsOpInterface]> {
+  let description = [{}];
+
+  let arguments = (ins
+      Transform_ConcreteOpType<"tensor.expand_shape">:$expand_shape,
+      DenseI64ArrayAttr:$source_element_shape,
+      DenseI64ArrayAttr:$result_element_shape);
+  let results = (outs
+      Transform_ConcreteOpType<"hls.tensor_to_stream">:$tensor_to_stream,
+      Transform_ConcreteOpType<"hls.stream_expand_shape">:$stream_expand_shape,
+      Transform_ConcreteOpType<"hls.stream_to_tensor">:$stream_to_tensor);
+  let assemblyFormat = [{
+    $expand_shape attr-dict `:` functional-type(operands, results)
+  }];
+
+  let hasVerifier = 1;
+
+  let extraClassDeclaration = [{
+    ::mlir::DiagnosedSilenceableFailure applyToOne(
+        ::mlir::transform::TransformRewriter &rewriter,
+        ::mlir::tensor::ExpandShapeOp expandShape,
+        ::mlir::transform::ApplyToEachResultList &results,
+        ::mlir::transform::TransformState &state);
+  }];
+}
+
+def HLSConvertCollapseShapeToStreamOp : Op<Transform_Dialect,
+    "hls.convert_collapse_shape_to_stream",
+    [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
+     TransformOpInterface, MemoryEffectsOpInterface]> {
+  let description = [{}];
+
+  let arguments = (ins
+      Transform_ConcreteOpType<"tensor.collapse_shape">:$collapse_shape,
+      DenseI64ArrayAttr:$source_element_shape,
+      DenseI64ArrayAttr:$result_element_shape);
+  let results = (outs
+      Transform_ConcreteOpType<"hls.tensor_to_stream">:$tensor_to_stream,
+      Transform_ConcreteOpType<"hls.stream_collapse_shape">:$stream_collapse_shape,
+      Transform_ConcreteOpType<"hls.stream_to_tensor">:$stream_to_tensor);
+  let assemblyFormat = [{
+    $collapse_shape attr-dict `:` functional-type(operands, results)
+  }];
+
+  let hasVerifier = 1;
+
+  let extraClassDeclaration = [{
+    ::mlir::DiagnosedSilenceableFailure applyToOne(
+        ::mlir::transform::TransformRewriter &rewriter,
+        ::mlir::tensor::CollapseShapeOp collapseShape,
         ::mlir::transform::ApplyToEachResultList &results,
         ::mlir::transform::TransformState &state);
   }];

@@ -305,6 +305,145 @@ transform::HLSConvertExtractSliceToStreamOp::applyToOne(
 }
 
 //===----------------------------------------------------------------------===//
+// HLSConvertExpandShapeToStreamOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult transform::HLSConvertExpandShapeToStreamOp::verify() {
+  return success();
+}
+
+template <typename OpTy>
+static std::optional<std::pair<hls::StreamType, hls::StreamType>>
+getLowAndHighRankStreamTypes(OpTy reshapeOp, RankedTensorType lowType,
+                             RankedTensorType highType,
+                             ArrayRef<int64_t> lowElementShape,
+                             ArrayRef<int64_t> highElementShape) {
+  // The low and high types must have static shapes.
+  if (!lowType.hasStaticShape() || !highType.hasStaticShape())
+    return std::nullopt;
+
+  SmallVector<int64_t> lowIterTripCounts;
+  SmallVector<int64_t> lowIterSteps;
+  SmallVector<AffineExpr> lowIterExprs;
+  SmallVector<int64_t> highIterTripCounts;
+  SmallVector<int64_t> highIterSteps;
+  SmallVector<AffineExpr> highIterExprs;
+
+  // Collect the iteration shape and affine map of the streaming channel.
+  for (auto [lowDim, highDims] :
+       llvm::enumerate(reshapeOp.getReassociationIndices())) {
+    auto lowDimSize = lowType.getDimSize(lowDim);
+    auto lowElementDimSize = lowElementShape[lowDim];
+    if (lowDimSize % lowElementDimSize != 0)
+      return std::nullopt;
+
+    lowIterTripCounts.push_back(lowDimSize / lowElementDimSize);
+    lowIterSteps.push_back(lowElementDimSize);
+    lowIterExprs.push_back(getAffineDimExpr(lowDim, reshapeOp.getContext()));
+
+    for (auto highDim : highDims) {
+      auto highDimSize = highType.getDimSize(highDim);
+      auto highElementDimSize = highElementShape[highDim];
+      if (highDimSize % highElementDimSize != 0)
+        return std::nullopt;
+
+      highIterTripCounts.push_back(highDimSize / highElementDimSize);
+      highIterSteps.push_back(highElementDimSize);
+      highIterExprs.push_back(
+          getAffineDimExpr(highDim, reshapeOp.getContext()));
+    }
+  }
+
+  // Construct the low stream type.
+  auto lowIterMap = AffineMap::get(lowIterTripCounts.size(), 0, lowIterExprs,
+                                   reshapeOp.getContext());
+  auto lowElementType =
+      RankedTensorType::get(lowElementShape, lowType.getElementType());
+  auto lowStreamType =
+      hls::StreamType::get(lowElementType, lowIterTripCounts, lowIterSteps,
+                           lowIterMap, lowType.getNumElements());
+
+  // Construct the high stream type.
+  auto highIterMap = AffineMap::get(highIterTripCounts.size(), 0, highIterExprs,
+                                    reshapeOp.getContext());
+  auto highElementType =
+      RankedTensorType::get(highElementShape, highType.getElementType());
+  auto highStreamType =
+      hls::StreamType::get(highElementType, highIterTripCounts, highIterSteps,
+                           highIterMap, highType.getNumElements());
+
+  return std::make_pair(lowStreamType, highStreamType);
+}
+
+DiagnosedSilenceableFailure
+transform::HLSConvertExpandShapeToStreamOp::applyToOne(
+    transform::TransformRewriter &rewriter, tensor::ExpandShapeOp expandShape,
+    transform::ApplyToEachResultList &results,
+    transform::TransformState &state) {
+  // Construct the source and result stream types.
+  auto streamTypes = getLowAndHighRankStreamTypes(
+      expandShape, expandShape.getSrcType(), expandShape.getResultType(),
+      getSourceElementShape(), getResultElementShape());
+  if (!streamTypes)
+    return emitDefaultSilenceableFailure(expandShape);
+
+  // Convert the expand_shape op to stream ops and replace its uses.
+  rewriter.setInsertionPoint(expandShape);
+  auto sourceStream = rewriter.create<hls::TensorToStreamOp>(
+      rewriter.getUnknownLoc(), streamTypes->first, expandShape.getSrc());
+  auto streamExpandShape = rewriter.create<hls::StreamExpandShapeOp>(
+      rewriter.getUnknownLoc(), streamTypes->second, sourceStream,
+      expandShape.getReassociation());
+  auto resultTensor = rewriter.create<hls::StreamToTensorOp>(
+      rewriter.getUnknownLoc(), expandShape.getResultType(), streamExpandShape);
+  rewriter.replaceAllUsesWith(expandShape, resultTensor);
+
+  results.push_back(sourceStream);
+  results.push_back(streamExpandShape);
+  results.push_back(resultTensor);
+  return DiagnosedSilenceableFailure::success();
+}
+
+//===----------------------------------------------------------------------===//
+// HLSConvertCollapseShapeToStreamOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult transform::HLSConvertCollapseShapeToStreamOp::verify() {
+  return success();
+}
+
+DiagnosedSilenceableFailure
+transform::HLSConvertCollapseShapeToStreamOp::applyToOne(
+    transform::TransformRewriter &rewriter,
+    tensor::CollapseShapeOp collapseShape,
+    transform::ApplyToEachResultList &results,
+    transform::TransformState &state) {
+  // Construct the source and result stream types.
+  auto streamTypes = getLowAndHighRankStreamTypes(
+      collapseShape, collapseShape.getResultType(), collapseShape.getSrcType(),
+      getResultElementShape(), getSourceElementShape());
+  if (!streamTypes)
+    return emitDefaultSilenceableFailure(collapseShape);
+
+  // Convert the expand_shape op to stream ops and replace its uses.
+  rewriter.setInsertionPoint(collapseShape);
+  auto sourceStream = rewriter.create<hls::TensorToStreamOp>(
+      rewriter.getUnknownLoc(), streamTypes->second, collapseShape.getSrc());
+  auto streamCollapseShape = rewriter.create<hls::StreamCollapseShapeOp>(
+      rewriter.getUnknownLoc(), streamTypes->first, sourceStream,
+      collapseShape.getReassociation());
+  auto resultTensor = rewriter.create<hls::StreamToTensorOp>(
+      rewriter.getUnknownLoc(), collapseShape.getResultType(),
+      streamCollapseShape);
+  rewriter.replaceAllUsesWith(collapseShape, resultTensor);
+
+  results.push_back(sourceStream);
+  results.push_back(streamCollapseShape);
+  results.push_back(resultTensor);
+  return DiagnosedSilenceableFailure::success();
+}
+
+//===----------------------------------------------------------------------===//
 // HLSLowerTensorToStreamOp
 //===----------------------------------------------------------------------===//
 
