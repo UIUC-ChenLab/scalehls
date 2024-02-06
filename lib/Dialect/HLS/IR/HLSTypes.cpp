@@ -10,14 +10,36 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+static bool isProjectedPermutation(AffineMap map) {
+  if (map.getNumSymbols() > 0)
+    return false;
+
+  SmallVector<bool, 8> seen(map.getNumInputs(), false);
+  // A projected permutation can have, at most, only one instance of each input
+  // dimension in the result expressions.
+  for (auto expr : map.getResults()) {
+    if (auto dim = dyn_cast<AffineDimExpr>(expr)) {
+      if (seen[dim.getPosition()])
+        return false;
+      seen[dim.getPosition()] = true;
+    } else {
+      auto constExpr = dyn_cast<AffineConstantExpr>(expr);
+      if (!constExpr || constExpr.getValue() != 0)
+        return false;
+    }
+  }
+  // Results are either dims or zeros and zeros can be mapped to input dims.
+  return true;
+}
+
 LogicalResult
 hls::StreamType::verify(function_ref<InFlightDiagnostic()> emitError,
                         Type elementType, ArrayRef<int64_t> iterTripCounts,
-                        ArrayRef<int64_t> iterSteps, AffineMapAttr iterMap,
+                        ArrayRef<int64_t> iterSteps, AffineMap iterMap,
                         int64_t depth) {
-  if (iterMap.getAffineMap().getNumSymbols())
+  if (iterMap.getNumSymbols())
     return emitError() << "iteration map cannot have symbols";
-  if (iterTripCounts.size() != iterMap.getAffineMap().getNumDims())
+  if (iterTripCounts.size() != iterMap.getNumDims())
     return emitError() << "iteration space trip counts and map mismatch";
   if (iterTripCounts.size() != iterSteps.size())
     return emitError() << "iteration space trip counts and steps mismatch";
@@ -25,9 +47,12 @@ hls::StreamType::verify(function_ref<InFlightDiagnostic()> emitError,
   if (auto shapedElementType = llvm::dyn_cast<ShapedType>(elementType)) {
     if (!shapedElementType.hasStaticShape())
       return emitError() << "element type must have static shape";
-    if (iterMap.getAffineMap().getNumResults() != shapedElementType.getRank())
+    if (iterMap.getNumResults() != shapedElementType.getRank())
       return emitError() << "iteration map and element type rank mismatch";
   }
+
+  if (!isProjectedPermutation(iterMap))
+    return emitError() << "iteration map must be a projected permutation";
   return success();
 }
 
@@ -35,7 +60,7 @@ hls::StreamType::verify(function_ref<InFlightDiagnostic()> emitError,
 /// shape is `std::nullopt`, the current shape of the type is used.
 StreamType hls::StreamType::cloneWith(std::optional<ArrayRef<int64_t>> shape,
                                       Type elementType) const {
-  return StreamType::get(getContext(), elementType, shape ? *shape : getShape(),
+  return StreamType::get(elementType, shape ? *shape : getShape(),
                          getIterSteps(), getIterMap(), getDepth());
 }
 
@@ -55,8 +80,7 @@ SmallVector<int64_t> hls::StreamType::getIntegralShape() const {
   for (auto [tripCount, step] : llvm::zip(getIterTripCounts(), getIterSteps()))
     iterSizes.push_back(
         getAffineConstantExpr((tripCount - 1) * step, getContext()));
-  auto iterSizeMap =
-      getIterMap().getAffineMap().replaceDimsAndSymbols(iterSizes, {}, 0, 0);
+  auto iterSizeMap = getIterMap().replaceDimsAndSymbols(iterSizes, {}, 0, 0);
   auto shapedElementType = llvm::dyn_cast<ShapedType>(getElementType());
 
   SmallVector<int64_t> integralShape;
@@ -73,12 +97,42 @@ SmallVector<int64_t> hls::StreamType::getIntegralShape() const {
   return integralShape;
 }
 
-/// Return whether the "other" stream type is compatible with this stream
-/// type. By being compatible, it means that the two stream types have the
-/// element type and iteration order, but not necessarily the same iteration
-/// shape and layout.
-bool hls::StreamType::isCompatibleWith(StreamType other) const {
+/// Return whether this stream type represents a projected stream pattern.
+/// For example, for an array of:
+///   [[1, 2],
+///    [3, 4]]
+/// A traversing of [1, 3, 2, 4] is non-projected, while a traversing of
+/// [1, 3, 1, 3, 2, 4, 2, 4] is projected.
+bool hls::StreamType::isNonProjected() const {
+  // As long as every input dimension is appeared in the iteration map, the
+  // stream is non-projected. Otherwise, it means the some input dimension is
+  // the projected.
+  return llvm::all_of(llvm::seq(getIterMap().getNumDims()),
+                      [&](int i) { return getIterMap().isFunctionOfDim(i); });
+}
+
+/// Return whether this stream type represents a permuted stream pattern.
+/// For example, for an array of:
+///   [[1, 2],
+///    [3, 4]]
+/// A traversing of [1, 2, 1, 2, 3, 4, 3, 4] is non-permuted, while a traversing
+/// of [1, 3, 1, 3, 2, 4, 2, 4] is permuted.
+bool hls::StreamType::isNonPermuted() const {
+  SmallVector<unsigned> positions;
+  for (auto expr : getIterMap().getResults())
+    if (auto dim = llvm::dyn_cast<AffineDimExpr>(expr))
+      positions.push_back(dim.getPosition());
+  return llvm::is_sorted(positions);
+}
+
+/// Return whether the "other" stream type is castable with this stream type. By
+/// being castable, it means that the two stream types have the element type and
+/// iteration order, but not necessarily the same iteration shape and layout.
+bool hls::StreamType::isCastableWith(StreamType other) const {
   if (*this == other)
+    return true;
+  if (getElementType() == other.getElementType() &&
+      getIntegralShape() == other.getIntegralShape())
     return true;
   return false;
 }

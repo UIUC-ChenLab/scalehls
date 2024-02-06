@@ -31,7 +31,7 @@ def StreamType : HLSType<"Stream", [ShapedTypeInterface]> {
       "mlir::Type":$elementType,
       ArrayRefParameter<"int64_t">:$iterTripCounts,
       ArrayRefParameter<"int64_t">:$iterSteps,
-      "mlir::AffineMapAttr":$iterMap,
+      "mlir::AffineMap":$iterMap,
       DefaultValuedParameter<"int64_t", "1">:$depth);
   let assemblyFormat = [{
     `<` qualified($elementType) `,` `[` $iterTripCounts `]` `,`
@@ -44,7 +44,7 @@ def StreamType : HLSType<"Stream", [ShapedTypeInterface]> {
         "ArrayRef<int64_t>":$iterSteps, "mlir::AffineMap":$iterMap,
         CArg<"int64_t", "1">:$depth), [{
       return $_get(elementType.getContext(), elementType, iterTripCounts,
-                   iterSteps, AffineMapAttr::get(iterMap), depth);
+                   iterSteps, iterMap, depth);
     }]>,
     TypeBuilderWithInferredContext<(ins
         "mlir::Type":$elementType, "ArrayRef<int64_t>":$iterTripCounts,
@@ -67,6 +67,7 @@ def StreamType : HLSType<"Stream", [ShapedTypeInterface]> {
     }]>
   ];
 
+  let skipDefaultBuilders = 1;
   let genVerifyDecl = 1;
 
   let extraClassDeclaration = [{
@@ -93,11 +94,29 @@ def StreamType : HLSType<"Stream", [ShapedTypeInterface]> {
     /// Infer and return the integral shape this stream type represents.
     SmallVector<int64_t> getIntegralShape() const;
 
-    /// Return whether the "other" stream type is compatible with this stream
-    /// type. By being compatible, it means that the two stream types have the
-    /// element type and iteration order, but not necessarily the same iteration
+    /// Return whether this stream type represents a projected stream pattern.
+    /// For example, for an array of:
+    ///   [[1, 2],
+    ///    [3, 4]]
+    /// A traversing of [1, 3, 2, 4] is non-projected, while a traversing of
+    /// [1, 3, 1, 3, 2, 4, 2, 4] is projected.
+    bool isNonProjected() const;
+    bool isProjected() const { return !isNonProjected(); }
+
+    /// Return whether this stream type represents a permuted stream pattern.
+    /// For example, for an array of:
+    ///   [[1, 2],
+    ///    [3, 4]]
+    /// A traversing of [1, 2, 1, 2, 3, 4, 3, 4] is non-permuted, while a
+    /// traversing of [1, 3, 1, 3, 2, 4, 2, 4] is permuted.
+    bool isNonPermuted() const;
+    bool isPermuted() const { return !isNonPermuted(); }
+
+    /// Return whether the "other" stream type is castable with this stream
+    /// type. By being castable, it means that the two stream types have the
+    /// element type and integral shape, but not necessarily the same iteration
     /// shape and layout.
-    bool isCompatibleWith(StreamType other) const;
+    bool isCastableWith(StreamType other) const;
 
     /// Return whether this stream type can be converted to the "tensor" type.
     bool isConvertableWith(RankedTensorType tensor) const;
