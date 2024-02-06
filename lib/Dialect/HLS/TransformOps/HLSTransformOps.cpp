@@ -444,16 +444,24 @@ transform::HLSConvertCollapseShapeToStreamOp::applyToOne(
 }
 
 //===----------------------------------------------------------------------===//
-// HLSLowerTensorToStreamOp
+// Apply pattern operations
 //===----------------------------------------------------------------------===//
 
-DiagnosedSilenceableFailure transform::HLSLowerTensorToStreamOp::applyToOne(
-    transform::TransformRewriter &rewriter,
-    hls::TensorToStreamOp tensorToStream,
-    transform::ApplyToEachResultList &results,
-    transform::TransformState &state) {
+namespace {
+struct StreamElementConcatPattern
+    : public OpRewritePattern<hls::TensorToStreamOp> {
+  using OpRewritePattern<hls::TensorToStreamOp>::OpRewritePattern;
 
-  return DiagnosedSilenceableFailure::success();
+  LogicalResult matchAndRewrite(hls::TensorToStreamOp toStream,
+                                PatternRewriter &rewriter) const override {
+    return success();
+  }
+};
+} // namespace
+
+void transform::HLSApplyStreamElementConcatPatternOp::populatePatterns(
+    RewritePatternSet &patterns) {
+  patterns.add<StreamElementConcatPattern>(getContext());
 }
 
 //===----------------------------------------------------------------------===//
