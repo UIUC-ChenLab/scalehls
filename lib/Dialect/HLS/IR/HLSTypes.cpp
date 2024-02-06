@@ -51,6 +51,10 @@ hls::StreamType::verify(function_ref<InFlightDiagnostic()> emitError,
       return emitError() << "iteration map and element type rank mismatch";
   }
 
+  // For now, we ONLY allow the iteration map to be a projected permutation.
+  // This means any complicated memory access patterns are not supported yet,
+  // e.g. overlapped memory access, which is typically used in the convolution
+  // and can be streamed with line/row buffers.
   if (!isProjectedPermutation(iterMap))
     return emitError() << "iteration map must be a projected permutation";
   return success();

@@ -201,7 +201,7 @@ def StreamExpandShapeOp : HLSOp<"stream_expand_shape", [NoMemoryEffect]> {
   let arguments = (ins AnyStream:$input, IndexListArrayAttr:$reassociation);
   let results = (outs AnyStream:$output);
   let assemblyFormat = [{
-    $input attr-dict `:` functional-type($input, $output)
+    $input `,` $reassociation attr-dict `:` functional-type($input, $output)
   }];
 
   let hasVerifier = 1;
@@ -225,7 +225,7 @@ def StreamCollapseShapeOp : HLSOp<"stream_collapse_shape", [NoMemoryEffect]> {
   let arguments = (ins AnyStream:$input, IndexListArrayAttr:$reassociation);
   let results = (outs AnyStream:$output);
   let assemblyFormat = [{
-    $input attr-dict `:` functional-type($input, $output)
+    $input `,` $reassociation attr-dict `:` functional-type($input, $output)
   }];
 
   let hasVerifier = 1;

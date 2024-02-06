@@ -29,8 +29,7 @@ def HLSConvertExtractSliceToTensorInitOp : Op<Transform_Dialect,
 
   let arguments = (ins
       Transform_ConcreteOpType<"tensor.extract_slice">:$extract_slice);
-  let results = (outs
-      Transform_ConcreteOpType<"hls.tensor_init">:$tensor_init);
+  let results = (outs Transform_ConcreteOpType<"hls.tensor_init">:$tensor_init);
   let assemblyFormat = [{
     $extract_slice attr-dict `:` functional-type(operands, results)
   }];
@@ -44,24 +43,44 @@ def HLSConvertExtractSliceToTensorInitOp : Op<Transform_Dialect,
   }];
 }
 
-def HLSDemoteExtractSliceOp : Op<Transform_Dialect, "hls.demote_extract_slice",
+def HLSConvertFillToTensorInitOp : Op<Transform_Dialect,
+    "hls.convert_fill_to_tensor_init",
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {
   let description = [{
-    Demote an `extract_slice` op to as outer as possible loop level, potentially
-    increasing the resuability of the extracted tensor. This transform always
-    returns the handle of the target `extract_slice` op, no matter it has been
-    demoted or not.
+    Convert a target `fill` op to a `tensor_init` op. This transform returns the
+    handle of the new `tensor_init` op.
+  }];
 
-    **This transform must be applied on the `input` operand of a linalg op,
-    which means the source tensor is not an iteration argument of any loop,
-    otherwise a silenceable failure will be emitted.**
+  let arguments = (ins Transform_ConcreteOpType<"linalg.fill">:$fill);
+  let results = (outs Transform_ConcreteOpType<"hls.tensor_init">:$tensor_init);
+  let assemblyFormat = [{
+    $fill attr-dict `:` functional-type(operands, results)
+  }];
+
+  let extraClassDeclaration = [{
+    ::mlir::DiagnosedSilenceableFailure applyToOne(
+        ::mlir::transform::TransformRewriter &rewriter,
+        ::mlir::linalg::FillOp fill,
+        ::mlir::transform::ApplyToEachResultList &results,
+        ::mlir::transform::TransformState &state);
+  }];
+}
+
+def HLSMergeConsecutiveExtractSliceOp : Op<Transform_Dialect,
+    "hls.merge_consecutive_extract_slice",
+    [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
+     TransformOpInterface, MemoryEffectsOpInterface]> {
+  let description = [{
+    Merge consecutive `extract_slice` ops to a single `extract_slice` op. This
+    transform always return the handle of the resulting `extract_slice` op, no
+    matter it has been merged or not.
   }];
 
   let arguments = (ins
       Transform_ConcreteOpType<"tensor.extract_slice">:$extract_slice);
   let results = (outs
-      Transform_ConcreteOpType<"tensor.extract_slice">:$demoted_extract_slice);
+      Transform_ConcreteOpType<"tensor.extract_slice">:$merged_extract_slice);
   let assemblyFormat = [{
     $extract_slice attr-dict `:` functional-type(operands, results)
   }];

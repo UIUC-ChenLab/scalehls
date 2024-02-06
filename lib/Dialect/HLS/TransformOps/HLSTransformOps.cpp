@@ -6,6 +6,7 @@
 
 #include "scalehls/Dialect/HLS/TransformOps/HLSTransformOps.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Affine/ViewLikeInterfaceUtils.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/SCF/Transforms/TileUsingInterface.h"
@@ -61,60 +62,44 @@ transform::HLSConvertExtractSliceToTensorInitOp::applyToOne(
 }
 
 //===----------------------------------------------------------------------===//
-// HLSDemoteExtractSliceOp
+// HLSConvertFillToTensorInitOp
 //===----------------------------------------------------------------------===//
 
-static scf::ForOp getAssociatedLoop(Value value) {
-  if (auto arg = dyn_cast<BlockArgument>(value))
-    if (auto loop = dyn_cast<scf::ForOp>(arg.getOwner()->getParentOp()))
-      if (value == loop.getInductionVar())
-        return loop;
-  return nullptr;
+DiagnosedSilenceableFailure transform::HLSConvertFillToTensorInitOp::applyToOne(
+    transform::TransformRewriter &rewriter, linalg::FillOp fill,
+    transform::ApplyToEachResultList &results,
+    transform::TransformState &state) {
+  auto tensorInit = rewriter.replaceOpWithNewOp<hls::TensorInitOp>(
+      fill, fill.result().getType(), fill.value());
+  results.push_back(tensorInit);
+  return DiagnosedSilenceableFailure::success();
 }
 
-DiagnosedSilenceableFailure transform::HLSDemoteExtractSliceOp::applyToOne(
+//===----------------------------------------------------------------------===//
+// HLSMergeConsecutiveExtractSliceOp
+//===----------------------------------------------------------------------===//
+
+DiagnosedSilenceableFailure
+transform::HLSMergeConsecutiveExtractSliceOp::applyToOne(
     transform::TransformRewriter &rewriter, tensor::ExtractSliceOp extractSlice,
     transform::ApplyToEachResultList &results,
     transform::TransformState &state) {
-  // We first check whether the extract_slice op's source is an iter_args.
-  auto sourceArg = dyn_cast<BlockArgument>(extractSlice.getSource());
-  if (sourceArg && isa<scf::ForOp>(sourceArg.getOwner()->getParentOp()))
-    return emitDefaultSilenceableFailure(extractSlice);
-  results.push_back(extractSlice);
-
-  // We then check if all offsets are loop induction variables, and collect
-  // them into a set.
-  llvm::SmallDenseSet<Value> offsets;
-  for (auto offset : extractSlice.getMixedOffsets())
-    if (auto offsetValue = offset.dyn_cast<Value>()) {
-      // Here, we need to handle the case where the offset is defined by an
-      // affine.apply op. Specifically, we need to check whether the operands
-      // of the affine.apply op are loop induction variables.
-      if (auto apply = offsetValue.getDefiningOp<affine::AffineApplyOp>()) {
-        for (auto operand : apply.getOperands()) {
-          if (!getAssociatedLoop(operand))
-            return emitDefaultSilenceableFailure(extractSlice);
-          offsets.insert(operand);
-        }
-      } else {
-        if (!getAssociatedLoop(offsetValue))
-          return emitDefaultSilenceableFailure(extractSlice);
-        offsets.insert(offsetValue);
-      }
-    }
-
-  // Then, we find the outermost loop that does not contain any of the offsets.
-  Operation *insertBefore = extractSlice;
-  while (auto loop = insertBefore->getParentOfType<scf::ForOp>()) {
-    if (!offsets.count(loop.getInductionVar()))
-      insertBefore = loop;
-    else
-      break;
+  auto prevExtractSlice =
+      extractSlice.getSource().getDefiningOp<tensor::ExtractSliceOp>();
+  SmallVector<OpFoldResult> newOffsets, newSizes, newStrides;
+  if (!prevExtractSlice ||
+      failed(affine::mergeOffsetsSizesAndStrides(
+          rewriter, extractSlice.getLoc(), prevExtractSlice, extractSlice,
+          prevExtractSlice.getDroppedDims(), newOffsets, newSizes,
+          newStrides))) {
+    results.push_back(extractSlice);
+    return DiagnosedSilenceableFailure::success();
   }
 
-  // Finally, we move the extract_slice op before the outermost loop.
-  if (insertBefore != extractSlice)
-    extractSlice->moveBefore(insertBefore);
+  auto newExtractSlice = rewriter.replaceOpWithNewOp<tensor::ExtractSliceOp>(
+      extractSlice, extractSlice.getType(), prevExtractSlice.getSource(),
+      newOffsets, newSizes, newStrides);
+  results.push_back(newExtractSlice);
   return DiagnosedSilenceableFailure::success();
 }
 
@@ -157,6 +142,14 @@ getLoopTripCounts(const SmallVector<scf::ForOp> &loops) {
     tripCounts.push_back((ubCst - lbCst) / stepCst);
   }
   return tripCounts;
+}
+
+static scf::ForOp getAssociatedLoop(Value value) {
+  if (auto arg = dyn_cast<BlockArgument>(value))
+    if (auto loop = dyn_cast<scf::ForOp>(arg.getOwner()->getParentOp()))
+      if (value == loop.getInductionVar())
+        return loop;
+  return nullptr;
 }
 
 static std::optional<size_t>
@@ -454,6 +447,16 @@ struct StreamElementConcatPattern
 
   LogicalResult matchAndRewrite(hls::TensorToStreamOp toStream,
                                 PatternRewriter &rewriter) const override {
+    auto toTensor = toStream.getTensor().getDefiningOp<hls::StreamToTensorOp>();
+    if (!toTensor)
+      return failure();
+
+    auto sourceType = toTensor.getStream().getType();
+    auto resultType = toStream.getStream().getType();
+
+    if (sourceType.isProjected() || sourceType.isPermuted() ||
+        resultType.isProjected() || resultType.isPermuted()) {
+    }
     return success();
   }
 };
