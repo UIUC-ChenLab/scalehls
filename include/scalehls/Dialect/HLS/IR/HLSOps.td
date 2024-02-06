@@ -243,44 +243,14 @@ def StreamCollapseShapeOp : HLSOp<"stream_collapse_shape", [NoMemoryEffect]> {
   }];
 }
 
-def StreamElementChunkOp : HLSOp<"stream_element_chunk", [NoMemoryEffect]> {
+def StreamBufferOp : HLSOp<"stream_buffer", [NoMemoryEffect]> {
   let summary = [{
-    Chunk the input stream channel's element to smaller elements and pass to the
-    output stream channel. The output element type should have the same rank but
-    smaller dimension sizes compared to the input element type.
+    Represent a stream buffer.
   }];
 
-  let arguments = (ins AnyStream:$input);
-  let results = (outs AnyStream:$output);
-  let assemblyFormat = [{
-    $input attr-dict `:` functional-type($input, $output)
-  }];
-
-  let hasVerifier = 1;
-}
-
-def StreamElementConcatOp : HLSOp<"stream_element_concat", [NoMemoryEffect]> {
-  let summary = [{
-    Concatenate the input stream channel's elements to a larger element and pass
-    to the output stream channel. The output element type should have the same
-    rank but larger dimension sizes compared to the input element type.
-  }];
-
-  let arguments = (ins AnyStream:$input);
-  let results = (outs AnyStream:$output);
-  let assemblyFormat = [{
-    $input attr-dict `:` functional-type($input, $output)
-  }];
-
-  let hasVerifier = 1;
-}
-
-def StreamCastOp : HLSOp<"stream_cast", [NoMemoryEffect]> {
-  let summary = [{
-    Cast a stream channel to another type.
-  }];
-
-  let arguments = (ins AnyStream:$input);
+  let arguments = (ins AnyStream:$input, TypeAttr:$buffer_type,
+      DenseI64ArrayAttr:$iterTripCounts, DenseI64ArrayAttr:$iterSteps,
+      AffineMapAttr:$inputIterMap, AffineMapAttr:$outputIterMap);
   let results = (outs AnyStream:$output);
   let assemblyFormat = [{
     $input attr-dict `:` functional-type($input, $output)

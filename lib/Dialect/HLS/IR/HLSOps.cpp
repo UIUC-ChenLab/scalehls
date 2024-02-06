@@ -277,18 +277,6 @@ void StreamWriteOp::getEffects(
 }
 
 //===----------------------------------------------------------------------===//
-// StreamElementChunkOp
-//===----------------------------------------------------------------------===//
-
-LogicalResult StreamElementChunkOp::verify() { return success(); }
-
-//===----------------------------------------------------------------------===//
-// StreamElementConcatOp
-//===----------------------------------------------------------------------===//
-
-LogicalResult StreamElementConcatOp::verify() { return success(); }
-
-//===----------------------------------------------------------------------===//
 // StreamExpandShapeOp
 //===----------------------------------------------------------------------===//
 
@@ -301,10 +289,10 @@ LogicalResult StreamExpandShapeOp::verify() { return success(); }
 LogicalResult StreamCollapseShapeOp::verify() { return success(); }
 
 //===----------------------------------------------------------------------===//
-// StreamCastOp
+// StreamBufferOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult StreamCastOp::verify() { return success(); }
+LogicalResult StreamBufferOp::verify() { return success(); }
 
 //===----------------------------------------------------------------------===//
 // ScheduleOp

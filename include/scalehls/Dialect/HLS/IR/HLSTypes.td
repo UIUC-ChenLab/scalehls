@@ -100,8 +100,7 @@ def StreamType : HLSType<"Stream", [ShapedTypeInterface]> {
     ///    [3, 4]]
     /// A traversing of [1, 3, 2, 4] is non-projected, while a traversing of
     /// [1, 3, 1, 3, 2, 4, 2, 4] is projected.
-    bool isNonProjected() const;
-    bool isProjected() const { return !isNonProjected(); }
+    bool isProjected() const;
 
     /// Return whether this stream type represents a permuted stream pattern.
     /// For example, for an array of:
@@ -109,8 +108,10 @@ def StreamType : HLSType<"Stream", [ShapedTypeInterface]> {
     ///    [3, 4]]
     /// A traversing of [1, 2, 1, 2, 3, 4, 3, 4] is non-permuted, while a
     /// traversing of [1, 3, 1, 3, 2, 4, 2, 4] is permuted.
-    bool isNonPermuted() const;
-    bool isPermuted() const { return !isNonPermuted(); }
+    bool isPermuted() const;
+
+    /// Return whether this stream type represents an overlapped stream pattern.
+    bool isOverlapped() const;
 
     /// Return whether the "other" stream type is castable with this stream
     /// type. By being castable, it means that the two stream types have the

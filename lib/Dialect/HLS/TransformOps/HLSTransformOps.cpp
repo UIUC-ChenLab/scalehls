@@ -437,34 +437,26 @@ transform::HLSConvertCollapseShapeToStreamOp::applyToOne(
 }
 
 //===----------------------------------------------------------------------===//
-// Apply pattern operations
+// HLSConvertTensorToStreamBufferOp
 //===----------------------------------------------------------------------===//
 
-namespace {
-struct StreamElementConcatPattern
-    : public OpRewritePattern<hls::TensorToStreamOp> {
-  using OpRewritePattern<hls::TensorToStreamOp>::OpRewritePattern;
+DiagnosedSilenceableFailure
+transform::HLSConvertTensorToStreamBufferOp::applyToOne(
+    transform::TransformRewriter &rewriter,
+    hls::TensorToStreamOp tensorToStream,
+    transform::ApplyToEachResultList &results,
+    transform::TransformState &state) {
+  auto streamToTensor =
+      tensorToStream.getTensor().getDefiningOp<hls::StreamToTensorOp>();
+  if (!streamToTensor)
+    return DiagnosedSilenceableFailure::success();
 
-  LogicalResult matchAndRewrite(hls::TensorToStreamOp toStream,
-                                PatternRewriter &rewriter) const override {
-    auto toTensor = toStream.getTensor().getDefiningOp<hls::StreamToTensorOp>();
-    if (!toTensor)
-      return failure();
+  auto sourceType = streamToTensor.getStream().getType();
+  auto resultType = tensorToStream.getStream().getType();
+  if (sourceType.isOverlapped() || resultType.isOverlapped())
+    return DiagnosedSilenceableFailure::success();
 
-    auto sourceType = toTensor.getStream().getType();
-    auto resultType = toStream.getStream().getType();
-
-    if (sourceType.isProjected() || sourceType.isPermuted() ||
-        resultType.isProjected() || resultType.isPermuted()) {
-    }
-    return success();
-  }
-};
-} // namespace
-
-void transform::HLSApplyStreamElementConcatPatternOp::populatePatterns(
-    RewritePatternSet &patterns) {
-  patterns.add<StreamElementConcatPattern>(getContext());
+  return DiagnosedSilenceableFailure::success();
 }
 
 //===----------------------------------------------------------------------===//

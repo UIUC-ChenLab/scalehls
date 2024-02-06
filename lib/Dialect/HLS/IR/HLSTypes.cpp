@@ -52,9 +52,7 @@ hls::StreamType::verify(function_ref<InFlightDiagnostic()> emitError,
   }
 
   // For now, we ONLY allow the iteration map to be a projected permutation.
-  // This means any complicated memory access patterns are not supported yet,
-  // e.g. overlapped memory access, which is typically used in the convolution
-  // and can be streamed with line/row buffers.
+  // This means any complicated memory access patterns are not supported yet.
   if (!isProjectedPermutation(iterMap))
     return emitError() << "iteration map must be a projected permutation";
   return success();
@@ -107,12 +105,12 @@ SmallVector<int64_t> hls::StreamType::getIntegralShape() const {
 ///    [3, 4]]
 /// A traversing of [1, 3, 2, 4] is non-projected, while a traversing of
 /// [1, 3, 1, 3, 2, 4, 2, 4] is projected.
-bool hls::StreamType::isNonProjected() const {
+bool hls::StreamType::isProjected() const {
   // As long as every input dimension is appeared in the iteration map, the
   // stream is non-projected. Otherwise, it means the some input dimension is
   // the projected.
-  return llvm::all_of(llvm::seq(getIterMap().getNumDims()),
-                      [&](int i) { return getIterMap().isFunctionOfDim(i); });
+  return llvm::any_of(llvm::seq(getIterMap().getNumDims()),
+                      [&](int i) { return !getIterMap().isFunctionOfDim(i); });
 }
 
 /// Return whether this stream type represents a permuted stream pattern.
@@ -121,12 +119,31 @@ bool hls::StreamType::isNonProjected() const {
 ///    [3, 4]]
 /// A traversing of [1, 2, 1, 2, 3, 4, 3, 4] is non-permuted, while a traversing
 /// of [1, 3, 1, 3, 2, 4, 2, 4] is permuted.
-bool hls::StreamType::isNonPermuted() const {
+bool hls::StreamType::isPermuted() const {
   SmallVector<unsigned> positions;
   for (auto expr : getIterMap().getResults())
     if (auto dim = llvm::dyn_cast<AffineDimExpr>(expr))
       positions.push_back(dim.getPosition());
-  return llvm::is_sorted(positions);
+  return !llvm::is_sorted(positions);
+}
+
+/// Return whether this stream type represents an overlapped stream pattern.
+bool hls::StreamType::isOverlapped() const {
+  SmallVector<AffineExpr> iterShape;
+  for (auto step : getIterSteps())
+    iterShape.push_back(getAffineConstantExpr(step, getContext()));
+  auto iterShapeMap = getIterMap().replaceDimsAndSymbols(iterShape, {}, 0, 0);
+  auto shapedElementType = llvm::dyn_cast<ShapedType>(getElementType());
+
+  for (auto [index, iterDimSize] : llvm::enumerate(iterShapeMap.getResults())) {
+    auto constIterDimSize = llvm::dyn_cast<AffineConstantExpr>(iterDimSize);
+    assert(constIterDimSize && "non-constant size in the iteration layout");
+    auto elementDimSize =
+        shapedElementType ? shapedElementType.getDimSize(index) : 1;
+    if (constIterDimSize.getValue() != elementDimSize)
+      return true;
+  }
+  return false;
 }
 
 /// Return whether the "other" stream type is castable with this stream type. By

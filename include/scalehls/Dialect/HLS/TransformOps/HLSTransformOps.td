@@ -220,15 +220,25 @@ def HLSConvertCollapseShapeToStreamOp : Op<Transform_Dialect,
   }];
 }
 
-def HLSApplyStreamElementConcatPatternOp : Op<Transform_Dialect,
-    "apply_patterns.hls.stream_element_concat",
-    [DeclareOpInterfaceMethods<PatternDescriptorOpInterface>]> {
-  let description = [{
-    Try to transform a pair of `stream_to_tensor` and `tensor_to_stream` ops to
-    a non-repeating `stream_element_concat` op.
+def HLSConvertTensorToStreamBufferOp : Op<Transform_Dialect,
+    "hls.convertTensorToStreamBuffer",
+    [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
+     TransformOpInterface, MemoryEffectsOpInterface]> {
+  let description = [{}];
+
+  let arguments = (ins
+      Transform_ConcreteOpType<"hls.tensor_to_stream">:$tensor_to_stream);
+  let assemblyFormat = [{
+    $tensor_to_stream attr-dict `:` type(operands)
   }];
 
-  let assemblyFormat = "attr-dict";
+  let extraClassDeclaration = [{
+    ::mlir::DiagnosedSilenceableFailure applyToOne(
+        ::mlir::transform::TransformRewriter &rewriter,
+        ::mlir::scalehls::hls::TensorToStreamOp tensorToStream,
+        ::mlir::transform::ApplyToEachResultList &results,
+        ::mlir::transform::TransformState &state);
+  }];
 }
 
 #endif // SCALEHLS_DIALECT_HLS_TRANSFORMOPS_HLSTRANSFORMOPS_TD
