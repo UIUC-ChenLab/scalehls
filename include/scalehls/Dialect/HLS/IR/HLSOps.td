@@ -22,14 +22,21 @@ class HLSOp<string mnemonic, list<Trait> traits = []> :
 // StreamtType Predicates
 //===----------------------------------------------------------------------===//
 
-def IsStreamTypePred : CPred<
-  "::llvm::isa<::mlir::scalehls::hls::StreamType>($_self)">;
-
-class StreamOf<list<Type> allowedTypes, list<Pred> preds = [],
-    string summary = "stream">
-  : ShapedContainerType<allowedTypes,
-      And<!listconcat([IsStreamTypePred], preds)>,
-      summary, "::mlir::scalehls::hls::StreamType">;
+class StreamOf<list<Type> allowedTypes,
+               string cppClassName = "::mlir::scalehls::hls::StreamType">
+  : Type<
+      And<[
+        CPred<"::llvm::isa<" # cppClassName # ">($_self)">,
+        Concat<
+          "[](::mlir::Type elementType) { return ",
+          SubstLeaves<"$_self", "elementType",
+          AnyTypeOf<allowedTypes>.predicate>,
+          "; }(::llvm::cast<" # cppClassName # ">($_self).getElementType())"
+        >
+      ]>,
+      "stream of " # AnyTypeOf<allowedTypes>.summary # " values",
+      cppClassName
+    >;
 
 def AnyBuffer : StaticShapeMemRefOf<[AnyType]>;
 def AnyStream : StreamOf<[AnyType]>;
@@ -248,15 +255,16 @@ def StreamBufferOp : HLSOp<"stream_buffer", [NoMemoryEffect]> {
     Represent a stream buffer.
   }];
 
-  let arguments = (ins AnyStream:$input, TypeAttr:$buffer_type,
-      DenseI64ArrayAttr:$iterTripCounts, DenseI64ArrayAttr:$iterSteps,
-      AffineMapAttr:$inputIterMap, AffineMapAttr:$outputIterMap);
+  let arguments = (ins AnyStream:$input, TypeAttr:$bufferType,
+      I64Attr:$bufferPosition);
   let results = (outs AnyStream:$output);
   let assemblyFormat = [{
-    $input attr-dict `:` functional-type($input, $output)
+    $input `,` $bufferType `at` $bufferPosition attr-dict `:`
+    functional-type($input, $output)
   }];
 
   let hasVerifier = 1;
+  let hasFolder = 1;
 }
 
 //===----------------------------------------------------------------------===//

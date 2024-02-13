@@ -451,11 +451,22 @@ transform::HLSConvertTensorToStreamBufferOp::applyToOne(
   if (!streamToTensor)
     return DiagnosedSilenceableFailure::success();
 
-  auto sourceType = streamToTensor.getStream().getType();
-  auto resultType = tensorToStream.getStream().getType();
+  auto sourceStream = streamToTensor.getStream();
+  auto resultStream = tensorToStream.getStream();
+  auto sourceType = sourceStream.getType();
+  auto resultType = resultStream.getType();
   if (sourceType.isOverlapped() || resultType.isOverlapped())
     return DiagnosedSilenceableFailure::success();
 
+  int64_t bufferPosition = 0;
+  for (auto [sourceExpr, resultExpr] :
+       llvm::zip(sourceType.getIterMap().getResults(),
+                 resultType.getIterMap().getResults())) {
+  }
+
+  rewriter.replaceOpWithNewOp<hls::StreamBufferOp>(
+      tensorToStream, resultType, sourceStream, resultType.getElementType(),
+      bufferPosition);
   return DiagnosedSilenceableFailure::success();
 }
 
