@@ -13,6 +13,7 @@ def BufferLikeInterface : OpInterface<"BufferLikeInterface"> {
   let description = [{
     This interface is used to represent dataflow buffers.
   }];
+  string cppNamespace = "mlir::scalehls::hls";
 
   let methods = [
     InterfaceMethod<"Return the memref result of the buffer",
@@ -35,6 +36,7 @@ def ContainerLikeInterface : OpInterface<"ContainerLikeInterface"> {
     This interface is used to represent containers, including dispatch, task,
     schedule, and node.
   }];
+  string cppNamespace = "mlir::scalehls::hls";
 
   let methods = [    
     InterfaceMethod<"Return body region of the stage",

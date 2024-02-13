@@ -26,53 +26,7 @@
 #define GET_ATTRDEF_CLASSES
 #include "scalehls/Dialect/HLS/IR/HLSOpsAttributes.h.inc"
 
-namespace mlir {
-namespace scalehls {
-namespace hls {
-
 #include "scalehls/Dialect/HLS/IR/HLSOpsInterfaces.h.inc"
-
-/// Memory effects for dataflow.stream operations.
-namespace StreamEffects {
-struct Instantiate : public MemoryEffects::Effect::Base<Instantiate> {};
-struct Push : public MemoryEffects::Effect::Base<Push> {};
-struct Pop : public MemoryEffects::Effect::Base<Pop> {};
-} // namespace StreamEffects
-
-/// Printer hook for custom directive in assemblyFormat.
-///
-///   custom<DynamicTemplateList>($templates, $staticTemplates)
-///
-/// where `template` is of ODS type `Variadic<AnyType>` and `staticTemplates`
-/// is of ODS type `ArrayAttr`. Prints a list with either (1) the static
-/// attribute value in `staticTemplates` is `dynVal` or (2) the next value
-/// otherwise. This allows idiomatic printing of mixed value and attributes in a
-/// list. E.g. `<%arg0, 7, f32, %arg42>`.
-void printDynamicTemplateList(OpAsmPrinter &printer, Operation *op,
-                              OperandRange templates,
-                              ArrayAttr staticTemplates);
-
-/// Pasrer hook for custom directive in assemblyFormat.
-///
-///   custom<DynamicTemplateList>($templates, $staticTemplates)
-///
-/// where `templates` is of ODS type `Variadic<AnyType>` and `staticTemplates`
-/// is of ODS type `ArrayAttr`. Parse a mixed list with either (1) static
-/// templates or (2) SSA templates. Fill `staticTemplates` with the ArrayAttr,
-/// where `dynVal` encodes the position of SSA templates. Add the parsed SSA
-/// templates to `templates` in-order.
-//
-/// E.g. after parsing "<%arg0, 7, f32, %arg42>":
-///   1. `result` is filled with the ArrayAttr "[`dynVal`, 7, f32, `dynVal`]"
-///   2. `ssa` is filled with "[%arg0, %arg42]".
-ParseResult parseDynamicTemplateList(
-    OpAsmParser &parser,
-    SmallVectorImpl<OpAsmParser::UnresolvedOperand> &templates,
-    ArrayAttr &staticTemplates);
-
-} // namespace hls
-} // namespace scalehls
-} // namespace mlir
 
 #define GET_OP_CLASSES
 #include "scalehls/Dialect/HLS/IR/HLSOps.h.inc"
