@@ -58,73 +58,23 @@ hls::StreamType::verify(function_ref<InFlightDiagnostic()> emitError,
   return success();
 }
 
-/// Clone this type with the given shape and element type. If the provided
-/// shape is `std::nullopt`, the current shape of the type is used.
-StreamType hls::StreamType::cloneWith(std::optional<ArrayRef<int64_t>> shape,
-                                      Type elementType) const {
-  return StreamType::get(elementType, shape ? *shape : getShape(),
-                         getIterSteps(), getIterMap(), getDepth());
-}
-
-/// Return the iteration trip counts of this stream type.
-SmallVector<int64_t> hls::StreamType::getIterBounds() const {
-  // Note that the verifier has ensured that the iteration bounds are
-  // divisible by the iteration steps.
-  SmallVector<int64_t> iterBounds;
-  for (auto [tripCount, step] : llvm::zip(getIterTripCounts(), getIterSteps()))
-    iterBounds.push_back(tripCount * step);
-  return iterBounds;
-}
-
-/// Infer and return the integral shape this stream type represents.
-SmallVector<int64_t> hls::StreamType::getIntegralShape() const {
+/// Infer and return the integral shape of the full tensor this stream type
+/// represents.
+SmallVector<int64_t> hls::StreamType::getShape() const {
   SmallVector<AffineExpr> iterSizes;
   for (auto [tripCount, step] : llvm::zip(getIterTripCounts(), getIterSteps()))
     iterSizes.push_back(
         getAffineConstantExpr((tripCount - 1) * step, getContext()));
   auto iterSizeMap = getIterMap().replaceDimsAndSymbols(iterSizes, {}, 0, 0);
-  auto shapedElementType = llvm::dyn_cast<ShapedType>(getElementType());
 
   SmallVector<int64_t> integralShape;
   for (auto [index, iterSize] : llvm::enumerate(iterSizeMap.getResults())) {
     auto constIterSize = llvm::dyn_cast<AffineConstantExpr>(iterSize);
-    assert(constIterSize && "non-constant size in the iteration layout");
-
-    if (!shapedElementType)
-      integralShape.push_back(constIterSize.getValue());
-    else
-      integralShape.push_back(constIterSize.getValue() +
-                              shapedElementType.getDimSize(index));
+    assert(constIterSize && "non-constant size in the iteration map");
+    integralShape.push_back(constIterSize.getValue() +
+                            getElementDimSize(index));
   }
   return integralShape;
-}
-
-/// Return whether this stream type represents a projected stream pattern.
-/// For example, for an array of:
-///   [[1, 2],
-///    [3, 4]]
-/// A traversing of [1, 3, 2, 4] is non-projected, while a traversing of
-/// [1, 3, 1, 3, 2, 4, 2, 4] is projected.
-bool hls::StreamType::isProjected() const {
-  // As long as every input dimension is appeared in the iteration map, the
-  // stream is non-projected. Otherwise, it means the some input dimension is
-  // the projected.
-  return llvm::any_of(llvm::seq(getIterMap().getNumDims()),
-                      [&](int i) { return !getIterMap().isFunctionOfDim(i); });
-}
-
-/// Return whether this stream type represents a permuted stream pattern.
-/// For example, for an array of:
-///   [[1, 2],
-///    [3, 4]]
-/// A traversing of [1, 2, 1, 2, 3, 4, 3, 4] is non-permuted, while a traversing
-/// of [1, 3, 1, 3, 2, 4, 2, 4] is permuted.
-bool hls::StreamType::isPermuted() const {
-  SmallVector<unsigned> positions;
-  for (auto expr : getIterMap().getResults())
-    if (auto dim = llvm::dyn_cast<AffineDimExpr>(expr))
-      positions.push_back(dim.getPosition());
-  return !llvm::is_sorted(positions);
 }
 
 /// Return whether this stream type represents an overlapped stream pattern.
@@ -133,14 +83,12 @@ bool hls::StreamType::isOverlapped() const {
   for (auto step : getIterSteps())
     iterShape.push_back(getAffineConstantExpr(step, getContext()));
   auto iterShapeMap = getIterMap().replaceDimsAndSymbols(iterShape, {}, 0, 0);
-  auto shapedElementType = llvm::dyn_cast<ShapedType>(getElementType());
 
   for (auto [index, iterDimSize] : llvm::enumerate(iterShapeMap.getResults())) {
     auto constIterDimSize = llvm::dyn_cast<AffineConstantExpr>(iterDimSize);
-    assert(constIterDimSize && "non-constant size in the iteration layout");
-    auto elementDimSize =
-        shapedElementType ? shapedElementType.getDimSize(index) : 1;
-    if (constIterDimSize.getValue() != elementDimSize)
+    assert(constIterDimSize && "non-constant size in the iteration map");
+    if (constIterDimSize.getValue() != getElementDimSize(index) &&
+        constIterDimSize.getValue() != 0)
       return true;
   }
   return false;
@@ -153,7 +101,7 @@ bool hls::StreamType::isCastableWith(StreamType other) const {
   if (*this == other)
     return true;
   if (getElementType() == other.getElementType() &&
-      getIntegralShape() == other.getIntegralShape())
+      getShape() == other.getShape())
     return true;
   return false;
 }
@@ -163,7 +111,7 @@ bool hls::StreamType::isConvertableWith(RankedTensorType tensor) const {
   if (!tensor.hasStaticShape())
     return false;
 
-  if (auto shapedElementType = llvm::dyn_cast<ShapedType>(getElementType())) {
+  if (auto shapedElementType = getShapedElementType()) {
     if (tensor.getElementType() != shapedElementType.getElementType())
       return false;
     if (tensor.getRank() != shapedElementType.getRank())
@@ -172,7 +120,7 @@ bool hls::StreamType::isConvertableWith(RankedTensorType tensor) const {
     return false;
   }
 
-  if (tensor.getShape() != ArrayRef<int64_t>(getIntegralShape()))
+  if (tensor.getShape() != ArrayRef<int64_t>(getShape()))
     return false;
   return true;
 }

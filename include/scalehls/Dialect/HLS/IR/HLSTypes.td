@@ -20,7 +20,7 @@ class HLSType<string name, list<Trait> traits = [],
 // StreamType
 //===----------------------------------------------------------------------===//
 
-def StreamType : HLSType<"Stream", [ShapedTypeInterface]> {
+def StreamType : HLSType<"Stream", []> {
   let summary = "An HLS stream type";
   let description = [{
     Represents a stream of any type that can be transfered between HLS modules.
@@ -71,28 +71,52 @@ def StreamType : HLSType<"Stream", [ShapedTypeInterface]> {
   let genVerifyDecl = 1;
 
   let extraClassDeclaration = [{
-    /// Returns if this type is ranked.
-    bool hasRank() const { return true; }
+    /// Return the iteration bounds.
+    SmallVector<int64_t> getIterBounds() const {
+      return llvm::map_to_vector(llvm::zip(getIterTripCounts(), getIterSteps()),
+          [](std::tuple<int64_t, int64_t> tripCountStep) {
+              return std::get<0>(tripCountStep) * std::get<1>(tripCountStep);
+          });
+    }
 
-    /// Returns the shape of this type. For stream types, we consider the
-    /// iteration trip counts as the shape.
-    ArrayRef<int64_t> getShape() const { return getIterTripCounts(); }
+    /// Return the integral rank of the full tensor this stream type represents.
+    int64_t getRank() const {
+      return getIterMap().getNumResults();
+    }
 
-    /// Clone this type with the given shape and element type. If the provided
-    /// shape is `std::nullopt`, the current shape of the type is used.
-    StreamType cloneWith(std::optional<ArrayRef<int64_t>> shape,
-                         Type elementType) const;
+    /// Infer and return the integral shape of the full tensor this stream type
+    /// represents.
+    SmallVector<int64_t> getShape() const;
 
-    using ShapedType::Trait<StreamType>::getElementTypeBitWidth;
-    using ShapedType::Trait<StreamType>::getRank;
-    using ShapedType::Trait<StreamType>::getNumElements;
-    using ShapedType::Trait<StreamType>::getDimSize;
+    /// Get the shaped element type if applicable. Return nullptr if the element
+    /// type is not a shaped type.
+    ShapedType getShapedElementType() const {
+      return getElementType().dyn_cast<ShapedType>();
+    }
 
-    /// Return the iteration bounds of this stream type.
-    SmallVector<int64_t> getIterBounds() const;
+    /// Get the rank of the element type. Return 0 if the element type is not a
+    /// shaped type.
+    int64_t getElementRank() const {
+      if (auto shapedType = getShapedElementType())
+        return shapedType.getRank();
+      return 0;
+    }
 
-    /// Infer and return the integral shape this stream type represents.
-    SmallVector<int64_t> getIntegralShape() const;
+    /// Return the dimension size of the element type. Return 1 if the element
+    /// type is not a shaped type.
+    int64_t getElementDimSize(unsigned dim) const {
+      if (auto shapedType = getShapedElementType())
+        return shapedType.getDimSize(dim);
+      return 1;
+    }
+
+    /// Return the shape of the element type. Return an all-1 array if the 
+    /// element type is not a shaped type.
+    SmallVector<int64_t> getElementShape() const {
+      if (auto shapedType = getShapedElementType())
+        return SmallVector<int64_t>(shapedType.getShape());
+      return SmallVector<int64_t>(getIterMap().getNumResults(), 1);
+    }
 
     /// Return whether this stream type represents a projected stream pattern.
     /// For example, for an array of:
@@ -100,7 +124,10 @@ def StreamType : HLSType<"Stream", [ShapedTypeInterface]> {
     ///    [3, 4]]
     /// A traversing of [1, 3, 2, 4] is non-projected, while a traversing of
     /// [1, 3, 1, 3, 2, 4, 2, 4] is projected.
-    bool isProjected() const;
+    bool isProjected() const {
+      return llvm::any_of(llvm::seq(getIterMap().getNumDims()),
+          [&](int i) { return !getIterMap().isFunctionOfDim(i); });
+    }
 
     /// Return whether this stream type represents a permuted stream pattern.
     /// For example, for an array of:
@@ -108,7 +135,13 @@ def StreamType : HLSType<"Stream", [ShapedTypeInterface]> {
     ///    [3, 4]]
     /// A traversing of [1, 2, 1, 2, 3, 4, 3, 4] is non-permuted, while a
     /// traversing of [1, 3, 1, 3, 2, 4, 2, 4] is permuted.
-    bool isPermuted() const;
+    bool isPermuted() const {
+      SmallVector<unsigned> positions;
+      for (auto expr : getIterMap().getResults())
+        if (auto dim = llvm::dyn_cast<AffineDimExpr>(expr))
+          positions.push_back(dim.getPosition());
+      return !llvm::is_sorted(positions);
+    }
 
     /// Return whether this stream type represents an overlapped stream pattern.
     bool isOverlapped() const;
