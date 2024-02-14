@@ -69,7 +69,7 @@ struct SimplifyDispatchOrTaskOutputs : public OpRewritePattern<OpType> {
 
       rewriter.setInsertionPoint(op);
       auto newTask =
-          rewriter.create<OpType>(op.getLoc(), ValueRange(usedOutputs));
+          rewriter.create<OpType>(op.getLoc(), TypeRange(ValueRange(usedOutputs)));
       rewriter.inlineRegionBefore(op.getBody(), newTask.getBody(),
                                   newTask.getBody().end());
       for (auto t : llvm::zip(usedResults, newTask.getResults()))

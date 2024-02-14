@@ -52,7 +52,7 @@ struct SubViewSinkPattern : public OpRewritePattern<func::CallOp> {
     }
 
     if (hasChanged) {
-      func.setType(rewriter.getFunctionType(ValueRange(newInputs),
+      func.setType(rewriter.getFunctionType(TypeRange(ValueRange(newInputs)),
                                             func.getResultTypes()));
       rewriter.setInsertionPoint(call);
       rewriter.replaceOpWithNewOp<func::CallOp>(call, func, newInputs);
