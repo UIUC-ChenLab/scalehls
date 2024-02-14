@@ -255,12 +255,12 @@ def StreamBufferOp : HLSOp<"stream_buffer", [NoMemoryEffect]> {
     Represent a stream buffer.
   }];
 
-  let arguments = (ins AnyStream:$input, TypeAttr:$bufferType,
-      I64Attr:$bufferPosition);
+  let arguments = (ins AnyStream:$input, TypeAttr:$bufferElementType,
+      DenseI64ArrayAttr:$bufferShape, I64Attr:$bufferPosition);
   let results = (outs AnyStream:$output);
   let assemblyFormat = [{
-    $input `,` $bufferType `at` $bufferPosition attr-dict `:`
-    functional-type($input, $output)
+    $input `,` $bufferElementType $bufferShape `at` $bufferPosition attr-dict
+    `:` functional-type($input, $output)
   }];
 
   let hasVerifier = 1;

@@ -450,23 +450,68 @@ transform::HLSConvertTensorToStreamBufferOp::applyToOne(
       tensorToStream.getTensor().getDefiningOp<hls::StreamToTensorOp>();
   if (!streamToTensor)
     return DiagnosedSilenceableFailure::success();
+  auto tensorType = streamToTensor.getType();
 
-  auto sourceStream = streamToTensor.getStream();
-  auto resultStream = tensorToStream.getStream();
-  auto sourceType = sourceStream.getType();
-  auto resultType = resultStream.getType();
+  // TODO: Support overlapped stream types.
+  auto sourceType = streamToTensor.getStream().getType();
+  auto resultType = tensorToStream.getStream().getType();
   if (sourceType.isOverlapped() || resultType.isOverlapped())
     return DiagnosedSilenceableFailure::success();
 
-  int64_t bufferPosition = 0;
-  for (auto [sourceExpr, resultExpr] :
-       llvm::zip(sourceType.getIterMap().getResults(),
-                 resultType.getIterMap().getResults())) {
+  SmallVector<int64_t> bufferShape;
+  SmallVector<unsigned> sharedLoops;
+  for (int64_t dim = 0; dim < tensorType.getRank(); dim++) {
+    // To reduce the buffer size, we need to ensure that the source and result
+    // stream share the same tile size for the current dimension.
+    // TODO: Theoratically, we can partially reduce the buffer size when the
+    // tile sizes are different.
+    if (sourceType.getElementDimSize(dim) != resultType.getElementDimSize(dim))
+      break;
+
+    auto sourceExpr = sourceType.getIterMap().getResult(dim);
+    auto resultExpr = resultType.getIterMap().getResult(dim);
+
+    // If both the source and result indices are constants and have the same
+    // value, we can reduce the buffer size.
+    auto sourceConstExpr = dyn_cast<AffineConstantExpr>(sourceExpr);
+    auto resultConstExpr = dyn_cast<AffineConstantExpr>(resultExpr);
+    if (sourceConstExpr && resultConstExpr &&
+        sourceConstExpr.getValue() == resultConstExpr.getValue()) {
+      bufferShape.push_back(sourceType.getElementDimSize(dim));
+      continue;
+    }
+
+    // If both the source and result indices are dimensions and follow the same
+    // iteration order, we may be able to reduce the buffer size.
+    auto sourceDimExpr = dyn_cast<AffineDimExpr>(sourceExpr);
+    auto resultDimExpr = dyn_cast<AffineDimExpr>(resultExpr);
+    if (sourceDimExpr && resultDimExpr &&
+        sourceDimExpr.getPosition() == resultDimExpr.getPosition()) {
+      bufferShape.push_back(sourceType.getElementDimSize(dim));
+      sharedLoops.push_back(sourceDimExpr.getPosition());
+      continue;
+    }
+    break;
   }
 
+  // Ensure the buffer can be positioned correctly.
+  while (llvm::any_of(
+      sharedLoops, [&](unsigned loop) { return loop >= sharedLoops.size(); })) {
+    bufferShape.pop_back();
+    sharedLoops.pop_back();
+  }
+
+  // The buffer position is equal to the number of dimensions that have been
+  // reduced to the shared tile size.
+  auto bufferPosition = bufferShape.size();
+
+  // For the remaining dimensions, we keep the original dimension size.
+  bufferShape.append(std::next(tensorType.getShape().begin(), bufferPosition),
+                     tensorType.getShape().end());
+
   rewriter.replaceOpWithNewOp<hls::StreamBufferOp>(
-      tensorToStream, resultType, sourceStream, resultType.getElementType(),
-      bufferPosition);
+      tensorToStream, resultType, streamToTensor.getStream(),
+      tensorType.getElementType(), bufferShape, bufferPosition);
   return DiagnosedSilenceableFailure::success();
 }
 
