@@ -208,12 +208,11 @@ void AffineSelectOp::print(OpAsmPrinter &p) {
   p.printOperand(getTrueValue());
   p << ", ";
   p.printOperand(getFalseValue());
-  p << " : ";
-  p.printType(getType());
 
-  // Print the attribute list.
   p.printOptionalAttrDict((*this)->getAttrs(),
                           /*elidedAttrs=*/getConditionAttrStrName());
+  p << " : ";
+  p.printType(getType());
 }
 
 IntegerSet AffineSelectOp::getIntegerSet() {
@@ -254,59 +253,6 @@ void AffineSelectOp::setConditional(IntegerSet set, ValueRange operands) {
 // Attribute Accessors
 //===----------------------------------------------------------------------===//
 
-/// Tilelayout attribute accessors on operation.
-TileLayoutAttr hls::getTileLayout(Operation *op) {
-  return op->getAttrOfType<TileLayoutAttr>("__tile_layout__");
-}
-void hls::setTileLayout(Operation *op, TileLayoutAttr tileLayout) {
-  op->setAttr("__tile_layout__", tileLayout);
-}
-void hls::setTileLayout(Operation *op, ArrayRef<int64_t> tileShape,
-                        ArrayRef<int64_t> vectorShape) {
-  auto tileLayout =
-      TileLayoutAttr::get(op->getContext(), tileShape, vectorShape);
-  setTileLayout(op, tileLayout);
-}
-void hls::setTileLayout(Operation *op, ArrayRef<int64_t> tileShape) {
-  auto tileLayout = TileLayoutAttr::get(op->getContext(), tileShape);
-  setTileLayout(op, tileLayout);
-}
-
-/// Tilelayout attribute accessors on value.
-TileLayoutAttr hls::getTileLayout(Value memref) {
-  if (auto buffer = findBuffer(memref)) {
-    if (auto bufferArg = buffer.dyn_cast<BlockArgument>()) {
-      if (auto func =
-              dyn_cast<func::FuncOp>(bufferArg.getOwner()->getParentOp()))
-        return func.getArgAttrOfType<TileLayoutAttr>(bufferArg.getArgNumber(),
-                                                     "hls.__tile_layout__");
-    } else if (auto bufferOp = buffer.getDefiningOp<hls::BufferLikeInterface>())
-      return getTileLayout(bufferOp);
-  }
-  return TileLayoutAttr();
-}
-void hls::setTileLayout(Value memref, TileLayoutAttr tileLayout) {
-  if (auto buffer = findBuffer(memref)) {
-    if (auto bufferArg = buffer.dyn_cast<BlockArgument>()) {
-      if (auto func =
-              dyn_cast<func::FuncOp>(bufferArg.getOwner()->getParentOp()))
-        func.setArgAttr(bufferArg.getArgNumber(), "hls.__tile_layout__",
-                        tileLayout);
-    } else if (auto bufferOp = buffer.getDefiningOp<hls::BufferLikeInterface>())
-      setTileLayout(bufferOp, tileLayout);
-  }
-}
-void hls::setTileLayout(Value memref, ArrayRef<int64_t> tileShape,
-                        ArrayRef<int64_t> vectorShape) {
-  auto tileLayout =
-      TileLayoutAttr::get(memref.getContext(), tileShape, vectorShape);
-  setTileLayout(memref, tileLayout);
-}
-void hls::setTileLayout(Value memref, ArrayRef<int64_t> tileShape) {
-  auto tileLayout = TileLayoutAttr::get(memref.getContext(), tileShape);
-  setTileLayout(memref, tileLayout);
-}
-
 /// Loop directive attribute accessors.
 LoopDirectiveAttr hls::getLoopDirective(Operation *op) {
   return op->getAttrOfType<LoopDirectiveAttr>("__loop_direct__");
@@ -319,20 +265,6 @@ void hls::setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
   auto loopDirective = LoopDirectiveAttr::get(op->getContext(), pipeline,
                                               targetII, dataflow, flatten);
   setLoopDirective(op, loopDirective);
-}
-
-/// Parrallel and point loop attribute accessors.
-void hls::setParallelAttr(Operation *op) {
-  op->setAttr("__parallel__", UnitAttr::get(op->getContext()));
-}
-bool hls::hasParallelAttr(Operation *op) {
-  return op->hasAttrOfType<UnitAttr>("__parallel__");
-}
-void hls::setPointAttr(Operation *op) {
-  op->setAttr("__point__", UnitAttr::get(op->getContext()));
-}
-bool hls::hasPointAttr(Operation *op) {
-  return op->hasAttrOfType<UnitAttr>("__point__");
 }
 
 /// Function directive attribute accessors.

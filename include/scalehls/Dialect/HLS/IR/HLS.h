@@ -39,31 +39,11 @@ namespace hls {
 // Attribute Accessors
 //===----------------------------------------------------------------------===//
 
-/// Tilelayout attribute accessors on operation.
-TileLayoutAttr getTileLayout(Operation *op);
-void setTileLayout(Operation *op, TileLayoutAttr tileLayout);
-void setTileLayout(Operation *op, ArrayRef<int64_t> tileShape,
-                   ArrayRef<int64_t> vectorShape);
-void setTileLayout(Operation *op, ArrayRef<int64_t> tileShape);
-
-/// Tilelayout attribute accessors on value.
-TileLayoutAttr getTileLayout(Value memref);
-void setTileLayout(Value memref, TileLayoutAttr tileLayout);
-void setTileLayout(Value memref, ArrayRef<int64_t> tileShape,
-                   ArrayRef<int64_t> vectorShape);
-void setTileLayout(Value memref, ArrayRef<int64_t> tileShape);
-
 /// Loop directive attribute accessors.
 LoopDirectiveAttr getLoopDirective(Operation *op);
 void setLoopDirective(Operation *op, LoopDirectiveAttr loopDirective);
 void setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
                       bool dataflow, bool flatten);
-
-/// Parrallel and point loop attribute accessors.
-bool hasParallelAttr(Operation *op);
-void setParallelAttr(Operation *op);
-bool hasPointAttr(Operation *op);
-void setPointAttr(Operation *op);
 
 /// Function directive attribute accessors.
 FuncDirectiveAttr getFuncDirective(Operation *op);
