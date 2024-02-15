@@ -220,8 +220,8 @@ def HLSConvertCollapseShapeToStreamOp : Op<Transform_Dialect,
   }];
 }
 
-def HLSConvertTensorToStreamBufferOp : Op<Transform_Dialect,
-    "hls.convertTensorToStreamBuffer",
+def HLSEliminateIntermediateTensorOp : Op<Transform_Dialect,
+    "hls.eliminate_intermediate_tensor",
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {
   let description = [{}];

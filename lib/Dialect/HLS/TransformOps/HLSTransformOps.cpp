@@ -388,11 +388,11 @@ transform::HLSConvertCollapseShapeToStreamOp::applyToOne(
 }
 
 //===----------------------------------------------------------------------===//
-// HLSConvertTensorToStreamBufferOp
+// HLSEliminateIntermediateTensorOp
 //===----------------------------------------------------------------------===//
 
 DiagnosedSilenceableFailure
-transform::HLSConvertTensorToStreamBufferOp::applyToOne(
+transform::HLSEliminateIntermediateTensorOp::applyToOne(
     transform::TransformRewriter &rewriter,
     hls::TensorToStreamOp tensorToStream,
     transform::ApplyToEachResultList &results,

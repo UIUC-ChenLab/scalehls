@@ -9,15 +9,14 @@
 
 include "mlir/Pass/PassBase.td"
 
-def PreprocessDataflow : Pass<"scalehls-preprocess-dataflow", "func::FuncOp"> {
-  let summary = "Preprocess the IR for dataflow transformation";
-  let constructor = "mlir::scalehls::hls::createPreprocessDataflowPass()";
+def Preprocess : Pass<"scalehls-preprocess", "func::FuncOp"> {
+  let summary = "Preprocess the IR for subsequent transforms";
+  let constructor = "mlir::scalehls::hls::createPreprocessPass()";
 }
 
-def ConvertTensorToStream :
-    Pass<"scalehls-convert-tensor-to-stream", "func::FuncOp"> {
-  let summary = "Convert tensor to stream";
-  let constructor = "mlir::scalehls::hls::createConvertTensorToStreamPass()";
+def ScalarizeStream : Pass<"scalehls-scalarize-stream", "func::FuncOp"> {
+  let summary = "Scalarize stream channels";
+  let constructor = "mlir::scalehls::hls::createScalarizeStreamPass()";
 }
 
 def CreateDataflow : Pass<"scalehls-create-dataflow", "func::FuncOp"> {
