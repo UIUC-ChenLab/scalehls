@@ -1013,7 +1013,7 @@ void ModuleEmitter::emitAffineParallel(affine::AffineParallelOp op) {
     }
   }
 
-  auto steps = getIntArrayAttrValue(op, op.getStepsAttrName());
+  auto steps = op.getSteps();
   for (unsigned i = 0, e = op.getNumDims(); i < e; ++i) {
     indent() << "for (";
     auto iterVar = op.getBody()->getArgument(i);
@@ -1174,13 +1174,15 @@ void ModuleEmitter::emitAffineYield(affine::AffineYieldOp op) {
     // current results with corresponding arith::AtomicRMWKind operations.
     addIndent();
     auto RMWAttrs =
-        getIntArrayAttrValue(parentOp, parentOp.getReductionsAttrName());
+        llvm::map_to_vector(parentOp.getReductions(), [](auto &attr) {
+          return cast<arith::AtomicRMWKindAttr>(attr).getValue();
+        });
     resultIdx = 0;
     for (auto result : parentOp.getResults()) {
       unsigned rank = emitNestedLoopHeader(result);
       indent();
       emitValue(result, rank);
-      switch ((arith::AtomicRMWKind)RMWAttrs[resultIdx]) {
+      switch (RMWAttrs[resultIdx]) {
       case (arith::AtomicRMWKind::addf):
       case (arith::AtomicRMWKind::addi):
         os << " += ";
@@ -1673,8 +1675,7 @@ void ModuleEmitter::emitLoopDirectives(Operation *loop) {
   if (!loopDirect)
     return;
 
-  if (!hasParallelAttr(loop) && !loopDirect.getDataflow() &&
-      enforceFalseDependency.getValue())
+  if (!loopDirect.getDataflow() && enforceFalseDependency.getValue())
     indent() << "#pragma HLS dependence false\n";
 
   if (loopDirect.getPipeline()) {

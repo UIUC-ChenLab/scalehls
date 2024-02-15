@@ -19,13 +19,6 @@ namespace mlir {
 namespace scalehls {
 
 //===----------------------------------------------------------------------===//
-// Linalg Analysis Utils
-//===----------------------------------------------------------------------===//
-
-/// Check whether the given generic operation is elementwise.
-bool isElementwiseGenericOp(linalg::GenericOp op);
-
-//===----------------------------------------------------------------------===//
 // Memory and Loop Analysis Utils
 //===----------------------------------------------------------------------===//
 
@@ -33,28 +26,8 @@ using AffineLoopBand = SmallVector<affine::AffineForOp, 6>;
 using AffineLoopBands = std::vector<AffineLoopBand>;
 using FactorList = SmallVector<unsigned, 8>;
 
-/// Reduces each tile size to the largest divisor of the corresponding trip
-/// count (if the trip count is known).
-void adjustToDivisorsOfTripCounts(ArrayRef<affine::AffineForOp> band,
-                                  SmallVectorImpl<unsigned> *tileSizes);
-
 /// The current op or contained ops have effect on external buffers.
 bool hasEffectOnExternalBuffer(Operation *op);
-
-/// Distribute the given factor from the innermost loop of the given loop band,
-/// so that we can apply vectorize, unroll and jam, etc.
-FactorList
-getDistributedFactors(unsigned factor,
-                      const SmallVectorImpl<affine::AffineForOp> &band);
-
-/// Distribute the given factor evenly on all loop levels. The generated factors
-/// are garanteed to be divisors of the factors in given "costrFactorsList".
-/// This method can fail due to non-constant loop bounds.
-LogicalResult
-getEvenlyDistributedFactors(unsigned maxFactor, FactorList &factors,
-                            const SmallVectorImpl<affine::AffineForOp> &band,
-                            const SmallVectorImpl<FactorList> &constrFactors,
-                            bool powerOf2Constr = false);
 
 /// Compose any affine.apply ops feeding into `operands` of the integer set
 /// `set` by composing the maps of such affine.apply ops with the integer
@@ -67,9 +40,6 @@ std::pair<bool, bool> ifAlwaysTrueOrFalse(affine::AffineIfOp ifOp);
 
 /// Check whether the two given if statements have the same condition.
 bool checkSameIfStatement(affine::AffineIfOp lhsOp, affine::AffineIfOp rhsOp);
-
-/// Parse array attributes.
-SmallVector<int64_t, 8> getIntArrayAttrValue(Operation *op, StringRef name);
 
 /// For storing all affine memory access operations (including AffineLoadOp, and
 /// AffineStoreOp) indexed by the corresponding memref.
@@ -106,16 +76,6 @@ bool isFullyPartitioned(MemRefType memrefType);
 /// contained by the input operation.
 unsigned getChildLoopNum(Operation *op);
 
-/// Given a tiled loop band, return true and get the tile (tile-space) loop
-/// band and the point (intra-tile) loop band. If failed, return false.
-bool getTileAndPointLoopBand(const AffineLoopBand &band,
-                             AffineLoopBand &tileBand,
-                             AffineLoopBand &pointBand);
-
-bool getParallelAndReductionLoopBand(const AffineLoopBand &band,
-                                     AffineLoopBand &parallelBand,
-                                     AffineLoopBand &reductionBand);
-
 /// Get the whole loop band given the outermost or innermost loop and return it
 /// in "band". Meanwhile, the return value is the innermost or outermost loop of
 /// this loop band.
@@ -133,8 +93,6 @@ void getLoopBands(Block &block, AffineLoopBands &bands,
 
 void getArrays(Block &block, SmallVectorImpl<Value> &arrays,
                bool allowArguments = true);
-
-std::optional<unsigned> getAverageTripCount(affine::AffineForOp forOp);
 
 bool checkDependence(Operation *A, Operation *B);
 
