@@ -79,10 +79,15 @@ def StreamType : HLSType<"Stream", []> {
           });
     }
 
-    /// Return the integral rank of the full tensor this stream type represents.
-    int64_t getRank() const {
-      return getIterMap().getNumResults();
+    /// Return the data type of this stream type.
+    Type getDataType() const {
+      if (auto shapedType = getShapedElementType())
+        return shapedType.getElementType();
+      return getElementType();
     }
+
+    /// Return the integral rank of the full tensor this stream type represents.
+    int64_t getRank() const { return getIterMap().getNumResults(); }
 
     /// Infer and return the integral shape of the full tensor this stream type
     /// represents.
@@ -118,38 +123,10 @@ def StreamType : HLSType<"Stream", []> {
       return SmallVector<int64_t>(getIterMap().getNumResults(), 1);
     }
 
-    /// Return whether this stream type represents a projected stream pattern.
-    /// For example, for an array of:
-    ///   [[1, 2],
-    ///    [3, 4]]
-    /// A traversing of [1, 3, 2, 4] is non-projected, while a traversing of
-    /// [1, 3, 1, 3, 2, 4, 2, 4] is projected.
-    bool isProjected() const {
-      return llvm::any_of(llvm::seq(getIterMap().getNumDims()),
-          [&](int i) { return !getIterMap().isFunctionOfDim(i); });
-    }
-
-    /// Return whether this stream type represents a permuted stream pattern.
-    /// For example, for an array of:
-    ///   [[1, 2],
-    ///    [3, 4]]
-    /// A traversing of [1, 2, 1, 2, 3, 4, 3, 4] is non-permuted, while a
-    /// traversing of [1, 3, 1, 3, 2, 4, 2, 4] is permuted.
-    bool isPermuted() const {
-      SmallVector<unsigned> positions;
-      for (auto expr : getIterMap().getResults())
-        if (auto dim = llvm::dyn_cast<AffineDimExpr>(expr))
-          positions.push_back(dim.getPosition());
-      return !llvm::is_sorted(positions);
-    }
-
     /// Return whether this stream type represents an overlapped stream pattern.
     bool isOverlapped() const;
 
-    /// Return whether the "other" stream type is castable with this stream
-    /// type. By being castable, it means that the two stream types have the
-    /// element type and integral shape, but not necessarily the same iteration
-    /// shape and layout.
+    /// Return whether the "other" stream type is castable with this type.
     bool isCastableWith(StreamType other) const;
 
     /// Return whether this stream type can be converted to the "tensor" type.

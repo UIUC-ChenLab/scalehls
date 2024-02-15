@@ -94,33 +94,22 @@ bool hls::StreamType::isOverlapped() const {
   return false;
 }
 
-/// Return whether the "other" stream type is castable with this stream type. By
-/// being castable, it means that the two stream types have the element type and
-/// iteration order, but not necessarily the same iteration shape and layout.
+/// Return whether the "other" stream type is castable with this type.
 bool hls::StreamType::isCastableWith(StreamType other) const {
-  if (*this == other)
-    return true;
-  if (getElementType() == other.getElementType() &&
-      getShape() == other.getShape())
-    return true;
-  return false;
+  if (getDataType() != other.getDataType())
+    return false;
+  if (getShape() != other.getShape())
+    return false;
+  return true;
 }
 
 /// Return whether this stream type can be converted to the "tensor" type.
 bool hls::StreamType::isConvertableWith(RankedTensorType tensor) const {
   if (!tensor.hasStaticShape())
     return false;
-
-  if (auto shapedElementType = getShapedElementType()) {
-    if (tensor.getElementType() != shapedElementType.getElementType())
-      return false;
-    if (tensor.getRank() != shapedElementType.getRank())
-      return false;
-  } else if (tensor.getElementType() != getElementType()) {
+  if (getDataType() != tensor.getElementType())
     return false;
-  }
-
-  if (tensor.getShape() != ArrayRef<int64_t>(getShape()))
+  if (getShape() != SmallVector<int64_t>(tensor.getShape()))
     return false;
   return true;
 }
