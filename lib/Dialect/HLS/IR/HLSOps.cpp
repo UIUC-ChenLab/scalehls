@@ -232,7 +232,14 @@ LogicalResult StreamToTensorOp::verify() {
 // StreamOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult StreamOp::verify() { return success(); }
+LogicalResult StreamOp::verify() {
+  if (!llvm::hasSingleElement(
+          llvm::make_filter_range((*this)->getUsers(), [](Operation *user) {
+            return isa<StreamWriteOp>(user);
+          })))
+    return emitOpError() << "stream is written more than once";
+  return success();
+}
 
 void StreamOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
@@ -280,19 +287,93 @@ void StreamWriteOp::getEffects(
 // StreamExpandShapeOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult StreamExpandShapeOp::verify() { return success(); }
+static LogicalResult
+verifyReassociation(SmallVectorImpl<ReassociationIndices> &reassociation,
+                    StreamType lowType, StreamType highType, Operation *op) {
+  if (reassociation.size() != lowType.getIterTripCounts().size())
+    return op->emitOpError("reassociation size doesn't align with input type");
+
+  for (auto [indices, lowTripCount, lowStep] :
+       llvm::zip(reassociation, lowType.getIterTripCounts(),
+                 lowType.getIterSteps())) {
+    int64_t highTripCountProduct = 1;
+    int64_t highStepProduct = 1;
+    for (auto index : indices) {
+      highTripCountProduct *= highType.getIterTripCounts()[index];
+      highStepProduct *= highType.getIterSteps()[index];
+    }
+    if (lowTripCount != highTripCountProduct || lowStep != highStepProduct)
+      return op->emitOpError("reassociation doesn't align with input/output "
+                             "iteration trip counts or steps");
+  }
+
+  unsigned highIndex = 0;
+  for (auto lowExpr : lowType.getIterMap().getResults()) {
+    if (auto lowDimExpr = dyn_cast<AffineDimExpr>(lowExpr)) {
+      auto indices = reassociation[lowDimExpr.getPosition()];
+      for (auto index : indices) {
+        auto highDimExpr =
+            dyn_cast<AffineDimExpr>(highType.getIterMap().getResult(highIndex));
+        if (!highDimExpr || highDimExpr.getPosition() != index)
+          return op->emitOpError(
+              "reassociation doesn't align with input/output iteration maps");
+        highIndex++;
+      }
+    } else
+      highIndex++;
+  }
+  return success();
+}
+
+LogicalResult StreamExpandShapeOp::verify() {
+  auto inputType = getInput().getType();
+  auto outputType = getOutput().getType();
+  if (inputType.getDataType() != outputType.getDataType())
+    return emitOpError("input and output data type doesn't match");
+  auto reassociation = getReassociationIndices();
+  return verifyReassociation(reassociation, inputType, outputType, *this);
+}
 
 //===----------------------------------------------------------------------===//
 // StreamCollapseShapeOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult StreamCollapseShapeOp::verify() { return success(); }
+LogicalResult StreamCollapseShapeOp::verify() {
+  auto inputType = getInput().getType();
+  auto outputType = getOutput().getType();
+  if (inputType.getDataType() != outputType.getDataType())
+    return emitOpError("input and output data type doesn't match");
+  auto reassociation = getReassociationIndices();
+  return verifyReassociation(reassociation, outputType, inputType, *this);
+}
 
 //===----------------------------------------------------------------------===//
 // StreamBufferOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult StreamBufferOp::verify() { return success(); }
+LogicalResult StreamBufferOp::verify() {
+  auto inputType = getInput().getType();
+  auto outputType = getOutput().getType();
+  if (inputType.getDataType() != outputType.getDataType())
+    return emitOpError("input and output data type doesn't match");
+
+  auto inputShape = inputType.getShape();
+  if (inputShape != outputType.getShape())
+    return emitOpError("input and output shape doesn't match");
+
+  for (auto [position, bufferSize, dimSize, inputTileSize, outputTileSize] :
+       llvm::zip(llvm::seq(inputShape.size()), getBufferShape(), inputShape,
+                 inputType.getElementShape(), outputType.getElementShape())) {
+    if (position <= getBufferPosition()) {
+      if (bufferSize < inputTileSize || bufferSize < outputTileSize)
+        return emitOpError(
+            "buffer size is smaller than input/output tile size");
+    } else if (bufferSize != dimSize)
+      return emitOpError(
+          "buffer size doesn't align with input/output tensor size");
+  }
+  return success();
+}
 
 OpFoldResult StreamBufferOp::fold(FoldAdaptor adaptor) {
   if (getInput().getType() == getOutput().getType())
