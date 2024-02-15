@@ -253,9 +253,19 @@ void StreamOp::getEffects(
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamReadOp::verify() {
+  auto channelType = getChannel().getType();
   if (getResult())
-    if (getChannel().getType().getElementType() != getResult().getType())
+    if (channelType.getElementType() != getResult().getType())
       return emitOpError("result type doesn't align with channel type");
+
+  auto loops = getSurroundingLoops(*this, getChannel().getParentBlock());
+  auto tripCounts = getLoopTripCounts(loops);
+  auto steps = getLoopSteps(loops);
+  if (!tripCounts || !steps ||
+      channelType.getIterTripCounts() != ArrayRef<int64_t>(*tripCounts) ||
+      channelType.getIterSteps() != ArrayRef<int64_t>(*steps))
+    return emitOpError("iteration trip counts or steps doesn't align with "
+                       "stream type's iteration trip counts or steps");
   return success();
 }
 
@@ -271,8 +281,18 @@ void StreamReadOp::getEffects(
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamWriteOp::verify() {
-  if (getChannel().getType().getElementType() != getValue().getType())
+  auto channelType = getChannel().getType();
+  if (channelType.getElementType() != getValue().getType())
     return emitOpError("value type doesn't align with channel type");
+
+  auto loops = getSurroundingLoops(*this, getChannel().getParentBlock());
+  auto tripCounts = getLoopTripCounts(loops);
+  auto steps = getLoopSteps(loops);
+  if (!tripCounts || !steps ||
+      channelType.getIterTripCounts() != ArrayRef<int64_t>(*tripCounts) ||
+      channelType.getIterSteps() != ArrayRef<int64_t>(*steps))
+    return emitOpError("iteration trip counts or steps doesn't align with "
+                       "stream type's iteration trip counts or steps");
   return success();
 }
 

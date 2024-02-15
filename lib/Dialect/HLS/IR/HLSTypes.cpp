@@ -109,7 +109,7 @@ bool hls::StreamType::isConvertableWith(RankedTensorType tensor) const {
     return false;
   if (getDataType() != tensor.getElementType())
     return false;
-  if (getShape() != SmallVector<int64_t>(tensor.getShape()))
+  if (ArrayRef<int64_t>(getShape()) != tensor.getShape())
     return false;
   return true;
 }
