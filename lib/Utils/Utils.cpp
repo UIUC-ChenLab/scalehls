@@ -11,28 +11,58 @@
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/IntegerSet.h"
-#include "scalehls/Dialect/HLS/IR/HLS.h"
 
 using namespace mlir;
 using namespace scalehls;
-using namespace hls;
 using namespace affine;
 
-//===----------------------------------------------------------------------===//
-// Memory and Loop Analysis Utils
-//===----------------------------------------------------------------------===//
+SmallVector<scf::ForOp> scalehls::getSurroundingLoops(Operation *target,
+                                                      Block *sourceBlock) {
+  SmallVector<scf::ForOp> reversedLoops;
+  while (auto loop = target->getParentOfType<scf::ForOp>()) {
+    reversedLoops.push_back(loop);
+    target = loop;
+    if (sourceBlock == loop->getBlock())
+      break;
+  }
+  return {reversedLoops.rbegin(), reversedLoops.rend()};
+}
 
-/// The current op or contained ops have effect on external buffers.
-bool scalehls::hasEffectOnExternalBuffer(Operation *op) {
-  auto result = op->walk([](MemoryEffectOpInterface effectOp) {
-    SmallVector<MemoryEffects::EffectInstance> effects;
-    effectOp.getEffects(effects);
-    for (auto effect : effects)
-      if (isExtBuffer(effect.getValue()))
-        return WalkResult::interrupt();
-    return WalkResult::advance();
-  });
-  return result.wasInterrupted();
+std::optional<SmallVector<int64_t>>
+scalehls::getLoopSteps(const SmallVector<scf::ForOp> &loops) {
+  SmallVector<int64_t> steps;
+  for (auto loop : loops) {
+    auto stepCstOp = getConstantIntValue(loop.getStep());
+    if (!stepCstOp)
+      return std::nullopt;
+
+    int64_t stepCst = stepCstOp.value();
+    assert(stepCst >= 0 && "expected positive loop step");
+    steps.push_back(stepCst);
+  }
+  return steps;
+}
+
+std::optional<SmallVector<int64_t>>
+scalehls::getLoopTripCounts(const SmallVector<scf::ForOp> &loops) {
+  SmallVector<int64_t> tripCounts;
+  for (auto loop : loops) {
+    auto lbCstOp = getConstantIntValue(loop.getLowerBound());
+    auto ubCstOp = getConstantIntValue(loop.getUpperBound());
+    auto stepCstOp = getConstantIntValue(loop.getStep());
+    if (!lbCstOp || !ubCstOp || !stepCstOp)
+      return std::nullopt;
+
+    int64_t lbCst = lbCstOp.value();
+    int64_t ubCst = ubCstOp.value();
+    int64_t stepCst = stepCstOp.value();
+    assert(lbCst >= 0 && ubCst >= 0 && stepCst >= 0 &&
+           "expected positive loop bounds and step");
+    if ((ubCst - lbCst) % stepCst != 0)
+      return std::nullopt;
+    tripCounts.push_back((ubCst - lbCst) / stepCst);
+  }
+  return tripCounts;
 }
 
 /// Replace all occurrences of AffineExpr at position `pos` in `map` by the
@@ -414,38 +444,6 @@ scalehls::getBoundOfAffineMap(AffineMap map, ValueRange operands) {
   return std::pair<int64_t, int64_t>(*minmax.first, *minmax.second);
 }
 
-bool scalehls::isFullyPartitioned(MemRefType memrefType) {
-  if (memrefType.getRank() == 0)
-    return true;
-
-  bool fullyPartitioned = false;
-  SmallVector<int64_t, 8> factors;
-  getPartitionFactors(memrefType, &factors);
-
-  auto shapes = memrefType.getShape();
-  fullyPartitioned =
-      factors == SmallVector<int64_t, 8>(shapes.begin(), shapes.end());
-
-  return fullyPartitioned;
-}
-
-// Calculate partition factors through analyzing the "memrefType" and return
-// them in "factors". Meanwhile, the overall partition number is calculated and
-// returned as well.
-int64_t scalehls::getPartitionFactors(MemRefType memrefType,
-                                      SmallVectorImpl<int64_t> *factors) {
-  int64_t accumFactor = 1;
-  if (auto attr = memrefType.getLayout().dyn_cast<PartitionLayoutAttr>())
-    for (auto factor : attr.getActualFactors(memrefType.getShape())) {
-      accumFactor *= factor;
-      if (factors)
-        factors->push_back(factor);
-    }
-  else if (factors)
-    factors->assign(memrefType.getRank(), 1);
-  return accumFactor;
-}
-
 /// This is method for finding the number of child loops which immediatedly
 /// contained by the input operation.
 unsigned scalehls::getChildLoopNum(Operation *op) {
@@ -530,29 +528,4 @@ void scalehls::getArrays(Block &block, SmallVectorImpl<Value> &arrays,
     if (isa<memref::AllocaOp, memref::AllocOp>(op))
       arrays.push_back(op.getResult(0));
   }
-}
-
-func::FuncOp scalehls::getTopFunc(ModuleOp module, std::string topFuncName) {
-  func::FuncOp topFunc;
-  for (auto func : module.getOps<func::FuncOp>())
-    if (hasTopFuncAttr(func) || func.getName() == topFuncName) {
-      if (!topFunc)
-        topFunc = func;
-      else
-        return func::FuncOp();
-    }
-  return topFunc;
-}
-
-func::FuncOp scalehls::getRuntimeFunc(ModuleOp module,
-                                      std::string runtimeFuncName) {
-  func::FuncOp runtimeFunc;
-  for (auto func : module.getOps<func::FuncOp>())
-    if (hasRuntimeAttr(func) || func.getName() == runtimeFuncName) {
-      if (!runtimeFunc)
-        runtimeFunc = func;
-      else
-        return func::FuncOp();
-    }
-  return runtimeFunc;
 }

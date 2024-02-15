@@ -107,43 +107,6 @@ transform::HLSMergeConsecutiveExtractSliceOp::applyToOne(
 // HLSConvertInsertSliceToStreamOp
 //===----------------------------------------------------------------------===//
 
-static std::optional<SmallVector<int64_t>>
-getLoopSteps(const SmallVector<scf::ForOp> &loops) {
-  SmallVector<int64_t> steps;
-  for (auto loop : loops) {
-    auto stepCstOp = getConstantIntValue(loop.getStep());
-    if (!stepCstOp)
-      return std::nullopt;
-
-    int64_t stepCst = stepCstOp.value();
-    assert(stepCst >= 0 && "expected positive loop step");
-    steps.push_back(stepCst);
-  }
-  return steps;
-}
-
-static std::optional<SmallVector<int64_t>>
-getLoopTripCounts(const SmallVector<scf::ForOp> &loops) {
-  SmallVector<int64_t> tripCounts;
-  for (auto loop : loops) {
-    auto lbCstOp = getConstantIntValue(loop.getLowerBound());
-    auto ubCstOp = getConstantIntValue(loop.getUpperBound());
-    auto stepCstOp = getConstantIntValue(loop.getStep());
-    if (!lbCstOp || !ubCstOp || !stepCstOp)
-      return std::nullopt;
-
-    int64_t lbCst = lbCstOp.value();
-    int64_t ubCst = ubCstOp.value();
-    int64_t stepCst = stepCstOp.value();
-    assert(lbCst >= 0 && ubCst >= 0 && stepCst >= 0 &&
-           "expected positive loop bounds and step");
-    if ((ubCst - lbCst) % stepCst != 0)
-      return std::nullopt;
-    tripCounts.push_back((ubCst - lbCst) / stepCst);
-  }
-  return tripCounts;
-}
-
 static scf::ForOp getAssociatedLoop(Value value) {
   if (auto arg = dyn_cast<BlockArgument>(value))
     if (auto loop = dyn_cast<scf::ForOp>(arg.getOwner()->getParentOp()))
@@ -247,18 +210,6 @@ transform::HLSConvertInsertSliceToStreamOp::applyToOne(
 //===----------------------------------------------------------------------===//
 // HLSConvertExtractSliceToStreamOp
 //===----------------------------------------------------------------------===//
-
-static SmallVector<scf::ForOp> getSurroundingLoops(Operation *target,
-                                                   Block *sourceBlock) {
-  SmallVector<scf::ForOp> reversedLoops;
-  while (auto loop = target->getParentOfType<scf::ForOp>()) {
-    reversedLoops.push_back(loop);
-    target = loop;
-    if (sourceBlock == loop->getBlock())
-      break;
-  }
-  return {reversedLoops.rbegin(), reversedLoops.rend()};
-}
 
 DiagnosedSilenceableFailure
 transform::HLSConvertExtractSliceToStreamOp::applyToOne(

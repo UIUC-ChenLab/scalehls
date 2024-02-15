@@ -18,16 +18,18 @@
 namespace mlir {
 namespace scalehls {
 
-//===----------------------------------------------------------------------===//
-// Memory and Loop Analysis Utils
-//===----------------------------------------------------------------------===//
+SmallVector<scf::ForOp> getSurroundingLoops(Operation *target,
+                                            Block *sourceBlock);
+
+std::optional<SmallVector<int64_t>>
+getLoopSteps(const SmallVector<scf::ForOp> &loops);
+
+std::optional<SmallVector<int64_t>>
+getLoopTripCounts(const SmallVector<scf::ForOp> &loops);
 
 using AffineLoopBand = SmallVector<affine::AffineForOp, 6>;
 using AffineLoopBands = std::vector<AffineLoopBand>;
 using FactorList = SmallVector<unsigned, 8>;
-
-/// The current op or contained ops have effect on external buffers.
-bool hasEffectOnExternalBuffer(Operation *op);
 
 /// Compose any affine.apply ops feeding into `operands` of the integer set
 /// `set` by composing the maps of such affine.apply ops with the integer
@@ -64,14 +66,6 @@ unsigned getCommonSurroundingLoops(Operation *A, Operation *B,
 std::optional<std::pair<int64_t, int64_t>>
 getBoundOfAffineMap(AffineMap map, ValueRange operands);
 
-/// Calculate partition factors through analyzing the "memrefType" and return
-/// them in "factors". Meanwhile, the overall partition number is calculated and
-/// returned as well.
-int64_t getPartitionFactors(MemRefType memrefType,
-                            SmallVectorImpl<int64_t> *factors = nullptr);
-
-bool isFullyPartitioned(MemRefType memrefType);
-
 /// This is method for finding the number of child loops which immediatedly
 /// contained by the input operation.
 unsigned getChildLoopNum(Operation *op);
@@ -95,10 +89,6 @@ void getArrays(Block &block, SmallVectorImpl<Value> &arrays,
                bool allowArguments = true);
 
 bool checkDependence(Operation *A, Operation *B);
-
-func::FuncOp getTopFunc(ModuleOp module, std::string topFuncName = "");
-
-func::FuncOp getRuntimeFunc(ModuleOp module, std::string runtimeFuncName = "");
 
 } // namespace scalehls
 } // namespace mlir

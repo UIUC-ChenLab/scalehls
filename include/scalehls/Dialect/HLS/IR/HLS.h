@@ -119,6 +119,21 @@ bool isExtBuffer(Value memref);
 bool isRead(OpOperand &use);
 bool isWritten(OpOperand &use);
 
+func::FuncOp getTopFunc(ModuleOp module, std::string topFuncName = "");
+
+func::FuncOp getRuntimeFunc(ModuleOp module, std::string runtimeFuncName = "");
+
+bool isFullyPartitioned(MemRefType memrefType);
+
+/// Calculate partition factors through analyzing the "memrefType" and return
+/// them in "factors". Meanwhile, the overall partition number is calculated and
+/// returned as well.
+int64_t getPartitionFactors(MemRefType memrefType,
+                            SmallVectorImpl<int64_t> *factors = nullptr);
+
+/// The current op or contained ops have effect on external buffers.
+bool hasEffectOnExternalBuffer(Operation *op);
+
 } // namespace hls
 } // namespace scalehls
 } // namespace mlir

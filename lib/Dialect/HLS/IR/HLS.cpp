@@ -646,3 +646,72 @@ bool hls::isWritten(OpOperand &use) {
   return hasEffect<MemoryEffects::Write>(use.getOwner(), use.get()) ||
          isa<StreamWriteOp>(use.getOwner());
 }
+
+func::FuncOp hls::getTopFunc(ModuleOp module, std::string topFuncName) {
+  func::FuncOp topFunc;
+  for (auto func : module.getOps<func::FuncOp>())
+    if (hasTopFuncAttr(func) || func.getName() == topFuncName) {
+      if (!topFunc)
+        topFunc = func;
+      else
+        return func::FuncOp();
+    }
+  return topFunc;
+}
+
+func::FuncOp hls::getRuntimeFunc(ModuleOp module, std::string runtimeFuncName) {
+  func::FuncOp runtimeFunc;
+  for (auto func : module.getOps<func::FuncOp>())
+    if (hasRuntimeAttr(func) || func.getName() == runtimeFuncName) {
+      if (!runtimeFunc)
+        runtimeFunc = func;
+      else
+        return func::FuncOp();
+    }
+  return runtimeFunc;
+}
+
+bool hls::isFullyPartitioned(MemRefType memrefType) {
+  if (memrefType.getRank() == 0)
+    return true;
+
+  bool fullyPartitioned = false;
+  SmallVector<int64_t, 8> factors;
+  getPartitionFactors(memrefType, &factors);
+
+  auto shapes = memrefType.getShape();
+  fullyPartitioned =
+      factors == SmallVector<int64_t, 8>(shapes.begin(), shapes.end());
+
+  return fullyPartitioned;
+}
+
+// Calculate partition factors through analyzing the "memrefType" and return
+// them in "factors". Meanwhile, the overall partition number is calculated and
+// returned as well.
+int64_t hls::getPartitionFactors(MemRefType memrefType,
+                                 SmallVectorImpl<int64_t> *factors) {
+  int64_t accumFactor = 1;
+  if (auto attr = memrefType.getLayout().dyn_cast<PartitionLayoutAttr>())
+    for (auto factor : attr.getActualFactors(memrefType.getShape())) {
+      accumFactor *= factor;
+      if (factors)
+        factors->push_back(factor);
+    }
+  else if (factors)
+    factors->assign(memrefType.getRank(), 1);
+  return accumFactor;
+}
+
+/// The current op or contained ops have effect on external buffers.
+bool hls::hasEffectOnExternalBuffer(Operation *op) {
+  auto result = op->walk([](MemoryEffectOpInterface effectOp) {
+    SmallVector<MemoryEffects::EffectInstance> effects;
+    effectOp.getEffects(effects);
+    for (auto effect : effects)
+      if (isExtBuffer(effect.getValue()))
+        return WalkResult::interrupt();
+    return WalkResult::advance();
+  });
+  return result.wasInterrupted();
+}
