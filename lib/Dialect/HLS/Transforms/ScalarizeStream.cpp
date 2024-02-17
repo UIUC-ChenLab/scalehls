@@ -14,135 +14,58 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-struct LowerTensorToStreamConversionOp
-    : public OpRewritePattern<hls::TensorToStreamOp> {
-  using OpRewritePattern<hls::TensorToStreamOp>::OpRewritePattern;
+struct ScalarizeStreamOp : public OpRewritePattern<hls::StreamOp> {
+  using OpRewritePattern<hls::StreamOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(hls::TensorToStreamOp toStream,
+  LogicalResult matchAndRewrite(hls::StreamOp channel,
                                 PatternRewriter &rewriter) const override {
-    auto streamType = toStream.getStream().getType();
-    auto loc = toStream.getLoc();
-
-    // Create a new stream channel to replace the original stream.
-    auto channel = rewriter.create<hls::StreamOp>(loc, streamType);
-
-    // Construct loops to iterate over the tensor.
-    SmallVector<Value> ivs;
-    for (auto [tripCount, step] :
-         llvm::zip(streamType.getIterTripCounts(), streamType.getIterSteps())) {
-      auto lbCst = rewriter.create<arith::ConstantIndexOp>(loc, 0);
-      auto ubCst =
-          rewriter.create<arith::ConstantIndexOp>(loc, tripCount * step);
-      auto stepCst = rewriter.create<arith::ConstantIndexOp>(loc, step);
-      auto loop = rewriter.create<scf::ForOp>(loc, lbCst, ubCst, stepCst);
-      rewriter.setInsertionPointToStart(loop.getBody());
-      ivs.push_back(loop.getInductionVar());
-    }
-
-    // Construct the offsets based on the iteration map.
-    SmallVector<Value> indices;
-    for (auto expr : streamType.getIterMap().getResults()) {
-      auto apply = rewriter.create<affine::AffineApplyOp>(
-          loc, SmallVector<AffineExpr>({expr}), ivs);
-      indices.push_back(apply);
-    }
-
-    // Extract slice and write to the channel.
-    if (streamType.getShapedElementType()) {
-      auto offsets = llvm::map_to_vector(
-          indices, [&](Value index) { return (OpFoldResult)index; });
-      auto sizes =
-          llvm::map_to_vector(streamType.getElementShape(), [&](int64_t size) {
-            return (OpFoldResult)rewriter.getI64IntegerAttr(size);
-          });
-      auto strides = SmallVector<OpFoldResult>(streamType.getRank(),
-                                               rewriter.getI64IntegerAttr(1));
-
-      auto slice = rewriter.create<tensor::ExtractSliceOp>(
-          loc, toStream.getTensor(), offsets, sizes, strides);
-      rewriter.create<hls::StreamWriteOp>(loc, channel, slice);
-    } else {
-      auto element = rewriter.create<tensor::ExtractOp>(
-          loc, toStream.getTensor(), indices);
-      rewriter.create<hls::StreamWriteOp>(loc, channel, element);
-    }
-
-    rewriter.replaceAllUsesWith(toStream.getStream(), channel);
-    return success();
+    return failure();
   }
 };
 } // namespace
 
 namespace {
-struct LowerStreamToTensorConversionOp
-    : public OpRewritePattern<hls::StreamToTensorOp> {
-  using OpRewritePattern<hls::StreamToTensorOp>::OpRewritePattern;
+struct ScalarizeStreamReadOp : public OpRewritePattern<hls::StreamReadOp> {
+  using OpRewritePattern<hls::StreamReadOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(hls::StreamToTensorOp toTensor,
+  LogicalResult matchAndRewrite(hls::StreamReadOp read,
                                 PatternRewriter &rewriter) const override {
-    auto streamType = toTensor.getStream().getType();
-    auto tensorType = toTensor.getTensor().getType();
-    auto loc = toTensor.getLoc();
+    return failure();
+  }
+};
+} // namespace
 
-    // Create a new tensor to replace the original tensor.
-    auto tensorInit = rewriter.create<hls::TensorInitOp>(loc, tensorType);
+namespace {
+struct ScalarizeStreamWriteOp : public OpRewritePattern<hls::StreamWriteOp> {
+  using OpRewritePattern<hls::StreamWriteOp>::OpRewritePattern;
 
-    // Construct loops to iterate over the tensor.
-    SmallVector<Value> ivs;
-    SmallVector<scf::ForOp> loops;
-    Value tensorArg = tensorInit.getResult();
-    for (auto [tripCount, step] :
-         llvm::zip(streamType.getIterTripCounts(), streamType.getIterSteps())) {
-      auto lbCst = rewriter.create<arith::ConstantIndexOp>(loc, 0);
-      auto ubCst =
-          rewriter.create<arith::ConstantIndexOp>(loc, tripCount * step);
-      auto stepCst = rewriter.create<arith::ConstantIndexOp>(loc, step);
-      auto loop =
-          rewriter.create<scf::ForOp>(loc, lbCst, ubCst, stepCst, tensorArg);
-      if (tensorArg != tensorInit.getResult())
-        rewriter.create<scf::YieldOp>(loc, loop.getResult(0));
+  LogicalResult matchAndRewrite(hls::StreamWriteOp write,
+                                PatternRewriter &rewriter) const override {
+    return failure();
+  }
+};
+} // namespace
 
-      rewriter.setInsertionPointToStart(loop.getBody());
-      tensorArg = loop.getRegionIterArg(0);
-      ivs.push_back(loop.getInductionVar());
-      loops.push_back(loop);
-    }
+namespace {
+struct ScalarizeStreamExpandShapeOp
+    : public OpRewritePattern<hls::StreamExpandShapeOp> {
+  using OpRewritePattern<hls::StreamExpandShapeOp>::OpRewritePattern;
 
-    // Construct the offsets based on the iteration map.
-    SmallVector<Value> indices;
-    for (auto expr : streamType.getIterMap().getResults()) {
-      auto apply = rewriter.create<affine::AffineApplyOp>(
-          loc, SmallVector<AffineExpr>({expr}), ivs);
-      indices.push_back(apply);
-    }
+  LogicalResult matchAndRewrite(hls::StreamExpandShapeOp expandShape,
+                                PatternRewriter &rewriter) const override {
+    return failure();
+  }
+};
+} // namespace
 
-    // Extract slice and write to the channel.
-    if (streamType.getShapedElementType()) {
-      auto offsets = llvm::map_to_vector(
-          indices, [&](Value index) { return (OpFoldResult)index; });
-      auto sizes =
-          llvm::map_to_vector(streamType.getElementShape(), [&](int64_t size) {
-            return (OpFoldResult)rewriter.getI64IntegerAttr(size);
-          });
-      auto strides = SmallVector<OpFoldResult>(streamType.getRank(),
-                                               rewriter.getI64IntegerAttr(1));
+namespace {
+struct ScalarizeStreamCollapseShapeOp
+    : public OpRewritePattern<hls::StreamCollapseShapeOp> {
+  using OpRewritePattern<hls::StreamCollapseShapeOp>::OpRewritePattern;
 
-      auto slice = rewriter.create<hls::StreamReadOp>(
-          loc, streamType.getElementType(), toTensor.getStream());
-      auto tensorResult = rewriter.create<tensor::InsertSliceOp>(
-          loc, slice.getResult(), tensorArg, offsets, sizes, strides);
-      rewriter.create<scf::YieldOp>(loc, tensorResult.getResult());
-    } else {
-      auto element = rewriter.create<hls::StreamReadOp>(
-          loc, streamType.getElementType(), toTensor.getStream());
-      auto tensorResult = rewriter.create<tensor::InsertOp>(
-          loc, element.getResult(), tensorArg, indices);
-      rewriter.create<scf::YieldOp>(loc, tensorResult.getResult());
-    }
-
-    rewriter.replaceAllUsesWith(toTensor.getTensor(),
-                                loops.front().getResult(0));
-    return success();
+  LogicalResult matchAndRewrite(hls::StreamCollapseShapeOp collapseShape,
+                                PatternRewriter &rewriter) const override {
+    return failure();
   }
 };
 } // namespace
@@ -154,8 +77,11 @@ struct ScalarizeStream : public ScalarizeStreamBase<ScalarizeStream> {
     auto context = op->getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<LowerTensorToStreamConversionOp>(context);
-    patterns.add<LowerStreamToTensorConversionOp>(context);
+    patterns.add<ScalarizeStreamOp>(context);
+    patterns.add<ScalarizeStreamReadOp>(context);
+    patterns.add<ScalarizeStreamWriteOp>(context);
+    patterns.add<ScalarizeStreamExpandShapeOp>(context);
+    patterns.add<ScalarizeStreamCollapseShapeOp>(context);
     (void)applyPatternsAndFoldGreedily(op, std::move(patterns));
   }
 };

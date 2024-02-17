@@ -233,10 +233,11 @@ LogicalResult StreamToTensorOp::verify() {
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamOp::verify() {
-  if (!llvm::hasSingleElement(
-          llvm::make_filter_range((*this)->getUsers(), [](Operation *user) {
-            return isa<StreamWriteOp>(user);
-          })))
+  unsigned numWrites = 0;
+  for (auto user : (*this)->getUsers())
+    if (isa<StreamWriteOp>(user))
+      numWrites++;
+  if (numWrites > 1)
     return emitOpError() << "stream is written more than once";
   return success();
 }
@@ -359,6 +360,12 @@ LogicalResult StreamExpandShapeOp::verify() {
   return verifyReassociation(reassociation, inputType, outputType, *this);
 }
 
+OpFoldResult StreamExpandShapeOp::fold(FoldAdaptor adaptor) {
+  if (getInput().getType() == getOutput().getType())
+    return getInput();
+  return {};
+}
+
 //===----------------------------------------------------------------------===//
 // StreamCollapseShapeOp
 //===----------------------------------------------------------------------===//
@@ -372,6 +379,12 @@ LogicalResult StreamCollapseShapeOp::verify() {
   return verifyReassociation(reassociation, outputType, inputType, *this);
 }
 
+OpFoldResult StreamCollapseShapeOp::fold(FoldAdaptor adaptor) {
+  if (getInput().getType() == getOutput().getType())
+    return getInput();
+  return {};
+}
+
 //===----------------------------------------------------------------------===//
 // StreamBufferOp
 //===----------------------------------------------------------------------===//
@@ -379,18 +392,18 @@ LogicalResult StreamCollapseShapeOp::verify() {
 LogicalResult StreamBufferOp::verify() {
   auto inputType = getInput().getType();
   auto outputType = getOutput().getType();
-  if (inputType.getDataType() != outputType.getDataType())
-    return emitOpError("input and output data type doesn't match");
+  if (!inputType.isCastableWith(outputType))
+    return emitOpError("input and output are not castable");
+
+  if (getBeforeLoop() > inputType.getIterTripCounts().size())
+    return emitOpError("buffer position is out of loop range");
 
   auto inputShape = inputType.getShape();
-  if (inputShape != outputType.getShape())
-    return emitOpError("input and output shape doesn't match");
-
-  for (auto [position, bufferSize, dimSize, inputTileSize, outputTileSize] :
+  for (auto [dim, bufferSize, dimSize, inputTileSize, outputTileSize] :
        llvm::zip(llvm::seq(inputShape.size()), getBufferShape(), inputShape,
                  inputType.getElementShape(), outputType.getElementShape())) {
-    if (position <= getBufferPosition()) {
-      if (bufferSize < inputTileSize || bufferSize < outputTileSize)
+    if (dim < getBeforeDim()) {
+      if (inputTileSize != outputTileSize || bufferSize < inputTileSize)
         return emitOpError(
             "buffer size is smaller than input/output tile size");
     } else if (bufferSize != dimSize)
@@ -401,6 +414,24 @@ LogicalResult StreamBufferOp::verify() {
 }
 
 OpFoldResult StreamBufferOp::fold(FoldAdaptor adaptor) {
+  if (getInput().getType() == getOutput().getType())
+    return getInput();
+  return {};
+}
+
+//===----------------------------------------------------------------------===//
+// StreamCastOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult StreamCastOp::verify() {
+  auto inputType = getInput().getType();
+  auto outputType = getOutput().getType();
+  if (!inputType.isCastableWith(outputType))
+    return emitOpError("input and output are not castable");
+  return success();
+}
+
+OpFoldResult StreamCastOp::fold(FoldAdaptor adaptor) {
   if (getInput().getType() == getOutput().getType())
     return getInput();
   return {};

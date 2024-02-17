@@ -119,7 +119,7 @@ def YieldOp : HLSOp<"yield", [NoMemoryEffect, ReturnLike, Terminator,
 //===----------------------------------------------------------------------===//
 
 def TensorInitOp : HLSOp<"tensor_init", [NoMemoryEffect]> {
-  let summary = "Initiate a tensor";
+  let summary = "Initiate a tensor with an optional initialization value";
 
   let arguments = (ins Optional<AnyType>:$init_value);
   let results = (outs AnyRankedTensor:$result);
@@ -203,7 +203,7 @@ def StreamWriteOp : HLSOp<"stream_write", [
 }
 
 def StreamExpandShapeOp : HLSOp<"stream_expand_shape", [NoMemoryEffect]> {
-  let summary = [{}];
+  let summary = "Expand the shape of the iteration space";
 
   let arguments = (ins AnyStream:$input, IndexListArrayAttr:$reassociation);
   let results = (outs AnyStream:$output);
@@ -212,6 +212,7 @@ def StreamExpandShapeOp : HLSOp<"stream_expand_shape", [NoMemoryEffect]> {
   }];
 
   let hasVerifier = 1;
+  let hasFolder = 1;
 
   let extraClassDeclaration = [{
     SmallVector<ReassociationIndices, 4> getReassociationIndices() {
@@ -227,7 +228,7 @@ def StreamExpandShapeOp : HLSOp<"stream_expand_shape", [NoMemoryEffect]> {
 }
 
 def StreamCollapseShapeOp : HLSOp<"stream_collapse_shape", [NoMemoryEffect]> {
-  let summary = [{}];
+  let summary = "Collapse the shape of the iteration space";
 
   let arguments = (ins AnyStream:$input, IndexListArrayAttr:$reassociation);
   let results = (outs AnyStream:$output);
@@ -236,6 +237,7 @@ def StreamCollapseShapeOp : HLSOp<"stream_collapse_shape", [NoMemoryEffect]> {
   }];
 
   let hasVerifier = 1;
+  let hasFolder = 1;
 
   let extraClassDeclaration = [{
     SmallVector<ReassociationIndices, 4> getReassociationIndices() {
@@ -251,16 +253,27 @@ def StreamCollapseShapeOp : HLSOp<"stream_collapse_shape", [NoMemoryEffect]> {
 }
 
 def StreamBufferOp : HLSOp<"stream_buffer", [NoMemoryEffect]> {
-  let summary = [{
-    Represent a stream buffer.
-  }];
+  let summary = "Buffer a stream channel at a specific position";
 
   let arguments = (ins AnyStream:$input, TypeAttr:$bufferElementType,
-      DenseI64ArrayAttr:$bufferShape, I64Attr:$bufferPosition);
+      DenseI64ArrayAttr:$bufferShape, I64Attr:$beforeLoop, I64Attr:$beforeDim);
   let results = (outs AnyStream:$output);
   let assemblyFormat = [{
-    $input `,` $bufferElementType $bufferShape `at` $bufferPosition attr-dict
-    `:` functional-type($input, $output)
+    $input `,` $bufferElementType $bufferShape `loop` $beforeLoop `dim`
+    $beforeDim attr-dict `:` functional-type($input, $output)
+  }];
+
+  let hasVerifier = 1;
+  let hasFolder = 1;
+}
+
+def StreamCastOp : HLSOp<"stream_cast", [NoMemoryEffect]> {
+  let summary = "Cast a stream channel to a different type";
+
+  let arguments = (ins AnyStream:$input);
+  let results = (outs AnyStream:$output);
+  let assemblyFormat = [{
+    $input attr-dict `:` functional-type($input, $output)
   }];
 
   let hasVerifier = 1;

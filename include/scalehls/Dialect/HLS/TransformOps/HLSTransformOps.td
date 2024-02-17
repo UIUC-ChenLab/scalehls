@@ -220,25 +220,4 @@ def HLSConvertCollapseShapeToStreamOp : Op<Transform_Dialect,
   }];
 }
 
-def HLSEliminateIntermediateTensorOp : Op<Transform_Dialect,
-    "hls.eliminate_intermediate_tensor",
-    [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
-     TransformOpInterface, MemoryEffectsOpInterface]> {
-  let description = [{}];
-
-  let arguments = (ins
-      Transform_ConcreteOpType<"hls.tensor_to_stream">:$tensor_to_stream);
-  let assemblyFormat = [{
-    $tensor_to_stream attr-dict `:` type(operands)
-  }];
-
-  let extraClassDeclaration = [{
-    ::mlir::DiagnosedSilenceableFailure applyToOne(
-        ::mlir::transform::TransformRewriter &rewriter,
-        ::mlir::scalehls::hls::TensorToStreamOp tensorToStream,
-        ::mlir::transform::ApplyToEachResultList &results,
-        ::mlir::transform::TransformState &state);
-  }];
-}
-
 #endif // SCALEHLS_DIALECT_HLS_TRANSFORMOPS_HLSTRANSFORMOPS_TD

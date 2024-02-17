@@ -14,8 +14,19 @@ def Preprocess : Pass<"scalehls-preprocess", "func::FuncOp"> {
   let constructor = "mlir::scalehls::hls::createPreprocessPass()";
 }
 
+def ReduceTensorToStream :
+    Pass<"scalehls-reduce-tensor-to-stream", "func::FuncOp"> {
+  let summary = "Reduce immediate tensors to stream buffers";
+  let constructor = "mlir::scalehls::hls::createReduceTensorToStreamPass()";
+}
+
+def MaterializeStream : Pass<"scalehls-materialize-stream", "func::FuncOp"> {
+  let summary = "Materialize tensor/stream conversions and stream buffers";
+  let constructor = "mlir::scalehls::hls::createMaterializeStreamPass()";
+}
+
 def ScalarizeStream : Pass<"scalehls-scalarize-stream", "func::FuncOp"> {
-  let summary = "Scalarize stream channels";
+  let summary = "Scalarize stream channel elements";
   let constructor = "mlir::scalehls::hls::createScalarizeStreamPass()";
 }
 
