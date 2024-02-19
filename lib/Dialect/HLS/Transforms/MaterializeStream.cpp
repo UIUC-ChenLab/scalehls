@@ -219,7 +219,7 @@ struct LowerTensorToStreamConversionOp
 
     // Only if the stream type is not overlapped, we can pack the tensor to make
     // more efficient memory access pattern.
-    auto packing = !streamType.isOverlapped() && streamType.getRank() > 1;
+    auto packing = streamType.tileIsRegular() && streamType.getRank() > 1;
     auto target = toStream.getTensor();
     if (packing)
       target = packTensor(target, streamType.getElementShape(), loc, rewriter);
@@ -251,7 +251,7 @@ struct LowerStreamToTensorConversionOp
 
     // Only if the stream type is not overlapped, we can pack the tensor to make
     // more efficient memory access pattern.
-    auto packing = !streamType.isOverlapped() && streamType.getRank() > 1;
+    auto packing = streamType.tileIsRegular() && streamType.getRank() > 1;
     auto targetType = toTensor.getTensor().getType();
     if (packing)
       targetType = getPackedType(targetType, streamType.getElementShape());
@@ -310,7 +310,7 @@ struct LowerStreamBufferOp : public OpRewritePattern<hls::StreamBufferOp> {
         });
 
     // Get the buffer type and packed buffer type if necessary.
-    auto packing = !inputType.isOverlapped() && !outputType.isOverlapped() &&
+    auto packing = inputType.tileIsRegular() && outputType.tileIsRegular() &&
                    (inputType.getRank() > 1 || outputType.getRank() > 1);
     auto bufferType = RankedTensorType::get(
         streamBuffer.getBufferShape(), streamBuffer.getBufferElementType());

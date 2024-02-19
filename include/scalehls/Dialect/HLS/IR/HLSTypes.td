@@ -123,8 +123,13 @@ def StreamType : HLSType<"Stream", []> {
       return SmallVector<int64_t>(getIterMap().getNumResults(), 1);
     }
 
-    /// Return whether this stream type represents an overlapped stream pattern.
-    bool isOverlapped() const;
+    /// Return whether this stream type represents a projected permutation
+    /// iteration pattern.
+    bool iterationIsProjectedPermutation() const;
+
+    /// Return whether this stream type represents a non-overlapped and
+    /// non-gapped tiling pattern.
+    bool tileIsRegular() const;
 
     /// Return whether the "other" stream type is castable with this type.
     bool isCastableWith(StreamType other) const;

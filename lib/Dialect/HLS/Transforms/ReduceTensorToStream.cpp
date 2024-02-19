@@ -25,10 +25,10 @@ struct ConvertToStreamBuffer : public OpRewritePattern<hls::TensorToStreamOp> {
       return failure();
     auto tensorType = streamToTensor.getType();
 
-    // TODO: Support overlapped stream types.
+    // TODO: Support non-regular stream types.
     auto sourceType = streamToTensor.getStream().getType();
     auto resultType = tensorToStream.getStream().getType();
-    if (sourceType.isOverlapped() || resultType.isOverlapped())
+    if (!sourceType.tileIsRegular() || resultType.tileIsRegular())
       return failure();
 
     SmallVector<int64_t> bufferShape;
