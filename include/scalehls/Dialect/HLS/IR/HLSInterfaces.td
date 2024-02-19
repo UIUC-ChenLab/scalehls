@@ -9,6 +9,24 @@
 
 include "mlir/IR/OpBase.td"
 
+def StreamViewLikeInterface : OpInterface<"StreamViewLikeInterface"> {
+  let description = [{
+    This interface is used to represent stream views.
+  }];
+  string cppNamespace = "mlir::scalehls::hls";
+
+  let methods = [
+    InterfaceMethod<"Return the source of the stream view",
+      "TypedValue<StreamType>", "getInput", (ins), [{
+        return $_op.getInput();
+      }]>,
+    InterfaceMethod<"Return the result of the stream view",
+      "TypedValue<StreamType>", "getOutput", (ins), [{
+        return $_op.getOutput();
+      }]>
+  ];
+}
+
 def BufferLikeInterface : OpInterface<"BufferLikeInterface"> {
   let description = [{
     This interface is used to represent dataflow buffers.

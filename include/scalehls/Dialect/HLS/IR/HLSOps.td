@@ -202,7 +202,8 @@ def StreamWriteOp : HLSOp<"stream_write", [
   let hasVerifier = 1;
 }
 
-def StreamExpandShapeOp : HLSOp<"stream_expand_shape", [NoMemoryEffect]> {
+def StreamExpandShapeOp : HLSOp<"stream_expand_shape", [NoMemoryEffect,
+    DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
   let summary = "Expand the shape of the iteration space";
 
   let arguments = (ins AnyStream:$input, IndexListArrayAttr:$reassociation);
@@ -227,7 +228,8 @@ def StreamExpandShapeOp : HLSOp<"stream_expand_shape", [NoMemoryEffect]> {
   }];
 }
 
-def StreamCollapseShapeOp : HLSOp<"stream_collapse_shape", [NoMemoryEffect]> {
+def StreamCollapseShapeOp : HLSOp<"stream_collapse_shape", [NoMemoryEffect,
+    DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
   let summary = "Collapse the shape of the iteration space";
 
   let arguments = (ins AnyStream:$input, IndexListArrayAttr:$reassociation);
@@ -252,7 +254,8 @@ def StreamCollapseShapeOp : HLSOp<"stream_collapse_shape", [NoMemoryEffect]> {
   }];
 }
 
-def StreamBufferOp : HLSOp<"stream_buffer", [NoMemoryEffect]> {
+def StreamBufferOp : HLSOp<"stream_buffer", [NoMemoryEffect,
+    DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
   let summary = "Buffer a stream channel at a specific position";
 
   let arguments = (ins AnyStream:$input, TypeAttr:$bufferElementType,
@@ -267,7 +270,8 @@ def StreamBufferOp : HLSOp<"stream_buffer", [NoMemoryEffect]> {
   let hasFolder = 1;
 }
 
-def StreamCastOp : HLSOp<"stream_cast", [NoMemoryEffect]> {
+def StreamCastOp : HLSOp<"stream_cast", [NoMemoryEffect,
+    DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
   let summary = "Cast a stream channel to a different type";
 
   let arguments = (ins AnyStream:$input);

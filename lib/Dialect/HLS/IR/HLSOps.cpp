@@ -360,10 +360,17 @@ LogicalResult StreamExpandShapeOp::verify() {
   return verifyReassociation(reassociation, inputType, outputType, *this);
 }
 
-OpFoldResult StreamExpandShapeOp::fold(FoldAdaptor adaptor) {
-  if (getInput().getType() == getOutput().getType())
-    return getInput();
+OpFoldResult foldStreamViewLikeInterface(StreamViewLikeInterface op) {
+  if (op.getInput().getType() == op.getOutput().getType())
+    return op.getInput();
+  if (auto prevView = op.getInput().getDefiningOp<StreamViewLikeInterface>())
+    if (prevView.getInput().getType() == op.getOutput().getType())
+      return prevView.getInput();
   return {};
+}
+
+OpFoldResult StreamExpandShapeOp::fold(FoldAdaptor adaptor) {
+  return foldStreamViewLikeInterface(*this);
 }
 
 //===----------------------------------------------------------------------===//
@@ -380,9 +387,7 @@ LogicalResult StreamCollapseShapeOp::verify() {
 }
 
 OpFoldResult StreamCollapseShapeOp::fold(FoldAdaptor adaptor) {
-  if (getInput().getType() == getOutput().getType())
-    return getInput();
-  return {};
+  return foldStreamViewLikeInterface(*this);
 }
 
 //===----------------------------------------------------------------------===//
@@ -414,9 +419,7 @@ LogicalResult StreamBufferOp::verify() {
 }
 
 OpFoldResult StreamBufferOp::fold(FoldAdaptor adaptor) {
-  if (getInput().getType() == getOutput().getType())
-    return getInput();
-  return {};
+  return foldStreamViewLikeInterface(*this);
 }
 
 //===----------------------------------------------------------------------===//
@@ -432,9 +435,7 @@ LogicalResult StreamCastOp::verify() {
 }
 
 OpFoldResult StreamCastOp::fold(FoldAdaptor adaptor) {
-  if (getInput().getType() == getOutput().getType())
-    return getInput();
-  return {};
+  return foldStreamViewLikeInterface(*this);
 }
 
 //===----------------------------------------------------------------------===//
