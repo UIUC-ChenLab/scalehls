@@ -18,6 +18,19 @@
 namespace mlir {
 namespace scalehls {
 
+std::tuple<Value, Value, Value> getLoopBoundsAndStep(int64_t tripCount,
+                                                     int64_t step, Location loc,
+                                                     PatternRewriter &rewriter);
+
+/// Construct a loop with the given trip counts, steps, and an optional tensor
+/// as the iteration argument. Return the loop induction variables, the result
+/// of the outermost loop, and the iteration argument of the innermost loop.
+std::tuple<SmallVector<Value>, TypedValue<RankedTensorType>,
+           TypedValue<RankedTensorType>>
+constructLoops(ArrayRef<int64_t> tripCounts, ArrayRef<int64_t> steps,
+               Location loc, PatternRewriter &rewriter,
+               TypedValue<RankedTensorType> iterArg = nullptr);
+
 SmallVector<scf::ForOp> getSurroundingLoops(Operation *target,
                                             Block *sourceBlock);
 

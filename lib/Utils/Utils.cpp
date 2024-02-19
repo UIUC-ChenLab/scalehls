@@ -16,6 +16,52 @@ using namespace mlir;
 using namespace scalehls;
 using namespace affine;
 
+std::tuple<Value, Value, Value>
+scalehls::getLoopBoundsAndStep(int64_t tripCount, int64_t step, Location loc,
+                               PatternRewriter &rewriter) {
+  auto lbCst = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+  auto ubCst = rewriter.create<arith::ConstantIndexOp>(loc, tripCount * step);
+  auto stepCst = rewriter.create<arith::ConstantIndexOp>(loc, step);
+  return std::make_tuple(lbCst, ubCst, stepCst);
+}
+
+/// Construct a loop with the given trip counts, steps, and an optional tensor
+/// as the iteration argument. Return the loop induction variables, the result
+/// of the outermost loop, and the iteration argument of the innermost loop.
+std::tuple<SmallVector<Value>, TypedValue<RankedTensorType>,
+           TypedValue<RankedTensorType>>
+scalehls::constructLoops(ArrayRef<int64_t> tripCounts, ArrayRef<int64_t> steps,
+                         Location loc, PatternRewriter &rewriter,
+                         TypedValue<RankedTensorType> iterArg) {
+  SmallVector<Value> ivs;
+  TypedValue<RankedTensorType> result = iterArg;
+  for (auto [tripCount, step] : llvm::zip(tripCounts, steps)) {
+    // Construct loops with the given trip counts and steps.
+    auto [lbCst, ubCst, stepCst] =
+        getLoopBoundsAndStep(tripCount, step, loc, rewriter);
+    auto iterArgs = iterArg ? ValueRange(iterArg) : std::nullopt;
+    auto loop =
+        rewriter.create<scf::ForOp>(loc, lbCst, ubCst, stepCst, iterArgs);
+
+    // Handle the iteration argument if it is provided.
+    if (iterArg) {
+      iterArg =
+          llvm::cast<TypedValue<RankedTensorType>>(loop.getRegionIterArg(0));
+      // For the outermost loop, we return the loop result. For the other loops,
+      // we just yield the loop result and continue to the next loop.
+      if (ivs.empty())
+        result = llvm::cast<TypedValue<RankedTensorType>>(loop.getResult(0));
+      else
+        rewriter.create<scf::YieldOp>(loc, loop.getResult(0));
+    }
+
+    // Set the insertion point to the start of the loop body.
+    rewriter.setInsertionPointToStart(loop.getBody());
+    ivs.push_back(loop.getInductionVar());
+  }
+  return std::make_tuple(ivs, result, iterArg);
+}
+
 SmallVector<scf::ForOp> scalehls::getSurroundingLoops(Operation *target,
                                                       Block *sourceBlock) {
   SmallVector<scf::ForOp> reversedLoops;

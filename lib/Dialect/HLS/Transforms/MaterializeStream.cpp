@@ -13,52 +13,11 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
-static std::tuple<Value, Value, Value>
-getLoopBoundsAndStep(int64_t tripCount, int64_t step, Location loc,
-                     PatternRewriter &rewriter) {
-  auto lbCst = rewriter.create<arith::ConstantIndexOp>(loc, 0);
-  auto ubCst = rewriter.create<arith::ConstantIndexOp>(loc, tripCount * step);
-  auto stepCst = rewriter.create<arith::ConstantIndexOp>(loc, step);
-  return std::make_tuple(lbCst, ubCst, stepCst);
-}
-
-/// Construct a loop with the given trip counts, steps, and an optional tensor
-/// as the iteration argument. Return the loop induction variables, the result
-/// of the outermost loop, and the iteration argument of the innermost loop.
-static std::tuple<SmallVector<Value>, TypedValue<RankedTensorType>,
-                  TypedValue<RankedTensorType>>
-constructLoops(ArrayRef<int64_t> tripCounts, ArrayRef<int64_t> steps,
-               Location loc, PatternRewriter &rewriter,
-               TypedValue<RankedTensorType> iterArg = nullptr) {
-  SmallVector<Value> ivs;
-  TypedValue<RankedTensorType> result = iterArg;
-  for (auto [tripCount, step] : llvm::zip(tripCounts, steps)) {
-    // Construct loops with the given trip counts and steps.
-    auto [lbCst, ubCst, stepCst] =
-        getLoopBoundsAndStep(tripCount, step, loc, rewriter);
-    auto iterArgs = iterArg ? ValueRange(iterArg) : std::nullopt;
-    auto loop =
-        rewriter.create<scf::ForOp>(loc, lbCst, ubCst, stepCst, iterArgs);
-
-    // Handle the iteration argument if it is provided.
-    if (iterArg) {
-      iterArg =
-          llvm::cast<TypedValue<RankedTensorType>>(loop.getRegionIterArg(0));
-      // For the outermost loop, we return the loop result. For the other loops,
-      // we just yield the loop result and continue to the next loop.
-      if (ivs.empty())
-        result = llvm::cast<TypedValue<RankedTensorType>>(loop.getResult(0));
-      else
-        rewriter.create<scf::YieldOp>(loc, loop.getResult(0));
-    }
-
-    // Set the insertion point to the start of the loop body.
-    rewriter.setInsertionPointToStart(loop.getBody());
-    ivs.push_back(loop.getInductionVar());
-  }
-  return std::make_tuple(ivs, result, iterArg);
-}
-
+/// Return the offsets, sizes, and strides of a slice given the loop induction
+/// variables "ivs", the index expressions "indexExprs", the element shape
+/// "elementShape", and the packing flag "packing". If "packing" is true, the
+/// offsets, sizes, and strides are for the packed tensor; otherwise, they are
+/// for the unpacked tensor.
 static std::tuple<SmallVector<OpFoldResult>, SmallVector<OpFoldResult>,
                   SmallVector<OpFoldResult>>
 getSliceInfo(ArrayRef<Value> ivs, ArrayRef<AffineExpr> indexExprs,
@@ -95,6 +54,10 @@ getSliceInfo(ArrayRef<Value> ivs, ArrayRef<AffineExpr> indexExprs,
   return std::make_tuple(offsets, sizes, strides);
 }
 
+/// Get the reassociation indices list between a packed tensor and an unpacked
+/// tensor of the same shape. Specifically, given a 3-d tensor (d0, d1, d2), the
+/// shape of the packed tensor is (1, 1, 1, d0, d1, d2), which means the
+/// reassociation indices list is [[0, 1, 2, 3], [4], [5]].
 static SmallVector<ReassociationIndices> getPackingReassociation(int64_t rank) {
   SmallVector<ReassociationIndices> reassociations;
   for (int64_t i = 0; i < rank; i++) {
@@ -108,6 +71,9 @@ static SmallVector<ReassociationIndices> getPackingReassociation(int64_t rank) {
   return reassociations;
 }
 
+/// Extract a slice from the tensor and write to the stream channel. If
+/// "packing" is true, the slice is extracted from the packed tensor and shape
+/// collapsed before writing to the stream channel.
 static void extactSliceAndWriteStream(ArrayRef<Value> ivs,
                                       TypedValue<StreamType> channel,
                                       TypedValue<RankedTensorType> tensor,
@@ -125,6 +91,9 @@ static void extactSliceAndWriteStream(ArrayRef<Value> ivs,
   rewriter.create<hls::StreamWriteOp>(loc, channel, slice);
 }
 
+/// Read from the stream channel and insert the slice to the tensor. If
+/// "packing" is true, the slice is read from the stream channel and shape
+/// expanded before inserting to the tensor.
 static void readStreamAndInsertSlice(ArrayRef<Value> ivs,
                                      TypedValue<StreamType> channel,
                                      TypedValue<RankedTensorType> tensor,
