@@ -25,12 +25,13 @@ getLoopBoundsAndStep(int64_t tripCount, int64_t step, Location loc,
 /// Construct a loop with the given trip counts, steps, and an optional tensor
 /// as the iteration argument. Return the loop induction variables, the result
 /// of the outermost loop, and the iteration argument of the innermost loop.
-static std::tuple<SmallVector<Value>, Value, Value>
+static std::tuple<SmallVector<Value>, TypedValue<RankedTensorType>,
+                  TypedValue<RankedTensorType>>
 constructLoops(ArrayRef<int64_t> tripCounts, ArrayRef<int64_t> steps,
                Location loc, PatternRewriter &rewriter,
-               Value iterArg = Value()) {
+               TypedValue<RankedTensorType> iterArg = nullptr) {
   SmallVector<Value> ivs;
-  Value result = iterArg;
+  TypedValue<RankedTensorType> result = iterArg;
   for (auto [tripCount, step] : llvm::zip(tripCounts, steps)) {
     // Construct loops with the given trip counts and steps.
     auto [lbCst, ubCst, stepCst] =
@@ -41,11 +42,12 @@ constructLoops(ArrayRef<int64_t> tripCounts, ArrayRef<int64_t> steps,
 
     // Handle the iteration argument if it is provided.
     if (iterArg) {
-      iterArg = loop.getRegionIterArg(0);
+      iterArg =
+          llvm::cast<TypedValue<RankedTensorType>>(loop.getRegionIterArg(0));
       // For the outermost loop, we return the loop result. For the other loops,
       // we just yield the loop result and continue to the next loop.
       if (ivs.empty())
-        result = loop.getResult(0);
+        result = llvm::cast<TypedValue<RankedTensorType>>(loop.getResult(0));
       else
         rewriter.create<scf::YieldOp>(loc, loop.getResult(0));
     }
@@ -60,49 +62,149 @@ constructLoops(ArrayRef<int64_t> tripCounts, ArrayRef<int64_t> steps,
 static std::tuple<SmallVector<OpFoldResult>, SmallVector<OpFoldResult>,
                   SmallVector<OpFoldResult>>
 getSliceInfo(ArrayRef<Value> ivs, ArrayRef<AffineExpr> indexExprs,
-             ArrayRef<int64_t> elementShape, Location loc,
+             ArrayRef<int64_t> elementShape, bool packing, Location loc,
              PatternRewriter &rewriter) {
   assert(indexExprs.size() == elementShape.size() &&
          "indices and element shape should have the same size");
-  auto offsets = llvm::map_to_vector(indexExprs, [&](AffineExpr expr) {
-    auto map = AffineMap::get(ivs.size(), 0, expr);
-    auto apply = rewriter.create<affine::AffineApplyOp>(loc, map, ivs);
-    return OpFoldResult(apply.getResult());
-  });
+
+  auto offsets = llvm::map_to_vector(
+      llvm::zip(indexExprs, elementShape),
+      [&](std::tuple<AffineExpr, int64_t> tuple) {
+        auto [expr, tileSize] = tuple;
+        if (packing)
+          expr = expr.floorDiv(tileSize);
+        auto map = AffineMap::get(ivs.size(), 0, expr);
+        auto apply = rewriter.create<affine::AffineApplyOp>(loc, map, ivs);
+        return OpFoldResult(apply.getResult());
+      });
+  if (packing)
+    offsets.append(elementShape.size(), rewriter.getI64IntegerAttr(0));
+
   auto sizes = llvm::map_to_vector(elementShape, [&](int64_t size) {
     return OpFoldResult(rewriter.getI64IntegerAttr(size));
   });
+  if (packing)
+    sizes.insert(sizes.begin(), elementShape.size(),
+                 rewriter.getI64IntegerAttr(1));
+
   auto strides = SmallVector<OpFoldResult>(indexExprs.size(),
                                            rewriter.getI64IntegerAttr(1));
+  if (packing)
+    strides.append(elementShape.size(), rewriter.getI64IntegerAttr(1));
+
   return std::make_tuple(offsets, sizes, strides);
 }
 
-static void extactSliceAndWriteStream(ArrayRef<Value> ivs, Value channel,
-                                      Value tensor, Location loc,
+static SmallVector<ReassociationIndices> getPackingReassociation(int64_t rank) {
+  SmallVector<ReassociationIndices> reassociations;
+  for (int64_t i = 0; i < rank; i++) {
+    ReassociationIndices reassociation;
+    if (i == 0)
+      reassociation =
+          llvm::map_to_vector(llvm::seq(rank), [&](int64_t j) { return j; });
+    reassociation.push_back(rank + i);
+    reassociations.push_back(reassociation);
+  }
+  return reassociations;
+}
+
+static void extactSliceAndWriteStream(ArrayRef<Value> ivs,
+                                      TypedValue<StreamType> channel,
+                                      TypedValue<RankedTensorType> tensor,
+                                      bool packing, Location loc,
                                       PatternRewriter &rewriter) {
-  auto streamType = channel.getType().cast<StreamType>();
+  auto streamType = channel.getType();
   auto [offsets, sizes, strides] =
       getSliceInfo(ivs, streamType.getIterMap().getResults(),
-                   streamType.getElementShape(), loc, rewriter);
-  auto slice = rewriter.create<tensor::ExtractSliceOp>(loc, tensor, offsets,
-                                                       sizes, strides);
+                   streamType.getElementShape(), packing, loc, rewriter);
+  Value slice = rewriter.create<tensor::ExtractSliceOp>(loc, tensor, offsets,
+                                                        sizes, strides);
+  if (packing)
+    slice = rewriter.create<tensor::CollapseShapeOp>(
+        loc, slice, getPackingReassociation(streamType.getElementRank()));
   rewriter.create<hls::StreamWriteOp>(loc, channel, slice);
 }
 
-static void readStreamAndInsertSlice(ArrayRef<Value> ivs, Value channel,
-                                     Value tensor, Location loc,
+static void readStreamAndInsertSlice(ArrayRef<Value> ivs,
+                                     TypedValue<StreamType> channel,
+                                     TypedValue<RankedTensorType> tensor,
+                                     bool packing, Location loc,
                                      PatternRewriter &rewriter,
                                      bool yieldInsertedTensor = true) {
-  auto streamType = channel.getType().cast<StreamType>();
+  auto streamType = channel.getType();
   auto [offsets, sizes, strides] =
       getSliceInfo(ivs, streamType.getIterMap().getResults(),
-                   streamType.getElementShape(), loc, rewriter);
-  auto slice = rewriter.create<hls::StreamReadOp>(
+                   streamType.getElementShape(), packing, loc, rewriter);
+  auto streamRead = rewriter.create<hls::StreamReadOp>(
       loc, streamType.getElementType(), channel);
-  auto result = rewriter.create<tensor::InsertSliceOp>(
-      loc, slice.getResult(), tensor, offsets, sizes, strides);
+  auto slice = llvm::cast<TypedValue<RankedTensorType>>(streamRead.getResult());
+
+  if (packing) {
+    SmallVector<int64_t> expandedShape(streamType.getElementRank(), 1);
+    expandedShape.append(streamType.getElementShape());
+    auto expandedType =
+        RankedTensorType::get(expandedShape, slice.getType().getElementType());
+    slice = rewriter.create<tensor::ExpandShapeOp>(
+        loc, expandedType, slice,
+        getPackingReassociation(streamType.getElementRank()));
+  }
+  auto result = rewriter.create<tensor::InsertSliceOp>(loc, slice, tensor,
+                                                       offsets, sizes, strides);
   if (yieldInsertedTensor)
     rewriter.create<scf::YieldOp>(loc, result.getResult());
+}
+
+static RankedTensorType getPackedType(RankedTensorType tensorType,
+                                      ArrayRef<int64_t> tileSizes) {
+  auto packedShape =
+      llvm::map_to_vector(llvm::zip(tensorType.getShape(), tileSizes),
+                          [&](std::tuple<int64_t, int64_t> shape) {
+                            return std::get<0>(shape) / std::get<1>(shape);
+                          });
+  packedShape.append(tileSizes.begin(), tileSizes.end());
+  return RankedTensorType::get(packedShape, tensorType.getElementType());
+}
+
+static RankedTensorType getUnpackedType(RankedTensorType tensorType,
+                                        ArrayRef<int64_t> tileSizes) {
+  auto unpackedShape = llvm::map_to_vector(
+      llvm::zip(tensorType.getShape().take_front(tileSizes.size()), tileSizes),
+      [&](std::tuple<int64_t, int64_t> shape) {
+        return std::get<0>(shape) * std::get<1>(shape);
+      });
+  return RankedTensorType::get(unpackedShape, tensorType.getElementType());
+}
+
+static TypedValue<RankedTensorType>
+packTensor(TypedValue<RankedTensorType> tensor, ArrayRef<int64_t> tileSizes,
+           Location loc, PatternRewriter &rewriter) {
+  auto packedType = getPackedType(tensor.getType(), tileSizes);
+
+  auto init = rewriter.create<hls::TensorInitOp>(loc, packedType);
+  auto innerDimsPos = llvm::map_to_vector(llvm::seq<int64_t>(tileSizes.size()),
+                                          [&](int64_t i) { return i; });
+  auto innerTiles = llvm::map_to_vector(tileSizes, [&](int64_t tileSize) {
+    return OpFoldResult(rewriter.getI64IntegerAttr(tileSize));
+  });
+
+  return rewriter.create<tensor::PackOp>(loc, tensor, init, innerDimsPos,
+                                         innerTiles);
+}
+
+static TypedValue<RankedTensorType>
+unpackTensor(TypedValue<RankedTensorType> tensor, ArrayRef<int64_t> tileSizes,
+             Location loc, PatternRewriter &rewriter) {
+  auto unpackedType = getUnpackedType(tensor.getType(), tileSizes);
+
+  auto init = rewriter.create<hls::TensorInitOp>(loc, unpackedType);
+  auto innerDimsPos = llvm::map_to_vector(llvm::seq<int64_t>(tileSizes.size()),
+                                          [&](int64_t i) { return i; });
+  auto innerTiles = llvm::map_to_vector(tileSizes, [&](int64_t tileSize) {
+    return OpFoldResult(rewriter.getI64IntegerAttr(tileSize));
+  });
+
+  return rewriter.create<tensor::UnPackOp>(loc, tensor, init, innerDimsPos,
+                                           innerTiles);
 }
 
 namespace {
@@ -115,14 +217,20 @@ struct LowerTensorToStreamConversionOp
     auto streamType = toStream.getStream().getType();
     auto loc = toStream.getLoc();
 
-    // Create a new stream channel, then construct a loop nest to extract stream
-    // element from the tensor and write to the stream channel.
+    // Only if the stream type is not overlapped, we can pack the tensor to make
+    // more efficient memory access pattern.
+    auto packing = !streamType.isOverlapped() && streamType.getRank() > 1;
+    auto target = toStream.getTensor();
+    if (packing)
+      target = packTensor(target, streamType.getElementShape(), loc, rewriter);
+
+    // Create a new stream channel, then construct a loop nest to extract
+    // stream element from the tensor and write to the stream channel.
     auto channel = rewriter.create<hls::StreamOp>(loc, streamType);
     auto [ivs, result, iterArg] =
         constructLoops(streamType.getIterTripCounts(),
                        streamType.getIterSteps(), loc, rewriter);
-    extactSliceAndWriteStream(ivs, channel, toStream.getTensor(), loc,
-                              rewriter);
+    extactSliceAndWriteStream(ivs, channel, target, packing, loc, rewriter);
 
     // Replace the original stream channel with the new channel.
     rewriter.replaceAllUsesWith(toStream.getStream(), channel);
@@ -139,16 +247,28 @@ struct LowerStreamToTensorConversionOp
   LogicalResult matchAndRewrite(hls::StreamToTensorOp toTensor,
                                 PatternRewriter &rewriter) const override {
     auto streamType = toTensor.getStream().getType();
-    auto tensorType = toTensor.getTensor().getType();
     auto loc = toTensor.getLoc();
+
+    // Only if the stream type is not overlapped, we can pack the tensor to make
+    // more efficient memory access pattern.
+    auto packing = !streamType.isOverlapped() && streamType.getRank() > 1;
+    auto targetType = toTensor.getTensor().getType();
+    if (packing)
+      targetType = getPackedType(targetType, streamType.getElementShape());
 
     // Create a new tensor, then construct a loop nest to read from the stream
     // channel and insert stream element to the tensor.
-    auto init = rewriter.create<hls::TensorInitOp>(loc, tensorType);
+    auto init = rewriter.create<hls::TensorInitOp>(loc, targetType);
     auto [ivs, result, iterArg] = constructLoops(streamType.getIterTripCounts(),
                                                  streamType.getIterSteps(), loc,
                                                  rewriter, init.getResult());
-    readStreamAndInsertSlice(ivs, toTensor.getStream(), iterArg, loc, rewriter);
+    readStreamAndInsertSlice(ivs, toTensor.getStream(), iterArg, packing, loc,
+                             rewriter);
+    if (packing) {
+      rewriter.setInsertionPointAfterValue(result);
+      result =
+          unpackTensor(result, streamType.getElementShape(), loc, rewriter);
+    }
 
     // Replace the original tensor with the new tensor.
     rewriter.replaceAllUsesWith(toTensor.getTensor(), result);
@@ -182,14 +302,27 @@ struct LowerStreamBufferOp : public OpRewritePattern<hls::StreamBufferOp> {
       rewriter.setInsertionPointToStart(loop.getBody());
     }
 
-    // Instantiate a buffer tensor with specified shape and element type.
+    // Calculate the maximum tile sizes.
+    auto maxTileSizes = llvm::map_to_vector(
+        llvm::zip(inputType.getElementShape(), outputType.getElementShape()),
+        [&](std::tuple<int64_t, int64_t> shapes) {
+          return std::max(std::get<0>(shapes), std::get<1>(shapes));
+        });
+
+    // Get the buffer type and packed buffer type if necessary.
+    auto packing = !inputType.isOverlapped() && !outputType.isOverlapped() &&
+                   (inputType.getRank() > 1 || outputType.getRank() > 1);
     auto bufferType = RankedTensorType::get(
         streamBuffer.getBufferShape(), streamBuffer.getBufferElementType());
+    if (packing)
+      bufferType = getPackedType(bufferType, maxTileSizes);
+
+    // Instantiate a buffer tensor with calculated buffer type.
     auto init = rewriter.create<hls::TensorInitOp>(loc, bufferType);
-    auto zeroCst = rewriter.create<arith::ConstantIndexOp>(loc, 0);
 
     // Construct loops to read from the input stream channel and insert stream
     // element to the buffer tensor.
+    auto zeroCst = rewriter.create<arith::ConstantIndexOp>(loc, 0);
     auto [inputIvs, inputResult, inputIterArg] =
         constructLoops(inputType.getIterTripCounts().drop_front(beforeLoop),
                        inputType.getIterSteps().drop_front(beforeLoop), loc,
@@ -197,7 +330,8 @@ struct LowerStreamBufferOp : public OpRewritePattern<hls::StreamBufferOp> {
     SmallVector<Value> bufferInputIvs(beforeLoop, zeroCst);
     bufferInputIvs.append(inputIvs);
     readStreamAndInsertSlice(bufferInputIvs, streamBuffer.getInput(),
-                             inputIterArg, loc, rewriter, inputIvs.size() > 0);
+                             inputIterArg, packing, loc, rewriter,
+                             inputIvs.size() > 0);
 
     // Construct loops to extract stream element from the buffer tensor and
     // write to the output stream channel.
@@ -207,8 +341,8 @@ struct LowerStreamBufferOp : public OpRewritePattern<hls::StreamBufferOp> {
         outputType.getIterSteps().drop_front(beforeLoop), loc, rewriter);
     SmallVector<Value> bufferOutputIvs(beforeLoop, zeroCst);
     bufferOutputIvs.append(outputIvs);
-    extactSliceAndWriteStream(bufferOutputIvs, channel, inputResult, loc,
-                              rewriter);
+    extactSliceAndWriteStream(bufferOutputIvs, channel, inputResult, packing,
+                              loc, rewriter);
 
     // Replace the original output stream channel with the new channel.
     rewriter.replaceAllUsesWith(streamBuffer.getOutput(), channel);
