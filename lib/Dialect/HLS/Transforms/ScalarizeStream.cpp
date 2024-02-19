@@ -13,13 +13,47 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+static StreamType getScalarStreamType(StreamType stream) {
+  if (auto shapedElement = stream.getShapedElementType()) {
+    SmallVector<int64_t> scalarIterTripCounts(stream.getIterTripCounts());
+    scalarIterTripCounts.append(shapedElement.getShape().begin(),
+                                shapedElement.getShape().end());
+
+    SmallVector<int64_t> scalarIterSteps(stream.getIterSteps());
+    scalarIterSteps.append(shapedElement.getRank(), 1);
+
+    SmallVector<AffineExpr> scalarIterExprs;
+    for (auto [dim, expr] : llvm::enumerate(stream.getIterMap().getResults()))
+      scalarIterExprs.push_back(
+          expr + getAffineDimExpr(stream.getIterMap().getNumDims() + dim,
+                                  stream.getContext()));
+
+    auto scalarIterMap = AffineMap::get(
+        stream.getIterMap().getNumDims() + shapedElement.getRank(), 0,
+        scalarIterExprs, stream.getContext());
+    return StreamType::get(shapedElement.getElementType(), scalarIterTripCounts,
+                           scalarIterSteps, scalarIterMap, stream.getDepth());
+  }
+  return stream;
+}
+
 namespace {
 struct ScalarizeStreamOp : public OpRewritePattern<hls::StreamOp> {
   using OpRewritePattern<hls::StreamOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(hls::StreamOp channel,
                                 PatternRewriter &rewriter) const override {
-    return failure();
+    auto streamType = channel.getType();
+    auto scalarStreamType = getScalarStreamType(streamType);
+    if (streamType == scalarStreamType)
+      return failure();
+
+    channel.getResult().setType(scalarStreamType);
+    rewriter.setInsertionPointAfter(channel);
+    auto cast = rewriter.create<hls::StreamCastOp>(channel.getLoc(), streamType,
+                                                   channel);
+    rewriter.replaceAllUsesExcept(channel, cast.getResult(), cast);
+    return success();
   }
 };
 } // namespace
