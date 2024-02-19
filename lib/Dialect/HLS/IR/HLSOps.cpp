@@ -260,21 +260,27 @@ static LogicalResult verifyTripCountsAndSteps(Operation *op, Value channel) {
   if (!tripCounts || !steps)
     return op->emitOpError("iteration trip counts or steps not available");
 
-  auto stripedTripCountsAndSteps =
+  auto stripedLoopInfo =
       llvm::make_filter_range(llvm::zip(*tripCounts, *steps), [](auto tuple) {
         return std::get<0>(tuple) != 1;
       });
 
   auto channelType = channel.getType().cast<StreamType>();
-  auto stripedIterTripCountsAndSteps = llvm::make_filter_range(
+  auto stripedIterInfo = llvm::make_filter_range(
       llvm::zip(channelType.getIterTripCounts(), channelType.getIterSteps()),
       [](auto tuple) { return std::get<0>(tuple) != 1; });
 
-  if (llvm::any_of(
-          llvm::zip(stripedTripCountsAndSteps, stripedIterTripCountsAndSteps),
-          [](auto tuple) { return std::get<0>(tuple) != std::get<1>(tuple); }))
-    return op->emitOpError("loop trip counts or steps doesn't align with "
-                           "stream type's iteration trip counts or steps");
+  if (llvm::any_of(llvm::zip(stripedLoopInfo, stripedIterInfo), [](auto tuple) {
+        return std::get<0>(tuple) != std::get<1>(tuple);
+      })) {
+    auto diag = op->emitOpError("loop trip counts or steps doesn't align with "
+                                "stream iteration trip counts or steps\n");
+    diag << "loop trip counts: " << *tripCounts << ", steps: " << *steps
+         << "\n";
+    diag << "stream iteration trip counts: " << channelType.getIterTripCounts()
+         << ", steps: " << channelType.getIterSteps();
+    return diag;
+  }
   return success();
 }
 

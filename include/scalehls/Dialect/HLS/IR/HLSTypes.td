@@ -93,19 +93,19 @@ def StreamType : HLSType<"Stream", []> {
     /// represents.
     SmallVector<int64_t> getShape() const;
 
+    /// Return whether the element type is a shaped type.
+    bool hasShapedElementType() const {
+      return getElementType().isa<ShapedType>();
+    }
+
     /// Get the shaped element type if applicable. Return nullptr if the element
     /// type is not a shaped type.
     ShapedType getShapedElementType() const {
       return getElementType().dyn_cast<ShapedType>();
     }
 
-    /// Get the rank of the element type. Return 0 if the element type is not a
-    /// shaped type.
-    int64_t getElementRank() const {
-      if (auto shapedType = getShapedElementType())
-        return shapedType.getRank();
-      return 0;
-    }
+    /// Get the rank of the element type.
+    int64_t getElementRank() const { return getIterMap().getNumResults(); }
 
     /// Return the dimension size of the element type. Return 1 if the element
     /// type is not a shaped type.
