@@ -28,7 +28,7 @@ struct ConvertToStreamBuffer : public OpRewritePattern<hls::TensorToStreamOp> {
     // TODO: Support non-regular stream types.
     auto sourceType = streamToTensor.getStream().getType();
     auto resultType = tensorToStream.getStream().getType();
-    if (!sourceType.tileIsRegular() || resultType.tileIsRegular())
+    if (!sourceType.tileIsRegular() || !resultType.tileIsRegular())
       return failure();
 
     SmallVector<int64_t> bufferShape;

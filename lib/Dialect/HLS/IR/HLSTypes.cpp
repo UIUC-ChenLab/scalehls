@@ -78,7 +78,7 @@ bool hls::StreamType::iterationIsProjectedPermutation() const {
 /// Return whether this stream type represents a non-overlapped and non-gapped
 /// tiling pattern.
 bool hls::StreamType::tileIsRegular() const {
-  if (iterationIsProjectedPermutation())
+  if (!iterationIsProjectedPermutation())
     return false;
 
   SmallVector<AffineExpr> iterShape;
