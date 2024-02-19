@@ -59,16 +59,16 @@ getSliceInfo(ArrayRef<Value> ivs, ArrayRef<AffineExpr> indexExprs,
 /// shape of the packed tensor is (1, 1, 1, d0, d1, d2), which means the
 /// reassociation indices list is [[0, 1, 2, 3], [4], [5]].
 static SmallVector<ReassociationIndices> getPackingReassociation(int64_t rank) {
-  SmallVector<ReassociationIndices> reassociations;
+  SmallVector<ReassociationIndices> reassociation;
   for (int64_t i = 0; i < rank; i++) {
-    ReassociationIndices reassociation;
+    ReassociationIndices reassociationIndices;
     if (i == 0)
-      reassociation =
+      reassociationIndices =
           llvm::map_to_vector(llvm::seq(rank), [&](int64_t j) { return j; });
-    reassociation.push_back(rank + i);
-    reassociations.push_back(reassociation);
+    reassociationIndices.push_back(rank + i);
+    reassociation.push_back(reassociationIndices);
   }
-  return reassociations;
+  return reassociation;
 }
 
 /// Extract a slice from the tensor and write to the stream channel. If
