@@ -23,14 +23,15 @@ static StreamType getScalarStreamType(StreamType stream) {
     scalarIterSteps.append(shapedElement.getRank(), 1);
 
     SmallVector<AffineExpr> scalarIterExprs;
-    for (auto [dim, expr] : llvm::enumerate(stream.getIterMap().getResults()))
-      scalarIterExprs.push_back(
-          expr + getAffineDimExpr(stream.getIterMap().getNumDims() + dim,
-                                  stream.getContext()));
+    for (auto [dim, expr] : llvm::enumerate(stream.getIterMap().getResults())) {
+      auto newExpr = expr + getAffineDimExpr(stream.getIterRank() + dim,
+                                             stream.getContext());
+      scalarIterExprs.push_back(newExpr);
+    }
 
-    auto scalarIterMap = AffineMap::get(
-        stream.getIterMap().getNumDims() + shapedElement.getRank(), 0,
-        scalarIterExprs, stream.getContext());
+    auto scalarIterMap =
+        AffineMap::get(stream.getIterRank() + shapedElement.getRank(), 0,
+                       scalarIterExprs, stream.getContext());
     return StreamType::get(shapedElement.getElementType(), scalarIterTripCounts,
                            scalarIterSteps, scalarIterMap, stream.getDepth());
   }
@@ -122,71 +123,50 @@ struct ScalarizeStreamWriteOp : public OpRewritePattern<hls::StreamWriteOp> {
 };
 } // namespace
 
-static SmallVector<Attribute>
-getScalarReassociation(ArrayRef<ReassociationIndices> reassociation,
-                       PatternRewriter &rewriter) {
-  SmallVector<ReassociationIndices> scalarReassociation(reassociation);
-  auto rank = reassociation.back().back() + 1;
-  for (auto indices : reassociation) {
-    ReassociationIndices scalarReassociationIndices;
-    for (auto index : indices)
-      scalarReassociationIndices.push_back(index + rank);
-    scalarReassociation.push_back(scalarReassociationIndices);
+static SmallVector<Attribute> getScalarIterationReassociation(
+    ArrayRef<ReassociationIndices> iterationIndicesArray,
+    ArrayRef<ReassociationIndices> shapeIndicesArray,
+    PatternRewriter &rewriter) {
+  SmallVector<ReassociationIndices, 4> scalarIterationIndicesArray(
+      iterationIndicesArray);
+  auto rank = iterationIndicesArray.back().back() + 1;
+  for (auto shapeIndices : shapeIndicesArray) {
+    ReassociationIndices scalarIterationIndices;
+    for (auto shapeIndex : shapeIndices)
+      scalarIterationIndices.push_back(shapeIndex + rank);
+    scalarIterationIndicesArray.push_back(scalarIterationIndices);
   }
-  return llvm::map_to_vector(scalarReassociation, [&](auto indices) {
+  return llvm::map_to_vector(scalarIterationIndicesArray, [&](auto indices) {
     return Attribute(rewriter.getI64ArrayAttr(indices));
   });
 }
 
 namespace {
-struct ScalarizeStreamExpandShapeOp
-    : public OpRewritePattern<hls::StreamExpandShapeOp> {
-  using OpRewritePattern<hls::StreamExpandShapeOp>::OpRewritePattern;
+struct ScalarizeStreamReassociateOp
+    : public OpRewritePattern<hls::StreamReassociateOp> {
+  using OpRewritePattern<hls::StreamReassociateOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(hls::StreamExpandShapeOp expandShape,
+  LogicalResult matchAndRewrite(hls::StreamReassociateOp op,
                                 PatternRewriter &rewriter) const override {
-    auto inputType = expandShape.getInput().getType();
-    auto outputType = expandShape.getOutput().getType();
+    auto inputType = op.getInputType();
+    auto outputType = op.getOutputType();
     if (!inputType.hasShapedElementType() || !outputType.hasShapedElementType())
       return failure();
 
-    auto loc = expandShape.getLoc();
+    auto loc = op.getLoc();
     auto inputCast = rewriter.create<hls::StreamCastOp>(
-        loc, getScalarStreamType(inputType), expandShape.getInput());
+        loc, getScalarStreamType(inputType), op.getInput());
 
-    auto scalarReassociation = rewriter.getArrayAttr(getScalarReassociation(
-        expandShape.getReassociationIndices(), rewriter));
-    auto scalarExpandShape = rewriter.create<hls::StreamExpandShapeOp>(
-        loc, getScalarStreamType(outputType), inputCast, scalarReassociation);
-    rewriter.replaceOpWithNewOp<hls::StreamCastOp>(expandShape, outputType,
-                                                   scalarExpandShape);
-    return success();
-  }
-};
-} // namespace
+    auto scalarIterationReassociation =
+        rewriter.getArrayAttr(getScalarIterationReassociation(
+            op.getIterationReassociationIndices(),
+            op.getShapeReassociationIndices(), rewriter));
+    auto scalarOp = rewriter.create<hls::StreamReassociateOp>(
+        loc, getScalarStreamType(outputType), inputCast, op.getExpandShape(),
+        op.getShapeReassociation(), op.getExpandIteration(),
+        scalarIterationReassociation);
 
-namespace {
-struct ScalarizeStreamCollapseShapeOp
-    : public OpRewritePattern<hls::StreamCollapseShapeOp> {
-  using OpRewritePattern<hls::StreamCollapseShapeOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(hls::StreamCollapseShapeOp collapseShape,
-                                PatternRewriter &rewriter) const override {
-    auto inputType = collapseShape.getInput().getType();
-    auto outputType = collapseShape.getOutput().getType();
-    if (!inputType.hasShapedElementType() || !outputType.hasShapedElementType())
-      return failure();
-
-    auto loc = collapseShape.getLoc();
-    auto inputCast = rewriter.create<hls::StreamCastOp>(
-        loc, getScalarStreamType(inputType), collapseShape.getInput());
-
-    auto scalarReassociation = rewriter.getArrayAttr(getScalarReassociation(
-        collapseShape.getReassociationIndices(), rewriter));
-    auto scalarCollapseShape = rewriter.create<hls::StreamCollapseShapeOp>(
-        loc, getScalarStreamType(outputType), inputCast, scalarReassociation);
-    rewriter.replaceOpWithNewOp<hls::StreamCastOp>(collapseShape, outputType,
-                                                   scalarCollapseShape);
+    rewriter.replaceOpWithNewOp<hls::StreamCastOp>(op, outputType, scalarOp);
     return success();
   }
 };
@@ -202,8 +182,7 @@ struct ScalarizeStream : public ScalarizeStreamBase<ScalarizeStream> {
     patterns.add<ScalarizeStreamOp>(context);
     patterns.add<ScalarizeStreamReadOp>(context);
     patterns.add<ScalarizeStreamWriteOp>(context);
-    patterns.add<ScalarizeStreamExpandShapeOp>(context);
-    patterns.add<ScalarizeStreamCollapseShapeOp>(context);
+    patterns.add<ScalarizeStreamReassociateOp>(context);
     (void)applyPatternsAndFoldGreedily(op, std::move(patterns));
   }
 };

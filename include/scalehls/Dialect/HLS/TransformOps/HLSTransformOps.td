@@ -170,11 +170,11 @@ def HLSConvertExpandShapeToStreamOp : Op<Transform_Dialect,
 
   let arguments = (ins
       Transform_ConcreteOpType<"tensor.expand_shape">:$expand_shape,
-      DenseI64ArrayAttr:$source_element_shape,
-      DenseI64ArrayAttr:$result_element_shape);
+      DenseI64ArrayAttr:$input_element_shape,
+      DenseI64ArrayAttr:$output_element_shape);
   let results = (outs
       Transform_ConcreteOpType<"hls.tensor_to_stream">:$tensor_to_stream,
-      Transform_ConcreteOpType<"hls.stream_expand_shape">:$stream_expand_shape,
+      Transform_ConcreteOpType<"hls.stream_reassociate">:$stream_reassociate,
       Transform_ConcreteOpType<"hls.stream_to_tensor">:$stream_to_tensor);
   let assemblyFormat = [{
     $expand_shape attr-dict `:` functional-type(operands, results)
@@ -199,11 +199,11 @@ def HLSConvertCollapseShapeToStreamOp : Op<Transform_Dialect,
 
   let arguments = (ins
       Transform_ConcreteOpType<"tensor.collapse_shape">:$collapse_shape,
-      DenseI64ArrayAttr:$source_element_shape,
-      DenseI64ArrayAttr:$result_element_shape);
+      DenseI64ArrayAttr:$input_element_shape,
+      DenseI64ArrayAttr:$output_element_shape);
   let results = (outs
       Transform_ConcreteOpType<"hls.tensor_to_stream">:$tensor_to_stream,
-      Transform_ConcreteOpType<"hls.stream_collapse_shape">:$stream_collapse_shape,
+      Transform_ConcreteOpType<"hls.stream_reassociate">:$stream_reassociate,
       Transform_ConcreteOpType<"hls.stream_to_tensor">:$stream_to_tensor);
   let assemblyFormat = [{
     $collapse_shape attr-dict `:` functional-type(operands, results)

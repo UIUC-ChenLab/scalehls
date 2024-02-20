@@ -202,53 +202,45 @@ def StreamWriteOp : HLSOp<"stream_write", [
   let hasVerifier = 1;
 }
 
-class StreamReassociativeOp<string mnemonic, list<Trait> traits = []> :
-    HLSOp<mnemonic, !listconcat(traits, [Pure,
-      DeclareOpInterfaceMethods<StreamViewLikeInterface>])>,
-    Arguments<(ins AnyStream:$input, IndexListArrayAttr:$reassociation)>,
-    Results<(outs AnyStream:$output)> {
+def StreamReassociateOp : HLSOp<"stream_reassociate", [Pure,
+      DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
+  let summary = "Reassociate the shape and/or iteration of a stream channel";
 
-  code commonExtraClassDeclaration = [{
-    SmallVector<ReassociationIndices, 4> getReassociationIndices() {
+  let arguments = (ins AnyStream:$input, UnitAttr:$expandShape,
+        IndexListArrayAttr:$shapeReassociation, UnitAttr:$expandIteration,
+        IndexListArrayAttr:$iterationReassociation);
+  let results = (outs AnyStream:$output);
+  let assemblyFormat = [{
+    $input (`expand` $expandShape^):(`collapse`)? `shape` $shapeReassociation
+    (`expand` $expandIteration^):(`collapse`)? `iteration`
+    $iterationReassociation attr-dict `:` functional-type($input, $output)
+  }];
+
+  let hasVerifier = 1;
+  let hasFolder = 1;
+
+  let extraClassDeclaration = [{
+    static SmallVector<ReassociationIndices, 4> 
+    getReassociationIndices(ArrayAttr reassociationAttr) {
       SmallVector<ReassociationIndices, 4> reassociationIndices;
-      for (auto attr : getReassociation())
+      for (auto attr : reassociationAttr)
         reassociationIndices.push_back(llvm::to_vector<2>(
-            llvm::map_range(::llvm::cast<ArrayAttr>(attr), [&](Attribute indexAttr) {
-              return ::llvm::cast<IntegerAttr>(indexAttr).getInt();
+            llvm::map_range(cast<ArrayAttr>(attr), [&](Attribute indexAttr) {
+              return cast<IntegerAttr>(indexAttr).getInt();
             })));
       return reassociationIndices;
+    }
+
+    SmallVector<ReassociationIndices, 4> getShapeReassociationIndices() {
+      return getReassociationIndices(getShapeReassociation());
+    }
+    SmallVector<ReassociationIndices, 4> getIterationReassociationIndices() {
+      return getReassociationIndices(getIterationReassociation());
     }
 
     StreamType getInputType() { return getInput().getType(); }
     StreamType getOutputType() { return getOutput().getType(); }
   }];
-
-  let assemblyFormat = [{
-    $input $reassociation attr-dict `:` functional-type($input, $output)
-  }];
-
-  let hasVerifier = 1;
-  let hasFolder = 1;
-}
-
-def StreamSplitIterationOp : StreamReassociativeOp<"stream_split_iteration"> {
-  let summary = "Split the iteration space of a stream channel";
-  let extraClassDeclaration = commonExtraClassDeclaration;
-}
-
-def StreamMergeIterationOp : StreamReassociativeOp<"stream_merge_iteration"> {
-  let summary = "Merge the iteration space of a stream channel";
-  let extraClassDeclaration = commonExtraClassDeclaration;
-}
-
-def StreamExpandShapeOp : StreamReassociativeOp<"stream_expand_shape"> {
-  let summary = "Expand the shape of the stream element";
-  let extraClassDeclaration = commonExtraClassDeclaration;
-}
-
-def StreamCollapseShapeOp : StreamReassociativeOp<"stream_collapse_shape"> {
-  let summary = "Collapse the shape of the stream element";
-  let extraClassDeclaration = commonExtraClassDeclaration;
 }
 
 def StreamBufferOp : HLSOp<"stream_buffer", [Pure,
@@ -256,7 +248,7 @@ def StreamBufferOp : HLSOp<"stream_buffer", [Pure,
   let summary = "Buffer a stream channel at a specific position";
 
   let arguments = (ins AnyStream:$input, TypeAttr:$bufferElementType,
-      DenseI64ArrayAttr:$bufferShape, I64Attr:$loopIndex, I64Attr:$dimIndex);
+      DenseI64ArrayAttr:$bufferShape, SI64Attr:$loopIndex, SI64Attr:$dimIndex);
   let results = (outs AnyStream:$output);
   let assemblyFormat = [{
     $input `,` $bufferElementType $bufferShape `before` `loop` $loopIndex `dim`

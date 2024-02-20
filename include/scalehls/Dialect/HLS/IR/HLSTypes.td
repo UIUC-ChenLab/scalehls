@@ -79,6 +79,9 @@ def StreamType : HLSType<"Stream", []> {
           });
     }
 
+    /// Return the rank of the iteration space.
+    int64_t getIterRank() const { return getIterTripCounts().size(); }
+
     /// Return the data type of this stream type.
     Type getDataType() const {
       if (auto shapedType = getShapedElementType())
