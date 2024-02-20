@@ -201,6 +201,7 @@ transform::HLSConvertInsertSliceToStreamOp::applyToOne(
       rewriter.getUnknownLoc(), tensorToReplace.getType(), channel);
 
   rewriter.replaceAllUsesWith(tensorToReplace, channelTensor);
+  rewriter.replaceOp(insertSlice, insertSlice.getDest());
   results.push_back(channel);
   results.push_back(channelWrite);
   results.push_back(channelTensor);
