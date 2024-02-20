@@ -343,8 +343,12 @@ verifyIterationReassociation(ArrayRef<ReassociationIndices> reassociation,
 }
 
 LogicalResult StreamSplitIterationOp::verify() {
-  if (getInputType().isCastableWith(getOutputType()))
-    return emitOpError("input and output are not castable");
+  if (!getInputType().isCastableWith(getOutputType())) {
+    auto diag = emitOpError("input and output are not castable");
+    diag << "input shape: " << getInputType().getShape()
+         << ", output shape: " << getOutputType().getShape();
+    return diag;
+  }
   return verifyIterationReassociation(getReassociationIndices(), getInputType(),
                                       getOutputType(), *this);
 }
@@ -367,10 +371,14 @@ OpFoldResult StreamSplitIterationOp::fold(FoldAdaptor adaptor) {
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamMergeIterationOp::verify() {
-  if (getInputType().isCastableWith(getOutputType()))
-    return emitOpError("input and output are not castable");
-  return verifyIterationReassociation(getReassociationIndices(), getInputType(),
-                                      getOutputType(), *this);
+  if (!getInputType().isCastableWith(getOutputType())) {
+    auto diag = emitOpError("input and output are not castable");
+    diag << "input shape: " << getInputType().getShape()
+         << ", output shape: " << getOutputType().getShape();
+    return diag;
+  }
+  return verifyIterationReassociation(getReassociationIndices(),
+                                      getOutputType(), getInputType(), *this);
 }
 
 OpFoldResult StreamMergeIterationOp::fold(FoldAdaptor adaptor) {
@@ -385,27 +393,24 @@ static LogicalResult
 verifyShapeReassociation(ArrayRef<ReassociationIndices> reassociation,
                          StreamType lowType, StreamType highType,
                          Operation *op) {
-  // if (lowType.getIterTripCounts() != lowType.getIterTripCounts() ||
-  //     lowType.getIterSteps() != lowType.getIterSteps())
-  //   return op->emitOpError("input and output iteration trip counts or steps "
-  //                          "doesn't match");
+  if (lowType.getIterTripCounts() != lowType.getIterTripCounts() ||
+      lowType.getIterSteps() != lowType.getIterSteps())
+    return op->emitOpError("input and output iteration trip counts or steps "
+                           "doesn't match");
 
-  // unsigned highIndex = 0;
-  // for (auto lowExpr : lowType.getIterMap().getResults()) {
-  //   if (auto lowDimExpr = dyn_cast<AffineDimExpr>(lowExpr)) {
-  //     auto indices = reassociation[lowDimExpr.getPosition()];
-  //     for (auto index : indices) {
-  //       auto highDimExpr =
-  //           dyn_cast<AffineDimExpr>(highType.getIterMap().getResult(highIndex));
-  //       if (!highDimExpr || highDimExpr.getPosition() != index)
-  //         return op->emitOpError(
-  //             "reassociation doesn't align with input/output iteration
-  //             maps");
-  //       highIndex++;
-  //     }
-  //   } else
-  //     highIndex++;
-  // }
+  auto lowShape = lowType.getShape();
+  auto highShape = highType.getShape();
+  if (reassociation.size() != lowShape.size())
+    return op->emitOpError("reassociation size doesn't align with input type");
+
+  for (auto [indices, lowDimSize] : llvm::zip(reassociation, lowShape)) {
+    int64_t highDimSizeProduct = 1;
+    for (auto index : indices)
+      highDimSizeProduct *= highShape[index];
+    if (lowDimSize != highDimSizeProduct)
+      return op->emitOpError("reassociation doesn't align with input/output "
+                             "tensor shape");
+  }
   return success();
 }
 
@@ -427,8 +432,8 @@ OpFoldResult StreamExpandShapeOp::fold(FoldAdaptor adaptor) {
 LogicalResult StreamCollapseShapeOp::verify() {
   if (getInputType().getDataType() != getOutputType().getDataType())
     return emitOpError("input and output data type doesn't match");
-  return verifyShapeReassociation(getReassociationIndices(), getInputType(),
-                                  getOutputType(), *this);
+  return verifyShapeReassociation(getReassociationIndices(), getOutputType(),
+                                  getInputType(), *this);
 }
 
 OpFoldResult StreamCollapseShapeOp::fold(FoldAdaptor adaptor) {
@@ -442,8 +447,12 @@ OpFoldResult StreamCollapseShapeOp::fold(FoldAdaptor adaptor) {
 LogicalResult StreamBufferOp::verify() {
   auto inputType = getInput().getType();
   auto outputType = getOutput().getType();
-  if (!inputType.isCastableWith(outputType))
-    return emitOpError("input and output are not castable");
+  if (!inputType.isCastableWith(outputType)) {
+    auto diag = emitOpError("input and output are not castable");
+    diag << "input shape: " << inputType.getShape()
+         << ", output shape: " << outputType.getShape();
+    return diag;
+  }
 
   if (getLoopIndex() > inputType.getIterTripCounts().size())
     return emitOpError("buffer loop index is out of loop range");
@@ -474,8 +483,12 @@ OpFoldResult StreamBufferOp::fold(FoldAdaptor adaptor) {
 LogicalResult StreamCastOp::verify() {
   auto inputType = getInput().getType();
   auto outputType = getOutput().getType();
-  if (!inputType.isCastableWith(outputType))
-    return emitOpError("input and output are not castable");
+  if (!inputType.isCastableWith(outputType)) {
+    auto diag = emitOpError("input and output are not castable");
+    diag << "input shape: " << inputType.getShape()
+         << ", output shape: " << outputType.getShape();
+    return diag;
+  }
   return success();
 }
 
