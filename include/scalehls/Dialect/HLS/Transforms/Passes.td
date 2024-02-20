@@ -23,6 +23,11 @@ def ReduceTensorToStream :
 def MaterializeStream : Pass<"scalehls-materialize-stream", "func::FuncOp"> {
   let summary = "Materialize tensor/stream conversions and stream buffers";
   let constructor = "mlir::scalehls::hls::createMaterializeStreamPass()";
+
+  let options = [
+    Option<"enablePacking", "enable-packing", "bool", /*default=*/"true",
+           "Whether to enable packing during the materialization">
+  ];
 }
 
 def ScalarizeStream : Pass<"scalehls-scalarize-stream", "func::FuncOp"> {

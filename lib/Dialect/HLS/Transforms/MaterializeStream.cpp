@@ -179,7 +179,12 @@ unpackTensor(TypedValue<RankedTensorType> tensor, ArrayRef<int64_t> tileSizes,
 namespace {
 struct LowerTensorToStreamConversionOp
     : public OpRewritePattern<hls::TensorToStreamOp> {
-  using OpRewritePattern<hls::TensorToStreamOp>::OpRewritePattern;
+  LowerTensorToStreamConversionOp(MLIRContext *context,
+                                  bool enablePacking = true,
+                                  PatternBenefit benefit = 1,
+                                  ArrayRef<StringRef> generatedNames = {})
+      : OpRewritePattern(context, benefit, generatedNames),
+        enablePacking(enablePacking) {}
 
   LogicalResult matchAndRewrite(hls::TensorToStreamOp toStream,
                                 PatternRewriter &rewriter) const override {
@@ -188,7 +193,8 @@ struct LowerTensorToStreamConversionOp
 
     // Only if the stream type is not overlapped, we can pack the tensor to make
     // more efficient memory access pattern.
-    auto packing = streamType.tileIsRegular() && streamType.getRank() > 1;
+    auto packing =
+        enablePacking && streamType.tileIsRegular() && streamType.getRank() > 1;
     auto target = toStream.getTensor();
     if (packing)
       target = packTensor(target, streamType.getElementShape(), loc, rewriter);
@@ -205,13 +211,21 @@ struct LowerTensorToStreamConversionOp
     rewriter.replaceAllUsesWith(toStream.getStream(), channel);
     return success();
   }
+
+private:
+  bool enablePacking = true;
 };
 } // namespace
 
 namespace {
 struct LowerStreamToTensorConversionOp
     : public OpRewritePattern<hls::StreamToTensorOp> {
-  using OpRewritePattern<hls::StreamToTensorOp>::OpRewritePattern;
+  LowerStreamToTensorConversionOp(MLIRContext *context,
+                                  bool enablePacking = true,
+                                  PatternBenefit benefit = 1,
+                                  ArrayRef<StringRef> generatedNames = {})
+      : OpRewritePattern(context, benefit, generatedNames),
+        enablePacking(enablePacking) {}
 
   LogicalResult matchAndRewrite(hls::StreamToTensorOp toTensor,
                                 PatternRewriter &rewriter) const override {
@@ -220,7 +234,8 @@ struct LowerStreamToTensorConversionOp
 
     // Only if the stream type is not overlapped, we can pack the tensor to make
     // more efficient memory access pattern.
-    auto packing = streamType.tileIsRegular() && streamType.getRank() > 1;
+    auto packing =
+        enablePacking && streamType.tileIsRegular() && streamType.getRank() > 1;
     auto targetType = toTensor.getTensor().getType();
     if (packing)
       targetType = getPackedType(targetType, streamType.getElementShape());
@@ -243,12 +258,19 @@ struct LowerStreamToTensorConversionOp
     rewriter.replaceAllUsesWith(toTensor.getTensor(), result);
     return success();
   }
+
+private:
+  bool enablePacking = true;
 };
 } // namespace
 
 namespace {
 struct LowerStreamBufferOp : public OpRewritePattern<hls::StreamBufferOp> {
-  using OpRewritePattern<hls::StreamBufferOp>::OpRewritePattern;
+  LowerStreamBufferOp(MLIRContext *context, bool enablePacking = true,
+                      PatternBenefit benefit = 1,
+                      ArrayRef<StringRef> generatedNames = {})
+      : OpRewritePattern(context, benefit, generatedNames),
+        enablePacking(enablePacking) {}
 
   LogicalResult matchAndRewrite(hls::StreamBufferOp streamBuffer,
                                 PatternRewriter &rewriter) const override {
@@ -279,7 +301,8 @@ struct LowerStreamBufferOp : public OpRewritePattern<hls::StreamBufferOp> {
         });
 
     // Get the buffer type and packed buffer type if necessary.
-    auto packing = inputType.tileIsRegular() && outputType.tileIsRegular() &&
+    auto packing = enablePacking && inputType.tileIsRegular() &&
+                   outputType.tileIsRegular() &&
                    (inputType.getRank() > 1 || outputType.getRank() > 1);
     auto bufferType = RankedTensorType::get(
         streamBuffer.getBufferShape(), streamBuffer.getBufferElementType());
@@ -317,24 +340,46 @@ struct LowerStreamBufferOp : public OpRewritePattern<hls::StreamBufferOp> {
     rewriter.replaceAllUsesWith(streamBuffer.getOutput(), channel);
     return success();
   }
+
+private:
+  bool enablePacking = true;
+};
+} // namespace
+
+namespace {
+struct FoldPackOpIntoConstantOp : public OpRewritePattern<tensor::PackOp> {
+  using OpRewritePattern<tensor::PackOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(tensor::PackOp pack,
+                                PatternRewriter &rewriter) const override {
+    return failure();
+  }
 };
 } // namespace
 
 namespace {
 struct MaterializeStream : public MaterializeStreamBase<MaterializeStream> {
+  MaterializeStream() = default;
+  MaterializeStream(bool optEnablePacking = true) {
+    enablePacking = optEnablePacking;
+  }
+
   void runOnOperation() override {
     auto op = getOperation();
     auto context = op->getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<LowerTensorToStreamConversionOp>(context);
-    patterns.add<LowerStreamToTensorConversionOp>(context);
-    patterns.add<LowerStreamBufferOp>(context);
+    patterns.add<LowerTensorToStreamConversionOp>(context, enablePacking);
+    patterns.add<LowerStreamToTensorConversionOp>(context, enablePacking);
+    patterns.add<LowerStreamBufferOp>(context, enablePacking);
+    if (enablePacking)
+      patterns.add<FoldPackOpIntoConstantOp>(context);
     (void)applyPatternsAndFoldGreedily(op, std::move(patterns));
   }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::hls::createMaterializeStreamPass() {
-  return std::make_unique<MaterializeStream>();
+std::unique_ptr<Pass>
+scalehls::hls::createMaterializeStreamPass(bool enablePacking) {
+  return std::make_unique<MaterializeStream>(enablePacking);
 }
