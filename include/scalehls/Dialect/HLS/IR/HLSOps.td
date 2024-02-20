@@ -118,7 +118,7 @@ def YieldOp : HLSOp<"yield", [NoMemoryEffect, ReturnLike, Terminator,
 // Stream Operations
 //===----------------------------------------------------------------------===//
 
-def TensorInitOp : HLSOp<"tensor_init", [NoMemoryEffect]> {
+def TensorInitOp : HLSOp<"tensor_init", [Pure]> {
   let summary = "Initiate a tensor with an optional initialization value";
 
   let arguments = (ins Optional<AnyType>:$init_value);
@@ -134,7 +134,7 @@ def TensorInitOp : HLSOp<"tensor_init", [NoMemoryEffect]> {
   ];
 }
 
-def TensorToStreamOp : HLSOp<"tensor_to_stream",[NoMemoryEffect]> {
+def TensorToStreamOp : HLSOp<"tensor_to_stream",[Pure]> {
   let summary = "Convert a tensor to a stream channel";
 
   let arguments = (ins AnyRankedTensor:$tensor);
@@ -147,7 +147,7 @@ def TensorToStreamOp : HLSOp<"tensor_to_stream",[NoMemoryEffect]> {
   let hasFolder = 1;
 }
 
-def StreamToTensorOp : HLSOp<"stream_to_tensor", [NoMemoryEffect]> {
+def StreamToTensorOp : HLSOp<"stream_to_tensor", [Pure]> {
   let summary = "Convert a stream channel to a tensor";
 
   let arguments = (ins AnyStream:$stream);
@@ -196,26 +196,19 @@ def StreamWriteOp : HLSOp<"stream_write", [
 
   let arguments = (ins AnyStream:$channel, AnyType:$value);
   let assemblyFormat = [{
-    $channel `,` $value attr-dict `:` functional-type($value, $channel)
+    $value `to` $channel attr-dict `:` functional-type($value, $channel)
   }];
 
   let hasVerifier = 1;
 }
 
-def StreamExpandShapeOp : HLSOp<"stream_expand_shape", [NoMemoryEffect,
-    DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
-  let summary = "Expand the shape of the iteration space";
+class StreamReassociativeOp<string mnemonic, list<Trait> traits = []> :
+    HLSOp<mnemonic, !listconcat(traits, [Pure,
+      DeclareOpInterfaceMethods<StreamViewLikeInterface>])>,
+    Arguments<(ins AnyStream:$input, IndexListArrayAttr:$reassociation)>,
+    Results<(outs AnyStream:$output)> {
 
-  let arguments = (ins AnyStream:$input, IndexListArrayAttr:$reassociation);
-  let results = (outs AnyStream:$output);
-  let assemblyFormat = [{
-    $input `,` $reassociation attr-dict `:` functional-type($input, $output)
-  }];
-
-  let hasVerifier = 1;
-  let hasFolder = 1;
-
-  let extraClassDeclaration = [{
+  code commonExtraClassDeclaration = [{
     SmallVector<ReassociationIndices, 4> getReassociationIndices() {
       SmallVector<ReassociationIndices, 4> reassociationIndices;
       for (auto attr : getReassociation())
@@ -225,53 +218,62 @@ def StreamExpandShapeOp : HLSOp<"stream_expand_shape", [NoMemoryEffect,
             })));
       return reassociationIndices;
     }
+
+    StreamType getInputType() { return getInput().getType(); }
+    StreamType getOutputType() { return getOutput().getType(); }
   }];
-}
 
-def StreamCollapseShapeOp : HLSOp<"stream_collapse_shape", [NoMemoryEffect,
-    DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
-  let summary = "Collapse the shape of the iteration space";
-
-  let arguments = (ins AnyStream:$input, IndexListArrayAttr:$reassociation);
-  let results = (outs AnyStream:$output);
   let assemblyFormat = [{
-    $input `,` $reassociation attr-dict `:` functional-type($input, $output)
+    $input $reassociation attr-dict `:` functional-type($input, $output)
   }];
 
   let hasVerifier = 1;
   let hasFolder = 1;
-
-  let extraClassDeclaration = [{
-    SmallVector<ReassociationIndices, 4> getReassociationIndices() {
-      SmallVector<ReassociationIndices, 4> reassociationIndices;
-      for (auto attr : getReassociation())
-        reassociationIndices.push_back(llvm::to_vector<2>(
-            llvm::map_range(::llvm::cast<ArrayAttr>(attr), [&](Attribute indexAttr) {
-              return ::llvm::cast<IntegerAttr>(indexAttr).getInt();
-            })));
-      return reassociationIndices;
-    }
-  }];
 }
 
-def StreamBufferOp : HLSOp<"stream_buffer", [NoMemoryEffect,
-    DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
+def StreamSplitIterationOp : StreamReassociativeOp<"stream_split_iteration"> {
+  let summary = "Split the iteration space of a stream channel";
+  let extraClassDeclaration = commonExtraClassDeclaration;
+}
+
+def StreamMergeIterationOp : StreamReassociativeOp<"stream_merge_iteration"> {
+  let summary = "Merge the iteration space of a stream channel";
+  let extraClassDeclaration = commonExtraClassDeclaration;
+}
+
+def StreamExpandShapeOp : StreamReassociativeOp<"stream_expand_shape"> {
+  let summary = "Expand the shape of the stream element";
+  let extraClassDeclaration = commonExtraClassDeclaration;
+}
+
+def StreamCollapseShapeOp : StreamReassociativeOp<"stream_collapse_shape"> {
+  let summary = "Collapse the shape of the stream element";
+  let extraClassDeclaration = commonExtraClassDeclaration;
+}
+
+def StreamBufferOp : HLSOp<"stream_buffer", [Pure,
+      DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
   let summary = "Buffer a stream channel at a specific position";
 
   let arguments = (ins AnyStream:$input, TypeAttr:$bufferElementType,
-      DenseI64ArrayAttr:$bufferShape, I64Attr:$beforeLoop, I64Attr:$beforeDim);
+      DenseI64ArrayAttr:$bufferShape, I64Attr:$loopIndex, I64Attr:$dimIndex);
   let results = (outs AnyStream:$output);
   let assemblyFormat = [{
-    $input `,` $bufferElementType $bufferShape `loop` $beforeLoop `dim`
-    $beforeDim attr-dict `:` functional-type($input, $output)
+    $input `,` $bufferElementType $bufferShape `before` `loop` $loopIndex `dim`
+    $dimIndex attr-dict `:` functional-type($input, $output)
   }];
 
   let hasVerifier = 1;
   let hasFolder = 1;
+
+  let extraClassDeclaration = [{
+    StreamType getInputType() { return getInput().getType(); }
+    StreamType getOutputType() { return getOutput().getType(); }
+  }];
 }
 
-def StreamCastOp : HLSOp<"stream_cast", [NoMemoryEffect,
-    DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
+def StreamCastOp : HLSOp<"stream_cast", [Pure,
+      DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
   let summary = "Cast a stream channel to a different type";
 
   let arguments = (ins AnyStream:$input);
@@ -282,6 +284,11 @@ def StreamCastOp : HLSOp<"stream_cast", [NoMemoryEffect,
 
   let hasVerifier = 1;
   let hasFolder = 1;
+
+  let extraClassDeclaration = [{
+    StreamType getInputType() { return getInput().getType(); }
+    StreamType getOutputType() { return getOutput().getType(); }
+  }];
 }
 
 //===----------------------------------------------------------------------===//

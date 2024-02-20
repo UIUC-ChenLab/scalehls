@@ -254,7 +254,7 @@ struct LowerStreamBufferOp : public OpRewritePattern<hls::StreamBufferOp> {
                                 PatternRewriter &rewriter) const override {
     auto inputType = streamBuffer.getInput().getType();
     auto outputType = streamBuffer.getOutput().getType();
-    auto beforeLoop = streamBuffer.getBeforeLoop();
+    auto loopIndex = streamBuffer.getLoopIndex();
     auto loc = streamBuffer.getLoc();
 
     // Construct the output stream channel.
@@ -263,8 +263,8 @@ struct LowerStreamBufferOp : public OpRewritePattern<hls::StreamBufferOp> {
     // Construct loops to iterate over the dimensions shared by input stream and
     // output stream.
     for (auto [tripCount, step] :
-         llvm::zip(inputType.getIterTripCounts().take_front(beforeLoop),
-                   inputType.getIterSteps().take_front(beforeLoop))) {
+         llvm::zip(inputType.getIterTripCounts().take_front(loopIndex),
+                   inputType.getIterSteps().take_front(loopIndex))) {
       auto [lbCst, ubCst, stepCst] =
           getLoopBoundsAndStep(tripCount, step, loc, rewriter);
       auto loop = rewriter.create<scf::ForOp>(loc, lbCst, ubCst, stepCst);
@@ -293,10 +293,10 @@ struct LowerStreamBufferOp : public OpRewritePattern<hls::StreamBufferOp> {
     // element to the buffer tensor.
     auto zeroCst = rewriter.create<arith::ConstantIndexOp>(loc, 0);
     auto [inputIvs, inputResult, inputIterArg] =
-        constructLoops(inputType.getIterTripCounts().drop_front(beforeLoop),
-                       inputType.getIterSteps().drop_front(beforeLoop), loc,
+        constructLoops(inputType.getIterTripCounts().drop_front(loopIndex),
+                       inputType.getIterSteps().drop_front(loopIndex), loc,
                        rewriter, init.getResult());
-    SmallVector<Value> bufferInputIvs(beforeLoop, zeroCst);
+    SmallVector<Value> bufferInputIvs(loopIndex, zeroCst);
     bufferInputIvs.append(inputIvs);
     readStreamAndInsertSlice(bufferInputIvs, streamBuffer.getInput(),
                              inputIterArg, packing, loc, rewriter,
@@ -306,9 +306,9 @@ struct LowerStreamBufferOp : public OpRewritePattern<hls::StreamBufferOp> {
     // write to the output stream channel.
     rewriter.setInsertionPointAfterValue(inputResult);
     auto [outputIvs, outputResult, outputIterArg] = constructLoops(
-        outputType.getIterTripCounts().drop_front(beforeLoop),
-        outputType.getIterSteps().drop_front(beforeLoop), loc, rewriter);
-    SmallVector<Value> bufferOutputIvs(beforeLoop, zeroCst);
+        outputType.getIterTripCounts().drop_front(loopIndex),
+        outputType.getIterSteps().drop_front(loopIndex), loc, rewriter);
+    SmallVector<Value> bufferOutputIvs(loopIndex, zeroCst);
     bufferOutputIvs.append(outputIvs);
     extactSliceAndWriteStream(bufferOutputIvs, channel, inputResult, packing,
                               loc, rewriter);
