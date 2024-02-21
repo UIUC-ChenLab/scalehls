@@ -16,26 +16,128 @@ class HLSType<string name, list<Trait> traits = [],
   let mnemonic = ?;
 }
 
+class IterativeType<string name, list<Trait> traits = []>
+    : HLSType<name, !listconcat(traits, [IterativeTypeInterface])> {
+
+  let skipDefaultBuilders = 1;
+  let genVerifyDecl = 1;
+
+  code commonExtraClassDeclaration = [{
+    /// Return the rank of the iteration space.
+    int64_t getIterRank() const { return getIterMap().getNumDims(); }
+
+    /// Return the iteration bounds.
+    SmallVector<int64_t> getIterBounds() const {
+      return llvm::map_to_vector(llvm::zip(getIterTripCounts(), getIterSteps()),
+          [](std::tuple<int64_t, int64_t> tuple) {
+              return std::get<0>(tuple) * std::get<1>(tuple);
+          });
+    }
+
+    /// Return the rank of the full tensor.
+    int64_t getFullRank() const { return getIterMap().getNumResults(); }
+
+    /// Infer and return the shape of the full tensor.
+    SmallVector<int64_t> getFullShape() const;
+
+    /// Return whether this type is castable with the "other" type.
+    bool isCastableWith(}] # name # [{Type other) const {
+      return getElementType() == other.getElementType() &&
+             getFullShape() == other.getFullShape();
+    }
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// SlidingTensorType
+//===----------------------------------------------------------------------===//
+
+def SlidingTensorType : IterativeType<"SlidingTensor"> {
+  let summary = "A sliding tensor type";
+  let description = [{
+    Represents a sliding tensor of any data type. A sliding tensor is a "window"
+    of a full tensor that is accessed in a sliding window manner. The sliding
+    window is defined by the iteration space, which is represented by the
+    iteration trip counts, iteration steps, and the iteration map. The iteration
+    map is an affine map that maps the iteration space to the full tensor space.
+
+    For example, a sliding tensor with type `stensor<f32 [8, 8], tripcounts
+    [2, 4], steps [8, 8], (d0, d1) -> (d1, d0)>` represents a 8x8 sliding window
+    of a 32x16 full tensor. The iteration space is a 2x4 grid, and the iteration
+    map maps the iteration space to the full tensor space by permutating the two
+    dimensions.
+  }];
+  let mnemonic = "stensor";
+
+  let parameters = (ins
+      "mlir::Type":$elementType, ArrayRefParameter<"int64_t">:$shape,
+      ArrayRefParameter<"int64_t">:$iterTripCounts,
+      ArrayRefParameter<"int64_t">:$iterSteps, "mlir::AffineMap":$iterMap);
+  let assemblyFormat = [{
+    `<` qualified($elementType) `[` $shape `]` `,` `tripcounts`
+    `[` $iterTripCounts `]` `,` `steps` `[` $iterSteps `]` `,` $iterMap `>`
+  }];
+
+  let builders = [
+    TypeBuilderWithInferredContext<(ins
+        "ArrayRef<int64_t>":$shape, "mlir::Type":$elementType,
+        "ArrayRef<int64_t>":$iterTripCounts, "ArrayRef<int64_t>":$iterSteps,
+        "mlir::AffineMap":$iterMap), [{
+      return $_get(elementType.getContext(), shape, elementType, iterTripCounts,
+                   iterSteps, iterMap);
+    }]>
+  ];
+
+  let extraClassDeclaration = commonExtraClassDeclaration # [{
+    /// Get the rank of the sliding window.
+    int64_t getRank() const { return getShape().size(); }
+
+    /// Return the dimension size of the sliding window.
+    int64_t getDimSize(unsigned dim) const { return getShape()[dim]; }
+
+    /// Return whether the iteration map is a projected permutation.
+    bool isProjectedPermutation() const;
+
+    /// Return whether the sliding window is non-overlapped and non-gapped.
+    bool isRegular() const;
+
+    /// Get the ranked tensor type of the sliding window.
+    RankedTensorType getWindowType() const {
+      return RankedTensorType::get(getShape(), getElementType());
+    }
+
+    /// Return whether this type can be converted to the "tensor" type.
+    bool isConvertableWith(RankedTensorType tensor) const;
+  }];
+}
+
 //===----------------------------------------------------------------------===//
 // StreamType
 //===----------------------------------------------------------------------===//
 
-def StreamType : HLSType<"Stream", []> {
+def StreamType : IterativeType<"Stream"> {
   let summary = "An HLS stream type";
   let description = [{
-    Represents a stream of any type that can be transfered between HLS modules.
+    Represents a stream of any data type. A stream is a sequence of elements
+    that are accessed in a streaming manner. The iteration space is represented
+    by the iteration trip counts, iteration steps, and the iteration map. The
+    iteration map is an affine map that maps the iteration space to the full
+    tensor space.
+
+    For example, a stream with type `stream<f32, tripcounts [2, 4, 8, 8], steps
+    [8, 8, 1, 1], (d0, d1, d2, d3) -> (d1 + d2, d0 + d3)>` represents a stream
+    of a 32x16 full tensor. The iteration space is a 2x4x8x8 grid, and the
+    iteration map maps the iteration space to the full tensor space.
   }];
   let mnemonic = "stream";
 
   let parameters = (ins
-      "mlir::Type":$elementType,
-      ArrayRefParameter<"int64_t">:$iterTripCounts,
-      ArrayRefParameter<"int64_t">:$iterSteps,
-      "mlir::AffineMap":$iterMap,
+      "mlir::Type":$elementType, ArrayRefParameter<"int64_t">:$iterTripCounts,
+      ArrayRefParameter<"int64_t">:$iterSteps, "mlir::AffineMap":$iterMap,
       DefaultValuedParameter<"int64_t", "1">:$depth);
   let assemblyFormat = [{
-    `<` qualified($elementType) `,` `[` $iterTripCounts `]` `,`
-    `[` $iterSteps `]` `,` $iterMap `,` $depth `>`
+    `<` qualified($elementType) `,` `tripcounts` `[` $iterTripCounts `]` `,`
+    `steps` `[` $iterSteps `]` `,` $iterMap `,` $depth `>`
   }];
 
   let builders = [
@@ -45,100 +147,15 @@ def StreamType : HLSType<"Stream", []> {
         CArg<"int64_t", "1">:$depth), [{
       return $_get(elementType.getContext(), elementType, iterTripCounts,
                    iterSteps, iterMap, depth);
-    }]>,
-    TypeBuilderWithInferredContext<(ins
-        "mlir::Type":$elementType, "ArrayRef<int64_t>":$iterTripCounts,
-        "ArrayRef<int64_t>":$iterSteps, CArg<"int64_t", "1">:$depth), [{
-      auto identityMap = AffineMap::getMultiDimIdentityMap(
-          iterTripCounts.size(), elementType.getContext());
-      return get(elementType, iterTripCounts, iterSteps, identityMap, depth);
-    }]>,
-    TypeBuilderWithInferredContext<(ins
-        "mlir::Type":$elementType, "ArrayRef<int64_t>":$iterTripCounts,
-        "mlir::AffineMap":$iterMap, CArg<"int64_t", "1">:$depth), [{
-      return get(elementType, iterTripCounts,
-          SmallVector<int64_t>(iterTripCounts.size(), 1), iterMap, depth);
-    }]>,
-    TypeBuilderWithInferredContext<(ins
-        "mlir::Type":$elementType, "ArrayRef<int64_t>":$iterTripCounts,
-        CArg<"int64_t", "1">:$depth), [{
-      return get(elementType, iterTripCounts,
-          SmallVector<int64_t>(iterTripCounts.size(), 1), depth);
     }]>
   ];
 
-  let skipDefaultBuilders = 1;
-  let genVerifyDecl = 1;
-
-  let extraClassDeclaration = [{
-    /// Return the iteration bounds.
-    SmallVector<int64_t> getIterBounds() const {
-      return llvm::map_to_vector(llvm::zip(getIterTripCounts(), getIterSteps()),
-          [](std::tuple<int64_t, int64_t> tripCountStep) {
-              return std::get<0>(tripCountStep) * std::get<1>(tripCountStep);
-          });
+  let extraClassDeclaration = commonExtraClassDeclaration # [{
+    /// Return whether this type can be converted to the "stensor" type.
+    bool isConvertableWith(SlidingTensorType stensor) const {
+      return getElementType() == stensor.getElementType() &&
+             getFullShape() == stensor.getFullShape();
     }
-
-    /// Return the rank of the iteration space.
-    int64_t getIterRank() const { return getIterTripCounts().size(); }
-
-    /// Return the data type of this stream type.
-    Type getDataType() const {
-      if (auto shapedType = getShapedElementType())
-        return shapedType.getElementType();
-      return getElementType();
-    }
-
-    /// Return the integral rank of the full tensor this stream type represents.
-    int64_t getRank() const { return getIterMap().getNumResults(); }
-
-    /// Infer and return the integral shape of the full tensor this stream type
-    /// represents.
-    SmallVector<int64_t> getShape() const;
-
-    /// Return whether the element type is a shaped type.
-    bool hasShapedElementType() const {
-      return getElementType().isa<ShapedType>();
-    }
-
-    /// Get the shaped element type if applicable. Return nullptr if the element
-    /// type is not a shaped type.
-    ShapedType getShapedElementType() const {
-      return getElementType().dyn_cast<ShapedType>();
-    }
-
-    /// Get the rank of the element type.
-    int64_t getElementRank() const { return getIterMap().getNumResults(); }
-
-    /// Return the dimension size of the element type. Return 1 if the element
-    /// type is not a shaped type.
-    int64_t getElementDimSize(unsigned dim) const {
-      if (auto shapedType = getShapedElementType())
-        return shapedType.getDimSize(dim);
-      return 1;
-    }
-
-    /// Return the shape of the element type. Return an all-1 array if the 
-    /// element type is not a shaped type.
-    SmallVector<int64_t> getElementShape() const {
-      if (auto shapedType = getShapedElementType())
-        return SmallVector<int64_t>(shapedType.getShape());
-      return SmallVector<int64_t>(getIterMap().getNumResults(), 1);
-    }
-
-    /// Return whether this stream type represents a projected permutation
-    /// iteration pattern.
-    bool iterationIsProjectedPermutation() const;
-
-    /// Return whether this stream type represents a non-overlapped and
-    /// non-gapped tiling pattern.
-    bool tileIsRegular() const;
-
-    /// Return whether the "other" stream type is castable with this type.
-    bool isCastableWith(StreamType other) const;
-
-    /// Return whether this stream type can be converted to the "tensor" type.
-    bool isConvertableWith(RankedTensorType tensor) const;
   }];
 }
 

@@ -62,6 +62,16 @@ scalehls::constructLoops(ArrayRef<int64_t> tripCounts, ArrayRef<int64_t> steps,
   return std::make_tuple(ivs, result, iterArg);
 }
 
+Value scalehls::getUntiledSource(Value source) {
+  while (auto arg = dyn_cast<BlockArgument>(source)) {
+    if (auto loop = dyn_cast<scf::ForOp>(arg.getOwner()->getParentOp()))
+      source = loop.getTiedLoopInit(arg)->get();
+    else
+      break;
+  }
+  return source;
+}
+
 SmallVector<scf::ForOp> scalehls::getSurroundingLoops(Operation *target,
                                                       Block *sourceBlock) {
   SmallVector<scf::ForOp> reversedLoops;

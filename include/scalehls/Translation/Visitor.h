@@ -22,8 +22,8 @@ public:
     return TypeSwitch<Operation *, ResultType>(op)
         .template Case<
             // HLS dialect operations.
-            hls::BufferOp, hls::ConstBufferOp, hls::StreamOp, hls::StreamReadOp,
-            hls::StreamWriteOp, hls::AffineSelectOp,
+            hls::BufferOp, hls::ConstBufferOp, hls::StreamOp, hls::StreamPullOp,
+            hls::StreamPushOp, hls::AffineSelectOp,
 
             // Function operations.
             func::CallOp, func::ReturnOp,
@@ -99,8 +99,8 @@ public:
   HANDLE(hls::BufferOp);
   HANDLE(hls::ConstBufferOp);
   HANDLE(hls::StreamOp);
-  HANDLE(hls::StreamReadOp);
-  HANDLE(hls::StreamWriteOp);
+  HANDLE(hls::StreamPullOp);
+  HANDLE(hls::StreamPushOp);
   HANDLE(hls::AffineSelectOp);
 
   // Control flow operations.

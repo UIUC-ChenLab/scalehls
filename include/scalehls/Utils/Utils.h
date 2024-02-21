@@ -31,6 +31,8 @@ constructLoops(ArrayRef<int64_t> tripCounts, ArrayRef<int64_t> steps,
                Location loc, PatternRewriter &rewriter,
                TypedValue<RankedTensorType> iterArg = nullptr);
 
+Value getUntiledSource(Value source);
+
 SmallVector<scf::ForOp> getSurroundingLoops(Operation *target,
                                             Block *sourceBlock);
 

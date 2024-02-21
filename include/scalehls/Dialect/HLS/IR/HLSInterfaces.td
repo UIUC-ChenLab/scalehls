@@ -9,29 +9,27 @@
 
 include "mlir/IR/OpBase.td"
 
-def StreamViewLikeInterface : OpInterface<"StreamViewLikeInterface"> {
+def IterativeTypeInterface : TypeInterface<"IterativeTypeInterface"> {
   let description = [{
-    This interface is used to represent stream views.
+    Represents an iterative type.
   }];
   string cppNamespace = "mlir::scalehls::hls";
 
   let methods = [
-    InterfaceMethod<"Return the input stream",
-      "TypedValue<StreamType>", "getInput", (ins), [{
-        return $_op.getInput();
-      }]>,
-    InterfaceMethod<"Return the output stream",
-      "TypedValue<StreamType>", "getOutput", (ins), [{
-        return $_op.getOutput();
-      }]>,
-    InterfaceMethod<"Return the input stream type",
-      "StreamType", "getInputType", (ins), [{
-        return $_op.getInput().getType();
-      }]>,
-    InterfaceMethod<"Return the output stream type",
-      "StreamType", "getOutputType", (ins), [{
-        return $_op.getOutput().getType();
-      }]>
+    InterfaceMethod<"Return the trip counts of the iteration space.",
+      "ArrayRef<int64_t>", "getIterTripCounts">,
+    InterfaceMethod<"Return the steps of the iteration space.",
+      "ArrayRef<int64_t>", "getIterSteps">,
+    InterfaceMethod<"Return the iteration map of the iteration space.",
+      "AffineMap", "getIterMap">,
+    InterfaceMethod<"Return the rank of the iteration space.",
+      "int64_t", "getIterRank">,
+    InterfaceMethod<"Return the iteration bounds.",
+      "SmallVector<int64_t>", "getIterBounds">,
+    InterfaceMethod<"Return the rank of the full tensor.",
+      "int64_t", "getFullRank">,
+    InterfaceMethod<"Infer and return the shape of the full tensor.",
+      "SmallVector<int64_t>", "getFullShape">
   ];
 }
 

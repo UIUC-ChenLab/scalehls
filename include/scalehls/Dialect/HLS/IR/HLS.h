@@ -17,8 +17,11 @@
 #include "mlir/Interfaces/ControlFlowInterfaces.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "mlir/Interfaces/ViewLikeInterface.h"
+
 #include "scalehls/Dialect/HLS/IR/HLSOpsDialect.h.inc"
 #include "scalehls/Dialect/HLS/IR/HLSOpsEnums.h.inc"
+
+#include "scalehls/Dialect/HLS/IR/HLSTypesInterfaces.h.inc"
 
 #define GET_TYPEDEF_CLASSES
 #include "scalehls/Dialect/HLS/IR/HLSOpsTypes.h.inc"

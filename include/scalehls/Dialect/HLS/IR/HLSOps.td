@@ -19,27 +19,33 @@ class HLSOp<string mnemonic, list<Trait> traits = []> :
     Op<HLSDialect, mnemonic, traits>;
 
 //===----------------------------------------------------------------------===//
-// StreamtType Predicates
+// Constraints
 //===----------------------------------------------------------------------===//
 
-class StreamOf<list<Type> allowedTypes,
-               string cppClassName = "::mlir::scalehls::hls::StreamType">
-  : Type<
-      And<[
-        CPred<"::llvm::isa<" # cppClassName # ">($_self)">,
-        Concat<
-          "[](::mlir::Type elementType) { return ",
-          SubstLeaves<"$_self", "elementType",
-          AnyTypeOf<allowedTypes>.predicate>,
-          "; }(::llvm::cast<" # cppClassName # ">($_self).getElementType())"
-        >
-      ]>,
-      "stream of " # AnyTypeOf<allowedTypes>.summary # " values",
+class ShapedOf<list<Type> allowedTypes, string summary, string cppClassName>
+  : Type<And<[
+      CPred<"::llvm::isa<" # cppClassName # ">($_self)">,
+      Concat<
+        "[](::mlir::Type elementType) { return ",
+        SubstLeaves<"$_self", "elementType",
+        AnyTypeOf<allowedTypes>.predicate>,
+        "; }(::llvm::cast<" # cppClassName # ">($_self).getElementType())"
+      >]>,
+      summary # " of " # AnyTypeOf<allowedTypes>.summary # " values",
       cppClassName
     >;
 
-def AnyBuffer : StaticShapeMemRefOf<[AnyType]>;
+class SlidingTensorOf<list<Type> allowedTypes>
+  : ShapedOf<allowedTypes, "sliding tensor",
+             "::mlir::scalehls::hls::SlidingTensorType">;
+
+class StreamOf<list<Type> allowedTypes>
+  : ShapedOf<allowedTypes, "stream", "::mlir::scalehls::hls::StreamType">;
+
+def AnySlidingTensor : SlidingTensorOf<[AnyType]>;
 def AnyStream : StreamOf<[AnyType]>;
+
+def AnyBuffer : StaticShapeMemRefOf<[AnyType]>;
 def AnyBufferOrStream : Type<Or<[AnyBuffer.predicate, AnyStream.predicate]>,
     "memref or stream values">;
 
@@ -115,7 +121,7 @@ def YieldOp : HLSOp<"yield", [NoMemoryEffect, ReturnLike, Terminator,
 }
 
 //===----------------------------------------------------------------------===//
-// Stream Operations
+// Sliding Tensor Operations
 //===----------------------------------------------------------------------===//
 
 def TensorInitOp : HLSOp<"tensor_init", [Pure]> {
@@ -134,92 +140,135 @@ def TensorInitOp : HLSOp<"tensor_init", [Pure]> {
   ];
 }
 
-def TensorToStreamOp : HLSOp<"tensor_to_stream",[Pure]> {
-  let summary = "Convert a tensor to a stream channel";
+def TensorToSlidingTensorOp : HLSOp<"tensor_to_stensor",[Pure]> {
+  let summary = "Convert a tensor to a sliding tensor";
 
   let arguments = (ins AnyRankedTensor:$tensor);
-  let results = (outs AnyStream:$stream);
+  let results = (outs AnySlidingTensor:$sTensor);
   let assemblyFormat = [{
-    $tensor attr-dict `:` functional-type($tensor, $stream)
-  }];
-
-  let hasVerifier = 1;
-  let hasFolder = 1;
-}
-
-def StreamToTensorOp : HLSOp<"stream_to_tensor", [Pure]> {
-  let summary = "Convert a stream channel to a tensor";
-
-  let arguments = (ins AnyStream:$stream);
-  let results = (outs AnyRankedTensor:$tensor);
-  let assemblyFormat = [{
-    $stream attr-dict `:` functional-type($stream, $tensor)
-  }];
-
-  let hasVerifier = 1;
-}
-
-def StreamOp : HLSOp<"stream", [
-      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
-  let summary = "Declare a stream channel";
-
-  let results = (outs AnyStream:$channel);
-  let assemblyFormat = "attr-dict `:` type($channel)";
-
-  let hasVerifier = 1;
-}
-
-def StreamReadOp : HLSOp<"stream_read", [
-    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
-  let summary = "Read a stream channel";
-  let description = [{
-    Read/pop a value from a stream channel. The absence of the result indicates
-    the popped value is dropped. Each stream channel can be read multiple times.
-  }];
-
-  let arguments = (ins AnyStream:$channel);
-  let results = (outs Optional<AnyType>:$result);
-  let assemblyFormat = [{
-    $channel attr-dict `:` functional-type($channel, $result)
-  }];
-
-  let hasVerifier = 1;
-}
-
-def StreamWriteOp : HLSOp<"stream_write", [
-    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
-  let summary = "Write a stream channel";
-  let description = [{
-    Write/push a value to a stream channel. Each stream channel can only be
-    written once.
-  }];
-
-  let arguments = (ins AnyStream:$channel, AnyType:$value);
-  let assemblyFormat = [{
-    $value `to` $channel attr-dict `:` functional-type($value, $channel)
-  }];
-
-  let hasVerifier = 1;
-}
-
-def StreamReassociateOp : HLSOp<"stream_reassociate", [Pure,
-      DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
-  let summary = "Reassociate the shape and/or iteration of a stream channel";
-
-  let arguments = (ins AnyStream:$input, UnitAttr:$expandShape,
-        IndexListArrayAttr:$shapeReassociation, UnitAttr:$expandIteration,
-        IndexListArrayAttr:$iterationReassociation);
-  let results = (outs AnyStream:$output);
-  let assemblyFormat = [{
-    $input (`expand` $expandShape^):(`collapse`)? `shape` $shapeReassociation
-    (`expand` $expandIteration^):(`collapse`)? `iteration`
-    $iterationReassociation attr-dict `:` functional-type($input, $output)
+    $tensor attr-dict `:` functional-type(operands, results)
   }];
 
   let hasVerifier = 1;
   let hasFolder = 1;
 
   let extraClassDeclaration = [{
+    RankedTensorType getTensorType() { return getTensor().getType(); }
+    SlidingTensorType getSTensorType() { return getSTensor().getType(); }
+  }];
+}
+
+def SlidingTensorToTensorOp : HLSOp<"stensor_to_tensor", [Pure]> {
+  let summary = "Convert a sliding tensor to a tensor";
+
+  let arguments = (ins AnySlidingTensor:$sTensor);
+  let results = (outs AnyRankedTensor:$tensor);
+  let assemblyFormat = [{
+    $sTensor attr-dict `:` functional-type(operands, results)
+  }];
+
+  let hasVerifier = 1;
+
+  let extraClassDeclaration = [{
+    RankedTensorType getTensorType() { return getTensor().getType(); }
+    SlidingTensorType getSTensorType() { return getSTensor().getType(); }
+  }];
+}
+
+def SlidingTensorInitOp : HLSOp<"stensor_init", [Pure]> {
+  let summary = "Initiate a sliding tensor";
+
+  let results = (outs AnySlidingTensor:$sTensor);
+  let assemblyFormat = "attr-dict `:` type(results)";
+}
+
+def SlidingTensorPullOp : HLSOp<"stensor_pull", [Pure]> {
+  let summary = "Pull a sliding tensor";
+  let description = [{
+    This is a payload-carried operation, which means the status-updated sliding
+    tensor is explicitly returned as the result of the operation.
+  }];
+
+  let arguments = (ins AnySlidingTensor:$sTensor);
+  let results = (outs AnyRankedTensor:$window, AnySlidingTensor:$pulledSTensor);
+  let assemblyFormat = [{
+    $sTensor attr-dict `:` functional-type(operands, results)
+  }];
+
+  let hasVerifier = 1;
+
+  let extraClassDeclaration = [{
+    SlidingTensorType getSTensorType() { return getSTensor().getType(); }
+    RankedTensorType getWindowType() { return getWindow().getType(); }
+  }];
+}
+
+def SlidingTensorPushOp : HLSOp<"stensor_push", [Pure]> {
+  let summary = "Push a sliding tensor and return the pushed sliding tensor";
+  let description = [{
+    This is a payload-carried operation, which means the status-updated sliding
+    tensor is explicitly returned as the result of the operation.
+  }];
+
+  let arguments = (ins AnySlidingTensor:$sTensor, AnyRankedTensor:$window);
+  let results = (outs AnySlidingTensor:$pushedSTensor);
+  let assemblyFormat = [{
+    $window `to` $sTensor attr-dict `:` functional-type(operands, results)
+  }];
+
+  let hasVerifier = 1;
+
+  let extraClassDeclaration = [{
+    SlidingTensorType getSTensorType() { return getSTensor().getType(); }
+    RankedTensorType getWindowType() { return getWindow().getType(); }
+  }];
+}
+
+def SlidingTensorBufferOp : HLSOp<"stensor_buffer", [Pure]> {
+  let summary = "Buffer a sliding tensor before the specified loop and dim";
+
+  let arguments = (ins AnySlidingTensor:$input, TypeAttr:$bufferElementType,
+      DenseI64ArrayAttr:$bufferShape, SI64Attr:$loopIndex, SI64Attr:$dimIndex);
+  let results = (outs AnySlidingTensor:$output);
+  let assemblyFormat = [{
+    $input `,` $bufferElementType $bufferShape `before` `loop` $loopIndex `dim`
+    $dimIndex attr-dict `:` functional-type(operands, results)
+  }];
+
+  let hasVerifier = 1;
+  let hasFolder = 1;
+
+  let extraClassDeclaration = [{
+    SlidingTensorType getInputType() { return getInput().getType(); }
+    SlidingTensorType getOutputType() { return getOutput().getType(); }
+  }];
+}
+
+class BaseReassociateOp<string mnemonic, list<Trait> traits = []> :
+    HLSOp<mnemonic, !listconcat(traits, [Pure])> {
+  let description = [{
+    This is a view-like operation, which means the status of the sliding tensor
+    is not changed during the reassociation. The shape expand/collapse is
+    similar to the regular tensor shape expand/collapse, while the iteration
+    space expand/collapse can be considered as the loop split/merge of the
+    iteration loop nest.
+  }];
+
+  let arguments = (ins AnySlidingTensor:$input, UnitAttr:$expandShape,
+      IndexListArrayAttr:$shapeReassociation, UnitAttr:$expandIteration,
+      IndexListArrayAttr:$iterationReassociation);
+  let results = (outs AnySlidingTensor:$output);
+
+  let assemblyFormat = [{
+    $input (`expand` $expandShape^):(`collapse`)? `shape` $shapeReassociation
+    (`expand` $expandIteration^):(`collapse`)? `iteration`
+    $iterationReassociation attr-dict `:` functional-type(operands, results)
+  }];
+
+  let hasVerifier = 1;
+  let hasFolder = 1;
+
+  code commonExtraClassDeclaration = [{
     static SmallVector<ReassociationIndices, 4> 
     getReassociationIndices(ArrayAttr reassociationAttr) {
       SmallVector<ReassociationIndices, 4> reassociationIndices;
@@ -238,49 +287,111 @@ def StreamReassociateOp : HLSOp<"stream_reassociate", [Pure,
       return getReassociationIndices(getIterationReassociation());
     }
 
-    StreamType getInputType() { return getInput().getType(); }
-    StreamType getOutputType() { return getOutput().getType(); }
+    SlidingTensorType getInputType() { return getInput().getType(); }
+    SlidingTensorType getOutputType() { return getOutput().getType(); }
   }];
 }
 
-def StreamBufferOp : HLSOp<"stream_buffer", [Pure,
-      DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
-  let summary = "Buffer a stream channel at a specific position";
+def SlidingTensorReassociateOp : BaseReassociateOp<"stensor_reassociate"> {
+  let summary = "Reassociate the shape and/or iteration of a sliding tensor";
 
-  let arguments = (ins AnyStream:$input, TypeAttr:$bufferElementType,
-      DenseI64ArrayAttr:$bufferShape, SI64Attr:$loopIndex, SI64Attr:$dimIndex);
-  let results = (outs AnyStream:$output);
+  let extraClassDeclaration = commonExtraClassDeclaration;
+}
+
+//===----------------------------------------------------------------------===//
+// Stream Operations
+//===----------------------------------------------------------------------===//
+
+def SlidingTensorToStreamOp : HLSOp<"stensor_to_stream",[Pure]> {
+  let summary = "Convert a sliding tensor to a stream channel";
+
+  let arguments = (ins AnySlidingTensor:$sTensor);
+  let results = (outs AnyStream:$stream);
   let assemblyFormat = [{
-    $input `,` $bufferElementType $bufferShape `before` `loop` $loopIndex `dim`
-    $dimIndex attr-dict `:` functional-type($input, $output)
+    $sTensor attr-dict `:` functional-type(operands, results)
   }];
 
   let hasVerifier = 1;
   let hasFolder = 1;
 
   let extraClassDeclaration = [{
-    StreamType getInputType() { return getInput().getType(); }
-    StreamType getOutputType() { return getOutput().getType(); }
+    StreamType getStreamType() { return getStream().getType(); }
+    SlidingTensorType getSTensorType() { return getSTensor().getType(); }
   }];
 }
 
-def StreamCastOp : HLSOp<"stream_cast", [Pure,
-      DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
-  let summary = "Cast a stream channel to a different type";
+def StreamToSlidingTensorOp : HLSOp<"stream_to_stensor", [Pure]> {
+  let summary = "Convert a stream channel to a sliding tensor";
 
-  let arguments = (ins AnyStream:$input);
-  let results = (outs AnyStream:$output);
+  let arguments = (ins AnyStream:$stream);
+  let results = (outs AnySlidingTensor:$sTensor);
   let assemblyFormat = [{
-    $input attr-dict `:` functional-type($input, $output)
+    $stream attr-dict `:` functional-type(operands, results)
   }];
 
   let hasVerifier = 1;
-  let hasFolder = 1;
 
   let extraClassDeclaration = [{
-    StreamType getInputType() { return getInput().getType(); }
-    StreamType getOutputType() { return getOutput().getType(); }
+    StreamType getStreamType() { return getStream().getType(); }
+    SlidingTensorType getSTensorType() { return getSTensor().getType(); }
   }];
+}
+
+def StreamOp : HLSOp<"stream", [
+    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+  let summary = "Declare a stream channel";
+
+  let results = (outs AnyStream:$stream);
+  let assemblyFormat = "attr-dict `:` type(results)";
+
+  let hasVerifier = 1;
+}
+
+def StreamPullOp : HLSOp<"stream_pull", [
+    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+  let summary = "Pull a stream channel";
+  let description = [{
+    This is a memory-load effect operation on the stream channel.
+  }];
+
+  let arguments = (ins AnyStream:$stream);
+  let results = (outs AnyType:$element);
+  let assemblyFormat = [{
+    $stream attr-dict `:` functional-type(operands, results)
+  }];
+
+  let hasVerifier = 1;
+
+  let extraClassDeclaration = [{
+    StreamType getStreamType() { return getStream().getType(); }
+    Type getElementType() { return getElement().getType(); }
+  }];
+}
+
+def StreamPushOp : HLSOp<"stream_push", [
+    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+  let summary = "Push a stream channel";
+  let description = [{
+    This is a memory-store effect operation on the stream channel.
+  }];
+
+  let arguments = (ins AnyStream:$stream, AnyType:$element);
+  let assemblyFormat = [{
+    $element `to` $stream attr-dict `:` functional-type(operands, results)
+  }];
+
+  let hasVerifier = 1;
+
+  let extraClassDeclaration = [{
+    StreamType getStreamType() { return getStream().getType(); }
+    Type getElementType() { return getElement().getType(); }
+  }];
+}
+
+def StreamReassociateOp : BaseReassociateOp<"stream_reassociate"> {
+  let summary = "Reassociate the shape and/or iteration of a stream channel";
+
+  let extraClassDeclaration = commonExtraClassDeclaration;
 }
 
 //===----------------------------------------------------------------------===//

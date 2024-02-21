@@ -198,136 +198,151 @@ LogicalResult TensorInitOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
-// TensorToStreamOp
+// TensorToSlidingTensorOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult TensorToStreamOp::verify() {
-  if (!getStream().getType().isConvertableWith(getTensor().getType()))
-    return emitOpError() << "stream type is not convertable with tensor type, "
-                            "stream type has an integral shape of ("
-                         << getStream().getType().getShape() << ")";
+LogicalResult TensorToSlidingTensorOp::verify() {
+  if (!getSTensorType().isConvertableWith(getTensorType()))
+    return emitOpError(
+        "sliding tensor type is not convertable with tensor type");
   return success();
 }
 
-OpFoldResult TensorToStreamOp::fold(FoldAdaptor adaptor) {
-  if (auto streamToTensor = getTensor().getDefiningOp<StreamToTensorOp>())
-    if (streamToTensor.getStream().getType() == getStream().getType())
-      return streamToTensor.getStream();
+OpFoldResult TensorToSlidingTensorOp::fold(FoldAdaptor adaptor) {
+  if (auto toTensor = getTensor().getDefiningOp<SlidingTensorToTensorOp>())
+    if (toTensor.getSTensor().getType() == getSTensor().getType())
+      return toTensor.getSTensor();
   return {};
 }
 
 //===----------------------------------------------------------------------===//
-// StreamToTensorOp
+// SlidingTensorToTensorOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult StreamToTensorOp::verify() {
-  if (!getStream().getType().isConvertableWith(getTensor().getType()))
-    return emitOpError() << "stream type is not convertable with tensor type, "
-                            "stream type has an integral shape of ("
-                         << getStream().getType().getShape() << ")";
+LogicalResult SlidingTensorToTensorOp::verify() {
+  if (!getSTensorType().isConvertableWith(getTensorType()))
+    return emitOpError(
+        "tensor type is not convertable with sliding tensor type");
   return success();
 }
 
 //===----------------------------------------------------------------------===//
-// StreamOp
+// SlidingTensorPullOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult StreamOp::verify() {
-  unsigned numWrites = 0;
-  for (auto user : (*this)->getUsers())
-    if (isa<StreamWriteOp>(user))
-      numWrites++;
-  if (numWrites > 1)
-    return emitOpError() << "stream is written more than once";
-  return success();
-}
+static LogicalResult verifyTripCountsAndSteps(Operation *op, Value source) {
+  auto sourceBlock = source.getParentBlock();
+  if (isa<BlockArgument>(source))
+    sourceBlock = getUntiledSource(source).getParentBlock();
 
-void StreamOp::getEffects(
-    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
-        &effects) {
-  effects.emplace_back(MemoryEffects::Allocate::get(), getChannel(),
-                       SideEffects::DefaultResource::get());
-}
-
-//===----------------------------------------------------------------------===//
-// StreamReadOp
-//===----------------------------------------------------------------------===//
-
-static LogicalResult verifyTripCountsAndSteps(Operation *op, Value channel) {
-  auto loops = getSurroundingLoops(op, channel.getParentBlock());
+  auto loops = getSurroundingLoops(op, sourceBlock);
   auto tripCounts = getLoopTripCounts(loops);
   auto steps = getLoopSteps(loops);
   if (!tripCounts || !steps)
-    return op->emitOpError("iteration trip counts or steps not available");
+    return op->emitOpError("loop tripcounts or steps not available");
 
   auto stripedLoopInfo =
       llvm::make_filter_range(llvm::zip(*tripCounts, *steps), [](auto tuple) {
         return std::get<0>(tuple) != 1;
       });
 
-  auto channelType = channel.getType().cast<StreamType>();
+  auto iterativeType = cast<IterativeTypeInterface>(source.getType());
   auto stripedIterInfo = llvm::make_filter_range(
-      llvm::zip(channelType.getIterTripCounts(), channelType.getIterSteps()),
+      llvm::zip(iterativeType.getIterTripCounts(),
+                iterativeType.getIterSteps()),
       [](auto tuple) { return std::get<0>(tuple) != 1; });
 
   if (llvm::any_of(llvm::zip(stripedLoopInfo, stripedIterInfo), [](auto tuple) {
         return std::get<0>(tuple) != std::get<1>(tuple);
       })) {
-    auto diag = op->emitOpError("loop trip counts or steps doesn't align with "
-                                "stream iteration trip counts or steps\n");
-    diag << "loop trip counts: " << *tripCounts << ", steps: " << *steps
-         << "\n";
-    diag << "stream iteration trip counts: " << channelType.getIterTripCounts()
-         << ", steps: " << channelType.getIterSteps();
+    auto diag = op->emitOpError("loop tripcounts or steps doesn't align with "
+                                "iterative type tripcounts or steps\n");
+    diag << "loop tripcounts: " << *tripCounts << ", steps: " << *steps << "\n";
+    diag << "iterative tyupe tripcounts: " << iterativeType.getIterTripCounts()
+         << ", steps: " << iterativeType.getIterSteps();
     return diag;
   }
   return success();
 }
 
-LogicalResult StreamReadOp::verify() {
-  if (getResult())
-    if (getChannel().getType().getElementType() != getResult().getType())
-      return emitOpError("result type doesn't align with channel type");
-  return verifyTripCountsAndSteps(*this, getChannel());
-}
-
-void StreamReadOp::getEffects(
-    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
-        &effects) {
-  effects.emplace_back(MemoryEffects::Read::get(), getChannel(),
-                       SideEffects::DefaultResource::get());
+LogicalResult SlidingTensorPullOp::verify() {
+  if (getSTensorType().getWindowType() != getWindowType())
+    return emitOpError(
+        "sliding tensor type is not compatible with window type");
+  if (getSTensorType() != getPulledSTensor().getType())
+    return emitOpError("sliding tensor type doesn't align with pulled sliding "
+                       "tensor type");
+  return verifyTripCountsAndSteps(*this, getSTensor());
 }
 
 //===----------------------------------------------------------------------===//
-// StreamWriteOp
+// SlidingTensorPushOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult StreamWriteOp::verify() {
-  if (getChannel().getType().getElementType() != getValue().getType())
-    return emitOpError("value type doesn't align with channel type");
-  return verifyTripCountsAndSteps(*this, getChannel());
-}
-
-void StreamWriteOp::getEffects(
-    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
-        &effects) {
-  effects.emplace_back(MemoryEffects::Write::get(), getChannel(),
-                       SideEffects::DefaultResource::get());
+LogicalResult SlidingTensorPushOp::verify() {
+  if (getSTensorType().getWindowType() != getWindowType())
+    return emitOpError(
+        "sliding tensor type is not compatible with window type");
+  if (getSTensorType() != getPushedSTensor().getType())
+    return emitOpError("sliding tensor type doesn't align with pushed sliding "
+                       "tensor type");
+  return verifyTripCountsAndSteps(*this, getSTensor());
 }
 
 //===----------------------------------------------------------------------===//
-// StreamReassociateOp
+// SlidingTensorBufferOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult StreamReassociateOp::verify() {
-  if (getInputType().getDataType() != getOutputType().getDataType())
+LogicalResult SlidingTensorBufferOp::verify() {
+  auto inputType = getInputType();
+  auto outputType = getOutputType();
+  if (!inputType.isCastableWith(outputType)) {
+    auto diag = emitOpError("input and output are not castable");
+    diag << "input full shape: " << inputType.getFullShape()
+         << ", output full shape: " << outputType.getFullShape();
+    return diag;
+  }
+
+  if (getLoopIndex() > inputType.getIterRank())
+    return emitOpError("buffer loop index is out of loop range");
+
+  auto inputShape = inputType.getShape();
+  for (auto [dim, bufferSize, dimSize, inputWindowSize, outputWindowSize] :
+       llvm::zip(llvm::seq(inputShape.size()), getBufferShape(), inputShape,
+                 inputType.getShape(), outputType.getShape())) {
+    if ((int64_t)dim < getDimIndex()) {
+      if (inputWindowSize != outputWindowSize || bufferSize < inputWindowSize)
+        return emitOpError(
+            "buffer size is smaller than input/output window size");
+    } else if (bufferSize != dimSize)
+      return emitOpError(
+          "buffer size doesn't align with input/output full tensor size");
+  }
+  return success();
+}
+
+OpFoldResult SlidingTensorBufferOp::fold(FoldAdaptor adaptor) {
+  if (getInputType() == getOutputType())
+    return getInput();
+  if (auto prev = getInput().getDefiningOp<SlidingTensorBufferOp>())
+    if (prev.getInputType() == getOutputType())
+      return prev.getInput();
+  return {};
+}
+
+//===----------------------------------------------------------------------===//
+// SlidingTensorReassociateOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult SlidingTensorReassociateOp::verify() {
+  if (getInputType().getElementType() != getOutputType().getElementType())
     return emitOpError("input and output data type doesn't match");
 
   // Verify the shape reassociation.
-  auto lowShapeType = getExpandShape() ? getInputType() : getOutputType();
-  auto highShapeType = getExpandShape() ? getOutputType() : getInputType();
-  auto lowShape = lowShapeType.getShape();
-  auto highShape = highShapeType.getShape();
+  auto lowShape =
+      getExpandShape() ? getInputType().getShape() : getOutputType().getShape();
+  auto highShape =
+      getExpandShape() ? getOutputType().getShape() : getInputType().getShape();
   auto shapeReassociation = getShapeReassociationIndices();
   if (shapeReassociation.size() != lowShape.size())
     return emitOpError("shape reassociation has invalid size");
@@ -365,73 +380,97 @@ LogicalResult StreamReassociateOp::verify() {
   return success();
 }
 
-static OpFoldResult foldStreamViewLikeInterface(StreamViewLikeInterface op) {
-  if (op.getInput().getType() == op.getOutput().getType())
-    return op.getInput();
-  if (auto prevView = op.getInput().getDefiningOp<StreamViewLikeInterface>())
-    if (prevView.getInputType() == op.getOutput().getType())
-      return prevView.getInput();
+OpFoldResult SlidingTensorReassociateOp::fold(FoldAdaptor adaptor) {
+  if (getInputType() == getOutputType())
+    return getInput();
+  if (auto prev = getInput().getDefiningOp<SlidingTensorReassociateOp>())
+    if (prev.getInputType() == getOutputType())
+      return prev.getInput();
   return {};
 }
 
-OpFoldResult StreamReassociateOp::fold(FoldAdaptor adaptor) {
-  return foldStreamViewLikeInterface(*this);
-}
-
 //===----------------------------------------------------------------------===//
-// StreamBufferOp
+// SlidingTensorToStreamOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult StreamBufferOp::verify() {
-  auto inputType = getInput().getType();
-  auto outputType = getOutput().getType();
-  if (!inputType.isCastableWith(outputType)) {
-    auto diag = emitOpError("input and output are not castable");
-    diag << "input shape: " << inputType.getShape()
-         << ", output shape: " << outputType.getShape();
-    return diag;
-  }
-
-  if (getLoopIndex() > inputType.getIterRank())
-    return emitOpError("buffer loop index is out of loop range");
-
-  auto inputShape = inputType.getShape();
-  for (auto [dim, bufferSize, dimSize, inputTileSize, outputTileSize] :
-       llvm::zip(llvm::seq(inputShape.size()), getBufferShape(), inputShape,
-                 inputType.getElementShape(), outputType.getElementShape())) {
-    if ((int64_t)dim < getDimIndex()) {
-      if (inputTileSize != outputTileSize || bufferSize < inputTileSize)
-        return emitOpError(
-            "buffer size is smaller than input/output tile size");
-    } else if (bufferSize != dimSize)
-      return emitOpError(
-          "buffer size doesn't align with input/output tensor size");
-  }
+LogicalResult SlidingTensorToStreamOp::verify() {
+  if (!getStreamType().isConvertableWith(getSTensorType()))
+    return emitOpError()
+           << "stream type is not convertable with sliding tensor type";
   return success();
 }
 
-OpFoldResult StreamBufferOp::fold(FoldAdaptor adaptor) {
-  return foldStreamViewLikeInterface(*this);
+OpFoldResult SlidingTensorToStreamOp::fold(FoldAdaptor adaptor) {
+  if (auto toSTensor = getSTensor().getDefiningOp<StreamToSlidingTensorOp>())
+    if (toSTensor.getStreamType() == getStreamType())
+      return toSTensor.getStream();
+  return {};
 }
 
 //===----------------------------------------------------------------------===//
-// StreamCastOp
+// StreamToSlidingTensorOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult StreamCastOp::verify() {
-  auto inputType = getInput().getType();
-  auto outputType = getOutput().getType();
-  if (!inputType.isCastableWith(outputType)) {
-    auto diag = emitOpError("input and output are not castable");
-    diag << "input shape: " << inputType.getShape()
-         << ", output shape: " << outputType.getShape();
-    return diag;
-  }
+LogicalResult StreamToSlidingTensorOp::verify() {
+  if (!getStreamType().isConvertableWith(getSTensorType()))
+    return emitOpError()
+           << "stream type is not convertable with sliding tensor type";
   return success();
 }
 
-OpFoldResult StreamCastOp::fold(FoldAdaptor adaptor) {
-  return foldStreamViewLikeInterface(*this);
+//===----------------------------------------------------------------------===//
+// StreamOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult StreamOp::verify() {
+  unsigned numWrites = 0;
+  for (auto user : (*this)->getUsers())
+    if (isa<StreamPushOp>(user))
+      numWrites++;
+  if (numWrites > 1)
+    return emitOpError() << "stream is written more than once";
+  return success();
+}
+
+void StreamOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  effects.emplace_back(MemoryEffects::Allocate::get(), getStream(),
+                       SideEffects::DefaultResource::get());
+}
+
+//===----------------------------------------------------------------------===//
+// StreamPullOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult StreamPullOp::verify() {
+  if (getStreamType().getElementType() != getElementType())
+    return emitOpError("element type doesn't align with stream type");
+  return verifyTripCountsAndSteps(*this, getStream());
+}
+
+void StreamPullOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  effects.emplace_back(MemoryEffects::Read::get(), getStream(),
+                       SideEffects::DefaultResource::get());
+}
+
+//===----------------------------------------------------------------------===//
+// StreamPushOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult StreamPushOp::verify() {
+  if (getStreamType().getElementType() != getElementType())
+    return emitOpError("element type doesn't align with stream type");
+  return verifyTripCountsAndSteps(*this, getStream());
+}
+
+void StreamPushOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  effects.emplace_back(MemoryEffects::Write::get(), getStream(),
+                       SideEffects::DefaultResource::get());
 }
 
 //===----------------------------------------------------------------------===//

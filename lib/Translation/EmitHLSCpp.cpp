@@ -290,8 +290,8 @@ public:
   /// HLS dialect operation emitters.
   void emitConstBuffer(ConstBufferOp op);
   void emitStreamChannel(StreamOp op);
-  void emitStreamRead(StreamReadOp op);
-  void emitStreamWrite(StreamWriteOp op);
+  void emitStreamRead(StreamPullOp op);
+  void emitStreamWrite(StreamPushOp op);
   template <typename AssignOpType> void emitAssign(AssignOpType op);
   void emitAffineSelect(AffineSelectOp op);
 
@@ -464,8 +464,8 @@ public:
   }
   bool visitOp(ConstBufferOp op) { return emitter.emitConstBuffer(op), true; }
   bool visitOp(StreamOp op) { return emitter.emitStreamChannel(op), true; }
-  bool visitOp(StreamReadOp op) { return emitter.emitStreamRead(op), true; }
-  bool visitOp(StreamWriteOp op) { return emitter.emitStreamWrite(op), true; }
+  bool visitOp(StreamPullOp op) { return emitter.emitStreamRead(op), true; }
+  bool visitOp(StreamPushOp op) { return emitter.emitStreamWrite(op), true; }
   bool visitOp(AffineSelectOp op) { return emitter.emitAffineSelect(op), true; }
 
   /// Function operations.
@@ -698,28 +698,28 @@ void ModuleEmitter::emitConstBuffer(ConstBufferOp op) {
 
 void ModuleEmitter::emitStreamChannel(StreamOp op) {
   indent();
-  emitValue(op.getChannel());
+  emitValue(op.getStream());
   os << ";";
   emitInfoAndNewLine(op);
 }
 
-void ModuleEmitter::emitStreamRead(StreamReadOp op) {
+void ModuleEmitter::emitStreamRead(StreamPullOp op) {
   indent();
   if (op.getResult()) {
     emitValue(op.getResult());
     os << " = ";
   }
-  emitValue(op.getChannel());
+  emitValue(op.getStream());
   os << ".read(";
   os << ");";
   emitInfoAndNewLine(op);
 }
 
-void ModuleEmitter::emitStreamWrite(StreamWriteOp op) {
+void ModuleEmitter::emitStreamWrite(StreamPushOp op) {
   indent();
-  emitValue(op.getChannel());
+  emitValue(op.getStream());
   os << ".write(";
-  emitValue(op.getValue());
+  emitValue(op.getElement());
   os << ");";
   emitInfoAndNewLine(op);
 }

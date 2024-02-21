@@ -8,5 +8,6 @@ add_mlir_dialect_library(MLIRScaleHLSHLSDialect
   MLIRHLSOpsIncGen
   MLIRScaleHLSHLSEnumsIncGen
   MLIRScaleHLSHLSAttributesIncGen
-  MLIRScaleHLSHLSInterfacesIncGen
+  MLIRScaleHLSHLSOpsInterfacesIncGen
+  MLIRScaleHLSHLSTypesInterfacesIncGen
 )
