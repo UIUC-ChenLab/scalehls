@@ -246,20 +246,19 @@ static LogicalResult verifyTripCountsAndSteps(Operation *op, Value source) {
         return std::get<0>(tuple) != 1;
       });
 
-  auto iterativeType = cast<IterativeTypeInterface>(source.getType());
+  auto slidingType = cast<SlidingTypeInterface>(source.getType());
   auto stripedIterInfo = llvm::make_filter_range(
-      llvm::zip(iterativeType.getIterTripCounts(),
-                iterativeType.getIterSteps()),
+      llvm::zip(slidingType.getIterTripCounts(), slidingType.getIterSteps()),
       [](auto tuple) { return std::get<0>(tuple) != 1; });
 
   if (llvm::any_of(llvm::zip(stripedLoopInfo, stripedIterInfo), [](auto tuple) {
         return std::get<0>(tuple) != std::get<1>(tuple);
       })) {
     auto diag = op->emitOpError("loop tripcounts or steps doesn't align with "
-                                "iterative type tripcounts or steps\n");
+                                "sliding type tripcounts or steps\n");
     diag << "loop tripcounts: " << *tripCounts << ", steps: " << *steps << "\n";
-    diag << "iterative tyupe tripcounts: " << iterativeType.getIterTripCounts()
-         << ", steps: " << iterativeType.getIterSteps();
+    diag << "sliding type tripcounts: " << slidingType.getIterTripCounts()
+         << ", steps: " << slidingType.getIterSteps();
     return diag;
   }
   return success();
@@ -294,8 +293,12 @@ LogicalResult SlidingTensorPushOp::verify() {
 //===----------------------------------------------------------------------===//
 
 LogicalResult SlidingTensorBufferOp::verify() {
-  auto inputType = getInputType();
-  auto outputType = getOutputType();
+  auto inputType = getInputSTensorType();
+  auto outputType = getOutputSTensorType();
+  if (getInitSTensor().getType() = outputType)
+    return emitOpError("initial sliding tensor type doesn't align with output "
+                       "sliding tensor type");
+
   if (!inputType.isCastableWith(outputType)) {
     auto diag = emitOpError("input and output are not castable");
     diag << "input full shape: " << inputType.getFullShape()
@@ -321,29 +324,21 @@ LogicalResult SlidingTensorBufferOp::verify() {
   return success();
 }
 
-OpFoldResult SlidingTensorBufferOp::fold(FoldAdaptor adaptor) {
-  if (getInputType() == getOutputType())
-    return getInput();
-  if (auto prev = getInput().getDefiningOp<SlidingTensorBufferOp>())
-    if (prev.getInputType() == getOutputType())
-      return prev.getInput();
-  return {};
-}
+OpFoldResult SlidingTensorBufferOp::fold(FoldAdaptor adaptor) { return {}; }
 
 //===----------------------------------------------------------------------===//
 // SlidingTensorReassociateOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult SlidingTensorReassociateOp::verify() {
-  if (getInputType().getElementType() != getOutputType().getElementType())
-    return emitOpError("input and output data type doesn't match");
-
+template <typename OpTy>
+LogicalResult verifyReassociation(OpTy op, SlidingTypeInterface inputType,
+                                  SlidingTypeInterface outputType) {
   // Verify the shape reassociation.
   auto lowShape =
-      getExpandShape() ? getInputType().getShape() : getOutputType().getShape();
+      op.getExpandShape() ? inputType.getShape() : outputType.getShape();
   auto highShape =
-      getExpandShape() ? getOutputType().getShape() : getInputType().getShape();
-  auto shapeReassociation = getShapeReassociationIndices();
+      op.getExpandShape() ? outputType.getShape() : inputType.getShape();
+  auto shapeReassociation = op.getShapeReassociationIndices();
   if (shapeReassociation.size() != lowShape.size())
     return emitOpError("shape reassociation has invalid size");
 
@@ -352,18 +347,16 @@ LogicalResult SlidingTensorReassociateOp::verify() {
     for (auto index : indices)
       highDimSizeProduct *= highShape[index];
     if (lowDimSize != highDimSizeProduct)
-      return emitOpError(
+      return op.emitOpError(
           "shape reassociation doesn't align with input/output shape");
   }
 
   // Verify the iteration reassociation.
-  auto lowIterationType =
-      getExpandIteration() ? getInputType() : getOutputType();
-  auto highIterationType =
-      getExpandIteration() ? getOutputType() : getInputType();
+  auto lowIterationType = op.getExpandIteration() ? inputType : outputType;
+  auto highIterationType = op.getExpandIteration() ? outputType : inputType;
   auto iterationReassociation = getIterationReassociationIndices();
   if ((int64_t)iterationReassociation.size() != lowIterationType.getIterRank())
-    return emitOpError("iteration reassociation has invalid size");
+    return op.emitOpError("iteration reassociation has invalid size");
 
   for (auto [indices, lowTripCount, lowStep] :
        llvm::zip(iterationReassociation, lowIterationType.getIterTripCounts(),
@@ -374,48 +367,92 @@ LogicalResult SlidingTensorReassociateOp::verify() {
       highStepProduct *= highIterationType.getIterSteps()[index];
     }
     if (lowTripCount != highTripCountProduct || lowStep != highStepProduct)
-      return emitOpError("iteration reassociation doesn't align with "
-                         "input/output iteration trip counts or steps");
+      return op.emitOpError("iteration reassociation doesn't align with "
+                            "input/output iteration trip counts or steps");
   }
   return success();
 }
 
+LogicalResult SlidingTensorReassociateOp::verify() {
+  auto inputType = getInputSTensorType();
+  auto outputType = getOutputSTensorType();
+  if (inputType.getElementType() != outputType.getElementType())
+    return emitOpError("input and output data type doesn't match");
+
+  return verifyReassociation(*this, inputType, outputType);
+}
+
 OpFoldResult SlidingTensorReassociateOp::fold(FoldAdaptor adaptor) {
-  if (getInputType() == getOutputType())
-    return getInput();
-  if (auto prev = getInput().getDefiningOp<SlidingTensorReassociateOp>())
-    if (prev.getInputType() == getOutputType())
-      return prev.getInput();
+  if (getInputSTensorType() == getOutputSTensorType())
+    return getInputSTensor();
+  if (auto prev = getInputSTensor().getDefiningOp<SlidingTensorReassociateOp>())
+    if (prev.getInputSTensorType() == getOutputSTensorType())
+      return prev.getInputSTensor();
   return {};
 }
 
 //===----------------------------------------------------------------------===//
-// SlidingTensorToStreamOp
+// SlidingTensorToSlidingMemrefOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult SlidingTensorToStreamOp::verify() {
-  if (!getStreamType().isConvertableWith(getSTensorType()))
+LogicalResult SlidingTensorToSlidingMemrefOp::verify() {
+  if (!getSMemrefType().isConvertableWith(getSTensorType()))
     return emitOpError()
-           << "stream type is not convertable with sliding tensor type";
+           << "sliding memref type is not convertable with sliding tensor type";
   return success();
 }
 
-OpFoldResult SlidingTensorToStreamOp::fold(FoldAdaptor adaptor) {
-  if (auto toSTensor = getSTensor().getDefiningOp<StreamToSlidingTensorOp>())
-    if (toSTensor.getStreamType() == getStreamType())
-      return toSTensor.getStream();
+OpFoldResult SlidingTensorToSlidingMemrefOp::fold(FoldAdaptor adaptor) {
+  if (auto toSTensor =
+          getSTensor().getDefiningOp<SlidingMemrefToSlidingTensorOp>())
+    if (toSTensor.getSMemrefType() == getSMemrefType())
+      return toSTensor.getSMemref();
   return {};
 }
 
 //===----------------------------------------------------------------------===//
-// StreamToSlidingTensorOp
+// SlidingMemrefToSlidingTensorOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult StreamToSlidingTensorOp::verify() {
-  if (!getStreamType().isConvertableWith(getSTensorType()))
+LogicalResult SlidingMemrefToSlidingTensorOp::verify() {
+  if (!getSMemrefType().isConvertableWith(getSTensorType()))
     return emitOpError()
-           << "stream type is not convertable with sliding tensor type";
+           << "sliding memref type is not convertable with sliding tensor type";
   return success();
+}
+
+//===----------------------------------------------------------------------===//
+// SlidingMemrefPullOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult SlidingMemrefPullOp::verify() {
+  if (getSMemrefType().getWindowType() != getWindowType())
+    return emitOpError(
+        "sliding tensor type is not compatible with window type");
+  return verifyTripCountsAndSteps(*this, getSMemref());
+}
+
+//===----------------------------------------------------------------------===//
+// SlidingMemrefPushOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult SlidingMemrefPushOp::verify() {
+  if (getSMemrefType().getWindowType() != getWindowType())
+    return emitOpError(
+        "sliding tensor type is not compatible with window type");
+  return verifyTripCountsAndSteps(*this, getSMemref());
+}
+
+//===----------------------------------------------------------------------===//
+// SlidingMemrefReassociateOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult SlidingMemrefReassociateOp::verify() {
+  auto inputType = getInputSMemrefType();
+  auto outputType = getOutputSMemrefType();
+  if (inputType.getElementType() != outputType.getElementType())
+    return emitOpError("input and output data type doesn't match");
+  return verifyReassociation(*this, inputType, outputType);
 }
 
 //===----------------------------------------------------------------------===//
@@ -446,7 +483,7 @@ void StreamOp::getEffects(
 LogicalResult StreamPullOp::verify() {
   if (getStreamType().getElementType() != getElementType())
     return emitOpError("element type doesn't align with stream type");
-  return verifyTripCountsAndSteps(*this, getStream());
+  return success();
 }
 
 void StreamPullOp::getEffects(
@@ -463,7 +500,7 @@ void StreamPullOp::getEffects(
 LogicalResult StreamPushOp::verify() {
   if (getStreamType().getElementType() != getElementType())
     return emitOpError("element type doesn't align with stream type");
-  return verifyTripCountsAndSteps(*this, getStream());
+  return success();
 }
 
 void StreamPushOp::getEffects(

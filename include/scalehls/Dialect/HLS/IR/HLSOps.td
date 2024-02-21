@@ -7,7 +7,6 @@
 #ifndef SCALEHLS_DIALECT_HLS_HLSOPS_TD
 #define SCALEHLS_DIALECT_HLS_HLSOPS_TD
 
-include "scalehls/Dialect/HLS/IR/HLSInterfaces.td"
 include "scalehls/Dialect/HLS/IR/HLSTypes.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
@@ -22,27 +21,30 @@ class HLSOp<string mnemonic, list<Trait> traits = []> :
 // Constraints
 //===----------------------------------------------------------------------===//
 
-class ShapedOf<list<Type> allowedTypes, string summary, string cppClassName>
-  : Type<And<[
-      CPred<"::llvm::isa<" # cppClassName # ">($_self)">,
-      Concat<
-        "[](::mlir::Type elementType) { return ",
-        SubstLeaves<"$_self", "elementType",
-        AnyTypeOf<allowedTypes>.predicate>,
-        "; }(::llvm::cast<" # cppClassName # ">($_self).getElementType())"
-      >]>,
-      summary # " of " # AnyTypeOf<allowedTypes>.summary # " values",
-      cppClassName
-    >;
+class ContainerTypeOf<list<Type> allowedTypes, string summary,
+                      string cppClassName> : Type<
+    And<[CPred<"::llvm::isa<" # cppClassName # ">($_self)">, Concat<
+      "[](::mlir::Type elementType) { return ",
+      SubstLeaves<"$_self", "elementType",
+      AnyTypeOf<allowedTypes>.predicate>,
+      "; }(::llvm::cast<" # cppClassName # ">($_self).getElementType())"
+    >]>,
+    summary # " of " # AnyTypeOf<allowedTypes>.summary # " values",
+    cppClassName
+  >;
 
 class SlidingTensorOf<list<Type> allowedTypes>
-  : ShapedOf<allowedTypes, "sliding tensor",
+  : ContainerTypeOf<allowedTypes, "sliding tensor",
              "::mlir::scalehls::hls::SlidingTensorType">;
+def AnySlidingTensor : SlidingTensorOf<[AnyType]>;
+
+class SlidingMemrefOf<list<Type> allowedTypes>
+  : ContainerTypeOf<allowedTypes, "sliding memref",
+             "::mlir::scalehls::hls::SlidingMemrefType">;
+def AnySlidingMemref : SlidingMemrefOf<[AnyType]>;
 
 class StreamOf<list<Type> allowedTypes>
-  : ShapedOf<allowedTypes, "stream", "::mlir::scalehls::hls::StreamType">;
-
-def AnySlidingTensor : SlidingTensorOf<[AnyType]>;
+  : ContainerTypeOf<allowedTypes, "stream", "::mlir::scalehls::hls::StreamType">;
 def AnyStream : StreamOf<[AnyType]>;
 
 def AnyBuffer : StaticShapeMemRefOf<[AnyType]>;
@@ -227,24 +229,30 @@ def SlidingTensorPushOp : HLSOp<"stensor_push", [Pure]> {
 def SlidingTensorBufferOp : HLSOp<"stensor_buffer", [Pure]> {
   let summary = "Buffer a sliding tensor before the specified loop and dim";
 
-  let arguments = (ins AnySlidingTensor:$input, TypeAttr:$bufferElementType,
+  let arguments = (ins AnySlidingTensor:$inputSTensor, 
+      AnySlidingTensor:$initSTensor, TypeAttr:$bufferElementType,
       DenseI64ArrayAttr:$bufferShape, SI64Attr:$loopIndex, SI64Attr:$dimIndex);
-  let results = (outs AnySlidingTensor:$output);
+  let results = (outs AnySlidingTensor:$outputSTensor);
   let assemblyFormat = [{
-    $input `,` $bufferElementType $bufferShape `before` `loop` $loopIndex `dim`
-    $dimIndex attr-dict `:` functional-type(operands, results)
+    $inputSTensor `into` $initSTensor `,` $bufferElementType $bufferShape
+    `before` `loop` $loopIndex `dim` $dimIndex attr-dict `:`
+    functional-type(operands, results)
   }];
 
   let hasVerifier = 1;
   let hasFolder = 1;
 
   let extraClassDeclaration = [{
-    SlidingTensorType getInputType() { return getInput().getType(); }
-    SlidingTensorType getOutputType() { return getOutput().getType(); }
+    SlidingTensorType getInputSTensorType() {
+      return getInputSTensor().getType();
+    }
+    SlidingTensorType getOutputSTensorType() {
+      return getOutputSTensor().getType();
+    }
   }];
 }
 
-class BaseReassociateOp<string mnemonic, list<Trait> traits = []> :
+class ReassociateOp<string mnemonic, list<Trait> traits = []> :
     HLSOp<mnemonic, !listconcat(traits, [Pure])> {
   let description = [{
     This is a view-like operation, which means the status of the sliding tensor
@@ -252,17 +260,6 @@ class BaseReassociateOp<string mnemonic, list<Trait> traits = []> :
     similar to the regular tensor shape expand/collapse, while the iteration
     space expand/collapse can be considered as the loop split/merge of the
     iteration loop nest.
-  }];
-
-  let arguments = (ins AnySlidingTensor:$input, UnitAttr:$expandShape,
-      IndexListArrayAttr:$shapeReassociation, UnitAttr:$expandIteration,
-      IndexListArrayAttr:$iterationReassociation);
-  let results = (outs AnySlidingTensor:$output);
-
-  let assemblyFormat = [{
-    $input (`expand` $expandShape^):(`collapse`)? `shape` $shapeReassociation
-    (`expand` $expandIteration^):(`collapse`)? `iteration`
-    $iterationReassociation attr-dict `:` functional-type(operands, results)
   }];
 
   let hasVerifier = 1;
@@ -286,27 +283,42 @@ class BaseReassociateOp<string mnemonic, list<Trait> traits = []> :
     SmallVector<ReassociationIndices, 4> getIterationReassociationIndices() {
       return getReassociationIndices(getIterationReassociation());
     }
-
-    SlidingTensorType getInputType() { return getInput().getType(); }
-    SlidingTensorType getOutputType() { return getOutput().getType(); }
   }];
 }
 
-def SlidingTensorReassociateOp : BaseReassociateOp<"stensor_reassociate"> {
+def SlidingTensorReassociateOp : ReassociateOp<"stensor_reassociate"> {
   let summary = "Reassociate the shape and/or iteration of a sliding tensor";
 
-  let extraClassDeclaration = commonExtraClassDeclaration;
+  let arguments = (ins AnySlidingTensor:$inputSTensor, UnitAttr:$expandShape,
+      IndexListArrayAttr:$shapeReassociation, UnitAttr:$expandIteration,
+      IndexListArrayAttr:$iterationReassociation);
+  let results = (outs AnySlidingTensor:$outputSTensor);
+
+  let assemblyFormat = [{
+    $inputSTensor (`expand` $expandShape^):(`collapse`)? `shape`
+    $shapeReassociation (`expand` $expandIteration^):(`collapse`)? `iteration`
+    $iterationReassociation attr-dict `:` functional-type(operands, results)
+  }];
+
+  let extraClassDeclaration = commonExtraClassDeclaration # [{
+    SlidingTensorType getInputSTensorType() {
+      return getInputSTensor().getType();
+    }
+    SlidingTensorType getOutputSTensorType() {
+      return getOutputSTensor().getType();
+    }
+  }];
 }
 
 //===----------------------------------------------------------------------===//
-// Stream Operations
+// SlidingMemref Operations
 //===----------------------------------------------------------------------===//
 
-def SlidingTensorToStreamOp : HLSOp<"stensor_to_stream",[Pure]> {
-  let summary = "Convert a sliding tensor to a stream channel";
+def SlidingTensorToSlidingMemrefOp : HLSOp<"stensor_to_smemref",[Pure]> {
+  let summary = "Convert a sliding tensor to a sliding memref";
 
   let arguments = (ins AnySlidingTensor:$sTensor);
-  let results = (outs AnyStream:$stream);
+  let results = (outs AnySlidingMemref:$sMemref);
   let assemblyFormat = [{
     $sTensor attr-dict `:` functional-type(operands, results)
   }];
@@ -315,27 +327,106 @@ def SlidingTensorToStreamOp : HLSOp<"stensor_to_stream",[Pure]> {
   let hasFolder = 1;
 
   let extraClassDeclaration = [{
-    StreamType getStreamType() { return getStream().getType(); }
+    SlidingMemrefType getSMemrefType() { return getSMemref().getType(); }
     SlidingTensorType getSTensorType() { return getSTensor().getType(); }
   }];
 }
 
-def StreamToSlidingTensorOp : HLSOp<"stream_to_stensor", [Pure]> {
-  let summary = "Convert a stream channel to a sliding tensor";
+def SlidingMemrefToSlidingTensorOp : HLSOp<"smemref_to_stensor", [Pure]> {
+  let summary = "Convert a sliding memref to a sliding tensor";
 
-  let arguments = (ins AnyStream:$stream);
+  let arguments = (ins AnySlidingMemref:$sMemref);
   let results = (outs AnySlidingTensor:$sTensor);
   let assemblyFormat = [{
-    $stream attr-dict `:` functional-type(operands, results)
+    $sMemref attr-dict `:` functional-type(operands, results)
   }];
 
   let hasVerifier = 1;
 
   let extraClassDeclaration = [{
-    StreamType getStreamType() { return getStream().getType(); }
+    SlidingMemrefType getSMemrefType() { return getSMemref().getType(); }
     SlidingTensorType getSTensorType() { return getSTensor().getType(); }
   }];
 }
+
+def SlidingMemrefAllocOp : HLSOp<"smemref_alloc", [
+    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+  let summary = "Allocate a sliding memref";
+
+  let results = (outs AnySlidingMemref:$sMemref);
+  let assemblyFormat = "attr-dict `:` type(results)";
+
+  let hasVerifier = 1;
+}
+
+def SlidingMemrefPullOp : HLSOp<"smemref_pull", [
+    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+  let summary = "Pull a sliding memref";
+  let description = [{
+    This is a memory-read effect operation on the sliding memref.
+  }];
+
+  let arguments = (ins AnySlidingMemref:$sMemref);
+  let results = (outs AnyStaticShapeMemRef:$window);
+  let assemblyFormat = [{
+    $sMemref attr-dict `:` functional-type(operands, results)
+  }];
+
+  let hasVerifier = 1;
+
+  let extraClassDeclaration = [{
+    SlidingMemrefType getSMemrefType() { return getSMemref().getType(); }
+    MemRefType getWindowType() { return getWindow().getType(); }
+  }];
+}
+
+def SlidingMemrefPushOp : HLSOp<"smemref_push", [
+    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+  let summary = "Push a sliding memref";
+  let description = [{
+    This is a memory-write effect operation on the sliding memref.
+  }];
+
+  let arguments = (ins AnySlidingMemref:$sMemref, AnyStaticShapeMemRef:$window);
+  let assemblyFormat = [{
+    $window `to` $sMemref attr-dict `:` functional-type(operands, results)
+  }];
+
+  let hasVerifier = 1;
+
+  let extraClassDeclaration = [{
+    SlidingMemrefType getSMemrefType() { return getSMemref().getType(); }
+    MemRefType getWindowType() { return getWindow().getType(); }
+  }];
+}
+
+def SlidingMemrefReassociateOp : ReassociateOp<"smemref_reassociate"> {
+  let summary = "Reassociate the shape and/or iteration of a sliding memref";
+
+  let arguments = (ins AnySlidingMemref:$inputSMemref, UnitAttr:$expandShape,
+      IndexListArrayAttr:$shapeReassociation, UnitAttr:$expandIteration,
+      IndexListArrayAttr:$iterationReassociation);
+  let results = (outs AnySlidingMemref:$outputSMemref);
+
+  let assemblyFormat = [{
+    $inputSMemref (`expand` $expandShape^):(`collapse`)? `shape`
+    $shapeReassociation (`expand` $expandIteration^):(`collapse`)? `iteration`
+    $iterationReassociation attr-dict `:` functional-type(operands, results)
+  }];
+
+  let extraClassDeclaration = commonExtraClassDeclaration # [{
+    SlidingMemrefType getInputSMemrefType() {
+      return getInputSMemref().getType();
+    }
+    SlidingMemrefType getOutputSMemrefType() {
+      return getOutputSMemref().getType();
+    }
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// Stream Operations
+//===----------------------------------------------------------------------===//
 
 def StreamOp : HLSOp<"stream", [
     DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
@@ -386,12 +477,6 @@ def StreamPushOp : HLSOp<"stream_push", [
     StreamType getStreamType() { return getStream().getType(); }
     Type getElementType() { return getElement().getType(); }
   }];
-}
-
-def StreamReassociateOp : BaseReassociateOp<"stream_reassociate"> {
-  let summary = "Reassociate the shape and/or iteration of a stream channel";
-
-  let extraClassDeclaration = commonExtraClassDeclaration;
 }
 
 //===----------------------------------------------------------------------===//

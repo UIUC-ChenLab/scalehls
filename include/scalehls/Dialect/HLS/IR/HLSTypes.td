@@ -7,6 +7,7 @@
 #ifndef SCALEHLS_DIALECT_HLS_HLSTYPES_TD
 #define SCALEHLS_DIALECT_HLS_HLSTYPES_TD
 
+include "scalehls/Dialect/HLS/IR/HLSInterfaces.td"
 include "scalehls/Dialect/HLS/IR/HLSAttributes.td"
 include "mlir/IR/BuiltinTypeInterfaces.td"
 
@@ -16,61 +17,16 @@ class HLSType<string name, list<Trait> traits = [],
   let mnemonic = ?;
 }
 
-class IterativeType<string name, list<Trait> traits = []>
-    : HLSType<name, !listconcat(traits, [IterativeTypeInterface])> {
-
-  let skipDefaultBuilders = 1;
-  let genVerifyDecl = 1;
-
-  code commonExtraClassDeclaration = [{
-    /// Return the rank of the iteration space.
-    int64_t getIterRank() const { return getIterMap().getNumDims(); }
-
-    /// Return the iteration bounds.
-    SmallVector<int64_t> getIterBounds() const {
-      return llvm::map_to_vector(llvm::zip(getIterTripCounts(), getIterSteps()),
-          [](std::tuple<int64_t, int64_t> tuple) {
-              return std::get<0>(tuple) * std::get<1>(tuple);
-          });
-    }
-
-    /// Return the rank of the full tensor.
-    int64_t getFullRank() const { return getIterMap().getNumResults(); }
-
-    /// Infer and return the shape of the full tensor.
-    SmallVector<int64_t> getFullShape() const;
-
-    /// Return whether this type is castable with the "other" type.
-    bool isCastableWith(}] # name # [{Type other) const {
-      return getElementType() == other.getElementType() &&
-             getFullShape() == other.getFullShape();
-    }
-  }];
-}
-
 //===----------------------------------------------------------------------===//
-// SlidingTensorType
+// SlidingType
 //===----------------------------------------------------------------------===//
 
-def SlidingTensorType : IterativeType<"SlidingTensor"> {
-  let summary = "A sliding tensor type";
-  let description = [{
-    Represents a sliding tensor of any data type. A sliding tensor is a "window"
-    of a full tensor that is accessed in a sliding window manner. The sliding
-    window is defined by the iteration space, which is represented by the
-    iteration trip counts, iteration steps, and the iteration map. The iteration
-    map is an affine map that maps the iteration space to the full tensor space.
+class SlidingType<string name, list<Trait> traits = []>
+    : HLSType<name, !listconcat(traits, [
+        DeclareTypeInterfaceMethods<SlidingTypeInterface>]), "::mlir::Type"> {
 
-    For example, a sliding tensor with type `stensor<f32 [8, 8], tripcounts
-    [2, 4], steps [8, 8], (d0, d1) -> (d1, d0)>` represents a 8x8 sliding window
-    of a 32x16 full tensor. The iteration space is a 2x4 grid, and the iteration
-    map maps the iteration space to the full tensor space by permutating the two
-    dimensions.
-  }];
-  let mnemonic = "stensor";
-
-  let parameters = (ins
-      "mlir::Type":$elementType, ArrayRefParameter<"int64_t">:$shape,
+  let parameters = (ins "mlir::Type":$elementType,
+      ArrayRefParameter<"int64_t">:$shape,
       ArrayRefParameter<"int64_t">:$iterTripCounts,
       ArrayRefParameter<"int64_t">:$iterSteps, "mlir::AffineMap":$iterMap);
   let assemblyFormat = [{
@@ -79,35 +35,68 @@ def SlidingTensorType : IterativeType<"SlidingTensor"> {
   }];
 
   let builders = [
-    TypeBuilderWithInferredContext<(ins
-        "ArrayRef<int64_t>":$shape, "mlir::Type":$elementType,
-        "ArrayRef<int64_t>":$iterTripCounts, "ArrayRef<int64_t>":$iterSteps,
-        "mlir::AffineMap":$iterMap), [{
+    TypeBuilderWithInferredContext<(ins "ArrayRef<int64_t>":$shape,
+        "mlir::Type":$elementType, "ArrayRef<int64_t>":$iterTripCounts,
+        "ArrayRef<int64_t>":$iterSteps, "mlir::AffineMap":$iterMap), [{
       return $_get(elementType.getContext(), shape, elementType, iterTripCounts,
                    iterSteps, iterMap);
     }]>
   ];
 
-  let extraClassDeclaration = commonExtraClassDeclaration # [{
-    /// Get the rank of the sliding window.
-    int64_t getRank() const { return getShape().size(); }
+  let skipDefaultBuilders = 1;
+  let genVerifyDecl = 1;
+}
 
-    /// Return the dimension size of the sliding window.
-    int64_t getDimSize(unsigned dim) const { return getShape()[dim]; }
+//===----------------------------------------------------------------------===//
+// SlidingTensor/MemrefType
+//===----------------------------------------------------------------------===//
 
-    /// Return whether the iteration map is a projected permutation.
-    bool isProjectedPermutation() const;
+def SlidingTensorType : SlidingType<"SlidingTensor"> {
+  let summary = "A sliding tensor type";
+  let mnemonic = "stensor";
 
-    /// Return whether the sliding window is non-overlapped and non-gapped.
-    bool isRegular() const;
-
-    /// Get the ranked tensor type of the sliding window.
+  let extraClassDeclaration = [{
+    /// Get the ranked tensor type of the window.
     RankedTensorType getWindowType() const {
       return RankedTensorType::get(getShape(), getElementType());
     }
 
     /// Return whether this type can be converted to the "tensor" type.
-    bool isConvertableWith(RankedTensorType tensor) const;
+    bool isConvertableWith(RankedTensorType tensor) const {
+      return tensor.hasStaticShape() &&
+             getElementType() == tensor.getElementType() &&
+             ArrayRef<int64_t>(getFullShape()) == tensor.getShape();
+    }
+
+    /// Return whether this type can be casted to the "other" type.
+    bool isCastableWith(SlidingTensorType other) const {
+      return getElementType() == other.getElementType() &&
+             getFullShape() == other.getFullShape();
+    }
+  }];
+}
+
+def SlidingMemrefType : SlidingType<"SlidingMemref"> {
+  let summary = "A sliding memref type";
+  let mnemonic = "smemref";
+
+  let extraClassDeclaration = [{
+    /// Get the memref type of the window.
+    MemRefType getWindowType() const {
+      return MemRefType::get(getShape(), getElementType());
+    }
+
+    /// Return whether this type can be converted to the "stensor" type.
+    bool isConvertableWith(SlidingTensorType stensor) const {
+      return getElementType() == stensor.getElementType() &&
+             getFullShape() == stensor.getFullShape();
+    }
+  
+    /// Return whether this type can be casted to the "other" type.
+    bool isCastableWith(SlidingMemrefType other) const {
+      return getElementType() == other.getElementType() &&
+             getFullShape() == other.getFullShape();
+    }
   }];
 }
 
@@ -115,48 +104,25 @@ def SlidingTensorType : IterativeType<"SlidingTensor"> {
 // StreamType
 //===----------------------------------------------------------------------===//
 
-def StreamType : IterativeType<"Stream"> {
+def StreamType : HLSType<"Stream"> {
   let summary = "An HLS stream type";
   let description = [{
-    Represents a stream of any data type. A stream is a sequence of elements
-    that are accessed in a streaming manner. The iteration space is represented
-    by the iteration trip counts, iteration steps, and the iteration map. The
-    iteration map is an affine map that maps the iteration space to the full
-    tensor space.
-
-    For example, a stream with type `stream<f32, tripcounts [2, 4, 8, 8], steps
-    [8, 8, 1, 1], (d0, d1, d2, d3) -> (d1 + d2, d0 + d3)>` represents a stream
-    of a 32x16 full tensor. The iteration space is a 2x4x8x8 grid, and the
-    iteration map maps the iteration space to the full tensor space.
+    Represents a stream of any data type. Stream is corresponding to the FIFO
+    channel in the hardware. The depth of the stream is the number of elements
+    that can be stored in the FIFO channel.
   }];
   let mnemonic = "stream";
 
-  let parameters = (ins
-      "mlir::Type":$elementType, ArrayRefParameter<"int64_t">:$iterTripCounts,
-      ArrayRefParameter<"int64_t">:$iterSteps, "mlir::AffineMap":$iterMap,
+  let parameters = (ins "mlir::Type":$elementType, 
       DefaultValuedParameter<"int64_t", "1">:$depth);
-  let assemblyFormat = [{
-    `<` qualified($elementType) `,` `tripcounts` `[` $iterTripCounts `]` `,`
-    `steps` `[` $iterSteps `]` `,` $iterMap `,` $depth `>`
-  }];
+  let assemblyFormat = "`<` qualified($elementType) `,` $depth `>`";
 
   let builders = [
     TypeBuilderWithInferredContext<(ins
-        "mlir::Type":$elementType, "ArrayRef<int64_t>":$iterTripCounts,
-        "ArrayRef<int64_t>":$iterSteps, "mlir::AffineMap":$iterMap,
-        CArg<"int64_t", "1">:$depth), [{
-      return $_get(elementType.getContext(), elementType, iterTripCounts,
-                   iterSteps, iterMap, depth);
+        "mlir::Type":$elementType, CArg<"int64_t", "1">:$depth), [{
+      return $_get(elementType.getContext(), elementType, depth);
     }]>
   ];
-
-  let extraClassDeclaration = commonExtraClassDeclaration # [{
-    /// Return whether this type can be converted to the "stensor" type.
-    bool isConvertableWith(SlidingTensorType stensor) const {
-      return getElementType() == stensor.getElementType() &&
-             getFullShape() == stensor.getFullShape();
-    }
-  }];
 }
 
 #endif // SCALEHLS_DIALECT_HLS_HLSTYPES_TD

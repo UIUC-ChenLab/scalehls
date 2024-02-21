@@ -9,28 +9,60 @@
 
 include "mlir/IR/OpBase.td"
 
-def IterativeTypeInterface : TypeInterface<"IterativeTypeInterface"> {
+def SlidingTypeInterface : TypeInterface<"SlidingTypeInterface"> {
   let description = [{
-    Represents an iterative type.
+    Represents a sliding tensor/buffer of any data type. A sliding tensor/buffer
+    is a "window" of a full tensor/buffer that is accessed in a sliding manner.
+    The window is defined by the iteration space, which is represented by the
+    iteration trip counts, iteration steps, and the iteration map. The iteration
+    map is an affine map that maps the iteration space to the full tensor space.
+
+    For example, a sliding tensor/buffer with type `<f32 [8, 8], tripcounts
+    [2, 4], steps [8, 8], (d0, d1) -> (d1, d0)>` represents a 8x8 window of a
+    32x16 full tensor/buffer. The iteration space is a 2x4 grid, and the
+    iteration map maps the iteration space to the full tensor/buffer space by
+    permutating the two dimensions.
   }];
   string cppNamespace = "mlir::scalehls::hls";
 
   let methods = [
+    InterfaceMethod<"Return the element type.",
+      "Type", "getElementType">,
+    InterfaceMethod<"Return the shape of the window.",
+      "ArrayRef<int64_t>", "getShape">,
     InterfaceMethod<"Return the trip counts of the iteration space.",
       "ArrayRef<int64_t>", "getIterTripCounts">,
     InterfaceMethod<"Return the steps of the iteration space.",
       "ArrayRef<int64_t>", "getIterSteps">,
     InterfaceMethod<"Return the iteration map of the iteration space.",
-      "AffineMap", "getIterMap">,
-    InterfaceMethod<"Return the rank of the iteration space.",
-      "int64_t", "getIterRank">,
-    InterfaceMethod<"Return the iteration bounds.",
-      "SmallVector<int64_t>", "getIterBounds">,
-    InterfaceMethod<"Return the rank of the full tensor.",
-      "int64_t", "getFullRank">,
-    InterfaceMethod<"Infer and return the shape of the full tensor.",
-      "SmallVector<int64_t>", "getFullShape">
+      "AffineMap", "getIterMap">
   ];
+
+  let extraSharedClassDeclaration = [{
+    /// Get the rank of the window.
+    int64_t getRank() const { return $_type.getShape().size(); }
+
+    /// Return the dimension size of the window.
+    int64_t getDimSize(unsigned dim) const { return $_type.getShape()[dim]; }
+
+    /// Return the rank of the iteration space.
+    int64_t getIterRank() const { return $_type.getIterMap().getNumDims(); }
+
+    /// Return the iteration bounds.
+    SmallVector<int64_t> getIterBounds() const;
+
+    /// Return the rank of the full tensor.
+    int64_t getFullRank() const { return $_type.getIterMap().getNumResults(); }
+
+    /// Infer and return the shape of the full tensor.
+    SmallVector<int64_t> getFullShape() const;
+
+    /// Return whether the iteration map is a projected permutation.
+    bool isProjectedPermutation() const;
+
+    /// Return whether the window is non-overlapped and non-gapped.
+    bool isRegular() const;
+  }];
 }
 
 def BufferLikeInterface : OpInterface<"BufferLikeInterface"> {
