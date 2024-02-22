@@ -40,12 +40,16 @@ static Operation *createLinalgCopyOp(OpBuilder &b, Location loc, Value from,
       AffineMap::getMultiDimIdentityMap(memrefTypeTo.getRank(), b.getContext());
   SmallVector<utils::IteratorType> iteratorTypes(memrefTypeTo.getRank(),
                                                  utils::IteratorType::parallel);
+
+  SmallVector<NamedAttribute> linalgAttributes(attributes);
+  linalgAttributes.emplace_back(b.getStringAttr("__copy__"), b.getUnitAttr());
+
   return b.create<linalg::GenericOp>(
       loc, from, to, llvm::ArrayRef({id, id}), iteratorTypes,
       [](OpBuilder &b, Location loc, ValueRange args) {
         b.create<linalg::YieldOp>(loc, args.front());
       },
-      attributes);
+      linalgAttributes);
 }
 
 // Default allocation functions.
@@ -70,8 +74,8 @@ static OneShotBufferizationOptions getBufferizationOptions() {
   // bufferization.to_memref is used to bufferize constants. We'd like to leave
   // the arith.constant as is and insert bufferization.to_memref to convert the
   // tensor to memref.
-  options.opFilter.denyOperation<arith::ConstantOp>();
-  options.opFilter.denyOperation<bufferization::ToMemrefOp>();
+  // options.opFilter.denyOperation<arith::ConstantOp>();
+  // options.opFilter.denyOperation<bufferization::ToMemrefOp>();
 
   // This type converter converts tensor types to memref types when no exact
   // memref type can be inferred from the context.
