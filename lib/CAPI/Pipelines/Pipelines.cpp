@@ -14,14 +14,8 @@ using namespace scalehls;
 void mlirAddLinalgTransformPasses(MlirPassManager pm) {
   addLinalgTransformPasses(*unwrap(pm));
 }
-void mlirAddCreateDataflowPasses(MlirPassManager pm) {
-  addCreateDataflowPasses(*unwrap(pm));
-}
 void mlirAddComprehensiveBufferizePasses(MlirPassManager pm) {
   addComprehensiveBufferizePasses(*unwrap(pm));
-}
-void mlirAddLowerDataflowPasses(MlirPassManager pm) {
-  addLowerDataflowPasses(*unwrap(pm));
 }
 void mlirAddConvertDataflowToFuncPasses(MlirPassManager pm) {
   addConvertDataflowToFuncPasses(*unwrap(pm));

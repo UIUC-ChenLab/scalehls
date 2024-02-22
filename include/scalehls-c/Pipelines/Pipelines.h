@@ -15,10 +15,7 @@ extern "C" {
 #endif
 
 MLIR_CAPI_EXPORTED void mlirAddLinalgTransformPasses(MlirPassManager pm);
-MLIR_CAPI_EXPORTED void mlirAddCreateDataflowPasses(MlirPassManager pm);
-MLIR_CAPI_EXPORTED void mlirAddGenerateDesignSpacePasses(MlirPassManager pm);
 MLIR_CAPI_EXPORTED void mlirAddComprehensiveBufferizePasses(MlirPassManager pm);
-MLIR_CAPI_EXPORTED void mlirAddLowerDataflowPasses(MlirPassManager pm);
 MLIR_CAPI_EXPORTED void mlirAddConvertDataflowToFuncPasses(MlirPassManager pm);
 
 MLIR_CAPI_EXPORTED void mlirRegisterScaleHLSPipelines(void);

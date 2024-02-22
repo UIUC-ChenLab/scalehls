@@ -35,11 +35,6 @@ void scalehls::addLinalgTransformPasses(OpPassManager &pm) {
   pm.addPass(mlir::createCanonicalizerPass());
 }
 
-void scalehls::addCreateDataflowPasses(OpPassManager &pm) {
-  pm.addNestedPass<func::FuncOp>(hls::createCreateDataflowPass());
-  pm.addPass(mlir::createCanonicalizerPass());
-}
-
 void scalehls::addComprehensiveBufferizePasses(OpPassManager &pm) {
   pm.addPass(hls::createComprehensiveBufferizePass());
   pm.addPass(memref::createResolveShapedTypeResultDimsPass());
@@ -49,10 +44,8 @@ void scalehls::addComprehensiveBufferizePasses(OpPassManager &pm) {
   // can be deleted by canonicalizer. We have to run it again because the
   // memrefs are unified in CSE pass, so we can truely remove redundant memcpy.
   pm.addPass(mlir::createCanonicalizerPass());
-}
-
-void scalehls::addLowerDataflowPasses(OpPassManager &pm) {
-  pm.addNestedPass<func::FuncOp>(hls::createLowerDataflowPass());
+  pm.addPass(hls::createRaiseSCFToAffinePass());
+  pm.addPass(memref::createFoldMemRefAliasOpsPass());
   pm.addPass(mlir::createCanonicalizerPass());
 }
 
@@ -79,9 +72,11 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
       "Compile from Torch-MLIR (Linalg) to HLS C++",
       [](OpPassManager &pm, const ScaleHLSPyTorchPipelineOptions &opts) {
         addLinalgTransformPasses(pm);
-        addCreateDataflowPasses(pm);
         addComprehensiveBufferizePasses(pm);
-        addLowerDataflowPasses(pm);
+        pm.addNestedPass<func::FuncOp>(hls::createCreateDataflowPass());
+        pm.addPass(mlir::createCanonicalizerPass());
+        pm.addNestedPass<func::FuncOp>(hls::createLowerDataflowPass());
+        pm.addPass(mlir::createCanonicalizerPass());
         addConvertDataflowToFuncPasses(pm);
       });
 }
