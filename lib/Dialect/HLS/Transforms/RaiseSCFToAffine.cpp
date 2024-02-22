@@ -1014,14 +1014,109 @@ struct ParallelOpRaising : public OpRewritePattern<scf::ParallelOp> {
 };
 
 namespace {
+/// Simple memref load to affine load raising.
+struct MemrefLoadRaisePattern : public OpRewritePattern<memref::LoadOp> {
+  using OpRewritePattern<memref::LoadOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(memref::LoadOp load,
+                                PatternRewriter &rewriter) const override {
+    if (llvm::all_of(load.getIndices(), [&](Value operand) {
+          return isValidDim(operand) || isValidSymbol(operand);
+        })) {
+      rewriter.replaceOpWithNewOp<AffineLoadOp>(load, load.getMemref(),
+                                                load.getIndices());
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
+/// Simple memref store to affine store raising.
+struct MemrefStoreRaisePattern : public OpRewritePattern<memref::StoreOp> {
+  using OpRewritePattern<memref::StoreOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(memref::StoreOp store,
+                                PatternRewriter &rewriter) const override {
+    if (llvm::all_of(store.getIndices(), [&](Value operand) {
+          return isValidDim(operand) || isValidSymbol(operand);
+        })) {
+      rewriter.replaceOpWithNewOp<AffineStoreOp>(
+          store, store.getValue(), store.getMemref(), store.getIndices());
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
+/// Simple affine apply raising.
+struct AffineApplyRaisePattern : public OpRewritePattern<AffineApplyOp> {
+  using OpRewritePattern<AffineApplyOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(AffineApplyOp apply,
+                                PatternRewriter &rewriter) const override {
+    auto numDims = apply.getAffineMap().getNumDims();
+
+    SmallVector<AffineExpr> dimReplacements, symbolReplacements;
+    SmallVector<Value> dimOperands, symbolOperands;
+    for (auto [index, operand] : llvm::enumerate(apply.getOperands())) {
+      if (index < numDims) {
+        // Replace the original dimension operands.
+        if (isValidDim(operand)) {
+          dimReplacements.push_back(
+              rewriter.getAffineDimExpr(dimOperands.size()));
+          dimOperands.push_back(operand);
+        } else if (isValidSymbol(operand)) {
+          dimReplacements.push_back(
+              rewriter.getAffineSymbolExpr(symbolOperands.size()));
+          symbolOperands.push_back(operand);
+        } else
+          return failure();
+      } else {
+        // Replace the original symbol operands.
+        if (isValidDim(operand)) {
+          symbolReplacements.push_back(
+              rewriter.getAffineDimExpr(dimOperands.size()));
+          dimOperands.push_back(operand);
+        } else if (isValidSymbol(operand)) {
+          symbolReplacements.push_back(
+              rewriter.getAffineSymbolExpr(symbolOperands.size()));
+          symbolOperands.push_back(operand);
+        } else
+          return failure();
+      }
+    }
+
+    auto map = apply.getAffineMap().replaceDimsAndSymbols(
+        dimReplacements, symbolReplacements, dimOperands.size(),
+        symbolOperands.size());
+    if (map == apply.getAffineMap())
+      return failure();
+
+    SmallVector<Value> operands(dimOperands);
+    operands.append(symbolOperands);
+    rewriter.replaceOpWithNewOp<AffineApplyOp>(apply, map, operands);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 struct RaiseSCFToAffine : public RaiseSCFToAffineBase<RaiseSCFToAffine> {
   void runOnOperation() override {
-    RewritePatternSet patterns(&getContext());
-    patterns.insert<ForOpRaising, ParallelOpRaising>(&getContext());
+    auto context = &getContext();
 
-    GreedyRewriteConfig config;
-    (void)applyPatternsAndFoldGreedily(getOperation(), std::move(patterns),
-                                       config);
+    RewritePatternSet patterns(context);
+    patterns.insert<ForOpRaising>(context);
+    patterns.insert<ParallelOpRaising>(context);
+    patterns.insert<AffineApplyRaisePattern>(context);
+    patterns.insert<MemrefLoadRaisePattern>(context);
+    patterns.insert<MemrefStoreRaisePattern>(context);
+
+    (void)applyPatternsAndFoldGreedily(getOperation(), std::move(patterns));
   }
 };
 } // namespace
