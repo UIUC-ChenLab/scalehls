@@ -44,77 +44,6 @@ def AnyBufferOrStream : Type<Or<[AnyBuffer.predicate, AnyStream.predicate]>,
     "memref or stream values">;
 
 //===----------------------------------------------------------------------===//
-// Functional Dataflow (FDF) Operations
-//===----------------------------------------------------------------------===//
-
-def DispatchOp : HLSOp<"dispatch", [RecursiveMemoryEffects,
-      SingleBlockImplicitTerminator<"YieldOp">,
-      ParentOneOf<["func::FuncOp", "affine::AffineForOp", "scf::ForOp"]>]> {
-  let summary = "Represent a dataflow dispatch";
-  let description = [{
-    Dispatch op has a transparent region that contains a list of task ops to be
-    dispatched. This op is designed to organize and manipulate task ops at a
-    high level and will be lowered to schedule op for dataflow scheduling.
-  }];
-
-  let results = (outs Variadic<AnyType>:$results);
-  let regions = (region SizedRegion<1>:$body);
-  let assemblyFormat = "attr-dict-with-keyword (`:` type($results)^)? $body";
-
-  let hasVerifier = 1;
-  let hasCanonicalizer = 1;
-
-  let extraClassDeclaration = [{
-    YieldOp getYieldOp();
-  }];
-}
-
-def TaskOp : HLSOp<"task", [DeclareOpInterfaceMethods<ContainerLikeInterface>,
-      RecursiveMemoryEffects, SingleBlockImplicitTerminator<"YieldOp">,
-      HasParent<"DispatchOp">]> {
-  let summary = "Represent a dataflow task";
-  let description = [{
-    Task op has a transparent region that contains a list of ops to be executed
-    in the task. This op is designed to represent the task partition at a high
-    level and will be lowered to node op for dataflow scheduling.
-  }];
-
-  let results = (outs Variadic<AnyType>:$results);
-  let regions = (region SizedRegion<1>:$body);
-
-  let assemblyFormat = [{
-    attr-dict-with-keyword (`:` type($results)^)? $body
-  }];
-
-  let hasVerifier = 1;
-  let hasCanonicalizer = 1;
-
-  let extraClassDeclaration = [{
-    /// Return true if this task op contains nested sub-tasks.
-    bool hasHierarchy() {
-      return cast<ContainerLikeInterface>(this->getOperation()).hasHierarchy();
-    }
-
-    /// Get the immediate included linalg op. Will return nullptr if there is no
-    /// such linalg op or more than one linalg op.
-    linalg::LinalgOp getPayloadLinalgOp();
-
-    DispatchOp getDispatchOp();
-    YieldOp getYieldOp();
-  }];
-}
-
-def YieldOp : HLSOp<"yield", [NoMemoryEffect, ReturnLike, Terminator,
-      ParentOneOf<["DispatchOp", "TaskOp"]>]> {
-  let summary = "Terminate and yield results of a dispatch or task op";
-
-  let arguments = (ins Variadic<AnyType>:$results);
-  let assemblyFormat = "$results attr-dict `:` type($results)";
-
-  let builders = [OpBuilder<(ins), "build($_builder, $_state, std::nullopt);">];
-}
-
-//===----------------------------------------------------------------------===//
 // Stream Operations
 //===----------------------------------------------------------------------===//
 
@@ -285,6 +214,73 @@ def StreamCastOp : HLSOp<"stream_cast", [Pure,
     StreamType getInputType() { return getInput().getType(); }
     StreamType getOutputType() { return getOutput().getType(); }
   }];
+}
+
+//===----------------------------------------------------------------------===//
+// Functional Dataflow (FDF) Operations
+//===----------------------------------------------------------------------===//
+
+def DispatchOp : HLSOp<"dispatch", [RecursiveMemoryEffects,
+      SingleBlockImplicitTerminator<"YieldOp">,
+      ParentOneOf<["func::FuncOp", "affine::AffineForOp", "scf::ForOp"]>]> {
+  let summary = "Represent a dataflow dispatch";
+  let description = [{
+    Dispatch op has a transparent region that contains a list of task ops to be
+    dispatched. This op is designed to organize and manipulate task ops at a
+    high level and will be lowered to schedule op for dataflow scheduling.
+  }];
+
+  let results = (outs Variadic<AnyType>:$results);
+  let regions = (region SizedRegion<1>:$body);
+  let assemblyFormat = "attr-dict-with-keyword (`:` type($results)^)? $body";
+
+  let hasVerifier = 1;
+  let hasCanonicalizer = 1;
+
+  let extraClassDeclaration = [{
+    YieldOp getYieldOp();
+  }];
+}
+
+def TaskOp : HLSOp<"task", [DeclareOpInterfaceMethods<ContainerLikeInterface>,
+      RecursiveMemoryEffects, SingleBlockImplicitTerminator<"YieldOp">,
+      HasParent<"DispatchOp">]> {
+  let summary = "Represent a dataflow task";
+  let description = [{
+    Task op has a transparent region that contains a list of ops to be executed
+    in the task. This op is designed to represent the task partition at a high
+    level and will be lowered to node op for dataflow scheduling.
+  }];
+
+  let results = (outs Variadic<AnyType>:$results);
+  let regions = (region SizedRegion<1>:$body);
+
+  let assemblyFormat = [{
+    attr-dict-with-keyword (`:` type($results)^)? $body
+  }];
+
+  let hasVerifier = 1;
+  let hasCanonicalizer = 1;
+
+  let extraClassDeclaration = [{
+    /// Return true if this task op contains nested sub-tasks.
+    bool hasHierarchy() {
+      return cast<ContainerLikeInterface>(this->getOperation()).hasHierarchy();
+    }
+
+    DispatchOp getDispatchOp();
+    YieldOp getYieldOp();
+  }];
+}
+
+def YieldOp : HLSOp<"yield", [Pure, ReturnLike, Terminator,
+      ParentOneOf<["DispatchOp", "TaskOp"]>]> {
+  let summary = "Terminate and yield results of a dispatch or task op";
+
+  let arguments = (ins Variadic<AnyType>:$results);
+  let assemblyFormat = "$results attr-dict `:` type($results)";
+
+  let builders = [OpBuilder<(ins), "build($_builder, $_state, std::nullopt);">];
 }
 
 //===----------------------------------------------------------------------===//
