@@ -13,6 +13,8 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+/*
+
 /// Return the offsets, sizes, and strides of a slice given the loop induction
 /// variables "ivs", the index expressions "indexExprs", the element shape
 /// "elementShape", and the packing flag "packing". If "packing" is true, the
@@ -357,6 +359,8 @@ struct FoldPackOpIntoConstantOp : public OpRewritePattern<tensor::PackOp> {
 };
 } // namespace
 
+*/
+
 namespace {
 struct MaterializeStream : public MaterializeStreamBase<MaterializeStream> {
   MaterializeStream() = default;
@@ -369,11 +373,11 @@ struct MaterializeStream : public MaterializeStreamBase<MaterializeStream> {
     auto context = op->getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<LowerTensorToStreamConversionOp>(context, enablePacking);
-    patterns.add<LowerStreamToTensorConversionOp>(context, enablePacking);
-    patterns.add<LowerStreamBufferOp>(context, enablePacking);
-    if (enablePacking)
-      patterns.add<FoldPackOpIntoConstantOp>(context);
+    // patterns.add<LowerTensorToStreamConversionOp>(context, enablePacking);
+    // patterns.add<LowerStreamToTensorConversionOp>(context, enablePacking);
+    // patterns.add<LowerStreamBufferOp>(context, enablePacking);
+    // if (enablePacking)
+    // patterns.add<FoldPackOpIntoConstantOp>(context);
     (void)applyPatternsAndFoldGreedily(op, std::move(patterns));
   }
 };

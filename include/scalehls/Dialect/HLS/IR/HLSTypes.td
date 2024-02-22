@@ -38,7 +38,7 @@ class SlidingType<string name, list<Trait> traits = []>
     TypeBuilderWithInferredContext<(ins "ArrayRef<int64_t>":$shape,
         "mlir::Type":$elementType, "ArrayRef<int64_t>":$iterTripCounts,
         "ArrayRef<int64_t>":$iterSteps, "mlir::AffineMap":$iterMap), [{
-      return $_get(elementType.getContext(), shape, elementType, iterTripCounts,
+      return $_get(elementType.getContext(), elementType, shape, iterTripCounts,
                    iterSteps, iterMap);
     }]>
   ];

@@ -13,6 +13,8 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+/*
+
 namespace {
 struct ConvertToStreamBuffer : public OpRewritePattern<hls::TensorToStreamOp> {
   using OpRewritePattern<hls::TensorToStreamOp>::OpRewritePattern;
@@ -94,6 +96,8 @@ struct ConvertToStreamBuffer : public OpRewritePattern<hls::TensorToStreamOp> {
 };
 } // namespace
 
+*/
+
 namespace {
 struct ReduceTensorToStream
     : public ReduceTensorToStreamBase<ReduceTensorToStream> {
@@ -102,7 +106,7 @@ struct ReduceTensorToStream
     auto context = op->getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<ConvertToStreamBuffer>(context);
+    // patterns.add<ConvertToStreamBuffer>(context);
     (void)applyPatternsAndFoldGreedily(op, std::move(patterns));
   }
 };

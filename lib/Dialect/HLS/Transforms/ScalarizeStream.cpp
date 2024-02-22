@@ -13,6 +13,8 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+/*
+
 static StreamType getScalarStreamType(StreamType stream) {
   if (auto shapedElement = stream.getShapedElementType()) {
     SmallVector<int64_t> scalarIterTripCounts(stream.getIterTripCounts());
@@ -172,6 +174,8 @@ struct ScalarizeStreamReassociateOp
 };
 } // namespace
 
+*/
+
 namespace {
 struct ScalarizeStream : public ScalarizeStreamBase<ScalarizeStream> {
   void runOnOperation() override {
@@ -179,10 +183,10 @@ struct ScalarizeStream : public ScalarizeStreamBase<ScalarizeStream> {
     auto context = op->getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<ScalarizeStreamOp>(context);
-    patterns.add<ScalarizeStreamReadOp>(context);
-    patterns.add<ScalarizeStreamWriteOp>(context);
-    patterns.add<ScalarizeStreamReassociateOp>(context);
+    // patterns.add<ScalarizeStreamOp>(context);
+    // patterns.add<ScalarizeStreamReadOp>(context);
+    // patterns.add<ScalarizeStreamWriteOp>(context);
+    // patterns.add<ScalarizeStreamReassociateOp>(context);
     (void)applyPatternsAndFoldGreedily(op, std::move(patterns));
   }
 };
