@@ -25,10 +25,13 @@ struct DispatchFuncOp : public OpRewritePattern<func::FuncOp> {
       return failure();
 
     unsigned loopId;
-    func.walk([&](affine::AffineForOp loop) {
-      std::string name =
-          func.getName().str() + "_loop" + std::to_string(loopId++);
-      dispatchBlock(name, loop.getBody(), rewriter);
+    func.walk([&](Operation *op) {
+      if (isa<affine::AffineForOp, scf::ForOp>(op)) {
+        std::string name =
+            func.getName().str() + "_loop" + std::to_string(loopId++);
+        auto loopBody = &op->getRegion(0).getBlocks().front();
+        dispatchBlock(name, loopBody, rewriter);
+      }
     });
     return success();
   }

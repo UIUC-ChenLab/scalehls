@@ -304,8 +304,7 @@ bool hls::hasRuntimeAttr(Operation *op) {
 DispatchOp hls::dispatchBlock(StringRef name, Block *block,
                               PatternRewriter &rewriter) {
   if (!block->getOps<DispatchOp>().empty() ||
-      !isa<func::FuncOp, scf::ForOp, scf::ForallOp, scf::ParallelOp,
-           affine::AffineForOp, affine::AffineParallelOp>(block->getParentOp()))
+      !isa<func::FuncOp, affine::AffineForOp, scf::ForOp>(block->getParentOp()))
     return nullptr;
 
   auto loc = rewriter.getUnknownLoc();
@@ -325,7 +324,9 @@ DispatchOp hls::dispatchBlock(StringRef name, Block *block,
 
   unsigned taskId = 0;
   for (auto &op : llvm::make_early_inc_range(dispatch.getOps())) {
-    if (isa<linalg::LinalgOp, scf::ForOp, affine::AffineForOp>(op) ||
+    if (isa<hls::StreamBufferOp, hls::TensorToStreamOp, hls::StreamToTensorOp,
+            hls::StreamReadOp, hls::StreamWriteOp, linalg::LinalgOp,
+            affine::AffineForOp, scf::ForOp>(op) ||
         isa<tensor::TensorDialect>(op.getDialect())) {
       auto task = fuseOpsIntoTask({&op}, rewriter);
       std::string taskName = name.str() + "_" + std::to_string(taskId++);
