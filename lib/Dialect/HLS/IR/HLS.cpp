@@ -6,6 +6,7 @@
 
 #include "scalehls/Dialect/HLS/IR/HLS.h"
 #include "mlir/Dialect/Affine/Analysis/Utils.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/IntegerSet.h"
@@ -300,9 +301,11 @@ bool hls::hasRuntimeAttr(Operation *op) {
 //===----------------------------------------------------------------------===//
 
 /// Wrap the operations in the block with dispatch op.
-DispatchOp hls::dispatchBlock(Block *block, PatternRewriter &rewriter) {
+DispatchOp hls::dispatchBlock(StringRef name, Block *block,
+                              PatternRewriter &rewriter) {
   if (!block->getOps<DispatchOp>().empty() ||
-      !isa<func::FuncOp, affine::AffineForOp, scf::ForOp>(block->getParentOp()))
+      !isa<func::FuncOp, scf::ForOp, scf::ForallOp, scf::ParallelOp,
+           affine::AffineForOp, affine::AffineParallelOp>(block->getParentOp()))
     return nullptr;
 
   auto loc = rewriter.getUnknownLoc();
@@ -319,6 +322,17 @@ DispatchOp hls::dispatchBlock(Block *block, PatternRewriter &rewriter) {
   dispatchOps.splice(dispatchBlock.begin(), parentOps,
                      std::next(parentOps.begin()), std::prev(parentOps.end()));
   block->getTerminator()->setOperands(dispatch.getResults());
+
+  unsigned taskId = 0;
+  for (auto &op : llvm::make_early_inc_range(dispatch.getOps())) {
+    if (isa<linalg::LinalgOp, scf::ForOp, affine::AffineForOp>(op) ||
+        isa<tensor::TensorDialect>(op.getDialect())) {
+      auto task = fuseOpsIntoTask({&op}, rewriter);
+      std::string taskName = name.str() + "_" + std::to_string(taskId++);
+      op.setAttr(taskName, rewriter.getUnitAttr());
+      task->setAttr(taskName, rewriter.getUnitAttr());
+    }
+  }
   return dispatch;
 }
 

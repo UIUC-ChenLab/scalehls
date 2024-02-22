@@ -63,7 +63,8 @@ void setRuntimeAttr(Operation *op);
 
 /// Wrap the operations in the block with dispatch op. Return a nullptr if
 /// failed.
-DispatchOp dispatchBlock(Block *block, PatternRewriter &rewriter);
+DispatchOp dispatchBlock(StringRef name, Block *block,
+                         PatternRewriter &rewriter);
 
 /// Fuse the given operations into a new task. The new task will be created
 /// before "insertToOp" and each operation will be in the original order. This
