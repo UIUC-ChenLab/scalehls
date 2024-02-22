@@ -16,7 +16,7 @@ declare_mlir_python_sources(ScaleHLSPythonSources.Core
   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/scalehls"
   ADD_TO_PARENT ScaleHLSPythonSources
   SOURCES
-    uip.py
+    transforms.py
     __init__.py
     _mlir_libs/_scalehls.pyi
 )

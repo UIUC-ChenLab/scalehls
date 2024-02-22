@@ -4,4 +4,4 @@
 import scalehls.ir
 from scalehls.dialects import linalg
 from scalehls.dialects import hls
-from scalehls import uip
+from scalehls import transforms
