@@ -285,9 +285,11 @@ static LogicalResult verifyTripCountsAndSteps(Operation *op, Value channel) {
 }
 
 LogicalResult StreamReadOp::verify() {
-  if (getResult())
-    if (getChannel().getType().getElementType() != getResult().getType())
-      return emitOpError("result type doesn't align with channel type");
+  if (getChannel().getType().getElementType() != getResult().getType())
+    return emitOpError("result type doesn't align with channel type");
+  if (getInit())
+    if (getInit().getType() != getResult().getType())
+      return emitOpError("initial value type doesn't align with result type");
   return verifyTripCountsAndSteps(*this, getChannel());
 }
 

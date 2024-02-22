@@ -104,8 +104,22 @@ static void readStreamAndInsertSlice(ArrayRef<Value> ivs,
   auto [offsets, sizes, strides] =
       getSliceInfo(ivs, streamType.getIterMap().getResults(),
                    streamType.getElementShape(), packing, loc, rewriter);
+
+  // As we are going to insert a tensor slice back to the "input" tensor, to
+  // avoid unnecessary memory allocation and copy, we need to extract the slice
+  // from the "input" tensor first.
+  auto extractSlice = rewriter.create<tensor::ExtractSliceOp>(
+      loc, tensor, offsets, sizes, strides);
+  auto init =
+      llvm::cast<TypedValue<RankedTensorType>>(extractSlice.getResult());
+  if (packing)
+    init = rewriter.create<tensor::CollapseShapeOp>(
+        loc, init, getPackingReassociation(streamType.getElementRank()));
+
+  // Then we take the extracted tensor as the "init" operand of the stream read
+  // op, making it a "payload-carried" style operation.
   auto streamRead = rewriter.create<hls::StreamReadOp>(
-      loc, streamType.getElementType(), channel);
+      loc, streamType.getElementType(), channel, init);
   auto slice = llvm::cast<TypedValue<RankedTensorType>>(streamRead.getResult());
 
   if (packing) {

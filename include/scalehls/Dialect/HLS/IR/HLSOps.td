@@ -177,13 +177,17 @@ def StreamReadOp : HLSOp<"stream_read", [
     the popped value is dropped. Each stream channel can be read multiple times.
   }];
 
-  let arguments = (ins AnyStream:$channel);
-  let results = (outs Optional<AnyType>:$result);
+  let arguments = (ins AnyStream:$channel, Optional<AnyType>:$init);
+  let results = (outs AnyType:$result);
   let assemblyFormat = [{
-    $channel attr-dict `:` functional-type($channel, $result)
+    $channel (`init` $init^)? attr-dict `:` functional-type(operands, $result)
   }];
 
   let hasVerifier = 1;
+  let builders = [
+    OpBuilder<(ins "mlir::Type":$result, "mlir::Value":$channel),
+        "build($_builder, $_state, result, channel, nullptr);">
+  ];
 }
 
 def StreamWriteOp : HLSOp<"stream_write", [

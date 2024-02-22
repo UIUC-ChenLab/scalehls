@@ -75,10 +75,12 @@ struct ScalarizeStreamReadOp : public OpRewritePattern<hls::StreamReadOp> {
 
     rewriter.setInsertionPoint(read);
     auto elementType = streamType.getShapedElementType();
-    auto init = rewriter.create<hls::TensorInitOp>(loc, elementType);
+    auto init = read.getInit();
+    if (!init)
+      init = rewriter.create<hls::TensorInitOp>(loc, elementType);
     auto [ivs, result, iterArg] = constructLoops(
         elementType.getShape(), SmallVector<int64_t>(elementType.getRank(), 1),
-        loc, rewriter, init);
+        loc, rewriter, llvm::cast<TypedValue<RankedTensorType>>(init));
 
     auto scalarRead = rewriter.create<hls::StreamReadOp>(
         loc, elementType.getElementType(), cast);
