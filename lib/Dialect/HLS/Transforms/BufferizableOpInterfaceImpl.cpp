@@ -16,20 +16,20 @@ using namespace bufferization;
 using namespace scalehls;
 using namespace hls;
 
-/// Bufferization of dispatch/task operation. Replace with a new dispatch/task
+/// Bufferization of schedule/task operation. Replace with a new schedule/task
 /// that yields memrefs.
 template <typename OpType>
-struct DispatchOrTaskOpInterface
+struct ScheduleOrTaskOpInterface
     : public BufferizableOpInterface::ExternalModel<
-          DispatchOrTaskOpInterface<OpType>, OpType> {
-  /// Dispatch/task do not have tensor OpOperands. Thus, no OpOperand will be
+          ScheduleOrTaskOpInterface<OpType>, OpType> {
+  /// Schedule/task do not have tensor OpOperands. Thus, no OpOperand will be
   /// bufferized to memory read/write or be aliased to any returned values.
   AliasingValueList getAliasingValues(Operation *op, OpOperand &opOperand,
                                       const AnalysisState &state) const {
     return {};
   }
 
-  // Dispatch/task do not have tensor OpOperands. The yielded value can be any
+  // Schedule/task do not have tensor OpOperands. The yielded value can be any
   // SSA value that is in scope. To allow for use-def chain traversal in the
   // analysis, the yielded value is aliasing with the result.
   AliasingOpOperandList
@@ -58,13 +58,13 @@ struct DispatchOrTaskOpInterface
       newTypes.push_back(*bufferType);
     }
 
-    // Create new dispatch/task op.
+    // Create new schedule/task op.
     rewriter.setInsertionPoint(concreteOp);
     auto newOp = rewriter.create<OpType>(concreteOp.getLoc(), newTypes);
     rewriter.inlineRegionBefore(concreteOp.getBody(), newOp.getBody(),
                                 newOp.getBody().end());
 
-    // Replace dispatch/task op results.
+    // Replace schedule/task op results.
     replaceOpWithBufferizedValues(rewriter, concreteOp, newOp->getResults());
     return success();
   }
@@ -104,7 +104,7 @@ struct YieldOpInterface
 
   AliasingValueList getAliasingValues(Operation *op, OpOperand &opOperand,
                                       const AnalysisState &state) const {
-    if (isa<DispatchOp, TaskOp>(op->getParentOp()))
+    if (isa<ScheduleOp, TaskOp>(op->getParentOp()))
       return {{op->getParentOp()->getResult(opOperand.getOperandNumber()),
                BufferRelation::Equivalent}};
     return {};
@@ -238,8 +238,8 @@ struct TensorInitOpInterface
 void mlir::scalehls::hls::registerBufferizableOpInterfaceExternalModels(
     DialectRegistry &registry) {
   registry.addExtension(+[](MLIRContext *ctx, HLSDialect *dialect) {
-    DispatchOp::attachInterface<DispatchOrTaskOpInterface<DispatchOp>>(*ctx);
-    TaskOp::attachInterface<DispatchOrTaskOpInterface<TaskOp>>(*ctx);
+    ScheduleOp::attachInterface<ScheduleOrTaskOpInterface<ScheduleOp>>(*ctx);
+    TaskOp::attachInterface<ScheduleOrTaskOpInterface<TaskOp>>(*ctx);
     YieldOp::attachInterface<YieldOpInterface>(*ctx);
     hls::TensorInitOp::attachInterface<TensorInitOpInterface>(*ctx);
   });

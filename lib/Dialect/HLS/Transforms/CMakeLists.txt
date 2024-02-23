@@ -4,8 +4,7 @@ add_mlir_dialect_library(MLIRScaleHLSHLSTransforms
   ReduceTensorToStream.cpp
   MaterializeStream.cpp
   ScalarizeStream.cpp
-  CreateDataflow.cpp
-  LowerDataflow.cpp
+  ScheduleDataflow.cpp
   ConvertDataflowToFunc.cpp
   ApplyTransformPattern.cpp
   ComprehensiveBufferize.cpp

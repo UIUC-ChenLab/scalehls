@@ -22,19 +22,14 @@ MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(HLS, hls, hls::HLSDialect)
 // HLS Dialect Attributes
 //===----------------------------------------------------------------------===//
 
-static_assert(static_cast<int>(MlirPortKind::INPUT) ==
-                      static_cast<int>(PortKind::INPUT) &&
-                  static_cast<int>(MlirPortKind::OUTPUT) ==
-                      static_cast<int>(PortKind::OUTPUT),
-              "MlirPortKind (C-API) and PortKind (C++) mismatch");
-
-bool mlirAttrIsHLSPortKindAttr(MlirAttribute attr) {
-  return unwrap(attr).isa<hls::PortKindAttr>();
+bool mlirAttrIsHLSMemoryKindAttr(MlirAttribute attr) {
+  return unwrap(attr).isa<hls::MemoryKindAttr>();
 }
-MlirAttribute mlirHLSPortKindAttrGet(MlirContext ctx, MlirPortKind kind) {
-  return wrap(hls::PortKindAttr::get(unwrap(ctx), static_cast<PortKind>(kind)));
+MlirAttribute mlirHLSMemoryKindAttrGet(MlirContext ctx, MlirMemoryKind kind) {
+  return wrap(
+      hls::MemoryKindAttr::get(unwrap(ctx), static_cast<MemoryKind>(kind)));
 }
-MlirPortKind mlirHLSPortKindAttrGetValue(MlirAttribute attr) {
-  return static_cast<MlirPortKind>(
-      unwrap(attr).cast<hls::PortKindAttr>().getValue());
+MlirMemoryKind mlirHLSMemoryKindAttrGetValue(MlirAttribute attr) {
+  return static_cast<MlirMemoryKind>(
+      unwrap(attr).cast<hls::MemoryKindAttr>().getValue());
 }

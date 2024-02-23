@@ -300,35 +300,35 @@ bool hls::hasRuntimeAttr(Operation *op) {
 // Transform Utils
 //===----------------------------------------------------------------------===//
 
-/// Wrap the operations in the block with dispatch op.
-DispatchOp hls::dispatchBlock(StringRef name, Block *block,
+/// Wrap the operations in the block with schedule op.
+ScheduleOp hls::scheduleBlock(StringRef name, Block *block,
                               PatternRewriter &rewriter) {
-  if (!block->getOps<DispatchOp>().empty() ||
+  if (!block->getOps<ScheduleOp>().empty() ||
       !isa<func::FuncOp, affine::AffineForOp, scf::ForOp>(block->getParentOp()))
     return nullptr;
 
   auto loc = rewriter.getUnknownLoc();
   ValueRange returnValues(block->getTerminator()->getOperands());
   rewriter.setInsertionPointToStart(block);
-  auto dispatch = rewriter.create<DispatchOp>(loc, returnValues);
+  auto schedule = rewriter.create<ScheduleOp>(loc, returnValues);
 
-  auto &dispatchBlock = dispatch.getBody().emplaceBlock();
-  rewriter.setInsertionPointToEnd(&dispatchBlock);
+  auto &scheduleBlock = schedule.getBody().emplaceBlock();
+  rewriter.setInsertionPointToEnd(&scheduleBlock);
   rewriter.create<YieldOp>(loc, returnValues);
 
-  auto &dispatchOps = dispatchBlock.getOperations();
+  auto &scheduleOps = scheduleBlock.getOperations();
   auto &parentOps = block->getOperations();
-  dispatchOps.splice(dispatchBlock.begin(), parentOps,
+  scheduleOps.splice(scheduleBlock.begin(), parentOps,
                      std::next(parentOps.begin()), std::prev(parentOps.end()));
-  block->getTerminator()->setOperands(dispatch.getResults());
+  block->getTerminator()->setOperands(schedule.getResults());
 
   unsigned taskId = 0;
-  for (auto &op : llvm::make_early_inc_range(dispatch.getOps())) {
+  for (auto &op : llvm::make_early_inc_range(schedule.getOps())) {
     assert(!isa<hls::StreamBufferOp>(op) && !isa<hls::TensorToStreamOp>(op) &&
            !isa<hls::StreamToTensorOp>(op) &&
-           "stream op must be materialized before being dispatched");
+           "stream op must be materialized before being scheduleed");
     assert(!isa<tensor::TensorDialect>(op.getDialect()) &&
-           "tensor op must be bufferized before being dispatched");
+           "tensor op must be bufferized before being scheduleed");
     if (isa<linalg::LinalgOp, affine::AffineForOp, scf::ForOp>(op)) {
       auto task = fuseOpsIntoTask({&op}, rewriter);
       std::string taskName = name.str() + "_" + std::to_string(taskId++);
@@ -336,7 +336,7 @@ DispatchOp hls::dispatchBlock(StringRef name, Block *block,
       task->setAttr(taskName, rewriter.getUnitAttr());
     }
   }
-  return dispatch;
+  return schedule;
 }
 
 /// Fuse the given operations into a new task. The new task will be created
@@ -390,64 +390,6 @@ TaskOp hls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
   return task;
 }
 
-/// Fuse multiple nodes into a new node.
-NodeOp hls::fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter) {
-  assert((nodes.size() > 1) && "must fuse at least two nodes");
-
-  // Collect inputs, outputs, and params of the new node.
-  llvm::SetVector<Value> inputs;
-  llvm::SmallVector<unsigned, 8> inputTaps;
-  llvm::SmallVector<Location, 8> inputLocs;
-  llvm::SetVector<Value> outputs;
-  llvm::SmallVector<Location, 8> outputLocs;
-  llvm::SetVector<Value> params;
-  llvm::SmallVector<Location, 8> paramLocs;
-
-  for (auto node : nodes) {
-    for (auto output : node.getOutputs())
-      if (outputs.insert(output))
-        outputLocs.push_back(output.getLoc());
-    for (auto param : node.getParams())
-      if (params.insert(param))
-        paramLocs.push_back(param.getLoc());
-  }
-  for (auto node : nodes)
-    for (auto input : llvm::enumerate(node.getInputs())) {
-      if (outputs.count(input.value()))
-        continue;
-      if (inputs.insert(input.value())) {
-        inputLocs.push_back(input.value().getLoc());
-        inputTaps.push_back(node.getInputTap(input.index()));
-      }
-    }
-
-  // Construct the new node after the last node.
-  rewriter.setInsertionPointAfter(nodes.back());
-  auto newNode = rewriter.create<NodeOp>(
-      rewriter.getUnknownLoc(), inputs.getArrayRef(), outputs.getArrayRef(),
-      params.getArrayRef(), inputTaps);
-  auto block = rewriter.createBlock(&newNode.getBody());
-  block->addArguments(ValueRange(inputs.getArrayRef()), inputLocs);
-  block->addArguments(ValueRange(outputs.getArrayRef()), outputLocs);
-  block->addArguments(ValueRange(params.getArrayRef()), paramLocs);
-
-  // Inline all nodes into the new node.
-  for (auto node : nodes) {
-    auto &nodeOps = node.getBody().front().getOperations();
-    auto &newNodeOps = newNode.getBody().front().getOperations();
-    newNodeOps.splice(newNode.end(), nodeOps);
-    for (auto t : llvm::zip(node.getBody().getArguments(), node.getOperands()))
-      std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
-    rewriter.eraseOp(node);
-  }
-
-  for (auto t : llvm::zip(newNode.getOperands(), block->getArguments()))
-    std::get<0>(t).replaceUsesWithIf(std::get<1>(t), [&](OpOperand &use) {
-      return newNode->isProperAncestor(use.getOwner());
-    });
-  return newNode;
-}
-
 //===----------------------------------------------------------------------===//
 // Analysis Utils
 //===----------------------------------------------------------------------===//
@@ -488,179 +430,27 @@ bool hls::isUnknown(MemRefType type) {
   return kind == MemoryKind::UNKNOWN;
 }
 
-/// A helper to get all users of a buffer except the given node and with the
-/// given kind (producer or consumer).
-static auto getUsersExcept(Value buffer, PortKind kind, NodeOp except) {
-  SmallVector<NodeOp> nodes;
-  for (auto &use : buffer.getUses())
-    if (auto node = dyn_cast<NodeOp>(use.getOwner()))
-      if (node != except && node.getPortKind(use) == kind)
-        nodes.push_back(node);
-  return nodes;
-}
-
-/// Get the consumer/producer nodes of the given buffer expect the given op.
-SmallVector<NodeOp> hls::getConsumersExcept(Value buffer, NodeOp except) {
-  return getUsersExcept(buffer, PortKind::INPUT, except);
-}
-SmallVector<NodeOp> hls::getProducersExcept(Value buffer, NodeOp except) {
-  return getUsersExcept(buffer, PortKind::OUTPUT, except);
-}
-SmallVector<NodeOp> hls::getConsumers(Value buffer) {
-  return getConsumersExcept(buffer, NodeOp());
-}
-SmallVector<NodeOp> hls::getProducers(Value buffer) {
-  return getProducersExcept(buffer, NodeOp());
-}
-SmallVector<NodeOp> hls::getDependentConsumers(Value buffer, NodeOp node) {
-  // If the buffer is defined outside of a dependence free schedule op, we can
-  // ignore back dependences.
-  bool ignoreBackDependence =
-      buffer.isa<BlockArgument>() && node.getScheduleOp().isDependenceFree();
-
-  DominanceInfo domInfo;
-  SmallVector<NodeOp> nodes;
-  for (auto consumer : getConsumersExcept(buffer, node))
-    if (!ignoreBackDependence || domInfo.properlyDominates(node, consumer))
-      nodes.push_back(consumer);
-  return nodes;
-}
-
-/// A helper to get all nested users of a buffer except the given node and with
-/// the given kind (producer or consumer).
-static SmallVector<std::pair<NodeOp, Value>>
-getNestedUsersExcept(Value buffer, PortKind kind, NodeOp except) {
-  SmallVector<std::tuple<NodeOp, Value, PortKind>> worklist;
-
-  // A helper to append all node users of the given buffer.
-  auto appendWorklist = [&](Value buffer) {
-    for (auto &use : buffer.getUses())
-      if (auto node = dyn_cast<NodeOp>(use.getOwner()))
-        if (node != except)
-          worklist.push_back({node, buffer, node.getPortKind(use)});
-  };
-
-  // Initialize the worklist.
-  appendWorklist(buffer);
-
-  SmallVector<std::pair<NodeOp, Value>> nestedUsers;
-  while (!worklist.empty()) {
-    auto current = worklist.pop_back_val();
-    auto node = std::get<0>(current);
-    auto nodeBuffer = std::get<1>(current);
-    auto nodeKind = std::get<2>(current);
-
-    // If the current node doesn't have hierarchy, we add it to results if the
-    // node kind is aligned.
-    if (!node.hasHierarchy()) {
-      if (nodeKind == kind)
-        nestedUsers.push_back({node, nodeBuffer});
-      continue;
-    }
-
-    // Otherwise, we should delve into the hierarchy and traverse all contained
-    // schedules.
-    auto index =
-        llvm::find(node.getOperands(), nodeBuffer) - node.operand_begin();
-    assert(index != node.getNumOperands() && "invalid node or node buffer");
-    auto arg = node.getBody().getArgument(index);
-
-    for (auto &use : arg.getUses())
-      if (auto schedule = dyn_cast<ScheduleOp>(use.getOwner()))
-        appendWorklist(schedule.getBody().getArgument(use.getOperandNumber()));
-  }
-  return nestedUsers;
-}
-
-/// Get the nested consumer/producer nodes of the given buffer expect the given
-/// node. The corresponding buffer values are also returned.
-SmallVector<std::pair<NodeOp, Value>>
-hls::getNestedConsumersExcept(Value buffer, NodeOp except) {
-  return getNestedUsersExcept(buffer, PortKind::INPUT, except);
-}
-SmallVector<std::pair<NodeOp, Value>>
-hls::getNestedProducersExcept(Value buffer, NodeOp except) {
-  return getNestedUsersExcept(buffer, PortKind::OUTPUT, except);
-}
-SmallVector<std::pair<NodeOp, Value>> hls::getNestedConsumers(Value buffer) {
-  return getNestedConsumersExcept(buffer, NodeOp());
-}
-SmallVector<std::pair<NodeOp, Value>> hls::getNestedProducers(Value buffer) {
-  return getNestedProducersExcept(buffer, NodeOp());
-}
-
-/// Get the depth of a buffer or stream channel. Note that only if the defining
-/// operation of the buffer is not a BufferOp or stream types, the returned
-/// result will be 1.
-unsigned hls::getBufferDepth(Value memref) {
-  if (auto streamType = memref.getType().dyn_cast<StreamType>()) {
-    return streamType.getDepth();
-  }
-  return 1;
-}
-
-/// Find buffer value or buffer op across the dataflow hierarchy.
-Value hls::findBuffer(Value memref) {
-  if (auto arg = memref.dyn_cast<BlockArgument>()) {
-    if (auto node = dyn_cast<NodeOp>(arg.getParentBlock()->getParentOp()))
-      return findBuffer(node->getOperand(arg.getArgNumber()));
-    else if (auto schedule =
-                 dyn_cast<ScheduleOp>(arg.getParentBlock()->getParentOp()))
-      return findBuffer(schedule->getOperand(arg.getArgNumber()));
-    return memref;
-  } else if (auto viewOp = memref.getDefiningOp<ViewLikeOpInterface>())
-    return findBuffer(viewOp.getViewSource());
-  else if (auto buffer = memref.getDefiningOp<hls::BufferLikeInterface>())
-    return buffer.getMemref();
-  return Value();
-}
-hls::BufferLikeInterface hls::findBufferOp(Value memref) {
-  if (auto buffer = findBuffer(memref))
-    return buffer.getDefiningOp<hls::BufferLikeInterface>();
-  return hls::BufferLikeInterface();
-}
-
-/// Check whether the given buffer is external.
-bool hls::isExtBuffer(Value memref) {
-  if (auto type = memref.getType().dyn_cast<MemRefType>())
-    return isDram(type);
-  return false;
-}
-
 /// Check whether the given use has read/write semantics.
 bool hls::isRead(OpOperand &use) {
-  // For NodeOp and ScheduleOp, we don't rely on memory effect interface.
-  // Instead, we delve into its region to figure out the effect. However, for
-  // InstanceOp, we don't need this recursive approach any more.
-  if (auto node = dyn_cast<NodeOp>(use.getOwner()))
-    return llvm::any_of(
-        node.getBody().getArgument(use.getOperandNumber()).getUses(),
-        [](OpOperand &argUse) { return isRead(argUse); });
-  else if (auto schedule = dyn_cast<ScheduleOp>(use.getOwner()))
-    return llvm::any_of(
-        schedule.getBody().getArgument(use.getOperandNumber()).getUses(),
-        [](OpOperand &argUse) { return isRead(argUse); });
-  else if (auto view = dyn_cast<ViewLikeOpInterface>(use.getOwner()))
+  if (auto view = dyn_cast<ViewLikeOpInterface>(use.getOwner()))
     return llvm::any_of(view->getUses(),
                         [](OpOperand &viewUse) { return isRead(viewUse); });
-  return hasEffect<MemoryEffects::Read>(use.getOwner(), use.get()) ||
-         isa<StreamReadOp>(use.getOwner());
+  else if (auto streamView = dyn_cast<StreamViewLikeInterface>(use.getOwner()))
+    return llvm::any_of(streamView->getUses(), [](OpOperand &streamViewUse) {
+      return isRead(streamViewUse);
+    });
+  return hasEffect<MemoryEffects::Read>(use.getOwner(), use.get());
 }
+
 bool hls::isWritten(OpOperand &use) {
-  // For ScheduleOp, we don't rely on memory effect interface. Instead, we delve
-  // into its region to figure out the effect. However, for InstanceOp and
-  // NodeOp, we don't need this recursive approach any more.
-  if (auto node = dyn_cast<NodeOp>(use.getOwner()))
-    return node.getPortKind(use) == PortKind::OUTPUT;
-  else if (auto schedule = dyn_cast<ScheduleOp>(use.getOwner()))
-    return llvm::any_of(
-        schedule.getBody().getArgument(use.getOperandNumber()).getUses(),
-        [](OpOperand &argUse) { return isWritten(argUse); });
-  else if (auto view = dyn_cast<ViewLikeOpInterface>(use.getOwner()))
+  if (auto view = dyn_cast<ViewLikeOpInterface>(use.getOwner()))
     return llvm::any_of(view->getUses(),
                         [](OpOperand &viewUse) { return isWritten(viewUse); });
-  return hasEffect<MemoryEffects::Write>(use.getOwner(), use.get()) ||
-         isa<StreamWriteOp>(use.getOwner());
+  else if (auto streamView = dyn_cast<StreamViewLikeInterface>(use.getOwner()))
+    return llvm::any_of(streamView->getUses(), [](OpOperand &streamViewUse) {
+      return isWritten(streamViewUse);
+    });
+  return hasEffect<MemoryEffects::Write>(use.getOwner(), use.get());
 }
 
 func::FuncOp hls::getTopFunc(ModuleOp module, std::string topFuncName) {
@@ -717,17 +507,4 @@ int64_t hls::getPartitionFactors(MemRefType memrefType,
   else if (factors)
     factors->assign(memrefType.getRank(), 1);
   return accumFactor;
-}
-
-/// The current op or contained ops have effect on external buffers.
-bool hls::hasEffectOnExternalBuffer(Operation *op) {
-  auto result = op->walk([](MemoryEffectOpInterface effectOp) {
-    SmallVector<MemoryEffects::EffectInstance> effects;
-    effectOp.getEffects(effects);
-    for (auto effect : effects)
-      if (isExtBuffer(effect.getValue()))
-        return WalkResult::interrupt();
-    return WalkResult::advance();
-  });
-  return result.wasInterrupted();
 }

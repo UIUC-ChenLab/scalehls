@@ -25,55 +25,30 @@ mlirSemanticsInitializeBlockArguments(MlirOperation semantics,
                                       const std::vector<MlirValue> &ports);
 
 //===----------------------------------------------------------------------===//
-// HLS Dialect Types
-//===----------------------------------------------------------------------===//
-
-MLIR_CAPI_EXPORTED bool mlirTypeIsHLSStructType(MlirType type);
-MLIR_CAPI_EXPORTED MlirType mlirHLSStructTypeGet(MlirStringRef name,
-                                                 MlirContext ctx);
-
-MLIR_CAPI_EXPORTED bool mlirTypeIsHLSTypeType(MlirType type);
-MLIR_CAPI_EXPORTED MlirType mlirHLSTypeTypeGet(MlirContext ctx);
-
-MLIR_CAPI_EXPORTED bool mlirTypeIsHLSIntParamType(MlirType type);
-MLIR_CAPI_EXPORTED MlirType mlirHLSIntParamTypeGet(MlirContext ctx);
-
-MLIR_CAPI_EXPORTED bool mlirTypeIsHLSFloatParamType(MlirType type);
-MLIR_CAPI_EXPORTED MlirType mlirHLSFloatParamTypeGet(MlirContext ctx);
-
-MLIR_CAPI_EXPORTED bool mlirTypeIsHLSPortType(MlirType type);
-MLIR_CAPI_EXPORTED MlirType mlirHLSPortTypeGet(MlirContext ctx);
-
-MLIR_CAPI_EXPORTED bool mlirTypeIsHLSTaskImplType(MlirType type);
-MLIR_CAPI_EXPORTED MlirType mlirHLSTaskImplTypeGet(MlirContext ctx);
-
-MLIR_CAPI_EXPORTED bool mlirTypeIsHLSMemoryKindType(MlirType type);
-MLIR_CAPI_EXPORTED MlirType mlirHLSMemoryKindTypeGet(MlirContext ctx);
-
-//===----------------------------------------------------------------------===//
 // HLS Dialect Attributes
 //===----------------------------------------------------------------------===//
 
-enum class MlirParamKind : uint32_t {
-  TILE_SIZE = 0,
-  PARALLEL_SIZE = 1,
-  IP_TEMPLATE = 2,
-  TASK_IMPL = 3,
-  MEMORY_KIND = 4
+enum class MlirMemoryKind : uint32_t {
+  UNKNOWN = 0,
+  LUTRAM_1P = 1,
+  LUTRAM_2P = 2,
+  LUTRAM_S2P = 3,
+  BRAM_1P = 4,
+  BRAM_2P = 5,
+  BRAM_S2P = 6,
+  BRAM_T2P = 7,
+  URAM_1P = 8,
+  URAM_2P = 9,
+  URAM_S2P = 10,
+  URAM_T2P = 11,
+  DRAM = 12
 };
 
-MLIR_CAPI_EXPORTED bool mlirAttrIsHLSParamKindAttr(MlirAttribute attr);
-MLIR_CAPI_EXPORTED MlirAttribute mlirHLSParamKindAttrGet(MlirContext ctx,
-                                                         MlirParamKind kind);
-MLIR_CAPI_EXPORTED MlirParamKind
-mlirHLSParamKindAttrGetValue(MlirAttribute attr);
-
-enum class MlirPortKind : uint32_t { INPUT = 0, OUTPUT = 1, PARAM = 2 };
-
-MLIR_CAPI_EXPORTED bool mlirAttrIsHLSPortKindAttr(MlirAttribute attr);
-MLIR_CAPI_EXPORTED MlirAttribute mlirHLSPortKindAttrGet(MlirContext ctx,
-                                                        MlirPortKind kind);
-MLIR_CAPI_EXPORTED MlirPortKind mlirHLSPortKindAttrGetValue(MlirAttribute attr);
+MLIR_CAPI_EXPORTED bool mlirAttrIsHLSMemoryKindAttr(MlirAttribute attr);
+MLIR_CAPI_EXPORTED MlirAttribute mlirHLSMemoryKindAttrGet(MlirContext ctx,
+                                                          MlirMemoryKind kind);
+MLIR_CAPI_EXPORTED MlirMemoryKind
+mlirHLSMemoryKindAttrGetValue(MlirAttribute attr);
 
 #ifdef __cplusplus
 }

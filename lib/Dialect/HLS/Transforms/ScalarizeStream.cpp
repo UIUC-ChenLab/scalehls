@@ -176,7 +176,7 @@ struct ScalarizeStreamReassociateOp
 
 namespace {
 template <typename OpTy>
-struct ScalarizeDispatchOrTaskOp : public OpRewritePattern<OpTy> {
+struct ScalarizeScheduleOrTaskOp : public OpRewritePattern<OpTy> {
   using OpRewritePattern<OpTy>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(OpTy op,
@@ -222,8 +222,8 @@ struct ScalarizeStream : public ScalarizeStreamBase<ScalarizeStream> {
     patterns.add<ScalarizeStreamReadOp>(context);
     patterns.add<ScalarizeStreamWriteOp>(context);
     patterns.add<ScalarizeStreamReassociateOp>(context);
-    patterns.add<ScalarizeDispatchOrTaskOp<hls::DispatchOp>>(context);
-    patterns.add<ScalarizeDispatchOrTaskOp<hls::TaskOp>>(context);
+    patterns.add<ScalarizeScheduleOrTaskOp<hls::ScheduleOp>>(context);
+    patterns.add<ScalarizeScheduleOrTaskOp<hls::TaskOp>>(context);
     (void)applyPatternsAndFoldGreedily(op, std::move(patterns));
   }
 };

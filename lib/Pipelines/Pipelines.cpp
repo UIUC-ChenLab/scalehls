@@ -73,9 +73,7 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
       [](OpPassManager &pm, const ScaleHLSPyTorchPipelineOptions &opts) {
         addLinalgTransformPasses(pm);
         addComprehensiveBufferizePasses(pm);
-        pm.addNestedPass<func::FuncOp>(hls::createCreateDataflowPass());
-        pm.addPass(mlir::createCanonicalizerPass());
-        pm.addNestedPass<func::FuncOp>(hls::createLowerDataflowPass());
+        pm.addNestedPass<func::FuncOp>(hls::createScheduleDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
         addConvertDataflowToFuncPasses(pm);
       });

@@ -28,8 +28,7 @@ std::unique_ptr<Pass> createReduceTensorToStreamPass();
 std::unique_ptr<Pass> createMaterializeStreamPass(bool enablePacking = true);
 std::unique_ptr<Pass> createScalarizeStreamPass();
 
-std::unique_ptr<Pass> createCreateDataflowPass();
-std::unique_ptr<Pass> createLowerDataflowPass();
+std::unique_ptr<Pass> createScheduleDataflowPass();
 std::unique_ptr<Pass> createConvertDataflowToFuncPass();
 
 std::unique_ptr<Pass> createApplyTransformPatternPass();

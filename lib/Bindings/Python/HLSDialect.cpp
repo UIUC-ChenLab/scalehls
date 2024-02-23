@@ -21,24 +21,34 @@ using namespace mlir::python::adaptors;
 //===----------------------------------------------------------------------===//
 
 void populateHLSAttributes(py::module &m) {
-  py::enum_<MlirPortKind>(m, "PortKind", py::module_local())
-      .value("input", MlirPortKind::INPUT)
-      .value("output", MlirPortKind::OUTPUT)
-      .value("param", MlirPortKind::PARAM);
+  py::enum_<MlirMemoryKind>(m, "MemoryKind", py::module_local())
+      .value("UNKNOWN", MlirMemoryKind::UNKNOWN)
+      .value("LUTRAM_1P", MlirMemoryKind::LUTRAM_1P)
+      .value("LUTRAM_2P", MlirMemoryKind::LUTRAM_2P)
+      .value("LUTRAM_S2P", MlirMemoryKind::LUTRAM_S2P)
+      .value("BRAM_1P", MlirMemoryKind::BRAM_1P)
+      .value("BRAM_2P", MlirMemoryKind::BRAM_2P)
+      .value("BRAM_S2P", MlirMemoryKind::BRAM_S2P)
+      .value("BRAM_T2P", MlirMemoryKind::BRAM_T2P)
+      .value("URAM_1P", MlirMemoryKind::URAM_1P)
+      .value("URAM_2P", MlirMemoryKind::URAM_2P)
+      .value("URAM_S2P", MlirMemoryKind::URAM_S2P)
+      .value("URAM_T2P", MlirMemoryKind::URAM_T2P)
+      .value("DRAM", MlirMemoryKind::DRAM);
 
   auto portKindAttr =
-      mlir_attribute_subclass(m, "PortKindAttr", mlirAttrIsHLSPortKindAttr);
+      mlir_attribute_subclass(m, "MemoryKindAttr", mlirAttrIsHLSMemoryKindAttr);
   portKindAttr.def_classmethod(
       "get",
-      [](py::object cls, MlirPortKind kind, MlirContext ctx) {
-        return cls(mlirHLSPortKindAttrGet(ctx, kind));
+      [](py::object cls, MlirMemoryKind kind, MlirContext ctx) {
+        return cls(mlirHLSMemoryKindAttrGet(ctx, kind));
       },
-      "Get an instance of PortKindAttr in given context.", py::arg("cls"),
+      "Get an instance of MemoryKindAttr in given context.", py::arg("cls"),
       py::arg("kind"), py::arg("context") = py::none());
   portKindAttr.def_property_readonly(
       "value",
-      [](MlirAttribute attr) { return mlirHLSPortKindAttrGetValue(attr); },
-      "Returns the value of PortKindAttr.");
+      [](MlirAttribute attr) { return mlirHLSMemoryKindAttrGetValue(attr); },
+      "Returns the value of MemoryKindAttr.");
 }
 
 //===----------------------------------------------------------------------===//

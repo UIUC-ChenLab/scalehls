@@ -55,32 +55,4 @@ def BufferLikeInterface : OpInterface<"BufferLikeInterface"> {
   ];
 }
 
-def ContainerLikeInterface : OpInterface<"ContainerLikeInterface"> {
-  let description = [{
-    This interface is used to represent containers, including dispatch, task,
-    schedule, and node.
-  }];
-  string cppNamespace = "mlir::scalehls::hls";
-
-  let methods = [    
-    InterfaceMethod<"Return body region of the stage",
-      "mlir::Region &", "getBody", (ins), "return $_op.getBody();">,
-    InterfaceMethod<"Check whether the stage has hierarchy",
-      "bool", "hasHierarchy", (ins), [{
-        return $_op.walk([&](ContainerLikeInterface stage) {
-          if (stage != $_op)
-            return WalkResult::interrupt();
-          return WalkResult::advance();
-        }).wasInterrupted();
-      }]>,
-    InterfaceMethod<"Return whether the value is a stage livein",
-                    "bool", "isLivein", (ins "mlir::Value":$value)>,
-    InterfaceMethod<"Return the liveins of the stage",
-                    "llvm::SmallVector<mlir::Value>", "getLiveins">,
-    InterfaceMethod<"Return the internal users of a stage livein",
-                    "llvm::SmallVector<mlir::Operation *>", "getLiveinUsers",
-                    (ins "mlir::Value":$livein)>,
-  ];
-}
-
 #endif // SCALEHLS_DIALECT_HLS_HLSINTERFACES_TD

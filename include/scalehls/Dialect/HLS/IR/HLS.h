@@ -63,7 +63,7 @@ void setRuntimeAttr(Operation *op);
 
 /// Wrap the operations in the block with dispatch op. Return a nullptr if
 /// failed.
-DispatchOp dispatchBlock(StringRef name, Block *block,
+ScheduleOp scheduleBlock(StringRef name, Block *block,
                          PatternRewriter &rewriter);
 
 /// Fuse the given operations into a new task. The new task will be created
@@ -71,9 +71,6 @@ DispatchOp dispatchBlock(StringRef name, Block *block,
 /// method always succeeds even if the resulting IR is invalid.
 TaskOp fuseOpsIntoTask(ArrayRef<Operation *> ops, PatternRewriter &rewriter,
                        Operation *insertToOp = nullptr);
-
-/// Fuse multiple nodes into a new node.
-NodeOp fuseNodeOps(ArrayRef<NodeOp> nodes, PatternRewriter &rewriter);
 
 //===----------------------------------------------------------------------===//
 // Analysis Utils
@@ -87,34 +84,6 @@ bool isRamS2P(MemRefType type);
 bool isRamT2P(MemRefType type);
 bool isDram(MemRefType type);
 bool isUnknown(MemRefType type);
-
-/// Get the consumer/producer nodes of the given buffer expect the given op.
-SmallVector<NodeOp> getConsumersExcept(Value buffer, NodeOp except);
-SmallVector<NodeOp> getProducersExcept(Value buffer, NodeOp except);
-SmallVector<NodeOp> getConsumers(Value buffer);
-SmallVector<NodeOp> getProducers(Value buffer);
-SmallVector<NodeOp> getDependentConsumers(Value buffer, NodeOp node);
-
-/// Get the nested consumer/producer nodes of the given buffer expect the given
-/// node. The corresponding buffer values are also returned.
-SmallVector<std::pair<NodeOp, Value>> getNestedConsumersExcept(Value buffer,
-                                                               NodeOp except);
-SmallVector<std::pair<NodeOp, Value>> getNestedProducersExcept(Value buffer,
-                                                               NodeOp except);
-SmallVector<std::pair<NodeOp, Value>> getNestedConsumers(Value buffer);
-SmallVector<std::pair<NodeOp, Value>> getNestedProducers(Value buffer);
-
-/// Get the depth of a buffer or stream channel. Note that only if the defining
-/// operation of the buffer is not a BufferOp or stream types, the returned
-/// result will be 1.
-unsigned getBufferDepth(Value memref);
-
-/// Find buffer value or buffer op across the dataflow hierarchy.
-Value findBuffer(Value memref);
-hls::BufferLikeInterface findBufferOp(Value memref);
-
-/// Check whether the given buffer is external.
-bool isExtBuffer(Value memref);
 
 /// Check whether the given use has read/write semantics.
 bool isRead(OpOperand &use);
@@ -131,9 +100,6 @@ bool isFullyPartitioned(MemRefType memrefType);
 /// returned as well.
 int64_t getPartitionFactors(MemRefType memrefType,
                             SmallVectorImpl<int64_t> *factors = nullptr);
-
-/// The current op or contained ops have effect on external buffers.
-bool hasEffectOnExternalBuffer(Operation *op);
 
 } // namespace hls
 } // namespace scalehls

@@ -15,13 +15,13 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-struct DispatchFuncOp : public OpRewritePattern<func::FuncOp> {
+struct ScheduleFuncOp : public OpRewritePattern<func::FuncOp> {
   using OpRewritePattern<func::FuncOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(func::FuncOp func,
                                 PatternRewriter &rewriter) const override {
-    auto funcDispatch = dispatchBlock(func.getName(), &func.front(), rewriter);
-    if (!funcDispatch)
+    auto funcSchedule = scheduleBlock(func.getName(), &func.front(), rewriter);
+    if (!funcSchedule)
       return failure();
 
     unsigned loopId;
@@ -30,7 +30,7 @@ struct DispatchFuncOp : public OpRewritePattern<func::FuncOp> {
         std::string name =
             func.getName().str() + "_loop" + std::to_string(loopId++);
         auto loopBody = &op->getRegion(0).getBlocks().front();
-        dispatchBlock(name, loopBody, rewriter);
+        scheduleBlock(name, loopBody, rewriter);
       }
     });
     return success();
@@ -39,19 +39,19 @@ struct DispatchFuncOp : public OpRewritePattern<func::FuncOp> {
 } // namespace
 
 namespace {
-struct CreateDataflow : public CreateDataflowBase<CreateDataflow> {
+struct ScheduleDataflow : public ScheduleDataflowBase<ScheduleDataflow> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
 
-    // Dispatch the current function to create the dataflow hierarchy.
+    // Schedule the current function to create the dataflow hierarchy.
     mlir::RewritePatternSet patterns(context);
-    patterns.add<DispatchFuncOp>(context);
+    patterns.add<ScheduleFuncOp>(context);
     (void)applyOpPatternsAndFold({func}, std::move(patterns));
   }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::hls::createCreateDataflowPass() {
-  return std::make_unique<CreateDataflow>();
+std::unique_ptr<Pass> scalehls::hls::createScheduleDataflowPass() {
+  return std::make_unique<ScheduleDataflow>();
 }

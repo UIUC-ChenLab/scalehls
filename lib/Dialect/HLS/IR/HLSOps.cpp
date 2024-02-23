@@ -62,9 +62,8 @@ LogicalResult StreamToTensorOp::verify() {
 
 LogicalResult StreamOp::verify() {
   unsigned numWrites = 0;
-  for (auto user : (*this)->getUsers())
-    if (isa<StreamWriteOp>(user))
-      numWrites++;
+  for (auto &use : (*this)->getUses())
+    numWrites += isWritten(use);
   if (numWrites > 1)
     return emitOpError() << "stream is written more than once";
   return success();
@@ -120,7 +119,8 @@ LogicalResult StreamReadOp::verify() {
   if (getInit())
     if (getInit().getType() != getResult().getType())
       return emitOpError("initial value type doesn't align with result type");
-  return verifyTripCountsAndSteps(*this, getChannel());
+  return success();
+  // return verifyTripCountsAndSteps(*this, getChannel());
 }
 
 void StreamReadOp::getEffects(
@@ -137,7 +137,8 @@ void StreamReadOp::getEffects(
 LogicalResult StreamWriteOp::verify() {
   if (getChannel().getType().getElementType() != getValue().getType())
     return emitOpError("value type doesn't align with channel type");
-  return verifyTripCountsAndSteps(*this, getChannel());
+  return success();
+  // return verifyTripCountsAndSteps(*this, getChannel());
 }
 
 void StreamWriteOp::getEffects(
@@ -267,12 +268,12 @@ OpFoldResult StreamCastOp::fold(FoldAdaptor adaptor) {
 }
 
 //===----------------------------------------------------------------------===//
-// DispatchOp
+// ScheduleOp
 //===----------------------------------------------------------------------===//
 
 namespace {
 template <typename OpType>
-struct SimplifyDispatchOrTaskOutputs : public OpRewritePattern<OpType> {
+struct SimplifyScheduleOrTaskOutputs : public OpRewritePattern<OpType> {
   using OpRewritePattern<OpType>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(OpType op,
@@ -315,8 +316,8 @@ struct SimplifyDispatchOrTaskOutputs : public OpRewritePattern<OpType> {
 
 namespace {
 template <typename OpType>
-struct InlineDispatchOrTask : public OpRewritePattern<OpType> {
-  InlineDispatchOrTask(MLIRContext *context,
+struct InlineScheduleOrTask : public OpRewritePattern<OpType> {
+  InlineScheduleOrTask(MLIRContext *context,
                        llvm::function_ref<bool(OpType)> condition)
       : OpRewritePattern<OpType>(context), condition(condition) {}
 
@@ -340,7 +341,7 @@ private:
 
 namespace {
 template <typename OpType>
-struct DemoteYieldedOutput : public OpRewritePattern<OpType> {
+struct DemoteScheduleOrTaskOutputs : public OpRewritePattern<OpType> {
   using OpRewritePattern<OpType>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(OpType op,
@@ -369,23 +370,23 @@ struct DemoteYieldedOutput : public OpRewritePattern<OpType> {
 };
 } // namespace
 
-void DispatchOp::getCanonicalizationPatterns(RewritePatternSet &results,
+void ScheduleOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                              MLIRContext *context) {
-  results.add<SimplifyDispatchOrTaskOutputs<DispatchOp>>(context);
-  results.add<InlineDispatchOrTask<DispatchOp>>(context, [](DispatchOp op) {
+  results.add<SimplifyScheduleOrTaskOutputs<ScheduleOp>>(context);
+  results.add<InlineScheduleOrTask<ScheduleOp>>(context, [](ScheduleOp op) {
     return op.getOps<TaskOp>().empty() || llvm::hasSingleElement(op.getOps());
   });
-  results.add<DemoteYieldedOutput<DispatchOp>>(context);
+  results.add<DemoteScheduleOrTaskOutputs<ScheduleOp>>(context);
 }
 
-LogicalResult DispatchOp::verify() {
+LogicalResult ScheduleOp::verify() {
   if (getResultTypes() != getYieldOp().getOperandTypes())
     return emitOpError("yield type doesn't align with result type");
   return success();
 }
 
 /// Get the terminator yield op.
-YieldOp DispatchOp::getYieldOp() {
+YieldOp ScheduleOp::getYieldOp() {
   return cast<YieldOp>(getBody().front().getTerminator());
 }
 
@@ -395,13 +396,13 @@ YieldOp DispatchOp::getYieldOp() {
 
 void TaskOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                          MLIRContext *context) {
-  results.add<SimplifyDispatchOrTaskOutputs<TaskOp>>(context);
-  results.add<InlineDispatchOrTask<TaskOp>>(context, [](TaskOp op) {
+  results.add<SimplifyScheduleOrTaskOutputs<TaskOp>>(context);
+  results.add<InlineScheduleOrTask<TaskOp>>(context, [](TaskOp op) {
     return llvm::hasSingleElement(
-               op.getParentOp<DispatchOp>().getOps<TaskOp>()) ||
+               op.getParentOp<ScheduleOp>().getOps<TaskOp>()) ||
            llvm::hasSingleElement(op.getOps());
   });
-  results.add<DemoteYieldedOutput<TaskOp>>(context);
+  results.add<DemoteScheduleOrTaskOutputs<TaskOp>>(context);
 }
 
 LogicalResult TaskOp::verify() {
@@ -411,8 +412,8 @@ LogicalResult TaskOp::verify() {
 }
 
 /// Get the parent dispatch op.
-DispatchOp TaskOp::getDispatchOp() {
-  return (*this)->getParentOfType<DispatchOp>();
+ScheduleOp TaskOp::getScheduleOp() {
+  return (*this)->getParentOfType<ScheduleOp>();
 }
 
 /// Get the terminator yield op.
@@ -420,371 +421,27 @@ YieldOp TaskOp::getYieldOp() {
   return cast<YieldOp>(getBody().front().getTerminator());
 }
 
-bool TaskOp::isLivein(Value value) {
-  auto liveins = Liveness(*this).getLiveIn(&(*this).getBody().front());
-  return liveins.count(value);
-}
+// bool TaskOp::isLivein(Value value) {
+//   auto liveins = Liveness(*this).getLiveIn(&(*this).getBody().front());
+//   return liveins.count(value);
+// }
 
-SmallVector<Value> TaskOp::getLiveins() {
-  auto liveins = Liveness(*this).getLiveIn(&(*this).getBody().front());
-  return {liveins.begin(), liveins.end()};
-}
+// SmallVector<Value> TaskOp::getLiveins() {
+//   auto liveins = Liveness(*this).getLiveIn(&(*this).getBody().front());
+//   return {liveins.begin(), liveins.end()};
+// }
 
-SmallVector<Operation *> TaskOp::getLiveinUsers(Value livein) {
-  assert(isLivein(livein) && "invalid livein");
-  auto users = llvm::make_filter_range(livein.getUsers(), [&](Operation *user) {
-    return (*this)->isAncestor(user);
-  });
-  return {users.begin(), users.end()};
-}
-
-//===----------------------------------------------------------------------===//
-// ScheduleOp
-//===----------------------------------------------------------------------===//
-
-namespace {
-struct SimplifyScheduleOperands : public OpRewritePattern<ScheduleOp> {
-  using OpRewritePattern<ScheduleOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(ScheduleOp schedule,
-                                PatternRewriter &rewriter) const override {
-    bool hasUnusedPort = false;
-
-    // Identify input values that are used.
-    llvm::SmallDenseSet<BlockArgument, 4> unusedArgs;
-    SmallVector<Value, 4> usedOperands;
-    for (auto arg : schedule.getBody().getArguments())
-      if (arg.use_empty()) {
-        hasUnusedPort = true;
-        unusedArgs.insert(arg);
-      } else {
-        usedOperands.push_back(schedule.getOperand(arg.getArgNumber()));
-      }
-    schedule.getBody().front().eraseArguments(
-        [&](BlockArgument arg) { return unusedArgs.count(arg); });
-
-    // Construct new schedule.
-    if (hasUnusedPort) {
-      rewriter.setInsertionPoint(schedule);
-      auto newSchedule =
-          rewriter.create<ScheduleOp>(schedule.getLoc(), usedOperands);
-      rewriter.inlineRegionBefore(schedule.getBody(), newSchedule.getBody(),
-                                  newSchedule.getBody().end());
-      rewriter.eraseOp(schedule);
-      return success();
-    }
-    return failure();
-  }
-};
-} // namespace
-
-namespace {
-template <typename OpType>
-struct InlineScheduleOrNode : public OpRewritePattern<OpType> {
-  InlineScheduleOrNode(MLIRContext *context,
-                       llvm::function_ref<bool(OpType)> condition)
-      : OpRewritePattern<OpType>(context), condition(condition) {}
-
-  LogicalResult matchAndRewrite(OpType op,
-                                PatternRewriter &rewriter) const override {
-    if (condition(op)) {
-      auto &ops = op.getBody().front().getOperations();
-      auto &parentOps = op->getBlock()->getOperations();
-      parentOps.splice(op->getIterator(), ops);
-
-      for (auto t : llvm::zip(op.getBody().getArguments(), op.getOperands()))
-        std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
-      rewriter.eraseOp(op);
-      return success();
-    }
-    return failure();
-  }
-
-private:
-  llvm::function_ref<bool(OpType)> condition;
-};
-} // namespace
-
-void ScheduleOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                             MLIRContext *context) {
-  results.add<SimplifyScheduleOperands>(context);
-  results.add<InlineScheduleOrNode<ScheduleOp>>(
-      context, [](ScheduleOp op) { return op.getOps<NodeOp>().empty(); });
-}
-
-LogicalResult ScheduleOp::verify() {
-  if (getOperandTypes() != getBody().getArgumentTypes())
-    return emitOpError("operand type doesn't align with argument type");
-
-  if (getIsLegal())
-    for (auto &op : getOps())
-      if (!isa<NodeOp, BufferOp, ConstBufferOp, StreamOp>(op)) {
-        auto diag = emitOpError("legal schedule has illegal ops:\n");
-        diag.attachNote(op.getLoc())
-            .append("see current op: ")
-            .appendOp(op, OpPrintingFlags().printGenericOpForm());
-        return diag;
-      }
-  return success();
-}
-
-void ScheduleOp::getEffects(
-    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
-        &effects) {
-  for (auto value : getOperands())
-    if (value.getType().isa<MemRefType, StreamType>()) {
-      effects.emplace_back(MemoryEffects::Read::get(), value,
-                           SideEffects::DefaultResource::get());
-      effects.emplace_back(MemoryEffects::Write::get(), value,
-                           SideEffects::DefaultResource::get());
-    }
-}
-
-/// FIXME: Check whether the schedule is dependence free.
-bool ScheduleOp::isDependenceFree() {
-  return isa<func::FuncOp>((*this)->getParentOp());
-}
-
-/// Update the signature of the schedule op recursively.
-void ScheduleOp::updateSignatureRecursively() {
-  for (auto [operand, arg] : llvm::zip(getOperands(), getBody().getArguments()))
-    arg.setType(operand.getType());
-  for (auto node : getOps<NodeOp>())
-    node.updateSignatureRecursively();
-}
+// SmallVector<Operation *> TaskOp::getLiveinUsers(Value livein) {
+//   assert(isLivein(livein) && "invalid livein");
+//   auto users = llvm::make_filter_range(livein.getUsers(), [&](Operation
+//   *user) {
+//     return (*this)->isAncestor(user);
+//   });
+//   return {users.begin(), users.end()};
+// }
 
 //===----------------------------------------------------------------------===//
-// NodeOp
-//===----------------------------------------------------------------------===//
-
-namespace {
-struct SimplifyNodeIOs : public OpRewritePattern<NodeOp> {
-  using OpRewritePattern<NodeOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(NodeOp node,
-                                PatternRewriter &rewriter) const override {
-    bool hasUnusedPort = false;
-
-    // Identify input values that are used.
-    llvm::SmallDenseSet<BlockArgument, 4> unusedArgs;
-    SmallVector<Value, 4> usedInputs;
-    SmallVector<int32_t, 4> usedInputTaps;
-    SmallVector<Value, 4> usedOutputs;
-    SmallVector<Value, 4> usedParams;
-    for (auto arg : node.getBody().getArguments())
-      if (arg.use_empty()) {
-        hasUnusedPort = true;
-        unusedArgs.insert(arg);
-      } else {
-        auto idx = arg.getArgNumber();
-        if (node.getPortKind(idx) == PortKind::INPUT) {
-          usedInputs.push_back(node.getOperand(idx));
-          usedInputTaps.push_back(node.getInputTap(idx));
-        } else if (node.getPortKind(idx) == PortKind::OUTPUT)
-          usedOutputs.push_back(node.getOperand(idx));
-        else
-          usedParams.push_back(node.getOperand(idx));
-      }
-    node.getBody().front().eraseArguments(
-        [&](BlockArgument arg) { return unusedArgs.count(arg); });
-
-    // Construct new dataflow node.
-    if (hasUnusedPort) {
-      rewriter.setInsertionPoint(node);
-      auto newNode = rewriter.create<NodeOp>(
-          node.getLoc(), usedInputs, usedOutputs, usedParams,
-          rewriter.getI32ArrayAttr(usedInputTaps), node.getLevelAttr());
-      rewriter.inlineRegionBefore(node.getBody(), newNode.getBody(),
-                                  newNode.getBody().end());
-      rewriter.eraseOp(node);
-      return success();
-    }
-    return failure();
-  }
-};
-} // namespace
-
-void NodeOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                         MLIRContext *context) {
-  results.add<SimplifyNodeIOs>(context);
-  results.add<InlineScheduleOrNode<NodeOp>>(context, [](NodeOp op) {
-    return false;
-    // return llvm::hasSingleElement(op.getScheduleOp().getOps<NodeOp>());
-  });
-}
-
-LogicalResult NodeOp::verify() {
-  if (getOperandTypes() != getBody().getArgumentTypes())
-    return emitOpError("operand type doesn't align with argument type");
-
-  if (llvm::any_of(getParams(), [](Value param) {
-        return param.getType().isa<MemRefType, StreamType>();
-      }))
-    return emitOpError("node params should not be memref or stream typed");
-
-  if (getInputs().size() != getInputTaps().size())
-    return emitOpError("number of node inputs and input taps are not aligned");
-  for (auto t : llvm::zip(getInputs(), getInputTapsAsInt())) {
-    auto depth = getBufferDepth(std::get<0>(t));
-    auto inputTap = (unsigned)std::get<1>(t);
-    if (depth <= inputTap) {
-      auto diag = emitOpError("node input tap is larger than buffer depth, ");
-      diag << "input tap: " << inputTap << ", depth: " << depth;
-    }
-  }
-
-  for (auto inputArg : getInputArgs())
-    if (llvm::any_of(inputArg.getUses(), isWritten)) {
-      auto diag = emitOpError("input operand ");
-      diag << inputArg << " is written";
-      return diag;
-    }
-
-  for (auto outputArg : getOutputArgs())
-    if (!llvm::any_of(outputArg.getUses(), isWritten)) {
-      auto diag = emitOpError("output operand ");
-      diag << outputArg << " is not written";
-      return diag;
-    }
-
-  if (getScheduleOp().getIsLegal()) {
-    if (!getLevel())
-      return emitOpError("node is not scheduled");
-
-    for (auto output : getOutputs()) {
-      // DRAM buffer is not considered - the dependencies associated with them
-      // are handled later by tokens.
-      if (isExtBuffer(output))
-        continue;
-
-      if (getDependentConsumers(output, *this).size() > 1 ||
-          getProducers(output).size() > 1) {
-        auto diag = emitOpError(
-            "legal schedule violates single-consumer or single-producer, ");
-        diag << "see current buffer: " << output << "\n";
-        for (auto user : output.getUsers())
-          diag.attachNote(user->getLoc())
-              .append("see current buffer user: ")
-              .appendOp(*user, OpPrintingFlags().printGenericOpForm());
-        return diag;
-      }
-    }
-  }
-  return success();
-}
-
-void NodeOp::getEffects(
-    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
-        &effects) {
-  for (auto value : getInputs())
-    effects.emplace_back(MemoryEffects::Read::get(), value,
-                         SideEffects::DefaultResource::get());
-  for (auto value : getOutputs()) {
-    effects.emplace_back(MemoryEffects::Read::get(), value,
-                         SideEffects::DefaultResource::get());
-    effects.emplace_back(MemoryEffects::Write::get(), value,
-                         SideEffects::DefaultResource::get());
-  }
-}
-
-/// Get the parent schedule op.
-ScheduleOp NodeOp::getScheduleOp() {
-  return (*this)->getParentOfType<ScheduleOp>();
-}
-
-/// Get input taps.
-void NodeOp::setInputTap(unsigned idx, unsigned tap) {
-  SmallVector<int32_t> newInputTaps(llvm::map_range(
-      getInputTapsAsInt(), [](unsigned a) { return (int32_t)a; }));
-  newInputTaps[idx] = tap;
-  Builder builder(getContext());
-  setInputTapsAttr(builder.getI32ArrayAttr(newInputTaps));
-}
-unsigned NodeOp::getInputTap(unsigned idx) {
-  return getInputTaps()[idx].cast<IntegerAttr>().getInt();
-}
-SmallVector<unsigned> NodeOp::getInputTapsAsInt() {
-  auto array = llvm::map_range(getInputTaps(), [](Attribute attr) {
-    return attr.cast<IntegerAttr>().getInt();
-  });
-  return {array.begin(), array.end()};
-}
-
-/// Return the number of inputs, outputs, and params.
-unsigned NodeOp::getNumInputs() {
-  return getODSOperandIndexAndLength(0).second;
-}
-unsigned NodeOp::getNumOutputs() {
-  return getODSOperandIndexAndLength(1).second;
-}
-unsigned NodeOp::getNumParams() {
-  return getODSOperandIndexAndLength(2).second;
-}
-
-/// Get the type of operand: input, output, or param.
-PortKind NodeOp::getPortKind(OpOperand &operand) {
-  assert(operand.getOwner() == *this && "invalid operand");
-  return getPortKind(operand.getOperandNumber());
-}
-PortKind NodeOp::getPortKind(unsigned operandIdx) {
-  if (operandIdx >= getODSOperandIndexAndLength(2).first)
-    return PortKind::PARAM;
-  else if (operandIdx >= getODSOperandIndexAndLength(1).first)
-    return PortKind::OUTPUT;
-  else
-    return PortKind::INPUT;
-}
-
-/// Get the input, output, and param arguments.
-iterator_range<Block::args_iterator> NodeOp::getInputArgs() {
-  auto range = getODSOperandIndexAndLength(0);
-  return {std::next(getBody().args_begin(), range.first),
-          std::next(getBody().args_begin(), range.first + range.second)};
-}
-iterator_range<Block::args_iterator> NodeOp::getOutputArgs() {
-  auto range = getODSOperandIndexAndLength(1);
-  return {std::next(getBody().args_begin(), range.first),
-          std::next(getBody().args_begin(), range.first + range.second)};
-}
-iterator_range<Block::args_iterator> NodeOp::getParamArgs() {
-  auto range = getODSOperandIndexAndLength(2);
-  return {std::next(getBody().args_begin(), range.first),
-          std::next(getBody().args_begin(), range.first + range.second)};
-}
-
-bool NodeOp::isLivein(Value value) {
-  return value.isa<BlockArgument>() &&
-         value.getParentRegion() == &(*this).getBody();
-}
-
-SmallVector<Value> NodeOp::getLiveins() {
-  auto args = (*this).getBody().getArguments();
-  return {args.begin(), args.end()};
-}
-
-SmallVector<Operation *> NodeOp::getLiveinUsers(Value livein) {
-  assert(isLivein(livein) && "invalid livein");
-  auto users = livein.getUsers();
-  return {users.begin(), users.end()};
-}
-
-/// Update the signature of the node op recursively.
-void NodeOp::updateSignatureRecursively() {
-  llvm::SmallDenseSet<ScheduleOp> schedules;
-  for (auto [operand, arg] :
-       llvm::zip(getOperands(), getBody().getArguments())) {
-    arg.setType(operand.getType());
-    for (auto user : arg.getUsers())
-      if (auto schedule = dyn_cast<ScheduleOp>(user))
-        schedules.insert(schedule);
-  }
-  // TODO: How to traverse all schedule ops?
-  for (auto schedule : schedules)
-    schedule.updateSignatureRecursively();
-}
-
-//===----------------------------------------------------------------------===//
-// BufferOp and ConstBufferOp
+// BufferOp
 //===----------------------------------------------------------------------===//
 
 namespace {
@@ -809,124 +466,15 @@ struct FlattenReadOnlyBuffer : public OpRewritePattern<BufferOp> {
 };
 } // namespace
 
-static NodeOp sinkBufferIntoNode(NodeOp node, BufferOp buffer,
-                                 PatternRewriter &rewriter) {
-  assert(node->getParentRegion() == buffer->getParentRegion() &&
-         "node and buffer is not at the same region");
-  SmallVector<Value> inputs;
-  SmallVector<unsigned, 8> inputTaps;
-  SmallVector<Value> outputs;
-  llvm::BitVector eraseIndices;
-
-  for (auto input : llvm::enumerate(node.getInputs())) {
-    if (input.value() != buffer) {
-      inputs.push_back(input.value());
-      inputTaps.push_back(node.getInputTap(input.index()));
-      eraseIndices.push_back(false);
-    } else {
-      auto arg = node.getBody().getArgument(input.index());
-      arg.replaceAllUsesWith(buffer);
-      eraseIndices.push_back(true);
-    }
-  }
-  for (auto output : llvm::enumerate(node.getOutputs())) {
-    if (output.value() != buffer) {
-      outputs.push_back(output.value());
-      eraseIndices.push_back(false);
-    } else {
-      auto arg =
-          node.getBody().getArgument(node.getNumInputs() + output.index());
-      arg.replaceAllUsesWith(buffer);
-      eraseIndices.push_back(true);
-    }
-  }
-  for (unsigned i = 0; i < node.getNumParams(); ++i)
-    eraseIndices.push_back(false);
-
-  auto &nodeBlock = node.getBody().front();
-  buffer->moveBefore(&nodeBlock.front());
-  nodeBlock.eraseArguments(eraseIndices);
-
-  rewriter.setInsertionPointAfter(node);
-  auto newNode =
-      rewriter.create<NodeOp>(node.getLoc(), inputs, outputs, node.getParams(),
-                              inputTaps, node.getLevelAttr());
-  rewriter.inlineRegionBefore(node.getBody(), newNode.getBody(),
-                              newNode.getBody().begin());
-  rewriter.eraseOp(node);
-  return newNode;
-}
-
-static ScheduleOp sinkBufferIntoSchedule(ScheduleOp schedule, BufferOp buffer,
-                                         PatternRewriter &rewriter) {
-  assert(schedule->getParentRegion() == buffer->getParentRegion() &&
-         "node and buffer is not at the same region");
-  SmallVector<Value> operands;
-  llvm::BitVector eraseIndices;
-
-  for (auto operand : llvm::enumerate(schedule.getOperands())) {
-    if (operand.value() != buffer) {
-      operands.push_back(operand.value());
-      eraseIndices.push_back(false);
-    } else
-      eraseIndices.push_back(true);
-  }
-
-  auto &scheduleBlock = schedule.getBody().front();
-  buffer->moveBefore(&scheduleBlock.front());
-  scheduleBlock.eraseArguments(eraseIndices);
-
-  rewriter.setInsertionPointAfter(schedule);
-  auto newSchedule = rewriter.create<ScheduleOp>(schedule.getLoc(), operands,
-                                                 schedule.getIsLegalAttr());
-  rewriter.inlineRegionBefore(schedule.getBody(), newSchedule.getBody(),
-                              newSchedule.getBody().begin());
-  rewriter.eraseOp(schedule);
-  return newSchedule;
-}
-
-namespace {
-struct SinkInternalBuffer : public OpRewritePattern<BufferOp> {
-  using OpRewritePattern<BufferOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(BufferOp buffer,
-                                PatternRewriter &rewriter) const override {
-    if (!isExtBuffer(buffer) && llvm::hasSingleElement(buffer->getUsers())) {
-      auto user = *buffer->getUsers().begin();
-
-      // Sink the buffer into the node or schedule user.
-      if (user->getParentRegion() == buffer->getParentRegion() &&
-          isa<NodeOp, ScheduleOp>(user)) {
-        if (auto node = dyn_cast<NodeOp>(user))
-          sinkBufferIntoNode(node, buffer, rewriter);
-        else if (auto schedule = dyn_cast<ScheduleOp>(user))
-          sinkBufferIntoSchedule(schedule, buffer, rewriter);
-        return success();
-      }
-    }
-    return failure();
-  }
-};
-} // namespace
-
 void BufferOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                            MLIRContext *context) {
   results.add<FlattenReadOnlyBuffer>(context);
-  results.add<SinkInternalBuffer>(context);
 }
 
 LogicalResult BufferOp::verify() {
   if (auto initValue = getInitValue())
     if (initValue.value().getType() != getType().getElementType())
       return emitOpError("initial value's type doesn't align with memref type");
-
-  if (isExtBuffer(*this)) {
-    if (auto node = dyn_cast<NodeOp>((*this)->getParentOp()))
-      return emitOpError("external buffer should not be placed in node");
-    if (auto schedule = dyn_cast<ScheduleOp>((*this)->getParentOp()))
-      if (!isa<func::FuncOp>(schedule->getParentOp()))
-        return emitOpError("external buffer must be placed in top schedule");
-  }
   return success();
 }
 
@@ -940,6 +488,10 @@ void BufferOp::getEffects(
   effects.emplace_back(MemoryEffects::Allocate::get(), getMemref(),
                        SideEffects::DefaultResource::get());
 }
+
+//===----------------------------------------------------------------------===//
+// ConstBufferOp
+//===----------------------------------------------------------------------===//
 
 std::optional<TypedAttr> ConstBufferOp::getBufferInitValue() {
   return std::optional<TypedAttr>();

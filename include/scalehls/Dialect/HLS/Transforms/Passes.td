@@ -35,14 +35,9 @@ def ScalarizeStream : Pass<"scalehls-scalarize-stream", "func::FuncOp"> {
   let constructor = "mlir::scalehls::hls::createScalarizeStreamPass()";
 }
 
-def CreateDataflow : Pass<"scalehls-create-dataflow", "func::FuncOp"> {
-  let summary = "Convert linalg to functional dataflow";
-  let constructor = "mlir::scalehls::hls::createCreateDataflowPass()";
-}
-
-def LowerDataflow : Pass<"scalehls-lower-dataflow", "func::FuncOp"> {
-  let summary = "Convert functional to structural dataflow";
-  let constructor = "mlir::scalehls::hls::createLowerDataflowPass()";
+def ScheduleDataflow : Pass<"scalehls-schedule-dataflow", "func::FuncOp"> {
+  let summary = "Create a dataflow schedule";
+  let constructor = "mlir::scalehls::hls::createScheduleDataflowPass()";
 }
 
 def ConvertDataflowToFunc :
