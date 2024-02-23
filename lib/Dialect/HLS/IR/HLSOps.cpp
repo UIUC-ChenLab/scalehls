@@ -295,11 +295,12 @@ struct SimplifyDispatchOrTaskOutputs : public OpRewritePattern<OpType> {
       rewriter.replaceOpWithNewOp<YieldOp>(yield, usedOutputs);
 
       rewriter.setInsertionPoint(op);
-      auto newTask =
+      auto newOp =
           rewriter.create<OpType>(op.getLoc(), ValueRange(usedOutputs));
-      rewriter.inlineRegionBefore(op.getBody(), newTask.getBody(),
-                                  newTask.getBody().end());
-      for (auto t : llvm::zip(usedResults, newTask.getResults()))
+      newOp->setAttrs(op->getAttrs());
+      rewriter.inlineRegionBefore(op.getBody(), newOp.getBody(),
+                                  newOp.getBody().end());
+      for (auto t : llvm::zip(usedResults, newOp.getResults()))
         std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
 
       rewriter.eraseOp(op);
@@ -337,7 +338,7 @@ private:
 
 namespace {
 template <typename OpType>
-struct DemoteYieldedBuffer : public OpRewritePattern<OpType> {
+struct DemoteYieldedOutput : public OpRewritePattern<OpType> {
   using OpRewritePattern<OpType>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(OpType op,
@@ -345,17 +346,22 @@ struct DemoteYieldedBuffer : public OpRewritePattern<OpType> {
     auto yield = op.getYieldOp();
     bool hasChanged = false;
 
-    // Eliminat each yielded buffer. It's always safe to move the buffer to
-    // higher level hierarchy.
     for (auto [yieldedValue, result] :
-         llvm::zip(yield.getOperands(), op.getResults()))
-      if (auto buffer = yieldedValue.template getDefiningOp<BufferOp>()) {
-        if (op->isAncestor(buffer))
-          buffer->moveBefore(op);
+         llvm::zip(yield.getOperands(), op.getResults())) {
+      // Try to move yielded buffer/stream to the upper hierarchy.
+      auto defOp = yieldedValue.getDefiningOp();
+      if (defOp && isa<BufferLikeInterface, StreamOp>(defOp))
+        if (op->isAncestor(defOp)) {
+          defOp->moveBefore(op);
+          hasChanged = true;
+        }
 
-        rewriter.replaceAllUsesWith(result, buffer);
+      // If the yielded value is defined in an ancestor region of the current
+      if (yieldedValue.getParentRegion()->isProperAncestor(&op.getBody())) {
+        rewriter.replaceAllUsesWith(result, yieldedValue);
         hasChanged = true;
       }
+    }
     return success(hasChanged);
   }
 };
@@ -367,7 +373,7 @@ void DispatchOp::getCanonicalizationPatterns(RewritePatternSet &results,
   results.add<InlineDispatchOrTask<DispatchOp>>(context, [](DispatchOp op) {
     return op.getOps<TaskOp>().empty() || llvm::hasSingleElement(op.getOps());
   });
-  results.add<DemoteYieldedBuffer<DispatchOp>>(context);
+  results.add<DemoteYieldedOutput<DispatchOp>>(context);
 }
 
 LogicalResult DispatchOp::verify() {
@@ -393,7 +399,7 @@ void TaskOp::getCanonicalizationPatterns(RewritePatternSet &results,
                op.getParentOp<DispatchOp>().getOps<TaskOp>()) ||
            llvm::hasSingleElement(op.getOps());
   });
-  results.add<DemoteYieldedBuffer<TaskOp>>(context);
+  results.add<DemoteYieldedOutput<TaskOp>>(context);
 }
 
 LogicalResult TaskOp::verify() {
