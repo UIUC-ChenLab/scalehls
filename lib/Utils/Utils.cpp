@@ -65,10 +65,11 @@ scalehls::constructLoops(ArrayRef<int64_t> tripCounts, ArrayRef<int64_t> steps,
 SmallVector<scf::ForOp> scalehls::getSurroundingLoops(Operation *target,
                                                       Block *sourceBlock) {
   SmallVector<scf::ForOp> reversedLoops;
-  while (auto loop = target->getParentOfType<scf::ForOp>()) {
-    reversedLoops.push_back(loop);
-    target = loop;
-    if (sourceBlock == loop->getBlock())
+  while (auto parent = target->getParentOp()) {
+    if (auto loop = dyn_cast<scf::ForOp>(parent))
+      reversedLoops.push_back(loop);
+    target = parent;
+    if (sourceBlock == parent->getBlock())
       break;
   }
   return {reversedLoops.rbegin(), reversedLoops.rend()};

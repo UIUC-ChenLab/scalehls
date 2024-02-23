@@ -98,7 +98,9 @@ static LogicalResult verifyTripCountsAndSteps(Operation *op, Value channel) {
       llvm::zip(channelType.getIterTripCounts(), channelType.getIterSteps()),
       [](auto tuple) { return std::get<0>(tuple) != 1; });
 
-  if (llvm::any_of(llvm::zip(stripedLoopInfo, stripedIterInfo), [](auto tuple) {
+  if (std::distance(stripedLoopInfo.begin(), stripedLoopInfo.end()) !=
+          std::distance(stripedIterInfo.begin(), stripedIterInfo.end()) ||
+      llvm::any_of(llvm::zip(stripedLoopInfo, stripedIterInfo), [](auto tuple) {
         return std::get<0>(tuple) != std::get<1>(tuple);
       })) {
     auto diag = op->emitOpError("loop trip counts or steps doesn't align with "

@@ -101,6 +101,7 @@ struct ConvertTaskToNode : public OpRewritePattern<TaskOp> {
     rewriter.setInsertionPoint(task);
     auto node = rewriter.create<NodeOp>(rewriter.getUnknownLoc(), inputs,
                                         outputs, params);
+    node->setAttrs(task->getAttrs());
     auto nodeBlock = rewriter.createBlock(&node.getBody());
 
     auto inputArgs = nodeBlock->addArguments(ValueRange(inputs), inputLocs);
@@ -165,14 +166,13 @@ struct LowerDataflow : public LowerDataflowBase<LowerDataflow> {
 
     // Convert dispatch, task, and to_memref operations.
     ConversionTarget target(*context);
-    target
-        .addIllegalOp<DispatchOp, TaskOp, YieldOp, bufferization::ToMemrefOp>();
-    target.addLegalOp<ScheduleOp, NodeOp, ConstBufferOp>();
+    target.addIllegalOp<DispatchOp, TaskOp, YieldOp>();
+    target.addLegalOp<ScheduleOp, NodeOp>();
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<ConvertDispatchToSchedule>(context);
     patterns.add<ConvertTaskToNode>(context);
-    patterns.add<ConvertConstantToConstBuffer>(context);
+    // patterns.add<ConvertConstantToConstBuffer>(context);
     if (failed(applyPartialConversion(func, target, std::move(patterns))))
       return signalPassFailure();
   }
