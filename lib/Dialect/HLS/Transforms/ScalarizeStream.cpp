@@ -175,6 +175,43 @@ struct ScalarizeStreamReassociateOp
 } // namespace
 
 namespace {
+template <typename OpTy>
+struct ScalarizeDispatchOrTaskOp : public OpRewritePattern<OpTy> {
+  using OpRewritePattern<OpTy>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(OpTy op,
+                                PatternRewriter &rewriter) const override {
+    auto yieldOp = op.getYieldOp();
+    bool hasChanged = false;
+
+    for (auto [yieldedValue, result] :
+         llvm::zip(yieldOp.getOperands(), op.getResults())) {
+      auto streamType = dyn_cast<StreamType>(result.getType());
+      if (streamType && streamType.hasShapedElementType()) {
+        auto scalarStreamType = getScalarStreamType(streamType);
+
+        rewriter.setInsertionPoint(yieldOp);
+        auto cast = rewriter.create<hls::StreamCastOp>(
+            op.getLoc(), scalarStreamType, yieldedValue);
+        rewriter.replaceUsesWithIf(yieldedValue, cast, [&](OpOperand &operand) {
+          return operand.getOwner() == yieldOp;
+        });
+
+        rewriter.setInsertionPointAfter(op);
+        auto castBack =
+            rewriter.create<hls::StreamCastOp>(op.getLoc(), streamType, result);
+        rewriter.replaceAllUsesExcept(result, castBack, castBack);
+
+        result.setType(scalarStreamType);
+        hasChanged = true;
+      }
+    }
+    return success(hasChanged);
+  }
+};
+} // namespace
+
+namespace {
 struct ScalarizeStream : public ScalarizeStreamBase<ScalarizeStream> {
   void runOnOperation() override {
     auto op = getOperation();
@@ -185,6 +222,8 @@ struct ScalarizeStream : public ScalarizeStreamBase<ScalarizeStream> {
     patterns.add<ScalarizeStreamReadOp>(context);
     patterns.add<ScalarizeStreamWriteOp>(context);
     patterns.add<ScalarizeStreamReassociateOp>(context);
+    patterns.add<ScalarizeDispatchOrTaskOp<hls::DispatchOp>>(context);
+    patterns.add<ScalarizeDispatchOrTaskOp<hls::TaskOp>>(context);
     (void)applyPatternsAndFoldGreedily(op, std::move(patterns));
   }
 };
