@@ -232,7 +232,7 @@ def DispatchOp : HLSOp<"dispatch", [RecursiveMemoryEffects,
 
   let results = (outs Variadic<AnyType>:$results);
   let regions = (region SizedRegion<1>:$body);
-  let assemblyFormat = "attr-dict-with-keyword (`:` type($results)^)? $body";
+  let assemblyFormat = "(`:` type($results)^)? $body attr-dict";
 
   let hasVerifier = 1;
   let hasCanonicalizer = 1;
@@ -255,9 +255,7 @@ def TaskOp : HLSOp<"task", [DeclareOpInterfaceMethods<ContainerLikeInterface>,
   let results = (outs Variadic<AnyType>:$results);
   let regions = (region SizedRegion<1>:$body);
 
-  let assemblyFormat = [{
-    attr-dict-with-keyword (`:` type($results)^)? $body
-  }];
+  let assemblyFormat = "(`:` type($results)^)? $body attr-dict";
 
   let hasVerifier = 1;
   let hasCanonicalizer = 1;
@@ -301,8 +299,8 @@ def ScheduleOp : HLSOp<"schedule", [
   let arguments = (ins Variadic<AnyType>:$operands, UnitAttr:$isLegal);
   let regions = (region SizedRegion<1>:$body);
   let assemblyFormat = [{
-    (`legal` $isLegal^)? (`(` $operands^ `)`)? attr-dict-with-keyword
-    (`:` type($operands)^)? $body
+    (`legal` $isLegal^)? (`(` $operands^ `)`)? (`:` type($operands)^)? $body
+    attr-dict
   }];
 
   let hasVerifier = 1;
@@ -336,8 +334,8 @@ def NodeOp : HLSOp<"node", [DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
   let regions = (region SizedRegion<1>:$body);
 
   let assemblyFormat = [{
-    `(` $inputs `)` `->` `(` $outputs `)` (`[` $params^ `]`)? attr-dict `:`
-    functional-type($inputs, $outputs) (`[` type($params)^ `]`)? $body
+    `(` $inputs `)` `->` `(` $outputs `)` (`[` $params^ `]`)? `:`
+    functional-type($inputs, $outputs) (`[` type($params)^ `]`)? $body attr-dict
   }];
 
   let hasVerifier = 1;
@@ -405,8 +403,7 @@ def BufferOp : HLSOp<"buffer", [DeclareOpInterfaceMethods<BufferLikeInterface>,
       DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Represent a dataflow buffer";
 
-  let arguments = (ins I32Attr:$depth,
-                       OptionalAttr<TypedAttrInterface>:$init_value);
+  let arguments = (ins OptionalAttr<TypedAttrInterface>:$init_value);
   let results = (outs AnyBuffer:$memref);
   let assemblyFormat = "attr-dict `:` type($memref)";
 
@@ -414,7 +411,7 @@ def BufferOp : HLSOp<"buffer", [DeclareOpInterfaceMethods<BufferLikeInterface>,
   let hasCanonicalizer = 1;
   let builders = [
     OpBuilder<(ins "mlir::Type":$memref),
-        "build($_builder, $_state, memref, 1, nullptr);">
+        "build($_builder, $_state, memref, nullptr);">
   ];
 }
 

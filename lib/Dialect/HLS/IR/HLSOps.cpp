@@ -928,7 +928,6 @@ LogicalResult BufferOp::verify() {
   return success();
 }
 
-int32_t BufferOp::getBufferDepth() { return getDepth(); }
 std::optional<TypedAttr> BufferOp::getBufferInitValue() {
   return getInitValue();
 }
@@ -940,7 +939,6 @@ void BufferOp::getEffects(
                        SideEffects::DefaultResource::get());
 }
 
-int32_t ConstBufferOp::getBufferDepth() { return 1; }
 std::optional<TypedAttr> ConstBufferOp::getBufferInitValue() {
   return std::optional<TypedAttr>();
 }

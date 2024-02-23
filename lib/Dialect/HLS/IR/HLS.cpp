@@ -324,10 +324,12 @@ DispatchOp hls::dispatchBlock(StringRef name, Block *block,
 
   unsigned taskId = 0;
   for (auto &op : llvm::make_early_inc_range(dispatch.getOps())) {
-    if (isa<hls::StreamBufferOp, hls::TensorToStreamOp, hls::StreamToTensorOp,
-            hls::StreamReadOp, hls::StreamWriteOp, linalg::LinalgOp,
-            affine::AffineForOp, scf::ForOp>(op) ||
-        isa<tensor::TensorDialect>(op.getDialect())) {
+    assert(!isa<hls::StreamBufferOp>(op) && !isa<hls::TensorToStreamOp>(op) &&
+           !isa<hls::StreamToTensorOp>(op) &&
+           "stream op must be materialized before being dispatched");
+    assert(!isa<tensor::TensorDialect>(op.getDialect()) &&
+           "tensor op must be bufferized before being dispatched");
+    if (isa<linalg::LinalgOp, affine::AffineForOp, scf::ForOp>(op)) {
       auto task = fuseOpsIntoTask({&op}, rewriter);
       std::string taskName = name.str() + "_" + std::to_string(taskId++);
       op.setAttr(taskName, rewriter.getUnitAttr());
@@ -593,8 +595,7 @@ SmallVector<std::pair<NodeOp, Value>> hls::getNestedProducers(Value buffer) {
 unsigned hls::getBufferDepth(Value memref) {
   if (auto streamType = memref.getType().dyn_cast<StreamType>()) {
     return streamType.getDepth();
-  } else if (auto bufferOp = findBufferOp(memref))
-    return bufferOp.getBufferDepth();
+  }
   return 1;
 }
 

@@ -457,11 +457,7 @@ public:
   using HLSVisitorBase::visitOp;
 
   /// HLS dialect operations.
-  bool visitOp(BufferOp op) {
-    if (op.getDepth() == 1)
-      return emitter.emitAlloc(op), true;
-    return op.emitOpError("only support depth of 1"), false;
-  }
+  bool visitOp(BufferOp op) { return emitter.emitAlloc(op), true; }
   bool visitOp(ConstBufferOp op) { return emitter.emitConstBuffer(op), true; }
   bool visitOp(StreamOp op) { return emitter.emitStreamChannel(op), true; }
   bool visitOp(StreamReadOp op) { return emitter.emitStreamRead(op), true; }

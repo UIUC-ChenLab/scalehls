@@ -50,8 +50,6 @@ def BufferLikeInterface : OpInterface<"BufferLikeInterface"> {
         return $_op.getMemref().getType().template cast<mlir::MemRefType>();
       }]
     >,
-    InterfaceMethod<"Return the depth of the buffer", "int32_t",
-                    "getBufferDepth">,
     InterfaceMethod<"Return the initial value of the buffer",
                     "std::optional<mlir::TypedAttr>", "getBufferInitValue">,
   ];
