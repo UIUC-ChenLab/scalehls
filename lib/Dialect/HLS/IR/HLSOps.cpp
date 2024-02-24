@@ -81,6 +81,10 @@ void StreamOp::getEffects(
 //===----------------------------------------------------------------------===//
 
 static LogicalResult verifyTripCountsAndSteps(Operation *op, Value channel) {
+  auto channelType = channel.getType().cast<StreamType>();
+  if (!channelType.hasIterInfo())
+    return success();
+
   auto loops = getSurroundingLoops(op, channel.getParentBlock());
   auto tripCounts = getLoopTripCounts(loops);
   auto steps = getLoopSteps(loops);
@@ -92,7 +96,6 @@ static LogicalResult verifyTripCountsAndSteps(Operation *op, Value channel) {
         return std::get<0>(tuple) != 1;
       });
 
-  auto channelType = channel.getType().cast<StreamType>();
   auto stripedIterInfo = llvm::make_filter_range(
       llvm::zip(channelType.getIterTripCounts(), channelType.getIterSteps()),
       [](auto tuple) { return std::get<0>(tuple) != 1; });
@@ -119,8 +122,7 @@ LogicalResult StreamReadOp::verify() {
   if (getInit())
     if (getInit().getType() != getResult().getType())
       return emitOpError("initial value type doesn't align with result type");
-  return success();
-  // return verifyTripCountsAndSteps(*this, getChannel());
+  return verifyTripCountsAndSteps(*this, getChannel());
 }
 
 void StreamReadOp::getEffects(
@@ -137,8 +139,7 @@ void StreamReadOp::getEffects(
 LogicalResult StreamWriteOp::verify() {
   if (getChannel().getType().getElementType() != getValue().getType())
     return emitOpError("value type doesn't align with channel type");
-  return success();
-  // return verifyTripCountsAndSteps(*this, getChannel());
+  return verifyTripCountsAndSteps(*this, getChannel());
 }
 
 void StreamWriteOp::getEffects(

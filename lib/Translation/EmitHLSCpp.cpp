@@ -6,6 +6,7 @@
 
 #include "scalehls/Translation/EmitHLSCpp.h"
 #include "mlir/Analysis/CallGraph.h"
+#include "mlir/Dialect/Transform/IR/TransformOps.h"
 #include "mlir/IR/AffineExprVisitor.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/Tools/mlir-translate/Translation.h"
@@ -1894,11 +1895,11 @@ void ModuleEmitter::emitModule(ModuleOp module) {
   for (auto node : llvm::post_order<const CallGraph *>(&graph)) {
     if (node->isExternal())
       continue;
-    if (auto func = node->getCallableRegion()->getParentOfType<func::FuncOp>();
-        !hasRuntimeAttr(func)) {
-      emitFunction(func);
-      emittedFuncs.insert(func);
-    }
+    if (auto func = node->getCallableRegion()->getParentOfType<func::FuncOp>())
+      if (!hasRuntimeAttr(func)) {
+        emitFunction(func);
+        emittedFuncs.insert(func);
+      }
   }
 
   // Emit remained functions accordingly.
@@ -1906,7 +1907,7 @@ void ModuleEmitter::emitModule(ModuleOp module) {
     if (auto func = dyn_cast<func::FuncOp>(op)) {
       if (!emittedFuncs.count(func) && !hasRuntimeAttr(func))
         emitFunction(func);
-    } else if (!isa<ml_program::GlobalOp>(op))
+    } else if (!isa<ml_program::GlobalOp, transform::NamedSequenceOp>(op))
       emitError(&op, "is unsupported operation");
   }
 }

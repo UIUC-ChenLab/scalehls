@@ -128,6 +128,18 @@ struct ConvertDataflowToFunc
       constant->erase();
     }
 
+    // Fold all stream reassociate ops.
+    module.walk([&](hls::StreamReassociateOp reassociateOp) {
+      reassociateOp.getOutput().replaceAllUsesWith(reassociateOp.getInput());
+    });
+
+    // Strip iteration information of all streams.
+    module.walk([&](StreamOp stream) {
+      stream.getResult().setType(hls::StreamType::get(
+          stream.getType().getElementType(), stream.getType().getDepth()));
+    });
+
+    // Convert all tasks and schedules into sub-functions.
     for (auto func :
          llvm::make_early_inc_range(module.getOps<func::FuncOp>())) {
       unsigned taskIdx = 0;

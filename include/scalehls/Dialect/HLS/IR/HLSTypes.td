@@ -64,6 +64,10 @@ def StreamType : HLSType<"Stream", []> {
         CArg<"int64_t", "1">:$depth), [{
       return get(elementType, iterTripCounts,
           SmallVector<int64_t>(iterTripCounts.size(), 1), depth);
+    }]>,
+    TypeBuilderWithInferredContext<(ins
+        "mlir::Type":$elementType, CArg<"int64_t", "1">:$depth), [{
+      return get(elementType, SmallVector<int64_t>(), depth);
     }]>
   ];
 
@@ -139,6 +143,11 @@ def StreamType : HLSType<"Stream", []> {
 
     /// Return whether this stream type can be converted to the "tensor" type.
     bool isConvertableWith(RankedTensorType tensor) const;
+
+    /// Return whether this stream type has iteration information.
+    bool hasIterInfo() const {
+      return !getIterTripCounts().empty();
+    }
   }];
 }
 
