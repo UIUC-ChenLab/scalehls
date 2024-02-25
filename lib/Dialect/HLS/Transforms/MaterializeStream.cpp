@@ -94,12 +94,10 @@ static void extactSliceAndWriteStream(ArrayRef<Value> ivs,
 /// Read from the stream channel and insert the slice to the tensor. If
 /// "packing" is true, the slice is read from the stream channel and shape
 /// expanded before inserting to the tensor.
-static void readStreamAndInsertSlice(ArrayRef<Value> ivs,
-                                     TypedValue<StreamType> channel,
-                                     TypedValue<RankedTensorType> tensor,
-                                     bool packing, Location loc,
-                                     PatternRewriter &rewriter,
-                                     bool yieldInsertedTensor = true) {
+static TypedValue<RankedTensorType>
+readStreamAndInsertSlice(ArrayRef<Value> ivs, TypedValue<StreamType> channel,
+                         TypedValue<RankedTensorType> tensor, bool packing,
+                         Location loc, PatternRewriter &rewriter) {
   auto streamType = channel.getType();
   auto [offsets, sizes, strides] =
       getSliceInfo(ivs, streamType.getIterMap().getResults(),
@@ -131,10 +129,8 @@ static void readStreamAndInsertSlice(ArrayRef<Value> ivs,
         loc, expandedType, slice,
         getPackingReassociation(streamType.getElementRank()));
   }
-  auto result = rewriter.create<tensor::InsertSliceOp>(loc, slice, tensor,
-                                                       offsets, sizes, strides);
-  if (yieldInsertedTensor)
-    rewriter.create<scf::YieldOp>(loc, result.getResult());
+  return rewriter.create<tensor::InsertSliceOp>(loc, slice, tensor, offsets,
+                                                sizes, strides);
 }
 
 static RankedTensorType getPackedType(RankedTensorType tensorType,
@@ -260,8 +256,17 @@ struct LowerStreamToTensorConversionOp
     auto [ivs, result, iterArg] = constructLoops(streamType.getIterTripCounts(),
                                                  streamType.getIterSteps(), loc,
                                                  rewriter, init.getResult());
-    readStreamAndInsertSlice(ivs, toTensor.getStream(), iterArg, packing, loc,
-                             rewriter);
+    auto newResult = readStreamAndInsertSlice(ivs, toTensor.getStream(),
+                                              iterArg, packing, loc, rewriter);
+
+    // Update "result" if no loop is constructed. Otherwise, create a new yield
+    // op to yield "newResult" to "result".
+    if (ivs.empty())
+      result = newResult;
+    else
+      rewriter.create<scf::YieldOp>(loc, newResult);
+
+    // Handle the case where the tensor is packed.
     if (packing) {
       rewriter.setInsertionPointAfterValue(result);
       result =
@@ -335,9 +340,16 @@ struct LowerStreamBufferOp : public OpRewritePattern<hls::StreamBufferOp> {
                        rewriter, init.getResult());
     SmallVector<Value> bufferInputIvs(loopIndex, zeroCst);
     bufferInputIvs.append(inputIvs);
-    readStreamAndInsertSlice(bufferInputIvs, streamBuffer.getInput(),
-                             inputIterArg, packing, loc, rewriter,
-                             inputIvs.size() > 0);
+    auto newInputResult =
+        readStreamAndInsertSlice(bufferInputIvs, streamBuffer.getInput(),
+                                 inputIterArg, packing, loc, rewriter);
+
+    // Update "inputResult" if no loop is constructed. Otherwise, create a new
+    // yield op to yield "newInputResult" to "inputResult".
+    if (inputIvs.empty())
+      inputResult = newInputResult;
+    else
+      rewriter.create<scf::YieldOp>(loc, newInputResult);
 
     // Construct loops to extract stream element from the buffer tensor and
     // write to the output stream channel.
