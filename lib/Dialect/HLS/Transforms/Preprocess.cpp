@@ -70,7 +70,7 @@ struct ConvertLinalgGenericOp : public OpRewritePattern<linalg::GenericOp> {
 
       } else if (auto yieldedArg = dyn_cast<BlockArgument>(yieldedValue)) {
         // If the yielded value is from a constant tensor, we replace the
-        // original result with the transposed tensor if applicable.
+        // original result with the constant tensor if applicable.
         auto inputTensor = op.getMatchingOpOperand(yieldedArg);
         auto inputMap = op.getMatchingIndexingMap(inputTensor);
         auto resultMap = op.getIndexingMapMatchingResult(result);
@@ -91,24 +91,12 @@ struct Preprocess : public PreprocessBase<Preprocess> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
-    auto builder = OpBuilder(context);
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<ConvertTensorEmptyOp>(context);
     patterns.add<ConvertLinalgFillOp>(context);
     patterns.add<ConvertLinalgGenericOp>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
-
-    // Ensure each TensorInitOp is only used once.
-    for (auto tensorInit :
-         llvm::make_early_inc_range(func.getOps<hls::TensorInitOp>())) {
-      for (auto &use : llvm::make_early_inc_range(tensorInit->getUses())) {
-        builder.setInsertionPoint(use.getOwner());
-        auto newTensorInit =
-            cast<hls::TensorInitOp>(builder.clone(*tensorInit));
-        use.set(newTensorInit);
-      }
-    }
   }
 };
 } // namespace

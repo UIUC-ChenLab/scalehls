@@ -25,6 +25,22 @@ LogicalResult TensorInitOp::verify() {
   return success();
 }
 
+LogicalResult TensorInitOp::canonicalize(TensorInitOp op,
+                                         PatternRewriter &rewriter) {
+  if (op->hasOneUse())
+    return failure();
+
+  for (auto &use : llvm::make_early_inc_range(op->getUses())) {
+    rewriter.setInsertionPoint(use.getOwner());
+    auto newOp = cast<hls::TensorInitOp>(rewriter.clone(*op));
+    rewriter.replaceUsesWithIf(
+        op.getResult(), newOp.getResult(),
+        [&](OpOperand &operand) { return operand == use; });
+  }
+  rewriter.eraseOp(op);
+  return success();
+}
+
 //===----------------------------------------------------------------------===//
 // StreamOp
 //===----------------------------------------------------------------------===//
@@ -311,6 +327,28 @@ OpFoldResult StreamReassociateOp::fold(FoldAdaptor adaptor) {
   return foldStreamViewLikeInterface(*this);
 }
 
+static LogicalResult
+canonicalizeStreamViewLikeInterface(StreamViewLikeInterface op,
+                                    PatternRewriter &rewriter) {
+  if (op->hasOneUse())
+    return failure();
+
+  for (auto &use : llvm::make_early_inc_range(op->getUses())) {
+    rewriter.setInsertionPoint(use.getOwner());
+    auto newOp = cast<StreamViewLikeInterface>(rewriter.clone(*op));
+    rewriter.replaceUsesWithIf(
+        op.getResult(), newOp.getResult(),
+        [&](OpOperand &operand) { return operand == use; });
+  }
+  rewriter.eraseOp(op);
+  return success();
+}
+
+LogicalResult StreamReassociateOp::canonicalize(StreamReassociateOp op,
+                                                PatternRewriter &rewriter) {
+  return canonicalizeStreamViewLikeInterface(op, rewriter);
+}
+
 //===----------------------------------------------------------------------===//
 // StreamCastOp
 //===----------------------------------------------------------------------===//
@@ -327,6 +365,11 @@ LogicalResult StreamCastOp::verify() {
 
 OpFoldResult StreamCastOp::fold(FoldAdaptor adaptor) {
   return foldStreamViewLikeInterface(*this);
+}
+
+LogicalResult StreamCastOp::canonicalize(StreamCastOp op,
+                                         PatternRewriter &rewriter) {
+  return canonicalizeStreamViewLikeInterface(op, rewriter);
 }
 
 //===----------------------------------------------------------------------===//

@@ -47,7 +47,7 @@ def AnyBufferOrStream : Type<Or<[AnyBuffer.predicate, AnyStream.predicate]>,
 // Stream Operations
 //===----------------------------------------------------------------------===//
 
-def TensorInitOp : HLSOp<"tensor_init", [Pure]> {
+def TensorInitOp : HLSOp<"tensor_init"> {
   let summary = "Initiate a tensor with an optional initialization value";
 
   let arguments = (ins Optional<AnyType>:$initValue);
@@ -57,6 +57,8 @@ def TensorInitOp : HLSOp<"tensor_init", [Pure]> {
   }];
 
   let hasVerifier = 1;
+  let hasCanonicalizeMethod = 1;
+
   let builders = [
     OpBuilder<(ins "mlir::Type":$result),
         "build($_builder, $_state, result, nullptr);">
@@ -199,7 +201,7 @@ def StreamForkOp : HLSOp<"stream_fork", [
   }];
 }
 
-def StreamReassociateOp : HLSOp<"stream_reassociate", [Pure,
+def StreamReassociateOp : HLSOp<"stream_reassociate", [
       DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
   let summary = "Reassociate the shape and/or iteration of a stream channel";
 
@@ -215,6 +217,7 @@ def StreamReassociateOp : HLSOp<"stream_reassociate", [Pure,
 
   let hasVerifier = 1;
   let hasFolder = 1;
+  let hasCanonicalizeMethod = 1;
 
   let extraClassDeclaration = [{
     static SmallVector<ReassociationIndices, 4> 
@@ -240,18 +243,19 @@ def StreamReassociateOp : HLSOp<"stream_reassociate", [Pure,
   }];
 }
 
-def StreamCastOp : HLSOp<"stream_cast", [Pure,
+def StreamCastOp : HLSOp<"stream_cast", [
       DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
   let summary = "Cast a stream channel to a different type";
 
   let arguments = (ins AnyStream:$source);
-  let results = (outs AnyStream:$result);
+  let results = (outs AnyStream:$result); 
   let assemblyFormat = [{
     $source attr-dict `:` functional-type(operands, results)
   }];
 
   let hasVerifier = 1;
   let hasFolder = 1;
+  let hasCanonicalizeMethod = 1;
 
   let extraClassDeclaration = [{
     StreamType getSourceType() { return getSource().getType(); }
