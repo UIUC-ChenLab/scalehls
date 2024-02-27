@@ -188,7 +188,7 @@ unpackTensor(TypedValue<RankedTensorType> tensor, ArrayRef<int64_t> tileSizes,
 
 namespace {
 struct LowerTensorToStreamConversionOp
-    : public OpRewritePattern<hls::TensorToStreamOp> {
+    : public OpRewritePattern<hls::StreamFromTensorOp> {
   LowerTensorToStreamConversionOp(MLIRContext *context,
                                   bool enablePacking = true,
                                   PatternBenefit benefit = 1,
@@ -196,29 +196,27 @@ struct LowerTensorToStreamConversionOp
       : OpRewritePattern(context, benefit, generatedNames),
         enablePacking(enablePacking) {}
 
-  LogicalResult matchAndRewrite(hls::TensorToStreamOp toStream,
+  LogicalResult matchAndRewrite(hls::StreamFromTensorOp fromTensor,
                                 PatternRewriter &rewriter) const override {
-    auto streamType = toStream.getStream().getType();
-    auto loc = toStream.getLoc();
+    auto streamType = fromTensor.getStreamType();
+    auto loc = fromTensor.getLoc();
 
     // Only if the stream type is not overlapped, we can pack the tensor to make
     // more efficient memory access pattern.
     auto packing =
         enablePacking && streamType.tileIsRegular() && streamType.getRank() > 1;
-    auto target = toStream.getTensor();
+    auto source = fromTensor.getTensor();
     if (packing)
-      target = packTensor(target, streamType.getElementShape(), loc, rewriter);
+      source = packTensor(source, streamType.getElementShape(), loc, rewriter);
 
     // Create a new stream channel, then construct a loop nest to extract
     // stream element from the tensor and write to the stream channel.
-    auto channel = rewriter.create<hls::StreamOp>(loc, streamType);
     auto [ivs, result, iterArg] =
         constructLoops(streamType.getIterTripCounts(),
                        streamType.getIterSteps(), loc, rewriter);
-    extactSliceAndWriteStream(ivs, channel, target, packing, loc, rewriter);
-
-    // Replace the original stream channel with the new channel.
-    rewriter.replaceAllUsesWith(toStream.getStream(), channel);
+    extactSliceAndWriteStream(ivs, fromTensor.getStream(), source, packing, loc,
+                              rewriter);
+    rewriter.eraseOp(fromTensor);
     return success();
   }
 
@@ -239,7 +237,7 @@ struct LowerStreamToTensorConversionOp
 
   LogicalResult matchAndRewrite(hls::StreamToTensorOp toTensor,
                                 PatternRewriter &rewriter) const override {
-    auto streamType = toTensor.getStream().getType();
+    auto streamType = toTensor.getStreamType();
     auto loc = toTensor.getLoc();
 
     // Only if the stream type is not overlapped, we can pack the tensor to make
@@ -274,7 +272,7 @@ struct LowerStreamToTensorConversionOp
     }
 
     // Replace the original tensor with the new tensor.
-    rewriter.replaceAllUsesWith(toTensor.getTensor(), result);
+    rewriter.replaceOp(toTensor, result);
     return success();
   }
 
@@ -293,19 +291,16 @@ struct LowerStreamBufferOp : public OpRewritePattern<hls::StreamBufferOp> {
 
   LogicalResult matchAndRewrite(hls::StreamBufferOp streamBuffer,
                                 PatternRewriter &rewriter) const override {
-    auto inputType = streamBuffer.getInput().getType();
-    auto outputType = streamBuffer.getOutput().getType();
+    auto sourceType = streamBuffer.getSourceType();
+    auto destType = streamBuffer.getDestType();
     auto loopIndex = streamBuffer.getLoopIndex();
     auto loc = streamBuffer.getLoc();
-
-    // Construct the output stream channel.
-    auto channel = rewriter.create<hls::StreamOp>(loc, outputType);
 
     // Construct loops to iterate over the dimensions shared by input stream and
     // output stream.
     for (auto [tripCount, step] :
-         llvm::zip(inputType.getIterTripCounts().take_front(loopIndex),
-                   inputType.getIterSteps().take_front(loopIndex))) {
+         llvm::zip(sourceType.getIterTripCounts().take_front(loopIndex),
+                   sourceType.getIterSteps().take_front(loopIndex))) {
       auto [lbCst, ubCst, stepCst] =
           getLoopBoundsAndStep(tripCount, step, loc, rewriter);
       auto loop = rewriter.create<scf::ForOp>(loc, lbCst, ubCst, stepCst);
@@ -314,15 +309,15 @@ struct LowerStreamBufferOp : public OpRewritePattern<hls::StreamBufferOp> {
 
     // Calculate the maximum tile sizes.
     auto maxTileSizes = llvm::map_to_vector(
-        llvm::zip(inputType.getElementShape(), outputType.getElementShape()),
+        llvm::zip(sourceType.getElementShape(), destType.getElementShape()),
         [&](std::tuple<int64_t, int64_t> shapes) {
           return std::max(std::get<0>(shapes), std::get<1>(shapes));
         });
 
     // Get the buffer type and packed buffer type if necessary.
-    auto packing = enablePacking && inputType.tileIsRegular() &&
-                   outputType.tileIsRegular() &&
-                   (inputType.getRank() > 1 || outputType.getRank() > 1);
+    auto packing = enablePacking && sourceType.tileIsRegular() &&
+                   destType.tileIsRegular() &&
+                   (sourceType.getRank() > 1 || destType.getRank() > 1);
     auto bufferType = RankedTensorType::get(
         streamBuffer.getBufferShape(), streamBuffer.getBufferElementType());
     if (packing)
@@ -335,13 +330,13 @@ struct LowerStreamBufferOp : public OpRewritePattern<hls::StreamBufferOp> {
     // element to the buffer tensor.
     auto zeroCst = rewriter.create<arith::ConstantIndexOp>(loc, 0);
     auto [inputIvs, inputResult, inputIterArg] =
-        constructLoops(inputType.getIterTripCounts().drop_front(loopIndex),
-                       inputType.getIterSteps().drop_front(loopIndex), loc,
+        constructLoops(sourceType.getIterTripCounts().drop_front(loopIndex),
+                       sourceType.getIterSteps().drop_front(loopIndex), loc,
                        rewriter, init.getResult());
     SmallVector<Value> bufferInputIvs(loopIndex, zeroCst);
     bufferInputIvs.append(inputIvs);
     auto newInputResult =
-        readStreamAndInsertSlice(bufferInputIvs, streamBuffer.getInput(),
+        readStreamAndInsertSlice(bufferInputIvs, streamBuffer.getSource(),
                                  inputIterArg, packing, loc, rewriter);
 
     // Update "inputResult" if no loop is constructed. Otherwise, create a new
@@ -355,15 +350,13 @@ struct LowerStreamBufferOp : public OpRewritePattern<hls::StreamBufferOp> {
     // write to the output stream channel.
     rewriter.setInsertionPointAfterValue(inputResult);
     auto [outputIvs, outputResult, outputIterArg] = constructLoops(
-        outputType.getIterTripCounts().drop_front(loopIndex),
-        outputType.getIterSteps().drop_front(loopIndex), loc, rewriter);
+        destType.getIterTripCounts().drop_front(loopIndex),
+        destType.getIterSteps().drop_front(loopIndex), loc, rewriter);
     SmallVector<Value> bufferOutputIvs(loopIndex, zeroCst);
     bufferOutputIvs.append(outputIvs);
-    extactSliceAndWriteStream(bufferOutputIvs, channel, inputResult, packing,
-                              loc, rewriter);
-
-    // Replace the original output stream channel with the new channel.
-    rewriter.replaceAllUsesWith(streamBuffer.getOutput(), channel);
+    extactSliceAndWriteStream(bufferOutputIvs, streamBuffer.getDest(),
+                              inputResult, packing, loc, rewriter);
+    rewriter.eraseOp(streamBuffer);
     return success();
   }
 

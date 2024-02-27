@@ -16,21 +16,21 @@ def StreamViewLikeInterface : OpInterface<"StreamViewLikeInterface"> {
   string cppNamespace = "mlir::scalehls::hls";
 
   let methods = [
-    InterfaceMethod<"Return the input stream",
-      "TypedValue<StreamType>", "getInput", (ins), [{
-        return $_op.getInput();
+    InterfaceMethod<"Return the source stream",
+      "TypedValue<StreamType>", "getSource", (ins), [{
+        return $_op.getSource();
       }]>,
-    InterfaceMethod<"Return the output stream",
-      "TypedValue<StreamType>", "getOutput", (ins), [{
-        return $_op.getOutput();
+    InterfaceMethod<"Return the result stream",
+      "TypedValue<StreamType>", "getResult", (ins), [{
+        return $_op.getResult();
       }]>,
-    InterfaceMethod<"Return the input stream type",
-      "StreamType", "getInputType", (ins), [{
-        return $_op.getInput().getType();
+    InterfaceMethod<"Return the source stream type",
+      "StreamType", "getSourceType", (ins), [{
+        return $_op.getSource().getType();
       }]>,
-    InterfaceMethod<"Return the output stream type",
-      "StreamType", "getOutputType", (ins), [{
-        return $_op.getOutput().getType();
+    InterfaceMethod<"Return the result stream type",
+      "StreamType", "getResultType", (ins), [{
+        return $_op.getResult().getType();
       }]>
   ];
 }

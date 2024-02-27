@@ -14,20 +14,33 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-struct ConvertToStreamBuffer : public OpRewritePattern<hls::TensorToStreamOp> {
-  using OpRewritePattern<hls::TensorToStreamOp>::OpRewritePattern;
+struct EliminateIntermediateTensor
+    : public OpRewritePattern<hls::StreamFromTensorOp> {
+  using OpRewritePattern<hls::StreamFromTensorOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(hls::TensorToStreamOp tensorToStream,
+  LogicalResult matchAndRewrite(hls::StreamFromTensorOp streamFromTensor,
                                 PatternRewriter &rewriter) const override {
     auto streamToTensor =
-        tensorToStream.getTensor().getDefiningOp<hls::StreamToTensorOp>();
+        streamFromTensor.getTensor().getDefiningOp<hls::StreamToTensorOp>();
     if (!streamToTensor)
       return failure();
     auto tensorType = streamToTensor.getType();
 
+    // Directly replace the result stream with the source stream if they share
+    // the same type.
+    auto sourceType = streamToTensor.getStreamType();
+    auto resultType = streamFromTensor.getStreamType();
+    if (sourceType == resultType) {
+      auto streamToReplace = streamFromTensor.getStream();
+      rewriter.replaceAllUsesWith(streamToReplace, streamToTensor.getStream());
+      rewriter.eraseOp(streamToReplace.getDefiningOp());
+      rewriter.eraseOp(streamFromTensor);
+      return success();
+    }
+
+    // Otherwise, we need to generate a stream.buffer operation to reduce the
+    // buffer size.
     // TODO: Support non-regular stream types.
-    auto sourceType = streamToTensor.getStream().getType();
-    auto resultType = tensorToStream.getStream().getType();
     if (!sourceType.tileIsRegular() || !resultType.tileIsRegular())
       return failure();
 
@@ -87,8 +100,9 @@ struct ConvertToStreamBuffer : public OpRewritePattern<hls::TensorToStreamOp> {
                        tensorType.getShape().end());
 
     rewriter.replaceOpWithNewOp<hls::StreamBufferOp>(
-        tensorToStream, resultType, streamToTensor.getStream(),
-        tensorType.getElementType(), bufferShape, beforeLoop, beforeDim);
+        streamFromTensor, streamToTensor.getStream(),
+        streamFromTensor.getStream(), tensorType.getElementType(), bufferShape,
+        beforeLoop, beforeDim);
     return success();
   }
 };
@@ -102,7 +116,7 @@ struct ReduceTensorToStream
     auto context = op->getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<ConvertToStreamBuffer>(context);
+    patterns.add<EliminateIntermediateTensor>(context);
     (void)applyPatternsAndFoldGreedily(op, std::move(patterns));
   }
 };

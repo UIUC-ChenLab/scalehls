@@ -324,7 +324,8 @@ ScheduleOp hls::scheduleBlock(StringRef name, Block *block,
 
   unsigned taskId = 0;
   for (auto &op : llvm::make_early_inc_range(schedule.getOps())) {
-    assert(!isa<hls::StreamBufferOp>(op) && !isa<hls::TensorToStreamOp>(op) &&
+    assert(!isa<hls::StreamBufferOp>(op) && !isa<hls::StreamForkOp>(op) &&
+           !isa<hls::StreamFromTensorOp>(op) &&
            !isa<hls::StreamToTensorOp>(op) &&
            "stream op must be materialized before being scheduleed");
     assert(!isa<tensor::TensorDialect>(op.getDialect()) &&

@@ -64,14 +64,14 @@ struct ScalarizeStreamReadOp : public OpRewritePattern<hls::StreamReadOp> {
 
   LogicalResult matchAndRewrite(hls::StreamReadOp read,
                                 PatternRewriter &rewriter) const override {
-    auto streamType = read.getChannel().getType();
+    auto streamType = read.getStreamType();
     if (!streamType.hasShapedElementType())
       return failure();
 
     auto loc = read.getLoc();
-    rewriter.setInsertionPointAfterValue(read.getChannel());
+    rewriter.setInsertionPointAfterValue(read.getStream());
     auto cast = rewriter.create<hls::StreamCastOp>(
-        loc, getScalarStreamType(streamType), read.getChannel());
+        loc, getScalarStreamType(streamType), read.getStream());
 
     rewriter.setInsertionPoint(read);
     auto elementType = streamType.getShapedElementType();
@@ -100,14 +100,14 @@ struct ScalarizeStreamWriteOp : public OpRewritePattern<hls::StreamWriteOp> {
 
   LogicalResult matchAndRewrite(hls::StreamWriteOp write,
                                 PatternRewriter &rewriter) const override {
-    auto streamType = write.getChannel().getType();
+    auto streamType = write.getStreamType();
     if (!streamType.hasShapedElementType())
       return failure();
 
     auto loc = write.getLoc();
-    rewriter.setInsertionPointAfterValue(write.getChannel());
+    rewriter.setInsertionPointAfterValue(write.getStream());
     auto cast = rewriter.create<hls::StreamCastOp>(
-        loc, getScalarStreamType(streamType), write.getChannel());
+        loc, getScalarStreamType(streamType), write.getStream());
 
     rewriter.setInsertionPoint(write);
     auto elementType = streamType.getShapedElementType();
@@ -150,25 +150,26 @@ struct ScalarizeStreamReassociateOp
 
   LogicalResult matchAndRewrite(hls::StreamReassociateOp op,
                                 PatternRewriter &rewriter) const override {
-    auto inputType = op.getInputType();
-    auto outputType = op.getOutputType();
-    if (!inputType.hasShapedElementType() || !outputType.hasShapedElementType())
+    auto sourceType = op.getSourceType();
+    auto resultType = op.getResultType();
+    if (!sourceType.hasShapedElementType() ||
+        !resultType.hasShapedElementType())
       return failure();
 
     auto loc = op.getLoc();
     auto inputCast = rewriter.create<hls::StreamCastOp>(
-        loc, getScalarStreamType(inputType), op.getInput());
+        loc, getScalarStreamType(sourceType), op.getSource());
 
     auto scalarIterationReassociation =
         rewriter.getArrayAttr(getScalarIterationReassociation(
             op.getIterationReassociationIndices(),
             op.getShapeReassociationIndices(), rewriter));
     auto scalarOp = rewriter.create<hls::StreamReassociateOp>(
-        loc, getScalarStreamType(outputType), inputCast, op.getExpandShape(),
+        loc, getScalarStreamType(resultType), inputCast, op.getExpandShape(),
         op.getShapeReassociation(), op.getExpandIteration(),
         scalarIterationReassociation);
 
-    rewriter.replaceOpWithNewOp<hls::StreamCastOp>(op, outputType, scalarOp);
+    rewriter.replaceOpWithNewOp<hls::StreamCastOp>(op, resultType, scalarOp);
     return success();
   }
 };

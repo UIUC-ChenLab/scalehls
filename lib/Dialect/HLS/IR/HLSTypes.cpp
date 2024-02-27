@@ -42,8 +42,7 @@ SmallVector<int64_t> hls::StreamType::getShape() const {
 
   SmallVector<int64_t> integralShape;
   for (auto [index, iterSize] : llvm::enumerate(iterSizeMap.getResults())) {
-    auto constIterSize = llvm::dyn_cast<AffineConstantExpr>(iterSize);
-    assert(constIterSize && "non-constant size in the iteration map");
+    auto constIterSize = llvm::cast<AffineConstantExpr>(iterSize);
     integralShape.push_back(constIterSize.getValue() +
                             getElementDimSize(index));
   }
@@ -87,8 +86,7 @@ bool hls::StreamType::tileIsRegular() const {
   auto iterShapeMap = getIterMap().replaceDimsAndSymbols(iterShape, {}, 0, 0);
 
   for (auto [index, iterDimSize] : llvm::enumerate(iterShapeMap.getResults())) {
-    auto constIterDimSize = llvm::dyn_cast<AffineConstantExpr>(iterDimSize);
-    assert(constIterDimSize && "non-constant size in the iteration map");
+    auto constIterDimSize = llvm::cast<AffineConstantExpr>(iterDimSize);
     if (constIterDimSize.getValue() != getElementDimSize(index) &&
         constIterDimSize.getValue() != 0)
       return false;

@@ -26,22 +26,52 @@ LogicalResult TensorInitOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
-// TensorToStreamOp
+// StreamOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult TensorToStreamOp::verify() {
-  if (!getStream().getType().isConvertableWith(getTensor().getType()))
-    return emitOpError() << "stream type is not convertable with tensor type, "
-                            "stream type has an integral shape of ("
-                         << getStream().getType().getShape() << ")";
+template <typename Effect>
+static void recursivelyGetEffectsOps(TypedValue<StreamType> stream,
+                                     SmallVectorImpl<OpOperand *> &readers) {
+  for (auto &use : stream.getUses()) {
+    if (auto viewUser = dyn_cast<StreamViewLikeInterface>(use.getOwner()))
+      recursivelyGetEffectsOps<Effect>(viewUser.getResult(), readers);
+    else if (auto effectsUser =
+                 dyn_cast<MemoryEffectOpInterface>(use.getOwner()))
+      if (effectsUser.getEffectOnValue<Effect>(stream))
+        readers.push_back(&use);
+  }
+}
+
+SmallVector<OpOperand *> StreamOp::getReaders() {
+  SmallVector<OpOperand *> readers;
+  recursivelyGetEffectsOps<MemoryEffects::Read>(getStream(), readers);
+  return readers;
+}
+
+SmallVector<OpOperand *> StreamOp::getWriters() {
+  SmallVector<OpOperand *> readers;
+  recursivelyGetEffectsOps<MemoryEffects::Write>(getStream(), readers);
+  return readers;
+}
+
+LogicalResult StreamOp::verify() {
+  // We don't do any inter-procedural analysis for now.
+  if (llvm::any_of((*this)->getUsers(),
+                   [](Operation *user) { return isa<CallOpInterface>(user); }))
+    return success();
+
+  if (getNumWriters() != 1)
+    return emitOpError() << "stream channel must be written exactly once";
+  if (getNumReaders() == 0)
+    return emitOpError() << "stream channel is written but never read";
   return success();
 }
 
-OpFoldResult TensorToStreamOp::fold(FoldAdaptor adaptor) {
-  if (auto streamToTensor = getTensor().getDefiningOp<StreamToTensorOp>())
-    if (streamToTensor.getStream().getType() == getStream().getType())
-      return streamToTensor.getStream();
-  return {};
+void StreamOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  effects.emplace_back(MemoryEffects::Allocate::get(), getStream(),
+                       SideEffects::DefaultResource::get());
 }
 
 //===----------------------------------------------------------------------===//
@@ -49,30 +79,36 @@ OpFoldResult TensorToStreamOp::fold(FoldAdaptor adaptor) {
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamToTensorOp::verify() {
-  if (!getStream().getType().isConvertableWith(getTensor().getType()))
+  if (!getStreamType().isConvertableWith(getTensorType()))
+    return emitOpError() << "stream type is not convertable with tensor type, "
+                            "stream type has an integral shape of ("
+                         << getStreamType().getShape() << ")";
+  return success();
+}
+
+void StreamToTensorOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  effects.emplace_back(MemoryEffects::Read::get(), getStream(),
+                       SideEffects::DefaultResource::get());
+}
+
+//===----------------------------------------------------------------------===//
+// StreamFromTensorOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult StreamFromTensorOp::verify() {
+  if (!getStreamType().isConvertableWith(getTensorType()))
     return emitOpError() << "stream type is not convertable with tensor type, "
                             "stream type has an integral shape of ("
                          << getStream().getType().getShape() << ")";
   return success();
 }
 
-//===----------------------------------------------------------------------===//
-// StreamOp
-//===----------------------------------------------------------------------===//
-
-LogicalResult StreamOp::verify() {
-  unsigned numWrites = 0;
-  for (auto &use : (*this)->getUses())
-    numWrites += isWritten(use);
-  if (numWrites > 1)
-    return emitOpError() << "stream is written more than once";
-  return success();
-}
-
-void StreamOp::getEffects(
+void StreamFromTensorOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
         &effects) {
-  effects.emplace_back(MemoryEffects::Allocate::get(), getChannel(),
+  effects.emplace_back(MemoryEffects::Write::get(), getStream(),
                        SideEffects::DefaultResource::get());
 }
 
@@ -80,12 +116,13 @@ void StreamOp::getEffects(
 // StreamReadOp
 //===----------------------------------------------------------------------===//
 
-static LogicalResult verifyTripCountsAndSteps(Operation *op, Value channel) {
-  auto channelType = channel.getType().cast<StreamType>();
-  if (!channelType.hasIterInfo())
+static LogicalResult verifyTripCountsAndSteps(Operation *op,
+                                              TypedValue<StreamType> stream) {
+  auto streamType = stream.getType();
+  if (!streamType.hasIterInfo())
     return success();
 
-  auto loops = getSurroundingLoops(op, channel.getParentBlock());
+  auto loops = getSurroundingLoops(op, stream.getParentBlock());
   auto tripCounts = getLoopTripCounts(loops);
   auto steps = getLoopSteps(loops);
   if (!tripCounts || !steps)
@@ -97,7 +134,7 @@ static LogicalResult verifyTripCountsAndSteps(Operation *op, Value channel) {
       });
 
   auto stripedIterInfo = llvm::make_filter_range(
-      llvm::zip(channelType.getIterTripCounts(), channelType.getIterSteps()),
+      llvm::zip(streamType.getIterTripCounts(), streamType.getIterSteps()),
       [](auto tuple) { return std::get<0>(tuple) != 1; });
 
   if (std::distance(stripedLoopInfo.begin(), stripedLoopInfo.end()) !=
@@ -109,26 +146,26 @@ static LogicalResult verifyTripCountsAndSteps(Operation *op, Value channel) {
                                 "stream iteration trip counts or steps\n");
     diag << "loop trip counts: " << *tripCounts << ", steps: " << *steps
          << "\n";
-    diag << "stream iteration trip counts: " << channelType.getIterTripCounts()
-         << ", steps: " << channelType.getIterSteps();
+    diag << "stream iteration trip counts: " << streamType.getIterTripCounts()
+         << ", steps: " << streamType.getIterSteps();
     return diag;
   }
   return success();
 }
 
 LogicalResult StreamReadOp::verify() {
-  if (getChannel().getType().getElementType() != getResult().getType())
+  if (getStreamType().getElementType() != getType())
     return emitOpError("result type doesn't align with channel type");
   if (getInit())
-    if (getInit().getType() != getResult().getType())
+    if (getInit().getType() != getType())
       return emitOpError("initial value type doesn't align with result type");
-  return verifyTripCountsAndSteps(*this, getChannel());
+  return verifyTripCountsAndSteps(*this, getStream());
 }
 
 void StreamReadOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
         &effects) {
-  effects.emplace_back(MemoryEffects::Read::get(), getChannel(),
+  effects.emplace_back(MemoryEffects::Read::get(), getStream(),
                        SideEffects::DefaultResource::get());
 }
 
@@ -137,16 +174,78 @@ void StreamReadOp::getEffects(
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamWriteOp::verify() {
-  if (getChannel().getType().getElementType() != getValue().getType())
+  if (getStreamType().getElementType() != getValue().getType())
     return emitOpError("value type doesn't align with channel type");
-  return verifyTripCountsAndSteps(*this, getChannel());
+  return verifyTripCountsAndSteps(*this, getStream());
 }
 
 void StreamWriteOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
         &effects) {
-  effects.emplace_back(MemoryEffects::Write::get(), getChannel(),
+  effects.emplace_back(MemoryEffects::Write::get(), getStream(),
                        SideEffects::DefaultResource::get());
+}
+
+//===----------------------------------------------------------------------===//
+// StreamBufferOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult StreamBufferOp::verify() {
+  auto sourceType = getSourceType();
+  auto destType = getDestType();
+  if (!sourceType.isCastableWith(destType)) {
+    auto diag = emitOpError("input and output are not castable");
+    diag << "input shape: " << sourceType.getShape()
+         << ", output shape: " << destType.getShape();
+    return diag;
+  }
+
+  if (getLoopIndex() > sourceType.getIterRank())
+    return emitOpError("buffer loop index is out of loop range");
+
+  auto sourceShape = sourceType.getShape();
+  for (auto [dim, bufferSize, dimSize, sourceTileSize, destTileSize] :
+       llvm::zip(llvm::seq(sourceShape.size()), getBufferShape(), sourceShape,
+                 sourceType.getElementShape(), destType.getElementShape())) {
+    if ((int64_t)dim < getDimIndex()) {
+      if (sourceTileSize != destTileSize || bufferSize < sourceTileSize)
+        return emitOpError(
+            "buffer size is smaller than input/output tile size");
+    } else if (bufferSize != dimSize)
+      return emitOpError(
+          "buffer size doesn't align with input/output tensor size");
+  }
+  return success();
+}
+
+void StreamBufferOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  effects.emplace_back(MemoryEffects::Read::get(), getSource(),
+                       SideEffects::DefaultResource::get());
+  effects.emplace_back(MemoryEffects::Write::get(), getDest(),
+                       SideEffects::DefaultResource::get());
+}
+
+//===----------------------------------------------------------------------===//
+// StreamForkOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult StreamForkOp::verify() {
+  for (auto dest : getDests())
+    if (dest.getType() != getStreamType())
+      return emitOpError("dest type doesn't align with input type");
+  return success();
+}
+
+void StreamForkOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  effects.emplace_back(MemoryEffects::Read::get(), getSource(),
+                       SideEffects::DefaultResource::get());
+  for (auto dest : getDests())
+    effects.emplace_back(MemoryEffects::Write::get(), dest,
+                         SideEffects::DefaultResource::get());
 }
 
 //===----------------------------------------------------------------------===//
@@ -154,12 +253,12 @@ void StreamWriteOp::getEffects(
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamReassociateOp::verify() {
-  if (getInputType().getDataType() != getOutputType().getDataType())
+  if (getSourceType().getDataType() != getResultType().getDataType())
     return emitOpError("input and output data type doesn't match");
 
   // Verify the shape reassociation.
-  auto lowShapeType = getExpandShape() ? getInputType() : getOutputType();
-  auto highShapeType = getExpandShape() ? getOutputType() : getInputType();
+  auto lowShapeType = getExpandShape() ? getSourceType() : getResultType();
+  auto highShapeType = getExpandShape() ? getResultType() : getSourceType();
   auto lowShape = lowShapeType.getShape();
   auto highShape = highShapeType.getShape();
   auto shapeReassociation = getShapeReassociationIndices();
@@ -177,9 +276,9 @@ LogicalResult StreamReassociateOp::verify() {
 
   // Verify the iteration reassociation.
   auto lowIterationType =
-      getExpandIteration() ? getInputType() : getOutputType();
+      getExpandIteration() ? getSourceType() : getResultType();
   auto highIterationType =
-      getExpandIteration() ? getOutputType() : getInputType();
+      getExpandIteration() ? getResultType() : getSourceType();
   auto iterationReassociation = getIterationReassociationIndices();
   if ((int64_t)iterationReassociation.size() != lowIterationType.getIterRank())
     return emitOpError("iteration reassociation has invalid size");
@@ -200,11 +299,11 @@ LogicalResult StreamReassociateOp::verify() {
 }
 
 static OpFoldResult foldStreamViewLikeInterface(StreamViewLikeInterface op) {
-  if (op.getInput().getType() == op.getOutput().getType())
-    return op.getInput();
-  if (auto prevView = op.getInput().getDefiningOp<StreamViewLikeInterface>())
-    if (prevView.getInputType() == op.getOutput().getType())
-      return prevView.getInput();
+  if (op.getSourceType() == op.getResultType())
+    return op.getSource();
+  if (auto prevView = op.getSource().getDefiningOp<StreamViewLikeInterface>())
+    if (prevView.getSourceType() == op.getResultType())
+      return prevView.getSource();
   return {};
 }
 
@@ -213,52 +312,14 @@ OpFoldResult StreamReassociateOp::fold(FoldAdaptor adaptor) {
 }
 
 //===----------------------------------------------------------------------===//
-// StreamBufferOp
-//===----------------------------------------------------------------------===//
-
-LogicalResult StreamBufferOp::verify() {
-  auto inputType = getInput().getType();
-  auto outputType = getOutput().getType();
-  if (!inputType.isCastableWith(outputType)) {
-    auto diag = emitOpError("input and output are not castable");
-    diag << "input shape: " << inputType.getShape()
-         << ", output shape: " << outputType.getShape();
-    return diag;
-  }
-
-  if (getLoopIndex() > inputType.getIterRank())
-    return emitOpError("buffer loop index is out of loop range");
-
-  auto inputShape = inputType.getShape();
-  for (auto [dim, bufferSize, dimSize, inputTileSize, outputTileSize] :
-       llvm::zip(llvm::seq(inputShape.size()), getBufferShape(), inputShape,
-                 inputType.getElementShape(), outputType.getElementShape())) {
-    if ((int64_t)dim < getDimIndex()) {
-      if (inputTileSize != outputTileSize || bufferSize < inputTileSize)
-        return emitOpError(
-            "buffer size is smaller than input/output tile size");
-    } else if (bufferSize != dimSize)
-      return emitOpError(
-          "buffer size doesn't align with input/output tensor size");
-  }
-  return success();
-}
-
-OpFoldResult StreamBufferOp::fold(FoldAdaptor adaptor) {
-  return foldStreamViewLikeInterface(*this);
-}
-
-//===----------------------------------------------------------------------===//
 // StreamCastOp
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamCastOp::verify() {
-  auto inputType = getInput().getType();
-  auto outputType = getOutput().getType();
-  if (!inputType.isCastableWith(outputType)) {
+  if (!getSourceType().isCastableWith(getResultType())) {
     auto diag = emitOpError("input and output are not castable");
-    diag << "input shape: " << inputType.getShape()
-         << ", output shape: " << outputType.getShape();
+    diag << "input shape: " << getSourceType().getShape()
+         << ", output shape: " << getResultType().getShape();
     return diag;
   }
   return success();

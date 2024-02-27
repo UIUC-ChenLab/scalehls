@@ -695,7 +695,7 @@ void ModuleEmitter::emitConstBuffer(ConstBufferOp op) {
 
 void ModuleEmitter::emitStreamChannel(StreamOp op) {
   indent();
-  emitValue(op.getChannel());
+  emitValue(op.getStream());
   os << ";";
   emitInfoAndNewLine(op);
 }
@@ -706,7 +706,7 @@ void ModuleEmitter::emitStreamRead(StreamReadOp op) {
     emitValue(op.getResult());
     os << " = ";
   }
-  emitValue(op.getChannel());
+  emitValue(op.getStream());
   os << ".read(";
   os << ");";
   emitInfoAndNewLine(op);
@@ -714,7 +714,7 @@ void ModuleEmitter::emitStreamRead(StreamReadOp op) {
 
 void ModuleEmitter::emitStreamWrite(StreamWriteOp op) {
   indent();
-  emitValue(op.getChannel());
+  emitValue(op.getStream());
   os << ".write(";
   emitValue(op.getValue());
   os << ");";

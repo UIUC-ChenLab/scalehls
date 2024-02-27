@@ -157,7 +157,8 @@ def convert_generic_op_to_stream(target: Value, parallel_tile_sizes: List[int], 
                 transform.OperationType.get("tensor.extract_slice"),
                 match_input)
             convert_op = hls_transform.HLSConvertExtractSliceToStreamOp(
-                transform.OperationType.get("hls.tensor_to_stream"),
+                transform.OperationType.get("hls.stream"),
+                transform.OperationType.get("hls.stream_from_tensor"),
                 transform.OperationType.get("hls.stream_read"),
                 merge_op.result)
             transform.YieldOp()
@@ -166,7 +167,8 @@ def convert_generic_op_to_stream(target: Value, parallel_tile_sizes: List[int], 
 
 def convert_expand_shape_op_to_stream(target: Value, source_tile_sizes: List[int], result_tile_sizes: List[int]):
     stream_op = hls_transform.HLSConvertExpandShapeToStreamOp(
-        transform.OperationType.get("hls.tensor_to_stream"),
+        transform.OperationType.get("hls.stream"),
+        transform.OperationType.get("hls.stream_from_tensor"),
         transform.OperationType.get("hls.stream_reassociate"),
         transform.OperationType.get("hls.stream_to_tensor"),
         target,
@@ -177,7 +179,8 @@ def convert_expand_shape_op_to_stream(target: Value, source_tile_sizes: List[int
 
 def convert_collapse_shape_op_to_stream(target: Value, source_tile_sizes: List[int], result_tile_sizes: List[int]):
     stream_op = hls_transform.HLSConvertCollapseShapeToStreamOp(
-        transform.OperationType.get("hls.tensor_to_stream"),
+        transform.OperationType.get("hls.stream"),
+        transform.OperationType.get("hls.stream_from_tensor"),
         transform.OperationType.get("hls.stream_reassociate"),
         transform.OperationType.get("hls.stream_to_tensor"),
         target,

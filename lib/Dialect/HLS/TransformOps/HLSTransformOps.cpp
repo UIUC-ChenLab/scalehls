@@ -52,7 +52,8 @@ transform::HLSConvertExtractSliceToTensorInitOp::applyToOne(
       getUntiledOperandAndSurroundingLoops(&extractSlice.getSourceMutable());
   auto tensorInit = untiledUse->get().getDefiningOp<hls::TensorInitOp>();
   if (!tensorInit)
-    return emitDefaultSilenceableFailure(extractSlice);
+    return emitDefaultSilenceableFailure(extractSlice)
+           << "untiled operand must be defined by a tensor.init op";
 
   rewriter.setInsertionPoint(extractSlice);
   auto localTensorInit = rewriter.replaceOpWithNewOp<hls::TensorInitOp>(
@@ -165,46 +166,49 @@ transform::HLSConvertInsertSliceToStreamOp::applyToOne(
   // Check if the destination tensor of the insert_slice op has only one use,
   // which means no other operations have effect on the tensor.
   if (!insertSlice.getDest().hasOneUse())
-    return emitDefaultSilenceableFailure(insertSlice);
+    return emitDefaultSilenceableFailure(insertSlice)
+           << "destination tensor must have only one use";
 
   // Collect the surrounding loops of the insert_slice op.
   SmallVector<scf::ForOp> loops;
   auto untiledUse = getUntiledOperandAndSurroundingLoops(
       &insertSlice.getDestMutable(), &loops);
   if (untiledUse == &insertSlice.getDestMutable())
-    return emitDefaultSilenceableFailure(insertSlice);
+    return emitDefaultSilenceableFailure(insertSlice)
+           << "untiled operand must be defined by a tensor.init op";
 
   // Collect the iteration shape and affine map of the streaming channel.
   auto iterTripCounts = getLoopTripCounts(loops);
   auto iterSteps = getLoopSteps(loops);
   auto iterMap = getIterationAffineMap(insertSlice, loops);
   if (!iterTripCounts || !iterSteps || !iterMap)
-    return emitDefaultSilenceableFailure(insertSlice);
+    return emitDefaultSilenceableFailure(insertSlice)
+           << "trip counts, steps, or iteration map can be determined";
 
   // Create the streaming channel.
+  auto loc = insertSlice.getLoc();
   rewriter.setInsertionPoint(loops.front());
   auto channelType = hls::StreamType::get(
       insertSlice.getSourceType(), *iterTripCounts, *iterSteps, *iterMap,
       insertSlice.getDestType().getNumElements());
-  auto channel =
-      rewriter.create<hls::StreamOp>(rewriter.getUnknownLoc(), channelType);
+  auto channel = rewriter.create<hls::StreamOp>(loc, channelType);
 
   // Create the stream_write op.
   rewriter.setInsertionPoint(insertSlice);
   auto channelWrite = rewriter.create<hls::StreamWriteOp>(
-      rewriter.getUnknownLoc(), channel, insertSlice.getSource());
+      loc, channel, insertSlice.getSource());
 
   // Create the stream_to_tensor op.
   rewriter.setInsertionPointAfter(loops.front());
   auto tensorToReplace = loops.front().getTiedLoopResult(untiledUse);
-  auto channelTensor = rewriter.create<hls::StreamToTensorOp>(
-      rewriter.getUnknownLoc(), tensorToReplace.getType(), channel);
-
-  rewriter.replaceAllUsesWith(tensorToReplace, channelTensor);
+  auto channelToTensor = rewriter.create<hls::StreamToTensorOp>(
+      loc, tensorToReplace.getType(), channel);
+  rewriter.replaceAllUsesWith(tensorToReplace, channelToTensor);
   rewriter.replaceOp(insertSlice, insertSlice.getDest());
+
   results.push_back(channel);
   results.push_back(channelWrite);
-  results.push_back(channelTensor);
+  results.push_back(channelToTensor);
   return DiagnosedSilenceableFailure::success();
 }
 
@@ -226,25 +230,27 @@ transform::HLSConvertExtractSliceToStreamOp::applyToOne(
   auto iterSteps = getLoopSteps(loops);
   auto iterMap = getIterationAffineMap(extractSlice, loops);
   if (!iterTripCounts || !iterSteps || !iterMap)
-    return emitDefaultSilenceableFailure(extractSlice);
+    return emitDefaultSilenceableFailure(extractSlice)
+           << "trip counts, steps, or iteration map can be determined";
 
   // Create the tensor_to_stream op.
+  auto loc = extractSlice.getLoc();
   rewriter.setInsertionPointAfterValue(extractSlice.getSource());
   auto channelType = hls::StreamType::get(
       extractSlice.getResultType(), *iterTripCounts, *iterSteps, *iterMap,
       extractSlice.getSourceType().getNumElements());
-  auto channel = rewriter.create<hls::TensorToStreamOp>(
-      rewriter.getUnknownLoc(), channelType, extractSlice.getSource());
+  auto channel = rewriter.create<hls::StreamOp>(loc, channelType);
+  auto channelFromTensor = rewriter.create<hls::StreamFromTensorOp>(
+      loc, channel, extractSlice.getSource());
 
   // Create the stream_read op.
   rewriter.setInsertionPoint(extractSlice);
   auto channelRead = rewriter.create<hls::StreamReadOp>(
-      rewriter.getUnknownLoc(), extractSlice.getResultType(), channel);
+      loc, extractSlice.getResultType(), channel);
+  rewriter.replaceOp(extractSlice, channelRead.getResult());
 
-  // Create the stream_to_tensor op.
-  rewriter.replaceAllUsesWith(extractSlice.getResult(),
-                              channelRead.getResult());
   results.push_back(channel);
+  results.push_back(channelFromTensor);
   results.push_back(channelRead);
   return DiagnosedSilenceableFailure::success();
 }
@@ -337,17 +343,19 @@ transform::HLSConvertExpandShapeToStreamOp::applyToOne(
   // Convert the expand_shape op to stream ops and replace its uses.
   auto loc = expandShape.getLoc();
   rewriter.setInsertionPoint(expandShape);
-  auto sourceStream = rewriter.create<hls::TensorToStreamOp>(
-      loc, streamTypes->first, expandShape.getSrc());
+  auto sourceStream = rewriter.create<hls::StreamOp>(loc, streamTypes->first);
+  auto streamFromTensor = rewriter.create<hls::StreamFromTensorOp>(
+      loc, sourceStream, expandShape.getSrc());
   auto streamReassociate = rewriter.create<hls::StreamReassociateOp>(
       loc, streamTypes->second, sourceStream, /*expandShape=*/true,
       expandShape.getReassociation(), /*expandIteration=*/true,
       expandShape.getReassociation());
   auto resultTensor = rewriter.create<hls::StreamToTensorOp>(
-      loc, expandShape.getResultType(), streamReassociate);
-  rewriter.replaceAllUsesWith(expandShape, resultTensor);
+      loc, expandShape.getResultType(), streamReassociate.getResult());
+  rewriter.replaceOp(expandShape, resultTensor);
 
   results.push_back(sourceStream);
+  results.push_back(streamFromTensor);
   results.push_back(streamReassociate);
   results.push_back(resultTensor);
   return DiagnosedSilenceableFailure::success();
@@ -377,17 +385,19 @@ transform::HLSConvertCollapseShapeToStreamOp::applyToOne(
   // Convert the expand_shape op to stream ops and replace its uses.
   auto loc = collapseShape.getLoc();
   rewriter.setInsertionPoint(collapseShape);
-  auto sourceStream = rewriter.create<hls::TensorToStreamOp>(
-      loc, streamTypes->second, collapseShape.getSrc());
+  auto sourceStream = rewriter.create<hls::StreamOp>(loc, streamTypes->second);
+  auto streamFromTensor = rewriter.create<hls::StreamFromTensorOp>(
+      loc, sourceStream, collapseShape.getSrc());
   auto streamReassociate = rewriter.create<hls::StreamReassociateOp>(
       loc, streamTypes->first, sourceStream, /*expandShape=*/false,
       collapseShape.getReassociation(), /*expandIteration=*/false,
       collapseShape.getReassociation());
   auto resultTensor = rewriter.create<hls::StreamToTensorOp>(
-      loc, collapseShape.getResultType(), streamReassociate);
-  rewriter.replaceAllUsesWith(collapseShape, resultTensor);
+      loc, collapseShape.getResultType(), streamReassociate.getResult());
+  rewriter.replaceOp(collapseShape, resultTensor);
 
   results.push_back(sourceStream);
+  results.push_back(streamFromTensor);
   results.push_back(streamReassociate);
   results.push_back(resultTensor);
   return DiagnosedSilenceableFailure::success();

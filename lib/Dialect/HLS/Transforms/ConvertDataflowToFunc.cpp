@@ -130,7 +130,7 @@ struct ConvertDataflowToFunc
 
     // Fold all stream reassociate ops.
     module.walk([&](hls::StreamReassociateOp reassociateOp) {
-      reassociateOp.getOutput().replaceAllUsesWith(reassociateOp.getInput());
+      reassociateOp.getResult().replaceAllUsesWith(reassociateOp.getSource());
     });
 
     // Strip iteration information of all streams.
