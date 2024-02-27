@@ -46,28 +46,28 @@ LogicalResult TensorInitOp::canonicalize(TensorInitOp op,
 //===----------------------------------------------------------------------===//
 
 template <typename Effect>
-static void recursivelyGetEffectsOps(TypedValue<StreamType> stream,
-                                     SmallVectorImpl<OpOperand *> &readers) {
+static void recursivelyGetEffectUses(TypedValue<StreamType> stream,
+                                     SmallVectorImpl<OpOperand *> &uses) {
   for (auto &use : stream.getUses()) {
     if (auto viewUser = dyn_cast<StreamViewLikeInterface>(use.getOwner()))
-      recursivelyGetEffectsOps<Effect>(viewUser.getResult(), readers);
+      recursivelyGetEffectUses<Effect>(viewUser.getResult(), uses);
     else if (auto effectsUser =
                  dyn_cast<MemoryEffectOpInterface>(use.getOwner()))
       if (effectsUser.getEffectOnValue<Effect>(stream))
-        readers.push_back(&use);
+        uses.push_back(&use);
   }
 }
 
-SmallVector<OpOperand *> StreamOp::getReaders() {
-  SmallVector<OpOperand *> readers;
-  recursivelyGetEffectsOps<MemoryEffects::Read>(getStream(), readers);
-  return readers;
+SmallVector<OpOperand *> StreamOp::getReadUses() {
+  SmallVector<OpOperand *> readUses;
+  recursivelyGetEffectUses<MemoryEffects::Read>(getStream(), readUses);
+  return readUses;
 }
 
-SmallVector<OpOperand *> StreamOp::getWriters() {
-  SmallVector<OpOperand *> readers;
-  recursivelyGetEffectsOps<MemoryEffects::Write>(getStream(), readers);
-  return readers;
+SmallVector<OpOperand *> StreamOp::getWriteUses() {
+  SmallVector<OpOperand *> writeUses;
+  recursivelyGetEffectUses<MemoryEffects::Write>(getStream(), writeUses);
+  return writeUses;
 }
 
 LogicalResult StreamOp::verify() {
@@ -76,9 +76,9 @@ LogicalResult StreamOp::verify() {
                    [](Operation *user) { return isa<CallOpInterface>(user); }))
     return success();
 
-  if (getNumWriters() != 1)
+  if (getWriteUses().size() != 1)
     return emitOpError() << "stream channel must be written exactly once";
-  if (getNumReaders() == 0)
+  if (getReadUses().size() == 0)
     return emitOpError() << "stream channel is written but never read";
   return success();
 }
@@ -334,7 +334,6 @@ canonicalizeStreamViewLikeInterface(StreamViewLikeInterface op,
     return failure();
 
   for (auto &use : llvm::make_early_inc_range(op->getUses())) {
-    rewriter.setInsertionPoint(use.getOwner());
     auto newOp = cast<StreamViewLikeInterface>(rewriter.clone(*op));
     rewriter.replaceUsesWithIf(
         op.getResult(), newOp.getResult(),
