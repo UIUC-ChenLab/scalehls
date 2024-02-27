@@ -53,8 +53,7 @@ def TensorInitOp : HLSOp<"tensor_init", [Pure]> {
   let arguments = (ins Optional<AnyType>:$initValue);
   let results = (outs AnyRankedTensor:$result);
   let assemblyFormat = [{
-    (`init` $initValue^)? attr-dict `:` `(` type($initValue) `)` `->`
-    type($result)
+    (`init` $initValue^)? attr-dict `:` functional-type(operands, results)
   }];
 
   let hasVerifier = 1;

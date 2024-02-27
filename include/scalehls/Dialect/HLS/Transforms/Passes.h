@@ -25,6 +25,7 @@ namespace hls {
 
 std::unique_ptr<Pass> createPreprocessPass();
 std::unique_ptr<Pass> createReduceTensorToStreamPass();
+std::unique_ptr<Pass> createLegalizeStreamPass();
 std::unique_ptr<Pass> createMaterializeStreamPass(bool enablePacking = true);
 std::unique_ptr<Pass> createScalarizeStreamPass();
 

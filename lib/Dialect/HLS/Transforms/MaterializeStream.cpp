@@ -187,12 +187,11 @@ unpackTensor(TypedValue<RankedTensorType> tensor, ArrayRef<int64_t> tileSizes,
 }
 
 namespace {
-struct LowerTensorToStreamConversionOp
+struct MaterializeStreamFromTensorOp
     : public OpRewritePattern<hls::StreamFromTensorOp> {
-  LowerTensorToStreamConversionOp(MLIRContext *context,
-                                  bool enablePacking = true,
-                                  PatternBenefit benefit = 1,
-                                  ArrayRef<StringRef> generatedNames = {})
+  MaterializeStreamFromTensorOp(MLIRContext *context, bool enablePacking = true,
+                                PatternBenefit benefit = 1,
+                                ArrayRef<StringRef> generatedNames = {})
       : OpRewritePattern(context, benefit, generatedNames),
         enablePacking(enablePacking) {}
 
@@ -226,12 +225,11 @@ private:
 } // namespace
 
 namespace {
-struct LowerStreamToTensorConversionOp
+struct MaterializeStreamToTensorOp
     : public OpRewritePattern<hls::StreamToTensorOp> {
-  LowerStreamToTensorConversionOp(MLIRContext *context,
-                                  bool enablePacking = true,
-                                  PatternBenefit benefit = 1,
-                                  ArrayRef<StringRef> generatedNames = {})
+  MaterializeStreamToTensorOp(MLIRContext *context, bool enablePacking = true,
+                              PatternBenefit benefit = 1,
+                              ArrayRef<StringRef> generatedNames = {})
       : OpRewritePattern(context, benefit, generatedNames),
         enablePacking(enablePacking) {}
 
@@ -282,10 +280,11 @@ private:
 } // namespace
 
 namespace {
-struct LowerStreamBufferOp : public OpRewritePattern<hls::StreamBufferOp> {
-  LowerStreamBufferOp(MLIRContext *context, bool enablePacking = true,
-                      PatternBenefit benefit = 1,
-                      ArrayRef<StringRef> generatedNames = {})
+struct MaterializeStreamBufferOp
+    : public OpRewritePattern<hls::StreamBufferOp> {
+  MaterializeStreamBufferOp(MLIRContext *context, bool enablePacking = true,
+                            PatternBenefit benefit = 1,
+                            ArrayRef<StringRef> generatedNames = {})
       : OpRewritePattern(context, benefit, generatedNames),
         enablePacking(enablePacking) {}
 
@@ -388,9 +387,9 @@ struct MaterializeStream : public MaterializeStreamBase<MaterializeStream> {
     auto context = op->getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<LowerTensorToStreamConversionOp>(context, enablePacking);
-    patterns.add<LowerStreamToTensorConversionOp>(context, enablePacking);
-    patterns.add<LowerStreamBufferOp>(context, enablePacking);
+    patterns.add<MaterializeStreamFromTensorOp>(context, enablePacking);
+    patterns.add<MaterializeStreamToTensorOp>(context, enablePacking);
+    patterns.add<MaterializeStreamBufferOp>(context, enablePacking);
     if (enablePacking)
       patterns.add<FoldPackOpIntoConstantOp>(context);
     (void)applyPatternsAndFoldGreedily(op, std::move(patterns));
