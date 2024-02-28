@@ -2,6 +2,7 @@ add_mlir_dialect_library(MLIRScaleHLSHLSTransforms
   BufferizableOpInterfaceImpl.cpp
   Preprocess.cpp
   ReduceTensorToStream.cpp
+  FuseStreamFork.cpp
   MaterializeStream.cpp
   ScalarizeStream.cpp
   ScheduleDataflow.cpp
