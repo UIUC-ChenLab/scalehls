@@ -42,6 +42,26 @@ LogicalResult TensorInitOp::canonicalize(TensorInitOp op,
 }
 
 //===----------------------------------------------------------------------===//
+// TensorForkOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult TensorForkOp::verify() {
+  for (auto resultType : getResultTypes())
+    if (resultType != getSourceType())
+      return emitOpError("result type doesn't align with input type");
+  return success();
+}
+
+LogicalResult TensorForkOp::fold(FoldAdaptor adaptor,
+                                 SmallVectorImpl<OpFoldResult> &results) {
+  if (getNumResults() == 1) {
+    results.push_back(getSource());
+    return success();
+  }
+  return failure();
+}
+
+//===----------------------------------------------------------------------===//
 // StreamOp
 //===----------------------------------------------------------------------===//
 

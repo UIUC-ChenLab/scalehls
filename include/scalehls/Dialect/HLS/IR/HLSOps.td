@@ -44,7 +44,7 @@ def AnyBufferOrStream : Type<Or<[AnyBuffer.predicate, AnyStream.predicate]>,
     "memref or stream values">;
 
 //===----------------------------------------------------------------------===//
-// Stream Operations
+// Tensor Operations
 //===----------------------------------------------------------------------===//
 
 def TensorInitOp : HLSOp<"tensor_init"> {
@@ -64,6 +64,27 @@ def TensorInitOp : HLSOp<"tensor_init"> {
         "build($_builder, $_state, result, nullptr);">
   ];
 }
+
+def TensorForkOp : HLSOp<"tensor_fork", [Pure]> {
+  let summary = "Fork a tensor to multiple tensors";
+
+  let arguments = (ins AnyRankedTensor:$source);
+  let results = (outs Variadic<AnyRankedTensor>:$results);
+  let assemblyFormat = [{
+    $source attr-dict `:` functional-type(operands, results)
+  }];
+
+  let hasVerifier = 1;
+  let hasFolder = 1;
+
+  let extraClassDeclaration = [{
+    RankedTensorType getSourceType() { return getSource().getType(); }
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// Stream Operations
+//===----------------------------------------------------------------------===//
 
 def StreamOp : HLSOp<"stream", [
     DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
