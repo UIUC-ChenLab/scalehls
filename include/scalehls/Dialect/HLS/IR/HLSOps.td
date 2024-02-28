@@ -96,15 +96,14 @@ def StreamOp : HLSOp<"stream", [
   let hasVerifier = 1;
 
   let extraClassDeclaration = [{
-    /// Get all the uses that have read effect on this stream.
+    /// Get all the uses that have read/write effect on this stream.
     SmallVector<OpOperand *> getReadUses();
-
-    /// Get all the uses that have write effect on this stream.
     SmallVector<OpOperand *> getWriteUses();
 
-    /// Get the single use that has write effect on this stream. The verifier
-    /// should ensure there is only one write use.
-    OpOperand * getSingleWriteUse() { return getWriteUses().front(); }
+    /// Get the single use that has read/write effect on this stream. The
+    /// verifier should ensure there is only one read/write use.
+    OpOperand *getSingleReadUse() { return getReadUses().front(); }
+    OpOperand *getSingleWriteUse() { return getWriteUses().front(); }
   }];
 }
 

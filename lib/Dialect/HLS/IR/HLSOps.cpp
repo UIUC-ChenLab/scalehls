@@ -98,8 +98,8 @@ LogicalResult StreamOp::verify() {
 
   if (getWriteUses().size() != 1)
     return emitOpError() << "stream channel must be written exactly once";
-  if (getReadUses().size() == 0)
-    return emitOpError() << "stream channel is written but never read";
+  if (getReadUses().size() != 1)
+    return emitOpError() << "stream channel must be read exactly once";
   return success();
 }
 

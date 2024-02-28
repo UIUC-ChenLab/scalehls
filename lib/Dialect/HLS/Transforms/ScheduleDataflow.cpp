@@ -14,6 +14,45 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+/// Wrap the operations in the block with schedule op.
+static ScheduleOp scheduleBlock(StringRef name, Block *block,
+                                PatternRewriter &rewriter) {
+  if (!block->getOps<ScheduleOp>().empty() ||
+      !isa<func::FuncOp, affine::AffineForOp, scf::ForOp>(block->getParentOp()))
+    return nullptr;
+
+  auto loc = rewriter.getUnknownLoc();
+  ValueRange returnValues(block->getTerminator()->getOperands());
+  rewriter.setInsertionPointToStart(block);
+  auto schedule = rewriter.create<ScheduleOp>(loc, returnValues);
+
+  auto &scheduleBlock = schedule.getBody().emplaceBlock();
+  rewriter.setInsertionPointToEnd(&scheduleBlock);
+  rewriter.create<YieldOp>(loc, returnValues);
+
+  auto &scheduleOps = scheduleBlock.getOperations();
+  auto &parentOps = block->getOperations();
+  scheduleOps.splice(scheduleBlock.begin(), parentOps,
+                     std::next(parentOps.begin()), std::prev(parentOps.end()));
+  block->getTerminator()->setOperands(schedule.getResults());
+
+  unsigned taskId = 0;
+  for (auto &op : llvm::make_early_inc_range(schedule.getOps())) {
+    assert(!isa<StreamBufferOp>(op) && !isa<StreamForkOp>(op) &&
+           !isa<StreamFromTensorOp>(op) && !isa<StreamToTensorOp>(op) &&
+           "stream op must be materialized before being scheduleed");
+    assert(!isa<tensor::TensorDialect>(op.getDialect()) &&
+           "tensor op must be bufferized before being scheduleed");
+    if (isa<linalg::LinalgOp, affine::AffineForOp, scf::ForOp>(op)) {
+      auto task = fuseOpsIntoTask({&op}, rewriter);
+      std::string taskName = name.str() + "_" + std::to_string(taskId++);
+      op.setAttr(taskName, rewriter.getUnitAttr());
+      task->setAttr(taskName, rewriter.getUnitAttr());
+    }
+  }
+  return schedule;
+}
+
 namespace {
 struct ScheduleFuncOp : public OpRewritePattern<func::FuncOp> {
   using OpRewritePattern<func::FuncOp>::OpRewritePattern;

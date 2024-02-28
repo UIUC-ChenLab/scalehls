@@ -61,11 +61,6 @@ void setRuntimeAttr(Operation *op);
 // Transform Utils
 //===----------------------------------------------------------------------===//
 
-/// Wrap the operations in the block with dispatch op. Return a nullptr if
-/// failed.
-ScheduleOp scheduleBlock(StringRef name, Block *block,
-                         PatternRewriter &rewriter);
-
 /// Fuse the given operations into a new task. The new task will be created
 /// before "insertToOp" and each operation will be in the original order. This
 /// method always succeeds even if the resulting IR is invalid.

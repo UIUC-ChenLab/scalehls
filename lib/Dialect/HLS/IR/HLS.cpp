@@ -107,46 +107,6 @@ bool hls::hasRuntimeAttr(Operation *op) {
 // Transform Utils
 //===----------------------------------------------------------------------===//
 
-/// Wrap the operations in the block with schedule op.
-ScheduleOp hls::scheduleBlock(StringRef name, Block *block,
-                              PatternRewriter &rewriter) {
-  if (!block->getOps<ScheduleOp>().empty() ||
-      !isa<func::FuncOp, affine::AffineForOp, scf::ForOp>(block->getParentOp()))
-    return nullptr;
-
-  auto loc = rewriter.getUnknownLoc();
-  ValueRange returnValues(block->getTerminator()->getOperands());
-  rewriter.setInsertionPointToStart(block);
-  auto schedule = rewriter.create<ScheduleOp>(loc, returnValues);
-
-  auto &scheduleBlock = schedule.getBody().emplaceBlock();
-  rewriter.setInsertionPointToEnd(&scheduleBlock);
-  rewriter.create<YieldOp>(loc, returnValues);
-
-  auto &scheduleOps = scheduleBlock.getOperations();
-  auto &parentOps = block->getOperations();
-  scheduleOps.splice(scheduleBlock.begin(), parentOps,
-                     std::next(parentOps.begin()), std::prev(parentOps.end()));
-  block->getTerminator()->setOperands(schedule.getResults());
-
-  unsigned taskId = 0;
-  for (auto &op : llvm::make_early_inc_range(schedule.getOps())) {
-    assert(!isa<hls::StreamBufferOp>(op) && !isa<hls::StreamForkOp>(op) &&
-           !isa<hls::StreamFromTensorOp>(op) &&
-           !isa<hls::StreamToTensorOp>(op) &&
-           "stream op must be materialized before being scheduleed");
-    assert(!isa<tensor::TensorDialect>(op.getDialect()) &&
-           "tensor op must be bufferized before being scheduleed");
-    if (isa<linalg::LinalgOp, affine::AffineForOp, scf::ForOp>(op)) {
-      auto task = fuseOpsIntoTask({&op}, rewriter);
-      std::string taskName = name.str() + "_" + std::to_string(taskId++);
-      op.setAttr(taskName, rewriter.getUnitAttr());
-      task->setAttr(taskName, rewriter.getUnitAttr());
-    }
-  }
-  return schedule;
-}
-
 /// Fuse the given operations into a new task. The new task will be created
 /// before "insertToOp" and each operation will be in the original order. This
 /// method always succeeds even if the resulting IR is invalid.
