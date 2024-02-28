@@ -109,6 +109,42 @@ struct EliminateIntermediateTensor
 } // namespace
 
 namespace {
+struct ConvertTensorForkToStreamFork
+    : public OpRewritePattern<hls::TensorForkOp> {
+  using OpRewritePattern<hls::TensorForkOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(hls::TensorForkOp tensorForkOp,
+                                PatternRewriter &rewriter) const override {
+    auto streamToTensor =
+        tensorForkOp.getSource().getDefiningOp<hls::StreamToTensorOp>();
+    if (!streamToTensor)
+      return failure();
+
+    // Construct N forked stream channels.
+    auto loc = tensorForkOp.getLoc();
+    SmallVector<Value> destStreams;
+    for (unsigned i = 0; i < tensorForkOp.getNumResults(); i++)
+      destStreams.push_back(
+          rewriter.create<hls::StreamOp>(loc, streamToTensor.getStreamType()));
+
+    // Create the stream fork operation.
+    rewriter.create<hls::StreamForkOp>(loc, streamToTensor.getStream(),
+                                       destStreams);
+
+    // Replace the tensor fork results with the forked streams.
+    for (auto [result, destStream] :
+         llvm::zip(tensorForkOp.getResults(), destStreams)) {
+      auto destTensor = rewriter.create<hls::StreamToTensorOp>(
+          loc, result.getType(), destStream);
+      rewriter.replaceAllUsesWith(result, destTensor.getResult());
+    }
+    return success();
+    // love uuuuuuuu ;)
+  }
+};
+} // namespace
+
+namespace {
 struct ReduceTensorToStream
     : public ReduceTensorToStreamBase<ReduceTensorToStream> {
   void runOnOperation() override {
@@ -117,6 +153,7 @@ struct ReduceTensorToStream
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<EliminateIntermediateTensor>(context);
+    patterns.add<ConvertTensorForkToStreamFork>(context);
     (void)applyPatternsAndFoldGreedily(op, std::move(patterns));
   }
 };
