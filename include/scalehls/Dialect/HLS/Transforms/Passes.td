@@ -20,11 +20,6 @@ def ReduceTensorToStream :
   let constructor = "mlir::scalehls::hls::createReduceTensorToStreamPass()";
 }
 
-def LegalizeStream : Pass<"scalehls-legalize-stream", "func::FuncOp"> {
-  let summary = "Legalize stream to ensure single producer single consumer";
-  let constructor = "mlir::scalehls::hls::createLegalizeStreamPass()";
-}
-
 def MaterializeStream : Pass<"scalehls-materialize-stream", "func::FuncOp"> {
   let summary = "Materialize tensor/stream conversions and stream buffers";
   let constructor = "mlir::scalehls::hls::createMaterializeStreamPass()";
