@@ -706,19 +706,21 @@ void ModuleEmitter::emitStreamRead(StreamReadOp op) {
     emitValue(op.getResult());
     os << " = ";
   }
-  emitValue(op.getStream());
+  emitValue(op.getSource());
   os << ".read(";
   os << ");";
   emitInfoAndNewLine(op);
 }
 
 void ModuleEmitter::emitStreamWrite(StreamWriteOp op) {
-  indent();
-  emitValue(op.getStream());
-  os << ".write(";
-  emitValue(op.getValue());
-  os << ");";
-  emitInfoAndNewLine(op);
+  for (auto dest : op.getDests()) {
+    indent();
+    emitValue(dest);
+    os << ".write(";
+    emitValue(op.getValue());
+    os << ");";
+    emitInfoAndNewLine(op);
+  }
 }
 
 template <typename AssignOpType>

@@ -103,6 +103,14 @@ LogicalResult StreamOp::verify() {
   return success();
 }
 
+LogicalResult StreamOp::canonicalize(StreamOp op, PatternRewriter &rewriter) {
+  if (op->use_empty()) {
+    rewriter.eraseOp(op);
+    return success();
+  }
+  return failure();
+}
+
 void StreamOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
         &effects) {
@@ -115,37 +123,40 @@ void StreamOp::getEffects(
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamToTensorOp::verify() {
-  if (!getStreamType().isConvertableWith(getTensorType()))
-    return emitOpError() << "stream type is not convertable with tensor type, "
-                            "stream type has an integral shape of ("
-                         << getStreamType().getShape() << ")";
+  if (!getSourceType().isConvertableWith(getTensorType()))
+    return emitOpError() << "stream type is not convertable with tensor type";
   return success();
 }
 
 void StreamToTensorOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
         &effects) {
-  effects.emplace_back(MemoryEffects::Read::get(), getStream(),
+  effects.emplace_back(MemoryEffects::Read::get(), getSource(),
                        SideEffects::DefaultResource::get());
 }
 
 //===----------------------------------------------------------------------===//
-// StreamFromTensorOp
+// TensorToStreamOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult StreamFromTensorOp::verify() {
-  if (!getStreamType().isConvertableWith(getTensorType()))
-    return emitOpError() << "stream type is not convertable with tensor type, "
-                            "stream type has an integral shape of ("
-                         << getStream().getType().getShape() << ")";
+LogicalResult TensorToStreamOp::verify() {
+  if (getDests().empty())
+    return emitOpError("no dest stream specified");
+  if (llvm::any_of(getDests(),
+                   [&](Value dest) { return dest.getType() != getDestType(); }))
+    return emitOpError("dest types must be the same");
+
+  if (!getDestType().isConvertableWith(getTensorType()))
+    return emitOpError() << "stream type is not convertable with tensor type";
   return success();
 }
 
-void StreamFromTensorOp::getEffects(
+void TensorToStreamOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
         &effects) {
-  effects.emplace_back(MemoryEffects::Write::get(), getStream(),
-                       SideEffects::DefaultResource::get());
+  for (auto dest : getDests())
+    effects.emplace_back(MemoryEffects::Write::get(), dest,
+                         SideEffects::DefaultResource::get());
 }
 
 //===----------------------------------------------------------------------===//
@@ -190,18 +201,18 @@ static LogicalResult verifyTripCountsAndSteps(Operation *op,
 }
 
 LogicalResult StreamReadOp::verify() {
-  if (getStreamType().getElementType() != getType())
-    return emitOpError("result type doesn't align with channel type");
+  if (getSourceType().getElementType() != getValueType())
+    return emitOpError("value type doesn't align with channel type");
   if (getInit())
-    if (getInit().getType() != getType())
-      return emitOpError("initial value type doesn't align with result type");
-  return verifyTripCountsAndSteps(*this, getStream());
+    if (getInit().getType() != getValueType())
+      return emitOpError("initial value type doesn't align with value type");
+  return verifyTripCountsAndSteps(*this, getSource());
 }
 
 void StreamReadOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
         &effects) {
-  effects.emplace_back(MemoryEffects::Read::get(), getStream(),
+  effects.emplace_back(MemoryEffects::Read::get(), getSource(),
                        SideEffects::DefaultResource::get());
 }
 
@@ -210,16 +221,29 @@ void StreamReadOp::getEffects(
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamWriteOp::verify() {
-  if (getStreamType().getElementType() != getValue().getType())
+  if (getDests().empty())
+    return emitOpError("no dest stream specified");
+  if (llvm::any_of(getDests(),
+                   [&](Value dest) { return dest.getType() != getDestType(); }))
+    return emitOpError("dest types must be the same");
+
+  if (getDestType().getElementType() != getValueType())
     return emitOpError("value type doesn't align with channel type");
-  return verifyTripCountsAndSteps(*this, getStream());
+  for (auto dest : getDests()) {
+    auto verifyResult =
+        verifyTripCountsAndSteps(*this, cast<TypedValue<StreamType>>(dest));
+    if (failed(verifyResult))
+      return verifyResult;
+  }
+  return success();
 }
 
 void StreamWriteOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
         &effects) {
-  effects.emplace_back(MemoryEffects::Write::get(), getStream(),
-                       SideEffects::DefaultResource::get());
+  for (auto dest : getDests())
+    effects.emplace_back(MemoryEffects::Write::get(), dest,
+                         SideEffects::DefaultResource::get());
 }
 
 //===----------------------------------------------------------------------===//
@@ -227,6 +251,12 @@ void StreamWriteOp::getEffects(
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamBufferOp::verify() {
+  if (getDests().empty())
+    return emitOpError("no dest stream specified");
+  if (llvm::any_of(getDests(),
+                   [&](Value dest) { return dest.getType() != getDestType(); }))
+    return emitOpError("dest types must be the same");
+
   auto sourceType = getSourceType();
   auto destType = getDestType();
   if (!sourceType.isCastableWith(destType)) {
@@ -259,8 +289,9 @@ void StreamBufferOp::getEffects(
         &effects) {
   effects.emplace_back(MemoryEffects::Read::get(), getSource(),
                        SideEffects::DefaultResource::get());
-  effects.emplace_back(MemoryEffects::Write::get(), getDest(),
-                       SideEffects::DefaultResource::get());
+  for (auto dest : getDests())
+    effects.emplace_back(MemoryEffects::Write::get(), dest,
+                         SideEffects::DefaultResource::get());
 }
 
 //===----------------------------------------------------------------------===//
@@ -268,9 +299,14 @@ void StreamBufferOp::getEffects(
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamForkOp::verify() {
-  for (auto dest : getDests())
-    if (dest.getType() != getStreamType())
-      return emitOpError("dest type doesn't align with input type");
+  if (getDests().size() < 2)
+    return emitOpError("at least two dest streams are required");
+  if (llvm::any_of(getDests(),
+                   [&](Value dest) { return dest.getType() != getDestType(); }))
+    return emitOpError("dest types must be the same");
+
+  if (getDestType() != getSourceType())
+    return emitOpError("dest type doesn't align with source type");
   return success();
 }
 

@@ -94,6 +94,7 @@ def StreamOp : HLSOp<"stream", [
   let assemblyFormat = "attr-dict `:` type(results)";
 
   let hasVerifier = 1;
+  let hasCanonicalizeMethod = 1;
 
   let extraClassDeclaration = [{
     /// Get all the uses that have read/write effect on this stream.
@@ -111,33 +112,36 @@ def StreamToTensorOp : HLSOp<"stream_to_tensor", [
     DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Convert a stream channel to a tensor";
 
-  let arguments = (ins AnyStream:$stream);
+  let arguments = (ins AnyStream:$source);
   let results = (outs AnyRankedTensor:$tensor);
   let assemblyFormat = [{
-    $stream attr-dict `:` functional-type(operands, results)
+    $source attr-dict `:` functional-type(operands, results)
   }];
 
   let hasVerifier = 1;
 
   let extraClassDeclaration = [{
-    StreamType getStreamType() { return getStream().getType(); }
+    StreamType getSourceType() { return getSource().getType(); }
     RankedTensorType getTensorType() { return getTensor().getType(); }
   }];
 }
 
-def StreamFromTensorOp : HLSOp<"stream_from_tensor", [
+def TensorToStreamOp : HLSOp<"tensor_to_stream", [
     DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Convert a tensor to a stream channel";
 
-  let arguments = (ins AnyStream:$stream, AnyRankedTensor:$tensor);
+  let arguments = (ins AnyRankedTensor:$tensor, Variadic<AnyStream>:$dests);
   let assemblyFormat = [{
-    $stream `from` $tensor attr-dict `:` type(operands)
+    $tensor `to` $dests attr-dict `:` type(operands)
   }];
 
   let hasVerifier = 1;
 
   let extraClassDeclaration = [{
-    StreamType getStreamType() { return getStream().getType(); }
+    TypedValue<StreamType> getDest(unsigned idx) {
+      return cast<TypedValue<StreamType>>(getDests()[idx]);
+    }
+    StreamType getDestType() { return getDest(0).getType(); }
     RankedTensorType getTensorType() { return getTensor().getType(); }
   }];
 }
@@ -150,20 +154,21 @@ def StreamReadOp : HLSOp<"stream_read", [
     the popped value is dropped. Each stream channel can be read multiple times.
   }];
 
-  let arguments = (ins AnyStream:$stream, Optional<AnyRankedTensor>:$init);
-  let results = (outs AnyType:$result);
+  let arguments = (ins AnyStream:$source, Optional<AnyRankedTensor>:$init);
+  let results = (outs AnyType:$value);
   let assemblyFormat = [{
-    $stream (`to` $init^)? attr-dict `:` functional-type(operands, results)
+    $source (`to` $init^)? attr-dict `:` functional-type(operands, results)
   }];
 
   let hasVerifier = 1;
   let builders = [
-    OpBuilder<(ins "mlir::Type":$result, "mlir::Value":$stream),
-        "build($_builder, $_state, result, stream, nullptr);">
+    OpBuilder<(ins "mlir::Type":$value, "mlir::Value":$source),
+        "build($_builder, $_state, value, source, nullptr);">
   ];
 
   let extraClassDeclaration = [{
-    StreamType getStreamType() { return getStream().getType(); }
+    StreamType getSourceType() { return getSource().getType(); }
+    Type getValueType() { return getValue().getType(); }
   }];
 }
 
@@ -175,15 +180,19 @@ def StreamWriteOp : HLSOp<"stream_write", [
     written once.
   }];
 
-  let arguments = (ins AnyStream:$stream, AnyType:$value);
+  let arguments = (ins AnyType:$value, Variadic<AnyStream>:$dests);
   let assemblyFormat = [{
-    $value `into` $stream attr-dict `:` type(operands)
+    $value `into` $dests attr-dict `:` type(operands)
   }];
 
   let hasVerifier = 1;
 
   let extraClassDeclaration = [{
-    StreamType getStreamType() { return getStream().getType(); }
+    TypedValue<StreamType> getDest(unsigned idx) {
+      return cast<TypedValue<StreamType>>(getDests()[idx]);
+    }
+    StreamType getDestType() { return getDest(0).getType(); }
+    Type getValueType() { return getValue().getType(); }
   }];
 }
 
@@ -191,19 +200,22 @@ def StreamBufferOp : HLSOp<"stream_buffer", [
     DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Buffer a stream channel at a specific position";
 
-  let arguments = (ins AnyStream:$source, AnyStream:$dest,
+  let arguments = (ins AnyStream:$source, Variadic<AnyStream>:$dests,
       TypeAttr:$bufferElementType, DenseI64ArrayAttr:$bufferShape,
       SI64Attr:$loopIndex, SI64Attr:$dimIndex);
   let assemblyFormat = [{
-    $source `into` $dest `,` $bufferElementType $bufferShape `before` `loop`
+    $source `into` $dests `,` $bufferElementType $bufferShape `before` `loop`
     $loopIndex `dim` $dimIndex attr-dict `:` type(operands)
   }];
 
   let hasVerifier = 1;
 
   let extraClassDeclaration = [{
+    TypedValue<StreamType> getDest(unsigned idx) {
+      return cast<TypedValue<StreamType>>(getDests()[idx]);
+    }
     StreamType getSourceType() { return getSource().getType(); }
-    StreamType getDestType() { return getDest().getType(); }
+    StreamType getDestType() { return getDest(0).getType(); }
   }];
 }
 
@@ -219,7 +231,11 @@ def StreamForkOp : HLSOp<"stream_fork", [
   let hasVerifier = 1;
 
   let extraClassDeclaration = [{
-    StreamType getStreamType() { return getSource().getType(); }
+    TypedValue<StreamType> getDest(unsigned idx) {
+      return cast<TypedValue<StreamType>>(getDests()[idx]);
+    }
+    StreamType getSourceType() { return getSource().getType(); }
+    StreamType getDestType() { return getDest(0).getType(); }
   }];
 }
 

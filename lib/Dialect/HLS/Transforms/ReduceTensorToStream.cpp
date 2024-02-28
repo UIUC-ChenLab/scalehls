@@ -15,26 +15,27 @@ using namespace hls;
 
 namespace {
 struct EliminateIntermediateTensor
-    : public OpRewritePattern<hls::StreamFromTensorOp> {
-  using OpRewritePattern<hls::StreamFromTensorOp>::OpRewritePattern;
+    : public OpRewritePattern<hls::TensorToStreamOp> {
+  using OpRewritePattern<hls::TensorToStreamOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(hls::StreamFromTensorOp streamFromTensor,
+  LogicalResult matchAndRewrite(hls::TensorToStreamOp tensorTostream,
                                 PatternRewriter &rewriter) const override {
     auto streamToTensor =
-        streamFromTensor.getTensor().getDefiningOp<hls::StreamToTensorOp>();
+        tensorTostream.getTensor().getDefiningOp<hls::StreamToTensorOp>();
     if (!streamToTensor)
       return failure();
     auto tensorType = streamToTensor.getType();
 
     // Directly replace the result stream with the source stream if they share
     // the same type.
-    auto sourceType = streamToTensor.getStreamType();
-    auto resultType = streamFromTensor.getStreamType();
+    auto sourceType = streamToTensor.getSourceType();
+    auto resultType = tensorTostream.getDestType();
     if (sourceType == resultType) {
-      auto streamToReplace = streamFromTensor.getStream();
-      rewriter.replaceAllUsesWith(streamToReplace, streamToTensor.getStream());
-      rewriter.eraseOp(streamToReplace.getDefiningOp());
-      rewriter.eraseOp(streamFromTensor);
+      for (auto dest : tensorTostream.getDests()) {
+        rewriter.replaceAllUsesWith(dest, streamToTensor.getSource());
+        rewriter.eraseOp(dest.getDefiningOp());
+        rewriter.eraseOp(tensorTostream);
+      }
       return success();
     }
 
@@ -100,9 +101,8 @@ struct EliminateIntermediateTensor
                        tensorType.getShape().end());
 
     rewriter.replaceOpWithNewOp<hls::StreamBufferOp>(
-        streamFromTensor, streamToTensor.getStream(),
-        streamFromTensor.getStream(), tensorType.getElementType(), bufferShape,
-        beforeLoop, beforeDim);
+        tensorTostream, streamToTensor.getSource(), tensorTostream.getDests(),
+        tensorType.getElementType(), bufferShape, beforeLoop, beforeDim);
     return success();
   }
 };
@@ -125,10 +125,10 @@ struct ConvertTensorForkToStreamFork
     SmallVector<Value> destStreams;
     for (unsigned i = 0; i < tensorForkOp.getNumResults(); i++)
       destStreams.push_back(
-          rewriter.create<hls::StreamOp>(loc, streamToTensor.getStreamType()));
+          rewriter.create<hls::StreamOp>(loc, streamToTensor.getSourceType()));
 
     // Create the stream fork operation.
-    rewriter.create<hls::StreamForkOp>(loc, streamToTensor.getStream(),
+    rewriter.create<hls::StreamForkOp>(loc, streamToTensor.getSource(),
                                        destStreams);
 
     // Replace the tensor fork results with the forked streams.

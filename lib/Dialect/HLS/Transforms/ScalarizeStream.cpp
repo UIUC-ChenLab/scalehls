@@ -64,14 +64,14 @@ struct ScalarizeStreamReadOp : public OpRewritePattern<hls::StreamReadOp> {
 
   LogicalResult matchAndRewrite(hls::StreamReadOp read,
                                 PatternRewriter &rewriter) const override {
-    auto streamType = read.getStreamType();
+    auto streamType = read.getSourceType();
     if (!streamType.hasShapedElementType())
       return failure();
 
     auto loc = read.getLoc();
-    rewriter.setInsertionPointAfterValue(read.getStream());
+    rewriter.setInsertionPointAfterValue(read.getSource());
     auto cast = rewriter.create<hls::StreamCastOp>(
-        loc, getScalarStreamType(streamType), read.getStream());
+        loc, getScalarStreamType(streamType), read.getSource());
 
     rewriter.setInsertionPoint(read);
     auto elementType = streamType.getShapedElementType();
@@ -100,14 +100,18 @@ struct ScalarizeStreamWriteOp : public OpRewritePattern<hls::StreamWriteOp> {
 
   LogicalResult matchAndRewrite(hls::StreamWriteOp write,
                                 PatternRewriter &rewriter) const override {
-    auto streamType = write.getStreamType();
+    auto streamType = write.getDestType();
     if (!streamType.hasShapedElementType())
       return failure();
 
     auto loc = write.getLoc();
-    rewriter.setInsertionPointAfterValue(write.getStream());
-    auto cast = rewriter.create<hls::StreamCastOp>(
-        loc, getScalarStreamType(streamType), write.getStream());
+    SmallVector<Value> casts;
+    for (auto dest : write.getDests()) {
+      rewriter.setInsertionPointAfterValue(dest);
+      auto cast = rewriter.create<hls::StreamCastOp>(
+          loc, getScalarStreamType(streamType), dest);
+      casts.push_back(cast);
+    }
 
     rewriter.setInsertionPoint(write);
     auto elementType = streamType.getShapedElementType();
@@ -117,7 +121,7 @@ struct ScalarizeStreamWriteOp : public OpRewritePattern<hls::StreamWriteOp> {
 
     auto extract =
         rewriter.create<tensor::ExtractOp>(loc, write.getValue(), ivs);
-    rewriter.create<hls::StreamWriteOp>(loc, cast, extract.getResult());
+    rewriter.create<hls::StreamWriteOp>(loc, extract.getResult(), casts);
 
     rewriter.eraseOp(write);
     return success();

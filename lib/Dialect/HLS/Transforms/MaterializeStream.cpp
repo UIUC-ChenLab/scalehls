@@ -74,12 +74,15 @@ static SmallVector<ReassociationIndices> getPackingReassociation(int64_t rank) {
 /// Extract a slice from the tensor and write to the stream channel. If
 /// "packing" is true, the slice is extracted from the packed tensor and shape
 /// collapsed before writing to the stream channel.
-static void extactSliceAndWriteStream(ArrayRef<Value> ivs,
-                                      TypedValue<StreamType> channel,
+static void extactSliceAndWriteStream(ArrayRef<Value> ivs, ValueRange channels,
                                       TypedValue<RankedTensorType> tensor,
                                       bool packing, Location loc,
                                       PatternRewriter &rewriter) {
-  auto streamType = channel.getType();
+  auto streamType = cast<StreamType>(channels.front().getType());
+  assert(llvm::all_of(channels,
+                      [&](Value v) { return v.getType() == streamType; }) &&
+         "all channels should have the same type");
+
   auto [offsets, sizes, strides] =
       getSliceInfo(ivs, streamType.getIterMap().getResults(),
                    streamType.getElementShape(), packing, loc, rewriter);
@@ -88,7 +91,7 @@ static void extactSliceAndWriteStream(ArrayRef<Value> ivs,
   if (packing)
     slice = rewriter.create<tensor::CollapseShapeOp>(
         loc, slice, getPackingReassociation(streamType.getElementRank()));
-  rewriter.create<hls::StreamWriteOp>(loc, channel, slice);
+  rewriter.create<hls::StreamWriteOp>(loc, slice, channels);
 }
 
 /// Read from the stream channel and insert the slice to the tensor. If
@@ -187,24 +190,24 @@ unpackTensor(TypedValue<RankedTensorType> tensor, ArrayRef<int64_t> tileSizes,
 }
 
 namespace {
-struct MaterializeStreamFromTensorOp
-    : public OpRewritePattern<hls::StreamFromTensorOp> {
-  MaterializeStreamFromTensorOp(MLIRContext *context, bool enablePacking = true,
-                                PatternBenefit benefit = 1,
-                                ArrayRef<StringRef> generatedNames = {})
+struct MaterializeTensorToStreamOp
+    : public OpRewritePattern<hls::TensorToStreamOp> {
+  MaterializeTensorToStreamOp(MLIRContext *context, bool enablePacking = true,
+                              PatternBenefit benefit = 1,
+                              ArrayRef<StringRef> generatedNames = {})
       : OpRewritePattern(context, benefit, generatedNames),
         enablePacking(enablePacking) {}
 
-  LogicalResult matchAndRewrite(hls::StreamFromTensorOp fromTensor,
+  LogicalResult matchAndRewrite(hls::TensorToStreamOp toStream,
                                 PatternRewriter &rewriter) const override {
-    auto streamType = fromTensor.getStreamType();
-    auto loc = fromTensor.getLoc();
+    auto streamType = toStream.getDestType();
+    auto loc = toStream.getLoc();
 
     // Only if the stream type is not overlapped, we can pack the tensor to make
     // more efficient memory access pattern.
     auto packing =
         enablePacking && streamType.tileIsRegular() && streamType.getRank() > 1;
-    auto source = fromTensor.getTensor();
+    auto source = toStream.getTensor();
     if (packing)
       source = packTensor(source, streamType.getElementShape(), loc, rewriter);
 
@@ -213,9 +216,9 @@ struct MaterializeStreamFromTensorOp
     auto [ivs, result, iterArg] =
         constructLoops(streamType.getIterTripCounts(),
                        streamType.getIterSteps(), loc, rewriter);
-    extactSliceAndWriteStream(ivs, fromTensor.getStream(), source, packing, loc,
+    extactSliceAndWriteStream(ivs, toStream.getDests(), source, packing, loc,
                               rewriter);
-    rewriter.eraseOp(fromTensor);
+    rewriter.eraseOp(toStream);
     return success();
   }
 
@@ -235,7 +238,7 @@ struct MaterializeStreamToTensorOp
 
   LogicalResult matchAndRewrite(hls::StreamToTensorOp toTensor,
                                 PatternRewriter &rewriter) const override {
-    auto streamType = toTensor.getStreamType();
+    auto streamType = toTensor.getSourceType();
     auto loc = toTensor.getLoc();
 
     // Only if the stream type is not overlapped, we can pack the tensor to make
@@ -252,7 +255,7 @@ struct MaterializeStreamToTensorOp
     auto [ivs, result, iterArg] = constructLoops(streamType.getIterTripCounts(),
                                                  streamType.getIterSteps(), loc,
                                                  rewriter, init.getResult());
-    auto newResult = readStreamAndInsertSlice(ivs, toTensor.getStream(),
+    auto newResult = readStreamAndInsertSlice(ivs, toTensor.getSource(),
                                               iterArg, packing, loc, rewriter);
 
     // Update "result" if no loop is constructed. Otherwise, create a new yield
@@ -353,7 +356,7 @@ struct MaterializeStreamBufferOp
         destType.getIterSteps().drop_front(loopIndex), loc, rewriter);
     SmallVector<Value> bufferOutputIvs(loopIndex, zeroCst);
     bufferOutputIvs.append(outputIvs);
-    extactSliceAndWriteStream(bufferOutputIvs, streamBuffer.getDest(),
+    extactSliceAndWriteStream(bufferOutputIvs, streamBuffer.getDests(),
                               inputResult, packing, loc, rewriter);
     rewriter.eraseOp(streamBuffer);
     return success();
@@ -370,7 +373,7 @@ struct MaterializeStreamForkOp : public OpRewritePattern<hls::StreamForkOp> {
 
   LogicalResult matchAndRewrite(hls::StreamForkOp streamFork,
                                 PatternRewriter &rewriter) const override {
-    auto streamType = streamFork.getStreamType();
+    auto streamType = streamFork.getSourceType();
     auto loc = streamFork.getLoc();
 
     auto [ivs, result, iterArg] =
@@ -380,9 +383,8 @@ struct MaterializeStreamForkOp : public OpRewritePattern<hls::StreamForkOp> {
         rewriter.create<hls::TensorInitOp>(loc, streamType.getElementType());
     auto streamRead = rewriter.create<hls::StreamReadOp>(
         loc, streamType.getElementType(), streamFork.getSource(), init);
-    for (auto destStream : streamFork.getDests())
-      rewriter.create<hls::StreamWriteOp>(loc, destStream,
-                                          streamRead.getResult());
+    rewriter.create<hls::StreamWriteOp>(loc, streamRead.getResult(),
+                                        streamFork.getDests());
     rewriter.eraseOp(streamFork);
     return success();
   }
@@ -412,7 +414,7 @@ struct MaterializeStream : public MaterializeStreamBase<MaterializeStream> {
     auto context = op->getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<MaterializeStreamFromTensorOp>(context, enablePacking);
+    patterns.add<MaterializeTensorToStreamOp>(context, enablePacking);
     patterns.add<MaterializeStreamToTensorOp>(context, enablePacking);
     patterns.add<MaterializeStreamBufferOp>(context, enablePacking);
     patterns.add<MaterializeStreamForkOp>(context);
