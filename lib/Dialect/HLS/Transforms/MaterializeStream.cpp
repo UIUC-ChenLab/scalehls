@@ -365,6 +365,31 @@ private:
 } // namespace
 
 namespace {
+struct MaterializeStreamForkOp : public OpRewritePattern<hls::StreamForkOp> {
+  using OpRewritePattern<hls::StreamForkOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(hls::StreamForkOp streamFork,
+                                PatternRewriter &rewriter) const override {
+    auto streamType = streamFork.getStreamType();
+    auto loc = streamFork.getLoc();
+
+    auto [ivs, result, iterArg] =
+        constructLoops(streamType.getIterTripCounts(),
+                       streamType.getIterSteps(), loc, rewriter);
+    auto init =
+        rewriter.create<hls::TensorInitOp>(loc, streamType.getElementType());
+    auto streamRead = rewriter.create<hls::StreamReadOp>(
+        loc, streamType.getElementType(), streamFork.getSource(), init);
+    for (auto destStream : streamFork.getDests())
+      rewriter.create<hls::StreamWriteOp>(loc, destStream,
+                                          streamRead.getResult());
+    rewriter.eraseOp(streamFork);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 struct FoldPackOpIntoConstantOp : public OpRewritePattern<tensor::PackOp> {
   using OpRewritePattern<tensor::PackOp>::OpRewritePattern;
 
@@ -390,6 +415,7 @@ struct MaterializeStream : public MaterializeStreamBase<MaterializeStream> {
     patterns.add<MaterializeStreamFromTensorOp>(context, enablePacking);
     patterns.add<MaterializeStreamToTensorOp>(context, enablePacking);
     patterns.add<MaterializeStreamBufferOp>(context, enablePacking);
+    patterns.add<MaterializeStreamForkOp>(context);
     if (enablePacking)
       patterns.add<FoldPackOpIntoConstantOp>(context);
     (void)applyPatternsAndFoldGreedily(op, std::move(patterns));
