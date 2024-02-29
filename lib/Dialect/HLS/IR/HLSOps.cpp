@@ -42,26 +42,6 @@ LogicalResult TensorInitOp::canonicalize(TensorInitOp op,
 }
 
 //===----------------------------------------------------------------------===//
-// TensorForkOp
-//===----------------------------------------------------------------------===//
-
-LogicalResult TensorForkOp::verify() {
-  for (auto resultType : getResultTypes())
-    if (resultType != getSourceType())
-      return emitOpError("result type doesn't align with input type");
-  return success();
-}
-
-LogicalResult TensorForkOp::fold(FoldAdaptor adaptor,
-                                 SmallVectorImpl<OpFoldResult> &results) {
-  if (getNumResults() == 1) {
-    results.push_back(getSource());
-    return success();
-  }
-  return failure();
-}
-
-//===----------------------------------------------------------------------===//
 // StreamOp
 //===----------------------------------------------------------------------===//
 
@@ -104,7 +84,7 @@ LogicalResult StreamOp::verify() {
 }
 
 LogicalResult StreamOp::canonicalize(StreamOp op, PatternRewriter &rewriter) {
-  if (op->use_empty()) {
+  if (op.use_empty()) {
     rewriter.eraseOp(op);
     return success();
   }
@@ -284,6 +264,16 @@ LogicalResult StreamBufferOp::verify() {
   return success();
 }
 
+LogicalResult StreamBufferOp::canonicalize(StreamBufferOp op,
+                                           PatternRewriter &rewriter) {
+  if (op.getSourceType() == op.getDestType()) {
+    rewriter.replaceOpWithNewOp<StreamForkOp>(op, op.getSource(),
+                                              op.getDests());
+    return success();
+  }
+  return failure();
+}
+
 void StreamBufferOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
         &effects) {
@@ -299,8 +289,8 @@ void StreamBufferOp::getEffects(
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamForkOp::verify() {
-  if (getDests().size() < 2)
-    return emitOpError("at least two dest streams are required");
+  if (getDests().empty())
+    return emitOpError("no dest stream specified");
   if (llvm::any_of(getDests(),
                    [&](Value dest) { return dest.getType() != getDestType(); }))
     return emitOpError("dest types must be the same");
@@ -308,6 +298,16 @@ LogicalResult StreamForkOp::verify() {
   if (getDestType() != getSourceType())
     return emitOpError("dest type doesn't align with source type");
   return success();
+}
+
+LogicalResult StreamForkOp::canonicalize(StreamForkOp op,
+                                         PatternRewriter &rewriter) {
+  if (llvm::hasSingleElement(op.getDests())) {
+    rewriter.replaceAllUsesExcept(op.getDest(0), op.getSource(), op);
+    rewriter.eraseOp(op);
+    return success();
+  }
+  return failure();
 }
 
 void StreamForkOp::getEffects(
@@ -370,38 +370,18 @@ LogicalResult StreamReassociateOp::verify() {
   return success();
 }
 
-static OpFoldResult foldStreamViewLikeInterface(StreamViewLikeInterface op) {
-  if (op.getSourceType() == op.getResultType())
-    return op.getSource();
-  if (auto prevView = op.getSource().getDefiningOp<StreamViewLikeInterface>())
-    if (prevView.getSourceType() == op.getResultType())
+OpFoldResult StreamReassociateOp::fold(FoldAdaptor adaptor) {
+  if (getSourceType() == getResultType())
+    return getSource();
+  if (auto prevView = getSource().getDefiningOp<StreamViewLikeInterface>())
+    if (prevView.getSourceType() == getResultType())
       return prevView.getSource();
   return {};
 }
 
-OpFoldResult StreamReassociateOp::fold(FoldAdaptor adaptor) {
-  return foldStreamViewLikeInterface(*this);
-}
-
-static LogicalResult
-canonicalizeStreamViewLikeInterface(StreamViewLikeInterface op,
-                                    PatternRewriter &rewriter) {
-  if (op->hasOneUse())
-    return failure();
-
-  for (auto &use : llvm::make_early_inc_range(op->getUses())) {
-    auto newOp = cast<StreamViewLikeInterface>(rewriter.clone(*op));
-    rewriter.replaceUsesWithIf(
-        op.getResult(), newOp.getResult(),
-        [&](OpOperand &operand) { return operand == use; });
-  }
-  rewriter.eraseOp(op);
-  return success();
-}
-
 LogicalResult StreamReassociateOp::canonicalize(StreamReassociateOp op,
                                                 PatternRewriter &rewriter) {
-  return canonicalizeStreamViewLikeInterface(op, rewriter);
+  return failure();
 }
 
 //===----------------------------------------------------------------------===//
@@ -419,12 +399,17 @@ LogicalResult StreamCastOp::verify() {
 }
 
 OpFoldResult StreamCastOp::fold(FoldAdaptor adaptor) {
-  return foldStreamViewLikeInterface(*this);
+  if (getSourceType() == getResultType())
+    return getSource();
+  if (auto prevView = getSource().getDefiningOp<StreamViewLikeInterface>())
+    if (prevView.getSourceType() == getResultType())
+      return prevView.getSource();
+  return {};
 }
 
 LogicalResult StreamCastOp::canonicalize(StreamCastOp op,
                                          PatternRewriter &rewriter) {
-  return canonicalizeStreamViewLikeInterface(op, rewriter);
+  return failure();
 }
 
 //===----------------------------------------------------------------------===//

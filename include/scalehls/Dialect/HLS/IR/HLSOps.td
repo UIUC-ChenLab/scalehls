@@ -65,23 +65,6 @@ def TensorInitOp : HLSOp<"tensor_init"> {
   ];
 }
 
-def TensorForkOp : HLSOp<"tensor_fork", [Pure]> {
-  let summary = "Fork a tensor to multiple tensors";
-
-  let arguments = (ins AnyRankedTensor:$source);
-  let results = (outs Variadic<AnyRankedTensor>:$results);
-  let assemblyFormat = [{
-    $source attr-dict `:` functional-type(operands, results)
-  }];
-
-  let hasVerifier = 1;
-  let hasFolder = 1;
-
-  let extraClassDeclaration = [{
-    RankedTensorType getSourceType() { return getSource().getType(); }
-  }];
-}
-
 //===----------------------------------------------------------------------===//
 // Stream Operations
 //===----------------------------------------------------------------------===//
@@ -209,6 +192,7 @@ def StreamBufferOp : HLSOp<"stream_buffer", [
   }];
 
   let hasVerifier = 1;
+  let hasCanonicalizeMethod = 1;
 
   let extraClassDeclaration = [{
     TypedValue<StreamType> getDest(unsigned idx) {
@@ -229,6 +213,7 @@ def StreamForkOp : HLSOp<"stream_fork", [
   }];
 
   let hasVerifier = 1;
+  let hasCanonicalizeMethod = 1;
 
   let extraClassDeclaration = [{
     TypedValue<StreamType> getDest(unsigned idx) {
@@ -239,7 +224,7 @@ def StreamForkOp : HLSOp<"stream_fork", [
   }];
 }
 
-def StreamReassociateOp : HLSOp<"stream_reassociate", [
+def StreamReassociateOp : HLSOp<"stream_reassociate", [Pure,
       DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
   let summary = "Reassociate the shape and/or iteration of a stream channel";
 
@@ -281,7 +266,7 @@ def StreamReassociateOp : HLSOp<"stream_reassociate", [
   }];
 }
 
-def StreamCastOp : HLSOp<"stream_cast", [
+def StreamCastOp : HLSOp<"stream_cast", [Pure,
       DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
   let summary = "Cast a stream channel to a different type";
 

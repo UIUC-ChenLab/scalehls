@@ -99,22 +99,22 @@ struct Preprocess : public PreprocessBase<Preprocess> {
     hls::TensorInitOp::getCanonicalizationPatterns(patterns, context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
-    auto b = OpBuilder(context);
-    func.walk([&](Operation *op) {
-      b.setInsertionPointAfter(op);
-      for (auto result :
-           llvm::make_filter_range(op->getResults(), [&](Value v) {
-             return isa<RankedTensorType>(v.getType());
-           })) {
-        SmallVector<OpOperand *> uses = llvm::map_to_vector(
-            result.getUses(), [&](OpOperand &use) { return &use; });
-        auto forkTypes = SmallVector<Type>(uses.size(), result.getType());
-        auto forkOp =
-            b.create<hls::TensorForkOp>(op->getLoc(), forkTypes, result);
-        for (auto [use, fork] : llvm::zip(uses, forkOp.getResults()))
-          use->set(fork);
-      }
-    });
+    // auto b = OpBuilder(context);
+    // func.walk([&](Operation *op) {
+    //   b.setInsertionPointAfter(op);
+    //   for (auto result :
+    //        llvm::make_filter_range(op->getResults(), [&](Value v) {
+    //          return isa<RankedTensorType>(v.getType());
+    //        })) {
+    //     SmallVector<OpOperand *> uses = llvm::map_to_vector(
+    //         result.getUses(), [&](OpOperand &use) { return &use; });
+    //     auto forkTypes = SmallVector<Type>(uses.size(), result.getType());
+    //     auto forkOp =
+    //         b.create<hls::TensorForkOp>(op->getLoc(), forkTypes, result);
+    //     for (auto [use, fork] : llvm::zip(uses, forkOp.getResults()))
+    //       use->set(fork);
+    //   }
+    // });
   }
 };
 } // namespace
