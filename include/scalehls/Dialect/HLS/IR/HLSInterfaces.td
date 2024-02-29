@@ -16,23 +16,78 @@ def StreamViewLikeInterface : OpInterface<"StreamViewLikeInterface"> {
   string cppNamespace = "mlir::scalehls::hls";
 
   let methods = [
-    InterfaceMethod<"Return the source stream",
+    InterfaceMethod<"Return the source stream.",
       "TypedValue<StreamType>", "getSource", (ins), [{
         return $_op.getSource();
       }]>,
-    InterfaceMethod<"Return the result stream",
+    InterfaceMethod<"Return the result stream.",
       "TypedValue<StreamType>", "getResult", (ins), [{
         return $_op.getResult();
-      }]>,
-    InterfaceMethod<"Return the source stream type",
-      "StreamType", "getSourceType", (ins), [{
-        return $_op.getSource().getType();
-      }]>,
-    InterfaceMethod<"Return the result stream type",
-      "StreamType", "getResultType", (ins), [{
-        return $_op.getResult().getType();
       }]>
   ];
+
+  let extraSharedClassDeclaration = [{
+    StreamType getSourceType() { return $_op.getSource().getType(); }
+    StreamType getResultType() { return $_op.getResult().getType(); }
+
+    OpFoldResult foldRedundantViews() {
+      if (getSourceType() == getResultType())
+        return $_op.getSource();
+      if (auto prevView =
+          $_op.getSource().template getDefiningOp<StreamViewLikeInterface>())
+        if (prevView.getSourceType() == getResultType())
+          return prevView.getSource();
+      return {};
+    }
+  }];
+}
+
+def StreamReadLikeInterface : OpInterface<"StreamReadLikeInterface"> {
+  let description = [{
+    This interface is used to represent stream read operations.
+  }];
+  string cppNamespace = "mlir::scalehls::hls";
+
+  let methods = [
+    InterfaceMethod<"Return the stream source.",
+      "TypedValue<StreamType>", "getSource", (ins), [{
+        return $_op.getSource();
+      }]>
+  ];
+
+  let extraSharedClassDeclaration = [{
+    StreamType getSourceType() { return $_op.getSource().getType(); }
+  }];
+}
+
+def StreamWriteLikeInterface : OpInterface<"StreamWriteLikeInterface"> {
+  let description = [{
+    This interface is used to represent stream write operations.
+  }];
+  string cppNamespace = "mlir::scalehls::hls";
+
+  let methods = [
+    InterfaceMethod<"Return the stream destinations.",
+      "ValueRange", "getDests", (ins), [{
+        return $_op.getDests();
+      }]>
+  ];
+
+  let extraSharedClassDeclaration = [{
+    TypedValue<StreamType> getDest(unsigned idx) {
+      return cast<TypedValue<StreamType>>($_op.getDests()[idx]);
+    }
+    StreamType getDestType() { return getDest(0).getType(); }
+
+    LogicalResult verifyDests() {
+      if ($_op.getDests().empty())
+        return $_op.emitOpError("no dest stream specified");
+      if (llvm::any_of($_op.getDests(),
+          [&](Value dest) { return dest.getType() != getDestType(); }))
+        return $_op.emitOpError("dest types must be the same");
+      return success();
+    }
+  }];
 }
 
 def BufferLikeInterface : OpInterface<"BufferLikeInterface"> {

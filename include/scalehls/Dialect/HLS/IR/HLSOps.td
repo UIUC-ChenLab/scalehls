@@ -92,7 +92,8 @@ def StreamOp : HLSOp<"stream", [
 }
 
 def StreamToTensorOp : HLSOp<"stream_to_tensor", [
-    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
+    DeclareOpInterfaceMethods<StreamReadLikeInterface>]> {
   let summary = "Convert a stream channel to a tensor";
 
   let arguments = (ins AnyStream:$source);
@@ -104,13 +105,13 @@ def StreamToTensorOp : HLSOp<"stream_to_tensor", [
   let hasVerifier = 1;
 
   let extraClassDeclaration = [{
-    StreamType getSourceType() { return getSource().getType(); }
     RankedTensorType getTensorType() { return getTensor().getType(); }
   }];
 }
 
 def TensorToStreamOp : HLSOp<"tensor_to_stream", [
-    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
+    DeclareOpInterfaceMethods<StreamWriteLikeInterface>]> {
   let summary = "Convert a tensor to a stream channel";
 
   let arguments = (ins AnyRankedTensor:$tensor, Variadic<AnyStream>:$dests);
@@ -121,16 +122,13 @@ def TensorToStreamOp : HLSOp<"tensor_to_stream", [
   let hasVerifier = 1;
 
   let extraClassDeclaration = [{
-    TypedValue<StreamType> getDest(unsigned idx) {
-      return cast<TypedValue<StreamType>>(getDests()[idx]);
-    }
-    StreamType getDestType() { return getDest(0).getType(); }
     RankedTensorType getTensorType() { return getTensor().getType(); }
   }];
 }
 
 def StreamReadOp : HLSOp<"stream_read", [
-    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
+    DeclareOpInterfaceMethods<StreamReadLikeInterface>]> {
   let summary = "Read an element from stream channel";
   let description = [{
     Read/pop a value from a stream channel. The absence of the result indicates
@@ -150,13 +148,18 @@ def StreamReadOp : HLSOp<"stream_read", [
   ];
 
   let extraClassDeclaration = [{
-    StreamType getSourceType() { return getSource().getType(); }
+    std::optional<RankedTensorType> getInitType() {
+      if (getInit())
+        return getInit().getType();
+      return std::nullopt;
+    }
     Type getValueType() { return getValue().getType(); }
   }];
 }
 
 def StreamWriteOp : HLSOp<"stream_write", [
-    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
+    DeclareOpInterfaceMethods<StreamWriteLikeInterface>]> {
   let summary = "Write an element to stream channel";
   let description = [{
     Write/push a value to a stream channel. Each stream channel can only be
@@ -171,16 +174,14 @@ def StreamWriteOp : HLSOp<"stream_write", [
   let hasVerifier = 1;
 
   let extraClassDeclaration = [{
-    TypedValue<StreamType> getDest(unsigned idx) {
-      return cast<TypedValue<StreamType>>(getDests()[idx]);
-    }
-    StreamType getDestType() { return getDest(0).getType(); }
     Type getValueType() { return getValue().getType(); }
   }];
 }
 
 def StreamBufferOp : HLSOp<"stream_buffer", [
-    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
+    DeclareOpInterfaceMethods<StreamReadLikeInterface>,
+    DeclareOpInterfaceMethods<StreamWriteLikeInterface>]> {
   let summary = "Buffer a stream channel at a specific position";
 
   let arguments = (ins AnyStream:$source, Variadic<AnyStream>:$dests,
@@ -193,18 +194,12 @@ def StreamBufferOp : HLSOp<"stream_buffer", [
 
   let hasVerifier = 1;
   let hasCanonicalizeMethod = 1;
-
-  let extraClassDeclaration = [{
-    TypedValue<StreamType> getDest(unsigned idx) {
-      return cast<TypedValue<StreamType>>(getDests()[idx]);
-    }
-    StreamType getSourceType() { return getSource().getType(); }
-    StreamType getDestType() { return getDest(0).getType(); }
-  }];
 }
 
 def StreamForkOp : HLSOp<"stream_fork", [
-    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
+    DeclareOpInterfaceMethods<StreamReadLikeInterface>,
+    DeclareOpInterfaceMethods<StreamWriteLikeInterface>]> {
   let summary = "Fork a stream channel to multiple stream channels";
 
   let arguments = (ins AnyStream:$source, Variadic<AnyStream>:$dests);
@@ -214,14 +209,6 @@ def StreamForkOp : HLSOp<"stream_fork", [
 
   let hasVerifier = 1;
   let hasCanonicalizeMethod = 1;
-
-  let extraClassDeclaration = [{
-    TypedValue<StreamType> getDest(unsigned idx) {
-      return cast<TypedValue<StreamType>>(getDests()[idx]);
-    }
-    StreamType getSourceType() { return getSource().getType(); }
-    StreamType getDestType() { return getDest(0).getType(); }
-  }];
 }
 
 def StreamReassociateOp : HLSOp<"stream_reassociate", [Pure,
@@ -243,26 +230,23 @@ def StreamReassociateOp : HLSOp<"stream_reassociate", [Pure,
   let hasCanonicalizeMethod = 1;
 
   let extraClassDeclaration = [{
-    static SmallVector<ReassociationIndices, 4> 
+    static SmallVector<ReassociationIndices> 
     getReassociationIndices(ArrayAttr reassociationAttr) {
-      SmallVector<ReassociationIndices, 4> reassociationIndices;
+      SmallVector<ReassociationIndices> indices;
       for (auto attr : reassociationAttr)
-        reassociationIndices.push_back(llvm::to_vector<2>(
+        indices.push_back(llvm::to_vector<2>(
             llvm::map_range(cast<ArrayAttr>(attr), [&](Attribute indexAttr) {
               return cast<IntegerAttr>(indexAttr).getInt();
             })));
-      return reassociationIndices;
+      return indices;
     }
 
-    SmallVector<ReassociationIndices, 4> getShapeReassociationIndices() {
+    SmallVector<ReassociationIndices> getShapeReassociationIndices() {
       return getReassociationIndices(getShapeReassociation());
     }
-    SmallVector<ReassociationIndices, 4> getIterationReassociationIndices() {
+    SmallVector<ReassociationIndices> getIterationReassociationIndices() {
       return getReassociationIndices(getIterationReassociation());
     }
-
-    StreamType getSourceType() { return getSource().getType(); }
-    StreamType getResultType() { return getResult().getType(); }
   }];
 }
 
@@ -279,11 +263,6 @@ def StreamCastOp : HLSOp<"stream_cast", [Pure,
   let hasVerifier = 1;
   let hasFolder = 1;
   let hasCanonicalizeMethod = 1;
-
-  let extraClassDeclaration = [{
-    StreamType getSourceType() { return getSource().getType(); }
-    StreamType getResultType() { return getResult().getType(); }
-  }];
 }
 
 //===----------------------------------------------------------------------===//

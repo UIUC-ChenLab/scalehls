@@ -120,11 +120,9 @@ void StreamToTensorOp::getEffects(
 //===----------------------------------------------------------------------===//
 
 LogicalResult TensorToStreamOp::verify() {
-  if (getDests().empty())
-    return emitOpError("no dest stream specified");
-  if (llvm::any_of(getDests(),
-                   [&](Value dest) { return dest.getType() != getDestType(); }))
-    return emitOpError("dest types must be the same");
+  auto verifyDestsResult = verifyDests();
+  if (failed(verifyDestsResult))
+    return verifyDestsResult;
 
   if (!getDestType().isConvertableWith(getTensorType()))
     return emitOpError() << "stream type is not convertable with tensor type";
@@ -183,9 +181,8 @@ static LogicalResult verifyTripCountsAndSteps(Operation *op,
 LogicalResult StreamReadOp::verify() {
   if (getSourceType().getElementType() != getValueType())
     return emitOpError("value type doesn't align with channel type");
-  if (getInit())
-    if (getInit().getType() != getValueType())
-      return emitOpError("initial value type doesn't align with value type");
+  if (getInitType() && getInitType() != getValueType())
+    return emitOpError("initial value type doesn't align with value type");
   return verifyTripCountsAndSteps(*this, getSource());
 }
 
@@ -201,19 +198,17 @@ void StreamReadOp::getEffects(
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamWriteOp::verify() {
-  if (getDests().empty())
-    return emitOpError("no dest stream specified");
-  if (llvm::any_of(getDests(),
-                   [&](Value dest) { return dest.getType() != getDestType(); }))
-    return emitOpError("dest types must be the same");
+  auto verifyDestsResult = verifyDests();
+  if (failed(verifyDestsResult))
+    return verifyDestsResult;
 
   if (getDestType().getElementType() != getValueType())
     return emitOpError("value type doesn't align with channel type");
   for (auto dest : getDests()) {
-    auto verifyResult =
+    auto verifyIterationResult =
         verifyTripCountsAndSteps(*this, cast<TypedValue<StreamType>>(dest));
-    if (failed(verifyResult))
-      return verifyResult;
+    if (failed(verifyIterationResult))
+      return verifyIterationResult;
   }
   return success();
 }
@@ -231,11 +226,9 @@ void StreamWriteOp::getEffects(
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamBufferOp::verify() {
-  if (getDests().empty())
-    return emitOpError("no dest stream specified");
-  if (llvm::any_of(getDests(),
-                   [&](Value dest) { return dest.getType() != getDestType(); }))
-    return emitOpError("dest types must be the same");
+  auto verifyDestsResult = verifyDests();
+  if (failed(verifyDestsResult))
+    return verifyDestsResult;
 
   auto sourceType = getSourceType();
   auto destType = getDestType();
@@ -289,11 +282,9 @@ void StreamBufferOp::getEffects(
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamForkOp::verify() {
-  if (getDests().empty())
-    return emitOpError("no dest stream specified");
-  if (llvm::any_of(getDests(),
-                   [&](Value dest) { return dest.getType() != getDestType(); }))
-    return emitOpError("dest types must be the same");
+  auto verifyDestsResult = verifyDests();
+  if (failed(verifyDestsResult))
+    return verifyDestsResult;
 
   if (getDestType() != getSourceType())
     return emitOpError("dest type doesn't align with source type");
@@ -371,12 +362,7 @@ LogicalResult StreamReassociateOp::verify() {
 }
 
 OpFoldResult StreamReassociateOp::fold(FoldAdaptor adaptor) {
-  if (getSourceType() == getResultType())
-    return getSource();
-  if (auto prevView = getSource().getDefiningOp<StreamViewLikeInterface>())
-    if (prevView.getSourceType() == getResultType())
-      return prevView.getSource();
-  return {};
+  return foldRedundantViews();
 }
 
 LogicalResult StreamReassociateOp::canonicalize(StreamReassociateOp op,
@@ -399,12 +385,7 @@ LogicalResult StreamCastOp::verify() {
 }
 
 OpFoldResult StreamCastOp::fold(FoldAdaptor adaptor) {
-  if (getSourceType() == getResultType())
-    return getSource();
-  if (auto prevView = getSource().getDefiningOp<StreamViewLikeInterface>())
-    if (prevView.getSourceType() == getResultType())
-      return prevView.getSource();
-  return {};
+  return foldRedundantViews();
 }
 
 LogicalResult StreamCastOp::canonicalize(StreamCastOp op,
