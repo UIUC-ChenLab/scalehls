@@ -291,14 +291,69 @@ LogicalResult StreamForkOp::verify() {
   return success();
 }
 
-LogicalResult StreamForkOp::canonicalize(StreamForkOp op,
-                                         PatternRewriter &rewriter) {
-  if (llvm::hasSingleElement(op.getDests())) {
-    rewriter.replaceAllUsesExcept(op.getDest(0), op.getSource(), op);
-    rewriter.eraseOp(op);
-    return success();
+namespace {
+struct EliminateSingleDestForkOp : public OpRewritePattern<StreamForkOp> {
+  using OpRewritePattern<StreamForkOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(StreamForkOp streamFork,
+                                PatternRewriter &rewriter) const override {
+    if (llvm::hasSingleElement(streamFork.getDests())) {
+      rewriter.replaceAllUsesExcept(streamFork.getDest(0),
+                                    streamFork.getSource(), streamFork);
+      rewriter.eraseOp(streamFork);
+      return success();
+    }
+    return failure();
   }
-  return failure();
+};
+
+struct ForwardForkOpBeforeViewLikeOp : public OpRewritePattern<StreamForkOp> {
+  using OpRewritePattern<StreamForkOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(StreamForkOp streamFork,
+                                PatternRewriter &rewriter) const override {
+    if (auto streamView =
+            streamFork.getSource().getDefiningOp<StreamViewLikeInterface>()) {
+      rewriter.replaceUsesWithIf(
+          streamView.getResult(), streamView.getSource(),
+          [&](OpOperand &operand) { return operand.getOwner() == streamFork; });
+
+      rewriter.setInsertionPointAfter(streamFork);
+      for (auto dest : streamFork.getDests()) {
+        assert(dest.getDefiningOp<StreamOp>() &&
+               "destination is not a stream channel");
+        dest.setType(streamView.getSourceType());
+
+        auto destStreamView = streamView.cloneWith(dest);
+        rewriter.insert(destStreamView);
+        rewriter.replaceUsesWithIf(
+            dest, destStreamView.getResult(), [&](OpOperand &operand) {
+              return operand.getOwner() != destStreamView &&
+                     operand.getOwner() != streamFork;
+            });
+      }
+      return success();
+    }
+    return failure();
+  }
+};
+
+struct FuseForkOpIntoWriteLikeOp : public OpRewritePattern<StreamForkOp> {
+  using OpRewritePattern<StreamForkOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(StreamForkOp streamFork,
+                                PatternRewriter &rewriter) const override {
+
+    return failure();
+  }
+};
+} // namespace
+
+void StreamForkOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                               MLIRContext *context) {
+  results.add<EliminateSingleDestForkOp>(context);
+  results.add<ForwardForkOpBeforeViewLikeOp>(context);
+  results.add<FuseForkOpIntoWriteLikeOp>(context);
 }
 
 void StreamForkOp::getEffects(
@@ -365,11 +420,6 @@ OpFoldResult StreamReassociateOp::fold(FoldAdaptor adaptor) {
   return foldRedundantViews();
 }
 
-LogicalResult StreamReassociateOp::canonicalize(StreamReassociateOp op,
-                                                PatternRewriter &rewriter) {
-  return failure();
-}
-
 //===----------------------------------------------------------------------===//
 // StreamCastOp
 //===----------------------------------------------------------------------===//
@@ -386,11 +436,6 @@ LogicalResult StreamCastOp::verify() {
 
 OpFoldResult StreamCastOp::fold(FoldAdaptor adaptor) {
   return foldRedundantViews();
-}
-
-LogicalResult StreamCastOp::canonicalize(StreamCastOp op,
-                                         PatternRewriter &rewriter) {
-  return failure();
 }
 
 //===----------------------------------------------------------------------===//

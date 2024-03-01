@@ -39,6 +39,12 @@ def StreamViewLikeInterface : OpInterface<"StreamViewLikeInterface"> {
           return prevView.getSource();
       return {};
     }
+
+    StreamViewLikeInterface cloneWith(Value source) {
+      IRMapping mapping;
+      mapping.map($_op.getSource(), source);
+      return cast<StreamViewLikeInterface>($_op->clone(mapping));
+    }
   }];
 }
 
@@ -82,9 +88,14 @@ def StreamWriteLikeInterface : OpInterface<"StreamWriteLikeInterface"> {
     LogicalResult verifyDests() {
       if ($_op.getDests().empty())
         return $_op.emitOpError("no dest stream specified");
-      if (llvm::any_of($_op.getDests(),
-          [&](Value dest) { return dest.getType() != getDestType(); }))
-        return $_op.emitOpError("dest types must be the same");
+      for (auto dest : $_op.getDests()) {
+        // TODO: Support more flexible dest streams.
+        if (auto defOp = dest.getDefiningOp())
+          if (!isa<StreamOp>(defOp))
+            return $_op.emitOpError("dest must be defined by a stream op");
+        if (dest.getType() != getDestType())
+          return $_op.emitOpError("dest stream type mismatch");
+      }
       return success();
     }
   }];

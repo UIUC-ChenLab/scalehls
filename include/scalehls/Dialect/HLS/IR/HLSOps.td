@@ -208,7 +208,7 @@ def StreamForkOp : HLSOp<"stream_fork", [
   }];
 
   let hasVerifier = 1;
-  let hasCanonicalizeMethod = 1;
+  let hasCanonicalizer = 1;
 }
 
 def StreamReassociateOp : HLSOp<"stream_reassociate", [Pure,
@@ -227,7 +227,6 @@ def StreamReassociateOp : HLSOp<"stream_reassociate", [Pure,
 
   let hasVerifier = 1;
   let hasFolder = 1;
-  let hasCanonicalizeMethod = 1;
 
   let extraClassDeclaration = [{
     static SmallVector<ReassociationIndices> 
@@ -262,7 +261,6 @@ def StreamCastOp : HLSOp<"stream_cast", [Pure,
 
   let hasVerifier = 1;
   let hasFolder = 1;
-  let hasCanonicalizeMethod = 1;
 }
 
 //===----------------------------------------------------------------------===//

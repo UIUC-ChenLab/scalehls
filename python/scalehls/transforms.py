@@ -4,6 +4,7 @@
 #
 # ===----------------------------------------------------------------------=== #
 
+import io
 from ._mlir_libs._scalehls import *
 import networkx as nx
 from graphviz import Digraph
@@ -370,20 +371,20 @@ def apply_transform_sequence(module: Module, sequence: transform.NamedSequenceOp
 
 def apply_reduce_tensor_to_stream(module: Module):
     pm = PassManager.parse(
-        "builtin.module(func.func(scalehls-reduce-tensor-to-stream), canonicalize)")
+        "builtin.module(func.func(scalehls-reduce-tensor-to-stream), cse, canonicalize)")
     pm.run(module.operation)
 
 
 def apply_materialize_stream(module: Module, enable_packing: bool = False):
     enable_packing_str = "true" if enable_packing else "false"
     pm = PassManager.parse(
-        "builtin.module(func.func(scalehls-materialize-stream{enable-packing=" + enable_packing_str + "}), canonicalize)")
+        "builtin.module(func.func(scalehls-materialize-stream{enable-packing=" + enable_packing_str + "}), cse, canonicalize)")
     pm.run(module.operation)
 
 
 def apply_scalarize_stream(module: Module):
     pm = PassManager.parse(
-        "builtin.module(func.func(scalehls-scalarize-stream), canonicalize)")
+        "builtin.module(func.func(scalehls-scalarize-stream), cse, canonicalize)")
     pm.run(module.operation)
 
 
@@ -391,3 +392,21 @@ def apply_comprehensive_bufferize_passes(module: Module):
     pm = PassManager()
     add_comprehensive_bufferize_passes(pm)
     pm.run(module.operation)
+
+
+def apply_schedule_dataflow(module: Module):
+    pm = PassManager.parse(
+        "builtin.module(func.func(scalehls-schedule-dataflow), cse, canonicalize)")
+    pm.run(module.operation)
+
+
+def apply_convert_dataflow_to_func_passes(module: Module):
+    pm = PassManager()
+    add_convert_dataflow_to_func_passes(pm)
+    pm.run(module.operation)
+
+
+def get_module_cpp_str(module: Module):
+    buf = io.StringIO()
+    emit_hlscpp(module, buf)
+    return buf.getvalue()

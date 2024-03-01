@@ -20,6 +20,14 @@
 #include "scalehls/Dialect/HLS/IR/HLSOpsDialect.h.inc"
 #include "scalehls/Dialect/HLS/IR/HLSOpsEnums.h.inc"
 
+namespace mlir {
+namespace scalehls {
+namespace hls {
+class StreamOp;
+} // namespace hls
+} // namespace scalehls
+} // namespace mlir
+
 #define GET_TYPEDEF_CLASSES
 #include "scalehls/Dialect/HLS/IR/HLSOpsTypes.h.inc"
 
