@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Analysis/Liveness.h"
+#include "mlir/IR/Dominance.h"
 #include "scalehls/Dialect/HLS/IR/HLS.h"
 #include "scalehls/Utils/Utils.h"
 
@@ -76,10 +77,18 @@ LogicalResult StreamOp::verify() {
                    [](Operation *user) { return isa<CallOpInterface>(user); }))
     return success();
 
-  if (getWriteUses().size() != 1)
-    return emitOpError() << "stream channel must be written exactly once";
-  if (getReadUses().size() != 1)
-    return emitOpError() << "stream channel must be read exactly once";
+  auto writeUses = getWriteUses();
+  auto readUses = getReadUses();
+  if (writeUses.size() != 1)
+    return emitOpError("stream channel must be written exactly once");
+  if (readUses.size() != 1)
+    return emitOpError("stream channel must be read exactly once");
+
+  auto writer = writeUses.front()->getOwner();
+  auto reader = readUses.front()->getOwner();
+  if (!crossRegionDominates(writer, reader))
+    return emitOpError("writer doesn't properly dominate reader\nwriter: ")
+           << *writer << "\nreader: " << *reader;
   return success();
 }
 
@@ -104,7 +113,7 @@ void StreamOp::getEffects(
 
 LogicalResult StreamToTensorOp::verify() {
   if (!getSourceType().isConvertableWith(getTensorType()))
-    return emitOpError() << "stream type is not convertable with tensor type";
+    return emitOpError("stream type is not convertable with tensor type");
   return success();
 }
 
@@ -125,7 +134,7 @@ LogicalResult TensorToStreamOp::verify() {
     return verifyDestsResult;
 
   if (!getDestType().isConvertableWith(getTensorType()))
-    return emitOpError() << "stream type is not convertable with tensor type";
+    return emitOpError("stream type is not convertable with tensor type");
   return success();
 }
 
@@ -135,6 +144,11 @@ void TensorToStreamOp::getEffects(
   for (auto dest : getDests())
     effects.emplace_back(MemoryEffects::Write::get(), dest,
                          SideEffects::DefaultResource::get());
+}
+
+StreamWriteLikeInterface
+TensorToStreamOp::cloneWith(ValueRange dests, PatternRewriter &rewriter) {
+  return rewriter.create<TensorToStreamOp>(getLoc(), getTensor(), dests);
 }
 
 //===----------------------------------------------------------------------===//
@@ -166,15 +180,13 @@ static LogicalResult verifyTripCountsAndSteps(Operation *op,
           std::distance(stripedIterInfo.begin(), stripedIterInfo.end()) ||
       llvm::any_of(llvm::zip(stripedLoopInfo, stripedIterInfo), [](auto tuple) {
         return std::get<0>(tuple) != std::get<1>(tuple);
-      })) {
-    auto diag = op->emitOpError("loop trip counts or steps doesn't align with "
-                                "stream iteration trip counts or steps\n");
-    diag << "loop trip counts: " << *tripCounts << ", steps: " << *steps
-         << "\n";
-    diag << "stream iteration trip counts: " << streamType.getIterTripCounts()
-         << ", steps: " << streamType.getIterSteps();
-    return diag;
-  }
+      }))
+    return op->emitOpError("loop trip counts or steps doesn't align with "
+                           "stream iteration\nloop trip counts: ")
+           << *tripCounts << ", steps: " << *steps
+           << "\nstream iteration trip counts: "
+           << streamType.getIterTripCounts()
+           << ", steps: " << streamType.getIterSteps();
   return success();
 }
 
@@ -221,6 +233,11 @@ void StreamWriteOp::getEffects(
                          SideEffects::DefaultResource::get());
 }
 
+StreamWriteLikeInterface StreamWriteOp::cloneWith(ValueRange dests,
+                                                  PatternRewriter &rewriter) {
+  return rewriter.create<StreamWriteOp>(getLoc(), getValue(), dests);
+}
+
 //===----------------------------------------------------------------------===//
 // StreamBufferOp
 //===----------------------------------------------------------------------===//
@@ -232,12 +249,10 @@ LogicalResult StreamBufferOp::verify() {
 
   auto sourceType = getSourceType();
   auto destType = getDestType();
-  if (!sourceType.isCastableWith(destType)) {
-    auto diag = emitOpError("input and output are not castable");
-    diag << "input shape: " << sourceType.getShape()
-         << ", output shape: " << destType.getShape();
-    return diag;
-  }
+  if (!sourceType.isCastableWith(destType))
+    return emitOpError("input and output are not castable\ninput shape: ")
+           << sourceType.getShape()
+           << ", output shape: " << destType.getShape();
 
   if (getLoopIndex() > sourceType.getIterRank())
     return emitOpError("buffer loop index is out of loop range");
@@ -275,6 +290,13 @@ void StreamBufferOp::getEffects(
   for (auto dest : getDests())
     effects.emplace_back(MemoryEffects::Write::get(), dest,
                          SideEffects::DefaultResource::get());
+}
+
+StreamWriteLikeInterface StreamBufferOp::cloneWith(ValueRange dests,
+                                                   PatternRewriter &rewriter) {
+  return rewriter.create<StreamBufferOp>(
+      getLoc(), getSource(), dests, getBufferElementType(), getBufferShape(),
+      getLoopIndex(), getDimIndex());
 }
 
 //===----------------------------------------------------------------------===//
@@ -324,8 +346,7 @@ struct ForwardForkOpBeforeViewLikeOp : public OpRewritePattern<StreamForkOp> {
                "destination is not a stream channel");
         dest.setType(streamView.getSourceType());
 
-        auto destStreamView = streamView.cloneWith(dest);
-        rewriter.insert(destStreamView);
+        auto destStreamView = streamView.cloneWith(dest, rewriter);
         rewriter.replaceUsesWithIf(
             dest, destStreamView.getResult(), [&](OpOperand &operand) {
               return operand.getOwner() != destStreamView &&
@@ -343,7 +364,29 @@ struct FuseForkOpIntoWriteLikeOp : public OpRewritePattern<StreamForkOp> {
 
   LogicalResult matchAndRewrite(StreamForkOp streamFork,
                                 PatternRewriter &rewriter) const override {
+    if (auto sourceStream = streamFork.getSource().getDefiningOp<StreamOp>()) {
+      auto streamWrite = dyn_cast<StreamWriteLikeInterface>(
+          sourceStream.getSingleWriteUse()->getOwner());
+      assert(streamWrite && "source stream is not written");
 
+      SmallVector<Value> newDests;
+      for (auto dest : streamWrite.getDests())
+        if (dest != streamFork.getSource())
+          newDests.push_back(dest);
+
+      for (auto dest : streamFork.getDests()) {
+        auto destStream = dest.getDefiningOp<StreamOp>();
+        assert(destStream && "destination is not a stream channel");
+        destStream->moveAfter(sourceStream);
+        newDests.push_back(dest);
+      }
+
+      rewriter.setInsertionPoint(streamWrite);
+      rewriter.replaceOp(streamWrite,
+                         streamWrite.cloneWith(newDests, rewriter));
+      rewriter.eraseOp(streamFork);
+      return success();
+    }
     return failure();
   }
 };
@@ -364,6 +407,11 @@ void StreamForkOp::getEffects(
   for (auto dest : getDests())
     effects.emplace_back(MemoryEffects::Write::get(), dest,
                          SideEffects::DefaultResource::get());
+}
+
+StreamWriteLikeInterface StreamForkOp::cloneWith(ValueRange dests,
+                                                 PatternRewriter &rewriter) {
+  return rewriter.create<StreamForkOp>(getLoc(), getSource(), dests);
 }
 
 //===----------------------------------------------------------------------===//
@@ -426,10 +474,9 @@ OpFoldResult StreamReassociateOp::fold(FoldAdaptor adaptor) {
 
 LogicalResult StreamCastOp::verify() {
   if (!getSourceType().isCastableWith(getResultType())) {
-    auto diag = emitOpError("input and output are not castable");
-    diag << "input shape: " << getSourceType().getShape()
-         << ", output shape: " << getResultType().getShape();
-    return diag;
+    return emitOpError("input and output are not castable\ninput shape: ")
+           << getSourceType().getShape()
+           << ", output shape: " << getResultType().getShape();
   }
   return success();
 }

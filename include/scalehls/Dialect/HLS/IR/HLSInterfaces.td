@@ -40,10 +40,10 @@ def StreamViewLikeInterface : OpInterface<"StreamViewLikeInterface"> {
       return {};
     }
 
-    StreamViewLikeInterface cloneWith(Value source) {
+    StreamViewLikeInterface cloneWith(Value source, PatternRewriter &rewriter) {
       IRMapping mapping;
       mapping.map($_op.getSource(), source);
-      return cast<StreamViewLikeInterface>($_op->clone(mapping));
+      return cast<StreamViewLikeInterface>(rewriter.clone(*$_op, mapping));
     }
   }];
 }
@@ -76,7 +76,11 @@ def StreamWriteLikeInterface : OpInterface<"StreamWriteLikeInterface"> {
     InterfaceMethod<"Return the stream destinations.",
       "ValueRange", "getDests", (ins), [{
         return $_op.getDests();
-      }]>
+      }]>,
+    InterfaceMethod<"Clone the operation with the given stream destinations.",
+      "StreamWriteLikeInterface", "cloneWith",
+      (ins "ValueRange":$dests, "PatternRewriter &":$rewriter)
+    >
   ];
 
   let extraSharedClassDeclaration = [{
