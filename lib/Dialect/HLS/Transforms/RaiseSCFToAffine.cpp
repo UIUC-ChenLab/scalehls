@@ -915,6 +915,7 @@ struct ForOpRaising : public OpRewritePattern<scf::ForOp> {
                                              mergedYieldOp.getOperands());
       rewriter.eraseOp(mergedYieldOp);
 
+      affineLoop->setAttrs(loop->getAttrs());
       rewriter.replaceOp(loop, affineLoop.getResults());
 
       return success();
@@ -1007,6 +1008,7 @@ struct ParallelOpRaising : public OpRewritePattern<scf::ParallelOp> {
                                            mergedYieldOp.getOperands());
     rewriter.eraseOp(mergedYieldOp);
 
+    affineLoop->setAttrs(loop->getAttrs());
     rewriter.replaceOp(loop, affineLoop.getResults());
 
     return success();

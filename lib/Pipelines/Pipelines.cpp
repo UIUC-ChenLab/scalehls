@@ -14,6 +14,7 @@
 #include "mlir/Dialect/Func/Transforms/Passes.h"
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
+#include "mlir/Dialect/SCF/Transforms/Passes.h"
 #include "mlir/Dialect/Tensor/Transforms/Passes.h"
 #include "mlir/Transforms/Passes.h"
 #include "scalehls/Dialect/HLS/Transforms/Passes.h"
@@ -30,8 +31,8 @@ void scalehls::addLinalgTransformPasses(OpPassManager &pm) {
   pm.addPass(mlir::createLinalgFoldUnitExtentDimsPass());
   pm.addPass(bufferization::createEmptyTensorEliminationPass());
   pm.addPass(mlir::createLinalgInlineScalarOperandsPass());
-  pm.addPass(mlir::createCSEPass());
   pm.addNestedPass<func::FuncOp>(hls::createPreprocessPass());
+  pm.addPass(mlir::createCSEPass());
   pm.addPass(mlir::createCanonicalizerPass());
 }
 
@@ -40,22 +41,19 @@ void scalehls::addComprehensiveBufferizePasses(OpPassManager &pm) {
   pm.addPass(memref::createResolveShapedTypeResultDimsPass());
   pm.addPass(mlir::createCanonicalizerPass());
   pm.addPass(mlir::createCSEPass());
-  // There are redundant memcpy (with linalg.generic form) ops created, which
-  // can be deleted by canonicalizer. We have to run it again because the
-  // memrefs are unified in CSE pass, so we can truely remove redundant memcpy.
   pm.addPass(mlir::createCanonicalizerPass());
-  // pm.addPass(hls::createRaiseSCFToAffinePass());
 }
 
 void scalehls::addConvertDataflowToFuncPasses(OpPassManager &pm) {
-  pm.addPass(hls::createConvertDataflowToFuncPass());
-  pm.addPass(hls::createGenerateRuntimeFuncPass());
-  // Lower linalg to affine loops.
+  pm.addNestedPass<func::FuncOp>(hls::createStripStreamIterInfoPass());
+  pm.addPass(hls::createRaiseSCFToAffinePass());
   pm.addNestedPass<func::FuncOp>(mlir::createConvertLinalgToAffineLoopsPass());
-  pm.addNestedPass<func::FuncOp>(hls::createLowerCopyToAffineLoopsPass());
-  pm.addPass(memref::createFoldMemRefAliasOpsPass());
   pm.addNestedPass<func::FuncOp>(affine::createAffineLoopNormalizePass());
   pm.addNestedPass<func::FuncOp>(affine::createSimplifyAffineStructuresPass());
+  pm.addPass(memref::createFoldMemRefAliasOpsPass());
+  pm.addPass(hls::createConvertDataflowToFuncPass());
+  pm.addPass(hls::createGenerateRuntimeFuncPass());
+  pm.addPass(mlir::createCSEPass());
   pm.addPass(mlir::createCanonicalizerPass());
 }
 

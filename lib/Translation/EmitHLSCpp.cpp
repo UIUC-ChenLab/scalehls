@@ -20,7 +20,7 @@ using namespace scalehls;
 using namespace hls;
 
 static llvm::cl::opt<bool> emitVitisDirectives("emit-vitis-directives",
-                                               llvm::cl::init(false));
+                                               llvm::cl::init(true));
 static llvm::cl::opt<bool> enforceFalseDependency("enforce-false-dependency",
                                                   llvm::cl::init(false));
 static llvm::cl::opt<int64_t> limitDspNumber("limit-dsp-number",
@@ -1770,6 +1770,8 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
 
         os << " port=";
         emitValue(port);
+        os << " bundle=";
+        emitValue(port);
         os << "\n";
 
         if (port.getType().isa<MemRefType>())
@@ -1785,7 +1787,7 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
     }
   }
 
-  if (func->getAttr("inline"))
+  if (func->getAttr("__inline__"))
     indent() << "#pragma HLS inline\n";
 
   for (auto &port : portList)

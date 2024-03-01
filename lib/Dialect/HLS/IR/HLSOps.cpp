@@ -419,6 +419,9 @@ StreamWriteLikeInterface StreamForkOp::cloneWith(ValueRange dests,
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamReassociateOp::verify() {
+  if (!getSourceType().hasIterInfo() || !getResultType().hasIterInfo())
+    return emitOpError("input and output must have iteration information");
+
   if (getSourceType().getDataType() != getResultType().getDataType())
     return emitOpError("input and output data type doesn't match");
 

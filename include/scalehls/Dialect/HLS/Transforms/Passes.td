@@ -20,9 +20,10 @@ def ReduceTensorToStream :
   let constructor = "mlir::scalehls::hls::createReduceTensorToStreamPass()";
 }
 
-def FuseStreamFork : Pass<"scalehls-fuse-stream-fork", "func::FuncOp"> {
-  let summary = "Fuse stream fork operations";
-  let constructor = "mlir::scalehls::hls::createFuseStreamForkPass()";
+def StripStreamIterInfo :
+    Pass<"scalehls-strip-stream-iter-info", "func::FuncOp"> {
+  let summary = "Strip stream iteration information";
+  let constructor = "mlir::scalehls::hls::createStripStreamIterInfoPass()";
 }
 
 def MaterializeStream : Pass<"scalehls-materialize-stream", "func::FuncOp"> {

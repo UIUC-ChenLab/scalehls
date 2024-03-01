@@ -92,8 +92,9 @@ struct ConvertTaskToFunc : public OpRewritePattern<TaskOp> {
 
     // FIXME: A better method to judge whether to inline the node.
     if (!task.hasHierarchy() &&
-        llvm::hasSingleElement(task.getOps<AffineForOp>()))
-      subFunc->setAttr("inline", rewriter.getUnitAttr());
+        (llvm::hasSingleElement(task.getOps<LoopLikeOpInterface>()) ||
+         llvm::hasSingleElement(task.getOps<linalg::LinalgOp>())))
+      subFunc->setAttr("__inline__", rewriter.getUnitAttr());
 
     // Construct the body and arguments of the sub-function.
     auto subFuncBlock = rewriter.createBlock(&subFunc.getBody());
@@ -129,17 +130,6 @@ struct ConvertDataflowToFunc
   void runOnOperation() override {
     auto module = getOperation();
     auto context = module.getContext();
-
-    // Fold all stream view ops.
-    module.walk([&](hls::StreamViewLikeInterface streamView) {
-      streamView.getResult().replaceAllUsesWith(streamView.getSource());
-    });
-
-    // Strip iteration information of all streams.
-    module.walk([&](StreamOp stream) {
-      stream.getResult().setType(hls::StreamType::get(
-          stream.getType().getElementType(), stream.getType().getDepth()));
-    });
 
     // Convert all tasks and schedules into sub-functions.
     for (auto func :

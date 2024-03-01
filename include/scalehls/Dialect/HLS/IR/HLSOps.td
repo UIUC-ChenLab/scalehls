@@ -309,8 +309,10 @@ def TaskOp : HLSOp<"task", [RecursiveMemoryEffects, HasParent<"ScheduleOp">,
   let extraClassDeclaration = [{
     /// Return true if this task op contains nested sub-tasks.
     bool hasHierarchy() {
-      return walk([&](TaskOp task) {
-          return task != *this ? WalkResult::interrupt() : WalkResult::advance();
+      return walk([&](Operation *op) {
+          if (isa<TaskOp, func::CallOp>(op) && op != *this)
+            return WalkResult::interrupt();
+          return WalkResult::advance();
         }).wasInterrupted();
     }
 
