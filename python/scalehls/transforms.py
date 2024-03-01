@@ -11,13 +11,12 @@ from graphviz import Digraph
 import re
 import functools
 import operator
-import matplotlib.pyplot as plt
 from .dialects import hls, linalg, tensor, func, hls_transform, transform
 from .ir import IntegerType, IntegerAttr, StringAttr, ArrayAttr, Value, InsertionPoint, UnitAttr, DenseI64ArrayAttr, Block, Operation, Type, Location, Module, Context
 from .dialects.transform import structured as linalg_transform
 from .dialects.transform import tensor as tensor_transform
 from .passmanager import PassManager
-from typing import List, Dict, Optional, Union
+from typing import List, Optional, Union
 
 
 def transform_sequence(module: Module, name: str = "__transform_main"):
@@ -101,6 +100,12 @@ def match_linalg_result(linalg_op: Value, op_name: str):
     return match_result.results[0]
 
 
+def interchange(target: Value, permutation: List[int]):
+    return linalg_transform.InterchangeOp(
+        target,
+        iterator_interchange=permutation)
+
+
 def tile(target: Value, sizes: List[int], has_input: bool = True):
     tile_op = linalg_transform.TileUsingForOp(target, sizes=sizes)
     return tile_op
@@ -117,7 +122,7 @@ def tile_reduction(target: Value, sizes: List[int], has_input: bool = True):
     return tile_reduction_op
 
 
-def convert_generic_op_to_stream(target: Value, parallel_tile_sizes: List[int], reduction_tile_sizes: List[int], has_input: bool = True, combine_split_reduction=False):
+def convert_generic_op_to_stream(target: Value, parallel_tile_sizes: List[int], reduction_tile_sizes: List[int], permutation: List[int], has_input: bool = True, combine_split_reduction=False):
     tile_op = tile(target, parallel_tile_sizes, has_input)
     target = tile_op.tiled_linalg_op
 
@@ -147,7 +152,8 @@ def convert_generic_op_to_stream(target: Value, parallel_tile_sizes: List[int], 
                 transform.OperationType.get("hls.tensor_init"),
                 tile_reduction_op.fill_op)
         else:
-            tile_reduction_op = tile(target, reduction_tile_sizes, has_input)
+            tile_reduction_op = tile(
+                target, reduction_tile_sizes, has_input)
             target = tile_reduction_op.tiled_linalg_op
 
     if has_input:
@@ -163,6 +169,9 @@ def convert_generic_op_to_stream(target: Value, parallel_tile_sizes: List[int], 
                 transform.OperationType.get("hls.stream_read"),
                 merge_op.result)
             transform.YieldOp()
+
+    interchange_op = interchange(target, permutation)
+    target = interchange_op.transformed
     return target
 
 
@@ -290,6 +299,19 @@ def extract_loop_properties(node: linalg.GenericOp):
     return loop_properties
 
 
+def get_generic_op_naive_permutation(node: linalg.GenericOp):
+    loop_properties = extract_loop_properties(node)
+    numReduction = 0
+    interchange_permutation = []
+    for index, (_, type) in enumerate(loop_properties):
+        if type == "parallel":
+            interchange_permutation.append(index)
+        elif type == "reduction":
+            interchange_permutation.insert(numReduction, index)
+            numReduction += 1
+    return interchange_permutation
+
+
 def get_generic_op_naive_tile_sizes(node: linalg.GenericOp, default_tile_size: int = 16):
     loop_properties = extract_loop_properties(node)
 
@@ -336,11 +358,12 @@ def construct_tiling_and_streaming_transform_sequence(module: Module, graph: nx.
                 "id":  i64_attr(data["id"])}).result
 
             if isinstance(node, linalg.GenericOp):
+                permutation = get_generic_op_naive_permutation(node)
                 parallel_tile_sizes, reduction_tile_sizes = get_generic_op_naive_tile_sizes(
                     node, default_tile_size=16)
 
                 stream_node_handle = convert_generic_op_to_stream(
-                    node_handle, parallel_tile_sizes, reduction_tile_sizes, len(node.inputs) > 0)
+                    node_handle, parallel_tile_sizes, reduction_tile_sizes, permutation, len(node.inputs) > 0)
                 annotate(stream_node_handle, "id", i64_param(data["id"]))
 
             if isinstance(node, tensor.ExpandShapeOp):
