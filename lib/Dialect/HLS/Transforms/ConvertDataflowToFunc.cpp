@@ -30,6 +30,9 @@ struct InlineSchedule : public OpRewritePattern<ScheduleOp> {
     if (auto func = dyn_cast<func::FuncOp>(schedule->getParentOp()))
       setFuncDirective(func, /*pipeline=*/false, /*targetInterval=*/1,
                        /*dataflow=*/true);
+    else if (auto loop = dyn_cast<scf::ForOp>(schedule->getParentOp()))
+      setLoopDirective(loop, /*pipeline=*/false, /*targetII=*/1,
+                       /*dataflow=*/true, /*flattern=*/false);
     else if (auto loop = dyn_cast<AffineForOp>(schedule->getParentOp())) {
       // If the schedule is located inside of a loop nest, try to coalesce
       // them into a flattened loop.
@@ -58,12 +61,24 @@ struct ConvertTaskToFunc : public OpRewritePattern<TaskOp> {
       return task.emitOpError("should not yield any results");
 
     // Collect all live-ins of the task.
+    rewriter.setInsertionPointToStart(&task.getBody().front());
     SmallVector<Value, 8> operands;
     SmallVector<Location, 8> operandLocs;
     auto liveins = Liveness(task).getLiveIn(&task.getBody().front());
     for (auto livein : liveins) {
+      // Skip live-ins that are defined in the parent region.
       if (task.getBody().isAncestor(livein.getParentRegion()))
         continue;
+      // Localize constant live-ins.
+      if (auto constLivein = livein.getDefiningOp<arith::ConstantOp>()) {
+        auto cloneLivein =
+            cast<arith::ConstantOp>(rewriter.clone(*constLivein));
+        rewriter.replaceUsesWithIf(livein, cloneLivein, [&](OpOperand &use) {
+          return task.getBody().isAncestor(use.getOwner()->getParentRegion());
+        });
+        continue;
+      }
+      // Add the live-in to the list of operands.
       operands.push_back(livein);
       operandLocs.push_back(livein.getLoc());
     }
@@ -114,23 +129,10 @@ struct ConvertDataflowToFunc
   void runOnOperation() override {
     auto module = getOperation();
     auto context = module.getContext();
-    auto builder = OpBuilder(context);
 
-    // Collect all constants in the function and localize them to uses.
-    SmallVector<Operation *, 16> constants;
-    module.walk([&](arith::ConstantOp op) { constants.push_back(op); });
-    for (auto constant : constants) {
-      for (auto &use : llvm::make_early_inc_range(constant->getUses())) {
-        builder.setInsertionPoint(use.getOwner());
-        auto cloneConstant = cast<arith::ConstantOp>(builder.clone(*constant));
-        use.set(cloneConstant.getResult());
-      }
-      constant->erase();
-    }
-
-    // Fold all stream reassociate ops.
-    module.walk([&](hls::StreamReassociateOp reassociateOp) {
-      reassociateOp.getResult().replaceAllUsesWith(reassociateOp.getSource());
+    // Fold all stream view ops.
+    module.walk([&](hls::StreamViewLikeInterface streamView) {
+      streamView.getResult().replaceAllUsesWith(streamView.getSource());
     });
 
     // Strip iteration information of all streams.
