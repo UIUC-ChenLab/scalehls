@@ -43,6 +43,17 @@ LogicalResult TensorInitOp::canonicalize(TensorInitOp op,
 }
 
 //===----------------------------------------------------------------------===//
+// TensorToITensorOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult TensorToITensorOp::fold(FoldAdaptor adaptor) {
+  if (auto streamToTensor = getSource().getDefiningOp<ITensorToTensorOp>())
+    if (streamToTensor.getSource().getType() == getResult().getType())
+      return streamToTensor.getSource();
+  return {};
+}
+
+//===----------------------------------------------------------------------===//
 // StreamOp
 //===----------------------------------------------------------------------===//
 

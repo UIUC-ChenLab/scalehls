@@ -108,6 +108,7 @@ def TensorToITensorOp : HLSOp<"tensor_to_itensor", [Pure]> {
   }];
 
   // let hasVerifier = 1;
+  let hasFolder = 1;
 }
 
 def ITensorReadOp : HLSOp<"itensor_read", [Pure]> {

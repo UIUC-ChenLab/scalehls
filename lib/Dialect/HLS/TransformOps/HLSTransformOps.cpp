@@ -261,7 +261,7 @@ transform::HLSConvertExtractSliceToStreamOp::applyToOne(
 
   // Create the tensor_to_stream op.
   auto loc = extractSlice.getLoc();
-  rewriter.setInsertionPointAfterValue(extractSlice.getSource());
+  rewriter.setInsertionPoint(loops.front());
   auto tensorToStream = rewriter.create<hls::TensorToITensorOp>(
       loc, streamType, extractSlice.getSource());
 
