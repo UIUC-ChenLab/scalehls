@@ -66,6 +66,133 @@ def TensorInitOp : HLSOp<"tensor_init"> {
 }
 
 //===----------------------------------------------------------------------===//
+// ITensor Operations
+//===----------------------------------------------------------------------===//
+
+def ITensorInitOp : HLSOp<"itensor_init", [Pure]> {
+  let summary = "Initiate an iterative tensor";
+
+  let arguments = (ins Optional<AnyType>:$initValue);
+  let results = (outs AnyStream:$result);
+  let assemblyFormat = [{
+    (`init` $initValue^)? attr-dict `:` functional-type(operands, results)
+  }];
+
+  // let hasVerifier = 1;
+
+  let builders = [
+    OpBuilder<(ins "mlir::Type":$result),
+        "build($_builder, $_state, result, nullptr);">
+  ];
+}
+
+def ITensorToTensorOp : HLSOp<"itensor_to_tensor", [Pure]> {
+  let summary = "Convert an iterative tensor to a tensor";
+
+  let arguments = (ins AnyStream:$source);
+  let results = (outs AnyRankedTensor:$result);
+  let assemblyFormat = [{
+    $source attr-dict `:` functional-type(operands, results)
+  }];
+
+  // let hasVerifier = 1;
+}
+
+def TensorToITensorOp : HLSOp<"tensor_to_itensor", [Pure]> {
+  let summary = "Convert a tensor to an iterative tensor";
+
+  let arguments = (ins AnyRankedTensor:$source);
+  let results = (outs AnyStream:$result);
+  let assemblyFormat = [{
+    $source attr-dict `:` functional-type(operands, results)
+  }];
+
+  // let hasVerifier = 1;
+}
+
+def ITensorReadOp : HLSOp<"itensor_read", [Pure]> {
+  let summary = "Read an element from an iterative tensor";
+
+  let arguments = (ins AnyStream:$source, Optional<AnyRankedTensor>:$init);
+  let results = (outs AnyType:$value);
+  let assemblyFormat = [{
+    $source (`to` $init^)? attr-dict `:` functional-type(operands, results)
+  }];
+
+  // let hasVerifier = 1;
+  let builders = [
+    OpBuilder<(ins "mlir::Type":$value, "mlir::Value":$source),
+        "build($_builder, $_state, value, source, nullptr);">
+  ];
+}
+
+def ITensorWriteOp : HLSOp<"itensor_write", [Pure]> {
+  let summary = "Write an element to an iterative tensor";
+
+  let arguments = (ins AnyType:$value, AnyStream:$init);
+  let results = (outs AnyStream:$result);
+  let assemblyFormat = [{
+    $value `into` $init attr-dict `:` functional-type(operands, results)
+  }];
+
+  // let hasVerifier = 1;
+}
+
+def ITensorBufferOp : HLSOp<"itensor_buffer", [Pure]> {
+  let summary = "Buffer an iterative tensor at a specific position";
+
+  let arguments = (ins AnyStream:$source, TypeAttr:$bufferElementType,
+      DenseI64ArrayAttr:$bufferShape, SI64Attr:$loopIndex, SI64Attr:$dimIndex);
+  let results = (outs AnyStream:$result);
+  let assemblyFormat = [{
+    $source `,` $bufferElementType $bufferShape `before` `loop`
+    $loopIndex `dim` $dimIndex attr-dict `:` functional-type(operands, results)
+  }];
+
+  // let hasVerifier = 1;
+}
+
+def ITensorForkOp : HLSOp<"itensor_fork", [Pure]> {
+  let summary = "Fork an iterative tensor to multiple iterative tensors";
+
+  let arguments = (ins AnyStream:$source);
+  let results = (outs Variadic<AnyStream>:$results);
+  let assemblyFormat = [{
+    $source attr-dict `:` functional-type(operands, results)
+  }];
+
+  // let hasVerifier = 1;
+}
+
+def ITensorReassociateOp : HLSOp<"itensor_reassociate", [Pure]> {
+  let summary = "Reassociate the shape and/or iteration of an iterative tensor";
+
+  let arguments = (ins AnyStream:$source, UnitAttr:$expandShape,
+        IndexListArrayAttr:$shapeReassociation, UnitAttr:$expandIteration,
+        IndexListArrayAttr:$iterationReassociation);
+  let results = (outs AnyStream:$result);
+  let assemblyFormat = [{
+    $source (`expand` $expandShape^):(`collapse`)? `shape` $shapeReassociation
+    (`expand` $expandIteration^):(`collapse`)? `iteration`
+    $iterationReassociation attr-dict `:` functional-type(operands, results)
+  }];
+
+  // let hasVerifier = 1;
+}
+
+def ITensorCastOp : HLSOp<"itensor_cast", [Pure]> {
+  let summary = "Cast an iterative tensor to a different type";
+
+  let arguments = (ins AnyStream:$source);
+  let results = (outs AnyStream:$result);
+  let assemblyFormat = [{
+    $source attr-dict `:` functional-type(operands, results)
+  }];
+
+  // let hasVerifier = 1;
+}
+
+//===----------------------------------------------------------------------===//
 // Stream Operations
 //===----------------------------------------------------------------------===//
 
