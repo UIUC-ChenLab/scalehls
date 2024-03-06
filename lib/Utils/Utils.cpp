@@ -28,13 +28,12 @@ scalehls::getLoopBoundsAndStep(int64_t tripCount, int64_t step, Location loc,
 /// Construct a loop with the given trip counts, steps, and an optional tensor
 /// as the iteration argument. Return the loop induction variables, the result
 /// of the outermost loop, and the iteration argument of the innermost loop.
-std::tuple<SmallVector<Value>, TypedValue<RankedTensorType>,
-           TypedValue<RankedTensorType>>
+std::tuple<SmallVector<Value>, Value, Value>
 scalehls::constructLoops(ArrayRef<int64_t> tripCounts, ArrayRef<int64_t> steps,
                          Location loc, PatternRewriter &rewriter,
-                         TypedValue<RankedTensorType> iterArg) {
+                         Value iterArg) {
   SmallVector<Value> ivs;
-  TypedValue<RankedTensorType> result = iterArg;
+  Value result = iterArg;
   for (auto [tripCount, step] : llvm::zip(tripCounts, steps)) {
     // Construct loops with the given trip counts and steps.
     auto [lbCst, ubCst, stepCst] =
@@ -45,12 +44,11 @@ scalehls::constructLoops(ArrayRef<int64_t> tripCounts, ArrayRef<int64_t> steps,
 
     // Handle the iteration argument if it is provided.
     if (iterArg) {
-      iterArg =
-          llvm::cast<TypedValue<RankedTensorType>>(loop.getRegionIterArg(0));
+      iterArg = loop.getRegionIterArg(0);
       // For the outermost loop, we return the loop result. For the other loops,
       // we just yield the loop result and continue to the next loop.
       if (ivs.empty())
-        result = llvm::cast<TypedValue<RankedTensorType>>(loop.getResult(0));
+        result = loop.getResult(0);
       else
         rewriter.create<scf::YieldOp>(loc, loop.getResult(0));
     }
