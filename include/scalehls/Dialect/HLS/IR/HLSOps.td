@@ -165,7 +165,8 @@ def ITensorForkOp : HLSOp<"itensor_fork", [Pure]> {
   // let hasVerifier = 1;
 }
 
-def ITensorReassociateOp : HLSOp<"itensor_reassociate", [Pure]> {
+def ITensorReassociateOp : HLSOp<"itensor_reassociate", [Pure,
+      DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
   let summary = "Reassociate the shape and/or iteration of an iterative tensor";
 
   let arguments = (ins AnyStream:$source, UnitAttr:$expandShape,
@@ -179,9 +180,31 @@ def ITensorReassociateOp : HLSOp<"itensor_reassociate", [Pure]> {
   }];
 
   // let hasVerifier = 1;
+  let hasFolder = 1;
+
+  let extraClassDeclaration = [{
+    static SmallVector<ReassociationIndices> 
+    getReassociationIndices(ArrayAttr reassociationAttr) {
+      SmallVector<ReassociationIndices> indices;
+      for (auto attr : reassociationAttr)
+        indices.push_back(llvm::to_vector<2>(
+            llvm::map_range(cast<ArrayAttr>(attr), [&](Attribute indexAttr) {
+              return cast<IntegerAttr>(indexAttr).getInt();
+            })));
+      return indices;
+    }
+
+    SmallVector<ReassociationIndices> getShapeReassociationIndices() {
+      return getReassociationIndices(getShapeReassociation());
+    }
+    SmallVector<ReassociationIndices> getIterationReassociationIndices() {
+      return getReassociationIndices(getIterationReassociation());
+    }
+  }];
 }
 
-def ITensorCastOp : HLSOp<"itensor_cast", [Pure]> {
+def ITensorCastOp : HLSOp<"itensor_cast", [Pure,
+      DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
   let summary = "Cast an iterative tensor to a different type";
 
   let arguments = (ins AnyStream:$source);
@@ -191,6 +214,7 @@ def ITensorCastOp : HLSOp<"itensor_cast", [Pure]> {
   }];
 
   // let hasVerifier = 1;
+  let hasFolder = 1;
 }
 
 //===----------------------------------------------------------------------===//

@@ -54,6 +54,22 @@ OpFoldResult TensorToITensorOp::fold(FoldAdaptor adaptor) {
 }
 
 //===----------------------------------------------------------------------===//
+// ITensorReassociateOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult ITensorReassociateOp::fold(FoldAdaptor adaptor) {
+  return foldRedundantViews();
+}
+
+//===----------------------------------------------------------------------===//
+// ITensorCastOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult ITensorCastOp::fold(FoldAdaptor adaptor) {
+  return foldRedundantViews();
+}
+
+//===----------------------------------------------------------------------===//
 // StreamOp
 //===----------------------------------------------------------------------===//
 
