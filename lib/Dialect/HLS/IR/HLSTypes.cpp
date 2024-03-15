@@ -11,10 +11,10 @@ using namespace scalehls;
 using namespace hls;
 
 LogicalResult
-hls::StreamType::verify(function_ref<InFlightDiagnostic()> emitError,
-                        Type elementType, ArrayRef<int64_t> iterTripCounts,
-                        ArrayRef<int64_t> iterSteps, AffineMap iterMap,
-                        int64_t depth) {
+hls::ITensorType::verify(function_ref<InFlightDiagnostic()> emitError,
+                         Type elementType, ArrayRef<int64_t> iterTripCounts,
+                         ArrayRef<int64_t> iterSteps, AffineMap iterMap,
+                         int64_t depth) {
   if (iterMap.getNumSymbols())
     return emitError() << "iteration map cannot have symbols";
   if (iterTripCounts.size() != iterMap.getNumDims())
@@ -33,7 +33,7 @@ hls::StreamType::verify(function_ref<InFlightDiagnostic()> emitError,
 
 /// Infer and return the integral shape of the full tensor this stream type
 /// represents.
-SmallVector<int64_t> hls::StreamType::getShape() const {
+SmallVector<int64_t> hls::ITensorType::getShape() const {
   SmallVector<AffineExpr> iterSizes;
   for (auto [tripCount, step] : llvm::zip(getIterTripCounts(), getIterSteps()))
     iterSizes.push_back(
@@ -51,7 +51,7 @@ SmallVector<int64_t> hls::StreamType::getShape() const {
 
 /// Return whether this stream type represents a projected permutation
 /// iteration pattern.
-bool hls::StreamType::iterationIsProjectedPermutation() const {
+bool hls::ITensorType::iterationIsProjectedPermutation() const {
   auto map = getIterMap();
   if (map.getNumSymbols() > 0)
     return false;
@@ -76,7 +76,7 @@ bool hls::StreamType::iterationIsProjectedPermutation() const {
 
 /// Return whether this stream type represents a non-overlapped and non-gapped
 /// tiling pattern.
-bool hls::StreamType::tileIsRegular() const {
+bool hls::ITensorType::tileIsRegular() const {
   if (!iterationIsProjectedPermutation())
     return false;
 
@@ -95,7 +95,7 @@ bool hls::StreamType::tileIsRegular() const {
 }
 
 /// Return whether the "other" stream type is castable with this type.
-bool hls::StreamType::isCastableWith(StreamType other) const {
+bool hls::ITensorType::isCastableWith(ITensorType other) const {
   if (getDataType() != other.getDataType())
     return false;
   if (getShape() != other.getShape())
@@ -104,7 +104,7 @@ bool hls::StreamType::isCastableWith(StreamType other) const {
 }
 
 /// Return whether this stream type can be converted to the "tensor" type.
-bool hls::StreamType::isConvertableWith(RankedTensorType tensor) const {
+bool hls::ITensorType::isConvertableWith(RankedTensorType tensor) const {
   if (!tensor.hasStaticShape())
     return false;
   if (getDataType() != tensor.getElementType())
@@ -112,4 +112,14 @@ bool hls::StreamType::isConvertableWith(RankedTensorType tensor) const {
   if (ArrayRef<int64_t>(getShape()) != tensor.getShape())
     return false;
   return true;
+}
+
+LogicalResult
+hls::StreamType::verify(function_ref<InFlightDiagnostic()> emitError,
+                        Type elementType, int64_t depth) {
+  if (llvm::isa<ShapedType>(elementType))
+    return emitError() << "element type must be a scalar";
+  if (depth <= 0)
+    return emitError() << "depth must be positive";
+  return success();
 }

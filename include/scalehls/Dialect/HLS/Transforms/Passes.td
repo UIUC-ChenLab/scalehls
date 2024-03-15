@@ -14,21 +14,15 @@ def Preprocess : Pass<"scalehls-preprocess", "func::FuncOp"> {
   let constructor = "mlir::scalehls::hls::createPreprocessPass()";
 }
 
-def ReduceTensorToStream :
-    Pass<"scalehls-reduce-tensor-to-stream", "func::FuncOp"> {
-  let summary = "Reduce immediate tensors to stream buffers";
-  let constructor = "mlir::scalehls::hls::createReduceTensorToStreamPass()";
+def ReduceTensorToITensor :
+    Pass<"scalehls-reduce-tensor-to-itensor", "func::FuncOp"> {
+  let summary = "Reduce immediate tensors to itensor buffers";
+  let constructor = "mlir::scalehls::hls::createReduceTensorToITensorPass()";
 }
 
-def StripStreamIterInfo :
-    Pass<"scalehls-strip-stream-iter-info", "func::FuncOp"> {
-  let summary = "Strip stream iteration information";
-  let constructor = "mlir::scalehls::hls::createStripStreamIterInfoPass()";
-}
-
-def MaterializeStream : Pass<"scalehls-materialize-stream", "func::FuncOp"> {
-  let summary = "Materialize tensor/stream conversions and stream buffers";
-  let constructor = "mlir::scalehls::hls::createMaterializeStreamPass()";
+def MaterializeITensor : Pass<"scalehls-materialize-itensor", "func::FuncOp"> {
+  let summary = "Materialize tensor/itensor conversions and itensor buffers";
+  let constructor = "mlir::scalehls::hls::createMaterializeITensorPass()";
 
   let options = [
     Option<"enablePacking", "enable-packing", "bool", /*default=*/"true",
@@ -36,9 +30,15 @@ def MaterializeStream : Pass<"scalehls-materialize-stream", "func::FuncOp"> {
   ];
 }
 
-def ScalarizeStream : Pass<"scalehls-scalarize-stream", "func::FuncOp"> {
-  let summary = "Scalarize stream channel elements";
-  let constructor = "mlir::scalehls::hls::createScalarizeStreamPass()";
+def ScalarizeITensor : Pass<"scalehls-scalarize-itensor", "func::FuncOp"> {
+  let summary = "Scalarize itensor channel elements";
+  let constructor = "mlir::scalehls::hls::createScalarizeITensorPass()";
+}
+
+def LowerITensorToStream :
+    Pass<"scalehls-lower-itensor-to-stream", "func::FuncOp"> {
+  let summary = "Lower itensor operations to stream operations";
+  let constructor = "mlir::scalehls::hls::createLowerITensorToStreamPass()";
 }
 
 def ScheduleDataflow : Pass<"scalehls-schedule-dataflow", "func::FuncOp"> {

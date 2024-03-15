@@ -105,7 +105,7 @@ transform::HLSMergeConsecutiveExtractSliceOp::applyToOne(
 }
 
 //===----------------------------------------------------------------------===//
-// HLSConvertInsertSliceToStreamOp
+// HLSConvertInsertSliceToITensorOp
 //===----------------------------------------------------------------------===//
 
 static scf::ForOp getAssociatedLoop(Value value) {
@@ -151,7 +151,7 @@ getIterationAffineMap(OpTy target, const SmallVector<scf::ForOp> &loops) {
       }
     } else {
       // If the offset is a constant, it means we don't need to iterate over the
-      // dimension when streaming.
+      // dimension when iterating.
       exprs.push_back(getAffineConstantExpr(0, target.getContext()));
     }
   }
@@ -159,7 +159,7 @@ getIterationAffineMap(OpTy target, const SmallVector<scf::ForOp> &loops) {
 }
 
 DiagnosedSilenceableFailure
-transform::HLSConvertInsertSliceToStreamOp::applyToOne(
+transform::HLSConvertInsertSliceToITensorOp::applyToOne(
     transform::TransformRewriter &rewriter, tensor::InsertSliceOp insertSlice,
     transform::ApplyToEachResultList &results,
     transform::TransformState &state) {
@@ -178,7 +178,7 @@ transform::HLSConvertInsertSliceToStreamOp::applyToOne(
     return emitDefaultSilenceableFailure(insertSlice)
            << "untiled operand must be defined by a tensor.init op";
 
-  // Collect the iteration shape and affine map of the streaming channel.
+  // Collect the iteration shape and affine map of the iterative tensor.
   auto iterTripCounts = getLoopTripCounts(loops);
   auto iterSteps = getLoopSteps(loops);
   auto iterMap = getIterationAffineMap(insertSlice, loops);
@@ -186,24 +186,24 @@ transform::HLSConvertInsertSliceToStreamOp::applyToOne(
     return emitDefaultSilenceableFailure(insertSlice)
            << "trip counts, steps, or iteration map can be determined";
 
-  auto streamType = hls::StreamType::get(
+  auto iTensorType = hls::ITensorType::get(
       insertSlice.getSourceType(), *iterTripCounts, *iterSteps, *iterMap,
       insertSlice.getDestType().getNumElements());
 
-  // Create the streaming channel.
+  // Create the iterative tensor.
   auto loc = insertSlice.getLoc();
   rewriter.setInsertionPoint(loops.front());
-  auto sourceStream = rewriter.create<hls::ITensorInitOp>(loc, streamType);
+  auto sourceITensor = rewriter.create<hls::ITensorInitOp>(loc, iTensorType);
   rewriter.replaceUsesWithIf(
-      tensorInit.getResult(), sourceStream.getResult(),
+      tensorInit.getResult(), sourceITensor.getResult(),
       [&](OpOperand &operand) { return operand.getOwner() == loops.front(); });
 
-  // Create the stream_to_tensor op.
+  // Create the itensor_to_tensor op.
   rewriter.setInsertionPointAfter(loops.front());
   auto resultTensor = loops.front().getTiedLoopResult(untiledUse);
-  auto streamToTensor = rewriter.create<hls::ITensorToTensorOp>(
+  auto iTensorToTensor = rewriter.create<hls::ITensorToTensorOp>(
       loc, resultTensor.getType(), resultTensor);
-  rewriter.replaceAllUsesExcept(resultTensor, streamToTensor, streamToTensor);
+  rewriter.replaceAllUsesExcept(resultTensor, iTensorToTensor, iTensorToTensor);
 
   // Update the iteration argument of the loops.
   auto iterIdx = untiledUse->getOperandNumber();
@@ -214,20 +214,20 @@ transform::HLSConvertInsertSliceToStreamOp::applyToOne(
     loop.getTiedLoopResult(&iterOperand).setType(iterType);
   }
 
-  // Replace the insert_slice op with stream_write op.
+  // Replace the insert_slice op with itensor_write op.
   rewriter.setInsertionPoint(insertSlice);
   auto writeInit = loops.back().getTiedLoopRegionIterArg(
       &loops.back()->getOpOperand(iterIdx));
-  auto streamWrite = rewriter.create<hls::ITensorWriteOp>(
-      loc, streamType, insertSlice.getSource(), writeInit);
+  auto iTensorWrite = rewriter.create<hls::ITensorWriteOp>(
+      loc, iTensorType, insertSlice.getSource(), writeInit);
   rewriter.replaceAllUsesWith(
       loops.back().getTiedLoopYieldedValue(writeInit)->get(),
-      streamWrite.getResult());
+      iTensorWrite.getResult());
   rewriter.eraseOp(insertSlice);
 
-  results.push_back(sourceStream);
-  results.push_back(streamWrite);
-  results.push_back(streamToTensor);
+  results.push_back(sourceITensor);
+  results.push_back(iTensorWrite);
+  results.push_back(iTensorToTensor);
   return DiagnosedSilenceableFailure::success();
 }
 // xixi
@@ -235,11 +235,11 @@ transform::HLSConvertInsertSliceToStreamOp::applyToOne(
 // S2
 
 //===----------------------------------------------------------------------===//
-// HLSConvertExtractSliceToStreamOp
+// HLSConvertExtractSliceToITensorOp
 //===----------------------------------------------------------------------===//
 
 DiagnosedSilenceableFailure
-transform::HLSConvertExtractSliceToStreamOp::applyToOne(
+transform::HLSConvertExtractSliceToITensorOp::applyToOne(
     transform::TransformRewriter &rewriter, tensor::ExtractSliceOp extractSlice,
     transform::ApplyToEachResultList &results,
     transform::TransformState &state) {
@@ -247,7 +247,7 @@ transform::HLSConvertExtractSliceToStreamOp::applyToOne(
   auto loops = getSurroundingLoops(extractSlice,
                                    extractSlice.getSource().getParentBlock());
 
-  // Collect the iteration shape and affine map of the streaming channel.
+  // Collect the iteration shape and affine map of the iterative tensor.
   auto iterTripCounts = getLoopTripCounts(loops);
   auto iterSteps = getLoopSteps(loops);
   auto iterMap = getIterationAffineMap(extractSlice, loops);
@@ -255,44 +255,44 @@ transform::HLSConvertExtractSliceToStreamOp::applyToOne(
     return emitDefaultSilenceableFailure(extractSlice)
            << "trip counts, steps, or iteration map can be determined";
 
-  auto streamType = hls::StreamType::get(
+  auto iTensorType = hls::ITensorType::get(
       extractSlice.getResultType(), *iterTripCounts, *iterSteps, *iterMap,
       extractSlice.getSourceType().getNumElements());
 
-  // Create the tensor_to_stream op.
+  // Create the tensor_to_itensor op.
   auto loc = extractSlice.getLoc();
   rewriter.setInsertionPoint(loops.front());
-  auto tensorToStream = rewriter.create<hls::TensorToITensorOp>(
-      loc, streamType, extractSlice.getSource());
+  auto tensorToITensor = rewriter.create<hls::TensorToITensorOp>(
+      loc, iTensorType, extractSlice.getSource());
 
-  // Create the stream_read op.
+  // Create the itensor_read op.
   rewriter.setInsertionPoint(extractSlice);
-  auto streamRead = rewriter.create<hls::ITensorReadOp>(
-      loc, extractSlice.getResultType(), tensorToStream.getResult());
-  rewriter.replaceOp(extractSlice, streamRead.getResult());
+  auto iTensorRead = rewriter.create<hls::ITensorReadOp>(
+      loc, extractSlice.getResultType(), tensorToITensor.getResult());
+  rewriter.replaceOp(extractSlice, iTensorRead.getResult());
 
-  results.push_back(tensorToStream);
-  results.push_back(streamRead);
+  results.push_back(tensorToITensor);
+  results.push_back(iTensorRead);
   return DiagnosedSilenceableFailure::success();
 }
 
 //===----------------------------------------------------------------------===//
-// HLSConvertExpandShapeToStreamOp
+// HLSConvertExpandShapeToITensorOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult transform::HLSConvertExpandShapeToStreamOp::verify() {
+LogicalResult transform::HLSConvertExpandShapeToITensorOp::verify() {
   return success();
 }
 
 /// Given the low-ranked and high-ranked tensor types, and the resulting
 /// low-ranked and high-ranked element shapes, this function constructs the
-/// low-ranked and high-ranked stream types.
+/// low-ranked and high-ranked iTensor types.
 template <typename OpTy>
-static std::optional<std::pair<hls::StreamType, hls::StreamType>>
-getReassociateStreamTypes(OpTy reassociateOp, RankedTensorType lowType,
-                          RankedTensorType highType,
-                          ArrayRef<int64_t> lowElementShape,
-                          ArrayRef<int64_t> highElementShape) {
+static std::optional<std::pair<hls::ITensorType, hls::ITensorType>>
+getReassociateITensorTypes(OpTy reassociateOp, RankedTensorType lowType,
+                           RankedTensorType highType,
+                           ArrayRef<int64_t> lowElementShape,
+                           ArrayRef<int64_t> highElementShape) {
   // The low and high types must have static shapes.
   if (!lowType.hasStaticShape() || !highType.hasStaticShape())
     return std::nullopt;
@@ -302,7 +302,7 @@ getReassociateStreamTypes(OpTy reassociateOp, RankedTensorType lowType,
   SmallVector<int64_t> highIterTripCounts, highIterSteps;
   SmallVector<AffineExpr> highIterExprs;
 
-  // Collect the iteration shape and affine map of the streaming channel.
+  // Collect the iteration shape and affine map of the iterative tensor.
   for (auto [lowDim, highDims] :
        llvm::enumerate(reassociateOp.getReassociationIndices())) {
     auto lowDimSize = lowType.getDimSize(lowDim);
@@ -328,95 +328,95 @@ getReassociateStreamTypes(OpTy reassociateOp, RankedTensorType lowType,
     }
   }
 
-  // Construct the low stream type.
+  // Construct the low iTensor type.
   auto lowIterMap = AffineMap::get(lowIterTripCounts.size(), 0, lowIterExprs,
                                    reassociateOp.getContext());
   auto lowElementType =
       RankedTensorType::get(lowElementShape, lowType.getElementType());
-  auto lowStreamType =
-      hls::StreamType::get(lowElementType, lowIterTripCounts, lowIterSteps,
-                           lowIterMap, lowType.getNumElements());
+  auto lowITensorType =
+      hls::ITensorType::get(lowElementType, lowIterTripCounts, lowIterSteps,
+                            lowIterMap, lowType.getNumElements());
 
-  // Construct the high stream type.
+  // Construct the high iTensor type.
   auto highIterMap = AffineMap::get(highIterTripCounts.size(), 0, highIterExprs,
                                     reassociateOp.getContext());
   auto highElementType =
       RankedTensorType::get(highElementShape, highType.getElementType());
-  auto highStreamType =
-      hls::StreamType::get(highElementType, highIterTripCounts, highIterSteps,
-                           highIterMap, highType.getNumElements());
+  auto highITensorType =
+      hls::ITensorType::get(highElementType, highIterTripCounts, highIterSteps,
+                            highIterMap, highType.getNumElements());
 
-  return std::make_pair(lowStreamType, highStreamType);
+  return std::make_pair(lowITensorType, highITensorType);
 }
 
 DiagnosedSilenceableFailure
-transform::HLSConvertExpandShapeToStreamOp::applyToOne(
+transform::HLSConvertExpandShapeToITensorOp::applyToOne(
     transform::TransformRewriter &rewriter, tensor::ExpandShapeOp expandShape,
     transform::ApplyToEachResultList &results,
     transform::TransformState &state) {
-  // Construct the source and result stream types.
-  auto streamTypes = getReassociateStreamTypes(
+  // Construct the source and result iTensor types.
+  auto iTensorTypes = getReassociateITensorTypes(
       expandShape, expandShape.getSrcType(), expandShape.getResultType(),
       getInputElementShape(), getOutputElementShape());
-  if (!streamTypes)
+  if (!iTensorTypes)
     return emitDefaultSilenceableFailure(expandShape);
 
-  // Convert the expand_shape op to stream ops and replace its uses.
+  // Convert the expand_shape op to iTensor ops and replace its uses.
   auto loc = expandShape.getLoc();
   rewriter.setInsertionPoint(expandShape);
-  auto tensorToStream = rewriter.create<hls::TensorToITensorOp>(
-      loc, streamTypes->first, expandShape.getSrc());
-  auto streamReassociate = rewriter.create<hls::ITensorReassociateOp>(
-      loc, streamTypes->second, tensorToStream.getResult(),
+  auto tensorToITensor = rewriter.create<hls::TensorToITensorOp>(
+      loc, iTensorTypes->first, expandShape.getSrc());
+  auto iTensorReassociate = rewriter.create<hls::ITensorReassociateOp>(
+      loc, iTensorTypes->second, tensorToITensor.getResult(),
       /*expandShape=*/true, expandShape.getReassociation(),
       /*expandIteration=*/true, expandShape.getReassociation());
-  auto streamToTensor = rewriter.create<hls::ITensorToTensorOp>(
-      loc, expandShape.getResultType(), streamReassociate.getResult());
-  rewriter.replaceOp(expandShape, streamToTensor);
+  auto iTensorToTensor = rewriter.create<hls::ITensorToTensorOp>(
+      loc, expandShape.getResultType(), iTensorReassociate.getResult());
+  rewriter.replaceOp(expandShape, iTensorToTensor);
 
-  results.push_back(tensorToStream);
-  results.push_back(streamReassociate);
-  results.push_back(streamToTensor);
+  results.push_back(tensorToITensor);
+  results.push_back(iTensorReassociate);
+  results.push_back(iTensorToTensor);
   return DiagnosedSilenceableFailure::success();
 }
 
 //===----------------------------------------------------------------------===//
-// HLSConvertCollapseShapeToStreamOp
+// HLSConvertCollapseShapeToITensorOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult transform::HLSConvertCollapseShapeToStreamOp::verify() {
+LogicalResult transform::HLSConvertCollapseShapeToITensorOp::verify() {
   return success();
 }
 
 DiagnosedSilenceableFailure
-transform::HLSConvertCollapseShapeToStreamOp::applyToOne(
+transform::HLSConvertCollapseShapeToITensorOp::applyToOne(
     transform::TransformRewriter &rewriter,
     tensor::CollapseShapeOp collapseShape,
     transform::ApplyToEachResultList &results,
     transform::TransformState &state) {
-  // Construct the source and result stream types.
-  auto streamTypes = getReassociateStreamTypes(
+  // Construct the source and result iTensor types.
+  auto iTensorTypes = getReassociateITensorTypes(
       collapseShape, collapseShape.getResultType(), collapseShape.getSrcType(),
       getOutputElementShape(), getInputElementShape());
-  if (!streamTypes)
+  if (!iTensorTypes)
     return emitDefaultSilenceableFailure(collapseShape);
 
-  // Convert the expand_shape op to stream ops and replace its uses.
+  // Convert the expand_shape op to iTensor ops and replace its uses.
   auto loc = collapseShape.getLoc();
   rewriter.setInsertionPoint(collapseShape);
-  auto tensorToStream = rewriter.create<hls::TensorToITensorOp>(
-      loc, streamTypes->second, collapseShape.getSrc());
-  auto streamReassociate = rewriter.create<hls::ITensorReassociateOp>(
-      loc, streamTypes->first, tensorToStream.getResult(),
+  auto tensorToITensor = rewriter.create<hls::TensorToITensorOp>(
+      loc, iTensorTypes->second, collapseShape.getSrc());
+  auto iTensorReassociate = rewriter.create<hls::ITensorReassociateOp>(
+      loc, iTensorTypes->first, tensorToITensor.getResult(),
       /*expandShape=*/false, collapseShape.getReassociation(),
       /*expandIteration=*/false, collapseShape.getReassociation());
-  auto streamToTensor = rewriter.create<hls::ITensorToTensorOp>(
-      loc, collapseShape.getResultType(), streamReassociate.getResult());
-  rewriter.replaceOp(collapseShape, streamToTensor);
+  auto iTensorToTensor = rewriter.create<hls::ITensorToTensorOp>(
+      loc, collapseShape.getResultType(), iTensorReassociate.getResult());
+  rewriter.replaceOp(collapseShape, iTensorToTensor);
 
-  results.push_back(tensorToStream);
-  results.push_back(streamReassociate);
-  results.push_back(streamToTensor);
+  results.push_back(tensorToITensor);
+  results.push_back(iTensorReassociate);
+  results.push_back(iTensorToTensor);
   return DiagnosedSilenceableFailure::success();
 }
 

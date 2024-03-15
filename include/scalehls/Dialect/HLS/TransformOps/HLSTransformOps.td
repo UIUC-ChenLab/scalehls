@@ -94,15 +94,15 @@ def HLSMergeConsecutiveExtractSliceOp : Op<Transform_Dialect,
   }];
 }
 
-def HLSConvertInsertSliceToStreamOp : Op<Transform_Dialect,
-    "hls.convert_insert_slice_to_stream",
+def HLSConvertInsertSliceToITensorOp : Op<Transform_Dialect,
+    "hls.convert_insert_slice_to_itensor",
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {
   let description = [{
-    Convert a target `insert_slice` op to 1) a `stream` op, replacing the
-    destination tensor with a stream channel, 2) a `stream_write` op, writing
-    the slice tensor to the stream channel instead of inserting to the
-    destination tensor, and 3) a `stream_to_tensor` op, converting the stream
+    Convert a target `insert_slice` op to 1) a `itensor_init` op, replacing the
+    destination tensor with a iterative tensor, 2) a `itensor_write` op, writing
+    the slice tensor to the iterative tensor instead of inserting to the
+    destination tensor, and 3) a `itensor_to_tensor` op, converting the itensor
     channel back to a new destination tensor and replace the original one.
 
     **This transform must be applied on the only user of an destination tensor,
@@ -130,15 +130,15 @@ def HLSConvertInsertSliceToStreamOp : Op<Transform_Dialect,
   }];
 }
 
-def HLSConvertExtractSliceToStreamOp : Op<Transform_Dialect,
-    "hls.convert_extract_slice_to_stream",
+def HLSConvertExtractSliceToITensorOp : Op<Transform_Dialect,
+    "hls.convert_extract_slice_to_itensor",
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {
   let description = [{
-    Convert a target `extract_slice` op to 1) a `tensor_to_stream` op,
-    converting the source tensor to a stream channel, and 2) a `stream_read` op,
-    reading the destination slice tensor from the stream channel instead of
-    extracting from the source tensor.
+    Convert a target `extract_slice` op to 1) a `tensor_to_itensor` op,
+    converting the source tensor to a iterative tensor, and 2) a `itensor_read`
+    op, reading the destination slice tensor from the iterative tensor instead
+    of extracting from the source tensor.
 
     **This transform must be applied on the `input` operand of a statically
     tiled linalg op, otherwise a silenceable failure will be emitted.**
@@ -162,8 +162,8 @@ def HLSConvertExtractSliceToStreamOp : Op<Transform_Dialect,
   }];
 }
 
-def HLSConvertExpandShapeToStreamOp : Op<Transform_Dialect,
-    "hls.convert_expand_shape_to_stream",
+def HLSConvertExpandShapeToITensorOp : Op<Transform_Dialect,
+    "hls.convert_expand_shape_to_itensor",
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {
   let description = [{}];
@@ -191,8 +191,8 @@ def HLSConvertExpandShapeToStreamOp : Op<Transform_Dialect,
   }];
 }
 
-def HLSConvertCollapseShapeToStreamOp : Op<Transform_Dialect,
-    "hls.convert_collapse_shape_to_stream",
+def HLSConvertCollapseShapeToITensorOp : Op<Transform_Dialect,
+    "hls.convert_collapse_shape_to_itensor",
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {
   let description = [{}];

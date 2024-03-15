@@ -11,13 +11,13 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-struct StripStreamIterInfo
-    : public StripStreamIterInfoBase<StripStreamIterInfo> {
+struct LowerITensorToStream
+    : public LowerITensorToStreamBase<LowerITensorToStream> {
   void runOnOperation() override {
     auto op = getOperation();
 
     // Fold all stream view ops.
-    op.walk([&](hls::StreamViewLikeInterface streamView) {
+    op.walk([&](hls::ITensorViewLikeInterface streamView) {
       streamView.getResult().replaceAllUsesWith(streamView.getSource());
       streamView.erase();
     });
@@ -31,6 +31,6 @@ struct StripStreamIterInfo
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::hls::createStripStreamIterInfoPass() {
-  return std::make_unique<StripStreamIterInfo>();
+std::unique_ptr<Pass> scalehls::hls::createLowerITensorToStreamPass() {
+  return std::make_unique<LowerITensorToStream>();
 }

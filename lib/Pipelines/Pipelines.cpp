@@ -45,7 +45,6 @@ void scalehls::addComprehensiveBufferizePasses(OpPassManager &pm) {
 }
 
 void scalehls::addConvertDataflowToFuncPasses(OpPassManager &pm) {
-  pm.addNestedPass<func::FuncOp>(hls::createStripStreamIterInfoPass());
   pm.addPass(hls::createRaiseSCFToAffinePass());
   pm.addNestedPass<func::FuncOp>(mlir::createConvertLinalgToAffineLoopsPass());
   pm.addNestedPass<func::FuncOp>(affine::createAffineLoopNormalizePass());

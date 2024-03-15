@@ -19,29 +19,32 @@ class HLSOp<string mnemonic, list<Trait> traits = []> :
     Op<HLSDialect, mnemonic, traits>;
 
 //===----------------------------------------------------------------------===//
-// StreamtType Predicates
+// Type Predicates
 //===----------------------------------------------------------------------===//
 
-class StreamOf<list<Type> allowedTypes,
-               string cppClassName = "::mlir::scalehls::hls::StreamType">
-  : Type<
-      And<[
-        CPred<"::llvm::isa<" # cppClassName # ">($_self)">,
-        Concat<
-          "[](::mlir::Type elementType) { return ",
-          SubstLeaves<"$_self", "elementType",
-          AnyTypeOf<allowedTypes>.predicate>,
-          "; }(::llvm::cast<" # cppClassName # ">($_self).getElementType())"
-        >
-      ]>,
-      "stream of " # AnyTypeOf<allowedTypes>.summary # " values",
-      cppClassName
-    >;
+class ContainerOf<list<Type> allowedTypes, string name, string cppClassName>
+  : Type<And<[
+      CPred<"::llvm::isa<" # cppClassName # ">($_self)">,
+      Concat<
+        "[](::mlir::Type elementType) { return ",
+        SubstLeaves<"$_self", "elementType",
+        AnyTypeOf<allowedTypes>.predicate>,
+        "; }(::llvm::cast<" # cppClassName # ">($_self).getElementType())"
+      >
+    ]>,
+    name # " of " # AnyTypeOf<allowedTypes>.summary # " values",
+    cppClassName
+  >;
 
-def AnyBuffer : StaticShapeMemRefOf<[AnyType]>;
+class ITensorOf<list<Type> allowedTypes>
+  : ContainerOf<allowedTypes, "itensor", "::mlir::scalehls::hls::ITensorType">;
+
+class StreamOf<list<Type> allowedTypes>
+  : ContainerOf<allowedTypes, "stream", "::mlir::scalehls::hls::StreamType">;
+
+def AnyITensor : ITensorOf<[AnyType]>;
 def AnyStream : StreamOf<[AnyType]>;
-def AnyBufferOrStream : Type<Or<[AnyBuffer.predicate, AnyStream.predicate]>,
-    "memref or stream values">;
+def AnyBuffer : StaticShapeMemRefOf<[AnyType]>;
 
 //===----------------------------------------------------------------------===//
 // Tensor Operations
@@ -73,12 +76,10 @@ def ITensorInitOp : HLSOp<"itensor_init", [Pure]> {
   let summary = "Initiate an iterative tensor";
 
   let arguments = (ins Optional<AnyType>:$initValue);
-  let results = (outs AnyStream:$result);
+  let results = (outs AnyITensor:$result);
   let assemblyFormat = [{
     (`init` $initValue^)? attr-dict `:` functional-type(operands, results)
   }];
-
-  // let hasVerifier = 1;
 
   let builders = [
     OpBuilder<(ins "mlir::Type":$result),
@@ -89,97 +90,113 @@ def ITensorInitOp : HLSOp<"itensor_init", [Pure]> {
 def ITensorToTensorOp : HLSOp<"itensor_to_tensor", [Pure]> {
   let summary = "Convert an iterative tensor to a tensor";
 
-  let arguments = (ins AnyStream:$source);
+  let arguments = (ins AnyITensor:$source);
   let results = (outs AnyRankedTensor:$result);
   let assemblyFormat = [{
     $source attr-dict `:` functional-type(operands, results)
   }];
 
-  // let hasVerifier = 1;
+  let hasVerifier = 1;
+
+  let extraClassDeclaration = [{
+    ITensorType getSourceType() { return getSource().getType(); }
+    RankedTensorType getResultType() { return getResult().getType(); }
+  }];
 }
 
 def TensorToITensorOp : HLSOp<"tensor_to_itensor", [Pure]> {
   let summary = "Convert a tensor to an iterative tensor";
 
   let arguments = (ins AnyRankedTensor:$source);
-  let results = (outs AnyStream:$result);
+  let results = (outs AnyITensor:$result);
   let assemblyFormat = [{
     $source attr-dict `:` functional-type(operands, results)
   }];
 
-  // let hasVerifier = 1;
+  let hasVerifier = 1;
   let hasFolder = 1;
+
+  let extraClassDeclaration = [{
+    RankedTensorType getSourceType() { return getSource().getType(); }
+    ITensorType getResultType() { return getResult().getType(); }
+  }];
 }
 
 def ITensorReadOp : HLSOp<"itensor_read", [Pure]> {
   let summary = "Read an element from an iterative tensor";
 
-  let arguments = (ins AnyStream:$source, Optional<AnyRankedTensor>:$init);
+  let arguments = (ins AnyITensor:$source, Optional<AnyRankedTensor>:$init);
   let results = (outs AnyType:$value);
   let assemblyFormat = [{
     $source (`to` $init^)? attr-dict `:` functional-type(operands, results)
   }];
 
-  // let hasVerifier = 1;
+  let hasVerifier = 1;
   let builders = [
     OpBuilder<(ins "mlir::Type":$value, "mlir::Value":$source),
         "build($_builder, $_state, value, source, nullptr);">
   ];
+
+  let extraClassDeclaration = [{
+    ITensorType getSourceType() { return getSource().getType(); }
+    std::optional<RankedTensorType> getInitType() {
+      if (getInit())
+        return getInit().getType();
+      return std::nullopt;
+    }
+    Type getValueType() { return getValue().getType(); }
+  }];
 }
 
 def ITensorWriteOp : HLSOp<"itensor_write", [Pure]> {
   let summary = "Write an element to an iterative tensor";
 
-  let arguments = (ins AnyType:$value, AnyStream:$init);
-  let results = (outs AnyStream:$result);
+  let arguments = (ins AnyType:$value, AnyITensor:$init);
+  let results = (outs AnyITensor:$result);
   let assemblyFormat = [{
     $value `into` $init attr-dict `:` functional-type(operands, results)
   }];
 
-  // let hasVerifier = 1;
+  let hasVerifier = 1;
+
+  let extraClassDeclaration = [{
+    Type getValueType() { return getValue().getType(); }
+    ITensorType getInitType() { return getInit().getType(); }
+    ITensorType getResultType() { return getResult().getType(); }
+  }];
 }
 
-def ITensorBufferOp : HLSOp<"itensor_buffer", [Pure]> {
+def ITensorBufferOp : HLSOp<"itensor_buffer", [Pure,
+      DeclareOpInterfaceMethods<ITensorViewLikeInterface>]> {
   let summary = "Buffer an iterative tensor at a specific position";
 
-  let arguments = (ins AnyStream:$source, TypeAttr:$bufferElementType,
+  let arguments = (ins AnyITensor:$source, TypeAttr:$bufferElementType,
       DenseI64ArrayAttr:$bufferShape, SI64Attr:$loopIndex, SI64Attr:$dimIndex);
-  let results = (outs AnyStream:$result);
+  let results = (outs AnyITensor:$result);
   let assemblyFormat = [{
     $source `,` $bufferElementType $bufferShape `before` `loop`
     $loopIndex `dim` $dimIndex attr-dict `:` functional-type(operands, results)
   }];
 
-  // let hasVerifier = 1;
-}
-
-def ITensorForkOp : HLSOp<"itensor_fork", [Pure]> {
-  let summary = "Fork an iterative tensor to multiple iterative tensors";
-
-  let arguments = (ins AnyStream:$source);
-  let results = (outs Variadic<AnyStream>:$results);
-  let assemblyFormat = [{
-    $source attr-dict `:` functional-type(operands, results)
-  }];
-
-  // let hasVerifier = 1;
+  let hasVerifier = 1;
+  let hasFolder = 1;
 }
 
 def ITensorReassociateOp : HLSOp<"itensor_reassociate", [Pure,
-      DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
+      DeclareOpInterfaceMethods<ITensorViewLikeInterface>]> {
   let summary = "Reassociate the shape and/or iteration of an iterative tensor";
 
-  let arguments = (ins AnyStream:$source, UnitAttr:$expandShape,
+  let arguments = (ins AnyITensor:$source, UnitAttr:$expandShape,
         IndexListArrayAttr:$shapeReassociation, UnitAttr:$expandIteration,
         IndexListArrayAttr:$iterationReassociation);
-  let results = (outs AnyStream:$result);
+  let results = (outs AnyITensor:$result);
   let assemblyFormat = [{
     $source (`expand` $expandShape^):(`collapse`)? `shape` $shapeReassociation
     (`expand` $expandIteration^):(`collapse`)? `iteration`
     $iterationReassociation attr-dict `:` functional-type(operands, results)
   }];
 
-  // let hasVerifier = 1;
+  let hasVerifier = 1;
   let hasFolder = 1;
 
   let extraClassDeclaration = [{
@@ -204,17 +221,71 @@ def ITensorReassociateOp : HLSOp<"itensor_reassociate", [Pure,
 }
 
 def ITensorCastOp : HLSOp<"itensor_cast", [Pure,
-      DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
+      DeclareOpInterfaceMethods<ITensorViewLikeInterface>]> {
   let summary = "Cast an iterative tensor to a different type";
 
-  let arguments = (ins AnyStream:$source);
-  let results = (outs AnyStream:$result);
+  let arguments = (ins AnyITensor:$source);
+  let results = (outs AnyITensor:$result);
   let assemblyFormat = [{
     $source attr-dict `:` functional-type(operands, results)
   }];
 
-  // let hasVerifier = 1;
+  let hasVerifier = 1;
   let hasFolder = 1;
+}
+
+//===----------------------------------------------------------------------===//
+// Streamerization Operations
+//===----------------------------------------------------------------------===//
+
+def ITensorAllocOp : HLSOp<"itensor_alloc"> {
+  let summary = "Allocate an iterative tensor";
+
+  let arguments = (ins Optional<AnyType>:$initValue);
+  let results = (outs AnyITensor:$result);
+  let assemblyFormat = [{
+    (`init` $initValue^)? attr-dict `:` functional-type(operands, results)
+  }];
+
+  // let hasVerifier = 1;
+  // let hasCanonicalizeMethod = 1;
+
+  let builders = [
+    OpBuilder<(ins "mlir::Type":$result),
+        "build($_builder, $_state, result, nullptr);">
+  ];
+}
+
+def StreamToITensorOp : HLSOp<"stream_to_itensor"> {
+  let summary = "Convert a stream channel to a itensor";
+
+  let arguments = (ins AnyStream:$stream);
+  let results = (outs AnyITensor:$iTensor);
+  let assemblyFormat = [{
+    $stream attr-dict `:` functional-type(operands, results)
+  }];
+
+  let extraClassDeclaration = [{
+    StreamType getStreamType() { return getStream().getType(); }
+    ITensorType getITensorType() { return getITensor().getType(); }
+  }];
+}
+
+def ITensorToStreamOp : HLSOp<"itensor_to_stream"> {
+  let summary = "Convert an itensor to a stream channel";
+
+  let arguments = (ins ITensorType:$iTensor);
+  let results = (outs AnyStream:$stream);
+  let assemblyFormat = [{
+    $iTensor attr-dict `:` functional-type(operands, results)
+  }];
+
+  let hasFolder = 1;
+
+  let extraClassDeclaration = [{
+    ITensorType getITensorType() { return getITensor().getType(); }
+    StreamType getStreamType() { return getStream().getType(); }
+  }];
 }
 
 //===----------------------------------------------------------------------===//
@@ -230,189 +301,44 @@ def StreamOp : HLSOp<"stream", [
 
   let hasVerifier = 1;
   let hasCanonicalizeMethod = 1;
-
-  let extraClassDeclaration = [{
-    /// Get all the uses that have read/write effect on this stream.
-    SmallVector<OpOperand *> getReadUses();
-    SmallVector<OpOperand *> getWriteUses();
-
-    /// Get the single use that has read/write effect on this stream. The
-    /// verifier should ensure there is only one read/write use.
-    OpOperand *getSingleReadUse() { return getReadUses().front(); }
-    OpOperand *getSingleWriteUse() { return getWriteUses().front(); }
-  }];
 }
 
-def StreamToTensorOp : HLSOp<"stream_to_tensor", [
-    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
-    DeclareOpInterfaceMethods<StreamReadLikeInterface>]> {
-  let summary = "Convert a stream channel to a tensor";
+def StreamReadOp : HLSOp<"stream_read", [
+    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+  let summary = "Read an element from stream channel";
+  let description = [{
+    Read/pop a value from a stream channel.
+  }];
 
   let arguments = (ins AnyStream:$source);
-  let results = (outs AnyRankedTensor:$tensor);
+  let results = (outs AnyType:$value);
   let assemblyFormat = [{
     $source attr-dict `:` functional-type(operands, results)
   }];
 
-  let hasVerifier = 1;
-
   let extraClassDeclaration = [{
-    RankedTensorType getTensorType() { return getTensor().getType(); }
-  }];
-}
-
-def TensorToStreamOp : HLSOp<"tensor_to_stream", [
-    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
-    DeclareOpInterfaceMethods<StreamWriteLikeInterface>]> {
-  let summary = "Convert a tensor to a stream channel";
-
-  let arguments = (ins AnyRankedTensor:$tensor, Variadic<AnyStream>:$dests);
-  let assemblyFormat = [{
-    $tensor `to` $dests attr-dict `:` type(operands)
-  }];
-
-  let hasVerifier = 1;
-
-  let extraClassDeclaration = [{
-    RankedTensorType getTensorType() { return getTensor().getType(); }
-  }];
-}
-
-def StreamReadOp : HLSOp<"stream_read", [
-    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
-    DeclareOpInterfaceMethods<StreamReadLikeInterface>]> {
-  let summary = "Read an element from stream channel";
-  let description = [{
-    Read/pop a value from a stream channel. The absence of the result indicates
-    the popped value is dropped. Each stream channel can be read multiple times.
-  }];
-
-  let arguments = (ins AnyStream:$source, Optional<AnyRankedTensor>:$init);
-  let results = (outs AnyType:$value);
-  let assemblyFormat = [{
-    $source (`to` $init^)? attr-dict `:` functional-type(operands, results)
-  }];
-
-  let hasVerifier = 1;
-  let builders = [
-    OpBuilder<(ins "mlir::Type":$value, "mlir::Value":$source),
-        "build($_builder, $_state, value, source, nullptr);">
-  ];
-
-  let extraClassDeclaration = [{
-    std::optional<RankedTensorType> getInitType() {
-      if (getInit())
-        return getInit().getType();
-      return std::nullopt;
-    }
+    StreamType getSourceType() { return getSource().getType(); }
     Type getValueType() { return getValue().getType(); }
   }];
 }
 
 def StreamWriteOp : HLSOp<"stream_write", [
-    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
-    DeclareOpInterfaceMethods<StreamWriteLikeInterface>]> {
+    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Write an element to stream channel";
   let description = [{
     Write/push a value to a stream channel. Each stream channel can only be
     written once.
   }];
 
-  let arguments = (ins AnyType:$value, Variadic<AnyStream>:$dests);
+  let arguments = (ins AnyType:$value, AnyStream:$dest);
   let assemblyFormat = [{
-    $value `into` $dests attr-dict `:` type(operands)
+    $value `into` $dest attr-dict `:` type(operands)
   }];
 
-  let hasVerifier = 1;
-
   let extraClassDeclaration = [{
+    StreamType getDestType() { return getDest().getType(); }
     Type getValueType() { return getValue().getType(); }
   }];
-}
-
-def StreamBufferOp : HLSOp<"stream_buffer", [
-    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
-    DeclareOpInterfaceMethods<StreamReadLikeInterface>,
-    DeclareOpInterfaceMethods<StreamWriteLikeInterface>]> {
-  let summary = "Buffer a stream channel at a specific position";
-
-  let arguments = (ins AnyStream:$source, Variadic<AnyStream>:$dests,
-      TypeAttr:$bufferElementType, DenseI64ArrayAttr:$bufferShape,
-      SI64Attr:$loopIndex, SI64Attr:$dimIndex);
-  let assemblyFormat = [{
-    $source `into` $dests `,` $bufferElementType $bufferShape `before` `loop`
-    $loopIndex `dim` $dimIndex attr-dict `:` type(operands)
-  }];
-
-  let hasVerifier = 1;
-  let hasCanonicalizeMethod = 1;
-}
-
-def StreamForkOp : HLSOp<"stream_fork", [
-    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>,
-    DeclareOpInterfaceMethods<StreamReadLikeInterface>,
-    DeclareOpInterfaceMethods<StreamWriteLikeInterface>]> {
-  let summary = "Fork a stream channel to multiple stream channels";
-
-  let arguments = (ins AnyStream:$source, Variadic<AnyStream>:$dests);
-  let assemblyFormat = [{
-    $source `into` $dests attr-dict `:` type(operands)
-  }];
-
-  let hasVerifier = 1;
-  let hasCanonicalizer = 1;
-}
-
-def StreamReassociateOp : HLSOp<"stream_reassociate", [Pure,
-      DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
-  let summary = "Reassociate the shape and/or iteration of a stream channel";
-
-  let arguments = (ins AnyStream:$source, UnitAttr:$expandShape,
-        IndexListArrayAttr:$shapeReassociation, UnitAttr:$expandIteration,
-        IndexListArrayAttr:$iterationReassociation);
-  let results = (outs AnyStream:$result);
-  let assemblyFormat = [{
-    $source (`expand` $expandShape^):(`collapse`)? `shape` $shapeReassociation
-    (`expand` $expandIteration^):(`collapse`)? `iteration`
-    $iterationReassociation attr-dict `:` functional-type(operands, results)
-  }];
-
-  let hasVerifier = 1;
-  let hasFolder = 1;
-
-  let extraClassDeclaration = [{
-    static SmallVector<ReassociationIndices> 
-    getReassociationIndices(ArrayAttr reassociationAttr) {
-      SmallVector<ReassociationIndices> indices;
-      for (auto attr : reassociationAttr)
-        indices.push_back(llvm::to_vector<2>(
-            llvm::map_range(cast<ArrayAttr>(attr), [&](Attribute indexAttr) {
-              return cast<IntegerAttr>(indexAttr).getInt();
-            })));
-      return indices;
-    }
-
-    SmallVector<ReassociationIndices> getShapeReassociationIndices() {
-      return getReassociationIndices(getShapeReassociation());
-    }
-    SmallVector<ReassociationIndices> getIterationReassociationIndices() {
-      return getReassociationIndices(getIterationReassociation());
-    }
-  }];
-}
-
-def StreamCastOp : HLSOp<"stream_cast", [Pure,
-      DeclareOpInterfaceMethods<StreamViewLikeInterface>]> {
-  let summary = "Cast a stream channel to a different type";
-
-  let arguments = (ins AnyStream:$source);
-  let results = (outs AnyStream:$result); 
-  let assemblyFormat = [{
-    $source attr-dict `:` functional-type(operands, results)
-  }];
-
-  let hasVerifier = 1;
-  let hasFolder = 1;
 }
 
 //===----------------------------------------------------------------------===//

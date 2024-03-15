@@ -33,6 +33,8 @@ constructLoops(ArrayRef<int64_t> tripCounts, ArrayRef<int64_t> steps,
 SmallVector<scf::ForOp> getSurroundingLoops(Operation *target,
                                             Block *sourceBlock);
 
+Value getUntiledOperand(Value value);
+
 std::optional<SmallVector<int64_t>>
 getLoopSteps(const SmallVector<scf::ForOp> &loops);
 

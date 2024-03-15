@@ -136,7 +136,7 @@ def convert_generic_op_to_stream(target: Value, parallel_tile_sizes: List[int], 
 
     match_result = match_linalg_result(
         tile_op.tiled_linalg_op, "tensor.insert_slice")
-    hls_transform.HLSConvertInsertSliceToStreamOp(
+    hls_transform.HLSConvertInsertSliceToITensorOp(
         transform.OperationType.get("hls.itensor_init"),
         transform.OperationType.get("hls.itensor_write"),
         transform.OperationType.get("hls.itensor_to_tensor"),
@@ -163,7 +163,7 @@ def convert_generic_op_to_stream(target: Value, parallel_tile_sizes: List[int], 
             merge_op = hls_transform.HLSMergeConsecutiveExtractSliceOp(
                 transform.OperationType.get("tensor.extract_slice"),
                 match_input)
-            convert_op = hls_transform.HLSConvertExtractSliceToStreamOp(
+            convert_op = hls_transform.HLSConvertExtractSliceToITensorOp(
                 transform.OperationType.get("hls.tensor_to_itensor"),
                 transform.OperationType.get("hls.itensor_read"),
                 merge_op.result)
@@ -175,7 +175,7 @@ def convert_generic_op_to_stream(target: Value, parallel_tile_sizes: List[int], 
 
 
 def convert_expand_shape_op_to_stream(target: Value, source_tile_sizes: List[int], result_tile_sizes: List[int]):
-    stream_op = hls_transform.HLSConvertExpandShapeToStreamOp(
+    stream_op = hls_transform.HLSConvertExpandShapeToITensorOp(
         transform.OperationType.get("hls.tensor_to_itensor"),
         transform.OperationType.get("hls.itensor_reassociate"),
         transform.OperationType.get("hls.itensor_to_tensor"),
@@ -186,7 +186,7 @@ def convert_expand_shape_op_to_stream(target: Value, source_tile_sizes: List[int
 
 
 def convert_collapse_shape_op_to_stream(target: Value, source_tile_sizes: List[int], result_tile_sizes: List[int]):
-    stream_op = hls_transform.HLSConvertCollapseShapeToStreamOp(
+    stream_op = hls_transform.HLSConvertCollapseShapeToITensorOp(
         transform.OperationType.get("hls.tensor_to_itensor"),
         transform.OperationType.get("hls.itensor_reassociate"),
         transform.OperationType.get("hls.itensor_to_tensor"),
@@ -347,7 +347,7 @@ def apply_linalg_transform_passes(module: Module):
     pm.run(module.operation)
 
 
-def construct_tiling_and_streaming_transform_sequence(module: Module, graph: nx.Graph):
+def construct_tiling_and_tensor_reduction_transform_sequence(module: Module, graph: nx.Graph):
     sequence, target = transform_sequence(module)
     with InsertionPoint.at_block_begin(sequence.body):
         for node, data in graph.nodes(data=True):
@@ -389,22 +389,22 @@ def apply_transform_sequence(module: Module, sequence: transform.NamedSequenceOp
     pm.run(module.operation)
 
 
-def apply_reduce_tensor_to_stream(module: Module):
+def apply_reduce_tensor_to_itensor(module: Module):
     pm = PassManager.parse(
-        "builtin.module(func.func(scalehls-reduce-tensor-to-stream), cse, canonicalize)")
+        "builtin.module(func.func(scalehls-reduce-tensor-to-itensor), cse, canonicalize)")
     pm.run(module.operation)
 
 
-def apply_materialize_stream(module: Module, enable_packing: bool = False):
+def apply_materialize_itensor(module: Module, enable_packing: bool = False):
     enable_packing_str = "true" if enable_packing else "false"
     pm = PassManager.parse(
-        "builtin.module(func.func(scalehls-materialize-stream{enable-packing=" + enable_packing_str + "}), cse, canonicalize)")
+        "builtin.module(func.func(scalehls-materialize-itensor{enable-packing=" + enable_packing_str + "}), cse, canonicalize)")
     pm.run(module.operation)
 
 
-def apply_scalarize_stream(module: Module):
+def apply_scalarize_itensor(module: Module):
     pm = PassManager.parse(
-        "builtin.module(func.func(scalehls-scalarize-stream), cse, canonicalize)")
+        "builtin.module(func.func(scalehls-scalarize-itensor), cse, canonicalize)")
     pm.run(module.operation)
 
 

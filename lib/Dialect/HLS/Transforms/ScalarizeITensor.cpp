@@ -13,45 +13,47 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
-static StreamType getScalarStreamType(StreamType stream) {
-  if (auto shapedElement = stream.getShapedElementType()) {
-    SmallVector<int64_t> scalarIterTripCounts(stream.getIterTripCounts());
+static ITensorType getScalarITensorType(ITensorType iTensor) {
+  if (auto shapedElement = iTensor.getShapedElementType()) {
+    SmallVector<int64_t> scalarIterTripCounts(iTensor.getIterTripCounts());
     scalarIterTripCounts.append(shapedElement.getShape().begin(),
                                 shapedElement.getShape().end());
 
-    SmallVector<int64_t> scalarIterSteps(stream.getIterSteps());
+    SmallVector<int64_t> scalarIterSteps(iTensor.getIterSteps());
     scalarIterSteps.append(shapedElement.getRank(), 1);
 
     SmallVector<AffineExpr> scalarIterExprs;
-    for (auto [dim, expr] : llvm::enumerate(stream.getIterMap().getResults())) {
-      auto newExpr = expr + getAffineDimExpr(stream.getIterRank() + dim,
-                                             stream.getContext());
+    for (auto [dim, expr] :
+         llvm::enumerate(iTensor.getIterMap().getResults())) {
+      auto newExpr = expr + getAffineDimExpr(iTensor.getIterRank() + dim,
+                                             iTensor.getContext());
       scalarIterExprs.push_back(newExpr);
     }
 
     auto scalarIterMap =
-        AffineMap::get(stream.getIterRank() + shapedElement.getRank(), 0,
-                       scalarIterExprs, stream.getContext());
-    return StreamType::get(shapedElement.getElementType(), scalarIterTripCounts,
-                           scalarIterSteps, scalarIterMap, stream.getDepth());
+        AffineMap::get(iTensor.getIterRank() + shapedElement.getRank(), 0,
+                       scalarIterExprs, iTensor.getContext());
+    return ITensorType::get(shapedElement.getElementType(),
+                            scalarIterTripCounts, scalarIterSteps,
+                            scalarIterMap, iTensor.getDepth());
   }
-  return stream;
+  return iTensor;
 }
 
 namespace {
-struct ScalarizeStreamOp : public OpRewritePattern<hls::ITensorInitOp> {
+struct ScalarizeITensorOp : public OpRewritePattern<hls::ITensorInitOp> {
   using OpRewritePattern<hls::ITensorInitOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(hls::ITensorInitOp channel,
                                 PatternRewriter &rewriter) const override {
-    auto streamType = channel.getType();
-    if (!streamType.hasShapedElementType())
+    auto iTensorType = channel.getType();
+    if (!iTensorType.hasShapedElementType())
       return failure();
 
-    channel.getResult().setType(getScalarStreamType(streamType));
+    channel.getResult().setType(getScalarITensorType(iTensorType));
     rewriter.setInsertionPointAfter(channel);
     auto cast = rewriter.create<hls::ITensorCastOp>(channel.getLoc(),
-                                                    streamType, channel);
+                                                    iTensorType, channel);
     rewriter.replaceAllUsesExcept(channel, cast.getResult(), cast);
     return success();
   }
@@ -59,22 +61,22 @@ struct ScalarizeStreamOp : public OpRewritePattern<hls::ITensorInitOp> {
 } // namespace
 
 namespace {
-struct ScalarizeStreamReadOp : public OpRewritePattern<hls::ITensorReadOp> {
+struct ScalarizeITensorReadOp : public OpRewritePattern<hls::ITensorReadOp> {
   using OpRewritePattern<hls::ITensorReadOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(hls::ITensorReadOp read,
                                 PatternRewriter &rewriter) const override {
-    auto streamType = read.getSource().getType();
-    if (!streamType.hasShapedElementType())
+    auto iTensorType = read.getSource().getType();
+    if (!iTensorType.hasShapedElementType())
       return failure();
 
     auto loc = read.getLoc();
     rewriter.setInsertionPointAfterValue(read.getSource());
     auto cast = rewriter.create<hls::ITensorCastOp>(
-        loc, getScalarStreamType(streamType), read.getSource());
+        loc, getScalarITensorType(iTensorType), read.getSource());
 
     rewriter.setInsertionPoint(read);
-    auto elementType = streamType.getShapedElementType();
+    auto elementType = iTensorType.getShapedElementType();
     auto init = read.getInit();
     if (!init)
       init = rewriter.create<hls::TensorInitOp>(loc, elementType);
@@ -95,23 +97,23 @@ struct ScalarizeStreamReadOp : public OpRewritePattern<hls::ITensorReadOp> {
 } // namespace
 
 namespace {
-struct ScalarizeStreamWriteOp : public OpRewritePattern<hls::ITensorWriteOp> {
+struct ScalarizeITensorWriteOp : public OpRewritePattern<hls::ITensorWriteOp> {
   using OpRewritePattern<hls::ITensorWriteOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(hls::ITensorWriteOp write,
                                 PatternRewriter &rewriter) const override {
-    auto streamType = write.getResult().getType();
-    if (!streamType.hasShapedElementType())
+    auto iTensorType = write.getResult().getType();
+    if (!iTensorType.hasShapedElementType())
       return failure();
 
     auto loc = write.getLoc();
-    auto scalarStreamType = getScalarStreamType(streamType);
+    auto scalarITensorType = getScalarITensorType(iTensorType);
     rewriter.setInsertionPointAfterValue(write.getInit());
-    auto cast = rewriter.create<hls::ITensorCastOp>(loc, scalarStreamType,
+    auto cast = rewriter.create<hls::ITensorCastOp>(loc, scalarITensorType,
                                                     write.getInit());
 
     rewriter.setInsertionPoint(write);
-    auto elementType = streamType.getShapedElementType();
+    auto elementType = iTensorType.getShapedElementType();
     auto [ivs, result, iterArg] = constructLoops(
         elementType.getShape(), SmallVector<int64_t>(elementType.getRank(), 1),
         loc, rewriter, cast);
@@ -119,12 +121,12 @@ struct ScalarizeStreamWriteOp : public OpRewritePattern<hls::ITensorWriteOp> {
     auto extract =
         rewriter.create<tensor::ExtractOp>(loc, write.getValue(), ivs);
     auto scalarWrite = rewriter.create<hls::ITensorWriteOp>(
-        loc, scalarStreamType, extract.getResult(), iterArg);
+        loc, scalarITensorType, extract.getResult(), iterArg);
     rewriter.create<scf::YieldOp>(loc, scalarWrite.getResult());
 
     rewriter.setInsertionPointAfterValue(result);
     auto castBack =
-        rewriter.create<hls::ITensorCastOp>(loc, streamType, result);
+        rewriter.create<hls::ITensorCastOp>(loc, iTensorType, result);
     rewriter.replaceOp(write, castBack);
     return success();
   }
@@ -150,7 +152,7 @@ static SmallVector<Attribute> getScalarIterationReassociation(
 }
 
 namespace {
-struct ScalarizeStreamReassociateOp
+struct ScalarizeITensorReassociateOp
     : public OpRewritePattern<hls::ITensorReassociateOp> {
   using OpRewritePattern<hls::ITensorReassociateOp>::OpRewritePattern;
 
@@ -164,14 +166,14 @@ struct ScalarizeStreamReassociateOp
 
     auto loc = op.getLoc();
     auto inputCast = rewriter.create<hls::ITensorCastOp>(
-        loc, getScalarStreamType(sourceType), op.getSource());
+        loc, getScalarITensorType(sourceType), op.getSource());
 
     auto scalarIterationReassociation =
         rewriter.getArrayAttr(getScalarIterationReassociation(
             op.getIterationReassociationIndices(),
             op.getShapeReassociationIndices(), rewriter));
     auto scalarOp = rewriter.create<hls::ITensorReassociateOp>(
-        loc, getScalarStreamType(resultType), inputCast, op.getExpandShape(),
+        loc, getScalarITensorType(resultType), inputCast, op.getExpandShape(),
         op.getShapeReassociation(), op.getExpandIteration(),
         scalarIterationReassociation);
 
@@ -193,15 +195,15 @@ struct ScalarizeForOp : public OpRewritePattern<scf::ForOp> {
     for (auto [initArg, iterArg, yieldedValue, result] :
          llvm::zip(op.getInitArgs(), op.getRegionIterArgs(),
                    op.getYieldedValues(), op.getResults())) {
-      auto streamType = dyn_cast<StreamType>(result.getType());
-      if (streamType && streamType.hasShapedElementType()) {
+      auto iTensorType = dyn_cast<ITensorType>(result.getType());
+      if (iTensorType && iTensorType.hasShapedElementType()) {
         hasChanged = true;
-        auto scalarStreamType = getScalarStreamType(streamType);
+        auto scalarITensorType = getScalarITensorType(iTensorType);
 
         // Cast the initial argument's type.
         rewriter.setInsertionPoint(op);
         auto initArgCast = rewriter.create<hls::ITensorCastOp>(
-            op.getLoc(), scalarStreamType, initArg);
+            op.getLoc(), scalarITensorType, initArg);
         rewriter.replaceUsesWithIf(
             initArg, initArgCast,
             [&](OpOperand &operand) { return operand.getOwner() == op; });
@@ -209,14 +211,14 @@ struct ScalarizeForOp : public OpRewritePattern<scf::ForOp> {
         // Cast the iteration argument's type.
         rewriter.setInsertionPointToStart(op.getBody());
         auto iterArgCast = rewriter.create<hls::ITensorCastOp>(
-            op.getLoc(), streamType, iterArg);
+            op.getLoc(), iTensorType, iterArg);
         rewriter.replaceAllUsesExcept(iterArg, iterArgCast, iterArgCast);
-        iterArg.setType(scalarStreamType);
+        iterArg.setType(scalarITensorType);
 
         // Cast the yeilded value's type.
         rewriter.setInsertionPoint(yieldOp);
         auto yieldedValueCast = rewriter.create<hls::ITensorCastOp>(
-            op.getLoc(), scalarStreamType, yieldedValue);
+            op.getLoc(), scalarITensorType, yieldedValue);
         rewriter.replaceUsesWithIf(
             yieldedValue, yieldedValueCast,
             [&](OpOperand &operand) { return operand.getOwner() == yieldOp; });
@@ -224,9 +226,9 @@ struct ScalarizeForOp : public OpRewritePattern<scf::ForOp> {
         // Cast the loop result's type.
         rewriter.setInsertionPointAfter(op);
         auto resultCast = rewriter.create<hls::ITensorCastOp>(
-            op.getLoc(), streamType, result);
+            op.getLoc(), iTensorType, result);
         rewriter.replaceAllUsesExcept(result, resultCast, resultCast);
-        result.setType(scalarStreamType);
+        result.setType(scalarITensorType);
       }
     }
     return success(hasChanged);
@@ -246,23 +248,23 @@ struct ScalarizeScheduleOrTaskOp : public OpRewritePattern<OpTy> {
 
     for (auto [yieldedValue, result] :
          llvm::zip(yieldOp.getOperands(), op.getResults())) {
-      auto streamType = dyn_cast<StreamType>(result.getType());
-      if (streamType && streamType.hasShapedElementType()) {
+      auto iTensorType = dyn_cast<ITensorType>(result.getType());
+      if (iTensorType && iTensorType.hasShapedElementType()) {
         hasChanged = true;
-        auto scalarStreamType = getScalarStreamType(streamType);
+        auto scalarITensorType = getScalarITensorType(iTensorType);
 
         rewriter.setInsertionPoint(yieldOp);
         auto cast = rewriter.create<hls::ITensorCastOp>(
-            op.getLoc(), scalarStreamType, yieldedValue);
+            op.getLoc(), scalarITensorType, yieldedValue);
         rewriter.replaceUsesWithIf(yieldedValue, cast, [&](OpOperand &operand) {
           return operand.getOwner() == yieldOp;
         });
 
         rewriter.setInsertionPointAfter(op);
-        auto castBack = rewriter.create<hls::ITensorCastOp>(op.getLoc(),
-                                                            streamType, result);
+        auto castBack = rewriter.create<hls::ITensorCastOp>(
+            op.getLoc(), iTensorType, result);
         rewriter.replaceAllUsesExcept(result, castBack, castBack);
-        result.setType(scalarStreamType);
+        result.setType(scalarITensorType);
       }
     }
     return success(hasChanged);
@@ -271,16 +273,16 @@ struct ScalarizeScheduleOrTaskOp : public OpRewritePattern<OpTy> {
 } // namespace
 
 namespace {
-struct ScalarizeStream : public ScalarizeStreamBase<ScalarizeStream> {
+struct ScalarizeITensor : public ScalarizeITensorBase<ScalarizeITensor> {
   void runOnOperation() override {
     auto op = getOperation();
     auto context = op->getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<ScalarizeStreamOp>(context);
-    patterns.add<ScalarizeStreamReadOp>(context);
-    patterns.add<ScalarizeStreamWriteOp>(context);
-    patterns.add<ScalarizeStreamReassociateOp>(context);
+    patterns.add<ScalarizeITensorOp>(context);
+    patterns.add<ScalarizeITensorReadOp>(context);
+    patterns.add<ScalarizeITensorWriteOp>(context);
+    patterns.add<ScalarizeITensorReassociateOp>(context);
     patterns.add<ScalarizeForOp>(context);
     patterns.add<ScalarizeScheduleOrTaskOp<hls::ScheduleOp>>(context);
     patterns.add<ScalarizeScheduleOrTaskOp<hls::TaskOp>>(context);
@@ -289,6 +291,6 @@ struct ScalarizeStream : public ScalarizeStreamBase<ScalarizeStream> {
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::hls::createScalarizeStreamPass() {
-  return std::make_unique<ScalarizeStream>();
+std::unique_ptr<Pass> scalehls::hls::createScalarizeITensorPass() {
+  return std::make_unique<ScalarizeITensor>();
 }

@@ -702,10 +702,8 @@ void ModuleEmitter::emitStreamChannel(StreamOp op) {
 
 void ModuleEmitter::emitStreamRead(StreamReadOp op) {
   indent();
-  if (op.getResult()) {
-    emitValue(op.getResult());
-    os << " = ";
-  }
+  emitValue(op.getResult());
+  os << " = ";
   emitValue(op.getSource());
   os << ".read(";
   os << ");";
@@ -713,14 +711,12 @@ void ModuleEmitter::emitStreamRead(StreamReadOp op) {
 }
 
 void ModuleEmitter::emitStreamWrite(StreamWriteOp op) {
-  for (auto dest : op.getDests()) {
-    indent();
-    emitValue(dest);
-    os << ".write(";
-    emitValue(op.getValue());
-    os << ");";
-    emitInfoAndNewLine(op);
-  }
+  indent();
+  emitValue(op.getDest());
+  os << ".write(";
+  emitValue(op.getValue());
+  os << ");";
+  emitInfoAndNewLine(op);
 }
 
 template <typename AssignOpType>

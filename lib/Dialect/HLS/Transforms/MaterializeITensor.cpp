@@ -71,14 +71,14 @@ static SmallVector<ReassociationIndices> getPackingReassociation(int64_t rank) {
   return reassociation;
 }
 
-/// Extract a slice from the tensor and write to the stream channel. If
+/// Extract a slice from the tensor and write to the iterative tensor. If
 /// "packing" is true, the slice is extracted from the packed tensor and shape
-/// collapsed before writing to the stream channel.
-static TypedValue<StreamType>
-extactSliceAndWriteStream(ArrayRef<Value> ivs, TypedValue<StreamType> channel,
-                          TypedValue<RankedTensorType> tensor, bool packing,
-                          Location loc, PatternRewriter &rewriter) {
-  auto streamType = cast<StreamType>(channel.getType());
+/// collapsed before writing to the iterative tensor.
+static TypedValue<ITensorType>
+extactSliceAndWriteITensor(ArrayRef<Value> ivs, TypedValue<ITensorType> channel,
+                           TypedValue<RankedTensorType> tensor, bool packing,
+                           Location loc, PatternRewriter &rewriter) {
+  auto streamType = cast<ITensorType>(channel.getType());
 
   auto [offsets, sizes, strides] =
       getSliceInfo(ivs, streamType.getIterMap().getResults(),
@@ -91,13 +91,13 @@ extactSliceAndWriteStream(ArrayRef<Value> ivs, TypedValue<StreamType> channel,
   return rewriter.create<hls::ITensorWriteOp>(loc, streamType, slice, channel);
 }
 
-/// Read from the stream channel and insert the slice to the tensor. If
-/// "packing" is true, the slice is read from the stream channel and shape
+/// Read from the iterative tensor and insert the slice to the tensor. If
+/// "packing" is true, the slice is read from the iterative tensor and shape
 /// expanded before inserting to the tensor.
 static TypedValue<RankedTensorType>
-readStreamAndInsertSlice(ArrayRef<Value> ivs, TypedValue<StreamType> channel,
-                         TypedValue<RankedTensorType> tensor, bool packing,
-                         Location loc, PatternRewriter &rewriter) {
+readITensorAndInsertSlice(ArrayRef<Value> ivs, TypedValue<ITensorType> channel,
+                          TypedValue<RankedTensorType> tensor, bool packing,
+                          Location loc, PatternRewriter &rewriter) {
   auto streamType = channel.getType();
   auto [offsets, sizes, strides] =
       getSliceInfo(ivs, streamType.getIterMap().getResults(),
@@ -186,36 +186,36 @@ unpackTensor(TypedValue<RankedTensorType> tensor, ArrayRef<int64_t> tileSizes,
 }
 
 namespace {
-struct MaterializeTensorToStreamOp
+struct MaterializeTensorToITensorOp
     : public OpRewritePattern<hls::TensorToITensorOp> {
-  MaterializeTensorToStreamOp(MLIRContext *context, bool enablePacking = true,
-                              PatternBenefit benefit = 1,
-                              ArrayRef<StringRef> generatedNames = {})
+  MaterializeTensorToITensorOp(MLIRContext *context, bool enablePacking = true,
+                               PatternBenefit benefit = 1,
+                               ArrayRef<StringRef> generatedNames = {})
       : OpRewritePattern(context, benefit, generatedNames),
         enablePacking(enablePacking) {}
 
-  LogicalResult matchAndRewrite(hls::TensorToITensorOp toStream,
+  LogicalResult matchAndRewrite(hls::TensorToITensorOp toITensor,
                                 PatternRewriter &rewriter) const override {
-    auto streamType = toStream.getResult().getType();
-    auto loc = toStream.getLoc();
+    auto streamType = toITensor.getResult().getType();
+    auto loc = toITensor.getLoc();
 
     // Only if the stream type is not overlapped, we can pack the tensor to make
     // more efficient memory access pattern.
     auto packing =
         enablePacking && streamType.tileIsRegular() && streamType.getRank() > 1;
-    auto source = toStream.getSource();
+    auto source = toITensor.getSource();
     if (packing)
       source = packTensor(source, streamType.getElementShape(), loc, rewriter);
 
-    // Create a new stream channel, then construct a loop nest to extract
-    // stream element from the tensor and write to the stream channel.
+    // Create a new iterative tensor, then construct a loop nest to extract
+    // stream element from the tensor and write to the iterative tensor.
     auto itensorInit = rewriter.create<hls::ITensorInitOp>(loc, streamType);
     auto [ivs, result, iterArg] =
         constructLoops(streamType.getIterTripCounts(),
                        streamType.getIterSteps(), loc, rewriter, itensorInit);
     auto newResult =
-        extactSliceAndWriteStream(ivs, cast<TypedValue<StreamType>>(iterArg),
-                                  source, packing, loc, rewriter);
+        extactSliceAndWriteITensor(ivs, cast<TypedValue<ITensorType>>(iterArg),
+                                   source, packing, loc, rewriter);
 
     // Update "result" if no loop is constructed. Otherwise, create a new yield
     // op to yield "newResult" to "result".
@@ -225,7 +225,7 @@ struct MaterializeTensorToStreamOp
       rewriter.create<scf::YieldOp>(loc, newResult);
 
     // Replace the original stream with the new stream.
-    rewriter.replaceOp(toStream, result);
+    rewriter.replaceOp(toITensor, result);
     return success();
   }
 
@@ -235,15 +235,15 @@ private:
 } // namespace
 
 namespace {
-struct MaterializeStreamToTensorOp
-    : public OpRewritePattern<hls::StreamToTensorOp> {
-  MaterializeStreamToTensorOp(MLIRContext *context, bool enablePacking = true,
-                              PatternBenefit benefit = 1,
-                              ArrayRef<StringRef> generatedNames = {})
+struct MaterializeITensorToTensorOp
+    : public OpRewritePattern<hls::ITensorToTensorOp> {
+  MaterializeITensorToTensorOp(MLIRContext *context, bool enablePacking = true,
+                               PatternBenefit benefit = 1,
+                               ArrayRef<StringRef> generatedNames = {})
       : OpRewritePattern(context, benefit, generatedNames),
         enablePacking(enablePacking) {}
 
-  LogicalResult matchAndRewrite(hls::StreamToTensorOp toTensor,
+  LogicalResult matchAndRewrite(hls::ITensorToTensorOp toTensor,
                                 PatternRewriter &rewriter) const override {
     auto streamType = toTensor.getSourceType();
     auto loc = toTensor.getLoc();
@@ -252,7 +252,7 @@ struct MaterializeStreamToTensorOp
     // more efficient memory access pattern.
     auto packing =
         enablePacking && streamType.tileIsRegular() && streamType.getRank() > 1;
-    auto targetType = toTensor.getTensor().getType();
+    auto targetType = toTensor.getResult().getType();
     if (packing)
       targetType = getPackedType(targetType, streamType.getElementShape());
 
@@ -262,7 +262,7 @@ struct MaterializeStreamToTensorOp
     auto [ivs, result, iterArg] =
         constructLoops(streamType.getIterTripCounts(),
                        streamType.getIterSteps(), loc, rewriter, tensorInit);
-    auto newResult = readStreamAndInsertSlice(
+    auto newResult = readITensorAndInsertSlice(
         ivs, toTensor.getSource(), cast<TypedValue<RankedTensorType>>(iterArg),
         packing, loc, rewriter);
 
@@ -291,11 +291,11 @@ private:
 } // namespace
 
 namespace {
-struct MaterializeStreamBufferOp
+struct MaterializeITensorBufferOp
     : public OpRewritePattern<hls::ITensorBufferOp> {
-  MaterializeStreamBufferOp(MLIRContext *context, bool enablePacking = true,
-                            PatternBenefit benefit = 1,
-                            ArrayRef<StringRef> generatedNames = {})
+  MaterializeITensorBufferOp(MLIRContext *context, bool enablePacking = true,
+                             PatternBenefit benefit = 1,
+                             ArrayRef<StringRef> generatedNames = {})
       : OpRewritePattern(context, benefit, generatedNames),
         enablePacking(enablePacking) {}
 
@@ -333,7 +333,7 @@ struct MaterializeStreamBufferOp
     // Instantiate a buffer tensor with calculated buffer type.
     auto tensorInit = rewriter.create<hls::TensorInitOp>(loc, bufferType);
 
-    // Construct loops to read from the input stream channel and insert stream
+    // Construct loops to read from the input iterative tensor and insert stream
     // element to the buffer tensor.
     auto zeroCst = rewriter.create<arith::ConstantIndexOp>(loc, 0);
     auto [inputIvs, inputResult, inputIterArg] =
@@ -342,7 +342,7 @@ struct MaterializeStreamBufferOp
                        rewriter, tensorInit);
     SmallVector<Value> bufferInputIvs(loopIndex, zeroCst);
     bufferInputIvs.append(inputIvs);
-    auto newInputResult = readStreamAndInsertSlice(
+    auto newInputResult = readITensorAndInsertSlice(
         bufferInputIvs, streamBuffer.getSource(),
         cast<TypedValue<RankedTensorType>>(inputIterArg), packing, loc,
         rewriter);
@@ -355,7 +355,7 @@ struct MaterializeStreamBufferOp
       rewriter.create<scf::YieldOp>(loc, newInputResult);
 
     // Construct loops to extract stream element from the buffer tensor and
-    // write to the output stream channel.
+    // write to the output iterative tensor.
     rewriter.setInsertionPointAfterValue(inputResult);
     auto [outputIvs, outputResult, outputIterArg] =
         constructLoops(resultType.getIterTripCounts().drop_front(loopIndex),
@@ -363,8 +363,8 @@ struct MaterializeStreamBufferOp
                        rewriter, iterArg);
     SmallVector<Value> bufferOutputIvs(loopIndex, zeroCst);
     bufferOutputIvs.append(outputIvs);
-    auto newOutputResult = extactSliceAndWriteStream(
-        bufferOutputIvs, cast<TypedValue<StreamType>>(outputIterArg),
+    auto newOutputResult = extactSliceAndWriteITensor(
+        bufferOutputIvs, cast<TypedValue<ITensorType>>(outputIterArg),
         cast<TypedValue<RankedTensorType>>(inputResult), packing, loc,
         rewriter);
 
@@ -394,17 +394,6 @@ private:
 } // namespace
 
 namespace {
-struct MaterializeStreamForkOp : public OpRewritePattern<hls::StreamForkOp> {
-  using OpRewritePattern<hls::StreamForkOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(hls::StreamForkOp streamFork,
-                                PatternRewriter &rewriter) const override {
-    return failure();
-  }
-};
-} // namespace
-
-namespace {
 struct FoldPackOpIntoConstantOp : public OpRewritePattern<tensor::PackOp> {
   using OpRewritePattern<tensor::PackOp>::OpRewritePattern;
 
@@ -416,9 +405,9 @@ struct FoldPackOpIntoConstantOp : public OpRewritePattern<tensor::PackOp> {
 } // namespace
 
 namespace {
-struct MaterializeStream : public MaterializeStreamBase<MaterializeStream> {
-  MaterializeStream() = default;
-  MaterializeStream(bool optEnablePacking = true) {
+struct MaterializeITensor : public MaterializeITensorBase<MaterializeITensor> {
+  MaterializeITensor() = default;
+  MaterializeITensor(bool optEnablePacking = true) {
     enablePacking = optEnablePacking;
   }
 
@@ -427,10 +416,9 @@ struct MaterializeStream : public MaterializeStreamBase<MaterializeStream> {
     auto context = op->getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<MaterializeTensorToStreamOp>(context, enablePacking);
-    patterns.add<MaterializeStreamToTensorOp>(context, enablePacking);
-    patterns.add<MaterializeStreamBufferOp>(context, enablePacking);
-    patterns.add<MaterializeStreamForkOp>(context);
+    patterns.add<MaterializeTensorToITensorOp>(context, enablePacking);
+    patterns.add<MaterializeITensorToTensorOp>(context, enablePacking);
+    patterns.add<MaterializeITensorBufferOp>(context, enablePacking);
     if (enablePacking)
       patterns.add<FoldPackOpIntoConstantOp>(context);
     (void)applyPatternsAndFoldGreedily(op, std::move(patterns));
@@ -439,6 +427,6 @@ struct MaterializeStream : public MaterializeStreamBase<MaterializeStream> {
 } // namespace
 
 std::unique_ptr<Pass>
-scalehls::hls::createMaterializeStreamPass(bool enablePacking) {
-  return std::make_unique<MaterializeStream>(enablePacking);
+scalehls::hls::createMaterializeITensorPass(bool enablePacking) {
+  return std::make_unique<MaterializeITensor>(enablePacking);
 }

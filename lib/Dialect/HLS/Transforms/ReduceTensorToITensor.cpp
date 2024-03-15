@@ -18,17 +18,17 @@ struct EliminateIntermediateTensor
     : public OpRewritePattern<hls::TensorToITensorOp> {
   using OpRewritePattern<hls::TensorToITensorOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(hls::TensorToITensorOp tensorToStream,
+  LogicalResult matchAndRewrite(hls::TensorToITensorOp tensorToITensor,
                                 PatternRewriter &rewriter) const override {
-    auto streamToTensor =
-        tensorToStream.getSource().getDefiningOp<hls::ITensorToTensorOp>();
-    if (!streamToTensor)
+    auto iTensorToTensor =
+        tensorToITensor.getSource().getDefiningOp<hls::ITensorToTensorOp>();
+    if (!iTensorToTensor)
       return failure();
-    auto tensorType = streamToTensor.getType();
+    auto tensorType = iTensorToTensor.getType();
 
-    // TODO: Support non-regular stream types.
-    auto sourceType = streamToTensor.getSource().getType();
-    auto resultType = tensorToStream.getResult().getType();
+    // TODO: Support non-regular iTensor types.
+    auto sourceType = iTensorToTensor.getSource().getType();
+    auto resultType = tensorToITensor.getResult().getType();
     if (!sourceType.tileIsRegular() || !resultType.tileIsRegular())
       return failure();
 
@@ -37,7 +37,7 @@ struct EliminateIntermediateTensor
     unsigned beforeLoop = 0;
     for (int64_t dim = 0; dim < tensorType.getRank(); dim++) {
       // To reduce the buffer size, we need to ensure that the source and result
-      // stream share the same tile size for the current dimension.
+      // iTensor share the same tile size for the current dimension.
       // TODO: Theoratically, we can partially reduce the buffer size when the
       // tile sizes are different.
       if (sourceType.getElementDimSize(dim) !=
@@ -88,7 +88,7 @@ struct EliminateIntermediateTensor
                        tensorType.getShape().end());
 
     rewriter.replaceOpWithNewOp<hls::ITensorBufferOp>(
-        tensorToStream, resultType, streamToTensor.getSource(),
+        tensorToITensor, resultType, iTensorToTensor.getSource(),
         tensorType.getElementType(), bufferShape, beforeLoop, beforeDim);
     return success();
     // love uuuuuuuu ;)
@@ -97,8 +97,8 @@ struct EliminateIntermediateTensor
 } // namespace
 
 namespace {
-struct ReduceTensorToStream
-    : public ReduceTensorToStreamBase<ReduceTensorToStream> {
+struct ReduceTensorToITensor
+    : public ReduceTensorToITensorBase<ReduceTensorToITensor> {
   void runOnOperation() override {
     auto op = getOperation();
     auto context = op->getContext();
@@ -110,6 +110,6 @@ struct ReduceTensorToStream
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::hls::createReduceTensorToStreamPass() {
-  return std::make_unique<ReduceTensorToStream>();
+std::unique_ptr<Pass> scalehls::hls::createReduceTensorToITensorPass() {
+  return std::make_unique<ReduceTensorToITensor>();
 }

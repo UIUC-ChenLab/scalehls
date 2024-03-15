@@ -73,6 +73,16 @@ SmallVector<scf::ForOp> scalehls::getSurroundingLoops(Operation *target,
   return {reversedLoops.rbegin(), reversedLoops.rend()};
 }
 
+Value scalehls::getUntiledOperand(Value value) {
+  while (auto arg = dyn_cast<BlockArgument>(value)) {
+    if (auto loop = dyn_cast<scf::ForOp>(arg.getOwner()->getParentOp()))
+      value = loop.getTiedLoopInit(arg)->get();
+    else
+      break;
+  }
+  return value;
+}
+
 std::optional<SmallVector<int64_t>>
 scalehls::getLoopSteps(const SmallVector<scf::ForOp> &loops) {
   SmallVector<int64_t> steps;

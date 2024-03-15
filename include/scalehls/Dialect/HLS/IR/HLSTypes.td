@@ -17,15 +17,16 @@ class HLSType<string name, list<Trait> traits = [],
 }
 
 //===----------------------------------------------------------------------===//
-// StreamType
+// ITensorType
 //===----------------------------------------------------------------------===//
 
-def StreamType : HLSType<"Stream", []> {
-  let summary = "An HLS stream type";
+def ITensorType : HLSType<"ITensor"> {
+  let summary = "An HLS iterative tensor type";
   let description = [{
-    Represents a stream of any type that can be transfered between HLS modules.
+    Iterative tensor representing a tile of a full tensor that iteratively
+    traverses the full tensor.
   }];
-  let mnemonic = "stream";
+  let mnemonic = "itensor";
 
   let parameters = (ins
       "mlir::Type":$elementType,
@@ -86,17 +87,17 @@ def StreamType : HLSType<"Stream", []> {
     /// Return the rank of the iteration space.
     int64_t getIterRank() const { return getIterTripCounts().size(); }
 
-    /// Return the data type of this stream type.
+    /// Return the data type of this itensor type.
     Type getDataType() const {
       if (auto shapedType = getShapedElementType())
         return shapedType.getElementType();
       return getElementType();
     }
 
-    /// Return the integral rank of the full tensor this stream type represents.
+    /// Return the integral rank of the full tensor this itensor type represents.
     int64_t getRank() const { return getIterMap().getNumResults(); }
 
-    /// Infer and return the integral shape of the full tensor this stream type
+    /// Infer and return the integral shape of the full tensor this itensor type
     /// represents.
     SmallVector<int64_t> getShape() const;
 
@@ -130,25 +131,50 @@ def StreamType : HLSType<"Stream", []> {
       return SmallVector<int64_t>(getIterMap().getNumResults(), 1);
     }
 
-    /// Return whether this stream type represents a projected permutation
+    /// Return whether this itensor type represents a projected permutation
     /// iteration pattern.
     bool iterationIsProjectedPermutation() const;
 
-    /// Return whether this stream type represents a non-overlapped and
+    /// Return whether this itensor type represents a non-overlapped and
     /// non-gapped tiling pattern.
     bool tileIsRegular() const;
 
-    /// Return whether the "other" stream type is castable with this type.
-    bool isCastableWith(StreamType other) const;
+    /// Return whether the "other" itensor type is castable with this type.
+    bool isCastableWith(ITensorType other) const;
 
-    /// Return whether this stream type can be converted to the "tensor" type.
+    /// Return whether this itensor type can be converted to the "tensor" type.
     bool isConvertableWith(RankedTensorType tensor) const;
-
-    /// Return whether this stream type has iteration information.
-    bool hasIterInfo() const {
-      return !getIterTripCounts().empty();
-    }
   }];
+}
+
+//===----------------------------------------------------------------------===//
+// StreamType
+//===----------------------------------------------------------------------===//
+
+def StreamType : HLSType<"Stream", []> {
+  let summary = "An HLS stream type";
+  let description = [{
+    A stream of any type that represents a FIFO between the producer and the
+    consumer module.
+  }];
+  let mnemonic = "stream";
+
+  let parameters = (ins
+      "mlir::Type":$elementType,
+      DefaultValuedParameter<"int64_t", "1">:$depth);
+  let assemblyFormat = [{
+    `<` qualified($elementType) `,` $depth `>`
+  }];
+
+  let builders = [
+    TypeBuilderWithInferredContext<(ins
+        "mlir::Type":$elementType, CArg<"int64_t", "1">:$depth), [{
+      return $_get(elementType.getContext(), elementType, depth);
+    }]>
+  ];
+
+  let skipDefaultBuilders = 1;
+  let genVerifyDecl = 1;
 }
 
 #endif // SCALEHLS_DIALECT_HLS_HLSTYPES_TD

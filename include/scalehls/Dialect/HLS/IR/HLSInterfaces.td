@@ -9,98 +9,41 @@
 
 include "mlir/IR/OpBase.td"
 
-def StreamViewLikeInterface : OpInterface<"StreamViewLikeInterface"> {
+def ITensorViewLikeInterface : OpInterface<"ITensorViewLikeInterface"> {
   let description = [{
-    This interface is used to represent stream views.
+    This interface is used to represent itensor views.
   }];
   string cppNamespace = "mlir::scalehls::hls";
 
   let methods = [
-    InterfaceMethod<"Return the source stream.",
-      "TypedValue<StreamType>", "getSource", (ins), [{
+    InterfaceMethod<"Return the source itensor.",
+      "TypedValue<ITensorType>", "getSource", (ins), [{
         return $_op.getSource();
       }]>,
-    InterfaceMethod<"Return the result stream.",
-      "TypedValue<StreamType>", "getResult", (ins), [{
+    InterfaceMethod<"Return the result itensor.",
+      "TypedValue<ITensorType>", "getResult", (ins), [{
         return $_op.getResult();
       }]>
   ];
 
   let extraSharedClassDeclaration = [{
-    StreamType getSourceType() { return $_op.getSource().getType(); }
-    StreamType getResultType() { return $_op.getResult().getType(); }
+    ITensorType getSourceType() { return $_op.getSource().getType(); }
+    ITensorType getResultType() { return $_op.getResult().getType(); }
 
     OpFoldResult foldRedundantViews() {
       if (getSourceType() == getResultType())
         return $_op.getSource();
       if (auto prevView =
-          $_op.getSource().template getDefiningOp<StreamViewLikeInterface>())
+          $_op.getSource().template getDefiningOp<ITensorViewLikeInterface>())
         if (prevView.getSourceType() == getResultType())
           return prevView.getSource();
       return {};
     }
 
-    StreamViewLikeInterface cloneWith(Value source, PatternRewriter &rewriter) {
+    ITensorViewLikeInterface cloneWith(Value source, PatternRewriter &rewriter) {
       IRMapping mapping;
       mapping.map($_op.getSource(), source);
-      return cast<StreamViewLikeInterface>(rewriter.clone(*$_op, mapping));
-    }
-  }];
-}
-
-def StreamReadLikeInterface : OpInterface<"StreamReadLikeInterface"> {
-  let description = [{
-    This interface is used to represent stream read operations.
-  }];
-  string cppNamespace = "mlir::scalehls::hls";
-
-  let methods = [
-    InterfaceMethod<"Return the stream source.",
-      "TypedValue<StreamType>", "getSource", (ins), [{
-        return $_op.getSource();
-      }]>
-  ];
-
-  let extraSharedClassDeclaration = [{
-    StreamType getSourceType() { return $_op.getSource().getType(); }
-  }];
-}
-
-def StreamWriteLikeInterface : OpInterface<"StreamWriteLikeInterface"> {
-  let description = [{
-    This interface is used to represent stream write operations.
-  }];
-  string cppNamespace = "mlir::scalehls::hls";
-
-  let methods = [
-    InterfaceMethod<"Return the stream destinations.",
-      "ValueRange", "getDests", (ins), [{
-        return $_op.getDests();
-      }]>,
-    InterfaceMethod<"Clone the operation with the given stream destinations.",
-      "StreamWriteLikeInterface", "cloneWith",
-      (ins "ValueRange":$dests, "PatternRewriter &":$rewriter)
-    >
-  ];
-
-  let extraSharedClassDeclaration = [{
-    TypedValue<StreamType> getDest(unsigned idx) {
-      return cast<TypedValue<StreamType>>($_op.getDests()[idx]);
-    }
-    StreamType getDestType() { return getDest(0).getType(); }
-
-    LogicalResult verifyDests() {
-      if ($_op.getDests().empty())
-        return $_op.emitOpError("no dest stream specified");
-      for (auto dest : $_op.getDests()) {
-        // TODO: Support more flexible dest streams.
-        if (auto defOp = dest.getDefiningOp())
-          if (!isa<StreamOp>(defOp))
-            return $_op.emitOpError("dest must be defined by a stream op");
-        if (dest.getType() != getDestType())
-          return $_op.emitOpError("dest stream type mismatch");
-      }
-      return success();
+      return cast<ITensorViewLikeInterface>(rewriter.clone(*$_op, mapping));
     }
   }];
 }

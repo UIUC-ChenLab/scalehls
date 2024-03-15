@@ -203,7 +203,7 @@ bool hls::isRead(OpOperand &use) {
   if (auto view = dyn_cast<ViewLikeOpInterface>(use.getOwner()))
     return llvm::any_of(view->getUses(),
                         [](OpOperand &viewUse) { return isRead(viewUse); });
-  else if (auto streamView = dyn_cast<StreamViewLikeInterface>(use.getOwner()))
+  else if (auto streamView = dyn_cast<ITensorViewLikeInterface>(use.getOwner()))
     return llvm::any_of(streamView->getUses(), [](OpOperand &streamViewUse) {
       return isRead(streamViewUse);
     });
@@ -214,7 +214,7 @@ bool hls::isWritten(OpOperand &use) {
   if (auto view = dyn_cast<ViewLikeOpInterface>(use.getOwner()))
     return llvm::any_of(view->getUses(),
                         [](OpOperand &viewUse) { return isWritten(viewUse); });
-  else if (auto streamView = dyn_cast<StreamViewLikeInterface>(use.getOwner()))
+  else if (auto streamView = dyn_cast<ITensorViewLikeInterface>(use.getOwner()))
     return llvm::any_of(streamView->getUses(), [](OpOperand &streamViewUse) {
       return isWritten(streamViewUse);
     });
