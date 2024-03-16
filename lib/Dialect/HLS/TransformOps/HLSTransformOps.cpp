@@ -201,7 +201,7 @@ transform::HLSConvertInsertSliceToITensorOp::applyToOne(
   // Create the itensor_to_tensor op.
   rewriter.setInsertionPointAfter(loops.front());
   auto resultTensor = loops.front().getTiedLoopResult(untiledUse);
-  auto iTensorToTensor = rewriter.create<hls::ITensorToTensorOp>(
+  auto iTensorToTensor = rewriter.create<hls::ITensorReadFullTensorOp>(
       loc, resultTensor.getType(), resultTensor);
   rewriter.replaceAllUsesExcept(resultTensor, iTensorToTensor, iTensorToTensor);
 
@@ -262,8 +262,9 @@ transform::HLSConvertExtractSliceToITensorOp::applyToOne(
   // Create the tensor_to_itensor op.
   auto loc = extractSlice.getLoc();
   rewriter.setInsertionPoint(loops.front());
-  auto tensorToITensor = rewriter.create<hls::TensorToITensorOp>(
-      loc, iTensorType, extractSlice.getSource());
+  auto iTensorInit = rewriter.create<hls::ITensorInitOp>(loc, iTensorType);
+  auto tensorToITensor = rewriter.create<hls::ITensorWriteFullTensorOp>(
+      loc, iTensorType, extractSlice.getSource(), iTensorInit);
 
   // Create the itensor_read op.
   rewriter.setInsertionPoint(extractSlice);
@@ -364,13 +365,15 @@ transform::HLSConvertExpandShapeToITensorOp::applyToOne(
   // Convert the expand_shape op to iTensor ops and replace its uses.
   auto loc = expandShape.getLoc();
   rewriter.setInsertionPoint(expandShape);
-  auto tensorToITensor = rewriter.create<hls::TensorToITensorOp>(
-      loc, iTensorTypes->first, expandShape.getSrc());
+  auto iTensorInit =
+      rewriter.create<hls::ITensorInitOp>(loc, iTensorTypes->first);
+  auto tensorToITensor = rewriter.create<hls::ITensorWriteFullTensorOp>(
+      loc, iTensorTypes->first, expandShape.getSrc(), iTensorInit);
   auto iTensorReassociate = rewriter.create<hls::ITensorReassociateOp>(
       loc, iTensorTypes->second, tensorToITensor.getResult(),
       /*expandShape=*/true, expandShape.getReassociation(),
       /*expandIteration=*/true, expandShape.getReassociation());
-  auto iTensorToTensor = rewriter.create<hls::ITensorToTensorOp>(
+  auto iTensorToTensor = rewriter.create<hls::ITensorReadFullTensorOp>(
       loc, expandShape.getResultType(), iTensorReassociate.getResult());
   rewriter.replaceOp(expandShape, iTensorToTensor);
 
@@ -404,13 +407,15 @@ transform::HLSConvertCollapseShapeToITensorOp::applyToOne(
   // Convert the expand_shape op to iTensor ops and replace its uses.
   auto loc = collapseShape.getLoc();
   rewriter.setInsertionPoint(collapseShape);
-  auto tensorToITensor = rewriter.create<hls::TensorToITensorOp>(
-      loc, iTensorTypes->second, collapseShape.getSrc());
+  auto iTensorInit =
+      rewriter.create<hls::ITensorInitOp>(loc, iTensorTypes->second);
+  auto tensorToITensor = rewriter.create<hls::ITensorWriteFullTensorOp>(
+      loc, iTensorTypes->second, collapseShape.getSrc(), iTensorInit);
   auto iTensorReassociate = rewriter.create<hls::ITensorReassociateOp>(
       loc, iTensorTypes->first, tensorToITensor.getResult(),
       /*expandShape=*/false, collapseShape.getReassociation(),
       /*expandIteration=*/false, collapseShape.getReassociation());
-  auto iTensorToTensor = rewriter.create<hls::ITensorToTensorOp>(
+  auto iTensorToTensor = rewriter.create<hls::ITensorReadFullTensorOp>(
       loc, collapseShape.getResultType(), iTensorReassociate.getResult());
   rewriter.replaceOp(collapseShape, iTensorToTensor);
 

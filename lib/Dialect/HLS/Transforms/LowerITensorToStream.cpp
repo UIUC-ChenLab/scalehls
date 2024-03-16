@@ -17,7 +17,7 @@ struct LowerITensorToStream
     auto op = getOperation();
 
     // Fold all stream view ops.
-    op.walk([&](hls::ITensorViewLikeInterface streamView) {
+    op.walk([&](hls::ITensorViewLikeOpInterface streamView) {
       streamView.getResult().replaceAllUsesWith(streamView.getSource());
       streamView.erase();
     });

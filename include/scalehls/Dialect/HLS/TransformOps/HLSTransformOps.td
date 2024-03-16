@@ -102,7 +102,7 @@ def HLSConvertInsertSliceToITensorOp : Op<Transform_Dialect,
     Convert a target `insert_slice` op to 1) a `itensor_init` op, replacing the
     destination tensor with a iterative tensor, 2) a `itensor_write` op, writing
     the slice tensor to the iterative tensor instead of inserting to the
-    destination tensor, and 3) a `itensor_to_tensor` op, converting the itensor
+    destination tensor, and 3) a `itensor_read_full_tensor` op, converting the itensor
     channel back to a new destination tensor and replace the original one.
 
     **This transform must be applied on the only user of an destination tensor,
@@ -116,7 +116,7 @@ def HLSConvertInsertSliceToITensorOp : Op<Transform_Dialect,
   let results = (outs
       Transform_ConcreteOpType<"hls.itensor_init">:$itensor_init,
       Transform_ConcreteOpType<"hls.itensor_write">:$itensor_write,
-      Transform_ConcreteOpType<"hls.itensor_to_tensor">:$itensor_to_tensor);
+      Transform_ConcreteOpType<"hls.itensor_read_full_tensor">:$itensor_read_full_tensor);
   let assemblyFormat = [{
     $insert_slice attr-dict `:` functional-type(operands, results)
   }];
@@ -135,7 +135,7 @@ def HLSConvertExtractSliceToITensorOp : Op<Transform_Dialect,
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {
   let description = [{
-    Convert a target `extract_slice` op to 1) a `tensor_to_itensor` op,
+    Convert a target `extract_slice` op to 1) a `itensor_write_full_tensor` op,
     converting the source tensor to a iterative tensor, and 2) a `itensor_read`
     op, reading the destination slice tensor from the iterative tensor instead
     of extracting from the source tensor.
@@ -147,7 +147,7 @@ def HLSConvertExtractSliceToITensorOp : Op<Transform_Dialect,
   let arguments = (ins
       Transform_ConcreteOpType<"tensor.extract_slice">:$extract_slice);
   let results = (outs
-      Transform_ConcreteOpType<"hls.tensor_to_itensor">:$tensor_to_itensor,
+      Transform_ConcreteOpType<"hls.itensor_write_full_tensor">:$itensor_write_full_tensor,
       Transform_ConcreteOpType<"hls.itensor_read">:$itensor_read);
   let assemblyFormat = [{
     $extract_slice attr-dict `:` functional-type(operands, results)
@@ -173,9 +173,9 @@ def HLSConvertExpandShapeToITensorOp : Op<Transform_Dialect,
       DenseI64ArrayAttr:$input_element_shape,
       DenseI64ArrayAttr:$output_element_shape);
   let results = (outs
-      Transform_ConcreteOpType<"hls.tensor_to_itensor">:$tensor_to_itensor,
+      Transform_ConcreteOpType<"hls.itensor_write_full_tensor">:$itensor_write_full_tensor,
       Transform_ConcreteOpType<"hls.itensor_reassociate">:$itensor_reassociate,
-      Transform_ConcreteOpType<"hls.itensor_to_tensor">:$itensor_to_tensor);
+      Transform_ConcreteOpType<"hls.itensor_read_full_tensor">:$itensor_read_full_tensor);
   let assemblyFormat = [{
     $expand_shape attr-dict `:` functional-type(operands, results)
   }];
@@ -202,9 +202,9 @@ def HLSConvertCollapseShapeToITensorOp : Op<Transform_Dialect,
       DenseI64ArrayAttr:$input_element_shape,
       DenseI64ArrayAttr:$output_element_shape);
   let results = (outs
-      Transform_ConcreteOpType<"hls.tensor_to_itensor">:$tensor_to_itensor,
+      Transform_ConcreteOpType<"hls.itensor_write_full_tensor">:$itensor_write_full_tensor,
       Transform_ConcreteOpType<"hls.itensor_reassociate">:$itensor_reassociate,
-      Transform_ConcreteOpType<"hls.itensor_to_tensor">:$itensor_to_tensor);
+      Transform_ConcreteOpType<"hls.itensor_read_full_tensor">:$itensor_read_full_tensor);
   let assemblyFormat = [{
     $collapse_shape attr-dict `:` functional-type(operands, results)
   }];

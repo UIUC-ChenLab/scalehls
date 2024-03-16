@@ -38,9 +38,10 @@ static ScheduleOp scheduleBlock(StringRef name, Block *block,
 
   unsigned taskId = 0;
   for (auto &op : llvm::make_early_inc_range(schedule.getOps())) {
-    assert(!isa<hls::ITensorBufferOp>(op) && !isa<hls::TensorToITensorOp>(op) &&
-           !isa<hls::ITensorToTensorOp>(op) &&
-           "stream op must be materialized before being scheduleed");
+    assert(!isa<hls::ITensorReadFullTensorOp>(op) &&
+           !isa<hls::ITensorWriteFullTensorOp>(op) &&
+           !isa<hls::ITensorBufferOp>(op) &&
+           "itensor DMA op must be materialized before being scheduleed");
     assert(!isa<tensor::TensorDialect>(op.getDialect()) &&
            "tensor op must be bufferized before being scheduleed");
     if (isa<linalg::LinalgOp, affine::AffineForOp, scf::ForOp>(op)) {

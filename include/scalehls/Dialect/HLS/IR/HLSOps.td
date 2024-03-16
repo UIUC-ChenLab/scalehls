@@ -50,8 +50,8 @@ def AnyBuffer : StaticShapeMemRefOf<[AnyType]>;
 // Tensor Operations
 //===----------------------------------------------------------------------===//
 
-def TensorInitOp : HLSOp<"tensor_init"> {
-  let summary = "Initiate a tensor with an optional initialization value";
+def TensorInitOp : HLSOp<"tensor_init", [Pure]> {
+  let summary = "Initiate a tensor";
 
   let arguments = (ins Optional<AnyType>:$initValue);
   let results = (outs AnyRankedTensor:$result);
@@ -60,7 +60,6 @@ def TensorInitOp : HLSOp<"tensor_init"> {
   }];
 
   let hasVerifier = 1;
-  let hasCanonicalizeMethod = 1;
 
   let builders = [
     OpBuilder<(ins "mlir::Type":$result),
@@ -81,17 +80,20 @@ def ITensorInitOp : HLSOp<"itensor_init", [Pure]> {
     (`init` $initValue^)? attr-dict `:` functional-type(operands, results)
   }];
 
+  let hasVerifier = 1;
+
   let builders = [
     OpBuilder<(ins "mlir::Type":$result),
         "build($_builder, $_state, result, nullptr);">
   ];
 }
 
-def ITensorToTensorOp : HLSOp<"itensor_to_tensor", [Pure]> {
-  let summary = "Convert an iterative tensor to a tensor";
+def ITensorReadFullTensorOp : HLSOp<"itensor_read_full_tensor", [Pure,
+      DeclareOpInterfaceMethods<ITensorReadLikeOpInterface>]> {
+  let summary = "Read the full tensor from an iterative tensor";
 
   let arguments = (ins AnyITensor:$source);
-  let results = (outs AnyRankedTensor:$result);
+  let results = (outs AnyRankedTensor:$fullTensor);
   let assemblyFormat = [{
     $source attr-dict `:` functional-type(operands, results)
   }];
@@ -99,36 +101,36 @@ def ITensorToTensorOp : HLSOp<"itensor_to_tensor", [Pure]> {
   let hasVerifier = 1;
 
   let extraClassDeclaration = [{
-    ITensorType getSourceType() { return getSource().getType(); }
-    RankedTensorType getResultType() { return getResult().getType(); }
+    RankedTensorType getFullTensorType() { return getFullTensor().getType(); }
   }];
 }
 
-def TensorToITensorOp : HLSOp<"tensor_to_itensor", [Pure]> {
-  let summary = "Convert a tensor to an iterative tensor";
+def ITensorWriteFullTensorOp : HLSOp<"itensor_write_full_tensor", [Pure,
+      DeclareOpInterfaceMethods<ITensorWriteLikeOpInterface>]> {
+  let summary = "Write the full tensor to an iterative tensor";
 
-  let arguments = (ins AnyRankedTensor:$source);
+  let arguments = (ins AnyRankedTensor:$fullTensor, AnyITensor:$dest);
   let results = (outs AnyITensor:$result);
   let assemblyFormat = [{
-    $source attr-dict `:` functional-type(operands, results)
+    $fullTensor `into` $dest attr-dict `:` functional-type(operands, results)
   }];
 
   let hasVerifier = 1;
   let hasFolder = 1;
 
   let extraClassDeclaration = [{
-    RankedTensorType getSourceType() { return getSource().getType(); }
-    ITensorType getResultType() { return getResult().getType(); }
+    RankedTensorType getFullTensorType() { return getFullTensor().getType(); }
   }];
 }
 
-def ITensorReadOp : HLSOp<"itensor_read", [Pure]> {
+def ITensorReadOp : HLSOp<"itensor_read", [Pure,
+      DeclareOpInterfaceMethods<ITensorReadLikeOpInterface>]> {
   let summary = "Read an element from an iterative tensor";
 
   let arguments = (ins AnyITensor:$source, Optional<AnyRankedTensor>:$init);
   let results = (outs AnyType:$value);
   let assemblyFormat = [{
-    $source (`to` $init^)? attr-dict `:` functional-type(operands, results)
+    $source (`init` $init^)? attr-dict `:` functional-type(operands, results)
   }];
 
   let hasVerifier = 1;
@@ -138,7 +140,6 @@ def ITensorReadOp : HLSOp<"itensor_read", [Pure]> {
   ];
 
   let extraClassDeclaration = [{
-    ITensorType getSourceType() { return getSource().getType(); }
     std::optional<RankedTensorType> getInitType() {
       if (getInit())
         return getInit().getType();
@@ -148,42 +149,42 @@ def ITensorReadOp : HLSOp<"itensor_read", [Pure]> {
   }];
 }
 
-def ITensorWriteOp : HLSOp<"itensor_write", [Pure]> {
+def ITensorWriteOp : HLSOp<"itensor_write", [Pure,
+      DeclareOpInterfaceMethods<ITensorWriteLikeOpInterface>]> {
   let summary = "Write an element to an iterative tensor";
 
-  let arguments = (ins AnyType:$value, AnyITensor:$init);
+  let arguments = (ins AnyType:$value, AnyITensor:$dest);
   let results = (outs AnyITensor:$result);
   let assemblyFormat = [{
-    $value `into` $init attr-dict `:` functional-type(operands, results)
+    $value `into` $dest attr-dict `:` functional-type(operands, results)
   }];
 
   let hasVerifier = 1;
 
   let extraClassDeclaration = [{
     Type getValueType() { return getValue().getType(); }
-    ITensorType getInitType() { return getInit().getType(); }
-    ITensorType getResultType() { return getResult().getType(); }
   }];
 }
 
 def ITensorBufferOp : HLSOp<"itensor_buffer", [Pure,
-      DeclareOpInterfaceMethods<ITensorViewLikeInterface>]> {
+      DeclareOpInterfaceMethods<ITensorReadLikeOpInterface>,
+      DeclareOpInterfaceMethods<ITensorWriteLikeOpInterface>]> {
   let summary = "Buffer an iterative tensor at a specific position";
 
-  let arguments = (ins AnyITensor:$source, TypeAttr:$bufferElementType,
-      DenseI64ArrayAttr:$bufferShape, SI64Attr:$loopIndex, SI64Attr:$dimIndex);
+  let arguments = (ins AnyITensor:$source, AnyITensor:$dest,
+      TypeAttr:$bufferElementType, DenseI64ArrayAttr:$bufferShape,
+      SI64Attr:$loopIndex, SI64Attr:$dimIndex);
   let results = (outs AnyITensor:$result);
   let assemblyFormat = [{
-    $source `,` $bufferElementType $bufferShape `before` `loop`
+    $source `into` $dest `,` $bufferElementType $bufferShape `before` `loop`
     $loopIndex `dim` $dimIndex attr-dict `:` functional-type(operands, results)
   }];
 
   let hasVerifier = 1;
-  let hasFolder = 1;
 }
 
 def ITensorReassociateOp : HLSOp<"itensor_reassociate", [Pure,
-      DeclareOpInterfaceMethods<ITensorViewLikeInterface>]> {
+      DeclareOpInterfaceMethods<ITensorViewLikeOpInterface>]> {
   let summary = "Reassociate the shape and/or iteration of an iterative tensor";
 
   let arguments = (ins AnyITensor:$source, UnitAttr:$expandShape,
@@ -221,7 +222,7 @@ def ITensorReassociateOp : HLSOp<"itensor_reassociate", [Pure,
 }
 
 def ITensorCastOp : HLSOp<"itensor_cast", [Pure,
-      DeclareOpInterfaceMethods<ITensorViewLikeInterface>]> {
+      DeclareOpInterfaceMethods<ITensorViewLikeOpInterface>]> {
   let summary = "Cast an iterative tensor to a different type";
 
   let arguments = (ins AnyITensor:$source);
@@ -247,8 +248,8 @@ def ITensorAllocOp : HLSOp<"itensor_alloc"> {
     (`init` $initValue^)? attr-dict `:` functional-type(operands, results)
   }];
 
-  // let hasVerifier = 1;
-  // let hasCanonicalizeMethod = 1;
+  let hasVerifier = 1;
+  let hasCanonicalizeMethod = 1;
 
   let builders = [
     OpBuilder<(ins "mlir::Type":$result),

@@ -139,7 +139,7 @@ def convert_generic_op_to_stream(target: Value, parallel_tile_sizes: List[int], 
     hls_transform.HLSConvertInsertSliceToITensorOp(
         transform.OperationType.get("hls.itensor_init"),
         transform.OperationType.get("hls.itensor_write"),
-        transform.OperationType.get("hls.itensor_to_tensor"),
+        transform.OperationType.get("hls.itensor_read_full_tensor"),
         match_result)
 
     if any(size > 0 for size in reduction_tile_sizes):
@@ -164,7 +164,7 @@ def convert_generic_op_to_stream(target: Value, parallel_tile_sizes: List[int], 
                 transform.OperationType.get("tensor.extract_slice"),
                 match_input)
             convert_op = hls_transform.HLSConvertExtractSliceToITensorOp(
-                transform.OperationType.get("hls.tensor_to_itensor"),
+                transform.OperationType.get("hls.itensor_write_full_tensor"),
                 transform.OperationType.get("hls.itensor_read"),
                 merge_op.result)
             transform.YieldOp()
@@ -176,9 +176,9 @@ def convert_generic_op_to_stream(target: Value, parallel_tile_sizes: List[int], 
 
 def convert_expand_shape_op_to_stream(target: Value, source_tile_sizes: List[int], result_tile_sizes: List[int]):
     stream_op = hls_transform.HLSConvertExpandShapeToITensorOp(
-        transform.OperationType.get("hls.tensor_to_itensor"),
+        transform.OperationType.get("hls.itensor_write_full_tensor"),
         transform.OperationType.get("hls.itensor_reassociate"),
-        transform.OperationType.get("hls.itensor_to_tensor"),
+        transform.OperationType.get("hls.itensor_read_full_tensor"),
         target,
         source_tile_sizes,
         result_tile_sizes)
@@ -187,9 +187,9 @@ def convert_expand_shape_op_to_stream(target: Value, source_tile_sizes: List[int
 
 def convert_collapse_shape_op_to_stream(target: Value, source_tile_sizes: List[int], result_tile_sizes: List[int]):
     stream_op = hls_transform.HLSConvertCollapseShapeToITensorOp(
-        transform.OperationType.get("hls.tensor_to_itensor"),
+        transform.OperationType.get("hls.itensor_write_full_tensor"),
         transform.OperationType.get("hls.itensor_reassociate"),
-        transform.OperationType.get("hls.itensor_to_tensor"),
+        transform.OperationType.get("hls.itensor_read_full_tensor"),
         target,
         source_tile_sizes,
         result_tile_sizes)

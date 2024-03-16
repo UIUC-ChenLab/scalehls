@@ -108,9 +108,9 @@ struct ScalarizeITensorWriteOp : public OpRewritePattern<hls::ITensorWriteOp> {
 
     auto loc = write.getLoc();
     auto scalarITensorType = getScalarITensorType(iTensorType);
-    rewriter.setInsertionPointAfterValue(write.getInit());
+    rewriter.setInsertionPointAfterValue(write.getDest());
     auto cast = rewriter.create<hls::ITensorCastOp>(loc, scalarITensorType,
-                                                    write.getInit());
+                                                    write.getDest());
 
     rewriter.setInsertionPoint(write);
     auto elementType = iTensorType.getShapedElementType();

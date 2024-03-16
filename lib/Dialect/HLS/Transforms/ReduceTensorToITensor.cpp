@@ -15,13 +15,13 @@ using namespace hls;
 
 namespace {
 struct EliminateIntermediateTensor
-    : public OpRewritePattern<hls::TensorToITensorOp> {
-  using OpRewritePattern<hls::TensorToITensorOp>::OpRewritePattern;
+    : public OpRewritePattern<hls::ITensorWriteFullTensorOp> {
+  using OpRewritePattern<hls::ITensorWriteFullTensorOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(hls::TensorToITensorOp tensorToITensor,
+  LogicalResult matchAndRewrite(hls::ITensorWriteFullTensorOp tensorToITensor,
                                 PatternRewriter &rewriter) const override {
-    auto iTensorToTensor =
-        tensorToITensor.getSource().getDefiningOp<hls::ITensorToTensorOp>();
+    auto iTensorToTensor = tensorToITensor.getFullTensor()
+                               .getDefiningOp<hls::ITensorReadFullTensorOp>();
     if (!iTensorToTensor)
       return failure();
     auto tensorType = iTensorToTensor.getType();
@@ -89,7 +89,8 @@ struct EliminateIntermediateTensor
 
     rewriter.replaceOpWithNewOp<hls::ITensorBufferOp>(
         tensorToITensor, resultType, iTensorToTensor.getSource(),
-        tensorType.getElementType(), bufferShape, beforeLoop, beforeDim);
+        tensorToITensor.getDest(), tensorType.getElementType(), bufferShape,
+        beforeLoop, beforeDim);
     return success();
     // love uuuuuuuu ;)
   }

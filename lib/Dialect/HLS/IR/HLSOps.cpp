@@ -26,47 +26,45 @@ LogicalResult TensorInitOp::verify() {
   return success();
 }
 
-LogicalResult TensorInitOp::canonicalize(TensorInitOp op,
-                                         PatternRewriter &rewriter) {
-  if (op->hasOneUse())
-    return failure();
+//===----------------------------------------------------------------------===//
+// ITensorInitOp
+//===----------------------------------------------------------------------===//
 
-  for (auto &use : llvm::make_early_inc_range(op->getUses())) {
-    rewriter.setInsertionPoint(use.getOwner());
-    auto newOp = cast<hls::TensorInitOp>(rewriter.clone(*op));
-    rewriter.replaceUsesWithIf(
-        op.getResult(), newOp.getResult(),
-        [&](OpOperand &operand) { return operand == use; });
-  }
-  rewriter.eraseOp(op);
+LogicalResult ITensorInitOp::verify() {
+  if (auto initValue = getInitValue())
+    if (initValue.getType() != getType().getDataType())
+      return emitOpError("initial value doesn't align with itensor data type");
   return success();
 }
 
 //===----------------------------------------------------------------------===//
-// TensorToITensorOp
+// ITensorReadFullTensorOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult TensorToITensorOp::verify() {
-  if (!getResultType().isConvertableWith(getSourceType()))
+LogicalResult ITensorReadFullTensorOp::verify() {
+  if (!getSourceType().isConvertableWith(getFullTensorType()))
     return emitOpError("itensor type is not convertable with tensor type");
   return success();
 }
 
-OpFoldResult TensorToITensorOp::fold(FoldAdaptor adaptor) {
-  if (auto streamToTensor = getSource().getDefiningOp<ITensorToTensorOp>())
+//===----------------------------------------------------------------------===//
+// ITensorWriteFullTensorOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult ITensorWriteFullTensorOp::verify() {
+  if (getDestType() != getResultType())
+    return emitOpError("initial itensor type doesn't align with result type");
+  if (!getResultType().isConvertableWith(getFullTensorType()))
+    return emitOpError("itensor type is not convertable with full tensor type");
+  return success();
+}
+
+OpFoldResult ITensorWriteFullTensorOp::fold(FoldAdaptor adaptor) {
+  if (auto streamToTensor =
+          getFullTensor().getDefiningOp<ITensorReadFullTensorOp>())
     if (streamToTensor.getSource().getType() == getResult().getType())
       return streamToTensor.getSource();
   return {};
-}
-
-//===----------------------------------------------------------------------===//
-// ITensorToTensorOp
-//===----------------------------------------------------------------------===//
-
-LogicalResult ITensorToTensorOp::verify() {
-  if (!getSourceType().isConvertableWith(getResultType()))
-    return emitOpError("itensor type is not convertable with tensor type");
-  return success();
 }
 
 //===----------------------------------------------------------------------===//
@@ -109,9 +107,9 @@ static LogicalResult verifyTripCountsAndSteps(Operation *op,
 
 LogicalResult ITensorReadOp::verify() {
   if (getSourceType().getElementType() != getValueType())
-    return emitOpError("value type doesn't align with channel type");
+    return emitOpError("value type doesn't align with itensor type");
   if (getInitType() && getInitType() != getValueType())
-    return emitOpError("initial value type doesn't align with value type");
+    return emitOpError("initial tensor type doesn't align with value type");
   return verifyTripCountsAndSteps(*this, getSource());
 }
 
@@ -120,11 +118,11 @@ LogicalResult ITensorReadOp::verify() {
 //===----------------------------------------------------------------------===//
 
 LogicalResult ITensorWriteOp::verify() {
-  if (getInitType().getElementType() != getValueType())
-    return emitOpError("value type doesn't align with channel type");
-  if (getInitType() != getResultType())
-    return emitOpError("initial value type doesn't align with value type");
-  return verifyTripCountsAndSteps(*this, getInit());
+  if (getDestType() != getResultType())
+    return emitOpError("initial itensor type doesn't align with result type");
+  if (getDestType().getElementType() != getValueType())
+    return emitOpError("value type doesn't align with itensor type");
+  return verifyTripCountsAndSteps(*this, getDest());
 }
 
 //===----------------------------------------------------------------------===//
@@ -132,8 +130,11 @@ LogicalResult ITensorWriteOp::verify() {
 //===----------------------------------------------------------------------===//
 
 LogicalResult ITensorBufferOp::verify() {
+  if (getDestType() != getResultType())
+    return emitOpError("initial itensor type doesn't align with result type");
+
   auto sourceType = getSourceType();
-  auto destType = getResultType();
+  auto destType = getDestType();
   if (!sourceType.isCastableWith(destType))
     return emitOpError("input and output are not castable\ninput shape: ")
            << sourceType.getShape()
@@ -157,17 +158,13 @@ LogicalResult ITensorBufferOp::verify() {
   return success();
 }
 
-OpFoldResult ITensorBufferOp::fold(FoldAdaptor adaptor) {
-  return foldRedundantViews();
-}
-
 //===----------------------------------------------------------------------===//
 // ITensorReassociateOp
 //===----------------------------------------------------------------------===//
 
 LogicalResult ITensorReassociateOp::verify() {
   if (getSourceType().getDataType() != getResultType().getDataType())
-    return emitOpError("input and output data type doesn't match");
+    return emitOpError("source and result itensor data type doesn't match");
 
   // Verify the shape reassociation.
   auto lowShapeType = getExpandShape() ? getSourceType() : getResultType();
@@ -235,6 +232,29 @@ OpFoldResult ITensorCastOp::fold(FoldAdaptor adaptor) {
 //===----------------------------------------------------------------------===//
 // ITensorAllocOp
 //===----------------------------------------------------------------------===//
+
+LogicalResult ITensorAllocOp::verify() {
+  if (auto initValue = getInitValue())
+    if (initValue.getType() != getType().getDataType())
+      return emitOpError("initial value doesn't align with itensor data type");
+  return success();
+}
+
+LogicalResult ITensorAllocOp::canonicalize(ITensorAllocOp op,
+                                           PatternRewriter &rewriter) {
+  if (op->hasOneUse())
+    return failure();
+
+  for (auto &use : llvm::make_early_inc_range(op->getUses())) {
+    rewriter.setInsertionPoint(use.getOwner());
+    auto newOp = cast<hls::ITensorAllocOp>(rewriter.clone(*op));
+    rewriter.replaceUsesWithIf(
+        op.getResult(), newOp.getResult(),
+        [&](OpOperand &operand) { return operand == use; });
+  }
+  rewriter.eraseOp(op);
+  return success();
+}
 
 //===----------------------------------------------------------------------===//
 // ITensorToStreamOp
