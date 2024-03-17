@@ -94,8 +94,8 @@ def HLSMergeConsecutiveExtractSliceOp : Op<Transform_Dialect,
   }];
 }
 
-def HLSConvertInsertSliceToITensorOp : Op<Transform_Dialect,
-    "hls.convert_insert_slice_to_itensor",
+def HLSConvertInsertSliceToITensorWriteOp : Op<Transform_Dialect,
+    "hls.convert_insert_slice_to_itensor_write",
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {
   let description = [{
@@ -130,8 +130,8 @@ def HLSConvertInsertSliceToITensorOp : Op<Transform_Dialect,
   }];
 }
 
-def HLSConvertExtractSliceToITensorOp : Op<Transform_Dialect,
-    "hls.convert_extract_slice_to_itensor",
+def HLSConvertExtractSliceToITensorReadOp : Op<Transform_Dialect,
+    "hls.convert_extract_slice_to_itensor_read",
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {
   let description = [{
@@ -162,8 +162,8 @@ def HLSConvertExtractSliceToITensorOp : Op<Transform_Dialect,
   }];
 }
 
-def HLSConvertExpandShapeToITensorOp : Op<Transform_Dialect,
-    "hls.convert_expand_shape_to_itensor",
+def HLSConvertExpandShapeToITensorReassociateOp : Op<Transform_Dialect,
+    "hls.convert_expand_shape_to_itensor_reassociate",
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {
   let description = [{}];
@@ -191,8 +191,8 @@ def HLSConvertExpandShapeToITensorOp : Op<Transform_Dialect,
   }];
 }
 
-def HLSConvertCollapseShapeToITensorOp : Op<Transform_Dialect,
-    "hls.convert_collapse_shape_to_itensor",
+def HLSConvertCollapseShapeToITensorReassociateOp : Op<Transform_Dialect,
+    "hls.convert_collapse_shape_to_itensor_reassociate",
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {
   let description = [{}];

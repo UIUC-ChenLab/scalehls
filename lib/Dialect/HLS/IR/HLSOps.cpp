@@ -72,11 +72,11 @@ OpFoldResult ITensorWriteFullTensorOp::fold(FoldAdaptor adaptor) {
 //===----------------------------------------------------------------------===//
 
 static LogicalResult verifyTripCountsAndSteps(Operation *op,
-                                              TypedValue<ITensorType> iTensor) {
-  auto iTensorType = iTensor.getType();
+                                              OpOperand *iTensor) {
+  auto iTensorType = cast<ITensorType>(iTensor->get().getType());
   auto untiledITensor = getUntiledOperand(iTensor);
 
-  auto loops = getSurroundingLoops(op, untiledITensor.getParentBlock());
+  auto loops = getSurroundingLoops(op, untiledITensor->get().getParentBlock());
   auto tripCounts = getLoopTripCounts(loops);
   auto steps = getLoopSteps(loops);
   if (!tripCounts || !steps)
@@ -110,7 +110,7 @@ LogicalResult ITensorReadOp::verify() {
     return emitOpError("value type doesn't align with itensor type");
   if (getInitType() && getInitType() != getValueType())
     return emitOpError("initial tensor type doesn't align with value type");
-  return verifyTripCountsAndSteps(*this, getSource());
+  return verifyTripCountsAndSteps(*this, &getSourceMutable());
 }
 
 //===----------------------------------------------------------------------===//
@@ -122,7 +122,7 @@ LogicalResult ITensorWriteOp::verify() {
     return emitOpError("initial itensor type doesn't align with result type");
   if (getDestType().getElementType() != getValueType())
     return emitOpError("value type doesn't align with itensor type");
-  return verifyTripCountsAndSteps(*this, getDest());
+  return verifyTripCountsAndSteps(*this, &getDestMutable());
 }
 
 //===----------------------------------------------------------------------===//

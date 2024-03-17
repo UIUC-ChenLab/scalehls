@@ -27,30 +27,13 @@ using namespace affine;
 // HLSConvertExtractSliceToTensorInitOp
 //===----------------------------------------------------------------------===//
 
-static OpOperand *
-getUntiledOperandAndSurroundingLoops(OpOperand *source,
-                                     SmallVector<scf::ForOp> *loops = nullptr) {
-  SmallVector<scf::ForOp> reverseLoops;
-  while (auto arg = dyn_cast<BlockArgument>(source->get())) {
-    if (auto loop = dyn_cast<scf::ForOp>(arg.getOwner()->getParentOp())) {
-      source = loop.getTiedLoopInit(arg);
-      reverseLoops.push_back(loop);
-    } else
-      break;
-  }
-  if (loops)
-    *loops = {reverseLoops.rbegin(), reverseLoops.rend()};
-  return source;
-}
-
 DiagnosedSilenceableFailure
 transform::HLSConvertExtractSliceToTensorInitOp::applyToOne(
     transform::TransformRewriter &rewriter, tensor::ExtractSliceOp extractSlice,
     transform::ApplyToEachResultList &results,
     transform::TransformState &state) {
-  auto untiledUse =
-      getUntiledOperandAndSurroundingLoops(&extractSlice.getSourceMutable());
-  auto tensorInit = untiledUse->get().getDefiningOp<hls::TensorInitOp>();
+  auto untiledOperand = getUntiledOperand(&extractSlice.getSourceMutable());
+  auto tensorInit = untiledOperand->get().getDefiningOp<hls::TensorInitOp>();
   if (!tensorInit)
     return emitDefaultSilenceableFailure(extractSlice)
            << "untiled operand must be defined by a tensor.init op";
@@ -105,7 +88,7 @@ transform::HLSMergeConsecutiveExtractSliceOp::applyToOne(
 }
 
 //===----------------------------------------------------------------------===//
-// HLSConvertInsertSliceToITensorOp
+// HLSConvertInsertSliceToITensorWriteOp
 //===----------------------------------------------------------------------===//
 
 static scf::ForOp getAssociatedLoop(Value value) {
@@ -159,7 +142,7 @@ getIterationAffineMap(OpTy target, const SmallVector<scf::ForOp> &loops) {
 }
 
 DiagnosedSilenceableFailure
-transform::HLSConvertInsertSliceToITensorOp::applyToOne(
+transform::HLSConvertInsertSliceToITensorWriteOp::applyToOne(
     transform::TransformRewriter &rewriter, tensor::InsertSliceOp insertSlice,
     transform::ApplyToEachResultList &results,
     transform::TransformState &state) {
@@ -169,12 +152,17 @@ transform::HLSConvertInsertSliceToITensorOp::applyToOne(
     return emitDefaultSilenceableFailure(insertSlice)
            << "destination tensor must have only one use";
 
-  // Collect the surrounding loops of the insert_slice op.
-  SmallVector<scf::ForOp> loops;
-  auto untiledUse = getUntiledOperandAndSurroundingLoops(
-      &insertSlice.getDestMutable(), &loops);
-  auto tensorInit = untiledUse->get().getDefiningOp<hls::TensorInitOp>();
-  if (untiledUse == &insertSlice.getDestMutable() || !tensorInit)
+  // Collect the untiled operand and surrounding loops of the insert_slice op.
+  auto untiledOperand = getUntiledOperand(&insertSlice.getDestMutable());
+  auto loops =
+      getSurroundingLoops(insertSlice, untiledOperand->get().getParentBlock());
+  if (loops.empty())
+    return emitDefaultSilenceableFailure(insertSlice)
+           << "no surrounding loops found";
+
+  // The untiled operand must be defined by a tensor.init op.
+  auto tensorInit = untiledOperand->get().getDefiningOp<hls::TensorInitOp>();
+  if (!tensorInit)
     return emitDefaultSilenceableFailure(insertSlice)
            << "untiled operand must be defined by a tensor.init op";
 
@@ -200,13 +188,13 @@ transform::HLSConvertInsertSliceToITensorOp::applyToOne(
 
   // Create the itensor_to_tensor op.
   rewriter.setInsertionPointAfter(loops.front());
-  auto resultTensor = loops.front().getTiedLoopResult(untiledUse);
+  auto resultTensor = loops.front().getTiedLoopResult(untiledOperand);
   auto iTensorToTensor = rewriter.create<hls::ITensorReadFullTensorOp>(
       loc, resultTensor.getType(), resultTensor);
   rewriter.replaceAllUsesExcept(resultTensor, iTensorToTensor, iTensorToTensor);
 
   // Update the iteration argument of the loops.
-  auto iterIdx = untiledUse->getOperandNumber();
+  auto iterIdx = untiledOperand->getOperandNumber();
   for (auto loop : loops) {
     auto &iterOperand = loop->getOpOperand(iterIdx);
     auto iterType = iterOperand.get().getType();
@@ -237,17 +225,20 @@ transform::HLSConvertInsertSliceToITensorOp::applyToOne(
 // S2
 
 //===----------------------------------------------------------------------===//
-// HLSConvertExtractSliceToITensorOp
+// HLSConvertExtractSliceToITensorReadOp
 //===----------------------------------------------------------------------===//
 
 DiagnosedSilenceableFailure
-transform::HLSConvertExtractSliceToITensorOp::applyToOne(
+transform::HLSConvertExtractSliceToITensorReadOp::applyToOne(
     transform::TransformRewriter &rewriter, tensor::ExtractSliceOp extractSlice,
     transform::ApplyToEachResultList &results,
     transform::TransformState &state) {
   // Collect the surrounding loops of the extract_slice op.
   auto loops = getSurroundingLoops(extractSlice,
                                    extractSlice.getSource().getParentBlock());
+  if (loops.empty())
+    return emitDefaultSilenceableFailure(extractSlice)
+           << "no surrounding loops found";
 
   // Collect the iteration shape and affine map of the iterative tensor.
   auto iterTripCounts = getLoopTripCounts(loops);
@@ -280,10 +271,11 @@ transform::HLSConvertExtractSliceToITensorOp::applyToOne(
 }
 
 //===----------------------------------------------------------------------===//
-// HLSConvertExpandShapeToITensorOp
+// HLSConvertExpandShapeToITensorReassociateOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult transform::HLSConvertExpandShapeToITensorOp::verify() {
+LogicalResult transform::HLSConvertExpandShapeToITensorReassociateOp::verify() {
+  // TODO: Verify whether the input/output element shapes are valid.
   return success();
 }
 
@@ -353,7 +345,7 @@ getReassociateITensorTypes(OpTy reassociateOp, RankedTensorType lowType,
 }
 
 DiagnosedSilenceableFailure
-transform::HLSConvertExpandShapeToITensorOp::applyToOne(
+transform::HLSConvertExpandShapeToITensorReassociateOp::applyToOne(
     transform::TransformRewriter &rewriter, tensor::ExpandShapeOp expandShape,
     transform::ApplyToEachResultList &results,
     transform::TransformState &state) {
@@ -386,15 +378,17 @@ transform::HLSConvertExpandShapeToITensorOp::applyToOne(
 }
 
 //===----------------------------------------------------------------------===//
-// HLSConvertCollapseShapeToITensorOp
+// HLSConvertCollapseShapeToITensorReassociateOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult transform::HLSConvertCollapseShapeToITensorOp::verify() {
+LogicalResult
+transform::HLSConvertCollapseShapeToITensorReassociateOp::verify() {
+  // TODO: Verify whether the input/output element shapes are valid.
   return success();
 }
 
 DiagnosedSilenceableFailure
-transform::HLSConvertCollapseShapeToITensorOp::applyToOne(
+transform::HLSConvertCollapseShapeToITensorReassociateOp::applyToOne(
     transform::TransformRewriter &rewriter,
     tensor::CollapseShapeOp collapseShape,
     transform::ApplyToEachResultList &results,

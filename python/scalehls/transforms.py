@@ -136,7 +136,7 @@ def convert_generic_op_to_stream(target: Value, parallel_tile_sizes: List[int], 
 
     match_result = match_linalg_result(
         tile_op.tiled_linalg_op, "tensor.insert_slice")
-    hls_transform.HLSConvertInsertSliceToITensorOp(
+    hls_transform.HLSConvertInsertSliceToITensorWriteOp(
         transform.OperationType.get("hls.itensor_init"),
         transform.OperationType.get("hls.itensor_write"),
         transform.OperationType.get("hls.itensor_read_full_tensor"),
@@ -163,7 +163,7 @@ def convert_generic_op_to_stream(target: Value, parallel_tile_sizes: List[int], 
             merge_op = hls_transform.HLSMergeConsecutiveExtractSliceOp(
                 transform.OperationType.get("tensor.extract_slice"),
                 match_input)
-            convert_op = hls_transform.HLSConvertExtractSliceToITensorOp(
+            convert_op = hls_transform.HLSConvertExtractSliceToITensorReadOp(
                 transform.OperationType.get("hls.itensor_write_full_tensor"),
                 transform.OperationType.get("hls.itensor_read"),
                 merge_op.result)
@@ -175,7 +175,7 @@ def convert_generic_op_to_stream(target: Value, parallel_tile_sizes: List[int], 
 
 
 def convert_expand_shape_op_to_stream(target: Value, source_tile_sizes: List[int], result_tile_sizes: List[int]):
-    stream_op = hls_transform.HLSConvertExpandShapeToITensorOp(
+    stream_op = hls_transform.HLSConvertExpandShapeToITensorReassociateOp(
         transform.OperationType.get("hls.itensor_write_full_tensor"),
         transform.OperationType.get("hls.itensor_reassociate"),
         transform.OperationType.get("hls.itensor_read_full_tensor"),
@@ -186,7 +186,7 @@ def convert_expand_shape_op_to_stream(target: Value, source_tile_sizes: List[int
 
 
 def convert_collapse_shape_op_to_stream(target: Value, source_tile_sizes: List[int], result_tile_sizes: List[int]):
-    stream_op = hls_transform.HLSConvertCollapseShapeToITensorOp(
+    stream_op = hls_transform.HLSConvertCollapseShapeToITensorReassociateOp(
         transform.OperationType.get("hls.itensor_write_full_tensor"),
         transform.OperationType.get("hls.itensor_reassociate"),
         transform.OperationType.get("hls.itensor_read_full_tensor"),
