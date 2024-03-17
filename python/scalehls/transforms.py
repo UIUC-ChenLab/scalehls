@@ -11,7 +11,7 @@ from graphviz import Digraph
 import re
 import functools
 import operator
-from .dialects import hls, linalg, tensor, func, hls_transform, transform
+from .dialects import hls, linalg, tensor, func, hls_transform, transform, arith
 from .ir import IntegerType, IntegerAttr, StringAttr, ArrayAttr, Value, InsertionPoint, UnitAttr, DenseI64ArrayAttr, Block, Operation, Type, Location, Module, Context
 from .dialects.transform import structured as linalg_transform
 from .dialects.transform import tensor as tensor_transform
@@ -234,6 +234,10 @@ def i64_param(value: int):
         Type.parse("!transform.any_param"), i64_attr(value))
 
 
+def is_nontrivial_node(node: Operation):
+    return not isinstance(node, (arith.ConstantOp, hls.TensorInitOp, tensor.EmptyOp))
+
+
 def construct_graph(module: Module, ):
     def find_func(module: Module, name: str) -> Optional[func.FuncOp]:
         for op in module.body:
@@ -262,17 +266,14 @@ def construct_graph(module: Module, ):
 
 
 def print_graph(g: nx.Graph, name: str):
-    def should_print(name: str):
-        return name != "arith.constant" and name != "hls.tensor_init" and name != "tensor.empty"
-
     dot = Digraph()
     for node, data in g.nodes(data=True):
-        if should_print(data["name"]):
+        if is_nontrivial_node(data["name"]):
             dot.node(data["name"] + str(data["id"]))
     for prev, next, data in g.edges(data=True):
         prev_data = g.nodes[prev]
         next_data = g.nodes[next]
-        if should_print(prev_data["name"]) and should_print(next_data["name"]):
+        if is_nontrivial_node(prev) and is_nontrivial_node(next):
             dot.edge(prev_data["name"] + str(prev_data["id"]),
                      next_data["name"] + str(next_data["id"]))
 

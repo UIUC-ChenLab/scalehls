@@ -4,6 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Tensor/Transforms/Transforms.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Dialect/HLS/Transforms/Passes.h"
@@ -394,12 +395,15 @@ private:
 } // namespace
 
 namespace {
-struct FoldPackOpIntoConstantOp : public OpRewritePattern<tensor::PackOp> {
+struct LowerPackOp : public OpRewritePattern<tensor::PackOp> {
   using OpRewritePattern<tensor::PackOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(tensor::PackOp pack,
                                 PatternRewriter &rewriter) const override {
-    return failure();
+    if (pack.getPaddingValue() ||
+        !pack.getSource().getDefiningOp<arith::ConstantOp>())
+      return failure();
+    return linalg::lowerPack(rewriter, pack);
   }
 };
 } // namespace
@@ -419,8 +423,12 @@ struct MaterializeITensor : public MaterializeITensorBase<MaterializeITensor> {
     patterns.add<MaterializeITensorWriteFullTensorOp>(context, enablePacking);
     patterns.add<MaterializeITensorReadFullTensorOp>(context, enablePacking);
     patterns.add<MaterializeITensorBufferOp>(context, enablePacking);
-    if (enablePacking)
-      patterns.add<FoldPackOpIntoConstantOp>(context);
+    if (enablePacking) {
+      patterns.add<LowerPackOp>(context);
+      patterns.add<linalg::LinalgGeneralizationPattern>(context);
+      linalg::populateConstantFoldLinalgOperations(
+          patterns, [&](OpOperand *fusedOperand) { return true; });
+    }
     (void)applyPatternsAndFoldGreedily(op, std::move(patterns));
   }
 };
