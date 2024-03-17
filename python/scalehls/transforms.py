@@ -408,6 +408,12 @@ def apply_scalarize_itensor(module: Module):
     pm.run(module.operation)
 
 
+def apply_lower_itensor_to_stream(module: Module):
+    pm = PassManager.parse(
+        "builtin.module(func.func(scalehls-lower-itensor-to-stream), cse, canonicalize)")
+    pm.run(module.operation)
+
+
 def apply_comprehensive_bufferize_passes(module: Module):
     pm = PassManager()
     add_comprehensive_bufferize_passes(pm)

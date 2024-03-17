@@ -41,20 +41,22 @@ static ITensorType getScalarITensorType(ITensorType iTensor) {
 }
 
 namespace {
-struct ScalarizeITensorOp : public OpRewritePattern<hls::ITensorInitOp> {
+struct ScalarizeITensorInitOp : public OpRewritePattern<hls::ITensorInitOp> {
   using OpRewritePattern<hls::ITensorInitOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(hls::ITensorInitOp channel,
+  LogicalResult matchAndRewrite(hls::ITensorInitOp init,
                                 PatternRewriter &rewriter) const override {
-    auto iTensorType = channel.getType();
+    auto iTensorType = init.getType();
     if (!iTensorType.hasShapedElementType())
       return failure();
 
-    channel.getResult().setType(getScalarITensorType(iTensorType));
-    rewriter.setInsertionPointAfter(channel);
-    auto cast = rewriter.create<hls::ITensorCastOp>(channel.getLoc(),
-                                                    iTensorType, channel);
-    rewriter.replaceAllUsesExcept(channel, cast.getResult(), cast);
+    rewriter.updateRootInPlace(init, [&]() {
+      init.getResult().setType(getScalarITensorType(iTensorType));
+    });
+    rewriter.setInsertionPointAfter(init);
+    auto cast =
+        rewriter.create<hls::ITensorCastOp>(init.getLoc(), iTensorType, init);
+    rewriter.replaceAllUsesExcept(init, cast.getResult(), cast);
     return success();
   }
 };
@@ -213,7 +215,9 @@ struct ScalarizeForOp : public OpRewritePattern<scf::ForOp> {
         auto iterArgCast = rewriter.create<hls::ITensorCastOp>(
             op.getLoc(), iTensorType, iterArg);
         rewriter.replaceAllUsesExcept(iterArg, iterArgCast, iterArgCast);
+        rewriter.startRootUpdate(op);
         iterArg.setType(scalarITensorType);
+        rewriter.finalizeRootUpdate(op);
 
         // Cast the yeilded value's type.
         rewriter.setInsertionPoint(yieldOp);
@@ -228,7 +232,9 @@ struct ScalarizeForOp : public OpRewritePattern<scf::ForOp> {
         auto resultCast = rewriter.create<hls::ITensorCastOp>(
             op.getLoc(), iTensorType, result);
         rewriter.replaceAllUsesExcept(result, resultCast, resultCast);
+        rewriter.startRootUpdate(op);
         result.setType(scalarITensorType);
+        rewriter.finalizeRootUpdate(op);
       }
     }
     return success(hasChanged);
@@ -264,7 +270,9 @@ struct ScalarizeScheduleOrTaskOp : public OpRewritePattern<OpTy> {
         auto castBack = rewriter.create<hls::ITensorCastOp>(
             op.getLoc(), iTensorType, result);
         rewriter.replaceAllUsesExcept(result, castBack, castBack);
+        rewriter.startRootUpdate(op);
         result.setType(scalarITensorType);
+        rewriter.finalizeRootUpdate(op);
       }
     }
     return success(hasChanged);
@@ -279,7 +287,7 @@ struct ScalarizeITensor : public ScalarizeITensorBase<ScalarizeITensor> {
     auto context = op->getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<ScalarizeITensorOp>(context);
+    patterns.add<ScalarizeITensorInitOp>(context);
     patterns.add<ScalarizeITensorReadOp>(context);
     patterns.add<ScalarizeITensorWriteOp>(context);
     patterns.add<ScalarizeITensorReassociateOp>(context);

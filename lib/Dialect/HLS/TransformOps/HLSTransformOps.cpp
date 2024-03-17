@@ -210,8 +210,10 @@ transform::HLSConvertInsertSliceToITensorOp::applyToOne(
   for (auto loop : loops) {
     auto &iterOperand = loop->getOpOperand(iterIdx);
     auto iterType = iterOperand.get().getType();
-    loop.getTiedLoopRegionIterArg(&iterOperand).setType(iterType);
-    loop.getTiedLoopResult(&iterOperand).setType(iterType);
+    rewriter.updateRootInPlace(loop, [&]() {
+      loop.getTiedLoopRegionIterArg(&iterOperand).setType(iterType);
+      loop.getTiedLoopResult(&iterOperand).setType(iterType);
+    });
   }
 
   // Replace the insert_slice op with itensor_write op.

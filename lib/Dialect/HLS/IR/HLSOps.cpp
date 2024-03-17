@@ -165,6 +165,8 @@ LogicalResult ITensorBufferOp::verify() {
 LogicalResult ITensorReassociateOp::verify() {
   if (getSourceType().getDataType() != getResultType().getDataType())
     return emitOpError("source and result itensor data type doesn't match");
+  if (getSourceType().getDepth() != getResultType().getDepth())
+    return emitOpError("source and result itensor depth doesn't match");
 
   // Verify the shape reassociation.
   auto lowShapeType = getExpandShape() ? getSourceType() : getResultType();
@@ -221,6 +223,8 @@ LogicalResult ITensorCastOp::verify() {
     return emitOpError("input and output are not castable\ninput shape: ")
            << getSourceType().getShape()
            << ", output shape: " << getResultType().getShape();
+    if (getSourceType().getDepth() != getResultType().getDepth())
+      return emitOpError("source and result itensor depth doesn't match");
   }
   return success();
 }
@@ -230,57 +234,8 @@ OpFoldResult ITensorCastOp::fold(FoldAdaptor adaptor) {
 }
 
 //===----------------------------------------------------------------------===//
-// ITensorAllocOp
-//===----------------------------------------------------------------------===//
-
-LogicalResult ITensorAllocOp::verify() {
-  if (auto initValue = getInitValue())
-    if (initValue.getType() != getType().getDataType())
-      return emitOpError("initial value doesn't align with itensor data type");
-  return success();
-}
-
-LogicalResult ITensorAllocOp::canonicalize(ITensorAllocOp op,
-                                           PatternRewriter &rewriter) {
-  if (op->hasOneUse())
-    return failure();
-
-  for (auto &use : llvm::make_early_inc_range(op->getUses())) {
-    rewriter.setInsertionPoint(use.getOwner());
-    auto newOp = cast<hls::ITensorAllocOp>(rewriter.clone(*op));
-    rewriter.replaceUsesWithIf(
-        op.getResult(), newOp.getResult(),
-        [&](OpOperand &operand) { return operand == use; });
-  }
-  rewriter.eraseOp(op);
-  return success();
-}
-
-//===----------------------------------------------------------------------===//
-// ITensorToStreamOp
-//===----------------------------------------------------------------------===//
-
-OpFoldResult ITensorToStreamOp::fold(FoldAdaptor adaptor) {
-  if (auto streamToITensor = getStream().getDefiningOp<StreamToITensorOp>())
-    if (streamToITensor.getStreamType() == getStreamType())
-      return streamToITensor.getStream();
-  return {};
-}
-
-//===----------------------------------------------------------------------===//
 // StreamOp
 //===----------------------------------------------------------------------===//
-
-template <typename Effect>
-static SmallVector<OpOperand *> getEffectUses(TypedValue<StreamType> stream) {
-  SmallVector<OpOperand *> uses;
-  for (auto &use : stream.getUses()) {
-    if (auto effectsUser = dyn_cast<MemoryEffectOpInterface>(use.getOwner()))
-      if (effectsUser.getEffectOnValue<Effect>(stream))
-        uses.push_back(&use);
-  }
-  return uses;
-}
 
 LogicalResult StreamOp::verify() {
   // We don't do any inter-procedural analysis for now.
@@ -288,8 +243,8 @@ LogicalResult StreamOp::verify() {
                    [](Operation *user) { return isa<CallOpInterface>(user); }))
     return success();
 
-  auto writeUses = getEffectUses<MemoryEffects::Write>(getStream());
-  auto readUses = getEffectUses<MemoryEffects::Read>(getStream());
+  auto writeUses = getWriteUses();
+  auto readUses = getReadUses();
   if (writeUses.size() != 1)
     return emitOpError("stream channel must be written exactly once");
   if (readUses.size() != 1)
@@ -318,9 +273,44 @@ void StreamOp::getEffects(
                        SideEffects::DefaultResource::get());
 }
 
+template <typename Effect>
+static SmallVector<OpOperand *> getEffectUses(TypedValue<StreamType> stream) {
+  SmallVector<OpOperand *> uses;
+  for (auto &use : stream.getUses()) {
+    if (auto effectsUser = dyn_cast<MemoryEffectOpInterface>(use.getOwner()))
+      if (effectsUser.getEffectOnValue<Effect>(stream))
+        uses.push_back(&use);
+  }
+  return uses;
+}
+
+SmallVector<OpOperand *> StreamOp::getReadUses() {
+  return getEffectUses<MemoryEffects::Read>(getStream());
+}
+SmallVector<OpOperand *> StreamOp::getWriteUses() {
+  return getEffectUses<MemoryEffects::Write>(getStream());
+}
+
+hls::StreamReadOp StreamOp::getReader() {
+  auto readUses = getReadUses();
+  assert(readUses.size() == 1 && "stream must only have one read use");
+  return cast<hls::StreamReadOp>(readUses.front()->getOwner());
+}
+hls::StreamWriteOp StreamOp::getWriter() {
+  auto writeUses = getWriteUses();
+  assert(writeUses.size() == 1 && "stream must only have one write use");
+  return cast<hls::StreamWriteOp>(writeUses.front()->getOwner());
+}
+
 //===----------------------------------------------------------------------===//
 // StreamReadOp
 //===----------------------------------------------------------------------===//
+
+LogicalResult StreamReadOp::verify() {
+  if (getValueType() != getSourceType().getElementType())
+    return emitOpError("value type doesn't align with stream type");
+  return success();
+}
 
 void StreamReadOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
@@ -332,6 +322,12 @@ void StreamReadOp::getEffects(
 //===----------------------------------------------------------------------===//
 // StreamWriteOp
 //===----------------------------------------------------------------------===//
+
+LogicalResult StreamWriteOp::verify() {
+  if (getValueType() != getDestType().getElementType())
+    return emitOpError("value type doesn't align with stream type");
+  return success();
+}
 
 void StreamWriteOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>

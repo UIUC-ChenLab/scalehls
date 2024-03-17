@@ -239,24 +239,6 @@ def ITensorCastOp : HLSOp<"itensor_cast", [Pure,
 // Streamerization Operations
 //===----------------------------------------------------------------------===//
 
-def ITensorAllocOp : HLSOp<"itensor_alloc"> {
-  let summary = "Allocate an iterative tensor";
-
-  let arguments = (ins Optional<AnyType>:$initValue);
-  let results = (outs AnyITensor:$result);
-  let assemblyFormat = [{
-    (`init` $initValue^)? attr-dict `:` functional-type(operands, results)
-  }];
-
-  let hasVerifier = 1;
-  let hasCanonicalizeMethod = 1;
-
-  let builders = [
-    OpBuilder<(ins "mlir::Type":$result),
-        "build($_builder, $_state, result, nullptr);">
-  ];
-}
-
 def StreamToITensorOp : HLSOp<"stream_to_itensor"> {
   let summary = "Convert a stream channel to a itensor";
 
@@ -281,8 +263,6 @@ def ITensorToStreamOp : HLSOp<"itensor_to_stream"> {
     $iTensor attr-dict `:` functional-type(operands, results)
   }];
 
-  let hasFolder = 1;
-
   let extraClassDeclaration = [{
     ITensorType getITensorType() { return getITensor().getType(); }
     StreamType getStreamType() { return getStream().getType(); }
@@ -302,6 +282,14 @@ def StreamOp : HLSOp<"stream", [
 
   let hasVerifier = 1;
   let hasCanonicalizeMethod = 1;
+
+  let extraClassDeclaration = [{
+    SmallVector<OpOperand *> getReadUses();
+    SmallVector<OpOperand *> getWriteUses();
+
+    hls::StreamReadOp getReader();
+    hls::StreamWriteOp getWriter();
+  }];
 }
 
 def StreamReadOp : HLSOp<"stream_read", [
@@ -317,6 +305,8 @@ def StreamReadOp : HLSOp<"stream_read", [
     $source attr-dict `:` functional-type(operands, results)
   }];
 
+  let hasVerifier = 1;
+
   let extraClassDeclaration = [{
     StreamType getSourceType() { return getSource().getType(); }
     Type getValueType() { return getValue().getType(); }
@@ -327,14 +317,15 @@ def StreamWriteOp : HLSOp<"stream_write", [
     DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Write an element to stream channel";
   let description = [{
-    Write/push a value to a stream channel. Each stream channel can only be
-    written once.
+    Write/push a value to a stream channel.
   }];
 
   let arguments = (ins AnyType:$value, AnyStream:$dest);
   let assemblyFormat = [{
     $value `into` $dest attr-dict `:` type(operands)
   }];
+
+  let hasVerifier = 1;
 
   let extraClassDeclaration = [{
     StreamType getDestType() { return getDest().getType(); }
