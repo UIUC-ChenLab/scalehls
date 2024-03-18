@@ -14,7 +14,7 @@ using namespace scalehls;
 using namespace hls;
 
 namespace {
-struct EliminateIntermediateTensor
+struct ReduceFullTensorToITensorBufferOp
     : public OpRewritePattern<hls::ITensorWriteFullTensorOp> {
   using OpRewritePattern<hls::ITensorWriteFullTensorOp>::OpRewritePattern;
 
@@ -98,19 +98,19 @@ struct EliminateIntermediateTensor
 } // namespace
 
 namespace {
-struct ReduceTensorToITensor
-    : public ReduceTensorToITensorBase<ReduceTensorToITensor> {
+struct ReduceFullTensorToITensor
+    : public ReduceFullTensorToITensorBase<ReduceFullTensorToITensor> {
   void runOnOperation() override {
     auto op = getOperation();
     auto context = op->getContext();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<EliminateIntermediateTensor>(context);
+    patterns.add<ReduceFullTensorToITensorBufferOp>(context);
     (void)applyPatternsAndFoldGreedily(op, std::move(patterns));
   }
 };
 } // namespace
 
-std::unique_ptr<Pass> scalehls::hls::createReduceTensorToITensorPass() {
-  return std::make_unique<ReduceTensorToITensor>();
+std::unique_ptr<Pass> scalehls::hls::createReduceFullTensorToITensorPass() {
+  return std::make_unique<ReduceFullTensorToITensor>();
 }

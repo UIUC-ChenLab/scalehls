@@ -196,31 +196,6 @@ def convert_collapse_shape_op_to_stream(target: Value, source_tile_sizes: List[i
     return stream_op.itensor_reassociate
 
 
-# def pack(target: Value, sizes: List[int]):
-#     return linalg_transform.PackOp(
-#         transform.any_op_t(),
-#         target,
-#         [],
-#         static_packed_sizes=DenseI64ArrayAttr.get(sizes))
-
-
-# def lower_pack(target: Value):
-#     return linalg_transform.LowerPackOp(
-#         transform.OperationType.get("tensor.pad"),
-#         transform.OperationType.get("tensor.expand_shape"),
-#         transform.OperationType.get("linalg.transpose"),
-#         target)
-
-
-# def lower_unpack(target: Value):
-#     return linalg_transform.LowerUnPackOp(
-#         transform.OperationType.get("tensor.empty"),
-#         transform.OperationType.get("linalg.transpose"),
-#         transform.OperationType.get("tensor.collapse_shape"),
-#         transform.OperationType.get("tensor.extract_slice"),
-#         target)
-
-
 def annotate(target: Value, annotation: str, param=None):
     return transform.AnnotateOp(target, annotation, param=param)
 
@@ -390,9 +365,9 @@ def apply_transform_sequence(module: Module, sequence: transform.NamedSequenceOp
     pm.run(module.operation)
 
 
-def apply_reduce_tensor_to_itensor(module: Module):
+def apply_reduce_full_tensor_to_itensor(module: Module):
     pm = PassManager.parse(
-        "builtin.module(func.func(scalehls-reduce-tensor-to-itensor), cse, canonicalize)")
+        "builtin.module(func.func(scalehls-reduce-full-tensor-to-itensor), cse, canonicalize)")
     pm.run(module.operation)
 
 

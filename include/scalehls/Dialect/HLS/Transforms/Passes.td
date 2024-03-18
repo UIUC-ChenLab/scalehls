@@ -14,10 +14,12 @@ def Preprocess : Pass<"scalehls-preprocess", "func::FuncOp"> {
   let constructor = "mlir::scalehls::hls::createPreprocessPass()";
 }
 
-def ReduceTensorToITensor :
-    Pass<"scalehls-reduce-tensor-to-itensor", "func::FuncOp"> {
-  let summary = "Reduce immediate tensors to itensor buffers";
-  let constructor = "mlir::scalehls::hls::createReduceTensorToITensorPass()";
+def ReduceFullTensorToITensor :
+    Pass<"scalehls-reduce-full-tensor-to-itensor", "func::FuncOp"> {
+  let summary = "Reduce immediate full tensors to itensor buffers";
+  let constructor = [{
+    mlir::scalehls::hls::createReduceFullTensorToITensorPass()
+  }];
 }
 
 def MaterializeITensor : Pass<"scalehls-materialize-itensor", "func::FuncOp"> {
