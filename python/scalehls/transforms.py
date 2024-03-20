@@ -511,7 +511,8 @@ class DesignSpaceGraph(nx.Graph):
 
         unroll_sizes = []
         for range, type in loop_properties:
-            unroll_size = default_unroll_size if range > default_unroll_size else 0
+            unroll_size = default_unroll_size \
+                if range > default_unroll_size else 0
             if type == "parallel":
                 unroll_sizes.append(unroll_size)
             elif type == "reduction":
@@ -539,10 +540,12 @@ class DesignSpaceGraph(nx.Graph):
         source_tile_sizes = []
         result_tile_sizes = []
         for source_dim_size in node.src.type.shape:
-            tile_size = default_tile_size if source_dim_size > default_tile_size else 1
+            tile_size = default_tile_size \
+                if source_dim_size > default_tile_size else 1
             source_tile_sizes.append(tile_size)
         for result_dim_size in node.result.type.shape:
-            tile_size = default_tile_size if result_dim_size > default_tile_size else 1
+            tile_size = default_tile_size \
+                if result_dim_size > default_tile_size else 1
             result_tile_sizes.append(tile_size)
 
         # Support more flexible tile sizes.
@@ -552,10 +555,14 @@ class DesignSpaceGraph(nx.Graph):
                 "Source tile sizes do not match result tile sizes")
         return source_tile_sizes, result_tile_sizes
 
-    def naive_exploration(self, default_tile_size: int = 16, default_unroll_size: int = 2):
+    def naive_exploration(
+            self,
+            default_tile_size: int = 16,
+            default_unroll_size: int = 2):
         for node, data in self.nodes(data=True):
             if isinstance(node, linalg.GenericOp):
-                data["parallel_tile_sizes"], data["reduction_tile_sizes"] = self.get_linalg_op_naive_tile_sizes(
+                data["parallel_tile_sizes"], data["reduction_tile_sizes"] = \
+                    self.get_linalg_op_naive_tile_sizes(
                     node, default_tile_size=default_tile_size)
                 data["unroll_sizes"] = self.get_linalg_op_naive_unroll_sizes(
                     node, default_unroll_size=default_unroll_size)
@@ -563,20 +570,33 @@ class DesignSpaceGraph(nx.Graph):
                     node)
 
             if isinstance(node, (tensor.ExpandShapeOp, tensor.CollapseShapeOp)):
-                data["source_tile_sizes"], data["result_tile_sizes"] = self.get_reshape_op_naive_tile_sizes(
+                data["source_tile_sizes"], data["result_tile_sizes"] = \
+                    self.get_reshape_op_naive_tile_sizes(
                     node, default_tile_size=default_unroll_size)
 
-    def print_dot(self, file_name: str):
+    def print_dot(self, file_name: str, print_params: bool = False):
         dot = Digraph()
         for node, data in self.nodes(data=True):
             if self.is_nontrivial_node(node):
-                dot.node(data["name"] + str(data["id"]))
+                if print_params:
+                    label = data["name"] + " " + str(data["id"]) + "\n"
+                    for key, value in data.items():
+                        if key == "name" or key == "id":
+                            continue
+                        if isinstance(value, (int, str)):
+                            label += key + ": " + str(value) + "\n"
+                        elif isinstance(value, list):
+                            label += key + ": [" + \
+                                ", ".join([str(x) for x in value]) + "]\n"
+                    dot.node(str(data["id"]), label)
+                else:
+                    dot.node(str(data["id"]), data["name"] +
+                             " " + str(data["id"]))
         for prev, next, data in self.edges(data=True):
             prev_data = self.nodes[prev]
             next_data = self.nodes[next]
             if self.is_nontrivial_node(prev) and self.is_nontrivial_node(next):
-                dot.edge(prev_data["name"] + str(prev_data["id"]),
-                         next_data["name"] + str(next_data["id"]))
+                dot.edge(str(prev_data["id"]), str(next_data["id"]))
         dot.render(file_name, format='png', cleanup=True)
 
 
