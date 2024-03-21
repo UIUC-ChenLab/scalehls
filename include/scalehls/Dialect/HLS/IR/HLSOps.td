@@ -401,7 +401,7 @@ def YieldOp : HLSOp<"yield", [Pure, ReturnLike, Terminator,
   let builders = [OpBuilder<(ins), "build($_builder, $_state, std::nullopt);">];
 }
 
-def BufferOp : HLSOp<"buffer", [DeclareOpInterfaceMethods<BufferLikeInterface>,
+def BufferOp : HLSOp<"buffer", [
       DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Represent a dataflow buffer";
 
@@ -415,18 +415,10 @@ def BufferOp : HLSOp<"buffer", [DeclareOpInterfaceMethods<BufferLikeInterface>,
     OpBuilder<(ins "mlir::Type":$memref),
         "build($_builder, $_state, memref, nullptr);">
   ];
-}
 
-def ConstBufferOp : HLSOp<"const_buffer", [
-      DeclareOpInterfaceMethods<BufferLikeInterface>,
-      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
-  let summary = "Represent a constant dataflow buffer";
-
-  let arguments = (ins ElementsAttr:$value);
-  let results = (outs AnyBuffer:$memref);
-  let assemblyFormat = "attr-dict `:` type($memref)";
-
-  let hasVerifier = 1;
+  let extraClassDeclaration = [{
+    MemRefType getMemrefType() { return getMemref().getType(); }
+  }];
 }
 
 //===----------------------------------------------------------------------===//

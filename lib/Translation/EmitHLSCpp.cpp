@@ -289,7 +289,6 @@ public:
       : ScaleHLSEmitterBase(state) {}
 
   /// HLS dialect operation emitters.
-  void emitConstBuffer(ConstBufferOp op);
   void emitStreamChannel(StreamOp op);
   void emitStreamRead(StreamReadOp op);
   void emitStreamWrite(StreamWriteOp op);
@@ -459,7 +458,6 @@ public:
 
   /// HLS dialect operations.
   bool visitOp(BufferOp op) { return emitter.emitAlloc(op), true; }
-  bool visitOp(ConstBufferOp op) { return emitter.emitConstBuffer(op), true; }
   bool visitOp(StreamOp op) { return emitter.emitStreamChannel(op), true; }
   bool visitOp(StreamReadOp op) { return emitter.emitStreamRead(op), true; }
   bool visitOp(StreamWriteOp op) { return emitter.emitStreamWrite(op), true; }
@@ -688,11 +686,6 @@ bool ExprVisitor::visitOp(arith::CmpIOp op) {
 //===----------------------------------------------------------------------===//
 
 /// HLS dialect operation emitters.
-void ModuleEmitter::emitConstBuffer(ConstBufferOp op) {
-  emitConstant(op);
-  emitArrayDirectives(op.getResult());
-}
-
 void ModuleEmitter::emitStreamChannel(StreamOp op) {
   indent();
   emitValue(op.getStream());

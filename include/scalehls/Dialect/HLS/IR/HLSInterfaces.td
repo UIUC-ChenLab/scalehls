@@ -95,24 +95,4 @@ def ITensorViewLikeOpInterface : OpInterface<"ITensorViewLikeOpInterface"> {
   }];
 }
 
-def BufferLikeInterface : OpInterface<"BufferLikeInterface"> {
-  let description = [{
-    This interface is used to represent dataflow buffers.
-  }];
-  string cppNamespace = "mlir::scalehls::hls";
-
-  let methods = [
-    InterfaceMethod<"Return the memref result of the buffer",
-      "mlir::Value", "getMemref", (ins), [{ return $_op.getMemref(); }]
-    >,
-    InterfaceMethod<"Return the memref type of the buffer",
-      "mlir::MemRefType", "getMemrefType", (ins), [{
-        return $_op.getMemref().getType().template cast<mlir::MemRefType>();
-      }]
-    >,
-    InterfaceMethod<"Return the initial value of the buffer",
-                    "std::optional<mlir::TypedAttr>", "getBufferInitValue">,
-  ];
-}
-
 #endif // SCALEHLS_DIALECT_HLS_HLSINTERFACES_TD
