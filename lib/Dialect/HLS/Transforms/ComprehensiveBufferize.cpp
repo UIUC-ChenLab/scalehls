@@ -71,11 +71,12 @@ static OneShotBufferizationOptions getBufferizationOptions() {
   OneShotBufferizationOptions options;
   options.setFunctionBoundaryTypeConversion(LayoutMapOption::IdentityLayoutMap);
 
-  // bufferization.to_memref is used to bufferize constants. We'd like to leave
-  // the arith.constant as is and insert bufferization.to_memref to convert the
-  // tensor to memref.
-  // options.opFilter.denyOperation<arith::ConstantOp>();
-  // options.opFilter.denyOperation<bufferization::ToMemrefOp>();
+  // We'd like to leave the tensor.pack/unpack op as is and insert bufferization
+  // ops to convert the memref to tensor and vice versa.
+  options.opFilter.denyOperation<tensor::PackOp>();
+  options.opFilter.denyOperation<tensor::UnPackOp>();
+  options.opFilter.denyOperation<bufferization::ToMemrefOp>();
+  options.opFilter.denyOperation<bufferization::ToTensorOp>();
 
   // This type converter converts tensor types to memref types when no exact
   // memref type can be inferred from the context.

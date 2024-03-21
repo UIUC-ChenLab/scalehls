@@ -46,11 +46,11 @@ struct GenerateRuntimeFunc
     SmallVector<Value, 32> topInputs(runtime.getArguments());
 
     // A helper to demote a buffer to the runtime function.
-    auto demoteBuffer = [&](hls::BufferLikeInterface buffer) {
+    auto demoteBuffer = [&](hls::BufferOp buffer) {
       buffer->moveBefore(runtimeReturn);
-      topInputs.push_back(buffer.getMemref());
-      buffer.getMemref().replaceAllUsesExcept(
-          top.front().addArgument(buffer.getMemrefType(), buffer.getLoc()),
+      topInputs.push_back(buffer.getBuffer());
+      buffer.getBuffer().replaceAllUsesExcept(
+          top.front().addArgument(buffer.getBufferType(), buffer.getLoc()),
           runtimeReturn);
     };
 
@@ -58,8 +58,7 @@ struct GenerateRuntimeFunc
     // and then erased from the returning values.
     BitVector eraseIndices;
     for (auto returnedValue : topReturn->getOperands()) {
-      if (auto buffer =
-              returnedValue.getDefiningOp<hls::BufferLikeInterface>()) {
+      if (auto buffer = returnedValue.getDefiningOp<hls::BufferOp>()) {
         demoteBuffer(buffer);
         eraseIndices.push_back(true);
       } else
@@ -68,9 +67,8 @@ struct GenerateRuntimeFunc
     topReturn->eraseOperands(eraseIndices);
 
     // For now, we demote a buffer if it exceeds a threshold.
-    for (auto buffer :
-         llvm::make_early_inc_range(top.getOps<hls::BufferLikeInterface>()))
-      if (buffer.getMemrefType().getNumElements() > 1024)
+    for (auto buffer : llvm::make_early_inc_range(top.getOps<hls::BufferOp>()))
+      if (buffer.getBufferType().getNumElements() > 1024)
         demoteBuffer(buffer);
 
     // Update the top function and call.

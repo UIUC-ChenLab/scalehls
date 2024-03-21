@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Analysis/Liveness.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/Dominance.h"
 #include "scalehls/Dialect/HLS/IR/HLS.h"
 #include "scalehls/Utils/Utils.h"
@@ -408,36 +409,36 @@ private:
 };
 } // namespace
 
-namespace {
-template <typename OpType>
-struct DemoteScheduleOrTaskOutputs : public OpRewritePattern<OpType> {
-  using OpRewritePattern<OpType>::OpRewritePattern;
+// namespace {
+// template <typename OpType>
+// struct DemoteScheduleOrTaskOutputs : public OpRewritePattern<OpType> {
+//   using OpRewritePattern<OpType>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(OpType op,
-                                PatternRewriter &rewriter) const override {
-    auto yield = op.getYieldOp();
-    bool hasChanged = false;
+//   LogicalResult matchAndRewrite(OpType op,
+//                                 PatternRewriter &rewriter) const override {
+//     auto yield = op.getYieldOp();
+//     bool hasChanged = false;
 
-    for (auto [yieldedValue, result] :
-         llvm::zip(yield.getOperands(), op.getResults())) {
-      // Try to move yielded buffer/stream to the upper hierarchy.
-      auto defOp = yieldedValue.getDefiningOp();
-      if (defOp && isa<BufferLikeInterface, StreamOp>(defOp))
-        if (op->isAncestor(defOp)) {
-          defOp->moveBefore(op);
-          hasChanged = true;
-        }
+//     for (auto [yieldedValue, result] :
+//          llvm::zip(yield.getOperands(), op.getResults())) {
+//       // Try to move yielded buffer/stream to the upper hierarchy.
+//       auto defOp = yieldedValue.getDefiningOp();
+//       if (defOp && isa<BufferLikeInterface, StreamOp>(defOp))
+//         if (op->isAncestor(defOp)) {
+//           defOp->moveBefore(op);
+//           hasChanged = true;
+//         }
 
-      // If the yielded value is defined in an ancestor region of the current
-      if (yieldedValue.getParentRegion()->isProperAncestor(&op.getBody())) {
-        rewriter.replaceAllUsesWith(result, yieldedValue);
-        hasChanged = true;
-      }
-    }
-    return success(hasChanged);
-  }
-};
-} // namespace
+//       // If the yielded value is defined in an ancestor region of the current
+//       if (yieldedValue.getParentRegion()->isProperAncestor(&op.getBody())) {
+//         rewriter.replaceAllUsesWith(result, yieldedValue);
+//         hasChanged = true;
+//       }
+//     }
+//     return success(hasChanged);
+//   }
+// };
+// } // namespace
 
 void ScheduleOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                              MLIRContext *context) {
@@ -445,7 +446,7 @@ void ScheduleOp::getCanonicalizationPatterns(RewritePatternSet &results,
   results.add<InlineScheduleOrTask<ScheduleOp>>(context, [](ScheduleOp op) {
     return op.getOps<TaskOp>().empty() || llvm::hasSingleElement(op.getOps());
   });
-  results.add<DemoteScheduleOrTaskOutputs<ScheduleOp>>(context);
+  // results.add<DemoteScheduleOrTaskOutputs<ScheduleOp>>(context);
 }
 
 LogicalResult ScheduleOp::verify() {
@@ -471,7 +472,7 @@ void TaskOp::getCanonicalizationPatterns(RewritePatternSet &results,
                op.getParentOp<ScheduleOp>().getOps<TaskOp>()) ||
            llvm::hasSingleElement(op.getOps());
   });
-  results.add<DemoteScheduleOrTaskOutputs<TaskOp>>(context);
+  // results.add<DemoteScheduleOrTaskOutputs<TaskOp>>(context);
 }
 
 LogicalResult TaskOp::verify() {
@@ -520,14 +521,11 @@ struct FlattenReadOnlyBuffer : public OpRewritePattern<BufferOp> {
   LogicalResult matchAndRewrite(BufferOp buffer,
                                 PatternRewriter &rewriter) const override {
     if (buffer.getInitValue() &&
-        llvm::all_of(buffer->getUsers(),
-                     [](Operation *user) { return isa<AffineLoadOp>(user); })) {
-      auto initValue = buffer.getInitValue().value();
-      auto constant =
-          rewriter.create<arith::ConstantOp>(buffer.getLoc(), initValue);
+        llvm::all_of(buffer->getUsers(), [](Operation *user) {
+          return isa<AffineLoadOp, memref::LoadOp>(user);
+        })) {
       for (auto user : buffer->getUsers())
-        rewriter.replaceOp(user, constant.getResult());
-      rewriter.eraseOp(buffer);
+        rewriter.replaceOp(user, buffer.getInitValue());
       return success();
     }
     return failure();
@@ -542,46 +540,15 @@ void BufferOp::getCanonicalizationPatterns(RewritePatternSet &results,
 
 LogicalResult BufferOp::verify() {
   if (auto initValue = getInitValue())
-    if (initValue.value().getType() != getType().getElementType())
-      return emitOpError("initial value's type doesn't align with memref type");
+    if (initValue.getType() != getType().getElementType() &&
+        initValue.getType() != getType())
+      return emitOpError("initial value's type doesn't align with buffer type");
   return success();
-}
-
-std::optional<TypedAttr> BufferOp::getBufferInitValue() {
-  return getInitValue();
 }
 
 void BufferOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
         &effects) {
-  effects.emplace_back(MemoryEffects::Allocate::get(), getMemref(),
-                       SideEffects::DefaultResource::get());
-}
-
-//===----------------------------------------------------------------------===//
-// ConstBufferOp
-//===----------------------------------------------------------------------===//
-
-std::optional<TypedAttr> ConstBufferOp::getBufferInitValue() {
-  return std::optional<TypedAttr>();
-}
-
-LogicalResult ConstBufferOp::verify() {
-  if (llvm::any_of((*this)->getUses(), isWritten))
-    return emitOpError("const buffer cannot be written");
-
-  auto memrefType = getType();
-  auto attrType = getValue().getType().cast<TensorType>();
-  if (memrefType.getElementType() != attrType.getElementType())
-    return emitOpError("element type mismatch");
-  if (memrefType.getShape() != attrType.getShape())
-    return emitOpError("shape mismatch");
-  return success();
-}
-
-void ConstBufferOp::getEffects(
-    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
-        &effects) {
-  effects.emplace_back(MemoryEffects::Allocate::get(), getMemref(),
+  effects.emplace_back(MemoryEffects::Allocate::get(), getBuffer(),
                        SideEffects::DefaultResource::get());
 }

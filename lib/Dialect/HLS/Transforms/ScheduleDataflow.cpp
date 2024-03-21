@@ -79,24 +79,6 @@ struct ScheduleFuncOp : public OpRewritePattern<func::FuncOp> {
 } // namespace
 
 namespace {
-struct ConvertGetGlobalToConstBuffer
-    : public OpRewritePattern<memref::GetGlobalOp> {
-  using OpRewritePattern<memref::GetGlobalOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(memref::GetGlobalOp getGlobal,
-                                PatternRewriter &rewriter) const override {
-    auto global = SymbolTable::lookupNearestSymbolFrom<memref::GlobalOp>(
-        getGlobal, getGlobal.getNameAttr());
-    rewriter.replaceOpWithNewOp<ConstBufferOp>(getGlobal, getGlobal.getType(),
-                                               global.getConstantInitValue());
-    if (global.use_empty())
-      rewriter.eraseOp(global);
-    return success();
-  }
-};
-} // namespace
-
-namespace {
 struct ScheduleDataflow : public ScheduleDataflowBase<ScheduleDataflow> {
   void runOnOperation() override {
     auto func = getOperation();
@@ -104,10 +86,6 @@ struct ScheduleDataflow : public ScheduleDataflowBase<ScheduleDataflow> {
 
     // Schedule the current function to create the dataflow hierarchy.
     mlir::RewritePatternSet patterns(context);
-    patterns.add<ConvertGetGlobalToConstBuffer>(context);
-    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
-
-    patterns.clear();
     patterns.add<ScheduleFuncOp>(context);
     (void)applyOpPatternsAndFold({func}, std::move(patterns));
   }

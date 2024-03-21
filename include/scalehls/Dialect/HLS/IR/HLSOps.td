@@ -334,8 +334,30 @@ def StreamWriteOp : HLSOp<"stream_write", [
 }
 
 //===----------------------------------------------------------------------===//
-// Functional Dataflow (FDF) Operations
+// Dataflow Operations
 //===----------------------------------------------------------------------===//
+
+def BufferOp : HLSOp<"buffer", [
+      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+  let summary = "Represent a dataflow buffer";
+
+  let arguments = (ins Optional<AnyType>:$initValue);
+  let results = (outs AnyBuffer:$buffer);
+  let assemblyFormat = [{
+    (`init` $initValue^)? attr-dict `:` functional-type(operands, results)
+  }];
+
+  let hasVerifier = 1;
+  let hasCanonicalizer = 1;
+  let builders = [
+    OpBuilder<(ins "mlir::Type":$buffer),
+        "build($_builder, $_state, buffer, nullptr);">
+  ];
+
+  let extraClassDeclaration = [{
+    MemRefType getBufferType() { return getBuffer().getType(); }
+  }];
+}
 
 def ScheduleOp : HLSOp<"schedule", [RecursiveMemoryEffects,
       SingleBlockImplicitTerminator<"YieldOp">,
@@ -399,34 +421,6 @@ def YieldOp : HLSOp<"yield", [Pure, ReturnLike, Terminator,
   let assemblyFormat = "$results attr-dict `:` type($results)";
 
   let builders = [OpBuilder<(ins), "build($_builder, $_state, std::nullopt);">];
-}
-
-def BufferOp : HLSOp<"buffer", [DeclareOpInterfaceMethods<BufferLikeInterface>,
-      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
-  let summary = "Represent a dataflow buffer";
-
-  let arguments = (ins OptionalAttr<TypedAttrInterface>:$init_value);
-  let results = (outs AnyBuffer:$memref);
-  let assemblyFormat = "attr-dict `:` type($memref)";
-
-  let hasVerifier = 1;
-  let hasCanonicalizer = 1;
-  let builders = [
-    OpBuilder<(ins "mlir::Type":$memref),
-        "build($_builder, $_state, memref, nullptr);">
-  ];
-}
-
-def ConstBufferOp : HLSOp<"const_buffer", [
-      DeclareOpInterfaceMethods<BufferLikeInterface>,
-      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
-  let summary = "Represent a constant dataflow buffer";
-
-  let arguments = (ins ElementsAttr:$value);
-  let results = (outs AnyBuffer:$memref);
-  let assemblyFormat = "attr-dict `:` type($memref)";
-
-  let hasVerifier = 1;
 }
 
 //===----------------------------------------------------------------------===//

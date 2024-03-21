@@ -289,8 +289,7 @@ public:
       : ScaleHLSEmitterBase(state) {}
 
   /// HLS dialect operation emitters.
-  void emitConstBuffer(ConstBufferOp op);
-  void emitStreamChannel(StreamOp op);
+  void emitStream(StreamOp op);
   void emitStreamRead(StreamReadOp op);
   void emitStreamWrite(StreamWriteOp op);
   template <typename AssignOpType> void emitAssign(AssignOpType op);
@@ -458,11 +457,10 @@ public:
   using HLSVisitorBase::visitOp;
 
   /// HLS dialect operations.
-  bool visitOp(BufferOp op) { return emitter.emitAlloc(op), true; }
-  bool visitOp(ConstBufferOp op) { return emitter.emitConstBuffer(op), true; }
-  bool visitOp(StreamOp op) { return emitter.emitStreamChannel(op), true; }
+  bool visitOp(StreamOp op) { return emitter.emitStream(op), true; }
   bool visitOp(StreamReadOp op) { return emitter.emitStreamRead(op), true; }
   bool visitOp(StreamWriteOp op) { return emitter.emitStreamWrite(op), true; }
+  bool visitOp(BufferOp op) { return emitter.emitAlloc(op), true; }
   bool visitOp(AffineSelectOp op) { return emitter.emitAffineSelect(op), true; }
 
   /// Function operations.
@@ -529,16 +527,6 @@ public:
   bool visitOp(memref::StoreOp op) { return emitter.emitStore(op), true; }
   bool visitOp(memref::DeallocOp op) { return true; }
   bool visitOp(memref::CopyOp op) { return emitter.emitMemCpy(op), true; }
-  // bool visitOp(memref::ReshapeOp op) { return emitter.emitReshape(op), true;
-  // } bool visitOp(memref::CollapseShapeOp op) {
-  //   return emitter.emitReshape(op), true;
-  // }
-  // bool visitOp(memref::ExpandShapeOp op) {
-  //   return emitter.emitReshape(op), true;
-  // }
-  // bool visitOp(memref::ReinterpretCastOp op) {
-  //   return emitter.emitReshape(op), true;
-  // }
 
 private:
   ModuleEmitter &emitter;
@@ -688,12 +676,7 @@ bool ExprVisitor::visitOp(arith::CmpIOp op) {
 //===----------------------------------------------------------------------===//
 
 /// HLS dialect operation emitters.
-void ModuleEmitter::emitConstBuffer(ConstBufferOp op) {
-  emitConstant(op);
-  emitArrayDirectives(op.getResult());
-}
-
-void ModuleEmitter::emitStreamChannel(StreamOp op) {
+void ModuleEmitter::emitStream(StreamOp op) {
   indent();
   emitValue(op.getStream());
   os << ";";
