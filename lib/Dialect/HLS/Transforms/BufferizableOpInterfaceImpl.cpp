@@ -18,10 +18,9 @@ using namespace hls;
 
 /// Bufferization of schedule/task operation. Replace with a new schedule/task
 /// that yields memrefs.
-template <typename OpType>
-struct ScheduleOrTaskOpInterface
-    : public BufferizableOpInterface::ExternalModel<
-          ScheduleOrTaskOpInterface<OpType>, OpType> {
+struct TaskOpInterface
+    : public BufferizableOpInterface::ExternalModel<TaskOpInterface,
+                                                    hls::TaskOp> {
   /// Schedule/task do not have tensor OpOperands. Thus, no OpOperand will be
   /// bufferized to memory read/write or be aliased to any returned values.
   AliasingValueList getAliasingValues(Operation *op, OpOperand &opOperand,
@@ -35,7 +34,7 @@ struct ScheduleOrTaskOpInterface
   AliasingOpOperandList
   getAliasingOpOperands(Operation *op, Value value,
                         const AnalysisState &state) const {
-    OpOperand *operand = &cast<OpType>(op).getYieldOp()->getOpOperand(
+    OpOperand *operand = &cast<hls::TaskOp>(op).getYieldOp()->getOpOperand(
         cast<OpResult>(value).getResultNumber());
     return {{operand, BufferRelation::Equivalent}};
   }
@@ -43,7 +42,7 @@ struct ScheduleOrTaskOpInterface
   LogicalResult bufferize(Operation *op, RewriterBase &rewriter,
                           const BufferizationOptions &options) const {
     OpBuilder::InsertionGuard g(rewriter);
-    auto concreteOp = cast<OpType>(op);
+    auto concreteOp = cast<hls::TaskOp>(op);
 
     // Compute bufferized result types.
     SmallVector<Type> newTypes;
@@ -60,7 +59,8 @@ struct ScheduleOrTaskOpInterface
 
     // Create new schedule/task op.
     rewriter.setInsertionPoint(concreteOp);
-    auto newOp = rewriter.create<OpType>(concreteOp.getLoc(), newTypes);
+    auto newOp = rewriter.create<hls::TaskOp>(concreteOp.getLoc(), newTypes,
+                                              ValueRange());
     rewriter.inlineRegionBefore(concreteOp.getBody(), newOp.getBody(),
                                 newOp.getBody().end());
 
@@ -73,7 +73,7 @@ struct ScheduleOrTaskOpInterface
   getBufferType(Operation *op, Value value, const BufferizationOptions &options,
                 SmallVector<Value> &invocationStack) const {
     assert(value.getDefiningOp() == op && "invalid value");
-    auto yieldedValue = cast<OpType>(op).getYieldOp().getOperand(
+    auto yieldedValue = cast<hls::TaskOp>(op).getYieldOp()->getOperand(
         value.cast<OpResult>().getResultNumber());
 
     if (auto bufferType =
@@ -104,7 +104,7 @@ struct YieldOpInterface
 
   AliasingValueList getAliasingValues(Operation *op, OpOperand &opOperand,
                                       const AnalysisState &state) const {
-    if (isa<ScheduleOp, TaskOp>(op->getParentOp()))
+    if (isa<TaskOp>(op->getParentOp()))
       return {{op->getParentOp()->getResult(opOperand.getOperandNumber()),
                BufferRelation::Equivalent}};
     return {};
@@ -238,8 +238,7 @@ struct TensorInitOpInterface
 void mlir::scalehls::hls::registerBufferizableOpInterfaceExternalModels(
     DialectRegistry &registry) {
   registry.addExtension(+[](MLIRContext *ctx, HLSDialect *dialect) {
-    ScheduleOp::attachInterface<ScheduleOrTaskOpInterface<ScheduleOp>>(*ctx);
-    TaskOp::attachInterface<ScheduleOrTaskOpInterface<TaskOp>>(*ctx);
+    TaskOp::attachInterface<TaskOpInterface>(*ctx);
     YieldOp::attachInterface<YieldOpInterface>(*ctx);
     hls::TensorInitOp::attachInterface<TensorInitOpInterface>(*ctx);
   });

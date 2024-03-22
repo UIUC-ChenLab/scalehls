@@ -16,39 +16,40 @@ using namespace scalehls;
 using namespace hls;
 using namespace affine;
 
-namespace {
-struct InlineSchedule : public OpRewritePattern<ScheduleOp> {
-  using OpRewritePattern<ScheduleOp>::OpRewritePattern;
+// namespace {
+// struct InlineSchedule : public OpRewritePattern<ScheduleOp> {
+//   using OpRewritePattern<ScheduleOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(ScheduleOp schedule,
-                                PatternRewriter &rewriter) const override {
-    auto &scheduleOps = schedule.getBody().front().getOperations();
-    auto &parentOps = schedule->getBlock()->getOperations();
-    parentOps.splice(schedule->getIterator(), scheduleOps, scheduleOps.begin(),
-                     std::prev(scheduleOps.end()));
+//   LogicalResult matchAndRewrite(ScheduleOp schedule,
+//                                 PatternRewriter &rewriter) const override {
+//     auto &scheduleOps = schedule.getBody().front().getOperations();
+//     auto &parentOps = schedule->getBlock()->getOperations();
+//     parentOps.splice(schedule->getIterator(), scheduleOps,
+//     scheduleOps.begin(),
+//                      std::prev(scheduleOps.end()));
 
-    if (auto func = dyn_cast<func::FuncOp>(schedule->getParentOp()))
-      setFuncDirective(func, /*pipeline=*/false, /*targetInterval=*/1,
-                       /*dataflow=*/true);
-    else if (auto loop = dyn_cast<scf::ForOp>(schedule->getParentOp()))
-      setLoopDirective(loop, /*pipeline=*/false, /*targetII=*/1,
-                       /*dataflow=*/true, /*flattern=*/false);
-    else if (auto loop = dyn_cast<AffineForOp>(schedule->getParentOp())) {
-      // If the schedule is located inside of a loop nest, try to coalesce
-      // them into a flattened loop.
-      AffineLoopBand band;
-      getLoopBandFromInnermost(loop, band);
-      auto dataflowLoop = loop;
-      if (isPerfectlyNested(band) && succeeded(coalesceLoops(band)))
-        dataflowLoop = band.front();
-      setLoopDirective(dataflowLoop, /*pipeline=*/false, /*targetII=*/1,
-                       /*dataflow=*/true, /*flattern=*/false);
-    }
-    rewriter.eraseOp(schedule);
-    return success();
-  }
-};
-} // namespace
+//     if (auto func = dyn_cast<func::FuncOp>(schedule->getParentOp()))
+//       setFuncDirective(func, /*pipeline=*/false, /*targetInterval=*/1,
+//                        /*dataflow=*/true);
+//     else if (auto loop = dyn_cast<scf::ForOp>(schedule->getParentOp()))
+//       setLoopDirective(loop, /*pipeline=*/false, /*targetII=*/1,
+//                        /*dataflow=*/true, /*flattern=*/false);
+//     else if (auto loop = dyn_cast<AffineForOp>(schedule->getParentOp())) {
+//       // If the schedule is located inside of a loop nest, try to coalesce
+//       // them into a flattened loop.
+//       AffineLoopBand band;
+//       getLoopBandFromInnermost(loop, band);
+//       auto dataflowLoop = loop;
+//       if (isPerfectlyNested(band) && succeeded(coalesceLoops(band)))
+//         dataflowLoop = band.front();
+//       setLoopDirective(dataflowLoop, /*pipeline=*/false, /*targetII=*/1,
+//                        /*dataflow=*/true, /*flattern=*/false);
+//     }
+//     rewriter.eraseOp(schedule);
+//     return success();
+//   }
+// };
+// } // namespace
 
 namespace {
 struct ConvertTaskToFunc : public OpRewritePattern<TaskOp> {
@@ -136,7 +137,7 @@ struct ConvertDataflowToFunc
          llvm::make_early_inc_range(module.getOps<func::FuncOp>())) {
       unsigned taskIdx = 0;
       mlir::RewritePatternSet patterns(context);
-      patterns.add<InlineSchedule>(context);
+      // patterns.add<InlineSchedule>(context);
       patterns.add<ConvertTaskToFunc>(context, func.getName(), taskIdx);
       (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
     }

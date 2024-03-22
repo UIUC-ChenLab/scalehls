@@ -261,8 +261,11 @@ transform::HLSConvertExtractSliceToITensorReadOp::applyToOne(
 
   // Create the itensor_read op.
   rewriter.setInsertionPoint(extractSlice);
+  auto sliceInit =
+      rewriter.create<hls::TensorInitOp>(loc, extractSlice.getResultType());
   auto iTensorRead = rewriter.create<hls::ITensorReadOp>(
-      loc, extractSlice.getResultType(), tensorToITensor.getResult());
+      loc, extractSlice.getResultType(), tensorToITensor.getResult(),
+      sliceInit);
   rewriter.replaceOp(extractSlice, iTensorRead.getResult());
 
   results.push_back(tensorToITensor);

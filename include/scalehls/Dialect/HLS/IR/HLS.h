@@ -104,6 +104,8 @@ bool isFullyPartitioned(MemRefType memrefType);
 int64_t getPartitionFactors(MemRefType memrefType,
                             SmallVectorImpl<int64_t> *factors = nullptr);
 
+OpOperand *getUntiledOperand(OpOperand *operand);
+
 } // namespace hls
 } // namespace scalehls
 } // namespace mlir

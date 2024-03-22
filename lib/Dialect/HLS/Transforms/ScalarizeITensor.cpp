@@ -243,11 +243,10 @@ struct ScalarizeForOp : public OpRewritePattern<scf::ForOp> {
 } // namespace
 
 namespace {
-template <typename OpTy>
-struct ScalarizeScheduleOrTaskOp : public OpRewritePattern<OpTy> {
-  using OpRewritePattern<OpTy>::OpRewritePattern;
+struct ScalarizeTaskOp : public OpRewritePattern<hls::TaskOp> {
+  using OpRewritePattern<hls::TaskOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(OpTy op,
+  LogicalResult matchAndRewrite(hls::TaskOp op,
                                 PatternRewriter &rewriter) const override {
     auto yieldOp = op.getYieldOp();
     bool hasChanged = false;
@@ -292,8 +291,7 @@ struct ScalarizeITensor : public ScalarizeITensorBase<ScalarizeITensor> {
     patterns.add<ScalarizeITensorWriteOp>(context);
     patterns.add<ScalarizeITensorReassociateOp>(context);
     patterns.add<ScalarizeForOp>(context);
-    patterns.add<ScalarizeScheduleOrTaskOp<hls::ScheduleOp>>(context);
-    patterns.add<ScalarizeScheduleOrTaskOp<hls::TaskOp>>(context);
+    patterns.add<ScalarizeTaskOp>(context);
     (void)applyPatternsAndFoldGreedily(op, std::move(patterns));
   }
 };

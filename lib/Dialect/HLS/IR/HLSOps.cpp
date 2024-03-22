@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Analysis/Liveness.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/Dominance.h"
 #include "scalehls/Dialect/HLS/IR/HLS.h"
 #include "scalehls/Utils/Utils.h"
@@ -337,157 +338,94 @@ void StreamWriteOp::getEffects(
 }
 
 //===----------------------------------------------------------------------===//
-// ScheduleOp
+// TaskOp
 //===----------------------------------------------------------------------===//
 
-namespace {
-template <typename OpType>
-struct SimplifyScheduleOrTaskOutputs : public OpRewritePattern<OpType> {
-  using OpRewritePattern<OpType>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(OpType op,
-                                PatternRewriter &rewriter) const override {
-    auto yield = op.getYieldOp();
-    bool hasUnusedPort = false;
-
-    // Identify output values that are used.
-    SmallVector<Value, 4> usedOutputs;
-    SmallVector<Value, 4> usedResults;
-    for (auto result : op.getResults())
-      if (result.use_empty()) {
-        hasUnusedPort = true;
-      } else {
-        usedOutputs.push_back(yield.getOperand(result.getResultNumber()));
-        usedResults.push_back(result);
-      }
-
-    // Construct new op with only used outputs.
-    if (hasUnusedPort) {
-      rewriter.setInsertionPoint(yield);
-      rewriter.replaceOpWithNewOp<YieldOp>(yield, usedOutputs);
-
-      rewriter.setInsertionPoint(op);
-      auto newOp =
-          rewriter.create<OpType>(op.getLoc(), ValueRange(usedOutputs));
-      newOp->setAttrs(op->getAttrs());
-      rewriter.inlineRegionBefore(op.getBody(), newOp.getBody(),
-                                  newOp.getBody().end());
-      for (auto t : llvm::zip(usedResults, newOp.getResults()))
-        std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
-
-      rewriter.eraseOp(op);
-      return success();
-    }
-    return failure();
-  }
-};
-} // namespace
-
-namespace {
-template <typename OpType>
-struct InlineScheduleOrTask : public OpRewritePattern<OpType> {
-  InlineScheduleOrTask(MLIRContext *context,
-                       llvm::function_ref<bool(OpType)> condition)
-      : OpRewritePattern<OpType>(context), condition(condition) {}
-
-  LogicalResult matchAndRewrite(OpType op,
-                                PatternRewriter &rewriter) const override {
-    if (condition(op)) {
-      auto &ops = op.getBody().front().getOperations();
-      auto &parentOps = op->getBlock()->getOperations();
-      parentOps.splice(op->getIterator(), ops, ops.begin(),
-                       std::prev(ops.end()));
-      rewriter.replaceOp(op, op.getYieldOp()->getOperands());
-      return success();
-    }
-    return failure();
-  }
-
-private:
-  llvm::function_ref<bool(OpType)> condition;
-};
-} // namespace
-
 // namespace {
-// template <typename OpType>
-// struct DemoteScheduleOrTaskOutputs : public OpRewritePattern<OpType> {
-//   using OpRewritePattern<OpType>::OpRewritePattern;
+// struct SimplifyTaskResults : public OpRewritePattern<hls::TaskOp> {
+//   using OpRewritePattern<hls::TaskOp>::OpRewritePattern;
 
-//   LogicalResult matchAndRewrite(OpType op,
+//   LogicalResult matchAndRewrite(hls::TaskOp op,
 //                                 PatternRewriter &rewriter) const override {
 //     auto yield = op.getYieldOp();
-//     bool hasChanged = false;
+//     bool hasUnusedPort = false;
 
-//     for (auto [yieldedValue, result] :
-//          llvm::zip(yield.getOperands(), op.getResults())) {
-//       // Try to move yielded buffer/stream to the upper hierarchy.
-//       auto defOp = yieldedValue.getDefiningOp();
-//       if (defOp && isa<BufferLikeInterface, StreamOp>(defOp))
-//         if (op->isAncestor(defOp)) {
-//           defOp->moveBefore(op);
-//           hasChanged = true;
-//         }
-
-//       // If the yielded value is defined in an ancestor region of the current
-//       if (yieldedValue.getParentRegion()->isProperAncestor(&op.getBody())) {
-//         rewriter.replaceAllUsesWith(result, yieldedValue);
-//         hasChanged = true;
+//     // Identify output values that are used.
+//     SmallVector<Value, 4> usedYieldedResults;
+//     SmallVector<Value, 4> usedResults;
+//     for (auto result : op.getResults())
+//       if (result.use_empty()) {
+//         hasUnusedPort = true;
+//       } else {
+//         usedYieldedResults.push_back(
+//             yield.getOperand(result.getResultNumber()));
+//         usedResults.push_back(result);
 //       }
+
+//     // Construct new op with only used outputs.
+//     if (hasUnusedPort) {
+//       rewriter.setInsertionPoint(yield);
+//       rewriter.replaceOpWithNewOp<YieldOp>(yield, usedYieldedResults);
+
+//       rewriter.setInsertionPoint(op);
+//       auto newOp = rewriter.create<hls::TaskOp>(op.getLoc(),
+//                                                 ValueRange(usedYieldedResults));
+//       newOp->setAttrs(op->getAttrs());
+//       rewriter.inlineRegionBefore(op.getBody(), newOp.getBody(),
+//                                   newOp.getBody().end());
+//       for (auto t : llvm::zip(usedResults, newOp.getResults()))
+//         std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
+
+//       rewriter.eraseOp(op);
+//       return success();
 //     }
-//     return success(hasChanged);
+//     return failure();
 //   }
 // };
 // } // namespace
 
-void ScheduleOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                             MLIRContext *context) {
-  results.add<SimplifyScheduleOrTaskOutputs<ScheduleOp>>(context);
-  results.add<InlineScheduleOrTask<ScheduleOp>>(context, [](ScheduleOp op) {
-    return op.getOps<TaskOp>().empty() || llvm::hasSingleElement(op.getOps());
-  });
-  // results.add<DemoteScheduleOrTaskOutputs<ScheduleOp>>(context);
-}
+// namespace {
+// struct InlineTask : public OpRewritePattern<hls::TaskOp> {
+//   InlineTask(MLIRContext *context,
+//              llvm::function_ref<bool(hls::TaskOp)> condition)
+//       : OpRewritePattern<hls::TaskOp>(context), condition(condition) {}
 
-LogicalResult ScheduleOp::verify() {
-  if (getResultTypes() != getYieldOp().getOperandTypes())
-    return emitOpError("yield type doesn't align with result type");
-  return success();
-}
+//   LogicalResult matchAndRewrite(hls::TaskOp op,
+//                                 PatternRewriter &rewriter) const override {
+//     if (condition(op)) {
+//       auto &ops = op.getBody().front().getOperations();
+//       auto &parentOps = op->getBlock()->getOperations();
+//       parentOps.splice(op->getIterator(), ops, ops.begin(),
+//                        std::prev(ops.end()));
+//       rewriter.replaceOp(op, op.getYieldOp()->getOperands());
+//       return success();
+//     }
+//     return failure();
+//   }
 
-/// Get the terminator yield op.
-YieldOp ScheduleOp::getYieldOp() {
-  return cast<YieldOp>(getBody().front().getTerminator());
-}
-
-//===----------------------------------------------------------------------===//
-// TaskOp
-//===----------------------------------------------------------------------===//
+// private:
+//   llvm::function_ref<bool(hls::TaskOp)> condition;
+// };
+// } // namespace
 
 void TaskOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                          MLIRContext *context) {
-  results.add<SimplifyScheduleOrTaskOutputs<TaskOp>>(context);
-  results.add<InlineScheduleOrTask<TaskOp>>(context, [](TaskOp op) {
-    return llvm::hasSingleElement(
-               op.getParentOp<ScheduleOp>().getOps<TaskOp>()) ||
-           llvm::hasSingleElement(op.getOps());
-  });
-  // results.add<DemoteScheduleOrTaskOutputs<TaskOp>>(context);
+  // results.add<SimplifyTaskResults>(context);
+  // results.add<InlineTask>(context, [](TaskOp op) {
+  //   return op.getOps<TaskOp>().empty() ||
+  //   llvm::hasSingleElement(op.getOps());
+  // });
 }
 
 LogicalResult TaskOp::verify() {
-  if (getResultTypes() != getYieldOp().getOperandTypes())
+  if (getResultTypes() != getYieldOp()->getOperandTypes())
     return emitOpError("yield type doesn't align with result type");
   return success();
 }
 
-/// Get the parent dispatch op.
-ScheduleOp TaskOp::getScheduleOp() {
-  return (*this)->getParentOfType<ScheduleOp>();
-}
-
-/// Get the terminator yield op.
+/// Return the yield op of this task op.
 YieldOp TaskOp::getYieldOp() {
-  return cast<YieldOp>(getBody().front().getTerminator());
+  return cast<YieldOp>(this->getRegion().front().getTerminator());
 }
 
 // bool TaskOp::isLivein(Value value) {
@@ -520,8 +458,9 @@ struct FlattenReadOnlyBuffer : public OpRewritePattern<BufferOp> {
   LogicalResult matchAndRewrite(BufferOp buffer,
                                 PatternRewriter &rewriter) const override {
     if (buffer.getInitValue() &&
-        llvm::all_of(buffer->getUsers(),
-                     [](Operation *user) { return isa<AffineLoadOp>(user); })) {
+        llvm::all_of(buffer->getUsers(), [](Operation *user) {
+          return isa<memref::LoadOp, AffineLoadOp>(user);
+        })) {
       auto initValue = buffer.getInitValue().value();
       auto constant =
           rewriter.create<arith::ConstantOp>(buffer.getLoc(), initValue);

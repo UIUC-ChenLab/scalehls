@@ -334,44 +334,18 @@ def StreamWriteOp : HLSOp<"stream_write", [
 }
 
 //===----------------------------------------------------------------------===//
-// Functional Dataflow (FDF) Operations
+// Dataflow Operations
 //===----------------------------------------------------------------------===//
 
-def ScheduleOp : HLSOp<"schedule", [RecursiveMemoryEffects,
-      SingleBlockImplicitTerminator<"YieldOp">,
-      ParentOneOf<["func::FuncOp", "affine::AffineForOp", "scf::ForOp"]>]> {
-  let summary = "Represent a dataflow schedule";
-  let description = [{
-    Schedule op has a transparent region that contains a list of task ops to be
-    scheduleed. This op is designed to organize and manipulate task ops at a
-    high level and will be lowered to schedule op for dataflow scheduling.
-  }];
-
-  let results = (outs Variadic<AnyType>:$results);
-  let regions = (region SizedRegion<1>:$body);
-  let assemblyFormat = "(`:` type($results)^)? $body attr-dict";
-
-  let hasVerifier = 1;
-  let hasCanonicalizer = 1;
-
-  let extraClassDeclaration = [{
-    YieldOp getYieldOp();
-  }];
-}
-
-def TaskOp : HLSOp<"task", [RecursiveMemoryEffects, HasParent<"ScheduleOp">,
-      SingleBlockImplicitTerminator<"YieldOp">]> {
+def TaskOp : HLSOp<"task", [SingleBlockImplicitTerminator<"YieldOp">]> {
   let summary = "Represent a dataflow task";
-  let description = [{
-    Task op has a transparent region that contains a list of ops to be executed
-    in the task. This op is designed to represent the task partition at a high
-    level and will be lowered to node op for dataflow scheduling.
-  }];
 
+  let arguments = (ins Variadic<AnyType>:$inits);
   let results = (outs Variadic<AnyType>:$results);
   let regions = (region SizedRegion<1>:$body);
-
-  let assemblyFormat = "(`:` type($results)^)? $body attr-dict";
+  let assemblyFormat = [{
+    (`inits` $inits^)? `:` functional-type(operands, results) $body attr-dict
+  }];
 
   let hasVerifier = 1;
   let hasCanonicalizer = 1;
@@ -386,13 +360,13 @@ def TaskOp : HLSOp<"task", [RecursiveMemoryEffects, HasParent<"ScheduleOp">,
         }).wasInterrupted();
     }
 
-    ScheduleOp getScheduleOp();
+    /// Return the yield op of this task op.
     YieldOp getYieldOp();
   }];
 }
 
 def YieldOp : HLSOp<"yield", [Pure, ReturnLike, Terminator,
-      ParentOneOf<["ScheduleOp", "TaskOp"]>]> {
+    HasParent<"TaskOp">]> {
   let summary = "Terminate and yield results of a schedule or task op";
 
   let arguments = (ins Variadic<AnyType>:$results);

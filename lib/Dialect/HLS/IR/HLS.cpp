@@ -130,8 +130,8 @@ TaskOp hls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
     rewriter.setInsertionPoint(ops.front());
   else
     rewriter.setInsertionPoint(insertToOp);
-  auto task =
-      rewriter.create<TaskOp>(loc, ValueRange(outputValues.getArrayRef()));
+  auto task = rewriter.create<TaskOp>(
+      loc, ValueRange(outputValues.getArrayRef()), ValueRange());
   auto taskBlock = rewriter.createBlock(&task.getBody());
 
   // Move each targeted op into the new graph task.
@@ -277,6 +277,18 @@ int64_t hls::getPartitionFactors(MemRefType memrefType,
   else if (factors)
     factors->assign(memrefType.getRank(), 1);
   return accumFactor;
+}
+
+OpOperand *hls::getUntiledOperand(OpOperand *operand) {
+  while (auto arg = dyn_cast<BlockArgument>(operand->get())) {
+    if (auto loop = dyn_cast<scf::ForOp>(arg.getOwner()->getParentOp()))
+      operand = loop.getTiedLoopInit(arg);
+    else if (auto task = dyn_cast<hls::TaskOp>(arg.getOwner()->getParentOp()))
+      operand = &task->getOpOperand(arg.getArgNumber());
+    else
+      break;
+  }
+  return operand;
 }
 
 //===----------------------------------------------------------------------===//
