@@ -68,38 +68,59 @@ struct LowerITensorViewLikeOpInterface
 };
 } // namespace
 
+static LogicalResult lowerDestinationStyleContainerOp(
+    Operation *op, ValueRange initOperands, ValueRange iterArgs,
+    ValueRange yieldedValues, ValueRange results, PatternRewriter &rewriter) {
+  bool hasChanged = false;
+  auto loc = op->getLoc();
+
+  for (auto [initArg, iterArg, yieldedValue, result] :
+       llvm::zip(initOperands, iterArgs, yieldedValues, results)) {
+    auto iTensorType = dyn_cast<ITensorType>(result.getType());
+    if (iTensorType && iterArg != yieldedValue && !iterArg.use_empty()) {
+      hasChanged = true;
+      auto streamType = getStreamType(iTensorType);
+
+      rewriter.setInsertionPoint(op);
+      auto stream =
+          rewriter.create<hls::ITensorToStreamOp>(loc, streamType, initArg);
+
+      rewriter.setInsertionPointAfterValue(iterArg);
+      auto iterArgRepl =
+          rewriter.create<hls::StreamToITensorOp>(loc, iTensorType, stream);
+      rewriter.replaceAllUsesWith(iterArg, iterArgRepl);
+
+      rewriter.setInsertionPointAfter(op);
+      auto resultRepl =
+          rewriter.create<hls::StreamToITensorOp>(loc, iTensorType, stream);
+      rewriter.replaceAllUsesWith(result, resultRepl);
+    }
+  }
+  return success(hasChanged);
+}
+
 namespace {
 struct LowerForOp : public OpRewritePattern<scf::ForOp> {
   using OpRewritePattern<scf::ForOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(scf::ForOp loop,
                                 PatternRewriter &rewriter) const override {
-    bool hasChanged = false;
+    return lowerDestinationStyleContainerOp(
+        loop, loop.getInitArgs(), loop.getRegionIterArgs(),
+        loop.getYieldedValues(), loop.getResults(), rewriter);
+  }
+};
+} // namespace
 
-    for (auto [initArg, iterArg, yieldedValue, result] :
-         llvm::zip(loop.getInitArgs(), loop.getRegionIterArgs(),
-                   loop.getYieldedValues(), loop.getResults())) {
-      auto iTensorType = dyn_cast<ITensorType>(result.getType());
-      if (iTensorType && iterArg != yieldedValue && !iterArg.use_empty()) {
-        hasChanged = true;
-        auto streamType = getStreamType(iTensorType);
+namespace {
+struct LowerTaskOp : public OpRewritePattern<hls::TaskOp> {
+  using OpRewritePattern<hls::TaskOp>::OpRewritePattern;
 
-        rewriter.setInsertionPoint(loop);
-        auto stream = rewriter.create<hls::ITensorToStreamOp>(
-            loop.getLoc(), streamType, initArg);
-
-        rewriter.setInsertionPointToStart(loop.getBody());
-        auto iterArgRepl = rewriter.create<hls::StreamToITensorOp>(
-            loop.getLoc(), iTensorType, stream);
-        rewriter.replaceAllUsesWith(iterArg, iterArgRepl);
-
-        rewriter.setInsertionPointAfter(loop);
-        auto resultRepl = rewriter.create<hls::StreamToITensorOp>(
-            loop.getLoc(), iTensorType, stream);
-        rewriter.replaceAllUsesWith(result, resultRepl);
-      }
-    }
-    return success(hasChanged);
+  LogicalResult matchAndRewrite(hls::TaskOp task,
+                                PatternRewriter &rewriter) const override {
+    return lowerDestinationStyleContainerOp(
+        task, task.getInits(), task.getBody().getArguments(),
+        task.getYieldOp().getOperands(), task.getResults(), rewriter);
   }
 };
 } // namespace
@@ -190,6 +211,7 @@ struct LowerITensorToStream
     patterns.add<LowerITensorWriteOp>(context);
     patterns.add<LowerITensorViewLikeOpInterface>(context);
     patterns.add<LowerForOp>(context);
+    patterns.add<LowerTaskOp>(context);
     scf::ForOp::getCanonicalizationPatterns(patterns, context);
     patterns.add<RemoveITensorToStreamOp>(context);
     patterns.add<RemoveStreamToITensorOp>(context);

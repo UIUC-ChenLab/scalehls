@@ -186,6 +186,8 @@ static LogicalResult scalarzieDetinationStyleContainerOp(
     Operation *op, ValueRange initOperands, ValueRange iterArgs,
     ValueRange yieldedValues, ValueRange results, PatternRewriter &rewriter) {
   bool hasChanged = false;
+  auto terminator = op->getRegions().back().back().getTerminator();
+  auto loc = op->getLoc();
 
   for (auto [initOperand, iterArg, yieldedValue, result] :
        llvm::zip(initOperands, iterArgs, yieldedValues, results)) {
@@ -195,8 +197,6 @@ static LogicalResult scalarzieDetinationStyleContainerOp(
 
     hasChanged = true;
     auto scalarITensorType = getScalarITensorType(iTensorType);
-    auto terminator = op->getRegions().back().back().getTerminator();
-    auto loc = op->getLoc();
 
     // Cast the initial operand's type.
     rewriter.setInsertionPoint(op);
@@ -252,11 +252,11 @@ namespace {
 struct ScalarizeTaskOp : public OpRewritePattern<hls::TaskOp> {
   using OpRewritePattern<hls::TaskOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(hls::TaskOp op,
+  LogicalResult matchAndRewrite(hls::TaskOp task,
                                 PatternRewriter &rewriter) const override {
     return scalarzieDetinationStyleContainerOp(
-        op, op.getInits(), op.getBody().getArguments(),
-        op.getYieldOp().getOperands(), op.getResults(), rewriter);
+        task, task.getInits(), task.getBody().getArguments(),
+        task.getYieldOp().getOperands(), task.getResults(), rewriter);
   }
 };
 } // namespace
