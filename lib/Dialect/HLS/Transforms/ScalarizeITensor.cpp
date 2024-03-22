@@ -182,59 +182,68 @@ struct ScalarizeITensorReassociateOp
 };
 } // namespace
 
+static LogicalResult scalarzieDetinationStyleContainerOp(
+    Operation *op, ValueRange initOperands, ValueRange iterArgs,
+    ValueRange yieldedValues, ValueRange results, PatternRewriter &rewriter) {
+  bool hasChanged = false;
+
+  for (auto [initOperand, iterArg, yieldedValue, result] :
+       llvm::zip(initOperands, iterArgs, yieldedValues, results)) {
+    auto iTensorType = dyn_cast<ITensorType>(result.getType());
+    if (!iTensorType || !iTensorType.hasShapedElementType())
+      continue;
+
+    hasChanged = true;
+    auto scalarITensorType = getScalarITensorType(iTensorType);
+    auto terminator = op->getRegions().back().back().getTerminator();
+    auto loc = op->getLoc();
+
+    // Cast the initial operand's type.
+    rewriter.setInsertionPoint(op);
+    auto initOperandCast = rewriter.create<hls::ITensorCastOp>(
+        loc, scalarITensorType, initOperand);
+    rewriter.replaceUsesWithIf(
+        initOperand, initOperandCast,
+        [&](OpOperand &operand) { return operand.getOwner() == op; });
+
+    // Cast the iteration argument's type.
+    rewriter.setInsertionPointAfterValue(iterArg);
+    auto iterArgCast =
+        rewriter.create<hls::ITensorCastOp>(loc, iTensorType, iterArg);
+    rewriter.replaceAllUsesExcept(iterArg, iterArgCast, iterArgCast);
+    rewriter.startRootUpdate(op);
+    iterArg.setType(scalarITensorType);
+    rewriter.finalizeRootUpdate(op);
+
+    // Cast the yeilded value's type.
+    rewriter.setInsertionPoint(terminator);
+    auto yieldedValueCast = rewriter.create<hls::ITensorCastOp>(
+        loc, scalarITensorType, yieldedValue);
+    rewriter.replaceUsesWithIf(
+        yieldedValue, yieldedValueCast,
+        [&](OpOperand &use) { return use.getOwner() == terminator; });
+
+    // Cast the loop result's type.
+    rewriter.setInsertionPointAfter(op);
+    auto resultCast =
+        rewriter.create<hls::ITensorCastOp>(loc, iTensorType, result);
+    rewriter.replaceAllUsesExcept(result, resultCast, resultCast);
+    rewriter.startRootUpdate(op);
+    result.setType(scalarITensorType);
+    rewriter.finalizeRootUpdate(op);
+  }
+  return success(hasChanged);
+}
+
 namespace {
 struct ScalarizeForOp : public OpRewritePattern<scf::ForOp> {
   using OpRewritePattern<scf::ForOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(scf::ForOp op,
                                 PatternRewriter &rewriter) const override {
-    auto yieldOp = cast<scf::YieldOp>(op.getBody()->getTerminator());
-    bool hasChanged = false;
-
-    for (auto [initArg, iterArg, yieldedValue, result] :
-         llvm::zip(op.getInitArgs(), op.getRegionIterArgs(),
-                   op.getYieldedValues(), op.getResults())) {
-      auto iTensorType = dyn_cast<ITensorType>(result.getType());
-      if (iTensorType && iTensorType.hasShapedElementType()) {
-        hasChanged = true;
-        auto scalarITensorType = getScalarITensorType(iTensorType);
-
-        // Cast the initial argument's type.
-        rewriter.setInsertionPoint(op);
-        auto initArgCast = rewriter.create<hls::ITensorCastOp>(
-            op.getLoc(), scalarITensorType, initArg);
-        rewriter.replaceUsesWithIf(
-            initArg, initArgCast,
-            [&](OpOperand &operand) { return operand.getOwner() == op; });
-
-        // Cast the iteration argument's type.
-        rewriter.setInsertionPointToStart(op.getBody());
-        auto iterArgCast = rewriter.create<hls::ITensorCastOp>(
-            op.getLoc(), iTensorType, iterArg);
-        rewriter.replaceAllUsesExcept(iterArg, iterArgCast, iterArgCast);
-        rewriter.startRootUpdate(op);
-        iterArg.setType(scalarITensorType);
-        rewriter.finalizeRootUpdate(op);
-
-        // Cast the yeilded value's type.
-        rewriter.setInsertionPoint(yieldOp);
-        auto yieldedValueCast = rewriter.create<hls::ITensorCastOp>(
-            op.getLoc(), scalarITensorType, yieldedValue);
-        rewriter.replaceUsesWithIf(
-            yieldedValue, yieldedValueCast,
-            [&](OpOperand &operand) { return operand.getOwner() == yieldOp; });
-
-        // Cast the loop result's type.
-        rewriter.setInsertionPointAfter(op);
-        auto resultCast = rewriter.create<hls::ITensorCastOp>(
-            op.getLoc(), iTensorType, result);
-        rewriter.replaceAllUsesExcept(result, resultCast, resultCast);
-        rewriter.startRootUpdate(op);
-        result.setType(scalarITensorType);
-        rewriter.finalizeRootUpdate(op);
-      }
-    }
-    return success(hasChanged);
+    return scalarzieDetinationStyleContainerOp(
+        op, op.getInitArgs(), op.getRegionIterArgs(), op.getYieldedValues(),
+        op.getResults(), rewriter);
   }
 };
 } // namespace
@@ -245,33 +254,9 @@ struct ScalarizeTaskOp : public OpRewritePattern<hls::TaskOp> {
 
   LogicalResult matchAndRewrite(hls::TaskOp op,
                                 PatternRewriter &rewriter) const override {
-    auto yieldOp = op.getYieldOp();
-    bool hasChanged = false;
-
-    for (auto [yieldedValue, result] :
-         llvm::zip(yieldOp.getOperands(), op.getResults())) {
-      auto iTensorType = dyn_cast<ITensorType>(result.getType());
-      if (iTensorType && iTensorType.hasShapedElementType()) {
-        hasChanged = true;
-        auto scalarITensorType = getScalarITensorType(iTensorType);
-
-        rewriter.setInsertionPoint(yieldOp);
-        auto cast = rewriter.create<hls::ITensorCastOp>(
-            op.getLoc(), scalarITensorType, yieldedValue);
-        rewriter.replaceUsesWithIf(yieldedValue, cast, [&](OpOperand &operand) {
-          return operand.getOwner() == yieldOp;
-        });
-
-        rewriter.setInsertionPointAfter(op);
-        auto castBack = rewriter.create<hls::ITensorCastOp>(
-            op.getLoc(), iTensorType, result);
-        rewriter.replaceAllUsesExcept(result, castBack, castBack);
-        rewriter.startRootUpdate(op);
-        result.setType(scalarITensorType);
-        rewriter.finalizeRootUpdate(op);
-      }
-    }
-    return success(hasChanged);
+    return scalarzieDetinationStyleContainerOp(
+        op, op.getInits(), op.getBody().getArguments(),
+        op.getYieldOp().getOperands(), op.getResults(), rewriter);
   }
 };
 } // namespace
