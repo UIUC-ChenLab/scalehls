@@ -79,17 +79,17 @@ static TypedValue<ITensorType>
 extactSliceAndWriteITensor(ArrayRef<Value> ivs, TypedValue<ITensorType> channel,
                            TypedValue<RankedTensorType> tensor, bool packing,
                            Location loc, PatternRewriter &rewriter) {
-  auto streamType = cast<ITensorType>(channel.getType());
+  auto iTensorType = cast<ITensorType>(channel.getType());
 
   auto [offsets, sizes, strides] =
-      getSliceInfo(ivs, streamType.getIterMap().getResults(),
-                   streamType.getElementShape(), packing, loc, rewriter);
+      getSliceInfo(ivs, iTensorType.getIterMap().getResults(),
+                   iTensorType.getElementShape(), packing, loc, rewriter);
   Value slice = rewriter.create<tensor::ExtractSliceOp>(loc, tensor, offsets,
                                                         sizes, strides);
   if (packing)
     slice = rewriter.create<tensor::CollapseShapeOp>(
-        loc, slice, getPackingReassociation(streamType.getElementRank()));
-  return rewriter.create<hls::ITensorWriteOp>(loc, streamType, slice, channel);
+        loc, slice, getPackingReassociation(iTensorType.getElementRank()));
+  return rewriter.create<hls::ITensorWriteOp>(loc, iTensorType, slice, channel);
 }
 
 /// Read from the iterative tensor and insert the slice to the tensor. If
@@ -99,10 +99,10 @@ static TypedValue<RankedTensorType>
 readITensorAndInsertSlice(ArrayRef<Value> ivs, TypedValue<ITensorType> channel,
                           TypedValue<RankedTensorType> tensor, bool packing,
                           Location loc, PatternRewriter &rewriter) {
-  auto streamType = channel.getType();
+  auto iTensorType = channel.getType();
   auto [offsets, sizes, strides] =
-      getSliceInfo(ivs, streamType.getIterMap().getResults(),
-                   streamType.getElementShape(), packing, loc, rewriter);
+      getSliceInfo(ivs, iTensorType.getIterMap().getResults(),
+                   iTensorType.getElementShape(), packing, loc, rewriter);
 
   // As we are going to insert a tensor slice back to the "input" tensor, to
   // avoid unnecessary memory allocation and copy, we need to extract the slice
@@ -112,22 +112,22 @@ readITensorAndInsertSlice(ArrayRef<Value> ivs, TypedValue<ITensorType> channel,
   auto init = extractSlice.getResult();
   if (packing)
     init = rewriter.create<tensor::CollapseShapeOp>(
-        loc, init, getPackingReassociation(streamType.getElementRank()));
+        loc, init, getPackingReassociation(iTensorType.getElementRank()));
 
   // Then we take the extracted tensor as the "init" operand of the stream read
   // op, making it a "payload-carried" style operation.
   auto streamRead = rewriter.create<hls::ITensorReadOp>(
-      loc, streamType.getElementType(), channel, init);
+      loc, iTensorType.getElementType(), channel, init);
   auto slice = llvm::cast<TypedValue<RankedTensorType>>(streamRead.getResult());
 
   if (packing) {
-    SmallVector<int64_t> expandedShape(streamType.getElementRank(), 1);
-    expandedShape.append(streamType.getElementShape());
+    SmallVector<int64_t> expandedShape(iTensorType.getElementRank(), 1);
+    expandedShape.append(iTensorType.getElementShape());
     auto expandedType =
         RankedTensorType::get(expandedShape, slice.getType().getElementType());
     slice = rewriter.create<tensor::ExpandShapeOp>(
         loc, expandedType, slice,
-        getPackingReassociation(streamType.getElementRank()));
+        getPackingReassociation(iTensorType.getElementRank()));
   }
   return rewriter.create<tensor::InsertSliceOp>(loc, slice, tensor, offsets,
                                                 sizes, strides);
@@ -198,22 +198,22 @@ struct MaterializeITensorWriteFullTensorOp
 
   LogicalResult matchAndRewrite(hls::ITensorWriteFullTensorOp toITensor,
                                 PatternRewriter &rewriter) const override {
-    auto streamType = toITensor.getResult().getType();
+    auto iTensorType = toITensor.getResult().getType();
     auto loc = toITensor.getLoc();
 
     // Only if the stream type is not overlapped, we can pack the tensor to make
     // more efficient memory access pattern.
-    auto packing =
-        enablePacking && streamType.tileIsRegular() && streamType.getRank() > 1;
+    auto packing = enablePacking && iTensorType.tileIsRegular() &&
+                   iTensorType.getRank() > 1;
     auto source = toITensor.getFullTensor();
     if (packing)
-      source = packTensor(source, streamType.getElementShape(), loc, rewriter);
+      source = packTensor(source, iTensorType.getElementShape(), loc, rewriter);
 
     // Create a new iterative tensor, then construct a loop nest to extract
     // stream element from the tensor and write to the iterative tensor.
-    auto [ivs, result, iterArg] = constructLoops(streamType.getIterTripCounts(),
-                                                 streamType.getIterSteps(), loc,
-                                                 rewriter, toITensor.getDest());
+    auto [ivs, result, iterArg] = constructLoops(
+        iTensorType.getIterTripCounts(), iTensorType.getIterSteps(), loc,
+        rewriter, toITensor.getDest());
     auto newResult =
         extactSliceAndWriteITensor(ivs, cast<TypedValue<ITensorType>>(iterArg),
                                    source, packing, loc, rewriter);
@@ -247,23 +247,22 @@ struct MaterializeITensorReadFullTensorOp
 
   LogicalResult matchAndRewrite(hls::ITensorReadFullTensorOp toTensor,
                                 PatternRewriter &rewriter) const override {
-    auto streamType = toTensor.getSourceType();
+    auto iTensorType = toTensor.getSourceType();
     auto loc = toTensor.getLoc();
 
     // Only if the stream type is not overlapped, we can pack the tensor to make
     // more efficient memory access pattern.
-    auto packing =
-        enablePacking && streamType.tileIsRegular() && streamType.getRank() > 1;
+    auto packing = enablePacking && iTensorType.tileIsRegular() &&
+                   iTensorType.getRank() > 1;
     auto targetType = toTensor.getResult().getType();
     if (packing)
-      targetType = getPackedType(targetType, streamType.getElementShape());
+      targetType = getPackedType(targetType, iTensorType.getElementShape());
 
     // Create a new tensor, then construct a loop nest to read from the stream
     // channel and insert stream element to the tensor.
-    auto tensorInit = rewriter.create<hls::TensorInitOp>(loc, targetType);
-    auto [ivs, result, iterArg] =
-        constructLoops(streamType.getIterTripCounts(),
-                       streamType.getIterSteps(), loc, rewriter, tensorInit);
+    auto [ivs, result, iterArg] = constructLoops(
+        iTensorType.getIterTripCounts(), iTensorType.getIterSteps(), loc,
+        rewriter, toTensor.getFullTensorInit());
     auto newResult = readITensorAndInsertSlice(
         ivs, toTensor.getSource(), cast<TypedValue<RankedTensorType>>(iterArg),
         packing, loc, rewriter);
@@ -279,7 +278,7 @@ struct MaterializeITensorReadFullTensorOp
     if (packing) {
       rewriter.setInsertionPointAfterValue(result);
       result = unpackTensor(cast<TypedValue<RankedTensorType>>(result),
-                            streamType.getElementShape(), loc, rewriter);
+                            iTensorType.getElementShape(), loc, rewriter);
     }
 
     // Replace the original tensor with the new tensor.

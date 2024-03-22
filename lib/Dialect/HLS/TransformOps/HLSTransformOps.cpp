@@ -190,7 +190,7 @@ transform::HLSConvertInsertSliceToITensorWriteOp::applyToOne(
   rewriter.setInsertionPointAfter(loops.front());
   auto resultTensor = loops.front().getTiedLoopResult(untiledOperand);
   auto iTensorToTensor = rewriter.create<hls::ITensorReadFullTensorOp>(
-      loc, resultTensor.getType(), resultTensor);
+      loc, resultTensor.getType(), resultTensor, tensorInit);
   rewriter.replaceAllUsesExcept(resultTensor, iTensorToTensor, iTensorToTensor);
 
   // Update the iteration argument of the loops.
@@ -370,8 +370,11 @@ transform::HLSConvertExpandShapeToITensorReassociateOp::applyToOne(
       loc, iTensorTypes->second, tensorToITensor.getResult(),
       /*expandShape=*/true, expandShape.getReassociation(),
       /*expandIteration=*/true, expandShape.getReassociation());
+  auto tensorInit =
+      rewriter.create<hls::TensorInitOp>(loc, expandShape.getResultType());
   auto iTensorToTensor = rewriter.create<hls::ITensorReadFullTensorOp>(
-      loc, expandShape.getResultType(), iTensorReassociate.getResult());
+      loc, expandShape.getResultType(), iTensorReassociate.getResult(),
+      tensorInit);
   rewriter.replaceOp(expandShape, iTensorToTensor);
 
   results.push_back(tensorToITensor);
@@ -414,8 +417,11 @@ transform::HLSConvertCollapseShapeToITensorReassociateOp::applyToOne(
       loc, iTensorTypes->first, tensorToITensor.getResult(),
       /*expandShape=*/false, collapseShape.getReassociation(),
       /*expandIteration=*/false, collapseShape.getReassociation());
+  auto tensorInit =
+      rewriter.create<hls::TensorInitOp>(loc, collapseShape.getResultType());
   auto iTensorToTensor = rewriter.create<hls::ITensorReadFullTensorOp>(
-      loc, collapseShape.getResultType(), iTensorReassociate.getResult());
+      loc, collapseShape.getResultType(), iTensorReassociate.getResult(),
+      tensorInit);
   rewriter.replaceOp(collapseShape, iTensorToTensor);
 
   results.push_back(tensorToITensor);

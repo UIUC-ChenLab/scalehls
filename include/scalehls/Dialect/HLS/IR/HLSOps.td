@@ -10,6 +10,7 @@
 include "scalehls/Dialect/HLS/IR/HLSInterfaces.td"
 include "scalehls/Dialect/HLS/IR/HLSTypes.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
+include "mlir/Interfaces/DestinationStyleOpInterface.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/Interfaces/ViewLikeInterface.td"
 include "mlir/IR/BuiltinAttributeInterfaces.td"
@@ -89,18 +90,23 @@ def ITensorInitOp : HLSOp<"itensor_init", [Pure]> {
 }
 
 def ITensorReadFullTensorOp : HLSOp<"itensor_read_full_tensor", [Pure,
+      DeclareOpInterfaceMethods<DestinationStyleOpInterface>,
       DeclareOpInterfaceMethods<ITensorReadLikeOpInterface>]> {
   let summary = "Read the full tensor from an iterative tensor";
 
-  let arguments = (ins AnyITensor:$source);
+  let arguments = (ins AnyITensor:$source, AnyRankedTensor:$fullTensorInit);
   let results = (outs AnyRankedTensor:$fullTensor);
   let assemblyFormat = [{
-    $source attr-dict `:` functional-type(operands, results)
+    $source `init` $fullTensorInit attr-dict `:`
+    functional-type(operands, results)
   }];
 
   let hasVerifier = 1;
 
   let extraClassDeclaration = [{
+    RankedTensorType getFullTensorInitType() {
+      return getFullTensorInit().getType();
+    }
     RankedTensorType getFullTensorType() { return getFullTensor().getType(); }
   }];
 }
@@ -124,10 +130,12 @@ def ITensorWriteFullTensorOp : HLSOp<"itensor_write_full_tensor", [Pure,
 }
 
 def ITensorReadOp : HLSOp<"itensor_read", [Pure,
+      DeclareOpInterfaceMethods<DestinationStyleOpInterface>,
       DeclareOpInterfaceMethods<ITensorReadLikeOpInterface>]> {
   let summary = "Read an element from an iterative tensor";
 
-  let arguments = (ins AnyITensor:$source, Optional<AnyRankedTensor>:$init);
+  let arguments = (ins AnyITensor:$source,
+      Optional<AnyRankedTensor>:$init);
   let results = (outs AnyType:$value);
   let assemblyFormat = [{
     $source (`init` $init^)? attr-dict `:` functional-type(operands, results)
@@ -140,10 +148,10 @@ def ITensorReadOp : HLSOp<"itensor_read", [Pure,
   ];
 
   let extraClassDeclaration = [{
-    std::optional<RankedTensorType> getInitType() {
+    RankedTensorType getInitType() {
       if (getInit())
         return getInit().getType();
-      return std::nullopt;
+      return nullptr;
     }
     Type getValueType() { return getValue().getType(); }
   }];

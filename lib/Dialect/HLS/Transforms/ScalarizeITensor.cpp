@@ -79,12 +79,9 @@ struct ScalarizeITensorReadOp : public OpRewritePattern<hls::ITensorReadOp> {
 
     rewriter.setInsertionPoint(read);
     auto elementType = iTensorType.getShapedElementType();
-    auto init = read.getInit();
-    if (!init)
-      init = rewriter.create<hls::TensorInitOp>(loc, elementType);
     auto [ivs, result, iterArg] = constructLoops(
         elementType.getShape(), SmallVector<int64_t>(elementType.getRank(), 1),
-        loc, rewriter, init);
+        loc, rewriter, read.getInit());
 
     auto scalarRead = rewriter.create<hls::ITensorReadOp>(
         loc, elementType.getElementType(), cast);

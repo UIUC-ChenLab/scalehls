@@ -45,7 +45,13 @@ LogicalResult ITensorInitOp::verify() {
 LogicalResult ITensorReadFullTensorOp::verify() {
   if (!getSourceType().isConvertableWith(getFullTensorType()))
     return emitOpError("itensor type is not convertable with tensor type");
+  if (getFullTensorInitType() != getFullTensorType())
+    return emitOpError("initial tensor type doesn't align with tensor type");
   return success();
+}
+
+MutableOperandRange ITensorReadFullTensorOp::getDpsInitsMutable() {
+  return getFullTensorInitMutable();
 }
 
 //===----------------------------------------------------------------------===//
@@ -109,9 +115,17 @@ static LogicalResult verifyTripCountsAndSteps(Operation *op,
 LogicalResult ITensorReadOp::verify() {
   if (getSourceType().getElementType() != getValueType())
     return emitOpError("value type doesn't align with itensor type");
-  if (getInitType() && getInitType() != getValueType())
-    return emitOpError("initial tensor type doesn't align with value type");
+  if (isa<RankedTensorType>(getValueType())) {
+    if (!getInit())
+      return emitOpError("missing initial tensor for tensor read");
+    if (getInitType() != getValueType())
+      return emitOpError("initial tensor type doesn't align with value type");
+  }
   return verifyTripCountsAndSteps(*this, &getSourceMutable());
+}
+
+MutableOperandRange ITensorReadOp::getDpsInitsMutable() {
+  return getInitMutable();
 }
 
 //===----------------------------------------------------------------------===//
