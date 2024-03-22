@@ -331,6 +331,7 @@ def convert_expand_shape_to_itensor_reassociate(
         source_tile_sizes: Sequence[int],
         result_tile_sizes: Sequence[int]):
     return hls_transform.HLSConvertExpandShapeToITensorReassociateOp(
+        transform.OperationType.get("hls.itensor_init"),
         transform.OperationType.get("hls.itensor_write_full_tensor"),
         transform.OperationType.get("hls.itensor_reassociate"),
         transform.OperationType.get("hls.itensor_read_full_tensor"),
@@ -344,6 +345,7 @@ def convert_collapse_shape_to_itensor_reassociate(
         source_tile_sizes: Sequence[int],
         result_tile_sizes: Sequence[int]):
     return hls_transform.HLSConvertCollapseShapeToITensorReassociateOp(
+        transform.OperationType.get("hls.itensor_init"),
         transform.OperationType.get("hls.itensor_write_full_tensor"),
         transform.OperationType.get("hls.itensor_reassociate"),
         transform.OperationType.get("hls.itensor_read_full_tensor"),
@@ -391,6 +393,7 @@ def merge_consecutive_extract_slice(extract_slice_handle: Value):
 
 def convert_extract_slice_to_itensor_read(extract_slice_handle: Value):
     return hls_transform.HLSConvertExtractSliceToITensorReadOp(
+        transform.OperationType.get("hls.itensor_init"),
         transform.OperationType.get("hls.itensor_write_full_tensor"),
         transform.OperationType.get("hls.itensor_read"),
         extract_slice_handle)

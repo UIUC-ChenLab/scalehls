@@ -114,7 +114,7 @@ def HLSConvertInsertSliceToITensorWriteOp : Op<Transform_Dialect,
   let arguments = (ins
       Transform_ConcreteOpType<"tensor.insert_slice">:$insert_slice);
   let results = (outs
-      Transform_ConcreteOpType<"hls.itensor_init">:$itensor_init,
+      Transform_ConcreteOpType<"hls.itensor_init">:$source_itensor_init,
       Transform_ConcreteOpType<"hls.itensor_write">:$itensor_write,
       Transform_ConcreteOpType<"hls.itensor_read_full_tensor">:$itensor_read_full_tensor);
   let assemblyFormat = [{
@@ -147,6 +147,7 @@ def HLSConvertExtractSliceToITensorReadOp : Op<Transform_Dialect,
   let arguments = (ins
       Transform_ConcreteOpType<"tensor.extract_slice">:$extract_slice);
   let results = (outs
+      Transform_ConcreteOpType<"hls.itensor_init">:$dest_itensor_init,
       Transform_ConcreteOpType<"hls.itensor_write_full_tensor">:$itensor_write_full_tensor,
       Transform_ConcreteOpType<"hls.itensor_read">:$itensor_read);
   let assemblyFormat = [{
@@ -173,6 +174,7 @@ def HLSConvertExpandShapeToITensorReassociateOp : Op<Transform_Dialect,
       DenseI64ArrayAttr:$input_element_shape,
       DenseI64ArrayAttr:$output_element_shape);
   let results = (outs
+      Transform_ConcreteOpType<"hls.itensor_init">:$dest_itensor_init,
       Transform_ConcreteOpType<"hls.itensor_write_full_tensor">:$itensor_write_full_tensor,
       Transform_ConcreteOpType<"hls.itensor_reassociate">:$itensor_reassociate,
       Transform_ConcreteOpType<"hls.itensor_read_full_tensor">:$itensor_read_full_tensor);
@@ -202,6 +204,7 @@ def HLSConvertCollapseShapeToITensorReassociateOp : Op<Transform_Dialect,
       DenseI64ArrayAttr:$input_element_shape,
       DenseI64ArrayAttr:$output_element_shape);
   let results = (outs
+      Transform_ConcreteOpType<"hls.itensor_init">:$dest_itensor_init,
       Transform_ConcreteOpType<"hls.itensor_write_full_tensor">:$itensor_write_full_tensor,
       Transform_ConcreteOpType<"hls.itensor_reassociate">:$itensor_reassociate,
       Transform_ConcreteOpType<"hls.itensor_read_full_tensor">:$itensor_read_full_tensor);
