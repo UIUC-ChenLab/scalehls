@@ -352,145 +352,15 @@ void StreamWriteOp::getEffects(
 }
 
 //===----------------------------------------------------------------------===//
-// TaskOp
-//===----------------------------------------------------------------------===//
-
-// namespace {
-// struct SimplifyTaskResults : public OpRewritePattern<hls::TaskOp> {
-//   using OpRewritePattern<hls::TaskOp>::OpRewritePattern;
-
-//   LogicalResult matchAndRewrite(hls::TaskOp op,
-//                                 PatternRewriter &rewriter) const override {
-//     auto yield = op.getYieldOp();
-//     bool hasUnusedPort = false;
-
-//     // Identify output values that are used.
-//     SmallVector<Value, 4> usedYieldedResults;
-//     SmallVector<Value, 4> usedResults;
-//     for (auto result : op.getResults())
-//       if (result.use_empty()) {
-//         hasUnusedPort = true;
-//       } else {
-//         usedYieldedResults.push_back(
-//             yield.getOperand(result.getResultNumber()));
-//         usedResults.push_back(result);
-//       }
-
-//     // Construct new op with only used outputs.
-//     if (hasUnusedPort) {
-//       rewriter.setInsertionPoint(yield);
-//       rewriter.replaceOpWithNewOp<YieldOp>(yield, usedYieldedResults);
-
-//       rewriter.setInsertionPoint(op);
-//       auto newOp = rewriter.create<hls::TaskOp>(op.getLoc(),
-//                                                 ValueRange(usedYieldedResults));
-//       newOp->setAttrs(op->getAttrs());
-//       rewriter.inlineRegionBefore(op.getBody(), newOp.getBody(),
-//                                   newOp.getBody().end());
-//       for (auto t : llvm::zip(usedResults, newOp.getResults()))
-//         std::get<0>(t).replaceAllUsesWith(std::get<1>(t));
-
-//       rewriter.eraseOp(op);
-//       return success();
-//     }
-//     return failure();
-//   }
-// };
-// } // namespace
-
-// namespace {
-// struct InlineTask : public OpRewritePattern<hls::TaskOp> {
-//   InlineTask(MLIRContext *context,
-//              llvm::function_ref<bool(hls::TaskOp)> condition)
-//       : OpRewritePattern<hls::TaskOp>(context), condition(condition) {}
-
-//   LogicalResult matchAndRewrite(hls::TaskOp op,
-//                                 PatternRewriter &rewriter) const override {
-//     if (condition(op)) {
-//       auto &ops = op.getBody().front().getOperations();
-//       auto &parentOps = op->getBlock()->getOperations();
-//       parentOps.splice(op->getIterator(), ops, ops.begin(),
-//                        std::prev(ops.end()));
-//       rewriter.replaceOp(op, op.getYieldOp()->getOperands());
-//       return success();
-//     }
-//     return failure();
-//   }
-
-// private:
-//   llvm::function_ref<bool(hls::TaskOp)> condition;
-// };
-// } // namespace
-
-void TaskOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                         MLIRContext *context) {
-  // results.add<SimplifyTaskResults>(context);
-  // results.add<InlineTask>(context, [](TaskOp op) {
-  //   return op.getOps<TaskOp>().empty() ||
-  //   llvm::hasSingleElement(op.getOps());
-  // });
-}
-
-LogicalResult TaskOp::verify() {
-  if (getResultTypes() != getYieldOp()->getOperandTypes())
-    return emitOpError("yield type doesn't align with result type");
-  return success();
-}
-
-/// Return the yield op of this task op.
-YieldOp TaskOp::getYieldOp() {
-  return cast<YieldOp>(this->getRegion().front().getTerminator());
-}
-
-// bool TaskOp::isLivein(Value value) {
-//   auto liveins = Liveness(*this).getLiveIn(&(*this).getBody().front());
-//   return liveins.count(value);
-// }
-
-// SmallVector<Value> TaskOp::getLiveins() {
-//   auto liveins = Liveness(*this).getLiveIn(&(*this).getBody().front());
-//   return {liveins.begin(), liveins.end()};
-// }
-
-// SmallVector<Operation *> TaskOp::getLiveinUsers(Value livein) {
-//   assert(isLivein(livein) && "invalid livein");
-//   auto users = llvm::make_filter_range(livein.getUsers(), [&](Operation
-//   *user) {
-//     return (*this)->isAncestor(user);
-//   });
-//   return {users.begin(), users.end()};
-// }
-
-//===----------------------------------------------------------------------===//
 // BufferOp
 //===----------------------------------------------------------------------===//
 
-namespace {
-struct FlattenReadOnlyBuffer : public OpRewritePattern<BufferOp> {
-  using OpRewritePattern<BufferOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(BufferOp buffer,
-                                PatternRewriter &rewriter) const override {
-    if (buffer.getInitValue() &&
-        llvm::all_of(buffer->getUsers(), [](Operation *user) {
-          return isa<memref::LoadOp, AffineLoadOp>(user);
-        })) {
-      auto initValue = buffer.getInitValue().value();
-      auto constant =
-          rewriter.create<arith::ConstantOp>(buffer.getLoc(), initValue);
-      for (auto user : buffer->getUsers())
-        rewriter.replaceOp(user, constant.getResult());
-      rewriter.eraseOp(buffer);
-      return success();
-    }
-    return failure();
+LogicalResult BufferOp::canonicalize(BufferOp op, PatternRewriter &rewriter) {
+  if (op.use_empty()) {
+    rewriter.eraseOp(op);
+    return success();
   }
-};
-} // namespace
-
-void BufferOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                           MLIRContext *context) {
-  results.add<FlattenReadOnlyBuffer>(context);
+  return failure();
 }
 
 LogicalResult BufferOp::verify() {
@@ -505,4 +375,165 @@ void BufferOp::getEffects(
         &effects) {
   effects.emplace_back(MemoryEffects::Allocate::get(), getMemref(),
                        SideEffects::DefaultResource::get());
+}
+
+//===----------------------------------------------------------------------===//
+// TaskOp
+//===----------------------------------------------------------------------===//
+
+namespace {
+struct FoldTaskIterArgs : public OpRewritePattern<hls::TaskOp> {
+  using OpRewritePattern<hls::TaskOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(hls::TaskOp task,
+                                PatternRewriter &rewriter) const final {
+    bool canonicalize = false;
+
+    // An internal flat vector of block transfer
+    // arguments `newBlockTransferArgs` keeps the 1-1 mapping of original to
+    // transformed block argument mappings. This plays the role of a
+    // IRMapping for the particular use case of calling into
+    // `inlineBlockBefore`.
+    int64_t numResults = task.getNumResults();
+    SmallVector<bool, 4> keepMask;
+    keepMask.reserve(numResults);
+    SmallVector<Value, 4> newBlockTransferArgs, newIterArgs, newYieldValues,
+        newResultValues;
+    newBlockTransferArgs.reserve(numResults);
+    newIterArgs.reserve(task.getInits().size());
+    newYieldValues.reserve(numResults);
+    newResultValues.reserve(numResults);
+    for (auto [initOperand, iterArg, result, yieldedValue] :
+         llvm::zip(task.getInits(), task.getBody().getArguments(),
+                   task.getResults(), task.getYieldOp().getOperands())) {
+      // Forwarded is `true` when:
+      // 1) The region `iter` argument is yielded.
+      // 2) The region `iter` argument has no use, and the corresponding iter
+      // operand (input) is yielded.
+      // 3) The region `iter` argument has no use, and the corresponding op
+      // result has no use.
+      bool forwarded = ((iterArg == yieldedValue) ||
+                        (iterArg.use_empty() &&
+                         (initOperand == yieldedValue || result.use_empty())));
+      keepMask.push_back(!forwarded);
+      canonicalize |= forwarded;
+      if (forwarded) {
+        newBlockTransferArgs.push_back(initOperand);
+        newResultValues.push_back(initOperand);
+        continue;
+      }
+      newIterArgs.push_back(initOperand);
+      newYieldValues.push_back(yieldedValue);
+      newBlockTransferArgs.push_back(Value()); // placeholder with null value
+      newResultValues.push_back(Value());      // placeholder with null value
+    }
+
+    if (!canonicalize)
+      return failure();
+
+    TaskOp newtask = rewriter.create<TaskOp>(
+        task.getLoc(), TypeRange(newIterArgs), newIterArgs);
+    newtask->setAttrs(task->getAttrs());
+    Block *newBlock = rewriter.createBlock(
+        &newtask.getBody(), newtask.getBody().begin(), TypeRange(newIterArgs));
+    rewriter.setInsertionPointToEnd(newBlock);
+    rewriter.create<hls::YieldOp>(task.getLoc(), newYieldValues);
+
+    // Replace the null placeholders with newly constructed values.
+    for (unsigned idx = 0, collapsedIdx = 0, e = newResultValues.size();
+         idx != e; ++idx) {
+      Value &blockTransferArg = newBlockTransferArgs[idx];
+      Value &newResultVal = newResultValues[idx];
+      assert((blockTransferArg && newResultVal) ||
+             (!blockTransferArg && !newResultVal));
+      if (!blockTransferArg) {
+        blockTransferArg = newtask.getBody().getArgument(collapsedIdx);
+        newResultVal = newtask.getResult(collapsedIdx++);
+      }
+    }
+
+    Block &oldBlock = task.getRegion().front();
+    assert(oldBlock.getNumArguments() == newBlockTransferArgs.size() &&
+           "unexpected argument size mismatch");
+
+    // No results case: the scf::task builder already created a zero
+    // result terminator. Merge before this terminator and just get rid of the
+    // original terminator that has been merged in.
+    if (newIterArgs.empty()) {
+      auto newYieldOp = newtask.getYieldOp();
+      rewriter.inlineBlockBefore(&oldBlock, newYieldOp, newBlockTransferArgs);
+      rewriter.eraseOp(newBlock->getTerminator()->getPrevNode());
+      rewriter.replaceOp(task, newResultValues);
+      return success();
+    }
+
+    // No terminator case: merge and rewrite the merged terminator.
+    auto cloneFilteredTerminator = [&](hls::YieldOp mergedTerminator) {
+      OpBuilder::InsertionGuard g(rewriter);
+      rewriter.setInsertionPoint(mergedTerminator);
+      SmallVector<Value, 4> filteredOperands;
+      filteredOperands.reserve(newResultValues.size());
+      for (unsigned idx = 0, e = keepMask.size(); idx < e; ++idx)
+        if (keepMask[idx])
+          filteredOperands.push_back(mergedTerminator.getOperand(idx));
+      rewriter.create<hls::YieldOp>(mergedTerminator.getLoc(),
+                                    filteredOperands);
+    };
+
+    rewriter.mergeBlocks(&oldBlock, newBlock, newBlockTransferArgs);
+    auto mergedYieldOp = newtask.getYieldOp();
+    cloneFilteredTerminator(mergedYieldOp);
+    rewriter.eraseOp(mergedYieldOp);
+    rewriter.replaceOp(task, newResultValues);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
+struct InlineTask : public OpRewritePattern<hls::TaskOp> {
+  InlineTask(MLIRContext *context,
+             llvm::function_ref<bool(hls::TaskOp)> condition)
+      : OpRewritePattern<hls::TaskOp>(context), condition(condition) {}
+
+  LogicalResult matchAndRewrite(hls::TaskOp task,
+                                PatternRewriter &rewriter) const override {
+    if (condition(task)) {
+      Block *block = &task.getBody().front();
+      YieldOp yieldOp = task.getYieldOp();
+      ValueRange yieldedValue = yieldOp.getOperands();
+      rewriter.inlineBlockBefore(block, task, task.getInits());
+      rewriter.replaceOp(task, yieldedValue);
+      rewriter.eraseOp(yieldOp);
+      return success();
+    }
+    return failure();
+  }
+
+private:
+  llvm::function_ref<bool(hls::TaskOp)> condition;
+};
+} // namespace
+
+void TaskOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                         MLIRContext *context) {
+  results.add<FoldTaskIterArgs>(context);
+  results.add<InlineTask>(context, [](TaskOp task) {
+    return llvm::hasSingleElement(
+        llvm::make_filter_range(task->getBlock()->getOperations(),
+                                [](Operation &op) { return isa<TaskOp>(op); }));
+  });
+}
+
+LogicalResult TaskOp::verify() {
+  if (getResultTypes() != getYieldOp()->getOperandTypes())
+    return emitOpError("yield type doesn't align with result type");
+  if (getResultTypes() != getInitTypes())
+    return emitOpError("init type doesn't align with result type");
+  return success();
+}
+
+/// Return the yield op of this task op.
+YieldOp TaskOp::getYieldOp() {
+  return cast<YieldOp>(this->getRegion().front().getTerminator());
 }

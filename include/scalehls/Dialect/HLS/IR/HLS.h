@@ -66,16 +66,6 @@ bool hasRuntimeAttr(Operation *op);
 void setRuntimeAttr(Operation *op);
 
 //===----------------------------------------------------------------------===//
-// Transform Utils
-//===----------------------------------------------------------------------===//
-
-/// Fuse the given operations into a new task. The new task will be created
-/// before "insertToOp" and each operation will be in the original order. This
-/// method always succeeds even if the resulting IR is invalid.
-TaskOp fuseOpsIntoTask(ArrayRef<Operation *> ops, PatternRewriter &rewriter,
-                       Operation *insertToOp = nullptr);
-
-//===----------------------------------------------------------------------===//
 // Analysis Utils
 //===----------------------------------------------------------------------===//
 

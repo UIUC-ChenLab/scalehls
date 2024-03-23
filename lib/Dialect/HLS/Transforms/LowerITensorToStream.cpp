@@ -213,6 +213,7 @@ struct LowerITensorToStream
     patterns.add<LowerForOp>(context);
     patterns.add<LowerTaskOp>(context);
     scf::ForOp::getCanonicalizationPatterns(patterns, context);
+    hls::TaskOp::getCanonicalizationPatterns(patterns, context);
     patterns.add<RemoveITensorToStreamOp>(context);
     patterns.add<RemoveStreamToITensorOp>(context);
     patterns.add<DuplicateStreamOp>(context);

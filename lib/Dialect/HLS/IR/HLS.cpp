@@ -104,61 +104,6 @@ bool hls::hasRuntimeAttr(Operation *op) {
 }
 
 //===----------------------------------------------------------------------===//
-// Transform Utils
-//===----------------------------------------------------------------------===//
-
-/// Fuse the given operations into a new task. The new task will be created
-/// before "insertToOp" and each operation will be in the original order. This
-/// method always succeeds even if the resulting IR is invalid.
-TaskOp hls::fuseOpsIntoTask(ArrayRef<Operation *> ops,
-                            PatternRewriter &rewriter, Operation *insertToOp) {
-  assert(!ops.empty() && "must fuse at least one op");
-  llvm::SmallDenseSet<Operation *, 4> opsSet(ops.begin(), ops.end());
-
-  // Collect output values. This is not sufficient and may lead to empty-used
-  // outputs, which will be removed during canonicalization.
-  llvm::SetVector<Value> outputValues;
-  for (auto op : ops)
-    for (auto result : op->getResults())
-      if (llvm::any_of(result.getUsers(),
-                       [&](Operation *user) { return !opsSet.count(user); }))
-        outputValues.insert(result);
-
-  // Create new graph task with all inputs and outputs.
-  auto loc = rewriter.getUnknownLoc();
-  if (!insertToOp)
-    rewriter.setInsertionPoint(ops.front());
-  else
-    rewriter.setInsertionPoint(insertToOp);
-  auto task = rewriter.create<TaskOp>(
-      loc, ValueRange(outputValues.getArrayRef()), ValueRange());
-  auto taskBlock = rewriter.createBlock(&task.getBody());
-
-  // Move each targeted op into the new graph task.
-  rewriter.setInsertionPointToEnd(taskBlock);
-  auto yield = rewriter.create<YieldOp>(loc, outputValues.getArrayRef());
-  for (auto op : ops)
-    op->moveBefore(yield);
-
-  // Replace external output uses with the task results.
-  unsigned idx = 0;
-  for (auto output : outputValues)
-    output.replaceUsesWithIf(task.getResult(idx++), [&](OpOperand &use) {
-      return !task->isProperAncestor(use.getOwner());
-    });
-
-  // Inline all sub-tasks.
-  for (auto subTask : llvm::make_early_inc_range(task.getOps<TaskOp>())) {
-    auto &subTaskOps = subTask.getBody().front().getOperations();
-    auto &taskOps = task.getBody().front().getOperations();
-    taskOps.splice(subTask->getIterator(), subTaskOps, subTaskOps.begin(),
-                   std::prev(subTaskOps.end()));
-    rewriter.replaceOp(subTask, subTask.getYieldOp()->getOperands());
-  }
-  return task;
-}
-
-//===----------------------------------------------------------------------===//
 // Analysis Utils
 //===----------------------------------------------------------------------===//
 

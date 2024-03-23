@@ -345,6 +345,26 @@ def StreamWriteOp : HLSOp<"stream_write", [
 // Dataflow Operations
 //===----------------------------------------------------------------------===//
 
+def BufferOp : HLSOp<"buffer", [
+      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+  let summary = "Represent a dataflow buffer";
+
+  let arguments = (ins OptionalAttr<TypedAttrInterface>:$init_value);
+  let results = (outs AnyBuffer:$memref);
+  let assemblyFormat = "attr-dict `:` type($memref)";
+
+  let hasVerifier = 1;
+  let hasCanonicalizeMethod = 1;
+  let builders = [
+    OpBuilder<(ins "mlir::Type":$memref),
+        "build($_builder, $_state, memref, nullptr);">
+  ];
+
+  let extraClassDeclaration = [{
+    MemRefType getMemrefType() { return getMemref().getType(); }
+  }];
+}
+
 def TaskOp : HLSOp<"task", [SingleBlockImplicitTerminator<"YieldOp">]> {
   let summary = "Represent a dataflow task";
 
@@ -370,6 +390,8 @@ def TaskOp : HLSOp<"task", [SingleBlockImplicitTerminator<"YieldOp">]> {
 
     /// Return the yield op of this task op.
     YieldOp getYieldOp();
+
+    TypeRange getInitTypes() { return TypeRange(getInits()); }
   }];
 }
 
@@ -381,26 +403,6 @@ def YieldOp : HLSOp<"yield", [Pure, ReturnLike, Terminator,
   let assemblyFormat = "$results attr-dict `:` type($results)";
 
   let builders = [OpBuilder<(ins), "build($_builder, $_state, std::nullopt);">];
-}
-
-def BufferOp : HLSOp<"buffer", [
-      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
-  let summary = "Represent a dataflow buffer";
-
-  let arguments = (ins OptionalAttr<TypedAttrInterface>:$init_value);
-  let results = (outs AnyBuffer:$memref);
-  let assemblyFormat = "attr-dict `:` type($memref)";
-
-  let hasVerifier = 1;
-  let hasCanonicalizer = 1;
-  let builders = [
-    OpBuilder<(ins "mlir::Type":$memref),
-        "build($_builder, $_state, memref, nullptr);">
-  ];
-
-  let extraClassDeclaration = [{
-    MemRefType getMemrefType() { return getMemref().getType(); }
-  }];
 }
 
 //===----------------------------------------------------------------------===//
