@@ -17,14 +17,13 @@ using namespace hls;
 hls::TaskOp wrapOpIntoTask(Operation *op, StringRef taskName,
                            ValueRange destOperands, OpBuilder &builder) {
   auto destTypes = TypeRange(destOperands);
-  auto destLocs = llvm::to_vector(llvm::map_range(
-      destOperands, [](Value destOperand) { return destOperand.getLoc(); }));
 
   builder.setInsertionPoint(op);
   auto task = builder.create<TaskOp>(op->getLoc(), destTypes, destOperands);
   task->setAttr(taskName, builder.getUnitAttr());
-  auto taskBlock = builder.createBlock(&task.getBody(), task.getBody().end(),
-                                       destTypes, destLocs);
+  auto taskBlock = builder.createBlock(
+      &task.getBody(), task.getBody().end(), destTypes,
+      llvm::map_to_vector(destOperands, [&](Value v) { return v.getLoc(); }));
   IRMapping mapper;
   for (auto [destOperand, taskBlockArg] :
        llvm::zip(destOperands, taskBlock->getArguments()))
@@ -48,10 +47,14 @@ static LogicalResult scheduleBlock(StringRef prefix, Block *block,
     std::string taskName = prefix.str() + "_" + std::to_string(taskId);
 
     ValueRange destOperands;
+
     if (auto loop = dyn_cast<scf::ForOp>(op)) {
       if (failed(scheduleBlock(taskName, loop.getBody(), builder)))
         return failure();
       destOperands = loop.getInitArgs();
+    } else if (isa<tensor::InsertOp, tensor::InsertSliceOp,
+                   tensor::ParallelInsertSliceOp>(op)) {
+      continue;
     } else if (auto destStyleOp = dyn_cast<DestinationStyleOpInterface>(op)) {
       destOperands = destStyleOp.getDpsInits();
     } else if (auto writeOp = dyn_cast<ITensorWriteLikeOpInterface>(op)) {

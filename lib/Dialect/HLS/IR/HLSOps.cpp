@@ -435,7 +435,8 @@ struct FoldTaskIterArgs : public OpRewritePattern<hls::TaskOp> {
         task.getLoc(), TypeRange(newIterArgs), newIterArgs);
     newtask->setAttrs(task->getAttrs());
     Block *newBlock = rewriter.createBlock(
-        &newtask.getBody(), newtask.getBody().begin(), TypeRange(newIterArgs));
+        &newtask.getBody(), newtask.getBody().begin(), TypeRange(newIterArgs),
+        llvm::map_to_vector(newIterArgs, [&](Value v) { return v.getLoc(); }));
     rewriter.setInsertionPointToEnd(newBlock);
     rewriter.create<hls::YieldOp>(task.getLoc(), newYieldValues);
 
@@ -518,11 +519,8 @@ private:
 void TaskOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                          MLIRContext *context) {
   results.add<FoldTaskIterArgs>(context);
-  results.add<InlineTask>(context, [](TaskOp task) {
-    return llvm::hasSingleElement(
-        llvm::make_filter_range(task->getBlock()->getOperations(),
-                                [](Operation &op) { return isa<TaskOp>(op); }));
-  });
+  results.add<InlineTask>(context,
+                          [](TaskOp task) { return task.isSingleTask(); });
 }
 
 LogicalResult TaskOp::verify() {

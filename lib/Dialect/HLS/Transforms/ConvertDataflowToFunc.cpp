@@ -92,7 +92,7 @@ struct ConvertTaskToFunc : public OpRewritePattern<TaskOp> {
     subFunc->setAttrs(task->getAttrs());
 
     // FIXME: A better method to judge whether to inline the node.
-    if (!task.hasHierarchy() &&
+    if (task.isLeafTask() &&
         (llvm::hasSingleElement(task.getOps<LoopLikeOpInterface>()) ||
          llvm::hasSingleElement(task.getOps<linalg::LinalgOp>())))
       subFunc->setAttr("__inline__", rewriter.getUnitAttr());
