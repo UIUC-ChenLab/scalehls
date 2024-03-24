@@ -13,6 +13,15 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+namespace mlir {
+namespace scalehls {
+namespace hls {
+#define GEN_PASS_DEF_REDUCEFULLTENSORTOITENSOR
+#include "scalehls/Dialect/HLS/Transforms/Passes.h.inc"
+} // namespace hls
+} // namespace scalehls
+} // namespace mlir
+
 namespace {
 struct ReduceFullTensorToITensorBufferOp
     : public OpRewritePattern<hls::ITensorWriteFullTensorOp> {
@@ -99,7 +108,8 @@ struct ReduceFullTensorToITensorBufferOp
 
 namespace {
 struct ReduceFullTensorToITensor
-    : public ReduceFullTensorToITensorBase<ReduceFullTensorToITensor> {
+    : public hls::impl::ReduceFullTensorToITensorBase<
+          ReduceFullTensorToITensor> {
   void runOnOperation() override {
     auto op = getOperation();
     auto context = op->getContext();
@@ -110,7 +120,3 @@ struct ReduceFullTensorToITensor
   }
 };
 } // namespace
-
-std::unique_ptr<Pass> scalehls::hls::createReduceFullTensorToITensorPass() {
-  return std::make_unique<ReduceFullTensorToITensor>();
-}

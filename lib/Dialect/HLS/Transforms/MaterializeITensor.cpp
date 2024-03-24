@@ -14,6 +14,15 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+namespace mlir {
+namespace scalehls {
+namespace hls {
+#define GEN_PASS_DEF_MATERIALIZEITENSOR
+#include "scalehls/Dialect/HLS/Transforms/Passes.h.inc"
+} // namespace hls
+} // namespace scalehls
+} // namespace mlir
+
 /// Return the offsets, sizes, and strides of a slice given the loop induction
 /// variables "ivs", the index expressions "indexExprs", the element shape
 /// "elementShape", and the packing flag "packing". If "packing" is true, the
@@ -260,9 +269,10 @@ struct MaterializeITensorReadFullTensorOp
 
     // Create a new tensor, then construct a loop nest to read from the stream
     // channel and insert stream element to the tensor.
-    auto [ivs, result, iterArg] = constructLoops(
-        iTensorType.getIterTripCounts(), iTensorType.getIterSteps(), loc,
-        rewriter, toTensor.getFullTensorInit());
+    auto tensorInit = rewriter.create<hls::TensorInitOp>(loc, targetType);
+    auto [ivs, result, iterArg] =
+        constructLoops(iTensorType.getIterTripCounts(),
+                       iTensorType.getIterSteps(), loc, rewriter, tensorInit);
     auto newResult = readITensorAndInsertSlice(
         ivs, toTensor.getSource(), cast<TypedValue<RankedTensorType>>(iterArg),
         packing, loc, rewriter);
@@ -408,11 +418,9 @@ struct LowerPackOp : public OpRewritePattern<tensor::PackOp> {
 } // namespace
 
 namespace {
-struct MaterializeITensor : public MaterializeITensorBase<MaterializeITensor> {
-  MaterializeITensor() = default;
-  MaterializeITensor(bool optEnablePacking = true) {
-    enablePacking = optEnablePacking;
-  }
+struct MaterializeITensor
+    : public hls::impl::MaterializeITensorBase<MaterializeITensor> {
+  using Base::Base;
 
   void runOnOperation() override {
     auto op = getOperation();
@@ -432,8 +440,3 @@ struct MaterializeITensor : public MaterializeITensorBase<MaterializeITensor> {
   }
 };
 } // namespace
-
-std::unique_ptr<Pass>
-scalehls::hls::createMaterializeITensorPass(bool enablePacking) {
-  return std::make_unique<MaterializeITensor>(enablePacking);
-}

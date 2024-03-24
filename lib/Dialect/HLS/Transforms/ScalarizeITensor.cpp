@@ -13,6 +13,15 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+namespace mlir {
+namespace scalehls {
+namespace hls {
+#define GEN_PASS_DEF_SCALARIZEITENSOR
+#include "scalehls/Dialect/HLS/Transforms/Passes.h.inc"
+} // namespace hls
+} // namespace scalehls
+} // namespace mlir
+
 static ITensorType getScalarITensorType(ITensorType iTensor) {
   if (auto shapedElement = iTensor.getShapedElementType()) {
     SmallVector<int64_t> scalarIterTripCounts(iTensor.getIterTripCounts());
@@ -262,7 +271,8 @@ struct ScalarizeTaskOp : public OpRewritePattern<hls::TaskOp> {
 } // namespace
 
 namespace {
-struct ScalarizeITensor : public ScalarizeITensorBase<ScalarizeITensor> {
+struct ScalarizeITensor
+    : public hls::impl::ScalarizeITensorBase<ScalarizeITensor> {
   void runOnOperation() override {
     auto op = getOperation();
     auto context = op->getContext();
@@ -278,7 +288,3 @@ struct ScalarizeITensor : public ScalarizeITensorBase<ScalarizeITensor> {
   }
 };
 } // namespace
-
-std::unique_ptr<Pass> scalehls::hls::createScalarizeITensorPass() {
-  return std::make_unique<ScalarizeITensor>();
-}

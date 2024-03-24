@@ -11,6 +11,15 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+namespace mlir {
+namespace scalehls {
+namespace hls {
+#define GEN_PASS_DEF_LOWERITENSORTOSTREAM
+#include "scalehls/Dialect/HLS/Transforms/Passes.h.inc"
+} // namespace hls
+} // namespace scalehls
+} // namespace mlir
+
 static StreamType getStreamType(hls::ITensorType iTensorType) {
   return hls::StreamType::get(iTensorType.getDataType(),
                               iTensorType.getDepth());
@@ -201,7 +210,7 @@ struct DuplicateStreamOp : public OpRewritePattern<hls::StreamOp> {
 
 namespace {
 struct LowerITensorToStream
-    : public LowerITensorToStreamBase<LowerITensorToStream> {
+    : public hls::impl::LowerITensorToStreamBase<LowerITensorToStream> {
   void runOnOperation() override {
     auto op = getOperation();
     auto context = op->getContext();
@@ -221,7 +230,3 @@ struct LowerITensorToStream
   }
 };
 } // namespace
-
-std::unique_ptr<Pass> scalehls::hls::createLowerITensorToStreamPass() {
-  return std::make_unique<LowerITensorToStream>();
-}

@@ -16,6 +16,15 @@ using namespace scalehls;
 using namespace hls;
 using namespace affine;
 
+namespace mlir {
+namespace scalehls {
+namespace hls {
+#define GEN_PASS_DEF_CONVERTDATAFLOWTOFUNC
+#include "scalehls/Dialect/HLS/Transforms/Passes.h.inc"
+} // namespace hls
+} // namespace scalehls
+} // namespace mlir
+
 // namespace {
 // struct InlineSchedule : public OpRewritePattern<ScheduleOp> {
 //   using OpRewritePattern<ScheduleOp>::OpRewritePattern;
@@ -127,7 +136,7 @@ private:
 
 namespace {
 struct ConvertDataflowToFunc
-    : public ConvertDataflowToFuncBase<ConvertDataflowToFunc> {
+    : public hls::impl::ConvertDataflowToFuncBase<ConvertDataflowToFunc> {
   void runOnOperation() override {
     auto module = getOperation();
     auto context = module.getContext();
@@ -144,7 +153,3 @@ struct ConvertDataflowToFunc
   }
 };
 } // namespace
-
-std::unique_ptr<Pass> scalehls::hls::createConvertDataflowToFuncPass() {
-  return std::make_unique<ConvertDataflowToFunc>();
-}

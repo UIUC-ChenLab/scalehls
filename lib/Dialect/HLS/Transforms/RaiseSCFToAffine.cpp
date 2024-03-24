@@ -28,6 +28,15 @@ using namespace scalehls;
 using namespace affine;
 using namespace hls;
 
+namespace mlir {
+namespace scalehls {
+namespace hls {
+#define GEN_PASS_DEF_RAISESCFTOAFFINE
+#include "scalehls/Dialect/HLS/Transforms/Passes.h.inc"
+} // namespace hls
+} // namespace scalehls
+} // namespace mlir
+
 static bool isValidSymbolInt(Value value, bool recur = true);
 static bool isValidSymbolInt(Operation *defOp, bool recur) {
   Attribute operandCst;
@@ -1107,7 +1116,8 @@ struct AffineApplyRaisePattern : public OpRewritePattern<AffineApplyOp> {
 } // namespace
 
 namespace {
-struct RaiseSCFToAffine : public RaiseSCFToAffineBase<RaiseSCFToAffine> {
+struct RaiseSCFToAffine
+    : public hls::impl::RaiseSCFToAffineBase<RaiseSCFToAffine> {
   void runOnOperation() override {
     auto context = &getContext();
 
@@ -1122,7 +1132,3 @@ struct RaiseSCFToAffine : public RaiseSCFToAffineBase<RaiseSCFToAffine> {
   }
 };
 } // namespace
-
-std::unique_ptr<Pass> scalehls::hls::createRaiseSCFToAffinePass() {
-  return std::make_unique<RaiseSCFToAffine>();
-}

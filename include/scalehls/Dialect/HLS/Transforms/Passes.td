@@ -11,20 +11,15 @@ include "mlir/Pass/PassBase.td"
 
 def Preprocess : Pass<"scalehls-preprocess", "func::FuncOp"> {
   let summary = "Preprocess the IR for subsequent transforms";
-  let constructor = "mlir::scalehls::hls::createPreprocessPass()";
 }
 
 def ReduceFullTensorToITensor :
     Pass<"scalehls-reduce-full-tensor-to-itensor", "func::FuncOp"> {
   let summary = "Reduce immediate full tensors to itensor buffers";
-  let constructor = [{
-    mlir::scalehls::hls::createReduceFullTensorToITensorPass()
-  }];
 }
 
 def MaterializeITensor : Pass<"scalehls-materialize-itensor", "func::FuncOp"> {
   let summary = "Materialize tensor/itensor conversions and itensor buffers";
-  let constructor = "mlir::scalehls::hls::createMaterializeITensorPass()";
 
   let options = [
     Option<"enablePacking", "enable-packing", "bool", /*default=*/"true",
@@ -34,63 +29,60 @@ def MaterializeITensor : Pass<"scalehls-materialize-itensor", "func::FuncOp"> {
 
 def ScalarizeITensor : Pass<"scalehls-scalarize-itensor", "func::FuncOp"> {
   let summary = "Scalarize itensor channel elements";
-  let constructor = "mlir::scalehls::hls::createScalarizeITensorPass()";
 }
 
 def LowerITensorToStream :
     Pass<"scalehls-lower-itensor-to-stream", "func::FuncOp"> {
   let summary = "Lower itensor operations to stream operations";
-  let constructor = "mlir::scalehls::hls::createLowerITensorToStreamPass()";
 }
 
 def ScheduleDataflow : Pass<"scalehls-schedule-dataflow", "func::FuncOp"> {
   let summary = "Create a dataflow schedule";
-  let constructor = "mlir::scalehls::hls::createScheduleDataflowPass()";
 }
 
 def ConvertDataflowToFunc :
     Pass<"scalehls-convert-dataflow-to-func", "mlir::ModuleOp"> {
   let summary = "Convert structural dataflow to function for C++ emission";
-  let constructor = "mlir::scalehls::hls::createConvertDataflowToFuncPass()";
-}
-
-//===----------------------------------------------------------------------===//
-// Transform Passes
-//===----------------------------------------------------------------------===//
-
-def ApplyTransformPattern :
-    Pass<"scalehls-apply-transform-pattern", "func::FuncOp"> {
-  let summary = "A test pass to apply transformation patterns";
-  let constructor = "mlir::scalehls::hls::createApplyTransformPatternPass()";
 }
 
 def RaiseSCFToAffine : Pass<"scalehls-raise-scf-to-affine"> {
   let summary = "Raise SCF to affine";
-  let constructor = "mlir::scalehls::hls::createRaiseSCFToAffinePass()";
 }
 
 def ComprehensiveBufferize :
     Pass<"scalehls-comprehensive-bufferize", "mlir::ModuleOp"> {
   let summary = "Comprehensively bufferize the program";
-  let constructor = "mlir::scalehls::hls::createComprehensiveBufferizePass()";
-}
-
-def LowerCopyToAffineLoops :
-    Pass<"scalehls-lower-copy-to-affine-loops", "func::FuncOp"> {
-  let summary = "Convert memref copy to affine loops";
-  let constructor = "mlir::scalehls::hls::createLowerCopyToAffineLoopsPass()";
 }
 
 def GenerateRuntimeFunc :
     Pass<"scalehls-generate-runtime-func", "mlir::ModuleOp"> {
   let summary = "Outline the top function for HLS";
-  let constructor = "mlir::scalehls::hls::createGenerateRuntimeFuncPass()";
-  
+
   let options = [
     Option<"topFunc", "top-func", "std::string", /*default=*/"\"forward\"",
            "Name of the top function for HLS">,
     Option<"runtimeFunc", "runtime-func", "std::string",
            /*default=*/"\"runtime\"", "Name of the runtime function.">
+  ];
+}
+
+def TransformInterpreter : Pass<"scalehls-transform-interpreter"> {
+  let summary = "Interprete transform sequence with the given entry point";
+
+  let options = [
+    Option<"debugPayloadRootTag", "debug-payload-root-tag", "std::string",
+           /*default=*/[{""}],
+           "Select the operation with 'transform.target_tag' attribute having "
+           "the given value as payload IR root. If empty select the pass "
+           "anchor operation as the payload IR root.">,
+    Option<"disableExpensiveChecks", "disable-expensive-checks", "bool",
+           "false",
+           "Disable expensive checks in the interpreter for a faster run.">,
+    Option<"entryPoint", "entry-point", "std::string",
+           /*default=*/"\"__transform_main\"",
+           "Entry point of the pass pipeline.">,
+    Option<"deleteEntryPoint", "delete-entry-point", "bool", /*default=*/"true",
+           "Delete the entry point after transformation.">
   ];
 }
 

@@ -31,13 +31,13 @@ void scalehls::addLinalgTransformPasses(OpPassManager &pm) {
   pm.addPass(mlir::createLinalgFoldUnitExtentDimsPass());
   pm.addPass(bufferization::createEmptyTensorEliminationPass());
   pm.addPass(mlir::createLinalgInlineScalarOperandsPass());
-  pm.addNestedPass<func::FuncOp>(hls::createPreprocessPass());
+  pm.addNestedPass<func::FuncOp>(hls::createPreprocess());
   pm.addPass(mlir::createCSEPass());
   pm.addPass(mlir::createCanonicalizerPass());
 }
 
 void scalehls::addComprehensiveBufferizePasses(OpPassManager &pm) {
-  pm.addPass(hls::createComprehensiveBufferizePass());
+  pm.addPass(hls::createComprehensiveBufferize());
   pm.addPass(memref::createResolveShapedTypeResultDimsPass());
   pm.addPass(mlir::createCanonicalizerPass());
   pm.addPass(mlir::createCSEPass());
@@ -45,13 +45,13 @@ void scalehls::addComprehensiveBufferizePasses(OpPassManager &pm) {
 }
 
 void scalehls::addConvertDataflowToFuncPasses(OpPassManager &pm) {
-  pm.addPass(hls::createRaiseSCFToAffinePass());
+  pm.addPass(hls::createRaiseSCFToAffine());
   pm.addNestedPass<func::FuncOp>(mlir::createConvertLinalgToAffineLoopsPass());
   pm.addNestedPass<func::FuncOp>(affine::createAffineLoopNormalizePass());
   pm.addNestedPass<func::FuncOp>(affine::createSimplifyAffineStructuresPass());
   pm.addPass(memref::createFoldMemRefAliasOpsPass());
-  pm.addPass(hls::createConvertDataflowToFuncPass());
-  pm.addPass(hls::createGenerateRuntimeFuncPass());
+  pm.addPass(hls::createConvertDataflowToFunc());
+  pm.addPass(hls::createGenerateRuntimeFunc());
   pm.addPass(mlir::createCSEPass());
   pm.addPass(mlir::createCanonicalizerPass());
 }
@@ -68,7 +68,7 @@ void scalehls::registerScaleHLSPyTorchPipeline() {
       [](OpPassManager &pm, const ScaleHLSPyTorchPipelineOptions &opts) {
         addLinalgTransformPasses(pm);
         addComprehensiveBufferizePasses(pm);
-        pm.addNestedPass<func::FuncOp>(hls::createScheduleDataflowPass());
+        pm.addNestedPass<func::FuncOp>(hls::createScheduleDataflow());
         pm.addPass(mlir::createCanonicalizerPass());
         addConvertDataflowToFuncPasses(pm);
       });

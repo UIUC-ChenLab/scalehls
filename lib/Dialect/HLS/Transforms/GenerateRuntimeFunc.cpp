@@ -11,14 +11,19 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+namespace mlir {
+namespace scalehls {
+namespace hls {
+#define GEN_PASS_DEF_GENERATERUNTIMEFUNC
+#include "scalehls/Dialect/HLS/Transforms/Passes.h.inc"
+} // namespace hls
+} // namespace scalehls
+} // namespace mlir
+
 namespace {
 struct GenerateRuntimeFunc
-    : public GenerateRuntimeFuncBase<GenerateRuntimeFunc> {
-  GenerateRuntimeFunc() = default;
-  GenerateRuntimeFunc(std::string optTopFunc, std::string optRuntimeFunc) {
-    topFunc = optTopFunc;
-    runtimeFunc = optRuntimeFunc;
-  }
+    : public hls::impl::GenerateRuntimeFuncBase<GenerateRuntimeFunc> {
+  using Base::Base;
 
   void runOnOperation() override {
     auto module = getOperation();
@@ -86,9 +91,3 @@ struct GenerateRuntimeFunc
   }
 };
 } // namespace
-
-std::unique_ptr<Pass>
-scalehls::hls::createGenerateRuntimeFuncPass(std::string optTopFunc,
-                                             std::string optRuntimeFunc) {
-  return std::make_unique<GenerateRuntimeFunc>(optTopFunc, optRuntimeFunc);
-}

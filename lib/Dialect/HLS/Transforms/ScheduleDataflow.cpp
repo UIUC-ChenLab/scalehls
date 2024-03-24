@@ -14,6 +14,15 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+namespace mlir {
+namespace scalehls {
+namespace hls {
+#define GEN_PASS_DEF_SCHEDULEDATAFLOW
+#include "scalehls/Dialect/HLS/Transforms/Passes.h.inc"
+} // namespace hls
+} // namespace scalehls
+} // namespace mlir
+
 hls::TaskOp wrapOpIntoTask(Operation *op, StringRef taskName,
                            ValueRange destOperands, OpBuilder &builder) {
   auto destTypes = TypeRange(destOperands);
@@ -71,7 +80,8 @@ static LogicalResult scheduleBlock(StringRef prefix, Block *block,
 }
 
 namespace {
-struct ScheduleDataflow : public ScheduleDataflowBase<ScheduleDataflow> {
+struct ScheduleDataflow
+    : public hls::impl::ScheduleDataflowBase<ScheduleDataflow> {
   void runOnOperation() override {
     auto func = getOperation();
     auto builder = OpBuilder(func);
@@ -81,7 +91,3 @@ struct ScheduleDataflow : public ScheduleDataflowBase<ScheduleDataflow> {
   }
 };
 } // namespace
-
-std::unique_ptr<Pass> scalehls::hls::createScheduleDataflowPass() {
-  return std::make_unique<ScheduleDataflow>();
-}

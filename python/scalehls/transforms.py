@@ -27,12 +27,17 @@ from functools import wraps
 
 def apply_transform_sequence(
         module: Module,
-        sequence: transform.NamedSequenceOp):
+        sequence: transform.NamedSequenceOp,
+        delete_sequence: bool = True):
     pm = PassManager.parse(
         "builtin.module("
-        "transform-interpreter{entry-point=" + sequence.sym_name.value + "},"
+        "scalehls-transform-interpreter{entry-point=" +
+        sequence.sym_name.value + " delete-entry-point=" +
+        str(delete_sequence).lower() + "},"
         "cse, canonicalize)")
     pm.run(module.operation)
+    if delete_sequence:
+        del module.operation.attributes["transform.with_named_sequence"]
 
 
 def apply_linalg_optimization_passes(module: Module):

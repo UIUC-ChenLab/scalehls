@@ -21,6 +21,15 @@ using namespace scalehls;
 using namespace hls;
 using namespace bufferization;
 
+namespace mlir {
+namespace scalehls {
+namespace hls {
+#define GEN_PASS_DEF_COMPREHENSIVEBUFFERIZE
+#include "scalehls/Dialect/HLS/Transforms/Passes.h.inc"
+} // namespace hls
+} // namespace scalehls
+} // namespace mlir
+
 /// Create a linalg::GenericOp version of an n-D copy that can further tile,
 /// lower to loops or vectorize, unlike the current implementation of
 /// memref::CopyOp.
@@ -71,11 +80,7 @@ static OneShotBufferizationOptions getBufferizationOptions() {
   OneShotBufferizationOptions options;
   options.setFunctionBoundaryTypeConversion(LayoutMapOption::IdentityLayoutMap);
 
-  // bufferization.to_memref is used to bufferize constants. We'd like to leave
-  // the arith.constant as is and insert bufferization.to_memref to convert the
-  // tensor to memref.
   // options.opFilter.denyOperation<arith::ConstantOp>();
-  // options.opFilter.denyOperation<bufferization::ToMemrefOp>();
 
   // This type converter converts tensor types to memref types when no exact
   // memref type can be inferred from the context.
@@ -104,18 +109,12 @@ runScaleHLSOneShotBufferize(Operation *op,
 
 namespace {
 struct ComprehensiveBufferize
-    : public ComprehensiveBufferizeBase<ComprehensiveBufferize> {
-  explicit ComprehensiveBufferize(
-      std::optional<BufferizationOptions::AllocationFn> allocationFn =
-          std::nullopt,
-      std::optional<BufferizationOptions::MemCpyFn> memCpyFn = std::nullopt)
-      : allocationFn(allocationFn), memCpyFn(memCpyFn) {}
-
+    : public hls::impl::ComprehensiveBufferizeBase<ComprehensiveBufferize> {
   void runOnOperation() override {
     ModuleOp moduleOp = getOperation();
     OneShotBufferizationOptions options = getBufferizationOptions();
-    options.allocationFn = allocationFn;
-    options.memCpyFn = memCpyFn;
+    options.allocationFn = defaultAllocationFn;
+    options.memCpyFn = defaultMemCpyFn;
     options.allowReturnAllocsFromLoops = true;
     options.bufferizeFunctionBoundaries = true;
 
@@ -127,19 +126,5 @@ struct ComprehensiveBufferize
     linalg::populateEraseUnusedOperandsAndResultsPatterns(patterns);
     (void)applyPatternsAndFoldGreedily(moduleOp, std::move(patterns));
   }
-
-private:
-  const std::optional<BufferizationOptions::AllocationFn> allocationFn;
-  const std::optional<BufferizationOptions::MemCpyFn> memCpyFn;
 };
 } // namespace
-
-std::unique_ptr<Pass> scalehls::hls::createComprehensiveBufferizePass(
-    std::optional<BufferizationOptions::AllocationFn> allocationFn,
-    std::optional<BufferizationOptions::MemCpyFn> memCpyFn) {
-  if (!allocationFn)
-    allocationFn = defaultAllocationFn;
-  if (!memCpyFn)
-    memCpyFn = defaultMemCpyFn;
-  return std::make_unique<ComprehensiveBufferize>(allocationFn, memCpyFn);
-}

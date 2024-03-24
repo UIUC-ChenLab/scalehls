@@ -7,10 +7,9 @@ add_mlir_dialect_library(MLIRScaleHLSHLSTransforms
   LowerITensorToStream.cpp
   ScheduleDataflow.cpp
   ConvertDataflowToFunc.cpp
-  ApplyTransformPattern.cpp
+  TransformInterpreter.cpp
   ComprehensiveBufferize.cpp
   GenerateRuntimeFunc.cpp
-  LowerCopyToAffineLoops.cpp
   RaiseSCFToAffine.cpp
 
   DEPENDS

@@ -23,29 +23,7 @@ namespace mlir {
 namespace scalehls {
 namespace hls {
 
-std::unique_ptr<Pass> createPreprocessPass();
-std::unique_ptr<Pass> createReduceFullTensorToITensorPass();
-std::unique_ptr<Pass> createMaterializeITensorPass(bool enablePacking = true);
-std::unique_ptr<Pass> createScalarizeITensorPass();
-std::unique_ptr<Pass> createLowerITensorToStreamPass();
-
-std::unique_ptr<Pass> createScheduleDataflowPass();
-std::unique_ptr<Pass> createConvertDataflowToFuncPass();
-
-std::unique_ptr<Pass> createApplyTransformPatternPass();
-std::unique_ptr<Pass> createRaiseSCFToAffinePass();
-
-std::unique_ptr<Pass> createComprehensiveBufferizePass(
-    std::optional<bufferization::BufferizationOptions::AllocationFn>
-        allocationFn = std::nullopt,
-    std::optional<bufferization::BufferizationOptions::MemCpyFn> memCpyFn =
-        std::nullopt);
-std::unique_ptr<Pass>
-createGenerateRuntimeFuncPass(std::string topFunc = "forward",
-                              std::string runtimeFunc = "runtime");
-std::unique_ptr<Pass> createLowerCopyToAffineLoopsPass();
-
-#define GEN_PASS_CLASSES
+#define GEN_PASS_DECL
 #include "scalehls/Dialect/HLS/Transforms/Passes.h.inc"
 
 #define GEN_PASS_REGISTRATION

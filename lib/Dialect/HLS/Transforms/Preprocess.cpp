@@ -14,6 +14,15 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
+namespace mlir {
+namespace scalehls {
+namespace hls {
+#define GEN_PASS_DEF_PREPROCESS
+#include "scalehls/Dialect/HLS/Transforms/Passes.h.inc"
+} // namespace hls
+} // namespace scalehls
+} // namespace mlir
+
 namespace {
 /// This pattern will convert a tensor.empty op to an fdf.tensor_init op.
 struct ConvertTensorEmptyOp : public OpRewritePattern<tensor::EmptyOp> {
@@ -87,7 +96,7 @@ struct ConvertLinalgGenericOp : public OpRewritePattern<linalg::GenericOp> {
 } // namespace
 
 namespace {
-struct Preprocess : public PreprocessBase<Preprocess> {
+struct Preprocess : public hls::impl::PreprocessBase<Preprocess> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -98,27 +107,6 @@ struct Preprocess : public PreprocessBase<Preprocess> {
     patterns.add<ConvertLinalgGenericOp>(context);
     hls::TensorInitOp::getCanonicalizationPatterns(patterns, context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
-
-    // auto b = OpBuilder(context);
-    // func.walk([&](Operation *op) {
-    //   b.setInsertionPointAfter(op);
-    //   for (auto result :
-    //        llvm::make_filter_range(op->getResults(), [&](Value v) {
-    //          return isa<RankedTensorType>(v.getType());
-    //        })) {
-    //     SmallVector<OpOperand *> uses = llvm::map_to_vector(
-    //         result.getUses(), [&](OpOperand &use) { return &use; });
-    //     auto forkTypes = SmallVector<Type>(uses.size(), result.getType());
-    //     auto forkOp =
-    //         b.create<hls::TensorForkOp>(op->getLoc(), forkTypes, result);
-    //     for (auto [use, fork] : llvm::zip(uses, forkOp.getResults()))
-    //       use->set(fork);
-    //   }
-    // });
   }
 };
 } // namespace
-
-std::unique_ptr<Pass> scalehls::hls::createPreprocessPass() {
-  return std::make_unique<Preprocess>();
-}
