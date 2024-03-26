@@ -18,6 +18,12 @@
 namespace mlir {
 namespace scalehls {
 
+RankedTensorType getPackedType(RankedTensorType tensorType,
+                               ArrayRef<int64_t> tileSizes);
+
+RankedTensorType getUnpackedType(RankedTensorType tensorType,
+                                 ArrayRef<int64_t> tileSizes);
+
 std::tuple<Value, Value, Value> getLoopBoundsAndStep(int64_t tripCount,
                                                      int64_t step, Location loc,
                                                      PatternRewriter &rewriter);

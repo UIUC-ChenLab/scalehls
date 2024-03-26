@@ -98,15 +98,13 @@ struct ConvertLinalgGenericOp : public OpRewritePattern<linalg::GenericOp> {
 namespace {
 struct Preprocess : public hls::impl::PreprocessBase<Preprocess> {
   void runOnOperation() override {
-    auto func = getOperation();
-    auto context = func.getContext();
-
+    auto context = &getContext();
     mlir::RewritePatternSet patterns(context);
     patterns.add<ConvertTensorEmptyOp>(context);
     patterns.add<ConvertLinalgFillOp>(context);
     patterns.add<ConvertLinalgGenericOp>(context);
     hls::TensorInitOp::getCanonicalizationPatterns(patterns, context);
-    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+    (void)applyPatternsAndFoldGreedily(getOperation(), std::move(patterns));
   }
 };
 } // namespace

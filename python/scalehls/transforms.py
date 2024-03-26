@@ -46,18 +46,24 @@ def apply_linalg_optimization_passes(module: Module):
     pm.run(module.operation)
 
 
-def apply_reduce_full_tensor_to_itensor(module: Module):
+def apply_reduce_full_tensor_to_itensor_buffer(module: Module):
     pm = PassManager.parse(
-        "builtin.module(func.func(scalehls-reduce-full-tensor-to-itensor),"
+        "builtin.module(func.func("
+        "scalehls-reduce-full-tensor-to-itensor-buffer),"
         "cse, canonicalize)")
     pm.run(module.operation)
 
 
-def apply_materialize_itensor(module: Module, enable_packing: bool = False):
-    enable_packing_str = "true" if enable_packing else "false"
+def apply_pack_itensor_dma(module: Module):
     pm = PassManager.parse(
-        "builtin.module(func.func(scalehls-materialize-itensor{"
-        "enable-packing=" + enable_packing_str + "}),"
+        "builtin.module(func.func(scalehls-pack-itensor-dma),"
+        "cse, canonicalize)")
+    pm.run(module.operation)
+
+
+def apply_materialize_itensor_dma(module: Module):
+    pm = PassManager.parse(
+        "builtin.module(func.func(scalehls-materialize-itensor-dma),"
         "cse, canonicalize)")
     pm.run(module.operation)
 
@@ -580,7 +586,7 @@ class DesignSpaceGraph(nx.Graph):
             if isinstance(node, (tensor.ExpandShapeOp, tensor.CollapseShapeOp)):
                 data["source_tile_sizes"], data["result_tile_sizes"] = \
                     self.get_reshape_op_naive_tile_sizes(
-                    node, default_tile_size=default_unroll_size)
+                    node, default_tile_size=default_tile_size)
 
     def print_dot(self, file_name: str, print_params: bool = False):
         dot = Digraph()

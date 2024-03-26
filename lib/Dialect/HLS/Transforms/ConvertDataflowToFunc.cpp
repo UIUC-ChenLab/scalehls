@@ -138,12 +138,12 @@ namespace {
 struct ConvertDataflowToFunc
     : public hls::impl::ConvertDataflowToFuncBase<ConvertDataflowToFunc> {
   void runOnOperation() override {
-    auto module = getOperation();
-    auto context = module.getContext();
+    auto moduleOp = getOperation();
+    auto context = &getContext();
 
     // Convert all tasks and schedules into sub-functions.
     for (auto func :
-         llvm::make_early_inc_range(module.getOps<func::FuncOp>())) {
+         llvm::make_early_inc_range(moduleOp.getOps<func::FuncOp>())) {
       unsigned taskIdx = 0;
       mlir::RewritePatternSet patterns(context);
       // patterns.add<InlineSchedule>(context);

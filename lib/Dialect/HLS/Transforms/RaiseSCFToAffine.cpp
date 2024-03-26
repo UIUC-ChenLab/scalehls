@@ -1120,14 +1120,12 @@ struct RaiseSCFToAffine
     : public hls::impl::RaiseSCFToAffineBase<RaiseSCFToAffine> {
   void runOnOperation() override {
     auto context = &getContext();
-
     RewritePatternSet patterns(context);
     patterns.insert<ForOpRaising>(context);
     patterns.insert<ParallelOpRaising>(context);
     patterns.insert<AffineApplyRaisePattern>(context);
     patterns.insert<MemrefLoadRaisePattern>(context);
     patterns.insert<MemrefStoreRaisePattern>(context);
-
     (void)applyPatternsAndFoldGreedily(getOperation(), std::move(patterns));
   }
 };

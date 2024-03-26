@@ -17,7 +17,7 @@ using namespace hls;
 namespace mlir {
 namespace scalehls {
 namespace hls {
-#define GEN_PASS_DEF_MATERIALIZEITENSOR
+#define GEN_PASS_DEF_MATERIALIZEITENSORDMA
 #include "scalehls/Dialect/HLS/Transforms/Passes.h.inc"
 } // namespace hls
 } // namespace scalehls
@@ -85,10 +85,11 @@ static SmallVector<ReassociationIndices> getPackingReassociation(int64_t rank) {
 /// "packing" is true, the slice is extracted from the packed tensor and shape
 /// collapsed before writing to the iterative tensor.
 static TypedValue<ITensorType>
-extactSliceAndWriteITensor(ArrayRef<Value> ivs, TypedValue<ITensorType> channel,
-                           TypedValue<RankedTensorType> tensor, bool packing,
+extactSliceAndWriteITensor(ArrayRef<Value> ivs, TypedValue<ITensorType> iTensor,
+                           TypedValue<RankedTensorType> tensor,
+                           TypedValue<ITensorType> loopResult, bool packing,
                            Location loc, PatternRewriter &rewriter) {
-  auto iTensorType = cast<ITensorType>(channel.getType());
+  auto iTensorType = cast<ITensorType>(iTensor.getType());
 
   auto [offsets, sizes, strides] =
       getSliceInfo(ivs, iTensorType.getIterMap().getResults(),
@@ -98,17 +99,18 @@ extactSliceAndWriteITensor(ArrayRef<Value> ivs, TypedValue<ITensorType> channel,
   if (packing)
     slice = rewriter.create<tensor::CollapseShapeOp>(
         loc, slice, getPackingReassociation(iTensorType.getElementRank()));
-  return rewriter.create<hls::ITensorWriteOp>(loc, iTensorType, slice, channel);
+  return rewriter.create<hls::ITensorWriteOp>(loc, iTensorType, slice, iTensor);
 }
 
 /// Read from the iterative tensor and insert the slice to the tensor. If
 /// "packing" is true, the slice is read from the iterative tensor and shape
 /// expanded before inserting to the tensor.
 static TypedValue<RankedTensorType>
-readITensorAndInsertSlice(ArrayRef<Value> ivs, TypedValue<ITensorType> channel,
-                          TypedValue<RankedTensorType> tensor, bool packing,
+readITensorAndInsertSlice(ArrayRef<Value> ivs, TypedValue<ITensorType> iTensor,
+                          TypedValue<RankedTensorType> tensor,
+                          TypedValue<RankedTensorType> loopResult, bool packing,
                           Location loc, PatternRewriter &rewriter) {
-  auto iTensorType = channel.getType();
+  auto iTensorType = iTensor.getType();
   auto [offsets, sizes, strides] =
       getSliceInfo(ivs, iTensorType.getIterMap().getResults(),
                    iTensorType.getElementShape(), packing, loc, rewriter);
@@ -126,7 +128,7 @@ readITensorAndInsertSlice(ArrayRef<Value> ivs, TypedValue<ITensorType> channel,
   // Then we take the extracted tensor as the "init" operand of the stream read
   // op, making it a "payload-carried" style operation.
   auto streamRead = rewriter.create<hls::ITensorReadOp>(
-      loc, iTensorType.getElementType(), channel, init);
+      loc, iTensorType.getElementType(), iTensor, init);
   auto slice = llvm::cast<TypedValue<RankedTensorType>>(streamRead.getResult());
 
   if (packing) {
@@ -142,173 +144,79 @@ readITensorAndInsertSlice(ArrayRef<Value> ivs, TypedValue<ITensorType> channel,
                                                 sizes, strides);
 }
 
-static RankedTensorType getPackedType(RankedTensorType tensorType,
-                                      ArrayRef<int64_t> tileSizes) {
-  auto packedShape =
-      llvm::map_to_vector(llvm::zip(tensorType.getShape(), tileSizes),
-                          [&](std::tuple<int64_t, int64_t> shape) {
-                            return std::get<0>(shape) / std::get<1>(shape);
-                          });
-  packedShape.append(tileSizes.begin(), tileSizes.end());
-  return RankedTensorType::get(packedShape, tensorType.getElementType());
-}
-
-static RankedTensorType getUnpackedType(RankedTensorType tensorType,
-                                        ArrayRef<int64_t> tileSizes) {
-  auto unpackedShape = llvm::map_to_vector(
-      llvm::zip(tensorType.getShape().take_front(tileSizes.size()), tileSizes),
-      [&](std::tuple<int64_t, int64_t> shape) {
-        return std::get<0>(shape) * std::get<1>(shape);
-      });
-  return RankedTensorType::get(unpackedShape, tensorType.getElementType());
-}
-
-static TypedValue<RankedTensorType>
-packTensor(TypedValue<RankedTensorType> tensor, ArrayRef<int64_t> tileSizes,
-           Location loc, PatternRewriter &rewriter) {
-  auto packedType = getPackedType(tensor.getType(), tileSizes);
-
-  auto init = rewriter.create<hls::TensorInitOp>(loc, packedType);
-  auto innerDimsPos = llvm::map_to_vector(llvm::seq<int64_t>(tileSizes.size()),
-                                          [&](int64_t i) { return i; });
-  auto innerTiles = llvm::map_to_vector(tileSizes, [&](int64_t tileSize) {
-    return OpFoldResult(rewriter.getI64IntegerAttr(tileSize));
-  });
-
-  return rewriter.create<tensor::PackOp>(loc, tensor, init, innerDimsPos,
-                                         innerTiles);
-}
-
-static TypedValue<RankedTensorType>
-unpackTensor(TypedValue<RankedTensorType> tensor, ArrayRef<int64_t> tileSizes,
-             Location loc, PatternRewriter &rewriter) {
-  auto unpackedType = getUnpackedType(tensor.getType(), tileSizes);
-
-  auto init = rewriter.create<hls::TensorInitOp>(loc, unpackedType);
-  auto innerDimsPos = llvm::map_to_vector(llvm::seq<int64_t>(tileSizes.size()),
-                                          [&](int64_t i) { return i; });
-  auto innerTiles = llvm::map_to_vector(tileSizes, [&](int64_t tileSize) {
-    return OpFoldResult(rewriter.getI64IntegerAttr(tileSize));
-  });
-
-  return rewriter.create<tensor::UnPackOp>(loc, tensor, init, innerDimsPos,
-                                           innerTiles);
-}
-
 namespace {
 struct MaterializeITensorWriteFullTensorOp
     : public OpRewritePattern<hls::ITensorWriteFullTensorOp> {
-  MaterializeITensorWriteFullTensorOp(MLIRContext *context,
-                                      bool enablePacking = true,
-                                      PatternBenefit benefit = 1,
-                                      ArrayRef<StringRef> generatedNames = {})
-      : OpRewritePattern(context, benefit, generatedNames),
-        enablePacking(enablePacking) {}
+  using OpRewritePattern<hls::ITensorWriteFullTensorOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(hls::ITensorWriteFullTensorOp toITensor,
+  LogicalResult matchAndRewrite(hls::ITensorWriteFullTensorOp writeFullTensor,
                                 PatternRewriter &rewriter) const override {
-    auto iTensorType = toITensor.getResult().getType();
-    auto loc = toITensor.getLoc();
-
-    // Only if the stream type is not overlapped, we can pack the tensor to make
-    // more efficient memory access pattern.
-    auto packing = enablePacking && iTensorType.tileIsRegular() &&
-                   iTensorType.getRank() > 1;
-    auto source = toITensor.getFullTensor();
-    if (packing)
-      source = packTensor(source, iTensorType.getElementShape(), loc, rewriter);
+    auto iTensorType = writeFullTensor.getResult().getType();
+    auto loc = writeFullTensor.getLoc();
 
     // Create a new iterative tensor, then construct a loop nest to extract
     // stream element from the tensor and write to the iterative tensor.
     auto [ivs, result, iterArg] = constructLoops(
         iTensorType.getIterTripCounts(), iTensorType.getIterSteps(), loc,
-        rewriter, toITensor.getDest());
-    auto newResult =
-        extactSliceAndWriteITensor(ivs, cast<TypedValue<ITensorType>>(iterArg),
-                                   source, packing, loc, rewriter);
+        rewriter, writeFullTensor.getDest());
+    auto newResult = extactSliceAndWriteITensor(
+        ivs, cast<TypedValue<ITensorType>>(iterArg),
+        writeFullTensor.getFullTensor(), cast<TypedValue<ITensorType>>(result),
+        writeFullTensor.getPacked(), loc, rewriter);
 
-    // Update "result" if no loop is constructed. Otherwise, create a new yield
-    // op to yield "newResult" to "result".
+    // Return "newResult" if no loop is constructed. Otherwise, create a new
+    // yield op to yield "newResult" to "result".
     if (ivs.empty())
       result = newResult;
     else
       rewriter.create<scf::YieldOp>(loc, newResult);
 
     // Replace the original stream with the new stream.
-    rewriter.replaceOp(toITensor, result);
+    rewriter.replaceOp(writeFullTensor, result);
     return success();
   }
-
-private:
-  bool enablePacking = true;
 };
 } // namespace
 
 namespace {
 struct MaterializeITensorReadFullTensorOp
     : public OpRewritePattern<hls::ITensorReadFullTensorOp> {
-  MaterializeITensorReadFullTensorOp(MLIRContext *context,
-                                     bool enablePacking = true,
-                                     PatternBenefit benefit = 1,
-                                     ArrayRef<StringRef> generatedNames = {})
-      : OpRewritePattern(context, benefit, generatedNames),
-        enablePacking(enablePacking) {}
+  using OpRewritePattern<hls::ITensorReadFullTensorOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(hls::ITensorReadFullTensorOp toTensor,
+  LogicalResult matchAndRewrite(hls::ITensorReadFullTensorOp readFullTensor,
                                 PatternRewriter &rewriter) const override {
-    auto iTensorType = toTensor.getSourceType();
-    auto loc = toTensor.getLoc();
-
-    // Only if the stream type is not overlapped, we can pack the tensor to make
-    // more efficient memory access pattern.
-    auto packing = enablePacking && iTensorType.tileIsRegular() &&
-                   iTensorType.getRank() > 1;
-    auto targetType = toTensor.getResult().getType();
-    if (packing)
-      targetType = getPackedType(targetType, iTensorType.getElementShape());
+    auto iTensorType = readFullTensor.getSourceType();
+    auto loc = readFullTensor.getLoc();
 
     // Create a new tensor, then construct a loop nest to read from the stream
     // channel and insert stream element to the tensor.
-    auto tensorInit = rewriter.create<hls::TensorInitOp>(loc, targetType);
-    auto [ivs, result, iterArg] =
-        constructLoops(iTensorType.getIterTripCounts(),
-                       iTensorType.getIterSteps(), loc, rewriter, tensorInit);
-    auto newResult = readITensorAndInsertSlice(
-        ivs, toTensor.getSource(), cast<TypedValue<RankedTensorType>>(iterArg),
-        packing, loc, rewriter);
+    auto [ivs, result, iterArg] = constructLoops(
+        iTensorType.getIterTripCounts(), iTensorType.getIterSteps(), loc,
+        rewriter, readFullTensor.getFullTensorInit());
+    auto newResult =
+        readITensorAndInsertSlice(ivs, readFullTensor.getSource(),
+                                  cast<TypedValue<RankedTensorType>>(iterArg),
+                                  cast<TypedValue<RankedTensorType>>(result),
+                                  readFullTensor.getPacked(), loc, rewriter);
 
-    // Update "result" if no loop is constructed. Otherwise, create a new yield
-    // op to yield "newResult" to "result".
+    // Return "newResult" if no loop is constructed. Otherwise, create a new
+    // yield op to yield "newResult" to "result".
     if (ivs.empty())
       result = newResult;
     else
       rewriter.create<scf::YieldOp>(loc, newResult);
 
-    // Handle the case where the tensor is packed.
-    if (packing) {
-      rewriter.setInsertionPointAfterValue(result);
-      result = unpackTensor(cast<TypedValue<RankedTensorType>>(result),
-                            iTensorType.getElementShape(), loc, rewriter);
-    }
-
     // Replace the original tensor with the new tensor.
-    rewriter.replaceOp(toTensor, result);
+    rewriter.replaceOp(readFullTensor, result);
     return success();
   }
-
-private:
-  bool enablePacking = true;
 };
 } // namespace
 
 namespace {
 struct MaterializeITensorBufferOp
     : public OpRewritePattern<hls::ITensorBufferOp> {
-  MaterializeITensorBufferOp(MLIRContext *context, bool enablePacking = true,
-                             PatternBenefit benefit = 1,
-                             ArrayRef<StringRef> generatedNames = {})
-      : OpRewritePattern(context, benefit, generatedNames),
-        enablePacking(enablePacking) {}
+  using OpRewritePattern<hls::ITensorBufferOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(hls::ITensorBufferOp iTensorBuffer,
                                 PatternRewriter &rewriter) const override {
@@ -324,24 +232,9 @@ struct MaterializeITensorBufferOp
                        sourceType.getIterSteps().take_front(loopIndex), loc,
                        rewriter, iTensorBuffer.getDest());
 
-    // Calculate the maximum tile sizes.
-    auto maxTileSizes = llvm::map_to_vector(
-        llvm::zip(sourceType.getElementShape(), resultType.getElementShape()),
-        [&](std::tuple<int64_t, int64_t> shapes) {
-          return std::max(std::get<0>(shapes), std::get<1>(shapes));
-        });
-
-    // Get the buffer type and packed buffer type if necessary.
-    auto packing = enablePacking && sourceType.tileIsRegular() &&
-                   resultType.tileIsRegular() &&
-                   (sourceType.getRank() > 1 || resultType.getRank() > 1);
-    auto bufferType = RankedTensorType::get(
-        iTensorBuffer.getBufferShape(), iTensorBuffer.getBufferElementType());
-    if (packing)
-      bufferType = getPackedType(bufferType, maxTileSizes);
-
     // Instantiate a buffer tensor with calculated buffer type.
-    auto tensorInit = rewriter.create<hls::TensorInitOp>(loc, bufferType);
+    auto tensorInit =
+        rewriter.create<hls::TensorInitOp>(loc, iTensorBuffer.getBufferType());
 
     // Construct loops to read from the input iterative tensor and insert stream
     // element to the buffer tensor.
@@ -354,11 +247,12 @@ struct MaterializeITensorBufferOp
     bufferInputIvs.append(inputIvs);
     auto newInputResult = readITensorAndInsertSlice(
         bufferInputIvs, iTensorBuffer.getSource(),
-        cast<TypedValue<RankedTensorType>>(inputIterArg), packing, loc,
-        rewriter);
+        cast<TypedValue<RankedTensorType>>(inputIterArg),
+        cast<TypedValue<RankedTensorType>>(inputResult),
+        iTensorBuffer.getPacked(), loc, rewriter);
 
-    // Update "inputResult" if no input loop is constructed. Otherwise, create a
-    // new yield op to yield "newInputResult" to "inputResult".
+    // Return "newResult" if no loop is constructed. Otherwise, create a new
+    // yield op to yield "newResult" to "result".
     if (inputIvs.empty())
       inputResult = newInputResult;
     else
@@ -375,11 +269,12 @@ struct MaterializeITensorBufferOp
     bufferOutputIvs.append(outputIvs);
     auto newOutputResult = extactSliceAndWriteITensor(
         bufferOutputIvs, cast<TypedValue<ITensorType>>(outputIterArg),
-        cast<TypedValue<RankedTensorType>>(inputResult), packing, loc,
-        rewriter);
+        cast<TypedValue<RankedTensorType>>(inputResult),
+        cast<TypedValue<ITensorType>>(outputResult), iTensorBuffer.getPacked(),
+        loc, rewriter);
 
-    // Update "outputResult" if no output loop is constructed. Otherwise, create
-    // a new yield op to yield "newOutputResult" to "outputResult".
+    // Return "newResult" if no loop is constructed. Otherwise, create a new
+    // yield op to yield "newResult" to "result".
     if (outputIvs.empty())
       outputResult = newOutputResult;
     else
@@ -397,46 +292,19 @@ struct MaterializeITensorBufferOp
     rewriter.replaceOp(iTensorBuffer, result);
     return success();
   }
-
-private:
-  bool enablePacking = true;
 };
 } // namespace
 
 namespace {
-struct LowerPackOp : public OpRewritePattern<tensor::PackOp> {
-  using OpRewritePattern<tensor::PackOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(tensor::PackOp pack,
-                                PatternRewriter &rewriter) const override {
-    if (pack.getPaddingValue() ||
-        !pack.getSource().getDefiningOp<arith::ConstantOp>())
-      return failure();
-    return linalg::lowerPack(rewriter, pack);
-  }
-};
-} // namespace
-
-namespace {
-struct MaterializeITensor
-    : public hls::impl::MaterializeITensorBase<MaterializeITensor> {
-  using Base::Base;
-
+struct MaterializeITensorDMA
+    : public hls::impl::MaterializeITensorDMABase<MaterializeITensorDMA> {
   void runOnOperation() override {
-    auto op = getOperation();
-    auto context = op->getContext();
-
+    auto context = &getContext();
     mlir::RewritePatternSet patterns(context);
-    patterns.add<MaterializeITensorWriteFullTensorOp>(context, enablePacking);
-    patterns.add<MaterializeITensorReadFullTensorOp>(context, enablePacking);
-    patterns.add<MaterializeITensorBufferOp>(context, enablePacking);
-    if (enablePacking) {
-      patterns.add<LowerPackOp>(context);
-      patterns.add<linalg::LinalgGeneralizationPattern>(context);
-      linalg::populateConstantFoldLinalgOperations(
-          patterns, [&](OpOperand *fusedOperand) { return true; });
-    }
-    (void)applyPatternsAndFoldGreedily(op, std::move(patterns));
+    patterns.add<MaterializeITensorWriteFullTensorOp>(context);
+    patterns.add<MaterializeITensorReadFullTensorOp>(context);
+    patterns.add<MaterializeITensorBufferOp>(context);
+    (void)applyPatternsAndFoldGreedily(getOperation(), std::move(patterns));
   }
 };
 } // namespace

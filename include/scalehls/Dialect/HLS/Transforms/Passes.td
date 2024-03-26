@@ -13,45 +13,17 @@ def Preprocess : Pass<"scalehls-preprocess", "func::FuncOp"> {
   let summary = "Preprocess the IR for subsequent transforms";
 }
 
-def ReduceFullTensorToITensor :
-    Pass<"scalehls-reduce-full-tensor-to-itensor", "func::FuncOp"> {
+def ReduceFullTensorToITensorBuffer :
+    Pass<"scalehls-reduce-full-tensor-to-itensor-buffer", "func::FuncOp"> {
   let summary = "Reduce immediate full tensors to itensor buffers";
 }
 
-def MaterializeITensor : Pass<"scalehls-materialize-itensor", "func::FuncOp"> {
-  let summary = "Materialize tensor/itensor conversions and itensor buffers";
-
-  let options = [
-    Option<"enablePacking", "enable-packing", "bool", /*default=*/"true",
-           "Whether to enable packing during the materialization">
-  ];
-}
-
-def ScalarizeITensor : Pass<"scalehls-scalarize-itensor", "func::FuncOp"> {
-  let summary = "Scalarize itensor channel elements";
-}
-
-def LowerITensorToStream :
-    Pass<"scalehls-lower-itensor-to-stream", "func::FuncOp"> {
-  let summary = "Lower itensor operations to stream operations";
+def PackITensorDMA : Pass<"scalehls-pack-itensor-dma", "func::FuncOp"> {
+  let summary = "Pack/unpack itensor DMAs";
 }
 
 def ScheduleDataflow : Pass<"scalehls-schedule-dataflow", "func::FuncOp"> {
   let summary = "Create a dataflow schedule";
-}
-
-def ConvertDataflowToFunc :
-    Pass<"scalehls-convert-dataflow-to-func", "mlir::ModuleOp"> {
-  let summary = "Convert structural dataflow to function for C++ emission";
-}
-
-def RaiseSCFToAffine : Pass<"scalehls-raise-scf-to-affine"> {
-  let summary = "Raise SCF to affine";
-}
-
-def ComprehensiveBufferize :
-    Pass<"scalehls-comprehensive-bufferize", "mlir::ModuleOp"> {
-  let summary = "Comprehensively bufferize the program";
 }
 
 def GenerateRuntimeFunc :
@@ -64,6 +36,34 @@ def GenerateRuntimeFunc :
     Option<"runtimeFunc", "runtime-func", "std::string",
            /*default=*/"\"runtime\"", "Name of the runtime function.">
   ];
+}
+
+def MaterializeITensorDMA :
+    Pass<"scalehls-materialize-itensor-dma", "func::FuncOp"> {
+  let summary = "Materialize itensor DMAs";
+}
+
+def ScalarizeITensor : Pass<"scalehls-scalarize-itensor", "func::FuncOp"> {
+  let summary = "Scalarize itensor elements";
+}
+
+def LowerITensorToStream :
+    Pass<"scalehls-lower-itensor-to-stream", "func::FuncOp"> {
+  let summary = "Lower itensor operations to stream operations";
+}
+
+def ComprehensiveBufferize :
+    Pass<"scalehls-comprehensive-bufferize", "mlir::ModuleOp"> {
+  let summary = "Comprehensively bufferize the program";
+}
+
+def ConvertDataflowToFunc :
+    Pass<"scalehls-convert-dataflow-to-func", "mlir::ModuleOp"> {
+  let summary = "Convert structural dataflow to function for C++ emission";
+}
+
+def RaiseSCFToAffine : Pass<"scalehls-raise-scf-to-affine"> {
+  let summary = "Raise SCF to affine";
 }
 
 def TransformInterpreter : Pass<"scalehls-transform-interpreter"> {

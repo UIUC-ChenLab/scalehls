@@ -16,7 +16,7 @@ using namespace hls;
 namespace mlir {
 namespace scalehls {
 namespace hls {
-#define GEN_PASS_DEF_REDUCEFULLTENSORTOITENSOR
+#define GEN_PASS_DEF_REDUCEFULLTENSORTOITENSORBUFFER
 #include "scalehls/Dialect/HLS/Transforms/Passes.h.inc"
 } // namespace hls
 } // namespace scalehls
@@ -96,10 +96,11 @@ struct ReduceFullTensorToITensorBufferOp
     bufferShape.append(std::next(tensorType.getShape().begin(), beforeDim),
                        tensorType.getShape().end());
 
+    auto bufferType =
+        RankedTensorType::get(bufferShape, tensorType.getElementType());
     rewriter.replaceOpWithNewOp<hls::ITensorBufferOp>(
         tensorToITensor, resultType, iTensorToTensor.getSource(),
-        tensorToITensor.getDest(), tensorType.getElementType(), bufferShape,
-        beforeLoop, beforeDim);
+        tensorToITensor.getDest(), bufferType, beforeLoop, beforeDim);
     return success();
     // love uuuuuuuu ;)
   }
@@ -107,16 +108,14 @@ struct ReduceFullTensorToITensorBufferOp
 } // namespace
 
 namespace {
-struct ReduceFullTensorToITensor
-    : public hls::impl::ReduceFullTensorToITensorBase<
-          ReduceFullTensorToITensor> {
+struct ReduceFullTensorToITensorBuffer
+    : public hls::impl::ReduceFullTensorToITensorBufferBase<
+          ReduceFullTensorToITensorBuffer> {
   void runOnOperation() override {
-    auto op = getOperation();
-    auto context = op->getContext();
-
+    auto context = &getContext();
     mlir::RewritePatternSet patterns(context);
     patterns.add<ReduceFullTensorToITensorBufferOp>(context);
-    (void)applyPatternsAndFoldGreedily(op, std::move(patterns));
+    (void)applyPatternsAndFoldGreedily(getOperation(), std::move(patterns));
   }
 };
 } // namespace

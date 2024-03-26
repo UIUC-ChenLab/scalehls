@@ -274,9 +274,10 @@ namespace {
 struct ScalarizeITensor
     : public hls::impl::ScalarizeITensorBase<ScalarizeITensor> {
   void runOnOperation() override {
-    auto op = getOperation();
-    auto context = op->getContext();
+    auto func = getOperation();
+    auto context = &getContext();
 
+    // Apply scalarization patterns.
     mlir::RewritePatternSet patterns(context);
     patterns.add<ScalarizeITensorInitOp>(context);
     patterns.add<ScalarizeITensorReadOp>(context);
@@ -284,7 +285,24 @@ struct ScalarizeITensor
     patterns.add<ScalarizeITensorReassociateOp>(context);
     patterns.add<ScalarizeForOp>(context);
     patterns.add<ScalarizeTaskOp>(context);
-    (void)applyPatternsAndFoldGreedily(op, std::move(patterns));
+    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+
+    // Check if all itensor cast ops have been folded.
+    auto checkResult = func.walk([&](Operation *op) {
+      if (isa<hls::ITensorBufferOp, hls::ITensorReadFullTensorOp,
+              hls::ITensorWriteFullTensorOp>(op)) {
+        op->emitOpError("itensor_buffer, itensor_read_full_itensor, and "
+                        "itensor_write_full_itensor ops, i.e. itensor DMA ops, "
+                        "must have been materialized before scalarization");
+        return WalkResult::interrupt();
+      } else if (isa<hls::ITensorCastOp>(op)) {
+        op->emitOpError("itensor_cast ops should have been folded");
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (checkResult.wasInterrupted())
+      return signalPassFailure();
   }
 };
 } // namespace

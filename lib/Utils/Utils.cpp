@@ -16,6 +16,27 @@ using namespace mlir;
 using namespace scalehls;
 using namespace affine;
 
+RankedTensorType scalehls::getPackedType(RankedTensorType tensorType,
+                                         ArrayRef<int64_t> tileSizes) {
+  auto packedShape =
+      llvm::map_to_vector(llvm::zip(tensorType.getShape(), tileSizes),
+                          [&](std::tuple<int64_t, int64_t> shape) {
+                            return std::get<0>(shape) / std::get<1>(shape);
+                          });
+  packedShape.append(tileSizes.begin(), tileSizes.end());
+  return RankedTensorType::get(packedShape, tensorType.getElementType());
+}
+
+RankedTensorType scalehls::getUnpackedType(RankedTensorType tensorType,
+                                           ArrayRef<int64_t> tileSizes) {
+  auto unpackedShape = llvm::map_to_vector(
+      llvm::zip(tensorType.getShape().take_front(tileSizes.size()), tileSizes),
+      [&](std::tuple<int64_t, int64_t> shape) {
+        return std::get<0>(shape) * std::get<1>(shape);
+      });
+  return RankedTensorType::get(unpackedShape, tensorType.getElementType());
+}
+
 std::tuple<Value, Value, Value>
 scalehls::getLoopBoundsAndStep(int64_t tripCount, int64_t step, Location loc,
                                PatternRewriter &rewriter) {

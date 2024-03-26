@@ -94,10 +94,11 @@ def ITensorReadFullTensorOp : HLSOp<"itensor_read_full_tensor", [Pure,
       DeclareOpInterfaceMethods<ITensorReadLikeOpInterface>]> {
   let summary = "Read the full tensor from an iterative tensor";
 
-  let arguments = (ins AnyITensor:$source, AnyRankedTensor:$fullTensorInit);
+  let arguments = (ins AnyITensor:$source, AnyRankedTensor:$fullTensorInit,
+                       UnitAttr:$packed);
   let results = (outs AnyRankedTensor:$fullTensor);
   let assemblyFormat = [{
-    $source `init` $fullTensorInit attr-dict `:`
+    $source `init` $fullTensorInit (`packed` $packed^)? attr-dict `:`
     functional-type(operands, results)
   }];
 
@@ -115,10 +116,12 @@ def ITensorWriteFullTensorOp : HLSOp<"itensor_write_full_tensor", [Pure,
       DeclareOpInterfaceMethods<ITensorWriteLikeOpInterface>]> {
   let summary = "Write the full tensor to an iterative tensor";
 
-  let arguments = (ins AnyRankedTensor:$fullTensor, AnyITensor:$dest);
+  let arguments = (ins AnyRankedTensor:$fullTensor, AnyITensor:$dest,
+                       UnitAttr:$packed);
   let results = (outs AnyITensor:$result);
   let assemblyFormat = [{
-    $fullTensor `into` $dest attr-dict `:` functional-type(operands, results)
+    $fullTensor `into` $dest (`packed` $packed^)? attr-dict `:`
+    functional-type(operands, results)
   }];
 
   let hasVerifier = 1;
@@ -180,15 +183,30 @@ def ITensorBufferOp : HLSOp<"itensor_buffer", [Pure,
   let summary = "Buffer an iterative tensor at a specific position";
 
   let arguments = (ins AnyITensor:$source, AnyITensor:$dest,
-      TypeAttr:$bufferElementType, DenseI64ArrayAttr:$bufferShape,
-      SI64Attr:$loopIndex, SI64Attr:$dimIndex);
+      TypeAttrOf<AnyRankedTensor>:$bufferType, SI64Attr:$loopIndex,
+      SI64Attr:$dimIndex, UnitAttr:$packed);
   let results = (outs AnyITensor:$result);
   let assemblyFormat = [{
-    $source `into` $dest `,` $bufferElementType $bufferShape `before` `loop`
-    $loopIndex `dim` $dimIndex attr-dict `:` functional-type(operands, results)
+    $source `into` $dest `,` $bufferType `before` `loop` $loopIndex `dim`
+    $dimIndex (`packed` $packed^)? attr-dict `:`
+    functional-type(operands, results)
   }];
 
   let hasVerifier = 1;
+
+  let extraClassDeclaration = [{
+    ArrayRef<int64_t> getBufferShape() { return getBufferType().getShape(); }
+    Type getBufferElementType() { return getBufferType().getElementType(); }
+
+    SmallVector<int64_t> getPackSizes() {
+      return llvm::map_to_vector(
+        llvm::zip(getSourceType().getElementShape(),
+                  getResultType().getElementShape()),
+        [&](std::tuple<int64_t, int64_t> shapes) {
+          return std::max(std::get<0>(shapes), std::get<1>(shapes));
+        });
+    }
+  }];
 }
 
 def ITensorReassociateOp : HLSOp<"itensor_reassociate", [Pure,
