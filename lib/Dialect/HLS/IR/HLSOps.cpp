@@ -448,8 +448,8 @@ struct FoldTaskIterArgs : public OpRewritePattern<hls::TaskOp> {
     if (!canonicalize)
       return failure();
 
-    TaskOp newtask = rewriter.create<TaskOp>(
-        task.getLoc(), TypeRange(newIterArgs), newIterArgs);
+    TaskOp newtask =
+        rewriter.create<TaskOp>(task.getLoc(), newIterArgs, task.getNameAttr());
     newtask->setAttrs(task->getAttrs());
     Block *newBlock = rewriter.createBlock(
         &newtask.getBody(), newtask.getBody().begin(), TypeRange(newIterArgs),

@@ -386,11 +386,19 @@ def BufferOp : HLSOp<"buffer", [
 def TaskOp : HLSOp<"task", [SingleBlockImplicitTerminator<"YieldOp">]> {
   let summary = "Represent a dataflow task";
 
-  let arguments = (ins Variadic<AnyType>:$inits);
+  let arguments = (ins Variadic<AnyType>:$inits, OptionalAttr<StrAttr>:$name);
   let results = (outs Variadic<AnyType>:$results);
   let regions = (region SizedRegion<1>:$body);
+  let builders = [
+    OpBuilder<(ins "mlir::ValueRange":$inits, "mlir::StringAttr":$name),
+        "build($_builder, $_state, inits, inits, name);">,
+    OpBuilder<(ins "mlir::ValueRange":$inits),
+        "build($_builder, $_state, inits, inits, nullptr);">
+  ];
+
   let assemblyFormat = [{
-    (`inits` $inits^)? `:` functional-type(operands, results) $body attr-dict
+    $name (`inits` $inits^)? $body attr-dict `:`
+    functional-type(operands, results)
   }];
 
   let hasVerifier = 1;

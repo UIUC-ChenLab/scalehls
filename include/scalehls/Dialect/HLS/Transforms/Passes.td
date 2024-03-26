@@ -22,8 +22,13 @@ def PackITensorDMA : Pass<"scalehls-pack-itensor-dma", "func::FuncOp"> {
   let summary = "Pack/unpack itensor DMAs";
 }
 
+def GenerateDataflowHierarchy :
+    Pass<"scalehls-generate-dataflow-hierarchy", "func::FuncOp"> {
+  let summary = "Generate dataflow hierarchy";
+}
+
 def ScheduleDataflow : Pass<"scalehls-schedule-dataflow", "func::FuncOp"> {
-  let summary = "Create a dataflow schedule";
+  let summary = "Schedule dataflow";
 }
 
 def GenerateRuntimeFunc :

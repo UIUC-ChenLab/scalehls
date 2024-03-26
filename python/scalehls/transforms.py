@@ -25,6 +25,9 @@ from functools import wraps
 # ===----------------------------------------------------------------------=== #
 
 
+k_id_attr_name = "__id__"
+
+
 def apply_transform_sequence(
         module: Module,
         sequence: transform.NamedSequenceOp,
@@ -85,6 +88,13 @@ def apply_lower_itensor_to_stream(module: Module):
 def apply_comprehensive_bufferize_passes(module: Module):
     pm = PassManager()
     add_comprehensive_bufferize_passes(pm)
+    pm.run(module.operation)
+
+
+def apply_generate_dataflow_hierarchy(module: Module):
+    pm = PassManager.parse(
+        "builtin.module(func.func(scalehls-generate-dataflow-hierarchy),"
+        "cse, canonicalize)")
     pm.run(module.operation)
 
 
@@ -488,7 +498,7 @@ class DesignSpaceGraph(nx.Graph):
         self.add_node(self.top, name=self.top.OPERATION_NAME, id=-1)
         for id, op in enumerate(self.top.entry_block):
             self.add_node(op, name=op.OPERATION_NAME, id=id)
-            op.attributes["id"] = i64_attr(id)
+            op.attributes[k_id_attr_name] = i64_attr(id)
             for operand in op.operands:
                 parent = operand.owner.owner if isinstance(
                     operand.owner, Block) else operand.owner
@@ -623,7 +633,7 @@ def construct_transform_sequence(target: BlockArgument,
     """
     for node, data in graph.nodes(data=True):
         node_handle = match(target, [data["name"]], {
-                            "id":  i64_attr(data["id"])})
+                            k_id_attr_name: i64_attr(data["id"])})
 
         if isinstance(node, linalg.GenericOp):
             if "parallel_tile_sizes" not in data:
@@ -642,7 +652,7 @@ def construct_transform_sequence(target: BlockArgument,
                 data["unroll_sizes"],
                 data["permutation"],
                 len(node.inputs) > 0)
-            annotate(linalg_op_handle, "id", i64_param(data["id"]))
+            annotate(linalg_op_handle, k_id_attr_name, i64_param(data["id"]))
 
         if isinstance(node, tensor.ExpandShapeOp):
             if "source_tile_sizes" not in data:
@@ -655,7 +665,7 @@ def construct_transform_sequence(target: BlockArgument,
                 data["source_tile_sizes"],
                 data["result_tile_sizes"])
             annotate(convert_op.itensor_reassociate,
-                     "id", i64_param(data["id"]))
+                     k_id_attr_name, i64_param(data["id"]))
 
         if isinstance(node, tensor.CollapseShapeOp):
             if "source_tile_sizes" not in data:
@@ -668,7 +678,7 @@ def construct_transform_sequence(target: BlockArgument,
                 data["source_tile_sizes"],
                 data["result_tile_sizes"])
             annotate(convert_op.itensor_reassociate,
-                     "id", i64_param(data["id"]))
+                     k_id_attr_name, i64_param(data["id"]))
     return []
 
 

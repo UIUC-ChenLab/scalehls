@@ -7,6 +7,7 @@ add_mlir_dialect_library(MLIRScaleHLSHLSTransforms
   ScalarizeITensor.cpp
   LowerITensorToStream.cpp
   ScheduleDataflow.cpp
+  GenerateDataflowHierarchy.cpp
   ConvertDataflowToFunc.cpp
   TransformInterpreter.cpp
   ComprehensiveBufferize.cpp
