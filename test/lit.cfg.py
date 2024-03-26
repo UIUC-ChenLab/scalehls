@@ -57,10 +57,10 @@ llvm_config.with_environment('PATH', config.llvm_tools_dir, append_path=True)
 
 # Tweak the PYTHONPATH to include the binary dir.
 if config.enable_bindings_python:
-  llvm_config.with_environment(
-      'PYTHONPATH',
-      [os.path.join(config.scalehls_python_packages_dir, 'scalehls_core')],
-      append_path=True)
+    llvm_config.with_environment(
+        'PYTHONPATH',
+        [os.path.join(config.scalehls_python_packages_dir, 'scalehls_core')],
+        append_path=True)
 
 tool_dirs = [config.scalehls_tools_dir, config.mlir_tools_dir,
              config.llvm_tools_dir]
@@ -77,4 +77,4 @@ tools.extend([
 llvm_config.add_tool_substitutions(tools, tool_dirs)
 
 if config.enable_bindings_python:
-  config.available_features.add('bindings_python')
+    config.available_features.add('bindings_python')
