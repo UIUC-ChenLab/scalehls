@@ -552,3 +552,13 @@ LogicalResult TaskOp::verify() {
 YieldOp TaskOp::getYieldOp() {
   return cast<YieldOp>(this->getRegion().front().getTerminator());
 }
+
+/// Get the live-ins of the task op.
+llvm::SmallPtrSet<Value, 16> TaskOp::getLiveIns() {
+  auto liveness = Liveness(*this);
+  llvm::SmallPtrSet<Value, 16> liveIns;
+  for (auto liveIn : liveness.getLiveIn(&this->getBody().front()))
+    if (liveIn.getParentRegion()->isProperAncestor(&getBody()))
+      liveIns.insert(liveIn);
+  return liveIns;
+}

@@ -386,18 +386,22 @@ def BufferOp : HLSOp<"buffer", [
 def TaskOp : HLSOp<"task", [SingleBlockImplicitTerminator<"YieldOp">]> {
   let summary = "Represent a dataflow task";
 
-  let arguments = (ins Variadic<AnyType>:$inits, OptionalAttr<StrAttr>:$name);
+  let arguments = (ins Variadic<AnyType>:$inits, OptionalAttr<StrAttr>:$name,
+                       OptionalAttr<StrAttr>:$location);
   let results = (outs Variadic<AnyType>:$results);
   let regions = (region SizedRegion<1>:$body);
   let builders = [
+    OpBuilder<(ins "mlir::ValueRange":$inits, "mlir::StringAttr":$name,
+                   "mlir::StringAttr":$location),
+        "build($_builder, $_state, inits, inits, name, location);">,
     OpBuilder<(ins "mlir::ValueRange":$inits, "mlir::StringAttr":$name),
-        "build($_builder, $_state, inits, inits, name);">,
+        "build($_builder, $_state, inits, name, nullptr);">,
     OpBuilder<(ins "mlir::ValueRange":$inits),
-        "build($_builder, $_state, inits, inits, nullptr);">
+        "build($_builder, $_state, inits, nullptr);">
   ];
 
   let assemblyFormat = [{
-    $name (`inits` $inits^)? $body attr-dict `:`
+    $name (`location` $location^)? (`inits` $inits^)? $body attr-dict `:`
     functional-type(operands, results)
   }];
 
@@ -405,6 +409,8 @@ def TaskOp : HLSOp<"task", [SingleBlockImplicitTerminator<"YieldOp">]> {
   let hasCanonicalizer = 1;
 
   let extraClassDeclaration = [{
+    TypeRange getInitTypes() { return TypeRange(getInits()); }
+
     /// Return whether this task op is a leaf task.
     bool isLeafTask() {
       return !walk([&](Operation *op) {
@@ -424,7 +430,8 @@ def TaskOp : HLSOp<"task", [SingleBlockImplicitTerminator<"YieldOp">]> {
     /// Return the yield op of this task op.
     YieldOp getYieldOp();
 
-    TypeRange getInitTypes() { return TypeRange(getInits()); }
+    /// Get the live-ins of the task op.
+    llvm::SmallPtrSet<Value, 16> getLiveIns();
   }];
 }
 
