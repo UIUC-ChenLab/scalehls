@@ -682,6 +682,8 @@ def construct_transform_sequence(target: BlockArgument,
     return []
 
 
-def apply_design_space(graph: DesignSpaceGraph):
+def apply_design_space(graph: DesignSpaceGraph, delete_sequence: bool = True):
     apply_transform_sequence(
-        graph.module, construct_transform_sequence(graph.module, graph))
+        graph.module,
+        construct_transform_sequence(graph.module, graph),
+        delete_sequence)

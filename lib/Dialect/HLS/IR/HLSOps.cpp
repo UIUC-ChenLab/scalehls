@@ -454,8 +454,10 @@ struct FoldTaskIterArgs : public OpRewritePattern<hls::TaskOp> {
     Block *newBlock = rewriter.createBlock(
         &newtask.getBody(), newtask.getBody().begin(), TypeRange(newIterArgs),
         llvm::map_to_vector(newIterArgs, [&](Value v) { return v.getLoc(); }));
-    rewriter.setInsertionPointToEnd(newBlock);
-    rewriter.create<hls::YieldOp>(task.getLoc(), newYieldValues);
+    if (newIterArgs.empty()) {
+      rewriter.setInsertionPointToEnd(newBlock);
+      rewriter.create<hls::YieldOp>(task.getLoc(), newYieldValues);
+    }
 
     // Replace the null placeholders with newly constructed values.
     for (unsigned idx = 0, collapsedIdx = 0, e = newResultValues.size();
