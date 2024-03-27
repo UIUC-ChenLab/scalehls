@@ -23,6 +23,12 @@ namespace hls {
 } // namespace scalehls
 } // namespace mlir
 
+static Operation *getParentInBlock(Operation *op, Block *block) {
+  while (op->getBlock() != block)
+    op = op->getParentOp();
+  return op;
+}
+
 /// Wrap a list of operations into a task. The task is created after the last
 /// operation in the list. The order of the list is preserved without any
 /// domination check. Therefore, this method may lead to incorrect results if
@@ -31,15 +37,19 @@ static hls::TaskOp wrapOpsIntoTask(SmallVectorImpl<Operation *> &ops,
                                    StringRef taskName, StringRef taskLocation,
                                    OpBuilder &builder) {
   assert(!ops.empty() && "expected non-empty ops list");
+  llvm::SmallDenseSet<Operation *> opSet(ops.begin(), ops.end());
 
   builder.setInsertionPointAfter(ops.back());
   SmallVector<Value> destOperands;
   SmallVector<Value> results;
   for (auto op : ops)
-    if (auto task = dyn_cast<hls::TaskOp>(op)) {
-      destOperands.append(task.getInits().begin(), task.getInits().end());
-      results.append(task.result_begin(), task.result_end());
-    }
+    if (auto task = dyn_cast<hls::TaskOp>(op))
+      if (llvm::any_of(task->getUsers(), [&](Operation *user) {
+            return !opSet.count(getParentInBlock(user, builder.getBlock()));
+          })) {
+        destOperands.append(task.getInits().begin(), task.getInits().end());
+        results.append(task.result_begin(), task.result_end());
+      }
 
   auto task = builder.create<hls::TaskOp>(builder.getUnknownLoc(), destOperands,
                                           builder.getStringAttr(taskName),
