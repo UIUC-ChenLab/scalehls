@@ -4,9 +4,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/IR/Dominance.h"
-#include "mlir/Transforms/DialectConversion.h"
-#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Dialect/HLS/Transforms/Passes.h"
 #include "scalehls/Utils/Utils.h"
 

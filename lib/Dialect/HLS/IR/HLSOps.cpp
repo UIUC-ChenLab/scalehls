@@ -27,6 +27,19 @@ LogicalResult TensorInitOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
+// TensorInstanceOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult TensorInstanceOp::verify() {
+  if (auto initValue = getInitValue())
+    if (initValue.value().getType() != getType().getElementType())
+      return emitOpError("initial value's type doesn't align with tensor type");
+  if (!(*this)->hasOneUse())
+    return emitOpError("tensor instance should have exactly one use");
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
 // ITensorInitOp
 //===----------------------------------------------------------------------===//
 
@@ -34,6 +47,19 @@ LogicalResult ITensorInitOp::verify() {
   if (auto initValue = getInitValue())
     if (initValue.value().getType() != getType().getDataType())
       return emitOpError("initial value doesn't align with itensor data type");
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
+// ITensorInstanceOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult ITensorInstanceOp::verify() {
+  if (auto initValue = getInitValue())
+    if (initValue.value().getType() != getType().getDataType())
+      return emitOpError("initial value doesn't align with itensor data type");
+  if (!(*this)->hasOneUse())
+    return emitOpError("itensor instance should have exactly one use");
   return success();
 }
 

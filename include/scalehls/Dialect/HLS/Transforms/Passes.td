@@ -27,9 +27,9 @@ def MaterializeITensorDMA :
   let summary = "Materialize itensor DMAs";
 }
 
-def ConvertTensorInitToTensorAlloc :
-    Pass<"scalehls-convert-tensor-init-to-tensor-alloc", "mlir::ModuleOp"> {
-  let summary = "Convert tensor/itensor init op to tensor/itensor alloc op";
+def ConvertTensorInitToTensorInstance :
+    Pass<"scalehls-convert-tensor-init-to-tensor-instance", "func::FuncOp"> {
+  let summary = "Convert tensor/itensor init op to tensor/itensor instance op";
 }
 
 def GenerateDataflowHierarchy :

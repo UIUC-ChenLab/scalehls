@@ -91,6 +91,14 @@ def apply_comprehensive_bufferize_passes(module: Module):
     pm.run(module.operation)
 
 
+def apply_convert_tensor_init_to_tensor_instance(module: Module):
+    pm = PassManager.parse(
+        "builtin.module(func.func("
+        "scalehls-convert-tensor-init-to-tensor-instance),"
+        "cse, canonicalize)")
+    pm.run(module.operation)
+
+
 def apply_generate_dataflow_hierarchy(module: Module):
     pm = PassManager.parse(
         "builtin.module(func.func(scalehls-generate-dataflow-hierarchy),"
