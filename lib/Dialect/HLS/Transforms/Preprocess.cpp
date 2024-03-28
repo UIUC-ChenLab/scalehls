@@ -25,7 +25,8 @@ namespace hls {
 
 namespace {
 /// This pattern will convert a tensor.empty op to an fdf.tensor_init op.
-struct ConvertTensorEmptyOp : public OpRewritePattern<tensor::EmptyOp> {
+struct ConvertTensorEmptyToTensorInit
+    : public OpRewritePattern<tensor::EmptyOp> {
   using OpRewritePattern<tensor::EmptyOp>::OpRewritePattern;
   LogicalResult matchAndRewrite(tensor::EmptyOp op,
                                 PatternRewriter &rewriter) const override {
@@ -38,13 +39,17 @@ struct ConvertTensorEmptyOp : public OpRewritePattern<tensor::EmptyOp> {
 namespace {
 /// This pattern will convert a linalg.fill op to an fdf.tensor_init op with
 /// initial value.
-struct ConvertLinalgFillOp : public OpRewritePattern<linalg::FillOp> {
+struct ConvertLinalgFillOpToTensorInit
+    : public OpRewritePattern<linalg::FillOp> {
   using OpRewritePattern<linalg::FillOp>::OpRewritePattern;
   LogicalResult matchAndRewrite(linalg::FillOp op,
                                 PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<hls::TensorInitOp>(op, op.result().getType(),
-                                                   op.value());
-    return success();
+    if (auto constantOp = op.value().getDefiningOp<arith::ConstantOp>()) {
+      rewriter.replaceOpWithNewOp<hls::TensorInitOp>(op, op.result().getType(),
+                                                     constantOp.getValue());
+      return success();
+    }
+    return failure();
   }
 };
 } // namespace
@@ -52,7 +57,7 @@ struct ConvertLinalgFillOp : public OpRewritePattern<linalg::FillOp> {
 namespace {
 /// This pattern will convert a linalg.generic op to an fdf.tensor_init op with
 /// initial value if applicable.
-struct ConvertLinalgGenericOp : public OpRewritePattern<linalg::GenericOp> {
+struct PreprocessLinalgGenericOp : public OpRewritePattern<linalg::GenericOp> {
   using OpRewritePattern<linalg::GenericOp>::OpRewritePattern;
   LogicalResult matchAndRewrite(linalg::GenericOp op,
                                 PatternRewriter &rewriter) const override {
@@ -69,11 +74,11 @@ struct ConvertLinalgGenericOp : public OpRewritePattern<linalg::GenericOp> {
       if (result.use_empty())
         continue;
 
-      if (yieldedValue.getDefiningOp<arith::ConstantOp>()) {
+      if (auto constantOp = yieldedValue.getDefiningOp<arith::ConstantOp>()) {
         // If the yielded value is a constant scalar, we create a tensor init
         // operation with the constant as the initial value.
         auto tensorInit = rewriter.create<hls::TensorInitOp>(
-            op.getLoc(), result.getType(), yieldedValue);
+            op.getLoc(), result.getType(), constantOp.getValue());
         rewriter.replaceAllUsesWith(result, tensorInit);
         hasChanged = true;
 
@@ -100,10 +105,9 @@ struct Preprocess : public hls::impl::PreprocessBase<Preprocess> {
   void runOnOperation() override {
     auto context = &getContext();
     mlir::RewritePatternSet patterns(context);
-    patterns.add<ConvertTensorEmptyOp>(context);
-    patterns.add<ConvertLinalgFillOp>(context);
-    patterns.add<ConvertLinalgGenericOp>(context);
-    hls::TensorInitOp::getCanonicalizationPatterns(patterns, context);
+    patterns.add<ConvertTensorEmptyToTensorInit>(context);
+    patterns.add<ConvertLinalgFillOpToTensorInit>(context);
+    patterns.add<PreprocessLinalgGenericOp>(context);
     (void)applyPatternsAndFoldGreedily(getOperation(), std::move(patterns));
   }
 };

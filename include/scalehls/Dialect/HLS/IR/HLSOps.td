@@ -54,10 +54,10 @@ def AnyBuffer : StaticShapeMemRefOf<[AnyType]>;
 def TensorInitOp : HLSOp<"tensor_init", [Pure]> {
   let summary = "Initiate a tensor";
 
-  let arguments = (ins Optional<AnyType>:$initValue);
+  let arguments = (ins OptionalAttr<TypedAttrInterface>:$initValue);
   let results = (outs AnyRankedTensor:$result);
   let assemblyFormat = [{
-    (`init` $initValue^)? attr-dict `:` functional-type(operands, results)
+    (`init` $initValue^)? attr-dict `:` type(results)
   }];
 
   let hasVerifier = 1;
@@ -75,10 +75,10 @@ def TensorInitOp : HLSOp<"tensor_init", [Pure]> {
 def ITensorInitOp : HLSOp<"itensor_init", [Pure]> {
   let summary = "Initiate an iterative tensor";
 
-  let arguments = (ins Optional<AnyType>:$initValue);
+  let arguments = (ins OptionalAttr<TypedAttrInterface>:$initValue);
   let results = (outs AnyITensor:$result);
   let assemblyFormat = [{
-    (`init` $initValue^)? attr-dict `:` functional-type(operands, results)
+    (`init` $initValue^)? attr-dict `:` type(results)
   }];
 
   let hasVerifier = 1;
@@ -367,9 +367,11 @@ def BufferOp : HLSOp<"buffer", [
       DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Represent a dataflow buffer";
 
-  let arguments = (ins OptionalAttr<TypedAttrInterface>:$init_value);
+  let arguments = (ins OptionalAttr<TypedAttrInterface>:$initValue);
   let results = (outs AnyBuffer:$memref);
-  let assemblyFormat = "attr-dict `:` type($memref)";
+  let assemblyFormat = [{
+    (`init` $initValue^)? attr-dict `:` type(results)
+  }];
 
   let hasVerifier = 1;
   let hasCanonicalizeMethod = 1;

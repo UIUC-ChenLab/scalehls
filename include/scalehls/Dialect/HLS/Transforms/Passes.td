@@ -22,6 +22,16 @@ def PackITensorDMA : Pass<"scalehls-pack-itensor-dma", "func::FuncOp"> {
   let summary = "Pack/unpack itensor DMAs";
 }
 
+def MaterializeITensorDMA :
+    Pass<"scalehls-materialize-itensor-dma", "func::FuncOp"> {
+  let summary = "Materialize itensor DMAs";
+}
+
+def ConvertTensorInitToTensorAlloc :
+    Pass<"scalehls-convert-tensor-init-to-tensor-alloc", "mlir::ModuleOp"> {
+  let summary = "Convert tensor/itensor init op to tensor/itensor alloc op";
+}
+
 def GenerateDataflowHierarchy :
     Pass<"scalehls-generate-dataflow-hierarchy", "func::FuncOp"> {
   let summary = "Generate dataflow hierarchy";
@@ -29,23 +39,6 @@ def GenerateDataflowHierarchy :
 
 def ScheduleDataflow : Pass<"scalehls-schedule-dataflow", "func::FuncOp"> {
   let summary = "Schedule dataflow";
-}
-
-def GenerateRuntimeFunc :
-    Pass<"scalehls-generate-runtime-func", "mlir::ModuleOp"> {
-  let summary = "Outline the top function for HLS";
-
-  let options = [
-    Option<"topFunc", "top-func", "std::string", /*default=*/"\"forward\"",
-           "Name of the top function for HLS">,
-    Option<"runtimeFunc", "runtime-func", "std::string",
-           /*default=*/"\"runtime\"", "Name of the runtime function.">
-  ];
-}
-
-def MaterializeITensorDMA :
-    Pass<"scalehls-materialize-itensor-dma", "func::FuncOp"> {
-  let summary = "Materialize itensor DMAs";
 }
 
 def ScalarizeITensor : Pass<"scalehls-scalarize-itensor", "func::FuncOp"> {

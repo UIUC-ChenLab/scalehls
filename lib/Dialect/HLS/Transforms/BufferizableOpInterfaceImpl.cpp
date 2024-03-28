@@ -484,13 +484,8 @@ struct TensorInitOpInterface
         return failure();
 
       // Handle initial value.
-      if (auto initValue = tensorInit.getInitValue()) {
-        auto initValueOp = initValue.getDefiningOp<arith::ConstantOp>();
-        auto bufferOp = buffer->getDefiningOp<BufferOp>();
-        if (!initValueOp || !bufferOp)
-          return failure();
-        bufferOp.setInitValueAttr(initValueOp.getValue());
-      }
+      auto bufferOp = buffer->getDefiningOp<BufferOp>();
+      bufferOp.setInitValueAttr(tensorInit.getInitValueAttr());
 
       auto repl = rewriter.create<bufferization::ToTensorOp>(
           tensorInit.getLoc(), *buffer);

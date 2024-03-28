@@ -40,7 +40,7 @@ transform::HLSConvertExtractSliceToTensorInitOp::applyToOne(
 
   rewriter.setInsertionPoint(extractSlice);
   auto localTensorInit = rewriter.replaceOpWithNewOp<hls::TensorInitOp>(
-      extractSlice, extractSlice.getType(), tensorInit.getInitValue());
+      extractSlice, extractSlice.getType(), tensorInit.getInitValueAttr());
   results.push_back(localTensorInit);
   return DiagnosedSilenceableFailure::success();
 }

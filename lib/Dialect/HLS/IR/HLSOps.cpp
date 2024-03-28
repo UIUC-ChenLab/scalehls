@@ -21,8 +21,7 @@ using namespace affine;
 
 LogicalResult TensorInitOp::verify() {
   if (auto initValue = getInitValue())
-    if (initValue.getType() != getType().getElementType() &&
-        initValue.getType() != getType())
+    if (initValue.value().getType() != getType().getElementType())
       return emitOpError("initial value's type doesn't align with tensor type");
   return success();
 }
@@ -33,7 +32,7 @@ LogicalResult TensorInitOp::verify() {
 
 LogicalResult ITensorInitOp::verify() {
   if (auto initValue = getInitValue())
-    if (initValue.getType() != getType().getDataType())
+    if (initValue.value().getType() != getType().getDataType())
       return emitOpError("initial value doesn't align with itensor data type");
   return success();
 }
@@ -538,8 +537,9 @@ private:
 void TaskOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                          MLIRContext *context) {
   results.add<FoldTaskIterArgs>(context);
-  results.add<InlineTask>(context,
-                          [](TaskOp task) { return task.isSingleTask(); });
+  results.add<InlineTask>(context, [](TaskOp task) {
+    return task.isSingleTask() && !task->getParentOfType<func::FuncOp>();
+  });
 }
 
 LogicalResult TaskOp::verify() {
