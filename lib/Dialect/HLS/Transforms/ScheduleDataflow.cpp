@@ -36,7 +36,8 @@ static Operation *getParentInBlock(Operation *op, Block *block) {
 static hls::TaskOp wrapOpsIntoTask(SmallVectorImpl<Operation *> &ops,
                                    StringRef taskName, StringRef taskLocation,
                                    OpBuilder &builder) {
-  assert(!ops.empty() && "expected non-empty ops list");
+  if (ops.empty())
+    return nullptr;
   llvm::SmallDenseSet<Operation *> opSet(ops.begin(), ops.end());
 
   builder.setInsertionPointAfter(ops.back());
@@ -111,10 +112,8 @@ struct ScheduleDataflow
 
       // For now, we locate the task on the "cpu" if there is no input/output
       // with itensor semantics.
-      if (!numITensor)
-        task.setLocation("cpu");
-      else
-        task.setLocation("pl");
+      auto location = numITensor ? "pl" : "cpu";
+      task.walk([&](hls::TaskOp subTask) { subTask.setLocation(location); });
     }
   }
 
