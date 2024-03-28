@@ -51,7 +51,6 @@ void scalehls::addConvertDataflowToFuncPasses(OpPassManager &pm) {
   pm.addNestedPass<func::FuncOp>(affine::createSimplifyAffineStructuresPass());
   pm.addPass(memref::createFoldMemRefAliasOpsPass());
   pm.addPass(hls::createConvertDataflowToFunc());
-  pm.addPass(hls::createGenerateRuntimeFunc());
   pm.addPass(mlir::createCSEPass());
   pm.addPass(mlir::createCanonicalizerPass());
 }
