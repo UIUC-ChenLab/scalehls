@@ -91,6 +91,10 @@ struct ReduceFullTensorToITensorBufferOp
         beforeLoop--;
     }
 
+    // Meaning the full tensor cannot be reduced.
+    if (beforeLoop == 0)
+      return failure();
+
     // For the remaining dimensions, we keep the original dimension size.
     int64_t beforeDim = bufferShape.size();
     bufferShape.append(std::next(tensorType.getShape().begin(), beforeDim),
