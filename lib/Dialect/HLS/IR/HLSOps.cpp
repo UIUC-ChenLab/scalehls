@@ -564,7 +564,7 @@ void TaskOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                          MLIRContext *context) {
   results.add<FoldTaskIterArgs>(context);
   results.add<InlineTask>(context, [](TaskOp task) {
-    return task.isSingleTask() && !task->getParentOfType<func::FuncOp>();
+    return task.isSingleTask() && !isa<func::FuncOp>(task->getParentOp());
   });
 }
 
