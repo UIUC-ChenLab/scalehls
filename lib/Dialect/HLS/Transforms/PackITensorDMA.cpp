@@ -154,7 +154,16 @@ struct LowerPackOp : public OpRewritePattern<tensor::PackOp> {
 
   LogicalResult matchAndRewrite(tensor::PackOp pack,
                                 PatternRewriter &rewriter) const override {
-    return linalg::lowerPack(rewriter, pack);
+    auto lowerResult = linalg::lowerPack(rewriter, pack);
+    if (failed(lowerResult))
+      return failure();
+
+    if (auto transpose = lowerResult->transposeOp)
+      if (auto empty = transpose.getInit().getDefiningOp<tensor::EmptyOp>()) {
+        rewriter.setInsertionPoint(empty);
+        rewriter.replaceOpWithNewOp<hls::TensorInitOp>(empty, empty.getType());
+      }
+    return success();
   }
 };
 } // namespace
@@ -165,7 +174,16 @@ struct LowerUnPackOp : public OpRewritePattern<tensor::UnPackOp> {
 
   LogicalResult matchAndRewrite(tensor::UnPackOp unpack,
                                 PatternRewriter &rewriter) const override {
-    return linalg::lowerUnPack(rewriter, unpack);
+    auto lowerResult = linalg::lowerUnPack(rewriter, unpack);
+    if (failed(lowerResult))
+      return failure();
+
+    if (auto transpose = lowerResult->transposeOp)
+      if (auto empty = transpose.getInit().getDefiningOp<tensor::EmptyOp>()) {
+        rewriter.setInsertionPoint(empty);
+        rewriter.replaceOpWithNewOp<hls::TensorInitOp>(empty, empty.getType());
+      }
+    return success();
   }
 };
 } // namespace
