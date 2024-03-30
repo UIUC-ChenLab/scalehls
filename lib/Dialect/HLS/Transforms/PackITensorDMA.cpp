@@ -154,10 +154,18 @@ struct LowerPackOp : public OpRewritePattern<tensor::PackOp> {
 
   LogicalResult matchAndRewrite(tensor::PackOp pack,
                                 PatternRewriter &rewriter) const override {
-    if (pack.getPaddingValue() ||
-        !pack.getSource().getDefiningOp<arith::ConstantOp>())
-      return failure();
     return linalg::lowerPack(rewriter, pack);
+  }
+};
+} // namespace
+
+namespace {
+struct LowerUnPackOp : public OpRewritePattern<tensor::UnPackOp> {
+  using OpRewritePattern<tensor::UnPackOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(tensor::UnPackOp unpack,
+                                PatternRewriter &rewriter) const override {
+    return linalg::lowerUnPack(rewriter, unpack);
   }
 };
 } // namespace
@@ -170,8 +178,18 @@ struct PackITensorDMA : public hls::impl::PackITensorDMABase<PackITensorDMA> {
     patterns.add<PackITensorWriteFullTensorOp>(context);
     patterns.add<PackITensorReadFullTensorOp>(context);
     patterns.add<PackITensorBufferOp>(context);
+    tensor::populateFoldIntoPackAndUnpackPatterns(patterns);
+    tensor::populateSimplifyPackAndUnpackPatterns(patterns);
+    tensor::PackOp::getCanonicalizationPatterns(patterns, context);
+    tensor::UnPackOp::getCanonicalizationPatterns(patterns, context);
+    (void)applyPatternsAndFoldGreedily(getOperation(), std::move(patterns));
+
+    patterns.clear();
     patterns.add<LowerPackOp>(context);
+    patterns.add<LowerUnPackOp>(context);
     patterns.add<linalg::LinalgGeneralizationPattern>(context);
+    tensor::ExpandShapeOp::getCanonicalizationPatterns(patterns, context);
+    tensor::CollapseShapeOp::getCanonicalizationPatterns(patterns, context);
     linalg::populateConstantFoldLinalgOperations(
         patterns, [&](OpOperand *fusedOperand) { return true; });
     (void)applyPatternsAndFoldGreedily(getOperation(), std::move(patterns));
