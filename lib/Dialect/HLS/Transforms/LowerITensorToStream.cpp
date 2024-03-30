@@ -26,6 +26,23 @@ static StreamType getStreamType(hls::ITensorType iTensorType) {
 }
 
 namespace {
+struct LowerITensorInstanceOp
+    : public OpRewritePattern<hls::ITensorInstanceOp> {
+  using OpRewritePattern<hls::ITensorInstanceOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(hls::ITensorInstanceOp inst,
+                                PatternRewriter &rewriter) const override {
+    auto streamType = getStreamType(inst.getType());
+    auto stream = rewriter.create<hls::StreamOp>(inst.getLoc(), streamType,
+                                                 inst.getLocationAttr());
+    rewriter.replaceOpWithNewOp<hls::StreamToITensorOp>(inst, inst.getType(),
+                                                        stream);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 struct LowerITensorReadOp : public OpRewritePattern<hls::ITensorReadOp> {
   using OpRewritePattern<hls::ITensorReadOp>::OpRewritePattern;
 
@@ -144,14 +161,6 @@ struct RemoveITensorToStreamOp
     if (toStream.use_empty()) {
       rewriter.eraseOp(toStream);
       return success();
-    }
-
-    if (auto init = toStream.getITensor().getDefiningOp<hls::ITensorInitOp>()) {
-      if (!init.getInitValue()) {
-        rewriter.replaceOpWithNewOp<hls::StreamOp>(toStream,
-                                                   toStream.getStreamType());
-        return success();
-      }
     } else if (auto toITensor = toStream.getITensor()
                                     .getDefiningOp<hls::StreamToITensorOp>()) {
       if (toStream.getStreamType() == toITensor.getStreamType()) {
@@ -217,6 +226,7 @@ struct LowerITensorToStream
 
     // Apply lowering patterns.
     mlir::RewritePatternSet patterns(context);
+    patterns.add<LowerITensorInstanceOp>(context);
     patterns.add<LowerITensorReadOp>(context);
     patterns.add<LowerITensorWriteOp>(context);
     patterns.add<LowerITensorViewLikeOpInterface>(context);

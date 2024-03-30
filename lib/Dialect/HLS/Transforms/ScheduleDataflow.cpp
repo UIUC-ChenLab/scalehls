@@ -132,6 +132,19 @@ struct ScheduleDataflow
     }
   }
 
+  void applyDefaultInstanceLocations() {
+    SmallVector<Operation *> instances;
+    getOperation().walk([&](Operation *op) {
+      if (isa<TensorInstanceOp, ITensorInstanceOp>(op))
+        instances.push_back(op);
+    });
+    for (auto instance : instances) {
+      assert(llvm::hasSingleElement(instance->getUsers()) &&
+             "instance should have a single user");
+      instance->moveBefore(*instance->user_begin());
+    }
+  }
+
   // Recursively add the task to the group, and create a new group if the task
   // is not in the group.
   void dfsScheduleDefiningOp(Value value, size_t prevLevel) {
@@ -142,8 +155,8 @@ struct ScheduleDataflow
         opToLevelMap.lookup(definingOp) > prevLevel)
       return;
 
-    assert(!isa<hls::TensorInitOp>(definingOp) &&
-           !isa<hls::ITensorInitOp>(definingOp) &&
+    assert(!isa<hls::TensorInstanceOp>(definingOp) &&
+           !isa<hls::ITensorInstanceOp>(definingOp) &&
            "tensor/itensor init op should not be scheduled at all");
 
     if (auto task = dyn_cast<hls::TaskOp>(definingOp)) {
@@ -176,6 +189,17 @@ struct ScheduleDataflow
   void runOnOperation() override {
     auto func = getOperation();
     OpBuilder builder(&getContext());
+
+    // Check if all itensor/tensor init ops have been converted.
+    auto checkResult = func.walk([&](Operation *op) {
+      if (isa<hls::TensorInitOp, hls::ITensorInitOp>(op)) {
+        op->emitOpError("tensor/itensor init op should have been converted");
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (checkResult.wasInterrupted())
+      return signalPassFailure();
 
     // If the task locations are not set, apply the default task locations.
     if (!checkTaskLocations())
@@ -210,6 +234,8 @@ struct ScheduleDataflow
           func.getName().str() + "_schedule_" + std::to_string(taskId++);
       wrapOpsIntoTask(ops, taskName, location, builder);
     }
+
+    applyDefaultInstanceLocations();
   }
 
 private:

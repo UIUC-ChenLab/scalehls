@@ -343,11 +343,18 @@ def StreamOp : HLSOp<"stream", [
     DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Instantiate a stream channel";
 
+  let arguments = (ins OptionalAttr<StrAttr>:$location);
   let results = (outs AnyStream:$stream);
-  let assemblyFormat = "attr-dict `:` type(results)";
+  let assemblyFormat = [{
+    (`location` $location^)? attr-dict `:` type(results)
+  }];
 
   let hasVerifier = 1;
   let hasCanonicalizeMethod = 1;
+  let builders = [
+    OpBuilder<(ins "mlir::Type":$stream),
+        "build($_builder, $_state, stream, nullptr);">
+  ];
 
   let extraClassDeclaration = [{
     SmallVector<OpOperand *> getReadUses();
@@ -411,7 +418,7 @@ def BufferOp : HLSOp<"buffer", [
                        OptionalAttr<StrAttr>:$location);
   let results = (outs AnyBuffer:$memref);
   let assemblyFormat = [{
-    (`init` $initValue^)? attr-dict `:` type(results)
+    (`init` $initValue^)? (`location` $location^)? attr-dict `:` type(results)
   }];
 
   let hasVerifier = 1;
@@ -435,6 +442,13 @@ def TaskOp : HLSOp<"task", [SingleBlockImplicitTerminator<"YieldOp">]> {
                        OptionalAttr<StrAttr>:$location);
   let results = (outs Variadic<AnyType>:$results);
   let regions = (region SizedRegion<1>:$body);
+  let assemblyFormat = [{
+    $name (`location` $location^)? (`inits` $inits^)? $body attr-dict `:`
+    functional-type(operands, results)
+  }];
+
+  let hasVerifier = 1;
+  let hasCanonicalizer = 1;
   let builders = [
     OpBuilder<(ins "mlir::ValueRange":$inits, "mlir::StringAttr":$name,
                    "mlir::StringAttr":$location),
@@ -444,14 +458,6 @@ def TaskOp : HLSOp<"task", [SingleBlockImplicitTerminator<"YieldOp">]> {
     OpBuilder<(ins "mlir::ValueRange":$inits),
         "build($_builder, $_state, inits, nullptr);">
   ];
-
-  let assemblyFormat = [{
-    $name (`location` $location^)? (`inits` $inits^)? $body attr-dict `:`
-    functional-type(operands, results)
-  }];
-
-  let hasVerifier = 1;
-  let hasCanonicalizer = 1;
 
   let extraClassDeclaration = [{
     TypeRange getInitTypes() { return TypeRange(getInits()); }

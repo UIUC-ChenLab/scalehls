@@ -448,9 +448,9 @@ struct YieldOpInterface
   }
 };
 
-struct TensorInitOpInterface
-    : public BufferizableOpInterface::ExternalModel<TensorInitOpInterface,
-                                                    hls::TensorInitOp> {
+struct TensorInstanceOpInterface
+    : public BufferizableOpInterface::ExternalModel<TensorInstanceOpInterface,
+                                                    hls::TensorInstanceOp> {
   bool bufferizesToAllocation(Operation *op, Value value) const { return true; }
 
   bool resultBufferizesToMemoryWrite(Operation *op, OpResult opResult,
@@ -462,53 +462,40 @@ struct TensorInitOpInterface
   LogicalResult bufferize(Operation *op, RewriterBase &rewriter,
                           const BufferizationOptions &options) const {
     OpBuilder::InsertionGuard g(rewriter);
-    auto tensorInit = cast<hls::TensorInitOp>(op);
+    auto tensorInst = cast<hls::TensorInstanceOp>(op);
 
-    // Nothing to do for dead TensorInitOps.
-    if (tensorInit->getUses().empty()) {
-      rewriter.eraseOp(tensorInit);
+    // Nothing to do for dead TensorInstanceOps.
+    if (tensorInst->getUses().empty()) {
+      rewriter.eraseOp(tensorInst);
       return success();
     }
 
-    // Create memory allocation.
     auto maybeType =
-        bufferization::getBufferType(tensorInit.getResult(), options);
+        bufferization::getBufferType(tensorInst.getResult(), options);
     if (failed(maybeType))
       return failure();
 
-    for (auto &use : llvm::make_early_inc_range(tensorInit->getUses())) {
-      rewriter.setInsertionPoint(use.getOwner());
-      FailureOr<Value> buffer = options.createAlloc(
-          rewriter, tensorInit.getLoc(), maybeType->cast<MemRefType>(), {});
-      if (failed(buffer))
-        return failure();
-
-      // Handle initial value.
-      auto bufferOp = buffer->getDefiningOp<BufferOp>();
-      bufferOp.setInitValueAttr(tensorInit.getInitValueAttr());
-
-      auto repl = rewriter.create<bufferization::ToTensorOp>(
-          tensorInit.getLoc(), *buffer);
-      rewriter.updateRootInPlace(use.getOwner(), [&]() { use.set(repl); });
-    }
-    rewriter.eraseOp(tensorInit);
+    auto buffer = rewriter.create<hls::BufferOp>(
+        tensorInst.getLoc(), *maybeType, tensorInst.getInitValueAttr(),
+        tensorInst.getLocationAttr());
+    replaceOpWithBufferizedValues(rewriter, op, buffer.getResult());
     return success();
   }
 
   FailureOr<BaseMemRefType>
   getBufferType(Operation *op, Value value, const BufferizationOptions &options,
                 SmallVector<Value> &invocationStack) const {
-    auto tensorInit = cast<hls::TensorInitOp>(op);
-    assert(value == tensorInit.getResult() && "invalid value");
+    auto tensorInst = cast<hls::TensorInstanceOp>(op);
+    assert(value == tensorInst.getResult() && "invalid value");
 
     // Compute memory space of this allocation.
     Attribute memorySpace;
     if (options.defaultMemorySpace.has_value())
       memorySpace = *options.defaultMemorySpace;
     else
-      return tensorInit.emitError("could not infer memory space");
+      return tensorInst.emitError("could not infer memory space");
 
-    return getMemRefTypeWithStaticIdentityLayout(tensorInit.getType(),
+    return getMemRefTypeWithStaticIdentityLayout(tensorInst.getType(),
                                                  memorySpace);
   }
 };
@@ -518,6 +505,6 @@ void mlir::scalehls::hls::registerBufferizableOpInterfaceExternalModels(
   registry.addExtension(+[](MLIRContext *ctx, HLSDialect *dialect) {
     hls::TaskOp::attachInterface<TaskOpInterface>(*ctx);
     hls::YieldOp::attachInterface<YieldOpInterface>(*ctx);
-    hls::TensorInitOp::attachInterface<TensorInitOpInterface>(*ctx);
+    hls::TensorInstanceOp::attachInterface<TensorInstanceOpInterface>(*ctx);
   });
 }
