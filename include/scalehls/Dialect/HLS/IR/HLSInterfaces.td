@@ -122,6 +122,7 @@ def MemoryInstanceOpInterface : OpInterface<"MemoryInstanceOpInterface"> {
   ];
 
   let extraSharedClassDeclaration = [{
+    OpOperand *getSingleUse() { return &*$_op->use_begin(); }
     Operation *getSingleUser() { return *$_op->user_begin(); }
 
     template <typename OpTy>

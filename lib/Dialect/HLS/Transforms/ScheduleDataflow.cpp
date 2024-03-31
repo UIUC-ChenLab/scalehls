@@ -128,20 +128,37 @@ struct ScheduleDataflow
       // For now, we locate the task on the "cpu" if there is no input/output
       // with itensor semantics.
       auto location = numITensor ? "pl" : "cpu";
-      task.walk([&](hls::TaskOp subTask) { subTask.setLocation(location); });
+      task.walk([&](hls::TaskOp subTask) {
+        if (!subTask.getLocation())
+          subTask.setLocation(location);
+      });
     }
   }
 
-  void applyDefaultInstanceLocations() {
-    SmallVector<Operation *> instances;
-    getOperation().walk([&](Operation *op) {
-      if (isa<TensorInstanceOp, ITensorInstanceOp>(op))
-        instances.push_back(op);
+  /// Infer and apply the locations of tensor/itensor instance ops based on the
+  /// locations of the tasks.
+  void applyTensorITensorInstanceLocations() {
+    SmallVector<hls::MemoryInstanceOpInterface> instances;
+    getOperation().walk([&](hls::MemoryInstanceOpInterface instance) {
+      instances.push_back(instance);
     });
+
     for (auto instance : instances) {
-      assert(llvm::hasSingleElement(instance->getUsers()) &&
-             "instance should have a single user");
-      instance->moveBefore(*instance->user_begin());
+      auto task = instance.getSingleUser<hls::TaskOp>();
+      auto taskResult =
+          task.getResult(instance.getSingleUse()->getOperandNumber());
+
+      instance->moveBefore(task);
+      if (auto parentTask = instance->getParentOfType<hls::TaskOp>())
+        instance.setLocation(parentTask.getLocation());
+      else if (llvm::any_of(taskResult.getUsers(), [&](Operation *user) {
+                 if (auto userParentTask = user->getParentOfType<hls::TaskOp>())
+                   return userParentTask.getLocation() == "cpu";
+                 return false;
+               }))
+        instance.setLocation("cpu");
+      else
+        instance.setLocation(task.getLocation());
     }
   }
 
@@ -155,9 +172,8 @@ struct ScheduleDataflow
         opToLevelMap.lookup(definingOp) > prevLevel)
       return;
 
-    assert(!isa<hls::TensorInstanceOp>(definingOp) &&
-           !isa<hls::ITensorInstanceOp>(definingOp) &&
-           "tensor/itensor init op should not be scheduled at all");
+    assert(!isa<hls::MemoryInstanceOpInterface>(definingOp) &&
+           "tensor/itensor instance op should not be scheduled at all");
 
     if (auto task = dyn_cast<hls::TaskOp>(definingOp)) {
       auto newLevel = prevLevel;
@@ -190,17 +206,6 @@ struct ScheduleDataflow
     auto func = getOperation();
     OpBuilder builder(&getContext());
 
-    // Check if all itensor/tensor init ops have been converted.
-    auto checkResult = func.walk([&](Operation *op) {
-      if (isa<hls::TensorInitOp, hls::ITensorInitOp>(op)) {
-        op->emitOpError("tensor/itensor init op should have been converted");
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
-    if (checkResult.wasInterrupted())
-      return signalPassFailure();
-
     // If the task locations are not set, apply the default task locations.
     if (!checkTaskLocations())
       applyDefaultTaskLocations();
@@ -215,9 +220,8 @@ struct ScheduleDataflow
         ensureSingleUse(&op, builder);
 
     // Start the depth-first search from the return operation.
-    auto returnOp = func.front().getTerminator();
     levelToLocationMap.push_back("cpu");
-    for (auto result : returnOp->getOperands())
+    for (auto result : func.front().getTerminator()->getOperands())
       dfsScheduleDefiningOp(result, 0);
 
     // Collect ops of each level in a topo-sorted order.
@@ -235,7 +239,7 @@ struct ScheduleDataflow
       wrapOpsIntoTask(ops, taskName, location, builder);
     }
 
-    applyDefaultInstanceLocations();
+    applyTensorITensorInstanceLocations();
   }
 
 private:
