@@ -204,8 +204,8 @@ struct DuplicateStreamOp : public OpRewritePattern<hls::StreamOp> {
     for (auto use : llvm::drop_begin(stream.getReadUses())) {
       hasChanged = true;
       rewriter.setInsertionPoint(stream);
-      auto newStream =
-          rewriter.create<hls::StreamOp>(stream.getLoc(), stream.getType());
+      auto newStream = rewriter.create<hls::StreamOp>(
+          stream.getLoc(), stream.getType(), stream.getLocationAttr());
       rewriter.setInsertionPoint(writer);
       rewriter.create<hls::StreamWriteOp>(writer.getLoc(), writer.getValue(),
                                           newStream);
