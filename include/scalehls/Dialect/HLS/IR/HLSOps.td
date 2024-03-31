@@ -68,7 +68,8 @@ def TensorInitOp : HLSOp<"tensor_init", [Pure]> {
   ];
 }
 
-def TensorInstanceOp : HLSOp<"tensor_instance"> {
+def TensorInstanceOp : HLSOp<"tensor_instance", [
+    DeclareOpInterfaceMethods<MemoryInstanceOpInterface>]> {
   let summary = "A tensor instance that is not pure";
 
   let arguments = (ins OptionalAttr<TypedAttrInterface>:$initValue,
@@ -109,7 +110,8 @@ def ITensorInitOp : HLSOp<"itensor_init", [Pure]> {
   ];
 }
 
-def ITensorInstanceOp : HLSOp<"itensor_instance"> {
+def ITensorInstanceOp : HLSOp<"itensor_instance", [
+    DeclareOpInterfaceMethods<MemoryInstanceOpInterface>]> {
   let summary = "An iterative tensor instance that is not pure";
 
   let arguments = (ins OptionalAttr<TypedAttrInterface>:$initValue,

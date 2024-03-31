@@ -36,6 +36,9 @@ LogicalResult TensorInstanceOp::verify() {
       return emitOpError("initial value's type doesn't align with tensor type");
   if (!(*this)->hasOneUse())
     return emitOpError("tensor instance should have exactly one use");
+  if (!getSingleUser<TaskOp>())
+    return emitOpError("tensor instance should be used by a task, but found")
+           << *getSingleUser();
   return success();
 }
 
@@ -60,6 +63,9 @@ LogicalResult ITensorInstanceOp::verify() {
       return emitOpError("initial value doesn't align with itensor data type");
   if (!(*this)->hasOneUse())
     return emitOpError("itensor instance should have exactly one use");
+  if (!getSingleUser<TaskOp>())
+    return emitOpError("tensor instance should be used by a task, but found")
+           << *getSingleUser();
   return success();
 }
 

@@ -95,4 +95,38 @@ def ITensorViewLikeOpInterface : OpInterface<"ITensorViewLikeOpInterface"> {
   }];
 }
 
+def MemoryInstanceOpInterface : OpInterface<"MemoryInstanceOpInterface"> {
+  let description = [{
+    This interface is used to represent tensor/itensor instance ops that should
+    only be used once.
+  }];
+  string cppNamespace = "mlir::scalehls::hls";
+
+  let methods = [
+    InterfaceMethod<"Get the location attribute.",
+      "StringAttr", "getLocationAttr", (ins), [{
+        return $_op.getLocationAttr();
+      }]>,
+    InterfaceMethod<"Get the location value.",
+      "std::optional<StringRef>", "getLocation", (ins), [{
+        return $_op.getLocation();
+      }]>,
+    InterfaceMethod<"Set the location attribute.",
+      "void", "setLocationAttr", (ins "StringAttr":$attr), [{
+        return $_op.setLocationAttr(attr);
+      }]>,
+    InterfaceMethod<"Set the location value.",
+      "void", "setLocation", (ins "std::optional<StringRef>":$attrValue), [{
+        return $_op.setLocation(attrValue);
+      }]>
+  ];
+
+  let extraSharedClassDeclaration = [{
+    Operation *getSingleUser() { return *$_op->user_begin(); }
+
+    template <typename OpTy>
+    OpTy getSingleUser() { return dyn_cast<OpTy>(getSingleUser()); }
+  }];
+}
+
 #endif // SCALEHLS_DIALECT_HLS_HLSINTERFACES_TD
