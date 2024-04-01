@@ -29,54 +29,23 @@ namespace hls {
 static std::tuple<SmallVector<OpFoldResult>, SmallVector<OpFoldResult>,
                   SmallVector<OpFoldResult>>
 getSliceInfo(ArrayRef<Value> ivs, ArrayRef<AffineExpr> indexExprs,
-             ArrayRef<int64_t> elementShape, bool packing, Location loc,
+             ArrayRef<int64_t> elementShape, Location loc,
              PatternRewriter &rewriter) {
   assert(indexExprs.size() == elementShape.size() &&
          "indices and element shape should have the same size");
 
-  auto offsets = llvm::map_to_vector(
-      llvm::zip(indexExprs, elementShape),
-      [&](std::tuple<AffineExpr, int64_t> tuple) {
-        auto [expr, tileSize] = tuple;
-        if (packing)
-          expr = expr.floorDiv(tileSize);
-        auto map = AffineMap::get(ivs.size(), 0, expr);
-        auto apply = rewriter.create<affine::AffineApplyOp>(loc, map, ivs);
-        return OpFoldResult(apply.getResult());
-      });
-  if (packing)
-    offsets.append(elementShape.size(), rewriter.getI64IntegerAttr(0));
+  auto offsets = llvm::map_to_vector(indexExprs, [&](AffineExpr expr) {
+    auto map = AffineMap::get(ivs.size(), 0, expr);
+    auto apply = rewriter.create<affine::AffineApplyOp>(loc, map, ivs);
+    return OpFoldResult(apply.getResult());
+  });
 
   auto sizes = llvm::map_to_vector(elementShape, [&](int64_t size) {
     return OpFoldResult(rewriter.getI64IntegerAttr(size));
   });
-  if (packing)
-    sizes.insert(sizes.begin(), elementShape.size(),
-                 rewriter.getI64IntegerAttr(1));
-
   auto strides = SmallVector<OpFoldResult>(indexExprs.size(),
                                            rewriter.getI64IntegerAttr(1));
-  if (packing)
-    strides.append(elementShape.size(), rewriter.getI64IntegerAttr(1));
-
   return std::make_tuple(offsets, sizes, strides);
-}
-
-/// Get the reassociation indices list between a packed tensor and an unpacked
-/// tensor of the same shape. Specifically, given a 3-d tensor (d0, d1, d2), the
-/// shape of the packed tensor is (1, 1, 1, d0, d1, d2), which means the
-/// reassociation indices list is [[0, 1, 2, 3], [4], [5]].
-static SmallVector<ReassociationIndices> getPackingReassociation(int64_t rank) {
-  SmallVector<ReassociationIndices> reassociation;
-  for (int64_t i = 0; i < rank; i++) {
-    ReassociationIndices reassociationIndices;
-    if (i == 0)
-      reassociationIndices =
-          llvm::map_to_vector(llvm::seq(rank), [&](int64_t j) { return j; });
-    reassociationIndices.push_back(rank + i);
-    reassociation.push_back(reassociationIndices);
-  }
-  return reassociation;
 }
 
 /// Extract a slice from the tensor and write to the iterative tensor. If
@@ -85,18 +54,15 @@ static SmallVector<ReassociationIndices> getPackingReassociation(int64_t rank) {
 static TypedValue<ITensorType>
 extactSliceAndWriteITensor(ArrayRef<Value> ivs, TypedValue<ITensorType> iTensor,
                            TypedValue<RankedTensorType> tensor,
-                           TypedValue<ITensorType> loopResult, bool packing,
-                           Location loc, PatternRewriter &rewriter) {
+                           TypedValue<ITensorType> loopResult, Location loc,
+                           PatternRewriter &rewriter) {
   auto iTensorType = cast<ITensorType>(iTensor.getType());
 
   auto [offsets, sizes, strides] =
       getSliceInfo(ivs, iTensorType.getIterMap().getResults(),
-                   iTensorType.getElementShape(), packing, loc, rewriter);
+                   iTensorType.getElementShape(), loc, rewriter);
   Value slice = rewriter.create<tensor::ExtractSliceOp>(loc, tensor, offsets,
                                                         sizes, strides);
-  if (packing)
-    slice = rewriter.create<tensor::CollapseShapeOp>(
-        loc, slice, getPackingReassociation(iTensorType.getElementRank()));
   return rewriter.create<hls::ITensorWriteOp>(loc, iTensorType, slice, iTensor);
 }
 
@@ -106,38 +72,23 @@ extactSliceAndWriteITensor(ArrayRef<Value> ivs, TypedValue<ITensorType> iTensor,
 static TypedValue<RankedTensorType>
 readITensorAndInsertSlice(ArrayRef<Value> ivs, TypedValue<ITensorType> iTensor,
                           TypedValue<RankedTensorType> tensor,
-                          TypedValue<RankedTensorType> loopResult, bool packing,
-                          Location loc, PatternRewriter &rewriter) {
+                          TypedValue<RankedTensorType> loopResult, Location loc,
+                          PatternRewriter &rewriter) {
   auto iTensorType = iTensor.getType();
   auto [offsets, sizes, strides] =
       getSliceInfo(ivs, iTensorType.getIterMap().getResults(),
-                   iTensorType.getElementShape(), packing, loc, rewriter);
+                   iTensorType.getElementShape(), loc, rewriter);
 
   // As we are going to insert a tensor slice back to the "input" tensor, to
   // avoid unnecessary memory allocation and copy, we need to extract the slice
   // from the "input" tensor first.
   auto extractSlice = rewriter.create<tensor::ExtractSliceOp>(
       loc, tensor, offsets, sizes, strides);
-  auto init = extractSlice.getResult();
-  if (packing)
-    init = rewriter.create<tensor::CollapseShapeOp>(
-        loc, init, getPackingReassociation(iTensorType.getElementRank()));
 
   // Then we take the extracted tensor as the "init" operand of the stream read
   // op, making it a "payload-carried" style operation.
-  auto streamRead = rewriter.create<hls::ITensorReadOp>(
-      loc, iTensorType.getElementType(), iTensor, init);
-  auto slice = llvm::cast<TypedValue<RankedTensorType>>(streamRead.getResult());
-
-  if (packing) {
-    SmallVector<int64_t> expandedShape(iTensorType.getElementRank(), 1);
-    expandedShape.append(iTensorType.getElementShape());
-    auto expandedType =
-        RankedTensorType::get(expandedShape, slice.getType().getElementType());
-    slice = rewriter.create<tensor::ExpandShapeOp>(
-        loc, expandedType, slice,
-        getPackingReassociation(iTensorType.getElementRank()));
-  }
+  auto slice = rewriter.create<hls::ITensorReadOp>(
+      loc, iTensorType.getElementType(), iTensor, extractSlice.getResult());
   return rewriter.create<tensor::InsertSliceOp>(loc, slice, tensor, offsets,
                                                 sizes, strides);
 }
@@ -160,7 +111,7 @@ struct MaterializeITensorWriteFullTensorOp
     auto newResult = extactSliceAndWriteITensor(
         ivs, cast<TypedValue<ITensorType>>(iterArg),
         writeFullTensor.getFullTensor(), cast<TypedValue<ITensorType>>(result),
-        writeFullTensor.getPacked(), loc, rewriter);
+        loc, rewriter);
 
     // Return "newResult" if no loop is constructed. Otherwise, create a new
     // yield op to yield "newResult" to "result".
@@ -191,11 +142,10 @@ struct MaterializeITensorReadFullTensorOp
     auto [ivs, result, iterArg] = constructLoops(
         iTensorType.getIterTripCounts(), iTensorType.getIterSteps(), loc,
         rewriter, readFullTensor.getFullTensorInit());
-    auto newResult =
-        readITensorAndInsertSlice(ivs, readFullTensor.getSource(),
-                                  cast<TypedValue<RankedTensorType>>(iterArg),
-                                  cast<TypedValue<RankedTensorType>>(result),
-                                  readFullTensor.getPacked(), loc, rewriter);
+    auto newResult = readITensorAndInsertSlice(
+        ivs, readFullTensor.getSource(),
+        cast<TypedValue<RankedTensorType>>(iterArg),
+        cast<TypedValue<RankedTensorType>>(result), loc, rewriter);
 
     // Return "newResult" if no loop is constructed. Otherwise, create a new
     // yield op to yield "newResult" to "result".
@@ -246,8 +196,7 @@ struct MaterializeITensorBufferOp
     auto newInputResult = readITensorAndInsertSlice(
         bufferInputIvs, iTensorBuffer.getSource(),
         cast<TypedValue<RankedTensorType>>(inputIterArg),
-        cast<TypedValue<RankedTensorType>>(inputResult),
-        iTensorBuffer.getPacked(), loc, rewriter);
+        cast<TypedValue<RankedTensorType>>(inputResult), loc, rewriter);
 
     // Return "newResult" if no loop is constructed. Otherwise, create a new
     // yield op to yield "newResult" to "result".
@@ -268,8 +217,7 @@ struct MaterializeITensorBufferOp
     auto newOutputResult = extactSliceAndWriteITensor(
         bufferOutputIvs, cast<TypedValue<ITensorType>>(outputIterArg),
         cast<TypedValue<RankedTensorType>>(inputResult),
-        cast<TypedValue<ITensorType>>(outputResult), iTensorBuffer.getPacked(),
-        loc, rewriter);
+        cast<TypedValue<ITensorType>>(outputResult), loc, rewriter);
 
     // Return "newResult" if no loop is constructed. Otherwise, create a new
     // yield op to yield "newResult" to "result".
