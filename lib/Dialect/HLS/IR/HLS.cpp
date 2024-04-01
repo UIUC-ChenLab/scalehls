@@ -19,7 +19,7 @@ using namespace hls;
 using namespace affine;
 
 //===----------------------------------------------------------------------===//
-// HLS dialect
+// HLS Dialect
 //===----------------------------------------------------------------------===//
 
 void HLSDialect::initialize() {
@@ -40,7 +40,7 @@ void HLSDialect::initialize() {
 }
 
 //===----------------------------------------------------------------------===//
-// Include tablegen classes
+// Tablegen Classes
 //===----------------------------------------------------------------------===//
 
 #include "scalehls/Dialect/HLS/IR/HLSOpsDialect.cpp.inc"
@@ -58,53 +58,7 @@ void HLSDialect::initialize() {
 #include "scalehls/Dialect/HLS/IR/HLSOps.cpp.inc"
 
 //===----------------------------------------------------------------------===//
-// Attribute Accessors
-//===----------------------------------------------------------------------===//
-
-/// Loop directive attribute accessors.
-LoopDirectiveAttr hls::getLoopDirective(Operation *op) {
-  return op->getAttrOfType<LoopDirectiveAttr>("__loop_direct__");
-}
-void hls::setLoopDirective(Operation *op, LoopDirectiveAttr loopDirective) {
-  op->setAttr("__loop_direct__", loopDirective);
-}
-void hls::setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
-                           bool dataflow, bool flatten) {
-  auto loopDirective = LoopDirectiveAttr::get(op->getContext(), pipeline,
-                                              targetII, dataflow, flatten);
-  setLoopDirective(op, loopDirective);
-}
-
-/// Function directive attribute accessors.
-FuncDirectiveAttr hls::getFuncDirective(Operation *op) {
-  return op->getAttrOfType<FuncDirectiveAttr>("__func_direct__");
-}
-void hls::setFuncDirective(Operation *op, FuncDirectiveAttr funcDirective) {
-  op->setAttr("__func_direct__", funcDirective);
-}
-void hls::setFuncDirective(Operation *op, bool pipeline, int64_t targetInterval,
-                           bool dataflow) {
-  auto funcDirective = FuncDirectiveAttr::get(op->getContext(), pipeline,
-                                              targetInterval, dataflow);
-  setFuncDirective(op, funcDirective);
-}
-
-/// Top and runtime function attribute utils.
-void hls::setTopFuncAttr(Operation *op) {
-  op->setAttr("__top__", UnitAttr::get(op->getContext()));
-}
-bool hls::hasTopFuncAttr(Operation *op) {
-  return op->hasAttrOfType<UnitAttr>("__top__");
-}
-void hls::setRuntimeAttr(Operation *op) {
-  op->setAttr("__runtime__", UnitAttr::get(op->getContext()));
-}
-bool hls::hasRuntimeAttr(Operation *op) {
-  return op->hasAttrOfType<UnitAttr>("__runtime__");
-}
-
-//===----------------------------------------------------------------------===//
-// Analysis Utils
+// Dialect Utils
 //===----------------------------------------------------------------------===//
 
 /// Get or check the memory kind of a type.
@@ -113,83 +67,6 @@ MemoryKind hls::getMemoryKind(MemRefType type) {
     if (auto kindAttr = memorySpace.dyn_cast<MemoryKindAttr>())
       return kindAttr.getValue();
   return MemoryKind::UNKNOWN;
-}
-
-bool hls::isRam1P(MemRefType type) {
-  auto kind = getMemoryKind(type);
-  return kind == MemoryKind::LUTRAM_1P || kind == MemoryKind::BRAM_1P ||
-         kind == MemoryKind::URAM_1P;
-}
-bool hls::isRam2P(MemRefType type) {
-  auto kind = getMemoryKind(type);
-  return kind == MemoryKind::LUTRAM_2P || kind == MemoryKind::BRAM_2P ||
-         kind == MemoryKind::URAM_2P;
-}
-bool hls::isRamS2P(MemRefType type) {
-  auto kind = getMemoryKind(type);
-  return kind == MemoryKind::LUTRAM_S2P || kind == MemoryKind::BRAM_S2P ||
-         kind == MemoryKind::URAM_S2P;
-}
-bool hls::isRamT2P(MemRefType type) {
-  auto kind = getMemoryKind(type);
-  return kind == MemoryKind::BRAM_T2P || kind == MemoryKind::URAM_T2P;
-}
-bool hls::isDram(MemRefType type) {
-  auto kind = getMemoryKind(type);
-  return kind == MemoryKind::DRAM;
-}
-bool hls::isUnknown(MemRefType type) {
-  auto kind = getMemoryKind(type);
-  return kind == MemoryKind::UNKNOWN;
-}
-
-/// Check whether the given use has read/write semantics.
-bool hls::isRead(OpOperand &use) {
-  if (auto view = dyn_cast<ViewLikeOpInterface>(use.getOwner()))
-    return llvm::any_of(view->getUses(),
-                        [](OpOperand &viewUse) { return isRead(viewUse); });
-  else if (auto streamView =
-               dyn_cast<ITensorViewLikeOpInterface>(use.getOwner()))
-    return llvm::any_of(streamView->getUses(), [](OpOperand &streamViewUse) {
-      return isRead(streamViewUse);
-    });
-  return hasEffect<MemoryEffects::Read>(use.getOwner(), use.get());
-}
-
-bool hls::isWritten(OpOperand &use) {
-  if (auto view = dyn_cast<ViewLikeOpInterface>(use.getOwner()))
-    return llvm::any_of(view->getUses(),
-                        [](OpOperand &viewUse) { return isWritten(viewUse); });
-  else if (auto streamView =
-               dyn_cast<ITensorViewLikeOpInterface>(use.getOwner()))
-    return llvm::any_of(streamView->getUses(), [](OpOperand &streamViewUse) {
-      return isWritten(streamViewUse);
-    });
-  return hasEffect<MemoryEffects::Write>(use.getOwner(), use.get());
-}
-
-func::FuncOp hls::getTopFunc(ModuleOp module, std::string topFuncName) {
-  func::FuncOp topFunc;
-  for (auto func : module.getOps<func::FuncOp>())
-    if (hasTopFuncAttr(func) || func.getName() == topFuncName) {
-      if (!topFunc)
-        topFunc = func;
-      else
-        return func::FuncOp();
-    }
-  return topFunc;
-}
-
-func::FuncOp hls::getRuntimeFunc(ModuleOp module, std::string runtimeFuncName) {
-  func::FuncOp runtimeFunc;
-  for (auto func : module.getOps<func::FuncOp>())
-    if (hasRuntimeAttr(func) || func.getName() == runtimeFuncName) {
-      if (!runtimeFunc)
-        runtimeFunc = func;
-      else
-        return func::FuncOp();
-    }
-  return runtimeFunc;
 }
 
 bool hls::isFullyPartitioned(MemRefType memrefType) {

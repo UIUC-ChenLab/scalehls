@@ -106,8 +106,6 @@ void getLoopBands(Block &block, AffineLoopBands &bands,
 void getArrays(Block &block, SmallVectorImpl<Value> &arrays,
                bool allowArguments = true);
 
-bool checkDependence(Operation *A, Operation *B);
-
 } // namespace scalehls
 } // namespace mlir
 

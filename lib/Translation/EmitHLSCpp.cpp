@@ -1659,18 +1659,15 @@ void ModuleEmitter::emitBlock(Block &block) {
 }
 
 void ModuleEmitter::emitLoopDirectives(Operation *loop) {
-  auto loopDirect = getLoopDirective(loop);
-  if (!loopDirect)
-    return;
-
-  if (!loopDirect.getDataflow() && enforceFalseDependency.getValue())
+  if (!loop->hasAttr("__dataflow__") && enforceFalseDependency.getValue())
     indent() << "#pragma HLS dependence false\n";
 
-  if (loopDirect.getPipeline()) {
-    indent() << "#pragma HLS pipeline II=" << loopDirect.getTargetII() << "\n";
+  if (loop->hasAttr("__pipeline__")) {
+    indent() << "#pragma HLS pipeline II="
+             << cast<IntegerAttr>(loop->getAttr("__ii__")) << "\n";
     // if (enforceFalseDependency.getValue())
     //   indent() << "#pragma HLS dependence false\n";
-  } else if (loopDirect.getDataflow())
+  } else if (loop->hasAttr("__dataflow__"))
     indent() << "#pragma HLS dataflow\n";
 }
 
@@ -1738,7 +1735,7 @@ void ModuleEmitter::emitArrayDirectives(Value memref, bool isInterface) {
 void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
                                            ArrayRef<Value> portList) {
   // Only top function should emit interface pragmas.
-  if (hasTopFuncAttr(func)) {
+  if (func->hasAttr("__top__")) {
     indent() << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
     for (auto &port : portList) {
       // MemRefType and StreamType must have been converted to AXI ports for the
@@ -1783,26 +1780,20 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
     if (port.getType().isa<MemRefType>())
       emitArrayDirectives(port, true);
 
-  if (auto funcDirect = getFuncDirective(func)) {
-    if (funcDirect.getPipeline()) {
-      indent() << "#pragma HLS pipeline II=" << funcDirect.getTargetInterval()
-               << "\n";
-      // An empty line.
-      os << "\n";
-    } else if (funcDirect.getDataflow()) {
-      indent() << "#pragma HLS dataflow\n";
-      // An empty line.
-      os << "\n";
-    }
+  if (func->hasAttr("__pipeline__")) {
+    indent() << "#pragma HLS pipeline\n";
+    // An empty line.
+    os << "\n";
+  } else if (func->hasAttr("__dataflow__")) {
+    indent() << "#pragma HLS dataflow\n";
+    // An empty line.
+    os << "\n";
   }
 }
 
 void ModuleEmitter::emitFunction(func::FuncOp func) {
   if (func.getBlocks().size() != 1)
     emitError(func, "has zero or more than one basic blocks.");
-
-  if (hasTopFuncAttr(func))
-    os << "/// This is top function.\n";
 
   // Emit function signature.
   os << "void " << func.getName() << "(\n";
@@ -1888,17 +1879,17 @@ void ModuleEmitter::emitModule(ModuleOp module) {
   for (auto node : llvm::post_order<const CallGraph *>(&graph)) {
     if (node->isExternal())
       continue;
-    if (auto func = node->getCallableRegion()->getParentOfType<func::FuncOp>())
-      if (!hasRuntimeAttr(func)) {
-        emitFunction(func);
-        emittedFuncs.insert(func);
-      }
+    if (auto func =
+            node->getCallableRegion()->getParentOfType<func::FuncOp>()) {
+      emitFunction(func);
+      emittedFuncs.insert(func);
+    }
   }
 
   // Emit remained functions accordingly.
   for (auto &op : *module.getBody()) {
     if (auto func = dyn_cast<func::FuncOp>(op)) {
-      if (!emittedFuncs.count(func) && !hasRuntimeAttr(func))
+      if (!emittedFuncs.count(func))
         emitFunction(func);
     } else if (!isa<ml_program::GlobalOp, transform::NamedSequenceOp>(op))
       emitError(&op, "is unsupported operation");

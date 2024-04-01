@@ -39,52 +39,16 @@ class StreamOp;
 #define GET_OP_CLASSES
 #include "scalehls/Dialect/HLS/IR/HLSOps.h.inc"
 
+//===----------------------------------------------------------------------===//
+// Dialect Utils
+//===----------------------------------------------------------------------===//
+
 namespace mlir {
 namespace scalehls {
 namespace hls {
 
-//===----------------------------------------------------------------------===//
-// Attribute Accessors
-//===----------------------------------------------------------------------===//
-
-/// Loop directive attribute accessors.
-LoopDirectiveAttr getLoopDirective(Operation *op);
-void setLoopDirective(Operation *op, LoopDirectiveAttr loopDirective);
-void setLoopDirective(Operation *op, bool pipeline, int64_t targetII,
-                      bool dataflow, bool flatten);
-
-/// Function directive attribute accessors.
-FuncDirectiveAttr getFuncDirective(Operation *op);
-void setFuncDirective(Operation *op, FuncDirectiveAttr FuncDirective);
-void setFuncDirective(Operation *op, bool pipeline, int64_t targetInterval,
-                      bool dataflow);
-
-/// Top and runtime function attribute utils.
-bool hasTopFuncAttr(Operation *op);
-void setTopFuncAttr(Operation *op);
-bool hasRuntimeAttr(Operation *op);
-void setRuntimeAttr(Operation *op);
-
-//===----------------------------------------------------------------------===//
-// Analysis Utils
-//===----------------------------------------------------------------------===//
-
 /// Get or check the memory kind of a type.
 MemoryKind getMemoryKind(MemRefType type);
-bool isRam1P(MemRefType type);
-bool isRam2P(MemRefType type);
-bool isRamS2P(MemRefType type);
-bool isRamT2P(MemRefType type);
-bool isDram(MemRefType type);
-bool isUnknown(MemRefType type);
-
-/// Check whether the given use has read/write semantics.
-bool isRead(OpOperand &use);
-bool isWritten(OpOperand &use);
-
-func::FuncOp getTopFunc(ModuleOp module, std::string topFuncName = "");
-
-func::FuncOp getRuntimeFunc(ModuleOp module, std::string runtimeFuncName = "");
 
 bool isFullyPartitioned(MemRefType memrefType);
 
