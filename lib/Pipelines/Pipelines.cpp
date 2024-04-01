@@ -26,7 +26,7 @@ using namespace hls;
 
 void scalehls::addLinalgTransformPasses(OpPassManager &pm) {
   pm.addPass(mlir::createConvertTensorToLinalgPass());
-  pm.addPass(mlir::createLinalgGeneralizationPass());
+  pm.addPass(mlir::createLinalgGeneralizeNamedOpsPass());
   pm.addPass(mlir::createLinalgElementwiseOpFusionPass());
   pm.addPass(mlir::createLinalgFoldUnitExtentDimsPass());
   pm.addPass(bufferization::createEmptyTensorEliminationPass());

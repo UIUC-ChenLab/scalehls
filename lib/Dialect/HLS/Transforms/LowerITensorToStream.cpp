@@ -209,8 +209,7 @@ struct DuplicateStreamOp : public OpRewritePattern<hls::StreamOp> {
       rewriter.setInsertionPoint(writer);
       rewriter.create<hls::StreamWriteOp>(writer.getLoc(), writer.getValue(),
                                           newStream);
-      rewriter.updateRootInPlace(use->getOwner(),
-                                 [&]() { use->set(newStream); });
+      rewriter.modifyOpInPlace(use->getOwner(), [&]() { use->set(newStream); });
     }
     return success(hasChanged);
   }

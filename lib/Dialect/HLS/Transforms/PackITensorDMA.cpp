@@ -72,7 +72,7 @@ struct PackITensorWriteFullTensorOp
     auto packed = packTensor(writeFullTensor.getFullTensor(),
                              iTensorType.getElementShape(),
                              writeFullTensor.getLoc(), rewriter);
-    rewriter.updateRootInPlace(writeFullTensor, [&]() {
+    rewriter.modifyOpInPlace(writeFullTensor, [&]() {
       writeFullTensor.getFullTensorMutable().assign(packed);
       writeFullTensor.setPacked(true);
     });
@@ -106,7 +106,7 @@ struct PackITensorReadFullTensorOp
                                      iTensorType.getElementShape(),
                                      readFullTensor.getLoc(), rewriter);
 
-    rewriter.updateRootInPlace(readFullTensor, [&]() {
+    rewriter.modifyOpInPlace(readFullTensor, [&]() {
       readFullTensor.getFullTensorInitMutable().assign(newFullTensorInit);
       readFullTensor.getFullTensor().setType(packedType);
       readFullTensor.setPacked(true);
@@ -139,7 +139,7 @@ struct PackITensorBufferOp : public OpRewritePattern<hls::ITensorBufferOp> {
 
     auto packedType =
         getPackedType(buffer.getBufferType(), buffer.getPackSizes());
-    rewriter.updateRootInPlace(buffer, [&]() {
+    rewriter.modifyOpInPlace(buffer, [&]() {
       buffer.setBufferType(packedType);
       buffer.setPacked(true);
     });

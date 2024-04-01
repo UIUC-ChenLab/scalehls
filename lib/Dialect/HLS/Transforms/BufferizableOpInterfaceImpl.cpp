@@ -278,7 +278,7 @@ struct TaskOpInterface
       yieldValues.push_back(*alloc);
     }
 
-    rewriter.updateRootInPlace(
+    rewriter.modifyOpInPlace(
         yieldOp, [&]() { yieldOp.getResultsMutable().assign(yieldValues); });
     return success();
   }
@@ -487,16 +487,7 @@ struct TensorInstanceOpInterface
                 SmallVector<Value> &invocationStack) const {
     auto tensorInst = cast<hls::TensorInstanceOp>(op);
     assert(value == tensorInst.getResult() && "invalid value");
-
-    // Compute memory space of this allocation.
-    Attribute memorySpace;
-    if (options.defaultMemorySpace.has_value())
-      memorySpace = *options.defaultMemorySpace;
-    else
-      return tensorInst.emitError("could not infer memory space");
-
-    return getMemRefTypeWithStaticIdentityLayout(tensorInst.getType(),
-                                                 memorySpace);
+    return getMemRefTypeWithStaticIdentityLayout(tensorInst.getType());
   }
 };
 

@@ -121,7 +121,7 @@ struct ConvertTensorInitOp : public OpRewritePattern<hls::TensorInitOp> {
       rewriter.setInsertionPoint(use.getOwner());
       auto instance = rewriter.create<hls::TensorInstanceOp>(
           init.getLoc(), init.getType(), init.getInitValueAttr());
-      rewriter.updateRootInPlace(use.getOwner(), [&]() { use.set(instance); });
+      rewriter.modifyOpInPlace(use.getOwner(), [&]() { use.set(instance); });
     }
     rewriter.eraseOp(init);
     return success();
@@ -139,7 +139,7 @@ struct ConvertITensorInitOp : public OpRewritePattern<hls::ITensorInitOp> {
       rewriter.setInsertionPoint(use.getOwner());
       auto instance = rewriter.create<hls::ITensorInstanceOp>(
           init.getLoc(), init.getType(), init.getInitValueAttr());
-      rewriter.updateRootInPlace(use.getOwner(), [&]() { use.set(instance); });
+      rewriter.modifyOpInPlace(use.getOwner(), [&]() { use.set(instance); });
     }
     rewriter.eraseOp(init);
     return success();

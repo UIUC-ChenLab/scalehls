@@ -12,7 +12,7 @@
 #include "mlir/Dialect/SCF/Transforms/TileUsingInterface.h"
 #include "mlir/Dialect/SCF/Utils/Utils.h"
 #include "mlir/Dialect/Transform/IR/TransformDialect.h"
-#include "mlir/Dialect/Transform/IR/TransformInterfaces.h"
+#include "mlir/Dialect/Transform/Interfaces/TransformInterfaces.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Dialect/HLS/IR/HLS.h"
@@ -199,7 +199,7 @@ transform::HLSConvertInsertSliceToITensorWriteOp::applyToOne(
   for (auto loop : loops) {
     auto &iterOperand = loop->getOpOperand(iterIdx);
     auto iterType = iterOperand.get().getType();
-    rewriter.updateRootInPlace(loop, [&]() {
+    rewriter.modifyOpInPlace(loop, [&]() {
       loop.getTiedLoopRegionIterArg(&iterOperand).setType(iterType);
       loop.getTiedLoopResult(&iterOperand).setType(iterType);
     });

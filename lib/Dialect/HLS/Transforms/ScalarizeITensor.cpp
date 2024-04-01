@@ -60,7 +60,7 @@ struct ScalarizeITensorInstanceOp
     if (!iTensorType.hasShapedElementType())
       return failure();
 
-    rewriter.updateRootInPlace(inst, [&]() {
+    rewriter.modifyOpInPlace(inst, [&]() {
       inst.getResult().setType(getScalarITensorType(iTensorType));
     });
     rewriter.setInsertionPointAfter(inst);
@@ -221,9 +221,9 @@ static LogicalResult scalarzieDetinationStyleContainerOp(
     auto iterArgCast =
         rewriter.create<hls::ITensorCastOp>(loc, iTensorType, iterArg);
     rewriter.replaceAllUsesExcept(iterArg, iterArgCast, iterArgCast);
-    rewriter.startRootUpdate(op);
+    rewriter.startOpModification(op);
     iterArg.setType(scalarITensorType);
-    rewriter.finalizeRootUpdate(op);
+    rewriter.finalizeOpModification(op);
 
     // Cast the yeilded value's type.
     rewriter.setInsertionPoint(terminator);
@@ -238,9 +238,9 @@ static LogicalResult scalarzieDetinationStyleContainerOp(
     auto resultCast =
         rewriter.create<hls::ITensorCastOp>(loc, iTensorType, result);
     rewriter.replaceAllUsesExcept(result, resultCast, resultCast);
-    rewriter.startRootUpdate(op);
+    rewriter.startOpModification(op);
     result.setType(scalarITensorType);
-    rewriter.finalizeRootUpdate(op);
+    rewriter.finalizeOpModification(op);
   }
   return success(hasChanged);
 }
