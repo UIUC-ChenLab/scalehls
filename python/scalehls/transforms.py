@@ -37,85 +37,124 @@ def apply_transform_sequence(
         "scalehls-transform-interpreter{entry-point=" +
         sequence.sym_name.value + " delete-entry-point=" +
         str(delete_sequence).lower() + "},"
-        "cse, canonicalize)")
+        "cse, canonicalize"
+        ")")
     pm.run(module.operation)
     if delete_sequence:
         del module.operation.attributes["transform.with_named_sequence"]
 
 
 def apply_linalg_optimization_passes(module: Module):
-    pm = PassManager()
-    add_linalg_transform_passes(pm)
+    pm = PassManager.parse(
+        "builtin.module("
+        "convert-tensor-to-linalg,"
+        "linalg-generalize-named-ops,"
+        "linalg-fuse-elementwise-ops,"
+        "linalg-fold-unit-extent-dims,"
+        "eliminate-empty-tensors,"
+        "linalg-inline-scalar-operands,"
+        "func.func(scalehls-preprocess),"
+        "cse, canonicalize"
+        ")")
     pm.run(module.operation)
 
 
 def apply_reduce_full_tensor_to_itensor_buffer(module: Module):
     pm = PassManager.parse(
-        "builtin.module(func.func("
-        "scalehls-reduce-full-tensor-to-itensor-buffer),"
-        "cse, canonicalize)")
+        "builtin.module("
+        "func.func(scalehls-reduce-full-tensor-to-itensor-buffer),"
+        "cse, canonicalize"
+        ")")
     pm.run(module.operation)
 
 
 def apply_pack_itensor_dma(module: Module):
     pm = PassManager.parse(
-        "builtin.module(func.func(scalehls-pack-itensor-dma),"
-        "cse, canonicalize)")
+        "builtin.module("
+        "func.func(scalehls-pack-itensor-dma),"
+        "cse, canonicalize"
+        ")")
     pm.run(module.operation)
 
 
 def apply_materialize_itensor_dma(module: Module):
     pm = PassManager.parse(
-        "builtin.module(func.func(scalehls-materialize-itensor-dma),"
-        "cse, canonicalize)")
+        "builtin.module("
+        "func.func(scalehls-materialize-itensor-dma),"
+        "cse, canonicalize"
+        ")")
     pm.run(module.operation)
 
 
 def apply_scalarize_itensor(module: Module):
     pm = PassManager.parse(
-        "builtin.module(func.func(scalehls-scalarize-itensor),"
-        "cse, canonicalize)")
+        "builtin.module("
+        "func.func(scalehls-scalarize-itensor),"
+        "cse, canonicalize"
+        ")")
     pm.run(module.operation)
 
 
 def apply_lower_itensor_to_stream(module: Module):
     pm = PassManager.parse(
-        "builtin.module(func.func(scalehls-lower-itensor-to-stream),"
-        "cse, canonicalize)")
+        "builtin.module("
+        "func.func(scalehls-lower-itensor-to-stream),"
+        "cse, canonicalize"
+        ")")
     pm.run(module.operation)
 
 
 def apply_comprehensive_bufferize_passes(module: Module):
-    pm = PassManager()
-    add_comprehensive_bufferize_passes(pm)
+    pm = PassManager.parse(
+        "builtin.module("
+        "scalehls-comprehensive-bufferize,"
+        "resolve-shaped-type-result-dims,"
+        "canonicalize, cse, canonicalize"
+        ")"
+    )
     pm.run(module.operation)
 
 
 def apply_convert_tensor_init_to_tensor_instance(module: Module):
     pm = PassManager.parse(
-        "builtin.module(func.func("
-        "scalehls-convert-tensor-init-to-tensor-instance),"
-        "cse, canonicalize)")
+        "builtin.module("
+        "func.func(scalehls-convert-tensor-init-to-tensor-instance),"
+        "cse, canonicalize"
+        ")")
     pm.run(module.operation)
 
 
 def apply_generate_dataflow_hierarchy(module: Module):
     pm = PassManager.parse(
-        "builtin.module(func.func(scalehls-generate-dataflow-hierarchy),"
-        "cse, canonicalize)")
+        "builtin.module("
+        "func.func(scalehls-generate-dataflow-hierarchy),"
+        "cse, canonicalize"
+        ")")
     pm.run(module.operation)
 
 
 def apply_schedule_dataflow(module: Module):
     pm = PassManager.parse(
-        "builtin.module(func.func(scalehls-schedule-dataflow),"
-        "cse, canonicalize)")
+        "builtin.module("
+        "func.func(scalehls-schedule-dataflow),"
+        "cse, canonicalize"
+        ")")
     pm.run(module.operation)
 
 
 def apply_convert_dataflow_to_func_passes(module: Module):
-    pm = PassManager()
-    add_convert_dataflow_to_func_passes(pm)
+    pm = PassManager.parse(
+        "builtin.module("
+        "func.func("
+        "scalehls-raise-scf-to-affine,"
+        "convert-linalg-to-affine-loops,"
+        "affine-loop-normalize,"
+        "affine-simplify-structures"
+        "),"
+        "fold-memref-alias-ops,"
+        "scalehls-convert-dataflow-to-func,"
+        "cse, canonicalize"
+        ")")
     pm.run(module.operation)
 
 

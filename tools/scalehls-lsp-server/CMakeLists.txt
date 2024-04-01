@@ -49,7 +49,6 @@ target_link_libraries(scalehls-lsp-server
   MLIRScaleHLSHLSDialect
   MLIRScaleHLSHLSTransforms
   MLIRScaleHLSHLSTransformOps
-  MLIRScaleHLSPipelines
   MLIRScaleHLSUtils
 )
 

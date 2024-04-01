@@ -79,11 +79,4 @@ PYBIND11_MODULE(_scalehls, m) {
             module, accum.getCallback(), accum.getUserData()));
       },
       py::arg("module"), py::arg("file_object"));
-
-  m.def("add_linalg_transform_passes", mlirAddLinalgTransformPasses,
-        py::arg("pass_manager"));
-  m.def("add_comprehensive_bufferize_passes",
-        mlirAddComprehensiveBufferizePasses, py::arg("pass_manager"));
-  m.def("add_convert_dataflow_to_func_passes",
-        mlirAddConvertDataflowToFuncPasses, py::arg("pass_manager"));
 }

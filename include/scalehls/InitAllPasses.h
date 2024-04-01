@@ -21,7 +21,6 @@
 #include "mlir/Dialect/Vector/Transforms/Passes.h"
 #include "mlir/Transforms/Passes.h"
 #include "scalehls/Dialect/HLS/Transforms/Passes.h"
-#include "scalehls/Pipelines/Pipelines.h"
 
 namespace mlir {
 namespace scalehls {
@@ -49,7 +48,6 @@ inline void registerAllPasses() {
 
   // ScaleHLS passes.
   hls::registerScaleHLSHLSTransformsPasses();
-  scalehls::registerScaleHLSPipelines();
 }
 
 } // namespace scalehls

@@ -60,7 +60,7 @@ def ConvertDataflowToFunc :
   let summary = "Convert structural dataflow to function for C++ emission";
 }
 
-def RaiseSCFToAffine : Pass<"scalehls-raise-scf-to-affine"> {
+def RaiseSCFToAffine : Pass<"scalehls-raise-scf-to-affine", "func::FuncOp"> {
   let summary = "Raise SCF to affine";
 }
 
