@@ -62,8 +62,7 @@ namespace hls {
 
 namespace {
 struct ConvertTaskToFunc : public OpRewritePattern<TaskOp> {
-  ConvertTaskToFunc(MLIRContext *context, StringRef prefix, unsigned &taskIdx)
-      : OpRewritePattern<TaskOp>(context), prefix(prefix), taskIdx(taskIdx) {}
+  using OpRewritePattern<TaskOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(TaskOp task,
                                 PatternRewriter &rewriter) const override {
@@ -73,64 +72,45 @@ struct ConvertTaskToFunc : public OpRewritePattern<TaskOp> {
     // Collect all live-ins of the task.
     rewriter.setInsertionPointToStart(&task.getBody().front());
     SmallVector<Value, 8> operands;
-    SmallVector<Location, 8> operandLocs;
-    auto liveins = Liveness(task).getLiveIn(&task.getBody().front());
+    auto liveins = task.getLiveIns();
     for (auto livein : liveins) {
-      // Skip live-ins that are defined in the parent region.
-      if (task.getBody().isAncestor(livein.getParentRegion()))
-        continue;
-      // Localize constant live-ins.
       if (auto constLivein = livein.getDefiningOp<arith::ConstantOp>()) {
+        // Sink constant live-ins to the sub-function.
         auto cloneLivein =
             cast<arith::ConstantOp>(rewriter.clone(*constLivein));
         rewriter.replaceUsesWithIf(livein, cloneLivein, [&](OpOperand &use) {
-          return task.getBody().isAncestor(use.getOwner()->getParentRegion());
+          return task->isAncestor(use.getOwner());
         });
-        continue;
-      }
-      // Add the live-in to the list of operands.
-      operands.push_back(livein);
-      operandLocs.push_back(livein.getLoc());
+      } else
+        operands.push_back(livein);
     }
 
     // Create a new sub-function.
     rewriter.setInsertionPoint(task->getParentOfType<func::FuncOp>());
     auto subFunc = rewriter.create<func::FuncOp>(
-        task.getLoc(), prefix.str() + "_task" + std::to_string(taskIdx++),
+        task.getLoc(), task.getNameAttr(),
         rewriter.getFunctionType(TypeRange(operands), TypeRange()));
-    subFunc->setAttrs(task->getAttrs());
-
-    // FIXME: A better method to judge whether to inline the node.
-    if (task.isLeafTask() &&
-        (llvm::hasSingleElement(task.getOps<LoopLikeOpInterface>()) ||
-         llvm::hasSingleElement(task.getOps<linalg::LinalgOp>())))
-      subFunc->setAttr("__inline__", rewriter.getUnitAttr());
+    subFunc->setAttr("__location__", task.getLocationAttr());
 
     // Construct the body and arguments of the sub-function.
     auto subFuncBlock = rewriter.createBlock(&subFunc.getBody());
-    auto args = subFuncBlock->addArguments(TypeRange(operands), operandLocs);
-    for (auto [operand, arg] : llvm::zip(operands, args))
-      operand.replaceUsesWithIf(arg, [&](OpOperand &use) {
+    auto subFuncArgs = subFuncBlock->addArguments(
+        TypeRange(operands),
+        llvm::map_to_vector(operands, [&](Value v) { return v.getLoc(); }));
+    for (auto [operand, subFuncArg] : llvm::zip(operands, subFuncArgs))
+      operand.replaceUsesWithIf(subFuncArg, [&](OpOperand &use) {
         return task->isAncestor(use.getOwner());
       });
 
-    // Inline the task body into the sub-function.
-    auto &subFuncOps = subFuncBlock->getOperations();
-    auto &taskOps = task.getBody().front().getOperations();
-    subFuncOps.splice(subFuncOps.begin(), taskOps, taskOps.begin(),
-                      std::prev(taskOps.end()));
-    rewriter.setInsertionPointToEnd(subFuncBlock);
-    rewriter.create<func::ReturnOp>(task.getYieldOp().getLoc());
+    // Merge the task block into the sub-function block.
+    rewriter.mergeBlocks(&task.getBody().front(), subFuncBlock);
+    rewriter.replaceOpWithNewOp<func::ReturnOp>(&subFuncBlock->back());
 
     // Replace original with a function call.
     rewriter.setInsertionPoint(task);
     rewriter.replaceOpWithNewOp<func::CallOp>(task, subFunc, operands);
     return success();
   }
-
-private:
-  StringRef prefix;
-  unsigned &taskIdx;
 };
 } // namespace
 
@@ -138,16 +118,11 @@ namespace {
 struct ConvertDataflowToFunc
     : public hls::impl::ConvertDataflowToFuncBase<ConvertDataflowToFunc> {
   void runOnOperation() override {
-    auto moduleOp = getOperation();
     auto context = &getContext();
-
-    // Convert all tasks and schedules into sub-functions.
     for (auto func :
-         llvm::make_early_inc_range(moduleOp.getOps<func::FuncOp>())) {
-      unsigned taskIdx = 0;
+         llvm::make_early_inc_range(getOperation().getOps<func::FuncOp>())) {
       mlir::RewritePatternSet patterns(context);
-      // patterns.add<InlineSchedule>(context);
-      patterns.add<ConvertTaskToFunc>(context, func.getName(), taskIdx);
+      patterns.add<ConvertTaskToFunc>(context);
       (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
     }
   }
