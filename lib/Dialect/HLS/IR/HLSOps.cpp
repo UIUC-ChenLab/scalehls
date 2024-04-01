@@ -272,6 +272,16 @@ OpFoldResult ITensorReassociateOp::fold(FoldAdaptor adaptor) {
   return foldRedundantViews();
 }
 
+LogicalResult ITensorReassociateOp::canonicalize(ITensorReassociateOp op,
+                                                 PatternRewriter &rewriter) {
+  if (auto init = op.getSource().getDefiningOp<ITensorInitOp>()) {
+    rewriter.replaceOpWithNewOp<ITensorInitOp>(op, op.getResultType(),
+                                               init.getInitValueAttr());
+    return success();
+  }
+  return failure();
+}
+
 //===----------------------------------------------------------------------===//
 // ITensorCastOp
 //===----------------------------------------------------------------------===//

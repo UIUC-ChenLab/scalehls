@@ -168,9 +168,16 @@ struct PackITensorReadFullTensorOp
 
     // Pack the init full tensor.
     auto loc = readFullTensor.getLoc();
-    auto packedFullTensorInit =
-        packTensor(readFullTensor.getFullTensorInit(),
-                   iTensorType.getElementShape(), loc, rewriter);
+    TypedValue<RankedTensorType> packedFullTensorInit;
+    if (auto init = readFullTensor.getFullTensorInit()
+                        .getDefiningOp<hls::TensorInitOp>())
+      packedFullTensorInit = rewriter.create<hls::TensorInitOp>(
+          loc, getPackedType(init.getType(), iTensorType.getElementShape()),
+          init.getInitValueAttr());
+    else
+      packedFullTensorInit =
+          packTensor(readFullTensor.getFullTensorInit(),
+                     iTensorType.getElementShape(), loc, rewriter);
 
     auto packedITensorType = getPackedItensorType(iTensorType);
     auto shapeReasAttr =

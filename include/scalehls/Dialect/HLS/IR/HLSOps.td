@@ -267,6 +267,7 @@ def ITensorReassociateOp : HLSOp<"itensor_reassociate", [Pure,
 
   let hasVerifier = 1;
   let hasFolder = 1;
+  let hasCanonicalizeMethod = 1;
 
   let extraClassDeclaration = [{
     static SmallVector<ReassociationIndices> 
