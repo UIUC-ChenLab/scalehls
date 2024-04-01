@@ -215,9 +215,15 @@ struct ScheduleDataflow
     // destination-style op, e.g. a sub-task, an scf loop, etc. Therefore, a
     // non-destination-style op should always be ensured single use to maintain
     // the semantics of task op.
+    SmallVector<Operation *> opsToEnsureSingleUse;
     for (auto &op : llvm::make_early_inc_range(func.getOps()))
       if (!isDestinationStyleOp(&op) && !op.hasTrait<OpTrait::ConstantLike>())
-        ensureSingleUse(&op, builder);
+        opsToEnsureSingleUse.push_back(&op);
+
+    // We ensure single use in a reversed order to make sure the cascaded
+    // non-destination-style ops are also ensured single use.
+    for (auto op : llvm::reverse(opsToEnsureSingleUse))
+      ensureSingleUse(op, builder);
 
     // Start the depth-first search from the return operation.
     levelToLocationMap.push_back("cpu");
