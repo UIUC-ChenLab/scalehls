@@ -6,6 +6,7 @@
 
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Tensor/Transforms/Transforms.h"
+#include "mlir/Dialect/Utils/ReshapeOpsUtils.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Dialect/HLS/Transforms/Passes.h"
 #include "scalehls/Utils/Utils.h"
@@ -55,6 +56,51 @@ static tensor::UnPackOp unpackTensor(TypedValue<RankedTensorType> tensor,
                                            innerTiles);
 }
 
+static AffineMap getPackedIterMap(AffineMap iterMap, OpBuilder &builder) {
+  SmallVector<AffineExpr> newExprs(iterMap.getNumResults(),
+                                   builder.getAffineConstantExpr(0));
+  for (auto expr : iterMap.getResults())
+    newExprs.push_back(expr);
+  return AffineMap::get(iterMap.getNumDims(), iterMap.getNumSymbols(), newExprs,
+                        iterMap.getContext());
+}
+
+static hls::ITensorType getPackedItensorType(hls::ITensorType iTensorType) {
+  OpBuilder builder(iTensorType.getContext());
+  auto packedElementType =
+      getPackedType(cast<RankedTensorType>(iTensorType.getElementType()),
+                    iTensorType.getElementShape());
+  auto packedIterMap = getPackedIterMap(iTensorType.getIterMap(), builder);
+  return hls::ITensorType::get(
+      packedElementType, iTensorType.getIterTripCounts(),
+      iTensorType.getIterSteps(), packedIterMap, iTensorType.getDepth());
+}
+
+/// Get the reassociation indices list between a packed tensor and an unpacked
+/// tensor of the same shape. Specifically, given a 3-d tensor (d0, d1, d2), the
+/// shape of the packed tensor is (1, 1, 1, d0, d1, d2), which means the
+/// reassociation indices list is [[0, 1, 2, 3], [4], [5]].
+static ArrayAttr getPackingReassociationAttr(int64_t rank,
+                                             PatternRewriter &rewriter) {
+  SmallVector<ReassociationIndices> reassociation;
+  for (int64_t i = 0; i < rank; i++) {
+    ReassociationIndices reassociationIndices;
+    if (i == 0)
+      reassociationIndices =
+          llvm::map_to_vector(llvm::seq(rank), [&](int64_t j) { return j; });
+    reassociationIndices.push_back(rank + i);
+    reassociation.push_back(reassociationIndices);
+  }
+  return getReassociationIndicesAttribute(rewriter, reassociation);
+}
+
+static ArrayAttr getIdenticalReassociationAttr(int64_t rank,
+                                               PatternRewriter &rewriter) {
+  auto reassociation = llvm::map_to_vector(
+      llvm::seq(rank), [&](int64_t i) { return ReassociationIndices(1, i); });
+  return getReassociationIndicesAttribute(rewriter, reassociation);
+}
+
 namespace {
 struct PackITensorWriteFullTensorOp
     : public OpRewritePattern<hls::ITensorWriteFullTensorOp> {
@@ -69,13 +115,38 @@ struct PackITensorWriteFullTensorOp
     if (!iTensorType.tileIsRegular() || iTensorType.getRank() == 1)
       return failure();
 
-    auto packed = packTensor(writeFullTensor.getFullTensor(),
-                             iTensorType.getElementShape(),
-                             writeFullTensor.getLoc(), rewriter);
+    // Pack the full tensor to be written.
+    auto loc = writeFullTensor.getLoc();
+    auto packedTensor =
+        packTensor(writeFullTensor.getFullTensor(),
+                   iTensorType.getElementShape(), loc, rewriter);
+
+    auto packedITensorType = getPackedItensorType(iTensorType);
+    auto shapeReasAttr =
+        getPackingReassociationAttr(iTensorType.getRank(), rewriter);
+    auto iterReasAttr =
+        getIdenticalReassociationAttr(iTensorType.getIterRank(), rewriter);
+
+    // Pack the destination itensor through reassociation.
+    auto packedITensor = rewriter.create<hls::ITensorReassociateOp>(
+        loc, packedITensorType, writeFullTensor.getDest(), /*expandShape=*/true,
+        shapeReasAttr, /*expandIteration=*/true, iterReasAttr);
+
+    // Update the writeFullTensor op.
     rewriter.modifyOpInPlace(writeFullTensor, [&]() {
-      writeFullTensor.getFullTensorMutable().assign(packed);
+      writeFullTensor.getDestMutable().assign(packedITensor);
+      writeFullTensor.getFullTensorMutable().assign(packedTensor);
+      writeFullTensor.getResult().setType(packedITensorType);
       writeFullTensor.setPacked(true);
     });
+
+    // Unpack the result itensor through reassociation.
+    rewriter.setInsertionPointAfter(writeFullTensor);
+    auto unpackedITensor = rewriter.create<hls::ITensorReassociateOp>(
+        loc, iTensorType, writeFullTensor.getResult(), /*expandShape=*/false,
+        shapeReasAttr, /*expandIteration=*/false, iterReasAttr);
+    rewriter.replaceAllUsesExcept(writeFullTensor, unpackedITensor,
+                                  unpackedITensor);
     return success();
   }
 };
@@ -95,28 +166,38 @@ struct PackITensorReadFullTensorOp
     if (!iTensorType.tileIsRegular() || iTensorType.getRank() == 1)
       return failure();
 
-    auto packedType = getPackedType(readFullTensor.getFullTensorType(),
-                                    iTensorType.getElementShape());
-    Value newFullTensorInit;
-    if (readFullTensor.getFullTensorInit().getDefiningOp<hls::TensorInitOp>())
-      newFullTensorInit = rewriter.create<hls::TensorInitOp>(
-          readFullTensor.getLoc(), packedType);
-    else
-      newFullTensorInit = packTensor(readFullTensor.getFullTensorInit(),
-                                     iTensorType.getElementShape(),
-                                     readFullTensor.getLoc(), rewriter);
+    // Pack the init full tensor.
+    auto loc = readFullTensor.getLoc();
+    auto packedFullTensorInit =
+        packTensor(readFullTensor.getFullTensorInit(),
+                   iTensorType.getElementShape(), loc, rewriter);
 
+    auto packedITensorType = getPackedItensorType(iTensorType);
+    auto shapeReasAttr =
+        getPackingReassociationAttr(iTensorType.getRank(), rewriter);
+    auto iterReasAttr =
+        getIdenticalReassociationAttr(iTensorType.getIterRank(), rewriter);
+
+    auto packedITensor = rewriter.create<hls::ITensorReassociateOp>(
+        loc, packedITensorType, readFullTensor.getSource(),
+        /*expandShape=*/true, shapeReasAttr, /*expandIteration=*/true,
+        iterReasAttr);
+
+    // Update the readFullTensor op.
     rewriter.modifyOpInPlace(readFullTensor, [&]() {
-      readFullTensor.getFullTensorInitMutable().assign(newFullTensorInit);
-      readFullTensor.getFullTensor().setType(packedType);
+      readFullTensor.getSourceMutable().assign(packedITensor);
+      readFullTensor.getFullTensorInitMutable().assign(packedFullTensorInit);
+      readFullTensor.getFullTensor().setType(packedFullTensorInit.getType());
       readFullTensor.setPacked(true);
     });
 
+    // Unpack the result full tensor.
     rewriter.setInsertionPointAfter(readFullTensor);
-    auto unpack = unpackTensor(readFullTensor.getFullTensor(),
-                               iTensorType.getElementShape(),
-                               readFullTensor.getLoc(), rewriter);
-    rewriter.replaceAllUsesExcept(readFullTensor, unpack, unpack);
+    auto unpackedFullTensor =
+        unpackTensor(readFullTensor.getFullTensor(),
+                     iTensorType.getElementShape(), loc, rewriter);
+    rewriter.replaceAllUsesExcept(readFullTensor, unpackedFullTensor,
+                                  unpackedFullTensor);
     return success();
   }
 };
@@ -137,12 +218,44 @@ struct PackITensorBufferOp : public OpRewritePattern<hls::ITensorBufferOp> {
         (sourceType.getRank() == 1 && resultType.getRank() == 1))
       return failure();
 
-    auto packedType =
-        getPackedType(buffer.getBufferType(), buffer.getPackSizes());
+    auto packedSourceType = getPackedItensorType(sourceType);
+    auto sourceShapeReasAttr =
+        getPackingReassociationAttr(sourceType.getRank(), rewriter);
+    auto sourceIterReasAttr =
+        getIdenticalReassociationAttr(sourceType.getIterRank(), rewriter);
+
+    auto packedResultType = getPackedItensorType(resultType);
+    auto resultShapeReasAttr =
+        getPackingReassociationAttr(resultType.getRank(), rewriter);
+    auto resultIterReasAttr =
+        getIdenticalReassociationAttr(resultType.getIterRank(), rewriter);
+
+    // Pack the source and dest itensor.
+    auto loc = buffer.getLoc();
+    auto packedSource = rewriter.create<hls::ITensorReassociateOp>(
+        loc, packedSourceType, buffer.getSource(), /*expandShape=*/true,
+        sourceShapeReasAttr, /*expandIteration=*/true, sourceIterReasAttr);
+    auto packedDest = rewriter.create<hls::ITensorReassociateOp>(
+        loc, packedResultType, buffer.getDest(), /*expandShape=*/true,
+        resultShapeReasAttr, /*expandIteration=*/true, resultIterReasAttr);
+
+    auto packSizes = buffer.getPackSizes();
+    auto packedBufferType = getPackedType(buffer.getBufferType(), packSizes);
     rewriter.modifyOpInPlace(buffer, [&]() {
-      buffer.setBufferType(packedType);
+      buffer.getSourceMutable().assign(packedSource);
+      buffer.getDestMutable().assign(packedDest);
+      buffer.setBufferType(packedBufferType);
+      buffer.setDimIndex(buffer.getDimIndex() + packSizes.size());
+      buffer.getResult().setType(packedResultType);
       buffer.setPacked(true);
     });
+
+    // Unpack the result itensor.
+    rewriter.setInsertionPointAfter(buffer);
+    auto unpackedResult = rewriter.create<hls::ITensorReassociateOp>(
+        loc, resultType, buffer.getResult(), /*expandShape=*/false,
+        resultShapeReasAttr, /*expandIteration=*/false, resultIterReasAttr);
+    rewriter.replaceAllUsesExcept(buffer, unpackedResult, unpackedResult);
     return success();
   }
 };

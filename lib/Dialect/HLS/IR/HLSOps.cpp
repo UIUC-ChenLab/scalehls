@@ -76,12 +76,8 @@ LogicalResult ITensorInstanceOp::verify() {
 LogicalResult ITensorReadFullTensorOp::verify() {
   if (getFullTensorInitType() != getFullTensorType())
     return emitOpError("initial tensor type doesn't align with tensor type");
-  auto fullTensorType = getFullTensorType();
-  if (getPacked())
-    fullTensorType =
-        getUnpackedType(fullTensorType, getSourceType().getElementShape());
-  if (!getSourceType().isConvertableWith(fullTensorType))
-    return emitOpError("itensor type is not convertable with tensor type");
+  if (!getSourceType().isConvertableWith(getFullTensorType(), getPacked()))
+    return emitOpError("itensor type is not convertable with full tensor type");
   return success();
 }
 
@@ -96,11 +92,7 @@ MutableOperandRange ITensorReadFullTensorOp::getDpsInitsMutable() {
 LogicalResult ITensorWriteFullTensorOp::verify() {
   if (getDestType() != getResultType())
     return emitOpError("initial itensor type doesn't align with result type");
-  auto fullTensorType = getFullTensorType();
-  if (getPacked())
-    fullTensorType =
-        getUnpackedType(fullTensorType, getResultType().getElementShape());
-  if (!getResultType().isConvertableWith(fullTensorType))
+  if (!getResultType().isConvertableWith(getFullTensorType(), getPacked()))
     return emitOpError("itensor type is not convertable with full tensor type");
   return success();
 }
@@ -201,15 +193,18 @@ LogicalResult ITensorBufferOp::verify() {
   if (getLoopIndex() > sourceType.getIterRank())
     return emitOpError("buffer loop index is out of loop range");
 
-  auto bufferType = getBufferType();
-  if (getPacked())
-    bufferType = getUnpackedType(bufferType, getPackSizes());
+  SmallVector<int64_t> bufferShape(getBufferShape());
+  if (getPacked()) {
+    auto unpackedType = getUnpackedType(getBufferType(), getPackSizes());
+    bufferShape = SmallVector<int64_t>(unpackedType.getRank(), 1);
+    bufferShape.append(unpackedType.getShape().begin(),
+                       unpackedType.getShape().end());
+  }
 
   auto sourceShape = sourceType.getShape();
   for (auto [dim, bufferSize, dimSize, sourceTileSize, destTileSize] :
-       llvm::zip(llvm::seq(sourceShape.size()), bufferType.getShape(),
-                 sourceShape, sourceType.getElementShape(),
-                 destType.getElementShape())) {
+       llvm::zip(llvm::seq(sourceShape.size()), bufferShape, sourceShape,
+                 sourceType.getElementShape(), destType.getElementShape())) {
     if ((int64_t)dim < getDimIndex()) {
       if (sourceTileSize != destTileSize || bufferSize < sourceTileSize)
         return emitOpError(

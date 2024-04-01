@@ -5,6 +5,7 @@
 
 #include "mlir/Support/MathExtras.h"
 #include "scalehls/Dialect/HLS/IR/HLS.h"
+#include "scalehls/Utils/Utils.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -104,12 +105,21 @@ bool hls::ITensorType::isCastableWith(ITensorType other) const {
 }
 
 /// Return whether this stream type can be converted to the "tensor" type.
-bool hls::ITensorType::isConvertableWith(RankedTensorType tensor) const {
+bool hls::ITensorType::isConvertableWith(RankedTensorType tensor,
+                                         bool packing) const {
   if (!tensor.hasStaticShape())
     return false;
   if (getDataType() != tensor.getElementType())
     return false;
-  if (ArrayRef<int64_t>(getShape()) != tensor.getShape())
+
+  SmallVector<int64_t> tensorShape(tensor.getShape());
+  if (packing) {
+    auto unpackedType = getUnpackedType(tensor, getElementShape());
+    tensorShape = SmallVector<int64_t>(unpackedType.getRank(), 1);
+    tensorShape.append(unpackedType.getShape().begin(),
+                       unpackedType.getShape().end());
+  }
+  if (getShape() != tensorShape)
     return false;
   return true;
 }

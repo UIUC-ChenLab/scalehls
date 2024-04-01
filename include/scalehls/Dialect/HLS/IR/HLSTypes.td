@@ -143,7 +143,7 @@ def ITensorType : HLSType<"ITensor"> {
     bool isCastableWith(ITensorType other) const;
 
     /// Return whether this itensor type can be converted to the "tensor" type.
-    bool isConvertableWith(RankedTensorType tensor) const;
+    bool isConvertableWith(RankedTensorType tensor, bool packing = false) const;
   }];
 }
 

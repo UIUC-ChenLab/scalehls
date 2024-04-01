@@ -29,8 +29,10 @@ RankedTensorType scalehls::getPackedType(RankedTensorType tensorType,
 
 RankedTensorType scalehls::getUnpackedType(RankedTensorType tensorType,
                                            ArrayRef<int64_t> tileSizes) {
+  auto unpackedRank = tensorType.getRank() / 2;
   auto unpackedShape = llvm::map_to_vector(
-      llvm::zip(tensorType.getShape().take_front(tileSizes.size()), tileSizes),
+      llvm::zip(tensorType.getShape().take_front(unpackedRank),
+                tileSizes.take_back(unpackedRank)),
       [&](std::tuple<int64_t, int64_t> shape) {
         return std::get<0>(shape) * std::get<1>(shape);
       });
