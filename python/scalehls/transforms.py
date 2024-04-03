@@ -156,7 +156,6 @@ def apply_convert_dataflow_to_func_passes(module: Module):
         "affine-scalrep"
         "),"
         "scalehls-convert-dataflow-to-func,"
-        # "buffer-results-to-out-params,"
         "cse, canonicalize"
         ")")
     pm.run(module.operation)

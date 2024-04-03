@@ -10,6 +10,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Bufferization/Transforms/OneShotAnalysis.h"
+#include "mlir/Dialect/Bufferization/Transforms/Passes.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Dialect/HLS/Transforms/Passes.h"
@@ -79,7 +80,7 @@ static LogicalResult defaultMemCpyFn(OpBuilder &builder, Location loc,
 static OneShotBufferizationOptions getBufferizationOptions() {
   OneShotBufferizationOptions options;
   options.setFunctionBoundaryTypeConversion(LayoutMapOption::IdentityLayoutMap);
-
+  options.bufferizeFunctionBoundaries = true;
   // options.opFilter.denyOperation<arith::ConstantOp>();
 
   // This type converter converts tensor types to memref types when no exact
@@ -112,13 +113,17 @@ struct ComprehensiveBufferize
     : public hls::impl::ComprehensiveBufferizeBase<ComprehensiveBufferize> {
   void runOnOperation() override {
     ModuleOp moduleOp = getOperation();
-    OneShotBufferizationOptions options = getBufferizationOptions();
-    options.allocationFn = defaultAllocationFn;
-    options.memCpyFn = defaultMemCpyFn;
-    options.allowReturnAllocsFromLoops = true;
-    options.bufferizeFunctionBoundaries = true;
 
-    if (failed(runScaleHLSOneShotBufferize(moduleOp, options)))
+    OneShotBufferizationOptions bufferizeOptions = getBufferizationOptions();
+    bufferizeOptions.allocationFn = defaultAllocationFn;
+    bufferizeOptions.memCpyFn = defaultMemCpyFn;
+    if (failed(runScaleHLSOneShotBufferize(moduleOp, bufferizeOptions)))
+      return signalPassFailure();
+
+    bufferization::BufferResultsToOutParamsOpts resultsToOutParamsOptions;
+    resultsToOutParamsOptions.memCpyFn = defaultMemCpyFn;
+    if (failed(bufferization::promoteBufferResultsToOutParams(
+            moduleOp, resultsToOutParamsOptions)))
       return signalPassFailure();
 
     // Remove redundant args and unused results.
