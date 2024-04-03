@@ -146,13 +146,17 @@ def apply_convert_dataflow_to_func_passes(module: Module):
     pm = PassManager.parse(
         "builtin.module("
         "func.func("
-        "scalehls-raise-scf-to-affine,"
-        "convert-linalg-to-affine-loops,"
-        "affine-loop-normalize,"
-        "affine-simplify-structures"
-        "),"
+        "scalehls-generate-directives,"
+        "convert-linalg-to-loops,"
         "fold-memref-alias-ops,"
+        "scalehls-raise-scf-to-affine,"
+        "affine-loop-normalize,"
+        "affine-simplify-structures,"
+        "scalehls-apply-directives,"
+        "affine-scalrep"
+        "),"
         "scalehls-convert-dataflow-to-func,"
+        # "buffer-results-to-out-params,"
         "cse, canonicalize"
         ")")
     pm.run(module.operation)
