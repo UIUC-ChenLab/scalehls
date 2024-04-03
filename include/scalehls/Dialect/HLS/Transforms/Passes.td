@@ -64,6 +64,10 @@ def RaiseSCFToAffine : Pass<"scalehls-raise-scf-to-affine", "func::FuncOp"> {
   let summary = "Raise SCF to affine";
 }
 
+def ApplyDirectives : Pass<"scalehls-apply-directives", "func::FuncOp"> {
+  let summary = "Apply HLS directives";
+}
+
 def TransformInterpreter : Pass<"scalehls-transform-interpreter"> {
   let summary = "Interprete transform sequence with the given entry point";
 

@@ -467,18 +467,19 @@ def TaskOp : HLSOp<"task", [SingleBlockImplicitTerminator<"YieldOp">]> {
 
     /// Return whether this task op is a leaf task.
     bool isLeafTask() {
-      return !walk([&](Operation *op) {
-          if (isa<TaskOp, func::CallOp>(op) && op != *this)
-            return WalkResult::interrupt();
-          return WalkResult::advance();
-        }).wasInterrupted();
+      auto walkResult = walk([&](TaskOp subTask) {
+        if (subTask != *this)
+          return WalkResult::interrupt();
+        return WalkResult::advance();
+      });
+      return !walkResult.wasInterrupted();
     }
 
     /// Return whether this task is the single task in the parent block.
     bool isSingleTask() {
       return llvm::hasSingleElement(
           llvm::make_filter_range((*this)->getBlock()->getOperations(),
-              [](Operation &op) { return isa<TaskOp, func::CallOp>(op); }));
+              [](Operation &op) { return isa<TaskOp>(op); }));
     }
 
     /// Return the yield op of this task op.
