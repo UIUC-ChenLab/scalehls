@@ -293,7 +293,6 @@ public:
   void emitStreamRead(StreamReadOp op);
   void emitStreamWrite(StreamWriteOp op);
   template <typename AssignOpType> void emitAssign(AssignOpType op);
-  void emitAffineSelect(AffineSelectOp op);
 
   /// Control flow operation emitters.
   void emitCall(func::CallOp op);
@@ -461,7 +460,6 @@ public:
   bool visitOp(StreamOp op) { return emitter.emitStreamChannel(op), true; }
   bool visitOp(StreamReadOp op) { return emitter.emitStreamRead(op), true; }
   bool visitOp(StreamWriteOp op) { return emitter.emitStreamWrite(op), true; }
-  bool visitOp(AffineSelectOp op) { return emitter.emitAffineSelect(op), true; }
 
   /// Function operations.
   bool visitOp(func::CallOp op) { return emitter.emitCall(op), true; }
@@ -722,34 +720,6 @@ void ModuleEmitter::emitAssign(AssignOpType op) {
   os << ";";
   emitInfoAndNewLine(op);
   emitNestedLoopFooter(rank);
-}
-
-void ModuleEmitter::emitAffineSelect(hls::AffineSelectOp op) {
-  indent();
-  emitValue(op.getResult());
-  os << " = (";
-  auto constrSet = op.getIntegerSet();
-  AffineExprEmitter constrEmitter(state, constrSet.getNumDims(),
-                                  op.getOperands());
-
-  // Emit all constraints.
-  unsigned constrIdx = 0;
-  for (auto &expr : constrSet.getConstraints()) {
-    constrEmitter.emitAffineExpr(expr);
-    if (constrSet.isEq(constrIdx))
-      os << " == 0";
-    else
-      os << " >= 0";
-
-    if (constrIdx++ != constrSet.getNumConstraints() - 1)
-      os << " && ";
-  }
-  os << ") ? ";
-  emitValue(op.getTrueValue());
-  os << " : ";
-  emitValue(op.getFalseValue());
-  os << ";";
-  emitInfoAndNewLine(op);
 }
 
 /// Control flow operation emitters.

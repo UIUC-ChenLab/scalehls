@@ -23,7 +23,6 @@ public:
         .template Case<
             // HLS dialect operations.
             hls::BufferOp, hls::StreamOp, hls::StreamReadOp, hls::StreamWriteOp,
-            hls::AffineSelectOp,
 
             // Function operations.
             func::CallOp, func::ReturnOp,
@@ -100,7 +99,6 @@ public:
   HANDLE(hls::StreamOp);
   HANDLE(hls::StreamReadOp);
   HANDLE(hls::StreamWriteOp);
-  HANDLE(hls::AffineSelectOp);
 
   // Control flow operations.
   HANDLE(func::CallOp);

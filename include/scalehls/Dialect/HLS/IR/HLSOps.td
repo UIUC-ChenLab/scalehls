@@ -500,36 +500,4 @@ def YieldOp : HLSOp<"yield", [Pure, ReturnLike, Terminator,
   let builders = [OpBuilder<(ins), "build($_builder, $_state, std::nullopt);">];
 }
 
-//===----------------------------------------------------------------------===//
-// Affine Extension Operations
-//===----------------------------------------------------------------------===//
-
-def AffineSelectOp : HLSOp<"affine.select", [NoMemoryEffect]> {
-  let summary = "Affine if-then-else operation";
-
-  let arguments = (ins Variadic<AnyType>:$args, AnyType:$true_value,
-                       AnyType:$false_value);
-  let results = (outs AnyType:$result);
-
-  let skipDefaultBuilders = 1;
-  let builders = [
-    OpBuilder<(ins "IntegerSet":$set, "ValueRange":$args, "Value":$trueValue,
-                   "Value":$falseValue)>
-  ];
-
-  let hasCanonicalizer = 1;
-  let hasCustomAssemblyFormat = 1;
-  let hasFolder = 1;
-  let hasVerifier = 1;
-  let extraClassDeclaration = [{
-    static StringRef getConditionAttrStrName() { return "condition"; }
-
-    IntegerSet getIntegerSet();
-    void setIntegerSet(IntegerSet newSet);
-
-    /// Sets the integer set with its operands.
-    void setConditional(IntegerSet set, ValueRange operands);
-  }];
-}
-
 #endif // SCALEHLS_DIALECT_HLS_HLSOPS_TD
