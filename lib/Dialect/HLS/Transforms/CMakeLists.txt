@@ -14,6 +14,7 @@ add_mlir_dialect_library(MLIRScaleHLSHLSTransforms
   GenerateDataflowHierarchy.cpp
   RaiseSCFToAffine.cpp
   ApplyDirectives.cpp
+  GenerateDirectives.cpp
 
   DEPENDS
   MLIRScaleHLSHLSTransformsIncGen

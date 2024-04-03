@@ -64,6 +64,10 @@ def RaiseSCFToAffine : Pass<"scalehls-raise-scf-to-affine", "func::FuncOp"> {
   let summary = "Raise SCF to affine";
 }
 
+def GenerateDirectives : Pass<"scalehls-generate-directives", "func::FuncOp"> {
+  let summary = "Generate HLS directives";
+}
+
 def ApplyDirectives : Pass<"scalehls-apply-directives", "func::FuncOp"> {
   let summary = "Apply HLS directives";
 }
