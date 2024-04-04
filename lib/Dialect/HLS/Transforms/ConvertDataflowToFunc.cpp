@@ -25,41 +25,6 @@ namespace hls {
 } // namespace scalehls
 } // namespace mlir
 
-// namespace {
-// struct InlineSchedule : public OpRewritePattern<ScheduleOp> {
-//   using OpRewritePattern<ScheduleOp>::OpRewritePattern;
-
-//   LogicalResult matchAndRewrite(ScheduleOp schedule,
-//                                 PatternRewriter &rewriter) const override {
-//     auto &scheduleOps = schedule.getBody().front().getOperations();
-//     auto &parentOps = schedule->getBlock()->getOperations();
-//     parentOps.splice(schedule->getIterator(), scheduleOps,
-//     scheduleOps.begin(),
-//                      std::prev(scheduleOps.end()));
-
-//     if (auto func = dyn_cast<func::FuncOp>(schedule->getParentOp()))
-//       setFuncDirective(func, /*pipeline=*/false, /*targetInterval=*/1,
-//                        /*dataflow=*/true);
-//     else if (auto loop = dyn_cast<scf::ForOp>(schedule->getParentOp()))
-//       setLoopDirective(loop, /*pipeline=*/false, /*targetII=*/1,
-//                        /*dataflow=*/true, /*flattern=*/false);
-//     else if (auto loop = dyn_cast<AffineForOp>(schedule->getParentOp())) {
-//       // If the schedule is located inside of a loop nest, try to coalesce
-//       // them into a flattened loop.
-//       AffineLoopBand band;
-//       getLoopBandFromInnermost(loop, band);
-//       auto dataflowLoop = loop;
-//       if (isPerfectlyNested(band) && succeeded(coalesceLoops(band)))
-//         dataflowLoop = band.front();
-//       setLoopDirective(dataflowLoop, /*pipeline=*/false, /*targetII=*/1,
-//                        /*dataflow=*/true, /*flattern=*/false);
-//     }
-//     rewriter.eraseOp(schedule);
-//     return success();
-//   }
-// };
-// } // namespace
-
 namespace {
 struct ConvertTaskToFunc : public OpRewritePattern<TaskOp> {
   using OpRewritePattern<TaskOp>::OpRewritePattern;
@@ -91,6 +56,10 @@ struct ConvertTaskToFunc : public OpRewritePattern<TaskOp> {
         task.getLoc(), task.getNameAttr(),
         rewriter.getFunctionType(TypeRange(operands), TypeRange()));
     subFunc->setAttr("__location__", task.getLocationAttr());
+    for (auto attr : task->getAttrs())
+      if (attr.getName() != task.getLocationAttrName() &&
+          attr.getName() != task.getNameAttrName())
+        subFunc->setAttr(attr.getName(), attr.getValue());
 
     // Construct the body and arguments of the sub-function.
     auto subFuncBlock = rewriter.createBlock(&subFunc.getBody());

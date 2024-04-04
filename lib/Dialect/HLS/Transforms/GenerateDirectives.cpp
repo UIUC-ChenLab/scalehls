@@ -59,6 +59,12 @@ struct GenerateDirectives
     if (!func.getOps<hls::TaskOp>().empty())
       func->setAttr("__dataflow__", builder.getUnitAttr());
 
+    func.walk([&](hls::TaskOp task) {
+      // Set dataflow directive for the task if it contains any task.
+      if (!task.getOps<hls::TaskOp>().empty())
+        task->setAttr("__dataflow__", builder.getUnitAttr());
+    });
+
     llvm::SmallDenseMap<BufferOp, SmallVector<Partition>> partitionsMap;
     func.walk([&](scf::ForOp loop) {
       // Set dataflow directive if the loop contains any task. Otherwise, set

@@ -23,8 +23,6 @@ static llvm::cl::opt<bool> emitVitisDirectives("emit-vitis-directives",
                                                llvm::cl::init(true));
 static llvm::cl::opt<bool> enforceFalseDependency("enforce-false-dependency",
                                                   llvm::cl::init(false));
-static llvm::cl::opt<int64_t> limitDspNumber("limit-dsp-number",
-                                             llvm::cl::init(240));
 
 //===----------------------------------------------------------------------===//
 // Utils
@@ -132,7 +130,11 @@ namespace {
 /// various emitters.
 class ScaleHLSEmitterState {
 public:
-  explicit ScaleHLSEmitterState(raw_ostream &os) : os(os) {}
+  explicit ScaleHLSEmitterState(raw_ostream &os,
+                                bool emitVitisDirectives = true,
+                                bool enforceFalseDependency = false)
+      : os(os), emitVitisDirectives(emitVitisDirectives),
+        enforceFalseDependency(enforceFalseDependency) {}
 
   // The stream to emit to.
   raw_ostream &os;
@@ -142,6 +144,15 @@ public:
 
   // This table contains all declared values.
   DenseMap<Value, SmallString<8>> nameTable;
+
+  // Whether to emit HLS C++ directives.
+  bool emitDirectives = false;
+
+  // Whether to emit Vitis HLS C++ directives.
+  const bool emitVitisDirectives;
+
+  // Whether to enforce false dependency.
+  const bool enforceFalseDependency;
 
 private:
   ScaleHLSEmitterState(const ScaleHLSEmitterState &) = delete;
@@ -185,6 +196,13 @@ public:
     } else
       return true;
   }
+
+  bool emitDirectives() { return state.emitDirectives; }
+  void setEmitDirectives() { state.emitDirectives = true; }
+  void clearEmitDirectives() { state.emitDirectives = false; }
+
+  bool emitVitisDirectives() { return state.emitVitisDirectives; }
+  bool enforceFalseDependency() { return state.enforceFalseDependency; }
 
 private:
   ScaleHLSEmitterBase(const ScaleHLSEmitterBase &) = delete;
@@ -373,7 +391,7 @@ private:
   void emitArrayDirectives(TypedValue<MemRefType> memref,
                            bool isInterface = false);
   void emitFunctionDirectives(func::FuncOp func, ArrayRef<Value> portList,
-                              bool isTop = false);
+                              bool isTopFunc = false);
   void emitFunction(func::FuncOp func);
 };
 } // namespace
@@ -1407,7 +1425,8 @@ void ModuleEmitter::emitGetGlobal(memref::GetGlobalOp op) {
   if (isDeclared(op.getResult()))
     return;
 
-  indent() << "const ";
+  indent();
+  // indent() << "const ";
   emitArrayDecl(op.getResult());
   os << " = ";
   auto global = SymbolTable::lookupNearestSymbolFrom<memref::GlobalOp>(
@@ -1644,7 +1663,10 @@ void ModuleEmitter::emitBlock(Block &block) {
 }
 
 void ModuleEmitter::emitLoopDirectives(Operation *loop) {
-  if (!loop->hasAttr("__dataflow__") && enforceFalseDependency.getValue())
+  if (!emitDirectives())
+    return;
+
+  if (!loop->hasAttr("__dataflow__") && enforceFalseDependency())
     indent() << "#pragma HLS dependence false\n";
 
   if (loop->hasAttr("__pipeline__")) {
@@ -1659,6 +1681,8 @@ void ModuleEmitter::emitLoopDirectives(Operation *loop) {
 
 void ModuleEmitter::emitArrayDirectives(TypedValue<MemRefType> memref,
                                         bool isInterface) {
+  if (!emitDirectives())
+    return;
   auto type = memref.getType();
 
   // Emit array_partition pragma(s).
@@ -1679,7 +1703,7 @@ void ModuleEmitter::emitArrayDirectives(TypedValue<MemRefType> memref,
         // Vitis HLS has a wierd feature/bug that will automatically collapse
         // the first dimension if its size is equal to one.
         auto directiveDim = dim + 1;
-        if (emitVitisDirectives.getValue())
+        if (emitVitisDirectives())
           if (type.getShape().front() == 1)
             directiveDim = dim;
         os << " dim=" << directiveDim << "\n";
@@ -1693,7 +1717,7 @@ void ModuleEmitter::emitArrayDirectives(TypedValue<MemRefType> memref,
   if (!isInterface) {
     auto kind = getMemoryKind(type);
     if (kind != MemoryKind::DRAM && !isFullyPartitioned(type)) {
-      if (emitVitisDirectives.getValue()) {
+      if (emitVitisDirectives()) {
         indent() << "#pragma HLS bind_storage";
         os << " variable=";
         emitValue(memref);
@@ -1712,35 +1736,34 @@ void ModuleEmitter::emitArrayDirectives(TypedValue<MemRefType> memref,
 
 void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
                                            ArrayRef<Value> portList,
-                                           bool isTop) {
+                                           bool isTopFunc) {
+  if (!emitDirectives())
+    return;
   // Only top function should emit interface pragmas.
-  if (isTop) {
+  if (isTopFunc) {
     indent() << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
     for (auto &port : portList) {
-      if (isa<MemRefType, StreamType>(port.getType())) {
-        indent() << "#pragma HLS interface";
-
-        if (isa<MemRefType>(port.getType()))
-          os << " m_axi offset=slave";
-        else
-          os << " axis";
-
-        os << " port=";
+      if (isa<MemRefType>(port.getType())) {
+        indent() << "#pragma HLS interface m_axi offset=slave port=";
         emitValue(port);
         os << " bundle=";
         emitValue(port);
         os << "\n";
+        emitArrayDirectives(cast<TypedValue<MemRefType>>(port), true);
 
-        if (isa<MemRefType>(port.getType()))
-          emitArrayDirectives(cast<TypedValue<MemRefType>>(port), true);
+      } else if (isa<StreamType>(port.getType())) {
+        indent() << "#pragma HLS interface axis port=";
+        emitValue(port);
+        os << "\n";
+        
+      } else {
+        // For scalar types, we always emit them as AXI-Lite ports.
+        auto name = getName(port);
+        if (name.front() == "*"[0])
+          name.erase(name.begin());
+        indent() << "#pragma HLS interface s_axilite port=" << name
+                 << " bundle=ctrl\n";
       }
-
-      // For scalar types, we always emit them as AXI-Lite ports.
-      auto name = getName(port);
-      if (name.front() == "*"[0])
-        name.erase(name.begin());
-      indent() << "#pragma HLS interface s_axilite port=" << name
-               << " bundle=ctrl\n";
     }
   }
 
@@ -1759,6 +1782,13 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
 }
 
 void ModuleEmitter::emitFunction(func::FuncOp func) {
+  if (auto location = func->getAttrOfType<StringAttr>("__location__"))
+    if (location == "pl") {
+      if (func->hasAttr("__top__"))
+        os << "/// Top PL function.\n";
+      setEmitDirectives();
+    }
+
   if (func.getBlocks().size() != 1)
     emitError(func, "has zero or more than one basic blocks.");
 
@@ -1808,12 +1838,14 @@ void ModuleEmitter::emitFunction(func::FuncOp func) {
   // Emit function body.
   addIndent();
 
-  emitFunctionDirectives(func, portList);
+  emitFunctionDirectives(func, portList, func->hasAttr("__top__"));
   emitBlock(func.front());
   reduceIndent();
   os << "}\n";
   // An empty line.
   os << "\n";
+
+  clearEmitDirectives();
 }
 
 /// Top-level MLIR module emitter.
@@ -1869,7 +1901,8 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 //===----------------------------------------------------------------------===//
 
 LogicalResult scalehls::emitHLSCpp(ModuleOp module, llvm::raw_ostream &os) {
-  ScaleHLSEmitterState state(os);
+  ScaleHLSEmitterState state(os, emitVitisDirectives.getValue(),
+                             enforceFalseDependency.getValue());
   ModuleEmitter(state).emitModule(module);
   return failure(state.encounteredError);
 }

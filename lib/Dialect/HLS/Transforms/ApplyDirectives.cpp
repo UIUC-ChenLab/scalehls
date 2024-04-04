@@ -62,9 +62,9 @@ struct ApplyDirectives
     // Coalesce all perfectly nested loops to be dataflowed.
     for (auto loop : loopsToDataflow) {
       auto band = getLoopBandFromInnermostLoop(loop);
-      if (affine::isPerfectlyNested(band))
-        (void)affine::coalesceLoops(band);
-      band.back()->setAttr("__dataflow__", builder.getUnitAttr());
+      if (affine::isPerfectlyNested(band) &&
+          succeeded(affine::coalesceLoops(band)))
+        band.front()->setAttr("__dataflow__", builder.getUnitAttr());
     }
 
     // Apply partition layout to all buffers.

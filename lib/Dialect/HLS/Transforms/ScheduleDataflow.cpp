@@ -242,7 +242,8 @@ struct ScheduleDataflow
     for (auto [location, ops] : llvm::zip(levelToLocationMap, levelToOpsMap)) {
       auto taskName =
           func.getName().str() + "_schedule_" + std::to_string(taskId++);
-      wrapOpsIntoTask(ops, taskName, location, builder);
+      auto task = wrapOpsIntoTask(ops, taskName, location, builder);
+      task->setAttr("__top__", builder.getUnitAttr());
     }
 
     applyTensorITensorInstanceLocations();
