@@ -260,6 +260,19 @@ static SmallString<8> getConstantString(Type type, Attribute attr) {
       auto value = attr.cast<IntegerAttr>().getInt();
       string.append(std::to_string(value));
     }
+  } else if (auto memrefType = type.dyn_cast<MemRefType>()) {
+    auto denseAttr = dyn_cast<DenseElementsAttr>(attr);
+    if (!denseAttr)
+      return string;
+    string.append("{");
+
+    unsigned elementIdx = 0;
+    for (auto element : denseAttr.getValues<Attribute>()) {
+      string.append(getConstantString(memrefType.getElementType(), element));
+      if (elementIdx++ != denseAttr.getNumElements() - 1)
+        string.append(", ");
+    }
+    string.append("}");
   }
   return string;
 }
@@ -292,7 +305,6 @@ public:
   void emitStreamChannel(StreamOp op);
   void emitStreamRead(StreamReadOp op);
   void emitStreamWrite(StreamWriteOp op);
-  template <typename AssignOpType> void emitAssign(AssignOpType op);
 
   /// Control flow operation emitters.
   void emitCall(func::CallOp op);
@@ -327,6 +339,7 @@ public:
   void emitStore(memref::StoreOp op);
   void emitMemCpy(memref::CopyOp op);
   template <typename OpType> void emitReshape(OpType op);
+  void emitGetGlobal(memref::GetGlobalOp op);
 
   /// Standard expression emitters.
   void emitUnary(Operation *op, const char *syntax);
@@ -336,6 +349,7 @@ public:
   /// Special expression emitters.
   void emitSelect(arith::SelectOp op);
   template <typename OpType> void emitConstant(OpType op);
+  template <typename AssignOpType> void emitAssign(AssignOpType op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
@@ -356,8 +370,10 @@ private:
   /// MLIR component and HLS C++ pragma emitters.
   void emitBlock(Block &block);
   void emitLoopDirectives(Operation *op);
-  void emitArrayDirectives(Value memref, bool isInterface = false);
-  void emitFunctionDirectives(func::FuncOp func, ArrayRef<Value> portList);
+  void emitArrayDirectives(TypedValue<MemRefType> memref,
+                           bool isInterface = false);
+  void emitFunctionDirectives(func::FuncOp func, ArrayRef<Value> portList,
+                              bool isTop = false);
   void emitFunction(func::FuncOp func);
 };
 } // namespace
@@ -468,9 +484,6 @@ public:
   /// SCF statements.
   bool visitOp(scf::ForOp op) { return emitter.emitScfFor(op), true; };
   bool visitOp(scf::IfOp op) { return emitter.emitScfIf(op), true; };
-  bool visitOp(scf::ParallelOp op) { return false; };
-  bool visitOp(scf::ReduceOp op) { return false; };
-  bool visitOp(scf::ReduceReturnOp op) { return false; };
   bool visitOp(scf::YieldOp op) { return emitter.emitScfYield(op), true; };
 
   /// Affine statements.
@@ -496,8 +509,6 @@ public:
   bool visitOp(affine::AffineStoreOp op) {
     return emitter.emitAffineStore(op), true;
   }
-  bool visitOp(affine::AffineVectorLoadOp op) { return false; }
-  bool visitOp(affine::AffineVectorStoreOp op) { return false; }
   bool visitOp(affine::AffineYieldOp op) {
     return emitter.emitAffineYield(op), true;
   }
@@ -525,16 +536,9 @@ public:
   bool visitOp(memref::StoreOp op) { return emitter.emitStore(op), true; }
   bool visitOp(memref::DeallocOp op) { return true; }
   bool visitOp(memref::CopyOp op) { return emitter.emitMemCpy(op), true; }
-  // bool visitOp(memref::ReshapeOp op) { return emitter.emitReshape(op), true;
-  // } bool visitOp(memref::CollapseShapeOp op) {
-  //   return emitter.emitReshape(op), true;
-  // }
-  // bool visitOp(memref::ExpandShapeOp op) {
-  //   return emitter.emitReshape(op), true;
-  // }
-  // bool visitOp(memref::ReinterpretCastOp op) {
-  //   return emitter.emitReshape(op), true;
-  // }
+  bool visitOp(memref::GetGlobalOp op) {
+    return emitter.emitGetGlobal(op), true;
+  }
 
 private:
   ModuleEmitter &emitter;
@@ -708,18 +712,6 @@ void ModuleEmitter::emitStreamWrite(StreamWriteOp op) {
   emitValue(op.getValue());
   os << ");";
   emitInfoAndNewLine(op);
-}
-
-template <typename AssignOpType>
-void ModuleEmitter::emitAssign(AssignOpType op) {
-  unsigned rank = emitNestedLoopHeader(op.getResult());
-  indent();
-  emitValue(op.getResult(), rank);
-  os << " = ";
-  emitValue(op.getOperand(), rank);
-  os << ";";
-  emitInfoAndNewLine(op);
-  emitNestedLoopFooter(rank);
 }
 
 /// Control flow operation emitters.
@@ -1409,6 +1401,28 @@ void ModuleEmitter::emitMemCpy(memref::CopyOp op) {
   os << "\n";
 }
 
+void ModuleEmitter::emitGetGlobal(memref::GetGlobalOp op) {
+  // A declared result indicates that the memref is output of the function, and
+  // has been declared in the function signature.
+  if (isDeclared(op.getResult()))
+    return;
+
+  indent() << "const ";
+  emitArrayDecl(op.getResult());
+  os << " = ";
+  auto global = SymbolTable::lookupNearestSymbolFrom<memref::GlobalOp>(
+      op, op.getNameAttr());
+
+  auto valueString = getConstantString(op.getType(), *global.getInitialValue());
+  if (valueString.empty())
+    emitError(op, "has unsupported constant type.");
+
+  os << valueString;
+  os << ";";
+  emitInfoAndNewLine(op);
+  emitArrayDirectives(op.getResult());
+}
+
 template <typename OpType> void ModuleEmitter::emitReshape(OpType op) {
   auto array = op->getResult(0);
   assert(!isDeclared(array) && "has been declared before.");
@@ -1499,26 +1513,27 @@ template <typename OpType> void ModuleEmitter::emitConstant(OpType op) {
   if (isDeclared(op.getResult()))
     return;
 
-  if (auto denseAttr = op.getValue().template dyn_cast<DenseElementsAttr>()) {
+  if (isa<DenseElementsAttr>(op.getValue())) {
     indent();
     emitArrayDecl(op.getResult());
-    os << " = {";
-    auto type =
-        op.getResult().getType().template cast<MemRefType>().getElementType();
-
-    unsigned elementIdx = 0;
-    for (auto element : denseAttr.template getValues<Attribute>()) {
-      auto string = getConstantString(type, element);
-      if (string.empty())
-        op.emitOpError("constant has invalid value");
-      os << string;
-      if (elementIdx++ != denseAttr.getNumElements() - 1)
-        os << ", ";
-    }
-    os << "};";
+    os << " = ";
+    os << getConstantString(op.getType(), op.getValue());
+    os << ";";
     emitInfoAndNewLine(op);
   } else
     emitError(op, "has unsupported constant type.");
+}
+
+template <typename AssignOpType>
+void ModuleEmitter::emitAssign(AssignOpType op) {
+  unsigned rank = emitNestedLoopHeader(op.getResult());
+  indent();
+  emitValue(op.getResult(), rank);
+  os << " = ";
+  emitValue(op.getOperand(), rank);
+  os << ";";
+  emitInfoAndNewLine(op);
+  emitNestedLoopFooter(rank);
 }
 
 /// C++ component emitters.
@@ -1633,17 +1648,18 @@ void ModuleEmitter::emitLoopDirectives(Operation *loop) {
     indent() << "#pragma HLS dependence false\n";
 
   if (loop->hasAttr("__pipeline__")) {
-    indent() << "#pragma HLS pipeline II="
-             << cast<IntegerAttr>(loop->getAttr("__ii__")) << "\n";
-    // if (enforceFalseDependency.getValue())
-    //   indent() << "#pragma HLS dependence false\n";
+    indent() << "#pragma HLS pipeline";
+    if (auto ii = loop->getAttrOfType<IntegerAttr>("__ii__"))
+      os << " II=" << cast<IntegerAttr>(ii).getInt() << "\n";
+    else
+      os << "\n";
   } else if (loop->hasAttr("__dataflow__"))
     indent() << "#pragma HLS dataflow\n";
 }
 
-void ModuleEmitter::emitArrayDirectives(Value memref, bool isInterface) {
-  bool emitPragmaFlag = false;
-  auto type = memref.getType().cast<MemRefType>();
+void ModuleEmitter::emitArrayDirectives(TypedValue<MemRefType> memref,
+                                        bool isInterface) {
+  auto type = memref.getType();
 
   // Emit array_partition pragma(s).
   if (auto attr = type.getLayout().dyn_cast<PartitionLayoutAttr>()) {
@@ -1651,8 +1667,6 @@ void ModuleEmitter::emitArrayDirectives(Value memref, bool isInterface) {
     for (auto [kind, factor] :
          llvm::zip(attr.getKinds(), attr.getActualFactors(type.getShape()))) {
       if (factor != 1) {
-        emitPragmaFlag = true;
-
         // FIXME: How to handle external memories?
         indent() << "#pragma HLS array_partition";
         os << " variable=";
@@ -1679,8 +1693,6 @@ void ModuleEmitter::emitArrayDirectives(Value memref, bool isInterface) {
   if (!isInterface) {
     auto kind = getMemoryKind(type);
     if (kind != MemoryKind::DRAM && !isFullyPartitioned(type)) {
-      emitPragmaFlag = true;
-
       if (emitVitisDirectives.getValue()) {
         indent() << "#pragma HLS bind_storage";
         os << " variable=";
@@ -1696,32 +1708,21 @@ void ModuleEmitter::emitArrayDirectives(Value memref, bool isInterface) {
       os << "\n";
     }
   }
-
-  // Emit an empty line.
-  if (emitPragmaFlag)
-    os << "\n";
 }
 
 void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
-                                           ArrayRef<Value> portList) {
+                                           ArrayRef<Value> portList,
+                                           bool isTop) {
   // Only top function should emit interface pragmas.
-  if (func->hasAttr("__top__")) {
+  if (isTop) {
     indent() << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
     for (auto &port : portList) {
-      // MemRefType and StreamType must have been converted to AXI ports for the
-      // top function.
-      if (port.getType().isa<MemRefType, StreamType>()) {
+      if (isa<MemRefType, StreamType>(port.getType())) {
         indent() << "#pragma HLS interface";
 
-        if (port.getType().isa<MemRefType>()) {
+        if (isa<MemRefType>(port.getType()))
           os << " m_axi offset=slave";
-          // else {
-          //   os << " bram ";
-          //   auto kind = getMemoryKind(port.getType().cast<MemRefType>());
-          //   os << getStorageTypeAndImpl(kind, "storage_type",
-          //   "storage_impl");
-          // }
-        } else
+        else
           os << " axis";
 
         os << " port=";
@@ -1730,8 +1731,8 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
         emitValue(port);
         os << "\n";
 
-        if (port.getType().isa<MemRefType>())
-          emitArrayDirectives(port, true);
+        if (isa<MemRefType>(port.getType()))
+          emitArrayDirectives(cast<TypedValue<MemRefType>>(port), true);
       }
 
       // For scalar types, we always emit them as AXI-Lite ports.
@@ -1745,10 +1746,6 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
 
   if (func->getAttr("__inline__"))
     indent() << "#pragma HLS inline\n";
-
-  for (auto &port : portList)
-    if (port.getType().isa<MemRefType>())
-      emitArrayDirectives(port, true);
 
   if (func->hasAttr("__pipeline__")) {
     indent() << "#pragma HLS pipeline\n";
@@ -1861,7 +1858,8 @@ void ModuleEmitter::emitModule(ModuleOp module) {
     if (auto func = dyn_cast<func::FuncOp>(op)) {
       if (!emittedFuncs.count(func))
         emitFunction(func);
-    } else if (!isa<ml_program::GlobalOp, transform::NamedSequenceOp>(op))
+    } else if (!isa<ml_program::GlobalOp, memref::GlobalOp,
+                    transform::NamedSequenceOp>(op))
       emitError(&op, "is unsupported operation");
   }
 }

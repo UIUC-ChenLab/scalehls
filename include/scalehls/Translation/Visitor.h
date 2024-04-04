@@ -28,15 +28,12 @@ public:
             func::CallOp, func::ReturnOp,
 
             // SCF statements.
-            scf::ForOp, scf::IfOp, scf::ParallelOp, scf::ReduceOp,
-            scf::ReduceReturnOp, scf::YieldOp,
+            scf::ForOp, scf::IfOp, scf::YieldOp,
 
             // Affine statements.
             affine::AffineForOp, affine::AffineIfOp, affine::AffineParallelOp,
             affine::AffineApplyOp, affine::AffineMaxOp, affine::AffineMinOp,
-            affine::AffineLoadOp, affine::AffineStoreOp,
-            affine::AffineVectorLoadOp, affine::AffineVectorStoreOp,
-            affine::AffineYieldOp,
+            affine::AffineLoadOp, affine::AffineStoreOp, affine::AffineYieldOp,
 
             // Vector statements.
             vector::InsertOp, vector::ExtractOp, vector::ExtractElementOp,
@@ -45,7 +42,7 @@ public:
 
             // Memref statements.
             memref::AllocOp, memref::AllocaOp, memref::LoadOp, memref::StoreOp,
-            memref::DeallocOp, memref::CopyOp,
+            memref::DeallocOp, memref::CopyOp, memref::GetGlobalOp,
 
             // Unary expressions.
             math::AbsIOp, math::AbsFOp, math::CeilOp, math::CosOp, math::SinOp,
@@ -140,6 +137,7 @@ public:
   HANDLE(memref::StoreOp);
   HANDLE(memref::DeallocOp);
   HANDLE(memref::CopyOp);
+  HANDLE(memref::GetGlobalOp);
 
   // Unary expressions.
   HANDLE(math::AbsIOp);
