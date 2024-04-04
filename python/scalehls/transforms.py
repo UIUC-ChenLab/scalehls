@@ -98,7 +98,7 @@ def apply_scalarize_itensor(module: Module):
 def apply_lower_itensor_to_stream(module: Module):
     pm = PassManager.parse(
         "builtin.module("
-        "func.func(scalehls-lower-itensor-to-stream),"
+        "func.func(scalehls-lower-itensor-to-stream, scalehls-sink-stream),"
         "cse, canonicalize"
         ")")
     pm.run(module.operation)

@@ -55,6 +55,10 @@ def ComprehensiveBufferize :
   let summary = "Comprehensively bufferize the program";
 }
 
+def SinkStream : Pass<"scalehls-sink-stream", "func::FuncOp"> {
+  let summary = "Sink stream to as lower level as possible";
+}
+
 def ConvertDataflowToFunc :
     Pass<"scalehls-convert-dataflow-to-func", "mlir::ModuleOp"> {
   let summary = "Convert structural dataflow to function for C++ emission";

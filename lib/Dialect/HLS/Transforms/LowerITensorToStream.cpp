@@ -236,7 +236,7 @@ struct LowerITensorToStream
     patterns.add<RemoveITensorToStreamOp>(context);
     patterns.add<RemoveStreamToITensorOp>(context);
     patterns.add<DuplicateStreamOp>(context);
-    (void)applyPatternsAndFoldGreedily(getOperation(), std::move(patterns));
+    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
 
     // Check if all itensor cast ops have been folded.
     auto checkResult = func.walk([&](Operation *op) {
