@@ -86,6 +86,15 @@ def apply_materialize_itensor_dma(module: Module):
     pm.run(module.operation)
 
 
+def apply_ensure_itensor_single_use(module: Module):
+    pm = PassManager.parse(
+        "builtin.module("
+        "func.func(scalehls-ensure-itensor-single-use),"
+        "cse, canonicalize"
+        ")")
+    pm.run(module.operation)
+
+
 def apply_scalarize_itensor(module: Module):
     pm = PassManager.parse(
         "builtin.module("

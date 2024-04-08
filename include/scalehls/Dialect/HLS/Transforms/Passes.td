@@ -27,6 +27,11 @@ def MaterializeITensorDMA :
   let summary = "Materialize itensor DMAs";
 }
 
+def EnsureITensorSingleUse :
+    Pass<"scalehls-ensure-itensor-single-use", "func::FuncOp"> {
+  let summary = "Ensure each itensor has a single use";
+}
+
 def ConvertTensorInitToTensorInstance :
     Pass<"scalehls-convert-tensor-init-to-tensor-instance", "func::FuncOp"> {
   let summary = "Convert tensor/itensor init op to tensor/itensor instance op";

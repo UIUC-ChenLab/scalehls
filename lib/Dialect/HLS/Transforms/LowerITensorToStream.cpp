@@ -219,11 +219,21 @@ struct DuplicateStreamOp : public OpRewritePattern<hls::StreamOp> {
 namespace {
 struct LowerITensorToStream
     : public hls::impl::LowerITensorToStreamBase<LowerITensorToStream> {
-  void runOnOperation() override {
-    auto func = getOperation();
-    auto context = &getContext();
+  LogicalResult postVerification() {
+    // Check if all itensor-stream conversion ops have been folded.
+    auto checkResult = getOperation().walk([&](Operation *op) {
+      if (isa<hls::ITensorToStreamOp, hls::StreamToITensorOp>(op)) {
+        op->emitOpError("itensor_to_stream and stream_to_itensor ops should "
+                        "have been folded");
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    return failure(checkResult.wasInterrupted());
+  }
 
-    // Apply lowering patterns.
+  void runOnOperation() override {
+    auto context = &getContext();
     mlir::RewritePatternSet patterns(context);
     patterns.add<LowerITensorInstanceOp>(context);
     patterns.add<LowerITensorReadOp>(context);
@@ -236,24 +246,9 @@ struct LowerITensorToStream
     patterns.add<RemoveITensorToStreamOp>(context);
     patterns.add<RemoveStreamToITensorOp>(context);
     patterns.add<DuplicateStreamOp>(context);
-    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+    (void)applyPatternsAndFoldGreedily(getOperation(), std::move(patterns));
 
-    // Check if all itensor cast ops have been folded.
-    auto checkResult = func.walk([&](Operation *op) {
-      if (isa<hls::ITensorBufferOp, hls::ITensorReadFullTensorOp,
-              hls::ITensorWriteFullTensorOp>(op)) {
-        op->emitOpError("itensor_buffer, itensor_read_full_itensor, and "
-                        "itensor_write_full_itensor ops, i.e. itensor DMA ops, "
-                        "must have been materialized before lowering");
-        return WalkResult::interrupt();
-      } else if (isa<hls::ITensorToStreamOp, hls::StreamToITensorOp>(op)) {
-        op->emitOpError("itensor_to_stream and stream_to_itensor ops should "
-                        "have been folded");
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
-    if (checkResult.wasInterrupted())
+    if (failed(postVerification()))
       return signalPassFailure();
   }
 };

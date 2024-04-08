@@ -274,11 +274,20 @@ struct ScalarizeTaskOp : public OpRewritePattern<hls::TaskOp> {
 namespace {
 struct ScalarizeITensor
     : public hls::impl::ScalarizeITensorBase<ScalarizeITensor> {
-  void runOnOperation() override {
-    auto func = getOperation();
-    auto context = &getContext();
+  LogicalResult postVerification() {
+    // Check if all itensor cast ops have been folded.
+    auto checkResult = getOperation().walk([&](Operation *op) {
+      if (isa<hls::ITensorCastOp>(op)) {
+        op->emitOpError("itensor_cast ops should have been folded");
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    return failure(checkResult.wasInterrupted());
+  }
 
-    // Apply scalarization patterns.
+  void runOnOperation() override {
+    auto context = &getContext();
     mlir::RewritePatternSet patterns(context);
     patterns.add<ScalarizeITensorInstanceOp>(context);
     patterns.add<ScalarizeITensorReadOp>(context);
@@ -286,23 +295,9 @@ struct ScalarizeITensor
     patterns.add<ScalarizeITensorReassociateOp>(context);
     patterns.add<ScalarizeForOp>(context);
     patterns.add<ScalarizeTaskOp>(context);
-    (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+    (void)applyPatternsAndFoldGreedily(getOperation(), std::move(patterns));
 
-    // Check if all itensor cast ops have been folded.
-    auto checkResult = func.walk([&](Operation *op) {
-      if (isa<hls::ITensorBufferOp, hls::ITensorReadFullTensorOp,
-              hls::ITensorWriteFullTensorOp>(op)) {
-        op->emitOpError("itensor_buffer, itensor_read_full_itensor, and "
-                        "itensor_write_full_itensor ops, i.e. itensor DMA ops, "
-                        "must have been materialized before scalarization");
-        return WalkResult::interrupt();
-      } else if (isa<hls::ITensorCastOp>(op)) {
-        op->emitOpError("itensor_cast ops should have been folded");
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
-    if (checkResult.wasInterrupted())
+    if (failed(postVerification()))
       return signalPassFailure();
   }
 };

@@ -16,6 +16,7 @@ add_mlir_dialect_library(MLIRScaleHLSHLSTransforms
   ApplyDirectives.cpp
   GenerateDirectives.cpp
   SinkStream.cpp
+  EnsureITensorSingleUse.cpp
 
   DEPENDS
   MLIRScaleHLSHLSTransformsIncGen
