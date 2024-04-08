@@ -50,23 +50,23 @@ static ITensorType getScalarITensorType(ITensorType iTensor) {
 }
 
 namespace {
-struct ScalarizeITensorInstanceOp
-    : public OpRewritePattern<hls::ITensorInstanceOp> {
-  using OpRewritePattern<hls::ITensorInstanceOp>::OpRewritePattern;
+template <typename OpTy>
+struct ScalarizeITensorInitLikeOp : public OpRewritePattern<OpTy> {
+  using OpRewritePattern<OpTy>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(hls::ITensorInstanceOp inst,
+  LogicalResult matchAndRewrite(OpTy init,
                                 PatternRewriter &rewriter) const override {
-    auto iTensorType = inst.getType();
+    auto iTensorType = init.getType();
     if (!iTensorType.hasShapedElementType())
       return failure();
 
-    rewriter.modifyOpInPlace(inst, [&]() {
-      inst.getResult().setType(getScalarITensorType(iTensorType));
+    rewriter.modifyOpInPlace(init, [&]() {
+      init.getResult().setType(getScalarITensorType(iTensorType));
     });
-    rewriter.setInsertionPointAfter(inst);
-    auto cast =
-        rewriter.create<hls::ITensorCastOp>(inst.getLoc(), iTensorType, inst);
-    rewriter.replaceAllUsesExcept(inst, cast.getResult(), cast);
+    rewriter.setInsertionPointAfter(init);
+    auto cast = rewriter.template create<hls::ITensorCastOp>(init.getLoc(),
+                                                             iTensorType, init);
+    rewriter.replaceAllUsesExcept(init, cast.getResult(), cast);
     return success();
   }
 };
@@ -289,7 +289,8 @@ struct ScalarizeITensor
   void runOnOperation() override {
     auto context = &getContext();
     mlir::RewritePatternSet patterns(context);
-    patterns.add<ScalarizeITensorInstanceOp>(context);
+    patterns.add<ScalarizeITensorInitLikeOp<ITensorInitOp>>(context);
+    patterns.add<ScalarizeITensorInitLikeOp<ITensorInstanceOp>>(context);
     patterns.add<ScalarizeITensorReadOp>(context);
     patterns.add<ScalarizeITensorWriteOp>(context);
     patterns.add<ScalarizeITensorReassociateOp>(context);

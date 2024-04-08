@@ -21,11 +21,12 @@ namespace hls {
 } // namespace mlir
 
 namespace {
-struct FoldForkOpIntoInitOp : public OpRewritePattern<ITensorForkOp> {
+template <typename OpTy>
+struct FoldForkOpIntoInitLikeOp : public OpRewritePattern<ITensorForkOp> {
   using OpRewritePattern<ITensorForkOp>::OpRewritePattern;
   LogicalResult matchAndRewrite(ITensorForkOp fork,
                                 PatternRewriter &rewriter) const override {
-    if (auto init = fork.getSource().getDefiningOp<ITensorInitOp>()) {
+    if (auto init = fork.getSource().template getDefiningOp<OpTy>()) {
       for (auto result : fork.getResults())
         rewriter.replaceAllUsesWith(result, init.getResult());
       rewriter.eraseOp(fork);
@@ -241,7 +242,8 @@ struct EnsureITensorSingleUse
     auto context = &getContext();
     generateITensorFork();
     mlir::RewritePatternSet patterns(context);
-    patterns.add<FoldForkOpIntoInitOp>(context);
+    patterns.add<FoldForkOpIntoInitLikeOp<ITensorInitOp>>(context);
+    patterns.add<FoldForkOpIntoInitLikeOp<ITensorInstanceOp>>(context);
     patterns.add<FoldForkOpIntoForkOp>(context);
     patterns.add<FoldForkOpIntoViewLikeOp>(context);
     patterns.add<FoldForkOpIntoWriteLikeOp>(context);
