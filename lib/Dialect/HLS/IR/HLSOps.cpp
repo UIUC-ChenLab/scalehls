@@ -302,6 +302,54 @@ OpFoldResult ITensorCastOp::fold(FoldAdaptor adaptor) {
 }
 
 //===----------------------------------------------------------------------===//
+// ITensorForkOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult ITensorForkOp::verify() {
+  if (llvm::any_of(getResultTypes(),
+                   [&](Type type) { return type != getSourceType(); }))
+    return emitOpError("source and result itensor type doesn't match");
+  for (auto result : getResults())
+    if (!result.hasOneUse())
+      return emitOpError("result itensor must have exactly one use but found ")
+             << llvm::range_size(result.getUses());
+  return success();
+}
+
+LogicalResult
+ITensorForkOp::fold(FoldAdaptor adaptor,
+                    SmallVectorImpl<::mlir::OpFoldResult> &results) {
+  if (getNumResults() == 1) {
+    results.push_back(getSource());
+    return success();
+  } else if (auto merge = getSource().getDefiningOp<ITensorJoinOp>()) {
+    if (merge.getNumSources() == getNumResults()) {
+      for (auto source : merge.getSources())
+        results.push_back(source);
+      return success();
+    }
+  }
+  return failure();
+}
+
+//===----------------------------------------------------------------------===//
+// ITensorJoinOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult ITensorJoinOp::verify() {
+  if (llvm::any_of(getSourceTypes(),
+                   [&](Type type) { return type != getResultType(); }))
+    return emitOpError("source and result itensor type doesn't match");
+  return success();
+}
+
+OpFoldResult ITensorJoinOp::fold(FoldAdaptor adaptor) {
+  if (getNumSources() == 1)
+    return getSources().front();
+  return {};
+}
+
+//===----------------------------------------------------------------------===//
 // StreamOp
 //===----------------------------------------------------------------------===//
 
@@ -513,7 +561,7 @@ struct FoldTaskIterArgs : public OpRewritePattern<hls::TaskOp> {
            "unexpected argument size mismatch");
 
     // No results case: the scf::task builder already created a zero
-    // result terminator. Merge before this terminator and just get rid of the
+    // result terminator. Join before this terminator and just get rid of the
     // original terminator that has been merged in.
     if (newIterArgs.empty()) {
       auto newYieldOp = newtask.getYieldOp();

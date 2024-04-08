@@ -304,6 +304,64 @@ def ITensorCastOp : HLSOp<"itensor_cast", [Pure,
   let hasFolder = 1;
 }
 
+def ITensorForkOp : HLSOp<"itensor_fork", [Pure]> {
+  let summary = "Fork an iterative tensor to multiple ones";
+
+  let arguments = (ins AnyITensor:$source);
+  let results = (outs Variadic<AnyITensor>:$results);
+  let assemblyFormat = [{
+    $source attr-dict `:` functional-type(operands, results)
+  }];
+
+  let hasVerifier = 1;
+  let hasFolder = 1;
+
+  let extraClassDeclaration = [{
+    size_t getNumResults() { return getResults().size(); }
+
+    ITensorType getSourceType() { return getSource().getType(); }
+    ITensorType getResultType() {
+      return cast<ITensorType>(getResults()[0].getType());
+    }
+
+    SmallVector<ITensorType> getResultTypes() {
+      return llvm::to_vector(llvm::map_range(getResults(),
+        [&](Value result) {
+          return cast<ITensorType>(result.getType());
+      }));
+    }
+  }];
+}
+
+def ITensorJoinOp : HLSOp<"itensor_join", [Pure]> {
+  let summary = "Join multiple iterative tensors to one";
+
+  let arguments = (ins Variadic<AnyITensor>:$sources);
+  let results = (outs AnyITensor:$result);
+  let assemblyFormat = [{
+    $sources attr-dict `:` functional-type(operands, results)
+  }];
+
+  let hasVerifier = 1;
+  let hasFolder = 1;
+
+  let extraClassDeclaration = [{
+    size_t getNumSources() { return getSources().size(); }
+
+    ITensorType getSourceType() {
+      return cast<ITensorType>(getSources()[0].getType());
+    }
+    ITensorType getResultType() { return getResult().getType(); }
+
+    SmallVector<ITensorType> getSourceTypes() {
+      return llvm::to_vector(llvm::map_range(getSources(),
+        [&](Value source) {
+          return cast<ITensorType>(source.getType());
+      }));
+    }
+  }];
+}
+
 //===----------------------------------------------------------------------===//
 // Streamerization Operations
 //===----------------------------------------------------------------------===//
