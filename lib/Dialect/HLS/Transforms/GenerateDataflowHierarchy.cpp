@@ -50,15 +50,20 @@ static LogicalResult generateTasksInBlock(StringRef prefix, Block *block,
   // Collect all ops that need to be wrapped into tasks.
   SmallVector<std::pair<Operation *, SmallVector<Value>>> opsToWrap;
   for (auto &op : *block) {
-    if (auto loop = dyn_cast<scf::ForOp>(op))
+    if (auto loop = dyn_cast<scf::ForOp>(op)) {
       opsToWrap.push_back({loop, loop.getInitArgs()});
-    else if (auto writeOp = dyn_cast<ITensorWriteLikeOpInterface>(op))
-      opsToWrap.push_back({writeOp, {writeOp.getDest()}});
-    else if (auto destStyleOp = dyn_cast<DestinationStyleOpInterface>(op)) {
+
+    } else if (auto writeOp = dyn_cast<ITensorWriteLikeOpInterface>(op)) {
+      // We only consider itensor with tensor type elements.
+      if (isa<TensorType>(writeOp.getDestType().getElementType()))
+        opsToWrap.push_back({writeOp, {writeOp.getDest()}});
+
+    } else if (auto destStyleOp = dyn_cast<DestinationStyleOpInterface>(op)) {
       // Because tensor insertion-like ops will be eliminated in the tensor
-      // bufferization pass, we don't need to wrap them into tasks.
-      if (!isa<tensor::InsertOp, tensor::InsertSliceOp,
-               tensor::ParallelInsertSliceOp>(op))
+      // bufferization pass, we don't need to wrap them into tasks. Also, we
+      // don't need to wrap ops that have no destination operands.
+      if (destStyleOp.getNumDpsInits() != 0 &&
+          !isa<tensor::InsertOp, tensor::InsertSliceOp>(op))
         opsToWrap.push_back({destStyleOp, destStyleOp.getDpsInits()});
     }
   }
