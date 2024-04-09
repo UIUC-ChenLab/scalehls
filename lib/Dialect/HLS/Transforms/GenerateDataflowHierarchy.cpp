@@ -21,24 +21,24 @@ namespace hls {
 } // namespace mlir
 
 static hls::TaskOp wrapOpIntoTask(Operation *op, StringRef taskName,
-                                  SmallVectorImpl<Value> &destOperands,
+                                  MutableOperandRange destOperandsMutable,
                                   OpBuilder &builder) {
+  auto destOperands = destOperandsMutable.getAsOperandRange();
   builder.setInsertionPoint(op);
   auto task = builder.create<TaskOp>(op->getLoc(), destOperands,
                                      builder.getStringAttr(taskName));
   op->replaceAllUsesWith(task.getResults());
+
   auto taskBlock = builder.createBlock(
       &task.getBody(), task.getBody().end(), TypeRange(destOperands),
       llvm::map_to_vector(destOperands, [&](Value v) { return v.getLoc(); }));
+  for (auto [destOperand, taskBlockArg] :
+       llvm::zip(destOperandsMutable, taskBlock->getArguments()))
+    destOperand.set(taskBlockArg);
 
   builder.setInsertionPointToEnd(taskBlock);
   auto yieldOp = builder.create<YieldOp>(op->getLoc(), op->getResults());
-
   op->moveBefore(yieldOp);
-  for (auto [destOperand, taskBlockArg] :
-       llvm::zip(destOperands, taskBlock->getArguments()))
-    destOperand.replaceUsesWithIf(
-        taskBlockArg, [&](OpOperand &use) { return use.getOwner() == op; });
   return task;
 }
 
@@ -48,15 +48,15 @@ static LogicalResult generateTasksInBlock(StringRef prefix, Block *block,
     return block->getParentOp()->emitOpError("expected a FuncOp or a ForOp");
 
   // Collect all ops that need to be wrapped into tasks.
-  SmallVector<std::pair<Operation *, SmallVector<Value>>> opsToWrap;
+  SmallVector<std::pair<Operation *, MutableOperandRange>> opsToWrap;
   for (auto &op : *block) {
     if (auto loop = dyn_cast<scf::ForOp>(op)) {
-      opsToWrap.push_back({loop, loop.getInitArgs()});
+      opsToWrap.push_back({loop, loop.getInitArgsMutable()});
 
     } else if (auto writeOp = dyn_cast<ITensorWriteLikeOpInterface>(op)) {
       // We only consider itensor with tensor type elements.
       if (isa<TensorType>(writeOp.getDestType().getElementType()))
-        opsToWrap.push_back({writeOp, {writeOp.getDest()}});
+        opsToWrap.push_back({writeOp, writeOp.getDestMutable()});
 
     } else if (auto destStyleOp = dyn_cast<DestinationStyleOpInterface>(op)) {
       // Because tensor insertion-like ops will be eliminated in the tensor
@@ -64,7 +64,7 @@ static LogicalResult generateTasksInBlock(StringRef prefix, Block *block,
       // don't need to wrap ops that have no destination operands.
       if (destStyleOp.getNumDpsInits() != 0 &&
           !isa<tensor::InsertOp, tensor::InsertSliceOp>(op))
-        opsToWrap.push_back({destStyleOp, destStyleOp.getDpsInits()});
+        opsToWrap.push_back({destStyleOp, destStyleOp.getDpsInitsMutable()});
     }
   }
 

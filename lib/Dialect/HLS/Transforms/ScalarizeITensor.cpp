@@ -193,8 +193,9 @@ struct ScalarizeITensorReassociateOp
 } // namespace
 
 static LogicalResult scalarzieDetinationStyleContainerOp(
-    Operation *op, ValueRange initOperands, ValueRange iterArgs,
-    ValueRange yieldedValues, ValueRange results, PatternRewriter &rewriter) {
+    Operation *op, MutableOperandRange initOperands, ValueRange iterArgs,
+    MutableOperandRange yieldedValues, ValueRange results,
+    PatternRewriter &rewriter) {
   bool hasChanged = false;
   auto terminator = op->getRegions().back().back().getTerminator();
   auto loc = op->getLoc();
@@ -211,10 +212,10 @@ static LogicalResult scalarzieDetinationStyleContainerOp(
     // Cast the initial operand's type.
     rewriter.setInsertionPoint(op);
     auto initOperandCast = rewriter.create<hls::ITensorCastOp>(
-        loc, scalarITensorType, initOperand);
-    rewriter.replaceUsesWithIf(
-        initOperand, initOperandCast,
-        [&](OpOperand &operand) { return operand.getOwner() == op; });
+        loc, scalarITensorType, initOperand.get());
+    rewriter.startOpModification(op);
+    initOperand.set(initOperandCast);
+    rewriter.finalizeOpModification(op);
 
     // Cast the iteration argument's type.
     rewriter.setInsertionPointAfterValue(iterArg);
@@ -228,10 +229,10 @@ static LogicalResult scalarzieDetinationStyleContainerOp(
     // Cast the yeilded value's type.
     rewriter.setInsertionPoint(terminator);
     auto yieldedValueCast = rewriter.create<hls::ITensorCastOp>(
-        loc, scalarITensorType, yieldedValue);
-    rewriter.replaceUsesWithIf(
-        yieldedValue, yieldedValueCast,
-        [&](OpOperand &use) { return use.getOwner() == terminator; });
+        loc, scalarITensorType, yieldedValue.get());
+    rewriter.startOpModification(terminator);
+    yieldedValue.set(yieldedValueCast);
+    rewriter.finalizeOpModification(terminator);
 
     // Cast the loop result's type.
     rewriter.setInsertionPointAfter(op);
@@ -252,7 +253,8 @@ struct ScalarizeForOp : public OpRewritePattern<scf::ForOp> {
   LogicalResult matchAndRewrite(scf::ForOp op,
                                 PatternRewriter &rewriter) const override {
     return scalarzieDetinationStyleContainerOp(
-        op, op.getInitArgs(), op.getRegionIterArgs(), op.getYieldedValues(),
+        op, op.getInitArgsMutable(), op.getRegionIterArgs(),
+        cast<scf::YieldOp>(op.getBody()->getTerminator()).getResultsMutable(),
         op.getResults(), rewriter);
   }
 };
@@ -265,8 +267,8 @@ struct ScalarizeTaskOp : public OpRewritePattern<hls::TaskOp> {
   LogicalResult matchAndRewrite(hls::TaskOp task,
                                 PatternRewriter &rewriter) const override {
     return scalarzieDetinationStyleContainerOp(
-        task, task.getInits(), task.getBody().getArguments(),
-        task.getYieldOp().getOperands(), task.getResults(), rewriter);
+        task, task.getInitsMutable(), task.getBody().getArguments(),
+        task.getYieldOp().getResultsMutable(), task.getResults(), rewriter);
   }
 };
 } // namespace

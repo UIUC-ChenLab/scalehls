@@ -20,6 +20,10 @@ def ITensorReadLikeOpInterface : OpInterface<"ITensorReadLikeOpInterface"> {
     InterfaceMethod<"Return the source itensor.",
       "TypedValue<ITensorType>", "getSource", (ins), [{
         return $_op.getSource();
+      }]>,
+    InterfaceMethod<"Return the mutable source itensor.",
+      "MutableOperandRange", "getSourceMutable", (ins), [{
+        return $_op.getSourceMutable();
       }]>
   ];
 
@@ -40,6 +44,10 @@ def ITensorWriteLikeOpInterface : OpInterface<"ITensorWriteLikeOpInterface"> {
     InterfaceMethod<"Return the destination itensor.",
       "TypedValue<ITensorType>", "getDest", (ins), [{
         return $_op.getDest();
+      }]>,
+    InterfaceMethod<"Return the mutable destination itensor.",
+      "MutableOperandRange", "getDestMutable", (ins), [{
+        return $_op.getDestMutable();
       }]>,
     InterfaceMethod<"Return the result itensor.",
       "TypedValue<ITensorType>", "getResult", (ins), [{
@@ -65,6 +73,10 @@ def ITensorViewLikeOpInterface : OpInterface<"ITensorViewLikeOpInterface"> {
     InterfaceMethod<"Return the source itensor.",
       "TypedValue<ITensorType>", "getSource", (ins), [{
         return $_op.getSource();
+      }]>,
+    InterfaceMethod<"Return the mutable source itensor.",
+      "MutableOperandRange", "getSourceMutable", (ins), [{
+        return $_op.getSourceMutable();
       }]>,
     InterfaceMethod<"Return the result itensor.",
       "TypedValue<ITensorType>", "getResult", (ins), [{

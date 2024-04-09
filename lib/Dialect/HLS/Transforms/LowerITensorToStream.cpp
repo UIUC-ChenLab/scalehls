@@ -152,8 +152,7 @@ struct LowerTaskOp : public OpRewritePattern<hls::TaskOp> {
 } // namespace
 
 namespace {
-struct RemoveITensorToStreamOp
-    : public OpRewritePattern<hls::ITensorToStreamOp> {
+struct FoldITensorToStreamOp : public OpRewritePattern<hls::ITensorToStreamOp> {
   using OpRewritePattern<hls::ITensorToStreamOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(hls::ITensorToStreamOp toStream,
@@ -174,8 +173,7 @@ struct RemoveITensorToStreamOp
 } // namespace
 
 namespace {
-struct RemoveStreamToITensorOp
-    : public OpRewritePattern<hls::StreamToITensorOp> {
+struct FoldStreamToITensorOp : public OpRewritePattern<hls::StreamToITensorOp> {
   using OpRewritePattern<hls::StreamToITensorOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(hls::StreamToITensorOp toITensor,
@@ -185,33 +183,6 @@ struct RemoveStreamToITensorOp
       return success();
     }
     return failure();
-  }
-};
-} // namespace
-
-namespace {
-struct DuplicateStreamOp : public OpRewritePattern<hls::StreamOp> {
-  using OpRewritePattern<hls::StreamOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(hls::StreamOp stream,
-                                PatternRewriter &rewriter) const override {
-    auto writeUses = stream.getWriteUses();
-    if (writeUses.size() != 1)
-      return failure();
-    auto writer = stream.getWriter();
-
-    bool hasChanged = false;
-    for (auto use : llvm::drop_begin(stream.getReadUses())) {
-      hasChanged = true;
-      rewriter.setInsertionPoint(stream);
-      auto newStream = rewriter.create<hls::StreamOp>(
-          stream.getLoc(), stream.getType(), stream.getLocationAttr());
-      rewriter.setInsertionPoint(writer);
-      rewriter.create<hls::StreamWriteOp>(writer.getLoc(), writer.getValue(),
-                                          newStream);
-      rewriter.modifyOpInPlace(use->getOwner(), [&]() { use->set(newStream); });
-    }
-    return success(hasChanged);
   }
 };
 } // namespace
@@ -243,9 +214,8 @@ struct LowerITensorToStream
     patterns.add<LowerTaskOp>(context);
     scf::ForOp::getCanonicalizationPatterns(patterns, context);
     hls::TaskOp::getCanonicalizationPatterns(patterns, context);
-    patterns.add<RemoveITensorToStreamOp>(context);
-    patterns.add<RemoveStreamToITensorOp>(context);
-    patterns.add<DuplicateStreamOp>(context);
+    patterns.add<FoldITensorToStreamOp>(context);
+    patterns.add<FoldStreamToITensorOp>(context);
     (void)applyPatternsAndFoldGreedily(getOperation(), std::move(patterns));
 
     if (failed(postVerification()))
