@@ -170,9 +170,9 @@ def apply_convert_dataflow_to_func_passes(module: Module):
     pm.run(module.operation)
 
 
-def get_module_cpp_str(module: Module):
+def get_module_cpp_str(module: Module, axi_max_widen_bitwidth=512):
     buf = io.StringIO()
-    emit_hlscpp(module, buf)
+    emit_hlscpp(module, buf, axi_max_widen_bitwidth)
     return buf.getvalue()
 
 

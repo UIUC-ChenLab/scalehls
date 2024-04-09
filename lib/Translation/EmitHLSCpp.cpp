@@ -19,11 +19,6 @@ using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
-static llvm::cl::opt<bool> emitVitisDirectives("emit-vitis-directives",
-                                               llvm::cl::init(true));
-static llvm::cl::opt<bool> enforceFalseDependency("enforce-false-dependency",
-                                                  llvm::cl::init(false));
-
 //===----------------------------------------------------------------------===//
 // Utils
 //===----------------------------------------------------------------------===//
@@ -92,35 +87,6 @@ static std::string getStorageTypeAndImpl(MemoryKind kind, std::string typeStr,
   }
 }
 
-static std::string getVivadoStorageTypeAndImpl(MemoryKind kind) {
-  switch (kind) {
-  case MemoryKind::LUTRAM_1P:
-    return "ram_1p_lutram";
-  case MemoryKind::LUTRAM_2P:
-    return "ram_2p_lutram";
-  case MemoryKind::LUTRAM_S2P:
-    return "ram_s2p_lutram";
-  case MemoryKind::BRAM_1P:
-    return "ram_1p_bram";
-  case MemoryKind::BRAM_2P:
-    return "ram_2p_bram";
-  case MemoryKind::BRAM_S2P:
-    return "ram_s2p_bram";
-  case MemoryKind::BRAM_T2P:
-    return "ram_t2p_bram";
-  case MemoryKind::URAM_1P:
-    return "ram_1p_uram";
-  case MemoryKind::URAM_2P:
-    return "ram_2p_uram";
-  case MemoryKind::URAM_S2P:
-    return "ram_s2p_uram";
-  case MemoryKind::URAM_T2P:
-    return "ram_t2p_uram";
-  default:
-    return "ram_t2p_bram";
-  }
-}
-
 //===----------------------------------------------------------------------===//
 // Some Base Classes
 //===----------------------------------------------------------------------===//
@@ -131,10 +97,8 @@ namespace {
 class ScaleHLSEmitterState {
 public:
   explicit ScaleHLSEmitterState(raw_ostream &os,
-                                bool emitVitisDirectives = true,
-                                bool enforceFalseDependency = false)
-      : os(os), emitVitisDirectives(emitVitisDirectives),
-        enforceFalseDependency(enforceFalseDependency) {}
+                                int64_t axiMaxWidenBitwidth = 512)
+      : os(os), axiMaxWidenBitwidth(axiMaxWidenBitwidth) {}
 
   // The stream to emit to.
   raw_ostream &os;
@@ -148,11 +112,8 @@ public:
   // Whether to emit HLS C++ directives.
   bool emitDirectives = false;
 
-  // Whether to emit Vitis HLS C++ directives.
-  const bool emitVitisDirectives;
-
-  // Whether to enforce false dependency.
-  const bool enforceFalseDependency;
+  // The max widen bitwidth of AXI interfaces.
+  const int64_t axiMaxWidenBitwidth;
 
 private:
   ScaleHLSEmitterState(const ScaleHLSEmitterState &) = delete;
@@ -201,8 +162,7 @@ public:
   void setEmitDirectives() { state.emitDirectives = true; }
   void clearEmitDirectives() { state.emitDirectives = false; }
 
-  bool emitVitisDirectives() { return state.emitVitisDirectives; }
-  bool enforceFalseDependency() { return state.enforceFalseDependency; }
+  int64_t axiMaxWidenBitwidth() { return state.axiMaxWidenBitwidth; }
 
 private:
   ScaleHLSEmitterBase(const ScaleHLSEmitterBase &) = delete;
@@ -1366,7 +1326,7 @@ template <typename OpType> void ModuleEmitter::emitAlloc(OpType op) {
   if (isDeclared(op.getResult()))
     return;
 
-  // Vivado HLS only supports static shape on-chip memory.
+  // Vitis HLS only supports static shape on-chip memory.
   if (!op.getType().hasStaticShape())
     emitError(op, "is unranked or has dynamic shape.");
 
@@ -1666,9 +1626,6 @@ void ModuleEmitter::emitLoopDirectives(Operation *loop) {
   if (!emitDirectives())
     return;
 
-  if (!loop->hasAttr("__dataflow__") && enforceFalseDependency())
-    indent() << "#pragma HLS dependence false\n";
-
   if (loop->hasAttr("__pipeline__")) {
     indent() << "#pragma HLS pipeline";
     if (auto ii = loop->getAttrOfType<IntegerAttr>("__ii__"))
@@ -1703,9 +1660,8 @@ void ModuleEmitter::emitArrayDirectives(TypedValue<MemRefType> memref,
         // Vitis HLS has a wierd feature/bug that will automatically collapse
         // the first dimension if its size is equal to one.
         auto directiveDim = dim + 1;
-        if (emitVitisDirectives())
-          if (type.getShape().front() == 1)
-            directiveDim = dim;
+        if (type.getShape().front() == 1)
+          directiveDim = dim;
         os << " dim=" << directiveDim << "\n";
       }
       ++dim;
@@ -1717,17 +1673,10 @@ void ModuleEmitter::emitArrayDirectives(TypedValue<MemRefType> memref,
   if (!isInterface) {
     auto kind = getMemoryKind(type);
     if (kind != MemoryKind::DRAM && !isFullyPartitioned(type)) {
-      if (emitVitisDirectives()) {
-        indent() << "#pragma HLS bind_storage";
-        os << " variable=";
-        emitValue(memref);
-        os << " " << getStorageTypeAndImpl(kind, "type", "impl");
-      } else {
-        indent() << "#pragma HLS resource";
-        os << " variable=";
-        emitValue(memref);
-        os << " core=" << getVivadoStorageTypeAndImpl(kind);
-      }
+      indent() << "#pragma HLS bind_storage variable=";
+      emitValue(memref);
+      os << " " << getStorageTypeAndImpl(kind, "type", "impl");
+
       // Emit a new line.
       os << "\n";
     }
@@ -1748,6 +1697,7 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
         emitValue(port);
         os << " bundle=";
         emitValue(port);
+        os << " max_widen_bitwidth=" << axiMaxWidenBitwidth();
         os << "\n";
         emitArrayDirectives(cast<TypedValue<MemRefType>>(port), true);
 
@@ -1755,7 +1705,7 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
         indent() << "#pragma HLS interface axis port=";
         emitValue(port);
         os << "\n";
-        
+
       } else {
         // For scalar types, we always emit them as AXI-Lite ports.
         auto name = getName(port);
@@ -1900,17 +1850,21 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 // Entry of scalehls-translate
 //===----------------------------------------------------------------------===//
 
-LogicalResult scalehls::emitHLSCpp(ModuleOp module, llvm::raw_ostream &os) {
-  ScaleHLSEmitterState state(os, emitVitisDirectives.getValue(),
-                             enforceFalseDependency.getValue());
+LogicalResult scalehls::emitHLSCpp(ModuleOp module, llvm::raw_ostream &os,
+                                   int64_t axiMaxWidenBitwidth) {
+  ScaleHLSEmitterState state(os, axiMaxWidenBitwidth);
   ModuleEmitter(state).emitModule(module);
   return failure(state.encounteredError);
 }
 
+static llvm::cl::opt<int64_t> axiMaxWidenBitwidth("axi-max-widen-bitwidth",
+                                                  llvm::cl::init(512));
+
 void scalehls::registerEmitHLSCppTranslation() {
   static TranslateFromMLIRRegistration toHLSCpp(
       "scalehls-emit-hlscpp", "Translate MLIR into synthesizable C++",
-      emitHLSCpp, [&](DialectRegistry &registry) {
-        scalehls::registerAllDialects(registry);
-      });
+      [&](ModuleOp module, llvm::raw_ostream &os) {
+        return emitHLSCpp(module, os, axiMaxWidenBitwidth.getValue());
+      },
+      [](DialectRegistry &registry) { registerAllDialects(registry); });
 }

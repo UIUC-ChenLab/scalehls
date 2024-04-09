@@ -13,10 +13,8 @@ namespace mlir {
 namespace scalehls {
 
 // Emit HLS C++ code for the given module.
-LogicalResult emitHLSCpp(ModuleOp module, llvm::raw_ostream &os);
-
-// Emit HLS C++ code for the given module to the specified directory.
-LogicalResult emitSplitHLSCpp(ModuleOp module, llvm::StringRef dirName);
+LogicalResult emitHLSCpp(ModuleOp module, llvm::raw_ostream &os,
+                         int64_t axiMaxWidenBitwidth = 512);
 
 void registerEmitHLSCppTranslation();
 
