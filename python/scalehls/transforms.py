@@ -151,10 +151,9 @@ def apply_schedule_dataflow(module: Module):
     pm.run(module.operation)
 
 
-def apply_convert_dataflow_to_func_passes(module: Module):
+def apply_loop_directive_optimization_passes(module: Module):
     pm = PassManager.parse(
-        "builtin.module("
-        "func.func("
+        "builtin.module(func.func("
         "scalehls-generate-directives,"
         "convert-linalg-to-loops,"
         "fold-memref-alias-ops,"
@@ -163,17 +162,17 @@ def apply_convert_dataflow_to_func_passes(module: Module):
         "affine-simplify-structures,"
         "scalehls-apply-directives,"
         "affine-scalrep"
-        "),"
+        "))")
+    pm.run(module.operation)
+
+
+def apply_convert_dataflow_to_func(module: Module):
+    pm = PassManager.parse(
+        "builtin.module("
         "scalehls-convert-dataflow-to-func,"
         "cse, canonicalize"
         ")")
     pm.run(module.operation)
-
-
-def get_module_cpp_str(module: Module, axi_max_widen_bitwidth=512):
-    buf = io.StringIO()
-    emit_hlscpp(module, buf, axi_max_widen_bitwidth)
-    return buf.getvalue()
 
 
 # ===----------------------------------------------------------------------=== #
@@ -542,11 +541,11 @@ def convert_full_tensor_linalg_op_to_itensor(
 
 
 # ===----------------------------------------------------------------------=== #
-# DesignSpaceGraph Class
+# LinalgDesignSpaceGraph Class
 # ===----------------------------------------------------------------------=== #
 
 
-class DesignSpaceGraph(nx.Graph):
+class LinalgDesignSpaceGraph(nx.Graph):
     def __init__(self, module: Module, top_name: str = "forward"):
         super().__init__()
         self.module = module
@@ -684,8 +683,8 @@ class DesignSpaceGraph(nx.Graph):
 
 
 @transform_sequence()
-def construct_transform_sequence(target: BlockArgument,
-                                 graph: DesignSpaceGraph):
+def construct_linalg_transform_sequence(target: BlockArgument,
+                                        graph: LinalgDesignSpaceGraph):
     """
     This function constructs a transform sequence to transform the target
     function based on the given design space graph.
@@ -741,8 +740,13 @@ def construct_transform_sequence(target: BlockArgument,
     return []
 
 
-def apply_design_space(graph: DesignSpaceGraph, delete_sequence: bool = True):
+def apply_linalg_design_space(graph: LinalgDesignSpaceGraph,
+                              delete_sequence: bool = True):
     apply_transform_sequence(
         graph.module,
-        construct_transform_sequence(graph.module, graph),
+        construct_linalg_transform_sequence(graph.module, graph),
         delete_sequence)
+
+# ===----------------------------------------------------------------------=== #
+# DataflowDesignSpaceGraph Class
+# ===----------------------------------------------------------------------=== #
