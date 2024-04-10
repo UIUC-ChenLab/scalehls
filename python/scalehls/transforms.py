@@ -4,9 +4,8 @@
 #
 # ===----------------------------------------------------------------------=== #
 
-import io
+
 from ._mlir_libs._scalehls import *
-import networkx as nx
 from graphviz import Digraph
 import re
 import functools
@@ -16,7 +15,7 @@ from .ir import IntegerType, IntegerAttr, StringAttr, ArrayAttr, Value, Insertio
 from .dialects.transform import structured as linalg_transform
 from .dialects.transform import tensor as tensor_transform
 from .passmanager import PassManager
-from typing import Sequence, Optional, Union, Callable, Mapping
+from typing import Sequence, Optional, Union, Callable, Mapping, Set, Any, List, Dict
 from functools import wraps
 
 
@@ -541,11 +540,89 @@ def convert_full_tensor_linalg_op_to_itensor(
 
 
 # ===----------------------------------------------------------------------=== #
+# BaseGraph Class
+# ===----------------------------------------------------------------------=== #
+
+
+class Node:
+    def __init__(self,
+                 id: Any,
+                 attributes: Optional[Dict[str, Any]] = None,
+                 parent: Optional['Node'] = None):
+        self.id: Any = id
+        self.attributes: Dict[str, Any] = \
+            attributes if attributes is not None else {}
+        self.parent: Optional['Node'] = parent
+        self.sub_nodes: List['Node'] = []
+
+    def add_sub_node(self, node: 'Node'):
+        self.sub_nodes.append(node)
+        node.parent = self
+
+    def __repr__(self):
+        return f"Node({self.id})"
+
+
+class Edge:
+    def __init__(self,
+                 source_id: Any,
+                 target_id: Any,
+                 attributes: Optional[Dict[str, Any]] = None):
+        self.source_id: Any = source_id
+        self.target_id: Any = target_id
+        self.attributes: Dict[str, Any] = \
+            attributes if attributes is not None else {}
+
+    def __repr__(self):
+        return f"Edge({self.source_id} -> {self.target_id})"
+
+
+class Graph:
+    def __init__(self):
+        self.nodes: Dict[Any, Node] = {}
+        self.edges: List[Edge] = []
+
+    def has_node(self, id):
+        return id in self.nodes
+
+    def add_node(self, id, attributes=None, parent=None):
+        self.nodes[id] = Node(id, attributes, parent)
+
+    def add_edge(self, source_id, target_id, attributes=None):
+        if self.has_node(source_id) and self.has_node(target_id):
+            new_edge = Edge(source_id, target_id, attributes)
+            self.edges.append(new_edge)
+        else:
+            print("One or both nodes not found in the graph.")
+
+    def add_sub_node(self, parent_id, id, attributes=None, parent=None):
+        if self.has_node(parent_id):
+            sub_node = Node(id, attributes, parent)
+            self.nodes[parent_id].add_sub_node(sub_node)
+            self.nodes[id] = sub_node
+        else:
+            print("Parent node not found.")
+
+    def __repr__(self):
+        return f"Graph(Nodes: {list(self.nodes.values())}, Edges: {self.edges})"
+
+    def iter_nodes(self):
+        visited = set()
+        for node in self.nodes.values():
+            if node.id not in visited:
+                visited.add(node.id)
+                yield node.id, node.attributes
+
+    def iter_edges(self):
+        for edge in self.edges:
+            yield edge.source_id, edge.target_id, edge.attributes
+
+# ===----------------------------------------------------------------------=== #
 # LinalgDesignSpaceGraph Class
 # ===----------------------------------------------------------------------=== #
 
 
-class LinalgDesignSpaceGraph(nx.Graph):
+class LinalgDesignSpaceGraph(Graph):
     def __init__(self, module: Module, top_name: str = "forward"):
         super().__init__()
         self.module = module
@@ -553,21 +630,21 @@ class LinalgDesignSpaceGraph(nx.Graph):
         if self.top is None:
             raise ValueError("top function `" + top_name + "` not found")
 
-        self.add_node(self.top, name=self.top.OPERATION_NAME, id=-1)
+        self.add_node(self.top, {"name": self.top.name.value, "id": -1})
         for id, op in enumerate(self.top.entry_block):
-            self.add_node(op, name=op.OPERATION_NAME, id=id)
+            self.add_node(op, {"name": op.name, "id": id})
             op.attributes[k_id_attr_name] = i64_attr(id)
             for operand in op.operands:
                 parent = operand.owner.owner if isinstance(
                     operand.owner, Block) else operand.owner
                 if not self.has_node(parent):
                     raise ValueError("parent node not found")
-                self.add_edge(parent, op, value=operand)
+                self.add_edge(parent, op, {"value": operand})
 
     @staticmethod
     def is_nontrivial_node(node: Operation):
-        return not isinstance(
-            node, (arith.ConstantOp, hls.TensorInitOp, tensor.EmptyOp))
+        return node.name != "hls.tensor_init" and \
+            node.name != "tensor.empty" and node.name != "arith.constant"
 
     @staticmethod
     def get_linalg_op_naive_tile_sizes(node: linalg.GenericOp,
@@ -641,7 +718,7 @@ class LinalgDesignSpaceGraph(nx.Graph):
             self,
             default_tile_size: int = 16,
             default_unroll_size: int = 2):
-        for node, data in self.nodes(data=True):
+        for node, data in self.iter_nodes():
             if isinstance(node, linalg.GenericOp):
                 data["parallel_tile_sizes"], data["reduction_tile_sizes"] = \
                     self.get_linalg_op_naive_tile_sizes(
@@ -658,7 +735,7 @@ class LinalgDesignSpaceGraph(nx.Graph):
 
     def print_dot(self, file_name: str, print_params: bool = False):
         dot = Digraph()
-        for node, data in self.nodes(data=True):
+        for node, data in self.iter_nodes():
             if self.is_nontrivial_node(node):
                 if print_params:
                     label = data["name"] + " " + str(data["id"]) + "\n"
@@ -674,10 +751,10 @@ class LinalgDesignSpaceGraph(nx.Graph):
                 else:
                     dot.node(str(data["id"]), data["name"] +
                              " " + str(data["id"]))
-        for prev, next, data in self.edges(data=True):
-            prev_data = self.nodes[prev]
-            next_data = self.nodes[next]
+        for prev, next, data in self.iter_edges():
             if self.is_nontrivial_node(prev) and self.is_nontrivial_node(next):
+                prev_data = self.nodes[prev].attributes
+                next_data = self.nodes[next].attributes
                 dot.edge(str(prev_data["id"]), str(next_data["id"]))
         dot.render(file_name, format='png', cleanup=True)
 
@@ -689,7 +766,7 @@ def construct_linalg_transform_sequence(target: BlockArgument,
     This function constructs a transform sequence to transform the target
     function based on the given design space graph.
     """
-    for node, data in graph.nodes(data=True):
+    for node, data in graph.iter_nodes():
         node_handle = match(target, [data["name"]], {
                             k_id_attr_name: i64_attr(data["id"])})
 
