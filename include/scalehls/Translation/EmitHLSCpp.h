@@ -14,7 +14,8 @@ namespace scalehls {
 
 // Emit HLS C++ code for the given module.
 LogicalResult emitHLSCpp(ModuleOp module, llvm::raw_ostream &os,
-                         int64_t axiMaxWidenBitwidth = 512);
+                         int64_t axiMaxWidenBitwidth = 512,
+                         bool omitGlobalConstants = true);
 
 void registerEmitHLSCppTranslation();
 

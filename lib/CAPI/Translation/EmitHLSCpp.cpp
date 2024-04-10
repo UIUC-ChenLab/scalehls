@@ -16,7 +16,9 @@ using namespace scalehls;
 MlirLogicalResult mlirScaleHLSEmitHlsCpp(MlirModule module,
                                          MlirStringCallback callback,
                                          void *userData,
-                                         int64_t axiMaxWidenBitwidth) {
+                                         int64_t axiMaxWidenBitwidth,
+                                         bool omitGlobalConstants) {
   mlir::detail::CallbackOstream stream(callback, userData);
-  return wrap(emitHLSCpp(unwrap(module), stream, axiMaxWidenBitwidth));
+  return wrap(emitHLSCpp(unwrap(module), stream, axiMaxWidenBitwidth,
+                         omitGlobalConstants));
 }

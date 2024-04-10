@@ -97,8 +97,10 @@ namespace {
 class ScaleHLSEmitterState {
 public:
   explicit ScaleHLSEmitterState(raw_ostream &os,
-                                int64_t axiMaxWidenBitwidth = 512)
-      : os(os), axiMaxWidenBitwidth(axiMaxWidenBitwidth) {}
+                                int64_t axiMaxWidenBitwidth = 512,
+                                bool omitGlobalConstants = true)
+      : os(os), axiMaxWidenBitwidth(axiMaxWidenBitwidth),
+        omitGlobalConstants(omitGlobalConstants) {}
 
   // The stream to emit to.
   raw_ostream &os;
@@ -114,6 +116,9 @@ public:
 
   // The max widen bitwidth of AXI interfaces.
   const int64_t axiMaxWidenBitwidth;
+
+  // Whether to omit global constants.
+  const bool omitGlobalConstants;
 
 private:
   ScaleHLSEmitterState(const ScaleHLSEmitterState &) = delete;
@@ -163,6 +168,7 @@ public:
   void clearEmitDirectives() { state.emitDirectives = false; }
 
   int64_t axiMaxWidenBitwidth() { return state.axiMaxWidenBitwidth; }
+  bool omitGlobalConstants() { return state.omitGlobalConstants; }
 
 private:
   ScaleHLSEmitterBase(const ScaleHLSEmitterBase &) = delete;
@@ -1388,15 +1394,17 @@ void ModuleEmitter::emitGetGlobal(memref::GetGlobalOp op) {
   indent();
   // indent() << "const ";
   emitArrayDecl(op.getResult());
-  os << " = ";
-  auto global = SymbolTable::lookupNearestSymbolFrom<memref::GlobalOp>(
-      op, op.getNameAttr());
 
-  auto valueString = getConstantString(op.getType(), *global.getInitialValue());
-  if (valueString.empty())
-    emitError(op, "has unsupported constant type.");
+  if (!omitGlobalConstants()) {
+    auto global = SymbolTable::lookupNearestSymbolFrom<memref::GlobalOp>(
+        op, op.getNameAttr());
+    auto valueString =
+        getConstantString(op.getType(), *global.getInitialValue());
+    if (valueString.empty())
+      emitError(op, "has unsupported constant type.");
+    os << " = " << valueString;
+  }
 
-  os << valueString;
   os << ";";
   emitInfoAndNewLine(op);
   emitArrayDirectives(op.getResult());
@@ -1851,20 +1859,24 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 //===----------------------------------------------------------------------===//
 
 LogicalResult scalehls::emitHLSCpp(ModuleOp module, llvm::raw_ostream &os,
-                                   int64_t axiMaxWidenBitwidth) {
-  ScaleHLSEmitterState state(os, axiMaxWidenBitwidth);
+                                   int64_t axiMaxWidenBitwidth,
+                                   bool omitGlobalConstants) {
+  ScaleHLSEmitterState state(os, axiMaxWidenBitwidth, omitGlobalConstants);
   ModuleEmitter(state).emitModule(module);
   return failure(state.encounteredError);
 }
 
 static llvm::cl::opt<int64_t> axiMaxWidenBitwidth("axi-max-widen-bitwidth",
                                                   llvm::cl::init(512));
+static llvm::cl::opt<bool> omitGlobalConstants("omit-global-constant",
+                                               llvm::cl::init(true));
 
 void scalehls::registerEmitHLSCppTranslation() {
   static TranslateFromMLIRRegistration toHLSCpp(
       "scalehls-emit-hlscpp", "Translate MLIR into synthesizable C++",
       [&](ModuleOp module, llvm::raw_ostream &os) {
-        return emitHLSCpp(module, os, axiMaxWidenBitwidth.getValue());
+        return emitHLSCpp(module, os, axiMaxWidenBitwidth.getValue(),
+                          omitGlobalConstants.getValue());
       },
       [](DialectRegistry &registry) { registerAllDialects(registry); });
 }

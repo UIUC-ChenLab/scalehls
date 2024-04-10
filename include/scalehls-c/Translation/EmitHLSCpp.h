@@ -13,9 +13,9 @@
 extern "C" {
 #endif
 
-MLIR_CAPI_EXPORTED MlirLogicalResult
-mlirScaleHLSEmitHlsCpp(MlirModule module, MlirStringCallback callback,
-                       void *userData, int64_t axiMaxWidenBitwidth = 512);
+MLIR_CAPI_EXPORTED MlirLogicalResult mlirScaleHLSEmitHlsCpp(
+    MlirModule module, MlirStringCallback callback, void *userData,
+    int64_t axiMaxWidenBitwidth = 512, bool omitGlobalConstants = true);
 
 #ifdef __cplusplus
 }

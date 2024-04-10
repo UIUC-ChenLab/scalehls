@@ -72,14 +72,15 @@ PYBIND11_MODULE(_scalehls, m) {
 
   m.def(
       "emit_hlscpp",
-      [](MlirModule module, py::object fileObject,
-         int64_t axiMaxWidenBitwidth) {
+      [](MlirModule module, py::object fileObject, int64_t axiMaxWidenBitwidth,
+         bool omitGlobalConstants) {
         PyFileAccumulator accum(fileObject, false);
         py::gil_scoped_release();
-        return mlirLogicalResultIsSuccess(
-            mlirScaleHLSEmitHlsCpp(module, accum.getCallback(),
-                                   accum.getUserData(), axiMaxWidenBitwidth));
+        return mlirLogicalResultIsSuccess(mlirScaleHLSEmitHlsCpp(
+            module, accum.getCallback(), accum.getUserData(),
+            axiMaxWidenBitwidth, omitGlobalConstants));
       },
       py::arg("module"), py::arg("file_object"),
-      py::arg("axi_max_widen_bitwidth") = 512);
+      py::arg("axi_max_widen_bitwidth") = 512,
+      py::arg("omit_global_constants") = true);
 }
