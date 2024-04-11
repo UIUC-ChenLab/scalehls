@@ -24,9 +24,6 @@ from functools import wraps
 # ===----------------------------------------------------------------------=== #
 
 
-k_id_attr_name = "__id__"
-
-
 def apply_transform_sequence(
         module: Module,
         sequence: transform.NamedSequenceOp,
@@ -145,6 +142,16 @@ def apply_schedule_dataflow(module: Module):
     pm = PassManager.parse(
         "builtin.module("
         "func.func(scalehls-schedule-dataflow),"
+        "cse, canonicalize"
+        ")")
+    pm.run(module.operation)
+
+
+def apply_strip_annotations(module: Module, annotation_name: str):
+    pm = PassManager.parse(
+        "builtin.module("
+        "func.func(scalehls-strip-annotations{annotation-name=" +
+        annotation_name + "}),"
         "cse, canonicalize"
         ")")
     pm.run(module.operation)
@@ -622,6 +629,9 @@ class Graph:
 # ===----------------------------------------------------------------------=== #
 
 
+k_linalg_dsg_id_name = "__linalg_dsg_id__"
+
+
 class LinalgDesignSpaceGraph(Graph):
     def __init__(self, module: Module, top_name: str = "forward"):
         super().__init__()
@@ -633,7 +643,7 @@ class LinalgDesignSpaceGraph(Graph):
         self.add_node(self.top, {"name": self.top.name.value, "id": -1})
         for id, op in enumerate(self.top.entry_block):
             self.add_node(op, {"name": op.name, "id": id})
-            op.attributes[k_id_attr_name] = i64_attr(id)
+            op.attributes[k_linalg_dsg_id_name] = i64_attr(id)
             for operand in op.operands:
                 parent = operand.owner.owner if isinstance(
                     operand.owner, Block) else operand.owner
@@ -768,7 +778,7 @@ def construct_linalg_transform_sequence(target: BlockArgument,
     """
     for node, data in graph.iter_nodes():
         node_handle = match(target, [data["name"]], {
-                            k_id_attr_name: i64_attr(data["id"])})
+                            k_linalg_dsg_id_name: i64_attr(data["id"])})
 
         if isinstance(node, linalg.GenericOp):
             if "parallel_tile_sizes" not in data:
@@ -787,7 +797,8 @@ def construct_linalg_transform_sequence(target: BlockArgument,
                 data["unroll_sizes"],
                 data["permutation"],
                 len(node.inputs) > 0)
-            annotate(linalg_op_handle, k_id_attr_name, i64_param(data["id"]))
+            annotate(linalg_op_handle, k_linalg_dsg_id_name,
+                     i64_param(data["id"]))
 
         if isinstance(node, tensor.ExpandShapeOp):
             if "source_tile_sizes" not in data:
@@ -800,7 +811,7 @@ def construct_linalg_transform_sequence(target: BlockArgument,
                 data["source_tile_sizes"],
                 data["result_tile_sizes"])
             annotate(convert_op.itensor_reassociate,
-                     k_id_attr_name, i64_param(data["id"]))
+                     k_linalg_dsg_id_name, i64_param(data["id"]))
 
         if isinstance(node, tensor.CollapseShapeOp):
             if "source_tile_sizes" not in data:
@@ -813,7 +824,7 @@ def construct_linalg_transform_sequence(target: BlockArgument,
                 data["source_tile_sizes"],
                 data["result_tile_sizes"])
             annotate(convert_op.itensor_reassociate,
-                     k_id_attr_name, i64_param(data["id"]))
+                     k_linalg_dsg_id_name, i64_param(data["id"]))
     return []
 
 
@@ -823,7 +834,31 @@ def apply_linalg_design_space(graph: LinalgDesignSpaceGraph,
         graph.module,
         construct_linalg_transform_sequence(graph.module, graph),
         delete_sequence)
+    apply_strip_annotations(graph.module, k_linalg_dsg_id_name)
 
 # ===----------------------------------------------------------------------=== #
 # DataflowDesignSpaceGraph Class
 # ===----------------------------------------------------------------------=== #
+
+
+k_dataflow_dsg_id_name = "__dataflow_dsg_id__"
+
+
+class DataflowDesignSpaceGraph(Graph):
+    def __init__(self, module: Module, top_name: str = "forward"):
+        super().__init__()
+        self.module = module
+        self.top = find_func(self.module, top_name)
+        if self.top is None:
+            raise ValueError("top function `" + top_name + "` not found")
+
+        self.add_node(self.top, {"name": self.top.name.value, "id": -1})
+        for id, op in enumerate(self.top.entry_block):
+            self.add_node(op, {"name": op.name, "id": id})
+            op.attributes[k_linalg_dsg_id_name] = i64_attr(id)
+            for operand in op.operands:
+                parent = operand.owner.owner if isinstance(
+                    operand.owner, Block) else operand.owner
+                if not self.has_node(parent):
+                    raise ValueError("parent node not found")
+                self.add_edge(parent, op, {"value": operand})
