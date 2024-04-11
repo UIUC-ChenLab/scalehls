@@ -677,6 +677,11 @@ void ModuleEmitter::emitStreamChannel(StreamOp op) {
   emitValue(op.getStream());
   os << ";";
   emitInfoAndNewLine(op);
+  if (emitDirectives()) {
+    indent() << "#pragma HLS stream variable=";
+    emitValue(op.getStream());
+    os << " depth=" << op.getType().getDepth() << "\n";
+  }
 }
 
 void ModuleEmitter::emitStreamRead(StreamReadOp op) {
