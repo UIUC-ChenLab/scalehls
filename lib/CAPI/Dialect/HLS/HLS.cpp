@@ -44,12 +44,15 @@ bool mlirTypeIsHLSITensorType(MlirType type) {
   return unwrap(type).isa<hls::ITensorType>();
 }
 
-MLIR_CAPI_EXPORTED int64_t mlirHLSITensorTypeGetDepth(MlirType type) {
+MlirTypeID mlirHLSITensorTypeGetTypeID() {
+  return wrap(hls::ITensorType::getTypeID());
+}
+
+int64_t mlirHLSITensorTypeGetDepth(MlirType type) {
   return cast<ITensorType>(unwrap(type)).getDepth();
 }
 
-MLIR_CAPI_EXPORTED MlirType mlirHLSITensorTypeSetDepth(MlirType type,
-                                                       int64_t depth) {
+MlirType mlirHLSITensorTypeSetDepth(MlirType type, int64_t depth) {
   auto oldType = cast<ITensorType>(unwrap(type));
   return wrap(
       ITensorType::get(oldType.getElementType(), oldType.getIterTripCounts(),

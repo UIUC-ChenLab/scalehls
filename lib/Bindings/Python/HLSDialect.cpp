@@ -42,36 +42,39 @@ void populateHLSAttributes(py::module &m) {
 
   auto portKindAttr =
       mlir_attribute_subclass(m, "MemoryKindAttr", mlirAttrIsHLSMemoryKindAttr);
-  portKindAttr.def_classmethod(
+  portKindAttr.def_staticmethod(
       "get",
       [](py::object cls, MlirMemoryKind kind, MlirContext ctx) {
         return cls(mlirHLSMemoryKindAttrGet(ctx, kind));
       },
-      "Get an instance of MemoryKindAttr in given context.", py::arg("cls"),
-      py::arg("kind"), py::arg("context") = py::none());
+      py::arg("cls"), py::arg("kind"), py::arg("context") = py::none(),
+      "Get an instance of MemoryKindAttr in given context.");
   portKindAttr.def_property_readonly(
       "value",
       [](MlirAttribute attr) { return mlirHLSMemoryKindAttrGetValue(attr); },
       "Returns the value of MemoryKindAttr.");
 }
 
+//===----------------------------------------------------------------------===//
+// HLS Dialect Types
+//===----------------------------------------------------------------------===//
+
 void populateHLSTypes(py::module &m) {
-  auto iTensorType =
-      mlir_type_subclass(m, "ITensorType", mlirTypeIsHLSITensorType);
-  iTensorType.def_classmethod(
+  auto iTensorType = mlir_type_subclass(
+      m, "ITensorType", mlirTypeIsHLSITensorType, mlirHLSITensorTypeGetTypeID);
+  iTensorType.def_property_readonly(
       "depth", [](MlirType type) { return mlirHLSITensorTypeGetDepth(type); },
-      "Get the depth of an itensor type.", py::arg("type"));
-  iTensorType.def_classmethod(
+      "Get the depth of an itensor type.");
+  iTensorType.def(
       "set_depth",
       [](MlirType type, int64_t depth) {
         return mlirHLSITensorTypeSetDepth(type, depth);
       },
-      "Set the depth of an itensor type and return.", py::arg("type"),
-      py::arg("depth"));
+      py::arg("depth"), "Set the depth of an itensor type and return.");
 }
 
 //===----------------------------------------------------------------------===//
-// HLS Dialect Types
+// Module Definition
 //===----------------------------------------------------------------------===//
 
 PYBIND11_MODULE(_hls_dialect, m) {

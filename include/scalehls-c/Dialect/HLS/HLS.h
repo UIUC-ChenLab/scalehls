@@ -51,6 +51,7 @@ mlirHLSMemoryKindAttrGetValue(MlirAttribute attr);
 //===----------------------------------------------------------------------===//
 
 MLIR_CAPI_EXPORTED bool mlirTypeIsHLSITensorType(MlirType type);
+MLIR_CAPI_EXPORTED MlirTypeID mlirHLSITensorTypeGetTypeID();
 MLIR_CAPI_EXPORTED int64_t mlirHLSITensorTypeGetDepth(MlirType type);
 MLIR_CAPI_EXPORTED MlirType mlirHLSITensorTypeSetDepth(MlirType type,
                                                        int64_t depth);

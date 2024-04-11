@@ -4,7 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "IRModule.h"
+#include "PybindUtils.h"
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/Bindings/Python/PybindAdaptors.h"
 #include "mlir/CAPI/IR.h"

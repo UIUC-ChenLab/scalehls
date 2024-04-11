@@ -578,8 +578,9 @@ class BaseDesignSpaceGraph(nx.Graph):
     def id(self, node: OpView) -> int:
         return self.attr(node, "id", int)
 
-    # def _parent(self, node: OpView) -> OpView:
-    #     return self.attr(node, "parent", OpView)
+    def parent(self, node: OpView) -> OpView:
+        # Not in use.
+        return self.attr(node, "parent", OpView)
 
     def children(self, node: OpView) -> List[OpView]:
         # This function doesn't check whether the node has children or not.
@@ -603,6 +604,9 @@ class BaseDesignSpaceGraph(nx.Graph):
                     label += f"\n{key}: [" + \
                         ", ".join([str(x) for x in value]) + "]"
         return label
+
+    def _format_edge_label(self, prev: OpView, next: OpView, print_params):
+        return ""
 
     def _add_nodes_recursively(self, dot, parent, print_params, filter):
         if self.has_children(parent):
@@ -636,9 +640,11 @@ class BaseDesignSpaceGraph(nx.Graph):
                 if self.has_children(prev):
                     leaf_prev = self._find_leaf_prev_node(prev)
                     dot.edge(f"{self.id(leaf_prev)}", f"{self.id(next)}",
+                             self._format_edge_label(prev, next, print_params),
                              ltail=f"cluster_{self.id(prev)}")
                 else:
-                    dot.edge(f"{self.id(prev)}", f"{self.id(next)}")
+                    dot.edge(f"{self.id(prev)}", f"{self.id(next)}",
+                             self._format_edge_label(prev, next, print_params))
         dot.render(file_name, format='png', cleanup=True)
 
 
@@ -884,3 +890,15 @@ class DataflowDesignSpaceGraph(BaseDesignSpaceGraph):
             node, (tensor.ExpandShapeOp, tensor.CollapseShapeOp,
                    tensor.ReshapeOp, tensor.CastOp, tensor.BitcastOp,
                    hls.ITensorReassociateOp, hls.ITensorCastOp))
+
+    def _format_edge_label(self, prev: OpView, next: OpView, print_params):
+        label = ""
+        if print_params:
+            for key, value in self.edges[prev, next].items():
+                if key == "instance":
+                    type = value.results[0].type
+                    if isinstance(type, tensor.RankedTensorType):
+                        label += f"\nshape: {type.shape}"
+                    elif isinstance(type, hls.ITensorType):  # type: ignore
+                        label += f"\ndepth: {type.depth}"
+        return label
