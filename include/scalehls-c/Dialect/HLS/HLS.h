@@ -20,10 +20,6 @@ extern "C" {
 
 MLIR_DECLARE_CAPI_DIALECT_REGISTRATION(HLS, hls);
 
-MLIR_CAPI_EXPORTED void
-mlirSemanticsInitializeBlockArguments(MlirOperation semantics,
-                                      const std::vector<MlirValue> &ports);
-
 //===----------------------------------------------------------------------===//
 // HLS Dialect Attributes
 //===----------------------------------------------------------------------===//
@@ -49,6 +45,15 @@ MLIR_CAPI_EXPORTED MlirAttribute mlirHLSMemoryKindAttrGet(MlirContext ctx,
                                                           MlirMemoryKind kind);
 MLIR_CAPI_EXPORTED MlirMemoryKind
 mlirHLSMemoryKindAttrGetValue(MlirAttribute attr);
+
+//===----------------------------------------------------------------------===//
+// HLS Dialect Types
+//===----------------------------------------------------------------------===//
+
+MLIR_CAPI_EXPORTED bool mlirTypeIsHLSITensorType(MlirType type);
+MLIR_CAPI_EXPORTED int64_t mlirHLSITensorTypeGetDepth(MlirType type);
+MLIR_CAPI_EXPORTED MlirType mlirHLSITensorTypeSetDepth(MlirType type,
+                                                       int64_t depth);
 
 #ifdef __cplusplus
 }

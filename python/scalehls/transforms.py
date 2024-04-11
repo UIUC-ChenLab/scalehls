@@ -590,7 +590,7 @@ class BaseDesignSpaceGraph(nx.Graph):
             return len(self.children(node)) > 0
         return False
 
-    def _format_label(self, node: OpView, print_params):
+    def _format_node_label(self, node: OpView, print_params):
         label = f"{self.name(node)} {self.id(node)}"
         if print_params:
             for key, value in self.nodes[node].items():
@@ -607,7 +607,7 @@ class BaseDesignSpaceGraph(nx.Graph):
     def _add_nodes_recursively(self, dot, parent, print_params, filter):
         if self.has_children(parent):
             subgraph = Digraph(name=f"cluster_{self.id(parent)}")
-            subgraph.attr(label=self._format_label(parent, print_params))
+            subgraph.attr(label=self._format_node_label(parent, print_params))
             subgraph.attr(compound='true')
 
             for node in self.children(parent):
@@ -616,7 +616,7 @@ class BaseDesignSpaceGraph(nx.Graph):
             dot.subgraph(subgraph)
         elif filter(parent):
             dot.node(f"{self.id(parent)}",
-                     self._format_label(parent, print_params))
+                     self._format_node_label(parent, print_params))
 
     def _find_leaf_prev_node(self, prev):
         leaf_prev = prev
@@ -666,15 +666,15 @@ class LinalgDesignSpaceGraph(BaseDesignSpaceGraph):
                         raise ValueError(f"prev node not found for {operand}")
                     self.add_edge(prev.opview, op, value=operand)
 
+    @ staticmethod
+    def _is_nontrivial_op(node: OpView):
+        return not isinstance(
+            node, (hls.TensorInitOp, tensor.EmptyOp, arith.ConstantOp))
+
     def print_dot(self, file_name: str, print_params: bool = True):
         return super().print_dot(file_name,
                                  print_params,
-                                 self.is_nontrivial_node)
-
-    @ staticmethod
-    def is_nontrivial_node(node: OpView):
-        return not isinstance(
-            node, (hls.TensorInitOp, tensor.EmptyOp, arith.ConstantOp))
+                                 self._is_nontrivial_op)
 
     @ staticmethod
     def get_linalg_op_naive_tile_sizes(node: linalg.GenericOp,
@@ -845,7 +845,7 @@ class DataflowDesignSpaceGraph(BaseDesignSpaceGraph):
         id = [0]
 
         def add_task_node(op: OpView):
-            if self.is_dataflow_node(op.opview):
+            if isinstance(op.opview, hls.TaskOp):
                 nonlocal id
                 parent_task = hls.get_parent_task(op)
                 parent = parent_task if parent_task is not None else self.top
@@ -854,28 +854,33 @@ class DataflowDesignSpaceGraph(BaseDesignSpaceGraph):
                 op.attributes[k_dataflow_dsg_id_name] = i64_attr(id[0])
                 id[0] += 1
 
-                operands = hls.get_live_ins(op) if isinstance(
-                    op.opview, hls.TaskOp) else op.operands
-                for operand in operands:
-                    if not isinstance(operand.owner, (Block)):
-                        prev = operand.owner
-                        if not isinstance(prev.opview,  # type: ignore
-                                          (arith.ConstantOp, hls.TensorInstanceOp,
-                                           hls.ITensorInstanceOp)):
-                            if not self.has_node(prev):
-                                raise ValueError(
-                                    f"prev node not found for {operand}")
-                            self.add_edge(prev.opview, op,   # type: ignore
-                                          value=operand)
+                for operand in hls.get_live_ins(op):
+                    views = []
+                    while not isinstance(operand.owner, Block) and \
+                            self._is_view_like_op(operand.owner.opview):
+                        views.append(operand.owner.opview)
+                        operand = operand.owner.operands[0]
+
+                    prev = operand.owner
+                    if isinstance(prev, Block) or isinstance(
+                        prev.opview, (arith.ConstantOp, hls.TensorInstanceOp,
+                                      hls.ITensorInstanceOp)):
+                        continue
+
+                    if not self.has_node(prev):
+                        raise ValueError(f"prev node not found for {operand}")
+                    instance = hls.get_defining_instance(operand)
+                    if not instance:
+                        raise ValueError(f"instance not found for {operand}")
+                    self.add_edge(prev.opview, op,
+                                  instance=instance, views=views)
 
         self.add_node(self.top, name=self.top.name.value, id=-1, children=[])
         walk_operation(self.top, add_task_node)
 
     @staticmethod
-    def is_dataflow_node(node: OpView):
-        # TODO: This is a temporary solution. We should have a more robust way
-        # to figure out what is needed in the task graph.
+    def _is_view_like_op(node: OpView):
         return isinstance(
-            node, (hls.TaskOp, tensor.ExpandShapeOp, tensor.CollapseShapeOp,
+            node, (tensor.ExpandShapeOp, tensor.CollapseShapeOp,
                    tensor.ReshapeOp, tensor.CastOp, tensor.BitcastOp,
-                   hls.ITensorReassociateOp, hls.ITensorCastOp, func.ReturnOp))
+                   hls.ITensorReassociateOp, hls.ITensorCastOp))

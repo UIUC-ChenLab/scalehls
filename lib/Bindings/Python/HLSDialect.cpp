@@ -55,6 +55,21 @@ void populateHLSAttributes(py::module &m) {
       "Returns the value of MemoryKindAttr.");
 }
 
+void populateHLSTypes(py::module &m) {
+  auto iTensorType =
+      mlir_type_subclass(m, "ITensorType", mlirTypeIsHLSITensorType);
+  iTensorType.def_classmethod(
+      "depth", [](MlirType type) { return mlirHLSITensorTypeGetDepth(type); },
+      "Get the depth of an itensor type.", py::arg("type"));
+  iTensorType.def_classmethod(
+      "set_depth",
+      [](MlirType type, int64_t depth) {
+        return mlirHLSITensorTypeSetDepth(type, depth);
+      },
+      "Set the depth of an itensor type and return.", py::arg("type"),
+      py::arg("depth"));
+}
+
 //===----------------------------------------------------------------------===//
 // HLS Dialect Types
 //===----------------------------------------------------------------------===//
@@ -84,5 +99,20 @@ PYBIND11_MODULE(_hls_dialect, m) {
       },
       py::arg("op"));
 
+  m.def(
+      "get_defining_instance",
+      [](MlirValue value) {
+        if (auto parent_task = unwrap(value).getDefiningOp<hls::TaskOp>()) {
+          auto result = cast<OpResult>(unwrap(value));
+          auto init = parent_task.getInits()[result.getResultNumber()];
+          if (auto instance =
+                  init.getDefiningOp<hls::MemoryInstanceOpInterface>())
+            return wrap(instance.getOperation());
+        }
+        return MlirOperation();
+      },
+      py::arg("value"));
+
   populateHLSAttributes(m);
+  populateHLSTypes(m);
 }
