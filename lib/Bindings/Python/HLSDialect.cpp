@@ -6,7 +6,10 @@
 
 #include "mlir-c/IR.h"
 #include "mlir/Bindings/Python/PybindAdaptors.h"
+#include "mlir/CAPI/IR.h"
 #include "scalehls-c/Dialect/HLS/HLS.h"
+#include "scalehls/Dialect/HLS/IR/HLS.h"
+#include "llvm/ADT/SmallPtrSet.h"
 
 #include <pybind11/pybind11.h>
 
@@ -15,6 +18,7 @@ namespace py = pybind11;
 using namespace mlir;
 using namespace mlir::python;
 using namespace mlir::python::adaptors;
+using namespace scalehls;
 
 //===----------------------------------------------------------------------===//
 // HLS Dialect Attributes
@@ -57,6 +61,28 @@ void populateHLSAttributes(py::module &m) {
 
 PYBIND11_MODULE(_hls_dialect, m) {
   m.doc() = "HLS Dialect Python Native Extension";
+
+  m.def(
+      "get_live_ins",
+      [](MlirOperation op) {
+        hls::TaskOp task_op = dyn_cast<hls::TaskOp>(unwrap(op));
+        assert(task_op && "input operation is not linalg generic operation");
+        auto live_ins = task_op.getLiveIns();
+        py::list py_live_ins;
+        for (auto &live_in : live_ins)
+          py_live_ins.append(wrap(live_in));
+        return py_live_ins;
+      },
+      py::arg("task_op"));
+
+  m.def(
+      "get_parent_task",
+      [](MlirOperation op) {
+        if (auto parent_task = unwrap(op)->getParentOfType<hls::TaskOp>())
+          return wrap(parent_task);
+        return MlirOperation();
+      },
+      py::arg("op"));
 
   populateHLSAttributes(m);
 }

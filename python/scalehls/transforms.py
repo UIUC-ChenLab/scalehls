@@ -4,14 +4,16 @@
 #
 # ===----------------------------------------------------------------------=== #
 
-
+import networkx as nx
+import plotly.graph_objects as go
+from plotly.offline import plot
 from ._mlir_libs._scalehls import *
 from graphviz import Digraph
 import re
 import functools
 import operator
 from .dialects import hls, linalg, tensor, func, hls_transform, transform, arith
-from .ir import IntegerType, IntegerAttr, StringAttr, ArrayAttr, Value, InsertionPoint, UnitAttr, DenseI64ArrayAttr, Block, Operation, Type, Location, Module, Context, BlockArgument, Attribute
+from .ir import IntegerType, IntegerAttr, StringAttr, ArrayAttr, Value, InsertionPoint, UnitAttr, DenseI64ArrayAttr, Block, Operation, Type, Location, Module, Context, BlockArgument, Attribute, OpView
 from .dialects.transform import structured as linalg_transform
 from .dialects.transform import tensor as tensor_transform
 from .passmanager import PassManager
@@ -30,9 +32,10 @@ def apply_transform_sequence(
         delete_sequence: bool = True):
     pm = PassManager.parse(
         "builtin.module("
-        "scalehls-transform-interpreter{entry-point=" +
-        sequence.sym_name.value + " delete-entry-point=" +
-        str(delete_sequence).lower() + "},"
+        "scalehls-transform-interpreter{"
+        f"entry-point={sequence.sym_name.value} "
+        f"delete-entry-point={str(delete_sequence).lower()}"
+        "},"
         "cse, canonicalize"
         ")")
     pm.run(module.operation)
@@ -150,8 +153,9 @@ def apply_schedule_dataflow(module: Module):
 def apply_strip_annotations(module: Module, annotation_name: str):
     pm = PassManager.parse(
         "builtin.module("
-        "func.func(scalehls-strip-annotations{annotation-name=" +
-        annotation_name + "}),"
+        "func.func(scalehls-strip-annotations{"
+        f"annotation-name={annotation_name}"
+        "}),"
         "cse, canonicalize"
         ")")
     pm.run(module.operation)
@@ -638,7 +642,7 @@ class LinalgDesignSpaceGraph(Graph):
         self.module = module
         self.top = find_func(self.module, top_name)
         if self.top is None:
-            raise ValueError("top function `" + top_name + "` not found")
+            raise ValueError(f"top function `{top_name}` not found")
 
         self.add_node(self.top, {"name": self.top.name.value, "id": -1})
         for id, op in enumerate(self.top.entry_block):
@@ -648,13 +652,13 @@ class LinalgDesignSpaceGraph(Graph):
                 parent = operand.owner.owner if isinstance(
                     operand.owner, Block) else operand.owner
                 if not self.has_node(parent):
-                    raise ValueError("parent node not found")
-                self.add_edge(parent, op, {"value": operand})
+                    raise ValueError(f"parent node not found for {operand}")
+                self.add_edge(parent.opview, op, {"value": operand})
 
     @staticmethod
-    def is_nontrivial_node(node: Operation):
-        return node.name != "hls.tensor_init" and \
-            node.name != "tensor.empty" and node.name != "arith.constant"
+    def is_nontrivial_node(node: OpView):
+        return not isinstance(
+            node, (hls.TensorInitOp, tensor.EmptyOp, arith.ConstantOp))
 
     @staticmethod
     def get_linalg_op_naive_tile_sizes(node: linalg.GenericOp,
@@ -747,20 +751,17 @@ class LinalgDesignSpaceGraph(Graph):
         dot = Digraph()
         for node, data in self.iter_nodes():
             if self.is_nontrivial_node(node):
+                label = f"{data['name']} {(data['id'])}"
                 if print_params:
-                    label = data["name"] + " " + str(data["id"]) + "\n"
                     for key, value in data.items():
                         if key == "name" or key == "id":
                             continue
                         if isinstance(value, (int, str)):
-                            label += key + ": " + str(value) + "\n"
+                            label += f"\n{key}: {value}"
                         elif isinstance(value, list):
-                            label += key + ": [" + \
-                                ", ".join([str(x) for x in value]) + "]\n"
-                    dot.node(str(data["id"]), label)
-                else:
-                    dot.node(str(data["id"]), data["name"] +
-                             " " + str(data["id"]))
+                            label += f"\n{key}: [" + \
+                                ", ".join([str(x) for x in value]) + "]"
+                dot.node(f"{data['id']}", label)
         for prev, next, data in self.iter_edges():
             if self.is_nontrivial_node(prev) and self.is_nontrivial_node(next):
                 prev_data = self.nodes[prev].attributes
@@ -850,15 +851,95 @@ class DataflowDesignSpaceGraph(Graph):
         self.module = module
         self.top = find_func(self.module, top_name)
         if self.top is None:
-            raise ValueError("top function `" + top_name + "` not found")
+            raise ValueError(f"top function `{top_name}` not found")
+        id = [0]
+
+        def add_task_node(op: OpView):
+            if self.is_nontrivial_node(op.opview):
+                nonlocal id
+                parent_task = hls.get_parent_task(op)
+                parent = parent_task if parent_task is not None else self.top
+                self.add_sub_node(parent, op, {"name": op.name, "id": id[0]})
+                op.attributes[k_dataflow_dsg_id_name] = i64_attr(id[0])
+                id[0] += 1
+
+                operands = hls.get_live_ins(op) if isinstance(
+                    op.opview, hls.TaskOp) else op.operands
+                for operand in operands:
+                    if not isinstance(operand.owner, Block):
+                        parent = operand.owner
+                        if not isinstance(parent.opview,  # type: ignore
+                                          (arith.ConstantOp,
+                                           hls.TensorInstanceOp,
+                                           hls.ITensorInstanceOp)):
+                            if not self.has_node(parent):
+                                raise ValueError(
+                                    f"parent node not found for {operand}")
+                            self.add_edge(parent.opview, op, {  # type: ignore
+                                "value": operand})
 
         self.add_node(self.top, {"name": self.top.name.value, "id": -1})
-        for id, op in enumerate(self.top.entry_block):
-            self.add_node(op, {"name": op.name, "id": id})
-            op.attributes[k_linalg_dsg_id_name] = i64_attr(id)
-            for operand in op.operands:
-                parent = operand.owner.owner if isinstance(
-                    operand.owner, Block) else operand.owner
-                if not self.has_node(parent):
-                    raise ValueError("parent node not found")
-                self.add_edge(parent, op, {"value": operand})
+        walk_operation(self.top, add_task_node)
+
+    @staticmethod
+    def is_nontrivial_node(node: OpView):
+        # TODO: This is a temporary solution. We should have a more robust way
+        # to figure out what is needed in the task graph.
+        return isinstance(node,
+                          (hls.TaskOp,
+                           tensor.ExpandShapeOp,
+                           tensor.CollapseShapeOp,
+                           tensor.ReshapeOp,
+                           tensor.CastOp,
+                           tensor.BitcastOp,
+                           hls.ITensorReassociateOp,
+                           hls.ITensorCastOp))
+
+    def print_dot(self, file_name: str, print_params: bool = False):
+        dot = Digraph()
+        dot.attr(compound='true')
+        self._add_nodes_recursively(dot, self.top, print_params)
+        for prev, next, data in self.iter_edges():
+            prev_data = self.nodes[prev].attributes
+            next_data = self.nodes[next].attributes
+            if len(self.nodes[next].sub_nodes) == 0:
+                if len(self.nodes[prev].sub_nodes) > 0:
+                    leaf_prev = self._find_leaf_prev_node(prev)
+                    leaf_prev_data = self.nodes[leaf_prev].attributes
+                    dot.edge(f"{leaf_prev_data['id']}", f"{next_data['id']}",
+                             ltail=f"cluster_{prev_data['id']}")
+                else:
+                    dot.edge(f"{prev_data['id']}", f"{next_data['id']}")
+        dot.render(file_name, format='png', cleanup=True)
+
+    def _add_nodes_recursively(self, dot: Digraph, parent_id, print_params):
+        parent_node = self.nodes[parent_id]
+        parent_data = parent_node.attributes
+        subgraph = Digraph(name=f"cluster_{parent_data['id']}")
+        subgraph.attr(label=f"{parent_data['name']} {parent_data['id']}")
+        subgraph.attr(compound='true')
+
+        for node in parent_node.sub_nodes:
+            if len(node.sub_nodes) > 0:
+                self._add_nodes_recursively(subgraph, node.id, print_params)
+            else:
+                data = node.attributes
+                label = f"{data['name']} {(data['id'])}"
+                if print_params:
+                    for key, value in data.items():
+                        if key == "name" or key == "id":
+                            continue
+                        if isinstance(value, (int, str)):
+                            label += f"\n{key}: {value}"
+                        elif isinstance(value, list):
+                            label += f"\n{key}: "
+                            ", ".join([str(x) for x in value])
+                subgraph.node(f"{data['id']}", label)
+
+        dot.subgraph(subgraph)
+
+    def _find_leaf_prev_node(self, prev_id):
+        prev_node = self.nodes[prev_id]
+        while len(prev_node.sub_nodes) > 0:
+            prev_node = prev_node.sub_nodes[-1]
+        return prev_node.id
