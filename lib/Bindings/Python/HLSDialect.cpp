@@ -83,21 +83,21 @@ PYBIND11_MODULE(_hls_dialect, m) {
   m.def(
       "get_live_ins",
       [](MlirOperation op) {
-        hls::TaskOp task_op = dyn_cast<hls::TaskOp>(unwrap(op));
-        assert(task_op && "input operation is not linalg generic operation");
-        auto live_ins = task_op.getLiveIns();
-        py::list py_live_ins;
-        for (auto &live_in : live_ins)
-          py_live_ins.append(wrap(live_in));
-        return py_live_ins;
+        hls::TaskOp task = dyn_cast<hls::TaskOp>(unwrap(op));
+        assert(task && "input operation is not linalg generic operation");
+        auto liveIns = task.getLiveIns();
+        py::list pyLiveIns;
+        for (auto &liveIn : liveIns)
+          pyLiveIns.append(wrap(liveIn));
+        return pyLiveIns;
       },
       py::arg("task_op"));
 
   m.def(
       "get_parent_task",
       [](MlirOperation op) {
-        if (auto parent_task = unwrap(op)->getParentOfType<hls::TaskOp>())
-          return wrap(parent_task);
+        if (auto parentTask = unwrap(op)->getParentOfType<hls::TaskOp>())
+          return wrap(parentTask);
         return MlirOperation();
       },
       py::arg("op"));
@@ -105,14 +105,33 @@ PYBIND11_MODULE(_hls_dialect, m) {
   m.def(
       "get_defining_instance",
       [](MlirValue value) {
-        if (auto parent_task = unwrap(value).getDefiningOp<hls::TaskOp>()) {
+        if (auto defTask = unwrap(value).getDefiningOp<hls::TaskOp>()) {
           auto result = cast<OpResult>(unwrap(value));
-          auto init = parent_task.getInits()[result.getResultNumber()];
+          auto init = defTask.getInits()[result.getResultNumber()];
           if (auto instance =
                   init.getDefiningOp<hls::MemoryInstanceOpInterface>())
             return wrap(instance.getOperation());
         }
         return MlirOperation();
+      },
+      py::arg("value"));
+
+  m.def(
+      "get_defining_tasks",
+      [](MlirValue value) {
+        py::list tasks;
+        Value result = unwrap(value);
+        while (auto defOp = result.getDefiningOp()) {
+          auto resultIdx = result.cast<OpResult>().getResultNumber();
+          if (auto task = dyn_cast<hls::TaskOp>(defOp)) {
+            result = task.getYieldOp().getOperand(resultIdx);
+            tasks.append(wrap(task));
+          } else if (auto loop = dyn_cast<scf::ForOp>(defOp))
+            result = loop.getYieldedValues()[resultIdx];
+          else
+            break;
+        }
+        return tasks;
       },
       py::arg("value"));
 

@@ -51,14 +51,14 @@ PYBIND11_MODULE(_scalehls, m) {
 
   m.def(
       "get_static_loop_ranges",
-      [](MlirOperation linalg_op) {
-        linalg::GenericOp generic_op =
-            dyn_cast<linalg::GenericOp>(unwrap(linalg_op));
-        assert(generic_op && "input operation is not linalg generic operation");
-        py::list py_loop_ranges;
-        for (auto &range : generic_op.getStaticLoopRanges())
-          py_loop_ranges.append(range);
-        return py_loop_ranges;
+      [](MlirOperation linalgOp) {
+        linalg::GenericOp genericOp =
+            dyn_cast<linalg::GenericOp>(unwrap(linalgOp));
+        assert(genericOp && "input operation is not linalg generic operation");
+        py::list pyLoopRanges;
+        for (auto &range : genericOp.getStaticLoopRanges())
+          pyLoopRanges.append(range);
+        return pyLoopRanges;
       },
       py::arg("linalg_op"));
 

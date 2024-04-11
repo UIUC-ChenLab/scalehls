@@ -612,8 +612,6 @@ class BaseDesignSpaceGraph(nx.Graph):
         if self.has_children(parent):
             subgraph = Digraph(name=f"cluster_{self.id(parent)}")
             subgraph.attr(label=self._format_node_label(parent, print_params))
-            subgraph.attr(compound='true')
-
             for node in self.children(parent):
                 self._add_nodes_recursively(
                     subgraph, node, print_params, filter)
@@ -622,29 +620,17 @@ class BaseDesignSpaceGraph(nx.Graph):
             dot.node(f"{self.id(parent)}",
                      self._format_node_label(parent, print_params))
 
-    def _find_leaf_prev_node(self, prev):
-        leaf_prev = prev
-        while self.has_children(leaf_prev):
-            leaf_prev = self.children(prev)[-1]
-        return leaf_prev
-
     def print_dot(self,
                   file_name: str,
                   print_params: bool = True,
                   filter: Callable[[OpView], bool] = lambda op: True):
         dot = Digraph()
-        dot.attr(compound='true')
         self._add_nodes_recursively(dot, self.top, print_params, filter)
         for prev, next in self.edges():
-            if filter(prev) and filter(next) and not self.has_children(next):
-                if self.has_children(prev):
-                    leaf_prev = self._find_leaf_prev_node(prev)
-                    dot.edge(f"{self.id(leaf_prev)}", f"{self.id(next)}",
-                             self._format_edge_label(prev, next, print_params),
-                             ltail=f"cluster_{self.id(prev)}")
-                else:
-                    dot.edge(f"{self.id(prev)}", f"{self.id(next)}",
-                             self._format_edge_label(prev, next, print_params))
+            if not self.has_children(prev) and not self.has_children(next) and \
+                    filter(prev) and filter(next):
+                dot.edge(f"{self.id(prev)}", f"{self.id(next)}",
+                         self._format_edge_label(prev, next, print_params))
         dot.render(file_name, format='png', cleanup=True)
 
 
@@ -861,25 +847,32 @@ class DataflowDesignSpaceGraph(BaseDesignSpaceGraph):
                 id[0] += 1
 
                 for operand in hls.get_live_ins(op):
+                    # Bypass all the view-like operations.
                     views = []
                     while not isinstance(operand.owner, Block) and \
                             self._is_view_like_op(operand.owner.opview):
                         views.append(operand.owner.opview)
                         operand = operand.owner.operands[0]
 
+                    # Ensure prev is not a block argument or a ignorable op.
                     prev = operand.owner
                     if isinstance(prev, Block) or isinstance(
                         prev.opview, (arith.ConstantOp, hls.TensorInstanceOp,
                                       hls.ITensorInstanceOp)):
                         continue
 
-                    if not self.has_node(prev):
-                        raise ValueError(f"prev node not found for {operand}")
+                    # Find the defining memory instance of the operand.
                     instance = hls.get_defining_instance(operand)
                     if not instance:
                         raise ValueError(f"instance not found for {operand}")
-                    self.add_edge(prev.opview, op,
-                                  instance=instance, views=views)
+
+                    # Find all the defining tasks of the operand.
+                    tasks = hls.get_defining_tasks(operand)
+                    for task in tasks:
+                        if not self.has_node(task):
+                            raise ValueError(f"prev not found for {operand}")
+                        self.add_edge(task, op,
+                                      instance=instance, views=views)
 
         self.add_node(self.top, name=self.top.name.value, id=-1, children=[])
         walk_operation(self.top, add_task_node)
@@ -902,3 +895,6 @@ class DataflowDesignSpaceGraph(BaseDesignSpaceGraph):
                     elif isinstance(type, hls.ITensorType):  # type: ignore
                         label += f"\ndepth: {type.depth}"
         return label
+
+    def naive_exploration(self):
+        pass
