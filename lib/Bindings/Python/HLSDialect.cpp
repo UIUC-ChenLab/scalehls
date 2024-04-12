@@ -94,11 +94,11 @@ PYBIND11_MODULE(_hls_dialect, m) {
       py::arg("task_op"));
 
   m.def(
-      "get_parent_task",
+      "get_parent_task_or_func",
       [](MlirOperation op) {
         if (auto parentTask = unwrap(op)->getParentOfType<hls::TaskOp>())
           return wrap(parentTask);
-        return MlirOperation();
+        return wrap(unwrap(op)->getParentOfType<func::FuncOp>());
       },
       py::arg("op"));
 

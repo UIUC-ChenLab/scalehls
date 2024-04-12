@@ -564,32 +564,27 @@ class BaseDesignSpaceGraph(nx.Graph):
             raise ValueError(f"top function `{top_name}` not found")
         self.top = top
 
-    def attr(self, node: OpView, attr_name: str, attr_type: type):
+    def attr(self, node: OpView, attr_name: str):
         if attr_name not in self.nodes[node]:
             raise ValueError(f"{attr_name} not found for {node}")
         attr = self.nodes[node][attr_name]
-        if not isinstance(attr, attr_type):
-            raise ValueError(f"{attr_name} is not of type {attr_type}")
         return attr
 
     def name(self, node: OpView) -> str:
-        return self.attr(node, "name", str)
+        return self.attr(node, "name")
 
     def id(self, node: OpView) -> int:
-        return self.attr(node, "id", int)
+        return self.attr(node, "id")
 
-    def parent(self, node: OpView) -> OpView:
-        # Not in use.
-        return self.attr(node, "parent", OpView)
+    def parent(self, node: OpView) -> Optional[OpView]:
+        return self.attr(node, "parent")
 
     def children(self, node: OpView) -> List[OpView]:
         # This function doesn't check whether the node has children or not.
-        return self.attr(node, "children", list)
+        return self.attr(node, "children")
 
     def has_children(self, node: OpView) -> bool:
-        if "children" in self.nodes[node]:
-            return len(self.children(node)) > 0
-        return False
+        return len(self.children(node)) > 0
 
     def _format_node_label(self, node: OpView, print_params):
         label = f"{self.name(node)} {self.id(node)}"
@@ -633,6 +628,13 @@ class BaseDesignSpaceGraph(nx.Graph):
                          self._format_edge_label(prev, next, print_params))
         dot.render(file_name, format='png', cleanup=True)
 
+    def verify(self):
+        for node in self.nodes():
+            if self.has_children(node):
+                for child in self.children(node):
+                    if self.parent(child) != node:
+                        raise ValueError(f"parent mismatch: {child} {node}")
+
 
 # ===----------------------------------------------------------------------=== #
 # LinalgDesignSpaceGraph Class
@@ -646,9 +648,11 @@ class LinalgDesignSpaceGraph(BaseDesignSpaceGraph):
     def __init__(self, module: Module, top_name: str = "forward"):
         super().__init__(module, top_name)
 
-        self.add_node(self.top, name=self.top.name.value, id=-1, children=[])
+        self.add_node(self.top, name=self.top.name.value,
+                      id=-1, parent=None, children=[])
         for id, op in enumerate(self.top.entry_block):
-            self.add_node(op, name=op.name, id=id, children=[])
+            self.add_node(op, name=op.name, id=id,
+                          parent=self.top, children=[])
             self.nodes[self.top]["children"].append(op)
             op.attributes[k_linalg_dsg_id_name] = i64_attr(id)
             for operand in op.operands:
@@ -657,6 +661,7 @@ class LinalgDesignSpaceGraph(BaseDesignSpaceGraph):
                     if not self.has_node(prev):
                         raise ValueError(f"prev node not found for {operand}")
                     self.add_edge(prev.opview, op, value=operand)
+        self.verify()
 
     @ staticmethod
     def _is_nontrivial_op(node: OpView):
@@ -839,9 +844,9 @@ class DataflowDesignSpaceGraph(BaseDesignSpaceGraph):
         def add_task_node(op: OpView):
             if isinstance(op.opview, hls.TaskOp):
                 nonlocal id
-                parent_task = hls.get_parent_task(op)
-                parent = parent_task if parent_task is not None else self.top
-                self.add_node(op, name=op.name, id=id[0], children=[])
+                parent = hls.get_parent_task_or_func(op)
+                self.add_node(op, name=op.name,
+                              id=id[0], parent=parent, children=[])
                 self.nodes[parent]["children"].append(op)
                 op.attributes[k_dataflow_dsg_id_name] = i64_attr(id[0])
                 id[0] += 1
@@ -874,8 +879,10 @@ class DataflowDesignSpaceGraph(BaseDesignSpaceGraph):
                         self.add_edge(task, op,
                                       instance=instance, views=views)
 
-        self.add_node(self.top, name=self.top.name.value, id=-1, children=[])
+        self.add_node(self.top, name=self.top.name.value,
+                      id=-1, parent=None, children=[])
         walk_operation(self.top, add_task_node)
+        self.verify()
 
     @staticmethod
     def _is_view_like_op(node: OpView):
