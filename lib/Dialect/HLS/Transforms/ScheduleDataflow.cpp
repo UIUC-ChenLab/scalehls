@@ -200,10 +200,13 @@ struct ScheduleDataflow
     // Wrap the ops of each level into a seperate task.
     unsigned taskId = 0;
     for (auto [location, ops] : llvm::zip(levelToLocationMap, levelToOpsMap)) {
+      if (ops.empty())
+        continue;
       auto taskName = func.getName().str() + "_top_" + std::to_string(taskId++);
       auto task = wrapOpsIntoTask(ops, taskName, location, builder);
       task->setAttr("__top__", builder.getUnitAttr());
     }
+    func->setAttr("__entry__", builder.getUnitAttr());
   }
 
   /// Infer and apply the locations of tensor/itensor instance ops based on the

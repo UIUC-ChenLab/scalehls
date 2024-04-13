@@ -55,7 +55,8 @@ struct ConvertTaskToFunc : public OpRewritePattern<TaskOp> {
     auto subFunc = rewriter.create<func::FuncOp>(
         task.getLoc(), task.getNameAttr(),
         rewriter.getFunctionType(TypeRange(operands), TypeRange()));
-    subFunc->setAttr("__location__", task.getLocationAttr());
+    if (task.getLocation())
+      subFunc->setAttr("__location__", task.getLocationAttr());
     for (auto attr : task->getAttrs())
       if (attr.getName() != task.getLocationAttrName() &&
           attr.getName() != task.getNameAttrName())

@@ -286,6 +286,7 @@ public:
       : ScaleHLSEmitterBase(state) {}
 
   /// HLS dialect operation emitters.
+  void emitBuffer(BufferOp op);
   void emitStreamChannel(StreamOp op);
   void emitStreamRead(StreamReadOp op);
   void emitStreamWrite(StreamWriteOp op);
@@ -456,7 +457,7 @@ public:
   using HLSVisitorBase::visitOp;
 
   /// HLS dialect operations.
-  bool visitOp(BufferOp op) { return emitter.emitAlloc(op), true; }
+  bool visitOp(BufferOp op) { return emitter.emitBuffer(op), true; }
   bool visitOp(StreamOp op) { return emitter.emitStreamChannel(op), true; }
   bool visitOp(StreamReadOp op) { return emitter.emitStreamRead(op), true; }
   bool visitOp(StreamWriteOp op) { return emitter.emitStreamWrite(op), true; }
@@ -672,16 +673,39 @@ bool ExprVisitor::visitOp(arith::CmpIOp op) {
 //===----------------------------------------------------------------------===//
 
 /// HLS dialect operation emitters.
+void ModuleEmitter::emitBuffer(BufferOp op) {
+  // A declared result indicates that the memref is output of the function, and
+  // has been declared in the function signature.
+  if (isDeclared(op.getResult()))
+    return;
+
+  // Vitis HLS only supports static shape on-chip memory.
+  if (!op.getType().hasStaticShape())
+    emitError(op, "is unranked or has dynamic shape.");
+
+  indent();
+  emitArrayDecl(op.getResult());
+  if (op.getInitValue()) {
+    os << " = {";
+    os << getConstantString(op.getType().getElementType(),
+                            op.getInitValueAttr());
+    os << "}";
+  }
+  os << ";";
+  emitInfoAndNewLine(op);
+  emitArrayDirectives(op.getResult());
+}
+
 void ModuleEmitter::emitStreamChannel(StreamOp op) {
   indent();
   emitValue(op.getStream());
   os << ";";
   emitInfoAndNewLine(op);
-  if (emitDirectives()) {
-    indent() << "#pragma HLS stream variable=";
-    emitValue(op.getStream());
-    os << " depth=" << op.getType().getDepth() << "\n";
-  }
+  // if (emitDirectives()) {
+  //   indent() << "#pragma HLS stream variable=";
+  //   emitValue(op.getStream());
+  //   os << " depth=" << op.getType().getDepth() << "\n";
+  // }
 }
 
 void ModuleEmitter::emitStreamRead(StreamReadOp op) {
@@ -1703,7 +1727,7 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
     return;
   // Only top function should emit interface pragmas.
   if (isTopFunc) {
-    indent() << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
+    indent() << "#pragma HLS interface s_axilite port=return\n";
     for (auto &port : portList) {
       if (isa<MemRefType>(port.getType())) {
         indent() << "#pragma HLS interface m_axi offset=slave port=";
@@ -1751,6 +1775,9 @@ void ModuleEmitter::emitFunction(func::FuncOp func) {
         os << "/// Top PL function.\n";
       setEmitDirectives();
     }
+
+  if (func->hasAttr("__entry__"))
+    os << "/// Entry function.\n";
 
   if (func.getBlocks().size() != 1)
     emitError(func, "has zero or more than one basic blocks.");

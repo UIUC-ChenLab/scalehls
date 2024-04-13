@@ -4,9 +4,9 @@
 #
 # ===----------------------------------------------------------------------=== #
 
+import subprocess
 import networkx as nx
-import plotly.graph_objects as go
-from plotly.offline import plot
+from torch import Tensor
 from ._mlir_libs._scalehls import *
 from graphviz import Digraph
 import re
@@ -43,7 +43,7 @@ def apply_transform_sequence(
         del module.operation.attributes["transform.with_named_sequence"]
 
 
-def apply_linalg_optimization_passes(module: Module):
+def apply_linalg_optimization_passes(module: Module, preprocess: bool = True):
     pm = PassManager.parse(
         "builtin.module("
         "convert-tensor-to-linalg,"
@@ -161,9 +161,26 @@ def apply_strip_annotations(module: Module, annotation_name: str):
     pm.run(module.operation)
 
 
+def apply_lower_linalg_passes(module: Module):
+    pm = PassManager.parse(
+        "builtin.module("
+        "func.func("
+        "convert-linalg-to-loops,"
+        "fold-memref-alias-ops,"
+        "scalehls-raise-scf-to-affine,"
+        "affine-loop-normalize,"
+        "affine-simplify-structures,"
+        "affine-scalrep"
+        "),"
+        "cse, canonicalize"
+        ")")
+    pm.run(module.operation)
+
+
 def apply_loop_directive_optimization_passes(module: Module):
     pm = PassManager.parse(
-        "builtin.module(func.func("
+        "builtin.module("
+        "func.func("
         "scalehls-generate-directives,"
         "convert-linalg-to-loops,"
         "fold-memref-alias-ops,"
@@ -172,7 +189,9 @@ def apply_loop_directive_optimization_passes(module: Module):
         "affine-simplify-structures,"
         "scalehls-apply-directives,"
         "affine-scalrep"
-        "))")
+        "),"
+        "cse, canonicalize"
+        ")")
     pm.run(module.operation)
 
 
@@ -555,13 +574,13 @@ def convert_full_tensor_linalg_op_to_itensor(
 # ===----------------------------------------------------------------------=== #
 
 
-class BaseDesignSpaceGraph(nx.Graph):
-    def __init__(self, module: Module, top_name: str = "forward"):
+class BaseDesignSpaceGraph(nx.DiGraph):
+    def __init__(self, module: Module, entry: str = "forward_scheduled"):
         super().__init__()
         self.module = module
-        top = find_func(self.module, top_name)
+        top = find_func(self.module, entry)
         if top is None:
-            raise ValueError(f"top function `{top_name}` not found")
+            raise ValueError(f"top function `{entry}` not found")
         self.top = top
 
     def attr(self, node: OpView, attr_name: str):
@@ -645,8 +664,8 @@ k_linalg_dsg_id_name = "__linalg_dsg_id__"
 
 
 class LinalgDesignSpaceGraph(BaseDesignSpaceGraph):
-    def __init__(self, module: Module, top_name: str = "forward"):
-        super().__init__(module, top_name)
+    def __init__(self, module: Module, entry: str = "forward"):
+        super().__init__(module, entry)
 
         self.add_node(self.top, name=self.top.name.value,
                       id=-1, parent=None, children=[])
@@ -837,8 +856,8 @@ k_dataflow_dsg_id_name = "__dataflow_dsg_id__"
 
 
 class DataflowDesignSpaceGraph(BaseDesignSpaceGraph):
-    def __init__(self, module: Module, top_name: str = "forward"):
-        super().__init__(module, top_name)
+    def __init__(self, module: Module, entry: str = "forward"):
+        super().__init__(module, entry)
         id = [0]
 
         def add_task_node(op: OpView):
@@ -904,4 +923,120 @@ class DataflowDesignSpaceGraph(BaseDesignSpaceGraph):
         return label
 
     def naive_exploration(self):
-        pass
+        for node, data in self.nodes(data=True):
+            for succ in self.successors(node):
+                pass
+
+
+# ===----------------------------------------------------------------------=== #
+# HLS Synthesis Utils
+# ===----------------------------------------------------------------------=== #
+
+class Synthesizer():
+    def __init__(self,
+                 tool_path: str = "vitis_hls",
+                 part: str = "xcu280-fsvh2892-2L-e",
+                 clock_period: int = 10,
+                 syn_path: str = "."):
+        self.tool_path = tool_path
+        self.part = part
+        self.clock_period = clock_period
+        self.syn_path = syn_path
+
+    def generate_testbench(self,
+                           entry: str,
+                           file_paths: List[str],
+                           input: Tensor,
+                           output: Tensor
+                           ):
+        input_declare = "float input" + \
+            "".join([f'[{x}]' for x in input.shape])
+        output_declare = "float output" + \
+            "".join([f'[{x}]' for x in output.shape])
+
+        testbench_header_path = f"{self.syn_path}/{entry}_tb.h"
+        with open(testbench_header_path, "w") as testbench_header_file:
+            testbench_header_file.write(
+                f"void {entry}({input_declare}, {output_declare});\n")
+
+        input_list = input.flatten().tolist()
+        output_list = output.flatten().tolist()
+        input_init = f"{{ {', '.join([str(x) for x in input_list])} }}"
+        output_init = f"{{ {', '.join([str(x) for x in output_list])} }}"
+        output_kernel_declare = f"float output_kernel" + \
+            "".join([f'[{x}]' for x in output.shape])
+        input_indices = "".join([f'[i{i}]' for i in range(len(input.shape))])
+        output_indices = "".join([f'[i{i}]' for i in range(len(output.shape))])
+
+        testbench_path = f"{self.syn_path}/{entry}_tb.cpp"
+        with open(testbench_path, "w") as testbench_file:
+            testbench_file.writelines([
+                f"#include <iostream>\n",
+                f"#include \"{testbench_header_path}\"\n",
+                f"int main() {{\n",
+                f"  {input_declare} = {input_init};\n",
+                f"  {output_declare} = {output_init};\n",
+                f"  {output_kernel_declare};\n",
+                f"  {entry}(input, output_kernel);\n",
+                *[f"  for (int i{i} = 0; i{i} < {x}; i{i}++) {{\n" for i,
+                  x in enumerate(output.shape)],
+                # f"    if (output_kernel{input_indices} != output{output_indices}) {{\n",
+                # f"       std::cout << \"Test failed!\" << std::endl;\n",
+                f"       std::cout << output_kernel{input_indices} << \", \" << output{output_indices} << std::endl;\n",
+                # f"       return 1;\n",
+                # f"    }}\n",
+                *[f"  }}\n" for _ in output.shape],
+                f"  std::cout << \"Test passed!\" << std::endl;\n",
+                f"  return 0;\n",
+                f"}}\n"
+            ])
+
+        return [testbench_file, testbench_header_file], \
+            [testbench_path, testbench_header_path]
+
+    def generate_script(self,
+                        hls_top: str,
+                        file_paths: List[str],
+                        tb_file_path: List[str],
+                        csim: bool = True,
+                        csynth: bool = True,
+                        cosim: bool = False):
+        script_path = f"{self.syn_path}/{hls_top}.tcl"
+        with open(script_path, "w") as script_file:
+            script_file.writelines([
+                f"open_project {self.syn_path}/{hls_top}\n",
+                f"set_top {hls_top}\n",
+                *[f"add_files {file_path}\n" for file_path in file_paths],
+                *[f"add_files -tb {file_path}\n" for file_path in tb_file_path],
+                f"open_solution {hls_top}\n",
+                f"set_part {self.part}\n",
+                f"create_clock -period {self.clock_period} -name default\n",
+                "csim_design\n" if csim else "# csim_design\n",
+                "csynth_design\n" if csynth else "# csynth_design\n",
+                "cosim_design\n" if cosim else "# cosim_design\n"
+            ])
+        return script_file, script_path
+
+    def run(self,
+            module: Module,
+            entry: str,
+            hls_top: str,
+            input: Tensor,
+            output: Tensor,
+            csim: bool = True,
+            csynth: bool = True,
+            cosim: bool = False):
+        design_path = f"{self.syn_path}/{entry}.cpp"
+        with open(design_path, "w") as design_file:
+            emit_hlscpp(module, design_file, omit_global_constants=False)
+
+        testbench_files, testbench_paths = self.generate_testbench(
+            entry, [design_path], input, output)
+
+        script_file, script_path = self.generate_script(
+            hls_top, [design_path], testbench_paths, csim, csynth, cosim)
+
+        result = subprocess.run([self.tool_path, script_path],
+                                capture_output=True, text=True)
+        with open(f"{self.syn_path}/{entry}.log", "w") as log_file:
+            log_file.write(result.stdout)
