@@ -674,26 +674,9 @@ bool ExprVisitor::visitOp(arith::CmpIOp op) {
 
 /// HLS dialect operation emitters.
 void ModuleEmitter::emitBuffer(BufferOp op) {
-  // A declared result indicates that the memref is output of the function, and
-  // has been declared in the function signature.
-  if (isDeclared(op.getResult()))
-    return;
-
-  // Vitis HLS only supports static shape on-chip memory.
-  if (!op.getType().hasStaticShape())
-    emitError(op, "is unranked or has dynamic shape.");
-
-  indent();
-  emitArrayDecl(op.getResult());
-  if (op.getInitValue()) {
-    os << " = {";
-    os << getConstantString(op.getType().getElementType(),
-                            op.getInitValueAttr());
-    os << "}";
-  }
-  os << ";";
-  emitInfoAndNewLine(op);
-  emitArrayDirectives(op.getResult());
+  if (op.getInitValue())
+    op.emitOpError("initial value is not supported in Vitis HLS");
+  emitAlloc(op);
 }
 
 void ModuleEmitter::emitStreamChannel(StreamOp op) {

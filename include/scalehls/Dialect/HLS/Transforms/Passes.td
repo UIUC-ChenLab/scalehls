@@ -77,6 +77,11 @@ def ApplyDirectives : Pass<"scalehls-apply-directives", "func::FuncOp"> {
   let summary = "Apply HLS directives";
 }
 
+def SinkTensorInitialization :
+    Pass<"scalehls-sink-tensor-initialization", "func::FuncOp"> {
+  let summary = "Sink the tensor initialization";
+}
+
 def StripAnnotations : Pass<"scalehls-strip-annotations", "func::FuncOp"> {
   let summary = "Strip all annotations with the given name";
   let options = [

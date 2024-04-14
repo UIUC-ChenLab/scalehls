@@ -58,6 +58,15 @@ def apply_linalg_optimization_passes(module: Module, preprocess: bool = True):
     pm.run(module.operation)
 
 
+def apply_sink_tensor_initialization(module: Module):
+    pm = PassManager.parse(
+        "builtin.module("
+        "func.func(scalehls-sink-tensor-initialization),"
+        "cse, canonicalize"
+        ")")
+    pm.run(module.operation)
+
+
 def apply_reduce_full_tensor_to_itensor_buffer(module: Module):
     pm = PassManager.parse(
         "builtin.module("
