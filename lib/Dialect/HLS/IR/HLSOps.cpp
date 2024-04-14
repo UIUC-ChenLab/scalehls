@@ -181,8 +181,10 @@ LogicalResult ITensorBufferOp::verify() {
 
   auto sourceType = getSourceType();
   auto destType = getDestType();
-  if (!sourceType.isCastableWith(destType))
-    return emitOpError("input and output are not castable\ninput shape: ")
+  if (sourceType.getDataType() != destType.getDataType())
+    return emitOpError("source and dest itensor data type doesn't match");
+  if (sourceType.getShape() != destType.getShape())
+    return emitOpError("source and dest itensor shape doesn't match: ")
            << sourceType.getShape()
            << ", output shape: " << destType.getShape();
 
@@ -287,13 +289,14 @@ LogicalResult ITensorReassociateOp::canonicalize(ITensorReassociateOp op,
 //===----------------------------------------------------------------------===//
 
 LogicalResult ITensorCastOp::verify() {
-  if (!getSourceType().isCastableWith(getResultType())) {
-    return emitOpError("input and output are not castable\ninput shape: ")
+  if (getSourceType().getDataType() != getResultType().getDataType())
+    return emitOpError("source and result itensor data type doesn't match");
+  if (getSourceType().getShape() != getResultType().getShape())
+    return emitOpError("source and result itensor shape doesn't match: ")
            << getSourceType().getShape()
            << ", output shape: " << getResultType().getShape();
-    if (getSourceType().getDepth() != getResultType().getDepth())
-      return emitOpError("source and result itensor depth doesn't match");
-  }
+  if (getSourceType().getDepth() != getResultType().getDepth())
+    return emitOpError("source and result itensor depth doesn't match");
   return success();
 }
 

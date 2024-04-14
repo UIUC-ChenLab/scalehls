@@ -1017,6 +1017,15 @@ class Synthesizer():
             ])
         return script_file, script_path
 
+    def generate_config(self):
+        config_path = f"{self.syn_path}/config.ini"
+        with open(config_path, "w") as config_file:
+            config_file.writelines([
+                f"[hls]\n",
+                f"syn.dataflow.default_channel=pingpong\n"
+            ])
+        return config_file, config_path
+
     def run(self,
             module: Module,
             entry: str,
@@ -1036,7 +1045,12 @@ class Synthesizer():
         script_file, script_path = self.generate_script(
             hls_top, [design_path], testbench_paths, csim, csynth, cosim)
 
-        result = subprocess.run([self.tool_path, script_path],
+        config_file, config_path = self.generate_config()
+
+        result = subprocess.run([self.tool_path, 
+                                 script_path, 
+                                 "-config", 
+                                 config_path],
                                 capture_output=True, text=True)
         with open(f"{self.syn_path}/{entry}.log", "w") as log_file:
             log_file.write(result.stdout)

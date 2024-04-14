@@ -139,9 +139,6 @@ def ITensorType : HLSType<"ITensor"> {
     /// non-gapped tiling pattern.
     bool tileIsRegular() const;
 
-    /// Return whether the "other" itensor type is castable with this type.
-    bool isCastableWith(ITensorType other) const;
-
     /// Return whether this itensor type can be converted to the "tensor" type.
     bool isConvertableWith(RankedTensorType tensor, bool packing = false) const;
   }];

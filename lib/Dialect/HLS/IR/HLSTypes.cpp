@@ -114,15 +114,6 @@ bool hls::ITensorType::tileIsRegular() const {
   return true;
 }
 
-/// Return whether the "other" stream type is castable with this type.
-bool hls::ITensorType::isCastableWith(ITensorType other) const {
-  if (getDataType() != other.getDataType())
-    return false;
-  if (getShape() != other.getShape())
-    return false;
-  return true;
-}
-
 /// Return whether this stream type can be converted to the "tensor" type.
 bool hls::ITensorType::isConvertableWith(RankedTensorType tensor,
                                          bool packing) const {

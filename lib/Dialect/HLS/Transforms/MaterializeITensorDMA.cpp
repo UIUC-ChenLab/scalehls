@@ -27,12 +27,29 @@ namespace hls {
 static std::tuple<SmallVector<OpFoldResult>, SmallVector<OpFoldResult>,
                   SmallVector<OpFoldResult>>
 getSliceInfo(ArrayRef<Value> ivs, ArrayRef<AffineExpr> indexExprs,
-             ArrayRef<int64_t> elementShape, Location loc,
+             ArrayRef<int64_t> elementShape, Location loc, bool packing,
              PatternRewriter &rewriter) {
   assert(indexExprs.size() == elementShape.size() &&
          "indices and element shape should have the same size");
 
-  auto offsets = llvm::map_to_vector(indexExprs, [&](AffineExpr expr) {
+  SmallVector<AffineExpr> newIndexExprs;
+  if (packing) {
+    assert(indexExprs.size() % 2 == 0 &&
+           "packing requires even number of indices");
+    auto unpackedRank = indexExprs.size() / 2;
+    for (auto [expr, tileSize] :
+         llvm::zip(indexExprs.take_back(unpackedRank),
+                   elementShape.take_back(unpackedRank)))
+      newIndexExprs.push_back(expr.floorDiv(tileSize));
+    for (auto [expr, tileSize] :
+         llvm::zip(indexExprs.take_back(unpackedRank),
+                   elementShape.take_back(unpackedRank)))
+      newIndexExprs.push_back(expr % tileSize);
+  } else {
+    newIndexExprs = {indexExprs.begin(), indexExprs.end()};
+  }
+
+  auto offsets = llvm::map_to_vector(newIndexExprs, [&](AffineExpr expr) {
     auto map = AffineMap::get(ivs.size(), 0, expr);
     auto apply = rewriter.create<affine::AffineApplyOp>(loc, map, ivs);
     return OpFoldResult(apply.getResult());
@@ -41,7 +58,7 @@ getSliceInfo(ArrayRef<Value> ivs, ArrayRef<AffineExpr> indexExprs,
   auto sizes = llvm::map_to_vector(elementShape, [&](int64_t size) {
     return OpFoldResult(rewriter.getI64IntegerAttr(size));
   });
-  auto strides = SmallVector<OpFoldResult>(indexExprs.size(),
+  auto strides = SmallVector<OpFoldResult>(newIndexExprs.size(),
                                            rewriter.getI64IntegerAttr(1));
   return std::make_tuple(offsets, sizes, strides);
 }
@@ -51,12 +68,12 @@ static TypedValue<ITensorType>
 extactSliceAndWriteITensor(ArrayRef<Value> ivs, TypedValue<ITensorType> iTensor,
                            TypedValue<RankedTensorType> tensor,
                            TypedValue<ITensorType> loopResult, Location loc,
-                           PatternRewriter &rewriter) {
+                           bool packing, PatternRewriter &rewriter) {
   auto iTensorType = cast<ITensorType>(iTensor.getType());
 
   auto [offsets, sizes, strides] =
       getSliceInfo(ivs, iTensorType.getIterMap().getResults(),
-                   iTensorType.getElementShape(), loc, rewriter);
+                   iTensorType.getElementShape(), loc, packing, rewriter);
   Value slice = rewriter.create<tensor::ExtractSliceOp>(loc, tensor, offsets,
                                                         sizes, strides);
   return rewriter.create<hls::ITensorWriteOp>(loc, iTensorType, slice, iTensor);
@@ -69,11 +86,11 @@ static TypedValue<RankedTensorType>
 readITensorAndInsertSlice(ArrayRef<Value> ivs, TypedValue<ITensorType> iTensor,
                           TypedValue<RankedTensorType> tensor,
                           TypedValue<RankedTensorType> loopResult, Location loc,
-                          PatternRewriter &rewriter) {
+                          bool packing, PatternRewriter &rewriter) {
   auto iTensorType = iTensor.getType();
   auto [offsets, sizes, strides] =
       getSliceInfo(ivs, iTensorType.getIterMap().getResults(),
-                   iTensorType.getElementShape(), loc, rewriter);
+                   iTensorType.getElementShape(), loc, packing, rewriter);
 
   // As we are going to insert a tensor slice back to the "input" tensor, to
   // avoid unnecessary memory allocation and copy, we need to extract the slice
@@ -107,7 +124,7 @@ struct MaterializeITensorWriteFullTensorOp
     auto newResult = extactSliceAndWriteITensor(
         ivs, cast<TypedValue<ITensorType>>(iterArg),
         writeFullTensor.getFullTensor(), cast<TypedValue<ITensorType>>(result),
-        loc, rewriter);
+        loc, writeFullTensor.getPacked(), rewriter);
 
     // Return "newResult" if no loop is constructed. Otherwise, create a new
     // yield op to yield "newResult" to "result".
@@ -138,10 +155,11 @@ struct MaterializeITensorReadFullTensorOp
     auto [ivs, result, iterArg] = constructLoops(
         iTensorType.getIterTripCounts(), iTensorType.getIterSteps(), loc,
         rewriter, readFullTensor.getFullTensorInit());
-    auto newResult = readITensorAndInsertSlice(
-        ivs, readFullTensor.getSource(),
-        cast<TypedValue<RankedTensorType>>(iterArg),
-        cast<TypedValue<RankedTensorType>>(result), loc, rewriter);
+    auto newResult =
+        readITensorAndInsertSlice(ivs, readFullTensor.getSource(),
+                                  cast<TypedValue<RankedTensorType>>(iterArg),
+                                  cast<TypedValue<RankedTensorType>>(result),
+                                  loc, readFullTensor.getPacked(), rewriter);
 
     // Return "newResult" if no loop is constructed. Otherwise, create a new
     // yield op to yield "newResult" to "result".
@@ -192,7 +210,8 @@ struct MaterializeITensorBufferOp
     auto newInputResult = readITensorAndInsertSlice(
         bufferInputIvs, iTensorBuffer.getSource(),
         cast<TypedValue<RankedTensorType>>(inputIterArg),
-        cast<TypedValue<RankedTensorType>>(inputResult), loc, rewriter);
+        cast<TypedValue<RankedTensorType>>(inputResult), loc,
+        iTensorBuffer.getPacked(), rewriter);
 
     // Return "newResult" if no loop is constructed. Otherwise, create a new
     // yield op to yield "newResult" to "result".
@@ -213,7 +232,8 @@ struct MaterializeITensorBufferOp
     auto newOutputResult = extactSliceAndWriteITensor(
         bufferOutputIvs, cast<TypedValue<ITensorType>>(outputIterArg),
         cast<TypedValue<RankedTensorType>>(inputResult),
-        cast<TypedValue<ITensorType>>(outputResult), loc, rewriter);
+        cast<TypedValue<ITensorType>>(outputResult), loc,
+        iTensorBuffer.getPacked(), rewriter);
 
     // Return "newResult" if no loop is constructed. Otherwise, create a new
     // yield op to yield "newResult" to "result".

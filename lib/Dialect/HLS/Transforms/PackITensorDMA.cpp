@@ -56,21 +56,17 @@ static tensor::UnPackOp unpackTensor(TypedValue<RankedTensorType> tensor,
                                            innerTiles);
 }
 
-static AffineMap getPackedIterMap(AffineMap iterMap, OpBuilder &builder) {
-  SmallVector<AffineExpr> newExprs(iterMap.getNumResults(),
-                                   builder.getAffineConstantExpr(0));
-  for (auto expr : iterMap.getResults())
-    newExprs.push_back(expr);
-  return AffineMap::get(iterMap.getNumDims(), iterMap.getNumSymbols(), newExprs,
-                        iterMap.getContext());
-}
-
 static hls::ITensorType getPackedItensorType(hls::ITensorType iTensorType) {
   OpBuilder builder(iTensorType.getContext());
   auto packedElementType =
       getPackedType(cast<RankedTensorType>(iTensorType.getElementType()),
                     iTensorType.getElementShape());
-  auto packedIterMap = getPackedIterMap(iTensorType.getIterMap(), builder);
+  SmallVector<AffineExpr> packedExprs(iTensorType.getRank(),
+                                      builder.getAffineConstantExpr(0));
+  for (auto expr : iTensorType.getIterMap().getResults())
+    packedExprs.push_back(expr);
+  auto packedIterMap = AffineMap::get(iTensorType.getIterRank(), 0, packedExprs,
+                                      iTensorType.getContext());
   return hls::ITensorType::get(
       packedElementType, iTensorType.getIterTripCounts(),
       iTensorType.getIterSteps(), packedIterMap, iTensorType.getDepth());
@@ -315,7 +311,7 @@ struct PackITensorDMA : public hls::impl::PackITensorDMABase<PackITensorDMA> {
     mlir::RewritePatternSet patterns(context);
     patterns.add<PackITensorWriteFullTensorOp>(context);
     patterns.add<PackITensorReadFullTensorOp>(context);
-    patterns.add<PackITensorBufferOp>(context);
+    // patterns.add<PackITensorBufferOp>(context);
     tensor::populateFoldIntoPackAndUnpackPatterns(patterns);
     tensor::populateSimplifyPackAndUnpackPatterns(patterns);
     tensor::PackOp::getCanonicalizationPatterns(patterns, context);
