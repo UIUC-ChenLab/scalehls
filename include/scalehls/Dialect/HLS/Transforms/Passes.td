@@ -9,10 +9,6 @@
 
 include "mlir/Pass/PassBase.td"
 
-def Preprocess : Pass<"scalehls-preprocess", "func::FuncOp"> {
-  let summary = "Preprocess the IR for subsequent transforms";
-}
-
 def ReduceFullTensorToITensorBuffer :
     Pass<"scalehls-reduce-full-tensor-to-itensor-buffer", "func::FuncOp"> {
   let summary = "Reduce immediate full tensors to itensor buffers";
@@ -32,9 +28,9 @@ def EnsureITensorSingleUse :
   let summary = "Ensure each itensor has a single use";
 }
 
-def ConvertTensorInitToTensorInstance :
-    Pass<"scalehls-convert-tensor-init-to-tensor-instance", "func::FuncOp"> {
-  let summary = "Convert tensor/itensor init op to tensor/itensor instance op";
+def ConvertEmptyToInstance :
+    Pass<"scalehls-convert-empty-to-instance", "func::FuncOp"> {
+  let summary = "Convert tensor/itensor empty op to tensor/itensor instance op";
 }
 
 def GenerateDataflowHierarchy :
@@ -77,9 +73,8 @@ def ApplyDirectives : Pass<"scalehls-apply-directives", "func::FuncOp"> {
   let summary = "Apply HLS directives";
 }
 
-def SinkTensorInitialization :
-    Pass<"scalehls-sink-tensor-initialization", "func::FuncOp"> {
-  let summary = "Sink the tensor initialization";
+def FuseLinalgFill : Pass<"scalehls-fuse-linalg-fill", "func::FuncOp"> {
+  let summary = "Fuse linalg fill op into generic op";
 }
 
 def StripAnnotations : Pass<"scalehls-strip-annotations", "func::FuncOp"> {

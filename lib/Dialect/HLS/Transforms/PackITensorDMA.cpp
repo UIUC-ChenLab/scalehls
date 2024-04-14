@@ -29,14 +29,14 @@ static tensor::PackOp packTensor(TypedValue<RankedTensorType> tensor,
                                  PatternRewriter &rewriter) {
   auto packedType = getPackedType(tensor.getType(), tileSizes);
 
-  auto init = rewriter.create<hls::TensorInitOp>(loc, packedType);
+  auto empty = rewriter.create<tensor::EmptyOp>(loc, packedType, ValueRange());
   auto innerDimsPos = llvm::map_to_vector(llvm::seq<int64_t>(tileSizes.size()),
                                           [&](int64_t i) { return i; });
   auto innerTiles = llvm::map_to_vector(tileSizes, [&](int64_t tileSize) {
     return OpFoldResult(rewriter.getI64IntegerAttr(tileSize));
   });
 
-  return rewriter.create<tensor::PackOp>(loc, tensor, init, innerDimsPos,
+  return rewriter.create<tensor::PackOp>(loc, tensor, empty, innerDimsPos,
                                          innerTiles);
 }
 
@@ -45,14 +45,15 @@ static tensor::UnPackOp unpackTensor(TypedValue<RankedTensorType> tensor,
                                      PatternRewriter &rewriter) {
   auto unpackedType = getUnpackedType(tensor.getType(), tileSizes);
 
-  auto init = rewriter.create<hls::TensorInitOp>(loc, unpackedType);
+  auto empty =
+      rewriter.create<tensor::EmptyOp>(loc, unpackedType, ValueRange());
   auto innerDimsPos = llvm::map_to_vector(llvm::seq<int64_t>(tileSizes.size()),
                                           [&](int64_t i) { return i; });
   auto innerTiles = llvm::map_to_vector(tileSizes, [&](int64_t tileSize) {
     return OpFoldResult(rewriter.getI64IntegerAttr(tileSize));
   });
 
-  return rewriter.create<tensor::UnPackOp>(loc, tensor, init, innerDimsPos,
+  return rewriter.create<tensor::UnPackOp>(loc, tensor, empty, innerDimsPos,
                                            innerTiles);
 }
 
@@ -165,11 +166,11 @@ struct PackITensorReadFullTensorOp
     // Pack the init full tensor.
     auto loc = readFullTensor.getLoc();
     TypedValue<RankedTensorType> packedFullTensorInit;
-    if (auto init = readFullTensor.getFullTensorInit()
-                        .getDefiningOp<hls::TensorInitOp>())
-      packedFullTensorInit = rewriter.create<hls::TensorInitOp>(
-          loc, getPackedType(init.getType(), iTensorType.getElementShape()),
-          init.getInitValueAttr());
+    if (auto empty =
+            readFullTensor.getFullTensorInit().getDefiningOp<tensor::EmptyOp>())
+      packedFullTensorInit = rewriter.create<tensor::EmptyOp>(
+          loc, getPackedType(empty.getType(), iTensorType.getElementShape()),
+          ValueRange());
     else
       packedFullTensorInit =
           packTensor(readFullTensor.getFullTensorInit(),
@@ -270,16 +271,7 @@ struct LowerPackOp : public OpRewritePattern<tensor::PackOp> {
 
   LogicalResult matchAndRewrite(tensor::PackOp pack,
                                 PatternRewriter &rewriter) const override {
-    auto lowerResult = linalg::lowerPack(rewriter, pack);
-    if (failed(lowerResult))
-      return failure();
-
-    if (auto transpose = lowerResult->transposeOp)
-      if (auto empty = transpose.getInit().getDefiningOp<tensor::EmptyOp>()) {
-        rewriter.setInsertionPoint(empty);
-        rewriter.replaceOpWithNewOp<hls::TensorInitOp>(empty, empty.getType());
-      }
-    return success();
+    return linalg::lowerPack(rewriter, pack);
   }
 };
 } // namespace
@@ -290,16 +282,7 @@ struct LowerUnPackOp : public OpRewritePattern<tensor::UnPackOp> {
 
   LogicalResult matchAndRewrite(tensor::UnPackOp unpack,
                                 PatternRewriter &rewriter) const override {
-    auto lowerResult = linalg::lowerUnPack(rewriter, unpack);
-    if (failed(lowerResult))
-      return failure();
-
-    if (auto transpose = lowerResult->transposeOp)
-      if (auto empty = transpose.getInit().getDefiningOp<tensor::EmptyOp>()) {
-        rewriter.setInsertionPoint(empty);
-        rewriter.replaceOpWithNewOp<hls::TensorInitOp>(empty, empty.getType());
-      }
-    return success();
+    return linalg::lowerUnPack(rewriter, unpack);
   }
 };
 } // namespace

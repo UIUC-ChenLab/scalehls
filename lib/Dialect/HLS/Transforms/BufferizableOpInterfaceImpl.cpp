@@ -476,8 +476,7 @@ struct TensorInstanceOpInterface
       return failure();
 
     auto buffer = rewriter.create<hls::BufferOp>(
-        tensorInst.getLoc(), *maybeType, tensorInst.getInitValueAttr(),
-        tensorInst.getLocationAttr());
+        tensorInst.getLoc(), *maybeType, tensorInst.getLocationAttr());
     replaceOpWithBufferizedValues(rewriter, op, buffer.getResult());
     return success();
   }

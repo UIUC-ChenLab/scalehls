@@ -674,8 +674,6 @@ bool ExprVisitor::visitOp(arith::CmpIOp op) {
 
 /// HLS dialect operation emitters.
 void ModuleEmitter::emitBuffer(BufferOp op) {
-  if (op.getInitValue())
-    op.emitOpError("initial value is not supported in Vitis HLS");
   emitAlloc(op);
 }
 

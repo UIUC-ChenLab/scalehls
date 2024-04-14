@@ -13,23 +13,23 @@ include "mlir/Dialect/Transform/IR/TransformTypes.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/OpBase.td"
 
-def HLSConvertExtractSliceToTensorInitOp : Op<Transform_Dialect,
-    "hls.convert_extract_slice_to_tensor_init",
+def HLSConvertExtractSliceToTensorEmptyOp : Op<Transform_Dialect,
+    "hls.convert_extract_slice_to_tensor_empty",
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {
   let description = [{
-    Convert a target `extract_slice` op to a `tensor_init` op, localizing the
+    Convert a target `extract_slice` op to a `tensor_empty` op, localizing the
     extracted tensor. This transform returns the handle of the new local
-    `tensor_init` op.
+    `tensor_empty` op.
 
     **This transform must be applied on the `init` operand of a linalg op.
-    Meanwhile, the real producer of the source tensor must be an `tensor_init`
+    Meanwhile, the real producer of the source tensor must be an `tensor_empty`
     op in the first place, otherwise a silenceable failure will be emitted.**
   }];
 
   let arguments = (ins
       Transform_ConcreteOpType<"tensor.extract_slice">:$extract_slice);
-  let results = (outs Transform_ConcreteOpType<"hls.tensor_init">:$tensor_init);
+  let results = (outs Transform_ConcreteOpType<"tensor.empty">:$tensor_empty);
   let assemblyFormat = [{
     $extract_slice attr-dict `:` functional-type(operands, results)
   }];
@@ -38,30 +38,6 @@ def HLSConvertExtractSliceToTensorInitOp : Op<Transform_Dialect,
     ::mlir::DiagnosedSilenceableFailure applyToOne(
         ::mlir::transform::TransformRewriter &rewriter,
         ::mlir::tensor::ExtractSliceOp extractSlice,
-        ::mlir::transform::ApplyToEachResultList &results,
-        ::mlir::transform::TransformState &state);
-  }];
-}
-
-def HLSConvertFillToTensorInitOp : Op<Transform_Dialect,
-    "hls.convert_fill_to_tensor_init",
-    [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
-     TransformOpInterface, MemoryEffectsOpInterface]> {
-  let description = [{
-    Convert a target `fill` op to a `tensor_init` op. This transform returns the
-    handle of the new `tensor_init` op.
-  }];
-
-  let arguments = (ins Transform_ConcreteOpType<"linalg.fill">:$fill);
-  let results = (outs Transform_ConcreteOpType<"hls.tensor_init">:$tensor_init);
-  let assemblyFormat = [{
-    $fill attr-dict `:` functional-type(operands, results)
-  }];
-
-  let extraClassDeclaration = [{
-    ::mlir::DiagnosedSilenceableFailure applyToOne(
-        ::mlir::transform::TransformRewriter &rewriter,
-        ::mlir::linalg::FillOp fill,
         ::mlir::transform::ApplyToEachResultList &results,
         ::mlir::transform::TransformState &state);
   }];
@@ -99,7 +75,7 @@ def HLSConvertInsertSliceToITensorWriteOp : Op<Transform_Dialect,
     [FunctionalStyleTransformOpTrait, TransformEachOpTrait,
      TransformOpInterface, MemoryEffectsOpInterface]> {
   let description = [{
-    Convert a target `insert_slice` op to 1) a `itensor_init` op, replacing the
+    Convert a target `insert_slice` op to 1) a `itensor_empty` op, replacing the
     destination tensor with a iterative tensor, 2) a `itensor_write` op, writing
     the slice tensor to the iterative tensor instead of inserting to the
     destination tensor, and 3) a `itensor_read_full_tensor` op, converting the itensor
@@ -114,7 +90,7 @@ def HLSConvertInsertSliceToITensorWriteOp : Op<Transform_Dialect,
   let arguments = (ins
       Transform_ConcreteOpType<"tensor.insert_slice">:$insert_slice);
   let results = (outs
-      Transform_ConcreteOpType<"hls.itensor_init">:$source_itensor_init,
+      Transform_ConcreteOpType<"hls.itensor_empty">:$source_itensor_empty,
       Transform_ConcreteOpType<"hls.itensor_write">:$itensor_write,
       Transform_ConcreteOpType<"hls.itensor_read_full_tensor">:$itensor_read_full_tensor);
   let assemblyFormat = [{
@@ -147,7 +123,7 @@ def HLSConvertExtractSliceToITensorReadOp : Op<Transform_Dialect,
   let arguments = (ins
       Transform_ConcreteOpType<"tensor.extract_slice">:$extract_slice);
   let results = (outs
-      Transform_ConcreteOpType<"hls.itensor_init">:$dest_itensor_init,
+      Transform_ConcreteOpType<"hls.itensor_empty">:$dest_itensor_empty,
       Transform_ConcreteOpType<"hls.itensor_write_full_tensor">:$itensor_write_full_tensor,
       Transform_ConcreteOpType<"hls.itensor_read">:$itensor_read);
   let assemblyFormat = [{
@@ -174,7 +150,7 @@ def HLSConvertExpandShapeToITensorReassociateOp : Op<Transform_Dialect,
       DenseI64ArrayAttr:$input_element_shape,
       DenseI64ArrayAttr:$output_element_shape);
   let results = (outs
-      Transform_ConcreteOpType<"hls.itensor_init">:$dest_itensor_init,
+      Transform_ConcreteOpType<"hls.itensor_empty">:$dest_itensor_empty,
       Transform_ConcreteOpType<"hls.itensor_write_full_tensor">:$itensor_write_full_tensor,
       Transform_ConcreteOpType<"hls.itensor_reassociate">:$itensor_reassociate,
       Transform_ConcreteOpType<"hls.itensor_read_full_tensor">:$itensor_read_full_tensor);
@@ -204,7 +180,7 @@ def HLSConvertCollapseShapeToITensorReassociateOp : Op<Transform_Dialect,
       DenseI64ArrayAttr:$input_element_shape,
       DenseI64ArrayAttr:$output_element_shape);
   let results = (outs
-      Transform_ConcreteOpType<"hls.itensor_init">:$dest_itensor_init,
+      Transform_ConcreteOpType<"hls.itensor_empty">:$dest_itensor_empty,
       Transform_ConcreteOpType<"hls.itensor_write_full_tensor">:$itensor_write_full_tensor,
       Transform_ConcreteOpType<"hls.itensor_reassociate">:$itensor_reassociate,
       Transform_ConcreteOpType<"hls.itensor_read_full_tensor">:$itensor_read_full_tensor);

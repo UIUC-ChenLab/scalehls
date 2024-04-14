@@ -1,13 +1,12 @@
 add_mlir_dialect_library(MLIRScaleHLSHLSTransforms
   BufferizableOpInterfaceImpl.cpp
-  Preprocess.cpp
   ReduceFullTensorToITensorBuffer.cpp
   MaterializeITensorDMA.cpp
   PackITensorDMA.cpp
   ScalarizeITensor.cpp
   LowerITensorToStream.cpp
   ScheduleDataflow.cpp
-  ConvertTensorInitToTensorInstance.cpp
+  ConvertEmptyToInstance.cpp
   ConvertDataflowToFunc.cpp
   TransformInterpreter.cpp
   ComprehensiveBufferize.cpp
@@ -17,7 +16,7 @@ add_mlir_dialect_library(MLIRScaleHLSHLSTransforms
   GenerateDirectives.cpp
   EnsureITensorSingleUse.cpp
   StripAnnotations.cpp
-  SinkTensorInitialization.cpp
+  FuseLinalgFill.cpp
 
   DEPENDS
   MLIRScaleHLSHLSTransformsIncGen

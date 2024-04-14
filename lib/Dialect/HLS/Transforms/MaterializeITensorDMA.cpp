@@ -195,8 +195,8 @@ struct MaterializeITensorBufferOp
                        rewriter, iTensorBuffer.getDest());
 
     // Instantiate a buffer tensor with calculated buffer type.
-    auto tensorInit =
-        rewriter.create<hls::TensorInitOp>(loc, iTensorBuffer.getBufferType());
+    auto tensorEmpty = rewriter.create<tensor::EmptyOp>(
+        loc, iTensorBuffer.getBufferType(), ValueRange());
 
     // Construct loops to read from the input iterative tensor and insert stream
     // element to the buffer tensor.
@@ -204,7 +204,7 @@ struct MaterializeITensorBufferOp
     auto [inputIvs, inputResult, inputIterArg] =
         constructLoops(sourceType.getIterTripCounts().drop_front(loopIndex),
                        sourceType.getIterSteps().drop_front(loopIndex), loc,
-                       rewriter, tensorInit);
+                       rewriter, tensorEmpty);
     SmallVector<Value> bufferInputIvs(loopIndex, zeroCst);
     bufferInputIvs.append(inputIvs);
     auto newInputResult = readITensorAndInsertSlice(

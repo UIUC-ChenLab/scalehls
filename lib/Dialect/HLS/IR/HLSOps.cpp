@@ -16,24 +16,10 @@ using namespace hls;
 using namespace affine;
 
 //===----------------------------------------------------------------------===//
-// TensorInitOp
-//===----------------------------------------------------------------------===//
-
-LogicalResult TensorInitOp::verify() {
-  if (auto initValue = getInitValue())
-    if (initValue.value().getType() != getType().getElementType())
-      return emitOpError("initial value's type doesn't align with tensor type");
-  return success();
-}
-
-//===----------------------------------------------------------------------===//
 // TensorInstanceOp
 //===----------------------------------------------------------------------===//
 
 LogicalResult TensorInstanceOp::verify() {
-  if (auto initValue = getInitValue())
-    if (initValue.value().getType() != getType().getElementType())
-      return emitOpError("initial value's type doesn't align with tensor type");
   if (!(*this)->hasOneUse())
     return emitOpError("tensor instance should have exactly one use");
   // if (!getSingleUser<TaskOp>())
@@ -43,24 +29,10 @@ LogicalResult TensorInstanceOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
-// ITensorInitOp
-//===----------------------------------------------------------------------===//
-
-LogicalResult ITensorInitOp::verify() {
-  if (auto initValue = getInitValue())
-    if (initValue.value().getType() != getType().getDataType())
-      return emitOpError("initial value doesn't align with itensor data type");
-  return success();
-}
-
-//===----------------------------------------------------------------------===//
 // ITensorInstanceOp
 //===----------------------------------------------------------------------===//
 
 LogicalResult ITensorInstanceOp::verify() {
-  if (auto initValue = getInitValue())
-    if (initValue.value().getType() != getType().getDataType())
-      return emitOpError("initial value doesn't align with itensor data type");
   if (!(*this)->hasOneUse())
     return emitOpError("itensor instance should have exactly one use");
   // if (!getSingleUser<TaskOp>())
@@ -276,9 +248,8 @@ OpFoldResult ITensorReassociateOp::fold(FoldAdaptor adaptor) {
 
 LogicalResult ITensorReassociateOp::canonicalize(ITensorReassociateOp op,
                                                  PatternRewriter &rewriter) {
-  if (auto init = op.getSource().getDefiningOp<ITensorInitOp>()) {
-    rewriter.replaceOpWithNewOp<ITensorInitOp>(op, op.getResultType(),
-                                               init.getInitValueAttr());
+  if (auto init = op.getSource().getDefiningOp<ITensorEmptyOp>()) {
+    rewriter.replaceOpWithNewOp<ITensorEmptyOp>(op, op.getResultType());
     return success();
   }
   return failure();
@@ -465,13 +436,6 @@ LogicalResult BufferOp::canonicalize(BufferOp op, PatternRewriter &rewriter) {
     return success();
   }
   return failure();
-}
-
-LogicalResult BufferOp::verify() {
-  if (auto initValue = getInitValue())
-    if (initValue.value().getType() != getType().getElementType())
-      return emitOpError("initial value's type doesn't align with memref type");
-  return success();
 }
 
 void BufferOp::getEffects(

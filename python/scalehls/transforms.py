@@ -52,16 +52,15 @@ def apply_linalg_optimization_passes(module: Module, preprocess: bool = True):
         "linalg-fold-unit-extent-dims,"
         "eliminate-empty-tensors,"
         "linalg-inline-scalar-operands,"
-        "func.func(scalehls-preprocess),"
         "cse, canonicalize"
         ")")
     pm.run(module.operation)
 
 
-def apply_sink_tensor_initialization(module: Module):
+def apply_fuse_linalg_fill(module: Module):
     pm = PassManager.parse(
         "builtin.module("
-        "func.func(scalehls-sink-tensor-initialization),"
+        "func.func(scalehls-fuse-linalg-fill),"
         "cse, canonicalize"
         ")")
     pm.run(module.operation)
@@ -132,10 +131,10 @@ def apply_comprehensive_bufferize_passes(module: Module):
     pm.run(module.operation)
 
 
-def apply_convert_tensor_init_to_tensor_instance(module: Module):
+def apply_convert_empty_to_instance(module: Module):
     pm = PassManager.parse(
         "builtin.module("
-        "func.func(scalehls-convert-tensor-init-to-tensor-instance),"
+        "func.func(scalehls-convert-empty-to-instance),"
         "cse, canonicalize"
         ")")
     pm.run(module.operation)
@@ -448,7 +447,7 @@ def convert_expand_shape_to_itensor_reassociate(
         source_tile_sizes: Sequence[int],
         result_tile_sizes: Sequence[int]):
     return hls_transform.HLSConvertExpandShapeToITensorReassociateOp(
-        transform.OperationType.get("hls.itensor_init"),
+        transform.OperationType.get("hls.itensor_empty"),
         transform.OperationType.get("hls.itensor_write_full_tensor"),
         transform.OperationType.get("hls.itensor_reassociate"),
         transform.OperationType.get("hls.itensor_read_full_tensor"),
@@ -462,7 +461,7 @@ def convert_collapse_shape_to_itensor_reassociate(
         source_tile_sizes: Sequence[int],
         result_tile_sizes: Sequence[int]):
     return hls_transform.HLSConvertCollapseShapeToITensorReassociateOp(
-        transform.OperationType.get("hls.itensor_init"),
+        transform.OperationType.get("hls.itensor_empty"),
         transform.OperationType.get("hls.itensor_write_full_tensor"),
         transform.OperationType.get("hls.itensor_reassociate"),
         transform.OperationType.get("hls.itensor_read_full_tensor"),
@@ -471,21 +470,21 @@ def convert_collapse_shape_to_itensor_reassociate(
         result_tile_sizes)
 
 
-def convert_extract_slice_to_tensor_init(extract_slice_handle: Value):
-    return hls_transform.HLSConvertExtractSliceToTensorInitOp(
-        transform.OperationType.get("hls.tensor_init"),
+def convert_extract_slice_to_tensor_empty(extract_slice_handle: Value):
+    return hls_transform.HLSConvertExtractSliceToTensorEmptyOp(
+        transform.OperationType.get("tensor.empty"),
         extract_slice_handle)
 
 
 @foreach_transform()
-def foreach_convert_extract_slice_to_tensor_init(
+def foreach_convert_extract_slice_to_tensor_empty(
         extract_slice_handle: Value):
-    convert_extract_slice_to_tensor_init(extract_slice_handle)
+    convert_extract_slice_to_tensor_empty(extract_slice_handle)
 
 
 def convert_insert_slice_to_itensor_write(insert_slice_handle: Value):
     return hls_transform.HLSConvertInsertSliceToITensorWriteOp(
-        transform.OperationType.get("hls.itensor_init"),
+        transform.OperationType.get("hls.itensor_empty"),
         transform.OperationType.get("hls.itensor_write"),
         transform.OperationType.get("hls.itensor_read_full_tensor"),
         insert_slice_handle)
@@ -496,12 +495,6 @@ def foreach_convert_insert_slice_to_itensor_write(insert_slice_handle: Value):
     convert_insert_slice_to_itensor_write(insert_slice_handle)
 
 
-def convert_fill_to_tensor_init(linalg_fill_handle: Value):
-    return hls_transform.HLSConvertFillToTensorInitOp(
-        transform.OperationType.get("hls.tensor_init"),
-        linalg_fill_handle)
-
-
 def merge_consecutive_extract_slice(extract_slice_handle: Value):
     return hls_transform.HLSMergeConsecutiveExtractSliceOp(
         transform.OperationType.get("tensor.extract_slice"),
@@ -510,7 +503,7 @@ def merge_consecutive_extract_slice(extract_slice_handle: Value):
 
 def convert_extract_slice_to_itensor_read(extract_slice_handle: Value):
     return hls_transform.HLSConvertExtractSliceToITensorReadOp(
-        transform.OperationType.get("hls.itensor_init"),
+        transform.OperationType.get("hls.itensor_empty"),
         transform.OperationType.get("hls.itensor_write_full_tensor"),
         transform.OperationType.get("hls.itensor_read"),
         extract_slice_handle)
@@ -542,7 +535,7 @@ def convert_full_tensor_linalg_op_to_itensor(
 
     # Convert the linalg `init` operand to a `tensor.init` op.
     matched_init = match_linalg_init(linalg_op_handle, "tensor.extract_slice")
-    foreach_convert_extract_slice_to_tensor_init(matched_init)
+    foreach_convert_extract_slice_to_tensor_empty(matched_init)
 
     # Convert each `insert_slice` op to a `itensor.write` op.
     matched_result = match_linalg_result(
@@ -560,7 +553,7 @@ def convert_full_tensor_linalg_op_to_itensor(
             tile_reduction_op = tile_reduction(
                 linalg_op_handle, reduction_tile_sizes)
             linalg_op_handle = tile_reduction_op.split_linalg_op
-            convert_fill_to_tensor_init(tile_reduction_op.fill_op)
+            # convert_fill_to_tensor_empty(tile_reduction_op.fill_op)
         else:
             tile_reduction_op = tile(linalg_op_handle, reduction_tile_sizes)
             linalg_op_handle = tile_reduction_op.tiled_linalg_op
@@ -693,8 +686,7 @@ class LinalgDesignSpaceGraph(BaseDesignSpaceGraph):
 
     @ staticmethod
     def _is_nontrivial_op(node: OpView):
-        return not isinstance(
-            node, (hls.TensorInitOp, tensor.EmptyOp, arith.ConstantOp))
+        return not isinstance(node, (tensor.EmptyOp, arith.ConstantOp))
 
     def print_dot(self, file_name: str, print_params: bool = True):
         return super().print_dot(file_name,
@@ -991,11 +983,12 @@ class Synthesizer():
                 f"  {entry}(input, output_kernel);\n",
                 *[f"  for (int i{i} = 0; i{i} < {x}; i{i}++) {{\n" for i,
                   x in enumerate(output.shape)],
-                # f"    if (output_kernel{input_indices} != output{output_indices}) {{\n",
-                # f"       std::cout << \"Test failed!\" << std::endl;\n",
+                f"    float difference = output_kernel{input_indices} - output{output_indices};\n",
+                f"    if (difference > 0.0001 || difference < -0.0001) {{\n",
+                f"       std::cout << \"Test failed!\" << std::endl;\n",
                 f"       std::cout << output_kernel{input_indices} << \", \" << output{output_indices} << std::endl;\n",
-                # f"       return 1;\n",
-                # f"    }}\n",
+                f"       return 1;\n",
+                f"    }}\n",
                 *[f"  }}\n" for _ in output.shape],
                 f"  std::cout << \"Test passed!\" << std::endl;\n",
                 f"  return 0;\n",
@@ -1043,23 +1036,24 @@ class Synthesizer():
         config_file, config_path = self.generate_config(
             hls_top, [design_path], testbench_paths)
 
+        work_path = f"{self.work_path}/{entry}_{hls_top}"
         if csim:
             command = [self.sim_tool_path, "--mode", "hls", "--config",
-                       config_path, "--work_dir", self.work_path, "--csim"]
+                       config_path, "--work_dir", work_path, "--csim"]
             result = subprocess.run(command, capture_output=True, text=True)
-            with open(f"{self.work_path}/{entry}_csim.log", "w") as log_file:
+            with open(f"{work_path}/{entry}_csim.log", "w") as log_file:
                 log_file.write(result.stdout)
 
         if csynth:
             command = [self.synth_tool_path, "-c", "--mode", "hls", "--config",
-                       config_path, "--work_dir", self.work_path]
+                       config_path, "--work_dir", work_path]
             result = subprocess.run(command, capture_output=True, text=True)
-            with open(f"{self.work_path}/{entry}_csynth.log", "w") as log_file:
+            with open(f"{work_path}/{entry}_csynth.log", "w") as log_file:
                 log_file.write(result.stdout)
 
         if cosim:
             command = [self.sim_tool_path, "--mode", "hls", "--config",
-                       config_path, "--work_dir", self.work_path, "--cosim"]
+                       config_path, "--work_dir", work_path, "--cosim"]
             result = subprocess.run(command, capture_output=True, text=True)
-            with open(f"{self.work_path}/{entry}_cosim.log", "w") as log_file:
+            with open(f"{work_path}/{entry}_cosim.log", "w") as log_file:
                 log_file.write(result.stdout)

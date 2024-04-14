@@ -51,39 +51,19 @@ def AnyBuffer : StaticShapeMemRefOf<[AnyType]>;
 // Tensor Operations
 //===----------------------------------------------------------------------===//
 
-def TensorInitOp : HLSOp<"tensor_init", [Pure]> {
-  let summary = "Initiate a tensor";
-
-  let arguments = (ins OptionalAttr<TypedAttrInterface>:$initValue);
-  let results = (outs AnyRankedTensor:$result);
-  let assemblyFormat = [{
-    (`init` $initValue^)? attr-dict `:` type(results)
-  }];
-
-  let hasVerifier = 1;
-
-  let builders = [
-    OpBuilder<(ins "mlir::Type":$result),
-        "build($_builder, $_state, result, nullptr);">
-  ];
-}
-
 def TensorInstanceOp : HLSOp<"tensor_instance", [
     DeclareOpInterfaceMethods<MemoryInstanceOpInterface>]> {
   let summary = "A tensor instance that is not pure";
 
-  let arguments = (ins OptionalAttr<TypedAttrInterface>:$initValue,
-                       OptionalAttr<StrAttr>:$location);
+  let arguments = (ins OptionalAttr<StrAttr>:$location);
   let results = (outs AnyRankedTensor:$result);
   let assemblyFormat = [{
-    (`init` $initValue^)? (`location` $location^)? attr-dict `:` type(results)
+    (`location` $location^)? attr-dict `:` type(results)
   }];
 
   let hasVerifier = 1;
 
   let builders = [
-    OpBuilder<(ins "mlir::Type":$result, "mlir::TypedAttr":$initValue),
-        "build($_builder, $_state, result, initValue, nullptr);">,
     OpBuilder<(ins "mlir::Type":$result),
         "build($_builder, $_state, result, nullptr);">
   ];
@@ -93,39 +73,26 @@ def TensorInstanceOp : HLSOp<"tensor_instance", [
 // ITensor Operations
 //===----------------------------------------------------------------------===//
 
-def ITensorInitOp : HLSOp<"itensor_init", [Pure]> {
-  let summary = "Initiate an iterative tensor";
+def ITensorEmptyOp : HLSOp<"itensor_empty", [Pure]> {
+  let summary = "A empty iterative tensor";
 
-  let arguments = (ins OptionalAttr<TypedAttrInterface>:$initValue);
   let results = (outs AnyITensor:$result);
-  let assemblyFormat = [{
-    (`init` $initValue^)? attr-dict `:` type(results)
-  }];
-
-  let hasVerifier = 1;
-
-  let builders = [
-    OpBuilder<(ins "mlir::Type":$result),
-        "build($_builder, $_state, result, nullptr);">
-  ];
+  let assemblyFormat = [{ attr-dict `:` type(results) }];
 }
 
 def ITensorInstanceOp : HLSOp<"itensor_instance", [
     DeclareOpInterfaceMethods<MemoryInstanceOpInterface>]> {
   let summary = "An iterative tensor instance that is not pure";
 
-  let arguments = (ins OptionalAttr<TypedAttrInterface>:$initValue,
-                       OptionalAttr<StrAttr>:$location);
+  let arguments = (ins OptionalAttr<StrAttr>:$location);
   let results = (outs AnyITensor:$result);
   let assemblyFormat = [{
-    (`init` $initValue^)? (`location` $location^)? attr-dict `:` type(results)
+    (`location` $location^)? attr-dict `:` type(results)
   }];
 
   let hasVerifier = 1;
 
   let builders = [
-    OpBuilder<(ins "mlir::Type":$result, "mlir::TypedAttr":$initValue),
-        "build($_builder, $_state, result, initValue, nullptr);">,
     OpBuilder<(ins "mlir::Type":$result),
         "build($_builder, $_state, result, nullptr);">
   ];
@@ -475,18 +442,14 @@ def BufferOp : HLSOp<"buffer", [
       DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "Represent a dataflow buffer";
 
-  let arguments = (ins OptionalAttr<TypedAttrInterface>:$initValue,
-                       OptionalAttr<StrAttr>:$location);
+  let arguments = (ins OptionalAttr<StrAttr>:$location);
   let results = (outs AnyBuffer:$memref);
   let assemblyFormat = [{
-    (`init` $initValue^)? (`location` $location^)? attr-dict `:` type(results)
+    (`location` $location^)? attr-dict `:` type(results)
   }];
 
-  let hasVerifier = 1;
   let hasCanonicalizeMethod = 1;
   let builders = [
-    OpBuilder<(ins "mlir::Type":$memref, "mlir::TypedAttr":$initValue),
-        "build($_builder, $_state, memref, initValue, nullptr);">,
     OpBuilder<(ins "mlir::Type":$memref),
         "build($_builder, $_state, memref, nullptr);">
   ];
