@@ -662,7 +662,7 @@ class BaseDesignSpaceGraph(nx.DiGraph):
 # ===----------------------------------------------------------------------=== #
 
 
-k_linalg_dsg_id_name = "__linalg_dsg_id__"
+k_linalg_dsg_id_attr_name = "hls.__linalg_dsg_id__"
 
 
 class LinalgDesignSpaceGraph(BaseDesignSpaceGraph):
@@ -675,7 +675,7 @@ class LinalgDesignSpaceGraph(BaseDesignSpaceGraph):
             self.add_node(op, name=op.name, id=id,
                           parent=self.top, children=[])
             self.nodes[self.top]["children"].append(op)
-            op.attributes[k_linalg_dsg_id_name] = i64_attr(id)
+            op.attributes[k_linalg_dsg_id_attr_name] = i64_attr(id)
             for operand in op.operands:
                 if not isinstance(operand.owner, Block):
                     prev = operand.owner
@@ -790,7 +790,7 @@ def construct_linalg_transform_sequence(target: BlockArgument,
     """
     for node, data in graph.nodes(data=True):
         node_handle = match(target, [data["name"]], {
-                            k_linalg_dsg_id_name: i64_attr(data["id"])})
+                            k_linalg_dsg_id_attr_name: i64_attr(data["id"])})
 
         if isinstance(node, linalg.GenericOp):
             if "parallel_tile_sizes" not in data:
@@ -809,7 +809,7 @@ def construct_linalg_transform_sequence(target: BlockArgument,
                 data["unroll_sizes"],
                 data["permutation"],
                 len(node.inputs) > 0)
-            annotate(linalg_op_handle, k_linalg_dsg_id_name,
+            annotate(linalg_op_handle, k_linalg_dsg_id_attr_name,
                      i64_param(data["id"]))
 
         if isinstance(node, tensor.ExpandShapeOp):
@@ -823,7 +823,7 @@ def construct_linalg_transform_sequence(target: BlockArgument,
                 data["source_tile_sizes"],
                 data["result_tile_sizes"])
             annotate(convert_op.itensor_reassociate,
-                     k_linalg_dsg_id_name, i64_param(data["id"]))
+                     k_linalg_dsg_id_attr_name, i64_param(data["id"]))
 
         if isinstance(node, tensor.CollapseShapeOp):
             if "source_tile_sizes" not in data:
@@ -836,7 +836,7 @@ def construct_linalg_transform_sequence(target: BlockArgument,
                 data["source_tile_sizes"],
                 data["result_tile_sizes"])
             annotate(convert_op.itensor_reassociate,
-                     k_linalg_dsg_id_name, i64_param(data["id"]))
+                     k_linalg_dsg_id_attr_name, i64_param(data["id"]))
     return []
 
 
@@ -846,14 +846,14 @@ def apply_linalg_design_space(graph: LinalgDesignSpaceGraph,
         graph.module,
         construct_linalg_transform_sequence(graph.module, graph),
         delete_sequence)
-    apply_strip_annotations(graph.module, k_linalg_dsg_id_name)
+    apply_strip_annotations(graph.module, k_linalg_dsg_id_attr_name)
 
 # ===----------------------------------------------------------------------=== #
 # DataflowDesignSpaceGraph Class
 # ===----------------------------------------------------------------------=== #
 
 
-k_dataflow_dsg_id_name = "__dataflow_dsg_id__"
+k_dataflow_dsg_id_attr_name = "hls.__dataflow_dsg_id__"
 
 
 class DataflowDesignSpaceGraph(BaseDesignSpaceGraph):
@@ -868,7 +868,7 @@ class DataflowDesignSpaceGraph(BaseDesignSpaceGraph):
                 self.add_node(op, name=op.name,
                               id=id[0], parent=parent, children=[])
                 self.nodes[parent]["children"].append(op)
-                op.attributes[k_dataflow_dsg_id_name] = i64_attr(id[0])
+                op.attributes[k_dataflow_dsg_id_attr_name] = i64_attr(id[0])
                 id[0] += 1
 
                 for operand in hls.get_live_ins(op):
@@ -1001,20 +1001,28 @@ class Synthesizer():
     def generate_config(self,
                         hls_top: str,
                         file_paths: List[str],
-                        tb_file_path: List[str]):
+                        tb_file_path: List[str],
+                        dataflow_profiling: bool = False,
+                        fifo_sizing: bool = False):
         config_path = f"{self.work_path}/{hls_top}_config.ini"
+        lines = [
+            f"part={self.part}\n\n",
+            f"[hls]\n",
+            f"clock={self.clock_period}\n",
+            f"clock_uncertainty=15%\n",
+            f"flow_target=vitis\n",
+            *[f"syn.file={file_path}\n" for file_path in file_paths],
+            f"syn.top={hls_top}\n",
+            *[f"tb.file={file_path}\n" for file_path in tb_file_path]
+        ]
+        if dataflow_profiling:
+            lines.append(
+                "cosim.enable_dataflow_profiling=true\n")
+        if fifo_sizing:
+            lines.append("cosim.enable_fifo_sizing=true\n")
+
         with open(config_path, "w") as config_file:
-            config_file.writelines([
-                f"part={self.part}\n\n",
-                f"[hls]\n",
-                f"clock={self.clock_period}\n",
-                f"clock_uncertainty=15%\n",
-                f"flow_target=vitis\n",
-                *[f"syn.file={file_path}\n" for file_path in file_paths],
-                f"syn.top={hls_top}\n",
-                *[f"tb.file={file_path}\n" for file_path in tb_file_path],
-                f"syn.dataflow.default_channel=pingpong\n"
-            ])
+            config_file.writelines(lines)
         return config_file, config_path
 
     def run(self,
@@ -1025,7 +1033,9 @@ class Synthesizer():
             output: Tensor,
             csim: bool = True,
             csynth: bool = True,
-            cosim: bool = False):
+            cosim: bool = False,
+            dataflow_profiling: bool = False,
+            fifo_sizing: bool = False):
         design_path = f"{self.work_path}/{entry}.cpp"
         with open(design_path, "w") as design_file:
             emit_hlscpp(module, design_file, omit_global_constants=False)
@@ -1034,7 +1044,8 @@ class Synthesizer():
             entry, [design_path], input, output)
 
         config_file, config_path = self.generate_config(
-            hls_top, [design_path], testbench_paths)
+            hls_top, [design_path], testbench_paths, dataflow_profiling,
+            fifo_sizing)
 
         work_path = f"{self.work_path}/{entry}_{hls_top}"
         if csim:

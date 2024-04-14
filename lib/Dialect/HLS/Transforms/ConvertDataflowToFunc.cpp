@@ -37,6 +37,8 @@ struct ConvertTaskToFunc : public OpRewritePattern<TaskOp> {
     // Collect all live-ins of the task.
     rewriter.setInsertionPointToStart(&task.getBody().front());
     SmallVector<Value, 8> operands;
+    SmallVector<int64_t> stableIndices;
+    unsigned index = 0;
     auto liveins = task.getLiveIns();
     for (auto livein : liveins) {
       if (auto constLivein = livein.getDefiningOp<arith::ConstantOp>()) {
@@ -46,8 +48,17 @@ struct ConvertTaskToFunc : public OpRewritePattern<TaskOp> {
         rewriter.replaceUsesWithIf(livein, cloneLivein, [&](OpOperand &use) {
           return task->isAncestor(use.getOwner());
         });
-      } else
+      } else {
         operands.push_back(livein);
+        if (livein.getDefiningOp<memref::GetGlobalOp>())
+          stableIndices.push_back(index);
+        else if (auto arg = dyn_cast<BlockArgument>(livein))
+          if (auto func = arg.getDefiningOp<func::FuncOp>())
+            if (func.getArgAttrOfType<UnitAttr>(arg.getArgNumber(),
+                                                kStableAttrName))
+              stableIndices.push_back(index);
+        index++;
+      }
     }
 
     // Create a new sub-function.
@@ -56,11 +67,17 @@ struct ConvertTaskToFunc : public OpRewritePattern<TaskOp> {
         task.getLoc(), task.getNameAttr(),
         rewriter.getFunctionType(TypeRange(operands), TypeRange()));
     if (task.getLocation())
-      subFunc->setAttr("__location__", task.getLocationAttr());
+      subFunc->setAttr(kLocationAttrName, task.getLocationAttr());
+
+    // Apply all attributes from the task to the sub-function.
     for (auto attr : task->getAttrs())
       if (attr.getName() != task.getLocationAttrName() &&
           attr.getName() != task.getNameAttrName())
         subFunc->setAttr(attr.getName(), attr.getValue());
+
+    // Mark stable arguments.
+    for (auto index : stableIndices)
+      subFunc.setArgAttr(index, kStableAttrName, rewriter.getUnitAttr());
 
     // Construct the body and arguments of the sub-function.
     auto subFuncBlock = rewriter.createBlock(&subFunc.getBody());

@@ -52,7 +52,8 @@ static Operation *createLinalgCopyOp(OpBuilder &b, Location loc, Value from,
                                                  utils::IteratorType::parallel);
 
   SmallVector<NamedAttribute> linalgAttributes(attributes);
-  linalgAttributes.emplace_back(b.getStringAttr("__copy__"), b.getUnitAttr());
+  linalgAttributes.emplace_back(b.getStringAttr(kCopyAttrName),
+                                b.getUnitAttr());
 
   return b.create<linalg::GenericOp>(
       loc, from, to, llvm::ArrayRef({id, id}), iteratorTypes,

@@ -673,9 +673,7 @@ bool ExprVisitor::visitOp(arith::CmpIOp op) {
 //===----------------------------------------------------------------------===//
 
 /// HLS dialect operation emitters.
-void ModuleEmitter::emitBuffer(BufferOp op) {
-  emitAlloc(op);
-}
+void ModuleEmitter::emitBuffer(BufferOp op) { emitAlloc(op); }
 
 void ModuleEmitter::emitStreamChannel(StreamOp op) {
   indent();
@@ -1644,13 +1642,9 @@ void ModuleEmitter::emitLoopDirectives(Operation *loop) {
   if (!emitDirectives())
     return;
 
-  if (loop->hasAttr("__pipeline__")) {
-    indent() << "#pragma HLS pipeline";
-    if (auto ii = loop->getAttrOfType<IntegerAttr>("__ii__"))
-      os << " II=" << cast<IntegerAttr>(ii).getInt() << "\n";
-    else
-      os << "\n";
-  } else if (loop->hasAttr("__dataflow__"))
+  if (loop->hasAttr(kPipelineAttrName)) {
+    indent() << "#pragma HLS pipeline\n";
+  } else if (loop->hasAttr(kDataflowAttrName))
     indent() << "#pragma HLS dataflow\n";
 }
 
@@ -1709,12 +1703,13 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
   // Only top function should emit interface pragmas.
   if (isTopFunc) {
     indent() << "#pragma HLS interface s_axilite port=return\n";
-    for (auto &port : portList) {
-      if (isa<MemRefType>(port.getType())) {
+    for (auto port : portList) {
+      if (auto memrefType = dyn_cast<MemRefType>(port.getType())) {
         indent() << "#pragma HLS interface m_axi offset=slave port=";
         emitValue(port);
         os << " bundle=";
         emitValue(port);
+        os << " depth=" << memrefType.getNumElements();
         os << " max_widen_bitwidth=" << axiMaxWidenBitwidth();
         os << "\n";
         emitArrayDirectives(cast<TypedValue<MemRefType>>(port), true);
@@ -1735,14 +1730,18 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
     }
   }
 
-  if (func->getAttr("__inline__"))
-    indent() << "#pragma HLS inline\n";
+  for (auto arg : func.getArguments())
+    if (func.getArgAttr(arg.getArgNumber(), kStableAttrName)) {
+      indent() << "#pragma HLS stable variable=";
+      emitValue(arg);
+      os << "\n";
+    }
 
-  if (func->hasAttr("__pipeline__")) {
+  if (func->hasAttr(kPipelineAttrName)) {
     indent() << "#pragma HLS pipeline\n";
     // An empty line.
     os << "\n";
-  } else if (func->hasAttr("__dataflow__")) {
+  } else if (func->hasAttr(kDataflowAttrName)) {
     indent() << "#pragma HLS dataflow\n";
     // An empty line.
     os << "\n";
@@ -1750,14 +1749,14 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
 }
 
 void ModuleEmitter::emitFunction(func::FuncOp func) {
-  if (auto location = func->getAttrOfType<StringAttr>("__location__"))
+  if (auto location = func->getAttrOfType<StringAttr>(kLocationAttrName))
     if (location == "pl") {
-      if (func->hasAttr("__top__"))
+      if (func->hasAttr(kTopAttrName))
         os << "/// Top PL function.\n";
       setEmitDirectives();
     }
 
-  if (func->hasAttr("__entry__"))
+  if (func->hasAttr(kEntryAttrName))
     os << "/// Entry function.\n";
 
   if (func.getBlocks().size() != 1)
@@ -1809,7 +1808,7 @@ void ModuleEmitter::emitFunction(func::FuncOp func) {
   // Emit function body.
   addIndent();
 
-  emitFunctionDirectives(func, portList, func->hasAttr("__top__"));
+  emitFunctionDirectives(func, portList, func->hasAttr(kTopAttrName));
   emitBlock(func.front());
   reduceIndent();
   os << "}\n";

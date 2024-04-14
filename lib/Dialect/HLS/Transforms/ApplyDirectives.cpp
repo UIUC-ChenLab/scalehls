@@ -46,9 +46,9 @@ struct ApplyDirectives
     SmallVector<affine::AffineForOp> loopsToPipeline;
     SmallVector<affine::AffineForOp> loopsToDataflow;
     func.walk([&](affine::AffineForOp loop) {
-      if (loop->hasAttr("__pipeline__"))
+      if (loop->hasAttr(kPipelineAttrName))
         loopsToPipeline.push_back(loop);
-      else if (loop->hasAttr("__dataflow__"))
+      else if (loop->hasAttr(kDataflowAttrName))
         loopsToDataflow.push_back(loop);
     });
 
@@ -64,17 +64,17 @@ struct ApplyDirectives
       auto band = getLoopBandFromInnermostLoop(loop);
       if (affine::isPerfectlyNested(band) &&
           succeeded(affine::coalesceLoops(band)))
-        band.front()->setAttr("__dataflow__", builder.getUnitAttr());
+        band.front()->setAttr(kDataflowAttrName, builder.getUnitAttr());
     }
 
     // Apply partition layout to all buffers.
     func.walk([](hls::BufferOp buffer) {
       if (auto layoutAttr =
-              buffer->getAttrOfType<PartitionLayoutAttr>("__partition__")) {
+              buffer->getAttrOfType<PartitionLayoutAttr>(kPartitionAttrName)) {
         buffer.getResult().setType(
             MemRefType::get(buffer.getType().getShape(),
                             buffer.getType().getElementType(), layoutAttr));
-        buffer->removeAttr("__partition__");
+        buffer->removeAttr(kPartitionAttrName);
       }
     });
   }

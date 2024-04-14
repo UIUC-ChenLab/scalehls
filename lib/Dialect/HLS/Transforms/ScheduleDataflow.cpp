@@ -204,9 +204,9 @@ struct ScheduleDataflow
         continue;
       auto taskName = func.getName().str() + "_top_" + std::to_string(taskId++);
       auto task = wrapOpsIntoTask(ops, taskName, location, builder);
-      task->setAttr("__top__", builder.getUnitAttr());
+      task->setAttr(kTopAttrName, builder.getUnitAttr());
     }
-    func->setAttr("__entry__", builder.getUnitAttr());
+    func->setAttr(kEntryAttrName, builder.getUnitAttr());
   }
 
   /// Infer and apply the locations of tensor/itensor instance ops based on the

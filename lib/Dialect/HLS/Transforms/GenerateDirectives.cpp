@@ -57,12 +57,12 @@ struct GenerateDirectives
 
     // Set dataflow directive for the function if it contains any task.
     if (!func.getOps<hls::TaskOp>().empty())
-      func->setAttr("__dataflow__", builder.getUnitAttr());
+      func->setAttr(kDataflowAttrName, builder.getUnitAttr());
 
     func.walk([&](hls::TaskOp task) {
       // Set dataflow directive for the task if it contains any task.
       if (!task.getOps<hls::TaskOp>().empty())
-        task->setAttr("__dataflow__", builder.getUnitAttr());
+        task->setAttr(kDataflowAttrName, builder.getUnitAttr());
     });
 
     llvm::SmallDenseMap<BufferOp, SmallVector<Partition>> partitionsMap;
@@ -70,9 +70,9 @@ struct GenerateDirectives
       // Set dataflow directive if the loop contains any task. Otherwise, set
       // pipeline directive if the loop is leaf loop.
       if (!loop.getOps<hls::TaskOp>().empty())
-        loop->setAttr("__dataflow__", builder.getUnitAttr());
+        loop->setAttr(kDataflowAttrName, builder.getUnitAttr());
       else if (isLeafLoop(loop)) {
-        loop->setAttr("__pipeline__", builder.getUnitAttr());
+        loop->setAttr(kPipelineAttrName, builder.getUnitAttr());
 
         for (auto subview : loop.getOps<memref::SubViewOp>()) {
           auto buffer = subview.getSource().getDefiningOp<BufferOp>();
@@ -111,7 +111,7 @@ struct GenerateDirectives
 
       auto layoutAttr =
           hls::PartitionLayoutAttr::get(builder.getContext(), kinds, factors);
-      buffer->setAttr("__partition__", layoutAttr);
+      buffer->setAttr(kPartitionAttrName, layoutAttr);
     }
   }
 };

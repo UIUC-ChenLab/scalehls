@@ -47,6 +47,15 @@ namespace mlir {
 namespace scalehls {
 namespace hls {
 
+const std::string kTopAttrName = "hls.__top__";
+const std::string kEntryAttrName = "hls.__entry__";
+const std::string kPipelineAttrName = "hls.__pipeline__";
+const std::string kDataflowAttrName = "hls.__dataflow__";
+const std::string kPartitionAttrName = "hls.__partition__";
+const std::string kStableAttrName = "hls.__stable__";
+const std::string kLocationAttrName = "hls.__location__";
+const std::string kCopyAttrName = "hls.__copy__";
+
 /// Get or check the memory kind of a type.
 MemoryKind getMemoryKind(MemRefType type);
 
