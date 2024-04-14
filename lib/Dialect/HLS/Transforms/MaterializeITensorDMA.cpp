@@ -23,9 +23,7 @@ namespace hls {
 
 /// Return the offsets, sizes, and strides of a slice given the loop induction
 /// variables "ivs", the index expressions "indexExprs", the element shape
-/// "elementShape", and the packing flag "packing". If "packing" is true, the
-/// offsets, sizes, and strides are for the packed tensor; otherwise, they are
-/// for the unpacked tensor.
+/// "elementShape".
 static std::tuple<SmallVector<OpFoldResult>, SmallVector<OpFoldResult>,
                   SmallVector<OpFoldResult>>
 getSliceInfo(ArrayRef<Value> ivs, ArrayRef<AffineExpr> indexExprs,
@@ -48,9 +46,7 @@ getSliceInfo(ArrayRef<Value> ivs, ArrayRef<AffineExpr> indexExprs,
   return std::make_tuple(offsets, sizes, strides);
 }
 
-/// Extract a slice from the tensor and write to the iterative tensor. If
-/// "packing" is true, the slice is extracted from the packed tensor and shape
-/// collapsed before writing to the iterative tensor.
+/// Extract a slice from the tensor and write to the iterative tensor.
 static TypedValue<ITensorType>
 extactSliceAndWriteITensor(ArrayRef<Value> ivs, TypedValue<ITensorType> iTensor,
                            TypedValue<RankedTensorType> tensor,

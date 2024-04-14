@@ -3,7 +3,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Support/MathExtras.h"
+#include "mlir/Analysis/FlatLinearValueConstraints.h"
 #include "scalehls/Dialect/HLS/IR/HLS.h"
 #include "scalehls/Utils/Utils.h"
 
@@ -35,19 +35,38 @@ hls::ITensorType::verify(function_ref<InFlightDiagnostic()> emitError,
 /// Infer and return the integral shape of the full tensor this stream type
 /// represents.
 SmallVector<int64_t> hls::ITensorType::getShape() const {
-  SmallVector<AffineExpr> iterSizes;
-  for (auto [tripCount, step] : llvm::zip(getIterTripCounts(), getIterSteps()))
-    iterSizes.push_back(
-        getAffineConstantExpr((tripCount - 1) * step, getContext()));
-  auto iterSizeMap = getIterMap().replaceDimsAndSymbols(iterSizes, {}, 0, 0);
-
-  SmallVector<int64_t> integralShape;
-  for (auto [index, iterSize] : llvm::enumerate(iterSizeMap.getResults())) {
-    auto constIterSize = llvm::cast<AffineConstantExpr>(iterSize);
-    integralShape.push_back(constIterSize.getValue() +
-                            getElementDimSize(index));
+  FlatLinearConstraints cstr;
+  SmallVector<AffineExpr> iterSizeExprs;
+  for (auto [tripCount, step] :
+       llvm::zip(getIterTripCounts(), getIterSteps())) {
+    auto pos = cstr.appendDimVar();
+    cstr.addBound(presburger::BoundType::LB, pos, 0);
+    cstr.addBound(presburger::BoundType::UB, pos, tripCount - 1);
+    iterSizeExprs.push_back(getAffineDimExpr(pos, getContext()) * step);
   }
-  return integralShape;
+
+  auto dimSizeMap =
+      getIterMap().replaceDimsAndSymbols(iterSizeExprs, {}, getIterRank(), 0);
+
+  SmallVector<int64_t> shape;
+  for (auto [dimSizeExpr, elementDimSize] :
+       llvm::zip(dimSizeMap.getResults(), getElementShape())) {
+    auto dimSizePos = cstr.appendDimVar();
+    auto result =
+        cstr.addBound(presburger::BoundType::EQ, dimSizePos,
+                      AffineMap::get(getIterRank() + 1, 0, dimSizeExpr));
+    assert(succeeded(result) && "failed to add dim size equality constraint");
+
+    auto maybeLb =
+        cstr.getConstantBound64(presburger::BoundType::LB, dimSizePos);
+    auto maybeUb =
+        cstr.getConstantBound64(presburger::BoundType::UB, dimSizePos);
+    assert(maybeLb.has_value() && maybeUb.has_value() && maybeLb.value() == 0 &&
+           "failed to infer dim size lower and/or upper bounds");
+    shape.push_back(maybeUb.value() + elementDimSize);
+    cstr.removeVar(dimSizePos);
+  }
+  return shape;
 }
 
 /// Return whether this stream type represents a projected permutation
