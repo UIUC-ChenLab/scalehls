@@ -934,14 +934,16 @@ class DataflowDesignSpaceGraph(BaseDesignSpaceGraph):
 
 class Synthesizer():
     def __init__(self,
-                 tool_path: str = "vitis_hls",
+                 synth_tool_path: str = "v++",
+                 sim_tool_path: str = "vitis-run",
                  part: str = "xcu280-fsvh2892-2L-e",
                  clock_period: int = 10,
-                 syn_path: str = "."):
-        self.tool_path = tool_path
+                 work_path: str = "."):
+        self.synth_tool_path = synth_tool_path
+        self.sim_tool_path = sim_tool_path
         self.part = part
         self.clock_period = clock_period
-        self.syn_path = syn_path
+        self.work_path = work_path
 
     def generate_testbench(self,
                            entry: str,
@@ -954,7 +956,7 @@ class Synthesizer():
         output_declare = "float output" + \
             "".join([f'[{x}]' for x in output.shape])
 
-        testbench_header_path = f"{self.syn_path}/{entry}_tb.h"
+        testbench_header_path = f"{self.work_path}/{entry}_tb.h"
         with open(testbench_header_path, "w") as testbench_header_file:
             testbench_header_file.write(
                 f"void {entry}({input_declare}, {output_declare});\n")
@@ -968,7 +970,7 @@ class Synthesizer():
         input_indices = "".join([f'[i{i}]' for i in range(len(input.shape))])
         output_indices = "".join([f'[i{i}]' for i in range(len(output.shape))])
 
-        testbench_path = f"{self.syn_path}/{entry}_tb.cpp"
+        testbench_path = f"{self.work_path}/{entry}_tb.cpp"
         with open(testbench_path, "w") as testbench_file:
             testbench_file.writelines([
                 f"#include <iostream>\n",
@@ -994,34 +996,21 @@ class Synthesizer():
         return [testbench_file, testbench_header_file], \
             [testbench_path, testbench_header_path]
 
-    def generate_script(self,
+    def generate_config(self,
                         hls_top: str,
                         file_paths: List[str],
-                        tb_file_path: List[str],
-                        csim: bool = True,
-                        csynth: bool = True,
-                        cosim: bool = False):
-        script_path = f"{self.syn_path}/{hls_top}.tcl"
-        with open(script_path, "w") as script_file:
-            script_file.writelines([
-                f"open_project {self.syn_path}/{hls_top}\n",
-                f"set_top {hls_top}\n",
-                *[f"add_files {file_path}\n" for file_path in file_paths],
-                *[f"add_files -tb {file_path}\n" for file_path in tb_file_path],
-                f"open_solution {hls_top}\n",
-                f"set_part {self.part}\n",
-                f"create_clock -period {self.clock_period} -name default\n",
-                "csim_design\n" if csim else "# csim_design\n",
-                "csynth_design\n" if csynth else "# csynth_design\n",
-                "cosim_design\n" if cosim else "# cosim_design\n"
-            ])
-        return script_file, script_path
-
-    def generate_config(self):
-        config_path = f"{self.syn_path}/config.ini"
+                        tb_file_path: List[str]):
+        config_path = f"{self.work_path}/{hls_top}_config.ini"
         with open(config_path, "w") as config_file:
             config_file.writelines([
+                f"part={self.part}\n\n",
                 f"[hls]\n",
+                f"clock={self.clock_period}\n",
+                f"clock_uncertainty=15%\n",
+                f"flow_target=vitis\n",
+                *[f"syn.file={file_path}\n" for file_path in file_paths],
+                f"syn.top={hls_top}\n",
+                *[f"tb.file={file_path}\n" for file_path in tb_file_path],
                 f"syn.dataflow.default_channel=pingpong\n"
             ])
         return config_file, config_path
@@ -1035,22 +1024,33 @@ class Synthesizer():
             csim: bool = True,
             csynth: bool = True,
             cosim: bool = False):
-        design_path = f"{self.syn_path}/{entry}.cpp"
+        design_path = f"{self.work_path}/{entry}.cpp"
         with open(design_path, "w") as design_file:
             emit_hlscpp(module, design_file, omit_global_constants=False)
 
         testbench_files, testbench_paths = self.generate_testbench(
             entry, [design_path], input, output)
 
-        script_file, script_path = self.generate_script(
-            hls_top, [design_path], testbench_paths, csim, csynth, cosim)
+        config_file, config_path = self.generate_config(
+            hls_top, [design_path], testbench_paths)
 
-        config_file, config_path = self.generate_config()
+        if csim:
+            command = [self.sim_tool_path, "--mode", "hls", "--config",
+                       config_path, "--work_dir", self.work_path, "--csim"]
+            result = subprocess.run(command, capture_output=True, text=True)
+            with open(f"{self.work_path}/{entry}_csim.log", "w") as log_file:
+                log_file.write(result.stdout)
 
-        result = subprocess.run([self.tool_path, 
-                                 script_path, 
-                                 "-config", 
-                                 config_path],
-                                capture_output=True, text=True)
-        with open(f"{self.syn_path}/{entry}.log", "w") as log_file:
-            log_file.write(result.stdout)
+        if csynth:
+            command = [self.synth_tool_path, "-c", "--mode", "hls", "--config",
+                       config_path, "--work_dir", self.work_path]
+            result = subprocess.run(command, capture_output=True, text=True)
+            with open(f"{self.work_path}/{entry}_csynth.log", "w") as log_file:
+                log_file.write(result.stdout)
+
+        if cosim:
+            command = [self.sim_tool_path, "--mode", "hls", "--config",
+                       config_path, "--work_dir", self.work_path, "--cosim"]
+            result = subprocess.run(command, capture_output=True, text=True)
+            with open(f"{self.work_path}/{entry}_cosim.log", "w") as log_file:
+                log_file.write(result.stdout)
