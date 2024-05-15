@@ -48,9 +48,9 @@ if [ ! -f "CMakeCache.txt" ]; then
     -DMLIR_ENABLE_BINDINGS_PYTHON="${PYBIND:=OFF}" \
     -DSCALEHLS_ENABLE_BINDINGS_PYTHON="${PYBIND:=OFF}" \
     -DLLVM_PARALLEL_LINK_JOBS="${JOBS:=}" \
-    -DLLVM_USE_LINKER=lld-16 \
-    -DCMAKE_C_COMPILER=clang-16 \
-    -DCMAKE_CXX_COMPILER=clang++-16
+    -DLLVM_USE_LINKER=lld \
+    -DCMAKE_C_COMPILER=clang \
+    -DCMAKE_CXX_COMPILER=clang++
 fi
 
 # Run building.
@@ -77,9 +77,9 @@ if [ ! -f "CMakeCache.txt" ]; then
     -DCLANG_DIR="${SCALEHLS_DIR}/build/lib/cmake/clang" \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=DEBUG \
-    -DLLVM_USE_LINKER=lld-16 \
-    -DCMAKE_C_COMPILER=clang-16 \
-    -DCMAKE_CXX_COMPILER=clang++-16
+    -DLLVM_USE_LINKER=lld \
+    -DCMAKE_C_COMPILER=clang \
+    -DCMAKE_CXX_COMPILER=clang++
 fi
 
 # Run building.
