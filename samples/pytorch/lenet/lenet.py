@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch_mlir
+import torch_mlir.torchscript
 
 
 class LeNet(nn.Module):
@@ -31,7 +32,7 @@ class LeNet(nn.Module):
         return out
 
 
-module = torch_mlir.compile(LeNet(), torch.ones(
-    1, 3, 32, 32), output_type=torch_mlir.OutputType.LINALG_ON_TENSORS)
+module = torch_mlir.torchscript.compile(LeNet(), torch.ones(
+    1, 3, 32, 32), output_type=torch_mlir.torchscript.OutputType.LINALG_ON_TENSORS)
 
 print(module)

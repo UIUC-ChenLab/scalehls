@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch_mlir
+import torch_mlir.torchscript
 
 
 class BasicBlock(nn.Module):
@@ -71,7 +72,7 @@ def ResNet18():
     return ResNet(BasicBlock, [2, 2, 2, 2])
 
 
-module = torch_mlir.compile(ResNet18(), torch.ones(
-    1, 3, 32, 32), output_type=torch_mlir.OutputType.LINALG_ON_TENSORS)
+module = torch_mlir.torchscript.compile(ResNet18(), torch.ones(
+    1, 3, 32, 32), output_type=torch_mlir.torchscript.OutputType.LINALG_ON_TENSORS)
 
 print(module)
