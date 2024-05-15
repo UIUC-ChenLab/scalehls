@@ -26,6 +26,10 @@ struct SplitElementwiseGenericOp : public OpRewritePattern<linalg::GenericOp> {
         op.getNumOutputs() == 1) {
       auto &input = op->getOpOperand(0);
       auto &output = op->getOpOperand(1);
+      if (input.get().getType() != output.get().getType()) {
+        LLVM_DEBUG(llvm::dbgs() << "\nCurrent generic: " << op << "\n";);
+        return failure();
+      }
       if (input.get() == output.get())
         return failure();
 
