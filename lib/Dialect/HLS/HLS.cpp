@@ -1001,7 +1001,6 @@ void AffineSelectOp::print(OpAsmPrinter &p) {
   p << ", ";
   p.printOperand(getFalseValue());
 
-  // Print the attribute list.
   p.printOptionalAttrDict((*this)->getAttrs(),
                           /*elidedAttrs=*/getConditionAttrStrName());
   p << " : ";
